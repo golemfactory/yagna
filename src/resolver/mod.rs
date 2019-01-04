@@ -103,7 +103,6 @@ pub enum Expression {
 
 impl Expression {
     // Implement strong resolution (ie. undefined results are propagated rather than ignored)
-    // TODO: handle whitespace characters in expressions
     // TODO: properties of different types (and respective "equals" logic)
     // TODO: other comparison operators
     // TODO: wildcard matching of property values

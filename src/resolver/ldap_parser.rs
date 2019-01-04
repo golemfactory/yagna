@@ -28,11 +28,11 @@ pub fn parse(input: &str) -> Result<Tag, String> {
     }
 }
 
-named!(filter <Tag>, delimited!(char!('('), content, char!(')')));
+named!(filter <Tag>, ws!(delimited!(char!('('), content, char!(')'))));
 named!(filterlist <Vec<Tag>>, many1!(filter));
 named!(content <Tag>, alt!(and | or | not | match_f));
 
-named!(and <Tag>, map!(preceded!( char!('&'), filterlist),
+named!(and <Tag>, map!(preceded!( ws!(char!('&')), filterlist),
     | tagv: Vec<Tag> | -> Tag {
         Tag::Sequence(Sequence {
             class: TagClass::Context,
@@ -41,7 +41,7 @@ named!(and <Tag>, map!(preceded!( char!('&'), filterlist),
         })
     }
 ));
-named!(or <Tag>, map!(preceded!( char!('|'), filterlist),
+named!(or <Tag>, map!(preceded!( ws!(char!('|')), filterlist),
     | tagv: Vec<Tag> | -> Tag {
         Tag::Sequence(Sequence {
             class: TagClass::Context,
@@ -50,7 +50,7 @@ named!(or <Tag>, map!(preceded!( char!('|'), filterlist),
         })
     }
 ));
-named!(not <Tag>, map!(preceded!( char!('!'), filter),
+named!(not <Tag>, map!(preceded!( ws!(char!('!')), filter),
     | tag: Tag | -> Tag {
         Tag::ExplicitTag(ExplicitTag {
             class: TagClass::Context,

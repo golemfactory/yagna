@@ -72,8 +72,91 @@ fn not() {
 }
 
 #[test]
+fn not_whitespace() {
+    let f = "( !   (cn=Tim Howes))";
+
+    let tag = Tag::ExplicitTag(ExplicitTag {
+        class: TagClass::Context,
+        id: 2,
+        inner: Box::new(Tag::Sequence(Sequence {
+            class: TagClass::Context,
+            id: 3,
+            inner: vec![
+                Tag::OctetString(OctetString {
+                    inner: vec![0x63, 0x6e],
+                    .. Default::default()
+                }),
+                Tag::OctetString(OctetString {
+                    inner: vec![0x54, 0x69, 0x6d, 0x20, 0x48, 0x6f, 0x77, 0x65, 0x73],
+                    .. Default::default()
+                })
+            ],
+        })),
+    });
+
+    assert_eq!(parse(f), Ok(tag));
+}
+
+#[test]
 fn and() {
     let f = "(&(a=b)(b=c)(c=d))";
+
+    let tag = Tag::Sequence(Sequence {
+        class: TagClass::Context,
+        id: 0,
+        inner: vec![
+            Tag::Sequence(Sequence {
+                class: TagClass::Context,
+                id: 3,
+                inner: vec![
+                    Tag::OctetString(OctetString {
+                        inner: vec![0x61],
+                        .. Default::default()
+                    }),
+                    Tag::OctetString(OctetString {
+                        inner: vec![0x62],
+                        .. Default::default()
+                    })
+                ]
+            }),
+            Tag::Sequence(Sequence {
+                class: TagClass::Context,
+                id: 3,
+                inner: vec![
+                    Tag::OctetString(OctetString {
+                        inner: vec![0x62],
+                        .. Default::default()
+                    }),
+                    Tag::OctetString(OctetString {
+                        inner: vec![0x63],
+                        .. Default::default()
+                    })
+                ]
+            }),
+            Tag::Sequence(Sequence {
+                class: TagClass::Context,
+                id: 3,
+                inner: vec![
+                    Tag::OctetString(OctetString {
+                        inner: vec![0x63],
+                        .. Default::default()
+                    }),
+                    Tag::OctetString(OctetString {
+                        inner: vec![0x64],
+                        .. Default::default()
+                    })
+                ]
+            }),
+        ]
+    });
+
+    assert_eq!(parse(f), Ok(tag));
+}
+
+
+#[test]
+fn and_whitespace() {
+    let f = "( &  (a=b)  (b=c)  (c=d) )";
 
     let tag = Tag::Sequence(Sequence {
         class: TagClass::Context,
