@@ -1,0 +1,9 @@
+[package]
+name = "market-api"
+version = "0.0.0"
+
+[dependencies]
+uuid = { version = "0.7", features = ["v4"] }
+nom = "2.0"
+asnom = { git = "https://github.com/dequbed/asnom.git" }
+
