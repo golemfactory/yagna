@@ -20,10 +20,11 @@ pub const TAG_LESS_EQUAL : u64 = 11;
 
 // Parse function
 
-pub fn parse(input: &str) -> Result<Tag, ()> {
+pub fn parse(input: &str) -> Result<Tag, String> {
     match filter(input.as_bytes()) {
         IResult::Done(_, t) => Ok(t),
-        IResult::Error(_) | IResult::Incomplete(_) => Err(()),
+        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+        IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
     }
 }
 

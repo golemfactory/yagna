@@ -13,8 +13,10 @@ pub mod provider;
 pub mod requestor;
 pub mod resolver;
 
+#[derive(Default)]
 pub struct NodeId {}
 
+#[derive(Default)]
 pub struct Offer {
     pub offer_id : Uuid,
     pub provider_id : NodeId,
@@ -29,6 +31,7 @@ pub struct Offer {
     pub imp_properties : Vec<String>,
 }
 
+#[derive(Default)]
 pub struct Demand {
     pub demand_id : Uuid,
     pub requestor_id : NodeId,

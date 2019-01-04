@@ -1,4 +1,5 @@
 pub mod ldap_parser;
+pub mod match_rel;
 
 use std::default::Default;
 use asnom::common::TagClass;
@@ -9,10 +10,10 @@ use std::error;
 use std::fmt;
 use std::str;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct PropertySet {
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PropertySet{
     pub exp_properties : HashMap<String, String>,
-    pub imp_properties : String,
+    pub imp_properties : Vec<String>,
 }
 
 // ResolveError
@@ -102,6 +103,7 @@ pub enum Expression {
 
 impl Expression {
     // Implement strong resolution (ie. undefined results are propagated rather than ignored)
+    // TODO: handle whitespace characters in expressions
     // TODO: properties of different types (and respective "equals" logic)
     // TODO: other comparison operators
     // TODO: wildcard matching of property values

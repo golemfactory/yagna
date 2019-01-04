@@ -10,6 +10,7 @@ use std::default::Default;
 use asnom::common::TagClass;
 use asnom::structures::{Tag, OctetString, Sequence, ExplicitTag};
 
+
 #[test]
 fn build_expression_present() {
     let f = "(objectClass=*)";
@@ -27,10 +28,7 @@ fn resolve_present() {
 
     // test positive
 
-    let mut property_set1 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set1 = PropertySet::default();
 
     property_set1.exp_properties.insert(String::from("objectClass"), String::from("Babs Jensen"));
 
@@ -38,10 +36,7 @@ fn resolve_present() {
 
     // test negative
 
-    let mut property_set2 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set2 = PropertySet::default();
 
     property_set2.exp_properties.insert(String::from("cn"), String::from("Dblah"));
 
@@ -66,10 +61,7 @@ fn resolve_equals() {
 
     // test positive
 
-    let mut property_set1 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set1 = PropertySet::default();
 
     property_set1.exp_properties.insert(String::from("cn"), String::from("Babs Jensen"));
 
@@ -77,10 +69,7 @@ fn resolve_equals() {
 
     // test negative
 
-    let mut property_set2 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set2 = PropertySet::default();
 
     property_set2.exp_properties.insert(String::from("cn"), String::from("Dblah"));
 
@@ -88,10 +77,7 @@ fn resolve_equals() {
 
     // test undefined
 
-    let mut property_set3 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set3 = PropertySet::default();
 
     property_set3.exp_properties.insert(String::from("cnas"), String::from("Dblah"));
 
@@ -120,10 +106,7 @@ fn resolve_not() {
 
     // test positive
 
-    let mut property_set1 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set1 = PropertySet::default();
 
     property_set1.exp_properties.insert(String::from("cn"), String::from("Babs Jensen"));
 
@@ -131,10 +114,7 @@ fn resolve_not() {
 
     // test negative
 
-    let mut property_set2 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set2 = PropertySet::default();
 
     property_set2.exp_properties.insert(String::from("cn"), String::from("Tim Howes"));
 
@@ -142,10 +122,7 @@ fn resolve_not() {
 
     // test undefined
 
-    let mut property_set3 = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set3 = PropertySet::default();
 
     property_set3.exp_properties.insert(String::from("cnas"), String::from("Dblah"));
 
@@ -181,10 +158,7 @@ fn resolve_and() {
 
     // test positive
 
-    let mut property_set = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set = PropertySet::default();
 
     property_set.exp_properties.insert(String::from("a"), String::from("b"));
     property_set.exp_properties.insert(String::from("b"), String::from("c"));
@@ -194,10 +168,7 @@ fn resolve_and() {
 
     // test negative
 
-    let mut property_set = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set = PropertySet::default();
 
     property_set.exp_properties.insert(String::from("a"), String::from("x")); // does not match
     property_set.exp_properties.insert(String::from("b"), String::from("c"));
@@ -207,10 +178,7 @@ fn resolve_and() {
 
     // test undefined
 
-    let mut property_set = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set = PropertySet::default();
 
     property_set.exp_properties.insert(String::from("b"), String::from("c"));
     property_set.exp_properties.insert(String::from("c"), String::from("d"));
@@ -227,10 +195,7 @@ fn resolve_or() {
 
     // test positive
 
-    let mut property_set = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set = PropertySet::default();
 
     property_set.exp_properties.insert(String::from("a"), String::from("b"));
     property_set.exp_properties.insert(String::from("b"), String::from("c"));
@@ -240,10 +205,7 @@ fn resolve_or() {
 
     // test negative
 
-    let mut property_set = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set = PropertySet::default();
 
     property_set.exp_properties.insert(String::from("a"), String::from("x"));
     property_set.exp_properties.insert(String::from("b"), String::from("y"));
@@ -253,10 +215,7 @@ fn resolve_or() {
 
     // test undefined
 
-    let mut property_set = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : String::default(),
-    };
+    let mut property_set = PropertySet::default();
 
     property_set.exp_properties.insert(String::from("b"), String::from("c"));
     property_set.exp_properties.insert(String::from("c"), String::from("d"));
@@ -275,7 +234,7 @@ fn resolve_complex() {
 
     let mut property_set = PropertySet{
         exp_properties : HashMap::new(),
-        imp_properties : String::default(),
+        imp_properties : vec![],
     };
 
     property_set.exp_properties.insert(String::from("a"), String::from("b"));
