@@ -2,7 +2,6 @@ extern crate market_api;
 
 use market_api::{ Demand, Offer };
 use market_api::resolver::*;
-use market_api::resolver::expression::*;
 use market_api::resolver::matching::*;
 
 #[test]

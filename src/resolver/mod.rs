@@ -1,4 +1,5 @@
 extern crate uuid;
+extern crate chrono;
 
 pub mod errors;
 pub mod ldap_parser;
@@ -7,6 +8,7 @@ pub mod expression;
 
 use std::collections::HashMap;
 use uuid::Uuid;
+use chrono::{DateTime, Utc};
 
 use self::errors::{ PrepareError };
 use super::{ NodeId, Demand, Offer };
@@ -15,10 +17,32 @@ use self::expression::build_expression;
 pub use self::matching::match_weak;
 pub use self::expression::Expression;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropertyValue<'a> {
+    Str(&'a str), // String 
+    Int(i32), 
+    Long(i64),
+    Float(f64),
+    DateTime(DateTime<Utc>),
+    Version(&'a str),
+    List(Vec<PropertyValue<'a>>),
+}
+
+impl <'a> PropertyValue<'a> {
+    // TODO Implement equals() for all types
+    // for now trivial string implementation
+    pub fn equals(&self, val : &str) -> bool {
+        match self {
+            PropertyValue::Str(value) => *value == val,  // trivial string comparison
+            _ => panic!("Not implemented")
+        }
+    }
+}
+
 // Property - describes the property with its value and aspects.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Property<'a> {
-    Explicit(&'a str, &'a str, HashMap<&'a str, &'a str>),  // name, value, aspects
+    Explicit(&'a str, PropertyValue<'a>, HashMap<&'a str, &'a str>),  // name, values, aspects
     Implicit(&'a str),  // name
 }
 
@@ -37,8 +61,9 @@ impl <'a> PropertySet<'a> {
 
         // re-pack explicit props
         for key in exp_props.keys() {
-            let prop = Property::Explicit(&key, &exp_props.get(key).unwrap(), HashMap::new());
-            result.properties.insert(&key, prop);
+            let (prop_name, prop_value) = PropertySet::parse_prop(key, &exp_props.get(key).unwrap());
+            let prop = Property::Explicit(prop_name, prop_value, HashMap::new());
+            result.properties.insert(prop_name, prop);
         }
 
         // re-pack implicit props
@@ -48,6 +73,12 @@ impl <'a> PropertySet<'a> {
         }
 
         result
+    }
+
+    // TODO Implement parsing of property values/types here
+    // for now - trivial string implementation
+    fn parse_prop(key : &'a str, value_string : &'a str) -> (&'a str, PropertyValue<'a>) {
+        (key, PropertyValue::Str(value_string))
     }
 }
 

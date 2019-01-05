@@ -33,11 +33,12 @@ pub enum Expression {
 
 impl Expression {
     // Implement strong resolution (ie. undefined results are propagated rather than ignored)
-    // TODO: properties of different types (and respective "equals" logic)
+    // TODO: properties of different types (and respective "equals" logic) -> PropertyValue equals(), PropertySet parse_prop() - prop_parser submodule?
     // TODO: other comparison operators
     // TODO: wildcard matching of property values
     // TODO: wildcard matching of value-less properties
     // TODO: aspects
+    // TODO: finalize and review the matching relation implementations
     pub fn resolve(&self, property_set : &PropertySet) -> ResolveResult {
         match self {
             Expression::Equals(attr, val) => {
@@ -105,7 +106,7 @@ impl Expression {
             Some(prop) => {
                 match prop {
                     Property::Explicit(_name, value, _aspects) => {
-                        if *value == val {
+                        if value.equals(val) {
                             ResolveResult::True
                         }
                         else

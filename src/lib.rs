@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate nom;
 extern crate asnom;
-
+extern crate chrono;
 extern crate uuid;
 
 use std::error;
@@ -13,6 +13,7 @@ pub mod provider;
 pub mod requestor;
 pub mod resolver;
 
+// Id of Golem Node
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct NodeId {}
 
@@ -42,7 +43,7 @@ pub struct Demand {
     // Filter expression
     pub constraints : String,
 
-    // Implicit prperties (no values declared)
+    // Implicit properties (no values declared)
     pub imp_properties : Vec<String>,
 }
 
