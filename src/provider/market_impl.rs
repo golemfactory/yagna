@@ -21,32 +21,32 @@ impl MarketProviderFacade
          GolemMarketProviderFacade{ state: 0 }
      }
 
-    fn scan(&self, criteria: DemandCriteria) -> Result<(), ScanError> {
+    fn scan(&self, _criteria: DemandCriteria) -> Result<(), ScanError> {
         Result::Ok(())
     }
 
-    fn subscribe(&self, offer: Offer) -> Result<u32, SubscribeError> {
+    fn subscribe(&self, _offer: Offer) -> Result<u32, SubscribeError> {
         Result::Ok(0)
     }
 
-    fn unsubscribe(&self, subs_id: u32) -> Result<(), UnSubscribeError> {
+    fn unsubscribe(&self, _subs_id: u32) -> Result<(), UnSubscribeError> {
         Result::Ok(())
     }
 
-    fn collect(&self, subs_id:u32, max_result: u32, timeout: u32) -> Result<Vec<ProviderCollectResult>, CollectError> {
+    fn collect(&self, _subs_id:u32, _max_result: u32, _timeout: u32) -> Result<Vec<ProviderCollectResult>, CollectError> {
         let result = vec!();
         Result::Ok(result)
     }
 
-    fn create_proposal(&self, offer : Offer, demand : Demand) -> Result<(), ProposalError> {
+    fn create_proposal(&self, _offer : Offer, _demand : Demand) -> Result<(), ProposalError> {
         Result::Ok(())
     }
 
-    fn approve_agreement(&self, agreement : Agreement) -> Result<(), AgreementError> {
+    fn approve_agreement(&self, _agreement : Agreement) -> Result<(), AgreementError> {
         Result::Ok(())
     }
 
-    fn reject_agreement(&self, agreement : Agreement) -> Result<(), AgreementError> {
+    fn reject_agreement(&self, _agreement : Agreement) -> Result<(), AgreementError> {
         Result::Ok(())
     }
 }

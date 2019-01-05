@@ -2,18 +2,8 @@ extern crate market_api;
 
 use market_api::{ Demand, Offer };
 use market_api::resolver::*;
-use market_api::resolver::match_rel::match_weak;
-
-#[test]
-fn match_weak_empty() {
-    let demand = Demand::default();
-    let offer = Offer::default();
-
-    assert!(match match_weak(&demand, &offer) {
-        Err(_) => true,
-        _ => false
-    });
-}
+use market_api::resolver::expression::*;
+use market_api::resolver::matching::*;
 
 #[test]
 fn match_weak_simple_match() {
@@ -25,7 +15,7 @@ fn match_weak_simple_match() {
     offer.exp_properties.insert(String::from("o1"), String::from("v2"));
     offer.constraints = String::from("(d1=v1)");
 
-    assert_eq!(match_weak(&demand, &offer), Ok(ResolveResult::True));
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::True));
 }
 
 #[test]
@@ -38,5 +28,5 @@ fn match_weak_simple_nonmatch() {
     offer.exp_properties.insert(String::from("o1"), String::from("v2"));
     offer.constraints = String::from("(d1=v3)");
 
-    assert_eq!(match_weak(&demand, &offer), Ok(ResolveResult::True));
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::True));
 }

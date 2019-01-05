@@ -13,10 +13,10 @@ pub mod provider;
 pub mod requestor;
 pub mod resolver;
 
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct NodeId {}
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Offer {
     pub offer_id : Uuid,
     pub provider_id : NodeId,
@@ -31,7 +31,7 @@ pub struct Offer {
     pub imp_properties : Vec<String>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Demand {
     pub demand_id : Uuid,
     pub requestor_id : NodeId,
@@ -50,7 +50,9 @@ pub struct Agreement {
     pub agreement_id : Uuid,
 }
 
-// ScanError
+
+
+// #region ScanError
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScanError {
@@ -74,7 +76,9 @@ impl error::Error for ScanError {
     }
 }
 
-// SubscribeError
+// #endregion
+
+// #region SubscribeError
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubscribeError {
@@ -98,7 +102,9 @@ impl error::Error for SubscribeError {
     }
 }
 
-// UnSubscribeError
+// #endregion
+
+// #region UnSubscribeError
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnSubscribeError {
@@ -122,7 +128,9 @@ impl error::Error for UnSubscribeError {
     }
 }
 
-// CollectError
+// #endregion
+
+// #region CollectError
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CollectError {
@@ -146,7 +154,9 @@ impl error::Error for CollectError {
     }
 }
 
-// ProposalError
+// #endregion
+
+// #region ProposalError
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProposalError {
@@ -170,7 +180,9 @@ impl error::Error for ProposalError {
     }
 }
 
-// AgreementError
+// #endregion
+
+// #region AgreementError
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AgreementError {
@@ -193,3 +205,5 @@ impl error::Error for AgreementError {
         None
     }
 }
+
+// #endregion

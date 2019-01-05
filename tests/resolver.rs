@@ -2,14 +2,30 @@ extern crate nom;
 extern crate asnom;
 extern crate market_api;
 
-use market_api::resolver::ldap_parser::parse;
-use market_api::resolver::*;
-
 use std::collections::HashMap;
-use std::default::Default;
-use asnom::common::TagClass;
-use asnom::structures::{Tag, OctetString, Sequence, ExplicitTag};
 
+use market_api::*;
+use market_api::resolver::*;
+use market_api::resolver::ldap_parser::parse;
+use market_api::resolver::expression::*;
+
+#[test]
+fn prepare_offer_error_for_empty() {
+    let demand = Demand::default();
+    match PreparedDemand::from(&demand) {
+        Err(_) => {},
+        _ => { assert!(false); }
+    }
+}
+
+#[test]
+fn prepare_demand_error_for_empty() {
+    let offer = Offer::default();
+    match PreparedOffer::from(&offer) {
+        Err(_) => {},
+        _ => { assert!(false); }
+    }
+}
 
 #[test]
 fn build_expression_present() {
@@ -20,28 +36,32 @@ fn build_expression_present() {
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
 
+fn run_resolve_test(expr : &str, props : &Vec<(&str, &str)>, expect_result : ResolveResult) {
+    let expression = build_expression(&parse(expr).unwrap()).unwrap();
+
+    let mut exp_properties = HashMap::new();
+
+    for prop in props {
+        exp_properties.insert(String::from(prop.0), String::from(prop.1));
+    }
+
+    let imp_props = vec![];
+    let property_set = PropertySet::from(&exp_properties, &imp_props);
+
+    assert_eq!(expression.resolve(&property_set), expect_result);
+}
+
 #[test]
 fn resolve_present() {
     let f = "(objectClass=*)";
 
-    let expression = build_expression(&parse(f).unwrap()).unwrap();
+    // test positive 
 
-    // test positive
-
-    let mut property_set1 = PropertySet::default();
-
-    property_set1.exp_properties.insert(String::from("objectClass"), String::from("Babs Jensen"));
-
-    assert_eq!(expression.resolve(&property_set1), ResolveResult::True);
+    run_resolve_test(f, &vec![("objectClass", "Babs Jensen")], ResolveResult::True);
 
     // test negative
 
-    let mut property_set2 = PropertySet::default();
-
-    property_set2.exp_properties.insert(String::from("cn"), String::from("Dblah"));
-
-    assert_eq!(expression.resolve(&property_set2), ResolveResult::False);
-
+    run_resolve_test(f, &vec![("cn", "Dblah")], ResolveResult::False);
 }
 
 #[test]
@@ -57,31 +77,17 @@ fn build_expression_equals() {
 fn resolve_equals() {
     let f = "(cn=Babs Jensen)";
 
-    let expression = build_expression(&parse(f).unwrap()).unwrap();
-
     // test positive
 
-    let mut property_set1 = PropertySet::default();
-
-    property_set1.exp_properties.insert(String::from("cn"), String::from("Babs Jensen"));
-
-    assert_eq!(expression.resolve(&property_set1), ResolveResult::True);
+    run_resolve_test(f, &vec![("cn", "Babs Jensen")], ResolveResult::True);
 
     // test negative
 
-    let mut property_set2 = PropertySet::default();
-
-    property_set2.exp_properties.insert(String::from("cn"), String::from("Dblah"));
-
-    assert_eq!(expression.resolve(&property_set2), ResolveResult::False);
+    run_resolve_test(f, &vec![("cn", "Dblah")], ResolveResult::False);
 
     // test undefined
 
-    let mut property_set3 = PropertySet::default();
-
-    property_set3.exp_properties.insert(String::from("cnas"), String::from("Dblah"));
-
-    assert_eq!(expression.resolve(&property_set3), ResolveResult::Undefined);
+    run_resolve_test(f, &vec![("cnas", "Dblah")], ResolveResult::Undefined);
 }
 
 
@@ -102,31 +108,17 @@ fn build_expression_not() {
 fn resolve_not() {
     let f = "(!(cn=Tim Howes))";
 
-    let expression = build_expression(&parse(f).unwrap()).unwrap();
-
     // test positive
 
-    let mut property_set1 = PropertySet::default();
-
-    property_set1.exp_properties.insert(String::from("cn"), String::from("Babs Jensen"));
-
-    assert_eq!(expression.resolve(&property_set1), ResolveResult::True);
+    run_resolve_test(f, &vec![("cn", "Babs Jensen")], ResolveResult::True);
 
     // test negative
 
-    let mut property_set2 = PropertySet::default();
-
-    property_set2.exp_properties.insert(String::from("cn"), String::from("Tim Howes"));
-
-    assert_eq!(expression.resolve(&property_set2), ResolveResult::False);
+    run_resolve_test(f, &vec![("cn", "Tim Howes")], ResolveResult::False);
 
     // test undefined
 
-    let mut property_set3 = PropertySet::default();
-
-    property_set3.exp_properties.insert(String::from("cnas"), String::from("Dblah"));
-
-    assert_eq!(expression.resolve(&property_set3), ResolveResult::Undefined);
+    run_resolve_test(f, &vec![("cnas", "Dblah")], ResolveResult::Undefined);
 }
 
 #[test]
@@ -154,93 +146,41 @@ fn build_expression_and() {
 fn resolve_and() {
     let f = "(&(a=b)(b=c)(c=d))";
 
-    let expression = build_expression(&parse(f).unwrap()).unwrap();
-
     // test positive
 
-    let mut property_set = PropertySet::default();
-
-    property_set.exp_properties.insert(String::from("a"), String::from("b"));
-    property_set.exp_properties.insert(String::from("b"), String::from("c"));
-    property_set.exp_properties.insert(String::from("c"), String::from("d"));
-
-    assert_eq!(expression.resolve(&property_set), ResolveResult::True);
+    run_resolve_test(f, &vec![("a", "b"), ("b", "c"), ("c", "d")], ResolveResult::True);
 
     // test negative
 
-    let mut property_set = PropertySet::default();
-
-    property_set.exp_properties.insert(String::from("a"), String::from("x")); // does not match
-    property_set.exp_properties.insert(String::from("b"), String::from("c"));
-    property_set.exp_properties.insert(String::from("c"), String::from("d"));
-
-    assert_eq!(expression.resolve(&property_set), ResolveResult::False);
+    run_resolve_test(f, &vec![("a", "x"), ("b", "c"), ("c", "d")], ResolveResult::False);
 
     // test undefined
 
-    let mut property_set = PropertySet::default();
-
-    property_set.exp_properties.insert(String::from("b"), String::from("c"));
-    property_set.exp_properties.insert(String::from("c"), String::from("d"));
-
-    assert_eq!(expression.resolve(&property_set), ResolveResult::Undefined);
-
+    run_resolve_test(f, &vec![("b", "c"), ("c", "d")], ResolveResult::Undefined);
 }
 
 #[test]
 fn resolve_or() {
     let f = "(|(a=b)(b=c)(c=d))";
 
-    let expression = build_expression(&parse(f).unwrap()).unwrap();
-
     // test positive
 
-    let mut property_set = PropertySet::default();
-
-    property_set.exp_properties.insert(String::from("a"), String::from("b"));
-    property_set.exp_properties.insert(String::from("b"), String::from("c"));
-    property_set.exp_properties.insert(String::from("c"), String::from("d"));
-
-    assert_eq!(expression.resolve(&property_set), ResolveResult::True);
+    run_resolve_test(f, &vec![("a", "b"), ("b", "c"), ("c", "d")], ResolveResult::True);
 
     // test negative
 
-    let mut property_set = PropertySet::default();
-
-    property_set.exp_properties.insert(String::from("a"), String::from("x"));
-    property_set.exp_properties.insert(String::from("b"), String::from("y"));
-    property_set.exp_properties.insert(String::from("c"), String::from("z"));
-
-    assert_eq!(expression.resolve(&property_set), ResolveResult::False);
+    run_resolve_test(f, &vec![("a", "x"), ("b", "y"), ("c", "z")], ResolveResult::False);
 
     // test undefined
 
-    let mut property_set = PropertySet::default();
-
-    property_set.exp_properties.insert(String::from("b"), String::from("c"));
-    property_set.exp_properties.insert(String::from("c"), String::from("d"));
-
-    assert_eq!(expression.resolve(&property_set), ResolveResult::Undefined);
-
+    run_resolve_test(f, &vec![("b", "c"), ("c", "d")], ResolveResult::Undefined);
 }
 
 #[test]
 fn resolve_complex() {
     let f = "(&(|(a=b)(b=c)(c=d))(!(x=dblah)))";
 
-    let expression = build_expression(&parse(f).unwrap()).unwrap();
-
     // test positive
 
-    let mut property_set = PropertySet{
-        exp_properties : HashMap::new(),
-        imp_properties : vec![],
-    };
-
-    property_set.exp_properties.insert(String::from("a"), String::from("b"));
-    property_set.exp_properties.insert(String::from("b"), String::from("x"));
-    property_set.exp_properties.insert(String::from("c"), String::from("y"));
-    property_set.exp_properties.insert(String::from("x"), String::from("notdblah"));
-
-    assert_eq!(expression.resolve(&property_set), ResolveResult::True);
+    run_resolve_test(f, &vec![("a", "b"), ("b", "x"), ("c", "y"), ("x", "notdblah")], ResolveResult::True);
 }
