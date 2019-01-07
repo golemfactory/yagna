@@ -3,6 +3,7 @@ extern crate chrono;
 
 pub mod errors;
 pub mod ldap_parser;
+pub mod prop_parser;
 pub mod matching;
 pub mod expression;
 
@@ -53,6 +54,21 @@ pub struct PropertySet <'a>{
 }
 
 impl <'a> PropertySet<'a> {
+    // Create PropertySet from vector of properties expressed in flat form (ie. by parsing)
+    pub fn from_flat_props(props : &'a Vec<String>) -> PropertySet<'a> {
+        let mut result = PropertySet{
+            properties : HashMap::new()
+        };
+
+        // parse and pack props
+        for prop_flat in props {
+            let (prop_name, prop_value) = PropertySet::parse_flat_prop(prop_flat);
+            result.properties.insert(prop_name, prop_value);
+        }
+
+        result
+    }
+
     // Create PropertySet from hashmap of explicit props and vector of implicit props
     pub fn from(exp_props : &'a HashMap<String, String>, imp_props : &'a Vec<String>) -> PropertySet<'a> {
         let mut result = PropertySet{
@@ -75,10 +91,18 @@ impl <'a> PropertySet<'a> {
         result
     }
 
-    // TODO Implement parsing of property values/types here
+    // TODO Remove this after flat prop parsing implemented
     // for now - trivial string implementation
     fn parse_prop(key : &'a str, value_string : &'a str) -> (&'a str, PropertyValue<'a>) {
         (key, PropertyValue::Str(value_string))
+    }
+
+    // TODO Implement parsing of property values/types here
+    // for now - dummy implementation
+    fn parse_flat_prop(prop_flat : &'a str) -> (&'a str, Property<'a>) {
+        // TODO parse the property string to extract: property name, property type and property value(s)
+        
+        ("key", Property::Implicit("key"))
     }
 }
 

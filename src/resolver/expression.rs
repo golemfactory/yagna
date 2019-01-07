@@ -5,6 +5,7 @@ use asnom::structures::{Tag, OctetString, ExplicitTag};
 use super::{Property, PropertySet};
 use super::errors::{ResolveError, ExpressionError};
 use super::ldap_parser;
+use super::prop_parser;
 
 // Expression resolution result enum
 #[derive(Debug, Clone, PartialEq)]
@@ -15,16 +16,22 @@ pub enum ResolveResult {
     Err(ResolveError)
 }
 
+// Property reference
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropertyRef {
+    Value(String), // reference to property value (prop name)
+    Aspect(String, String), // reference to property aspect (prop name, aspect name)
+}
 
 // Expression structure is the vehicle for LDAP filter expression resolution
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
-    Equals(String, String), // property name, value
-    Greater(String, String), // property name, value
-    GreaterEqual(String, String), // property name, value
-    Less(String, String), // property name, value
-    LessEqual(String, String), // property name, value
-    Present(String), // property name
+    Equals(PropertyRef, String), // property ref, value
+    Greater(PropertyRef, String), // property ref, value
+    GreaterEqual(PropertyRef, String), // property ref, value
+    Less(PropertyRef, String), // property ref, value
+    LessEqual(PropertyRef, String), // property ref, value
+    Present(PropertyRef), // property ref
     Or(Vec<Box<Expression>>), // operands
     And(Vec<Box<Expression>>), // operands
     Not(Box<Expression>), // operand
@@ -59,15 +66,7 @@ impl Expression {
                 }
             },
             Expression::Present(attr) => {
-                match property_set.properties.get(&attr[..]) {
-                    Some(_value) => {
-                        ResolveResult::True
-                    },
-                    None => {
-                        ResolveResult::False
-                    }
-                }
-
+                self.resolve_present(attr, property_set)
             },
             _ => ResolveResult::Err(ResolveError::new(&format!("Unexpected Expression type {:?}", self)))
         }
@@ -99,20 +98,51 @@ impl Expression {
         ResolveResult::False
     }
 
-    fn resolve_equals(&self, attr : &str, val : &str, property_set : &PropertySet) -> ResolveResult {
+    fn resolve_equals(&self, attr : &PropertyRef, val : &str, property_set : &PropertySet) -> ResolveResult {
         // TODO this requires rewrite to cater for implicit properties...
         // test if property exists and then if the value matches
-        match property_set.properties.get(&attr[..]) {
+        let mut name = "";
+
+        // extract referred property name
+        match attr {
+            PropertyRef::Value(n) => { name = n; },
+            PropertyRef::Aspect(n, _a) => { name = n; },
+        }
+
+        match property_set.properties.get(name) {
             Some(prop) => {
                 match prop {
-                    Property::Explicit(_name, value, _aspects) => {
-                        if value.equals(val) {
-                            ResolveResult::True
+                    Property::Explicit(_name, value, aspects) => {
+                        // now decide if we are referring to value or aspect
+                        match attr {
+                            PropertyRef::Value(n) => { 
+                                // resolve against prop value
+                                if value.equals(val) {
+                                    ResolveResult::True
+                                }
+                                else
+                                {
+                                    ResolveResult::False
+                                }
+                            },
+                            PropertyRef::Aspect(n, aspect) => { 
+                                // resolve against prop aspect
+                                match aspects.get(&aspect[..]) {
+                                    Some(aspect_value) => {
+                                        if val == *aspect_value {
+                                            ResolveResult::True
+                                        }
+                                        else {
+                                            ResolveResult::False
+                                        }
+                                    },
+                                    None => {
+                                        ResolveResult::Undefined
+                                    }
+                                }
+                            },
                         }
-                        else
-                        {
-                            ResolveResult::False
-                        }
+
                     },
                     Property::Implicit(_name) => {
                         ResolveResult::Undefined
@@ -124,6 +154,50 @@ impl Expression {
             }
         }
     }
+
+    // Resolve property/aspect presence
+    fn resolve_present(&self, attr : &PropertyRef, property_set : &PropertySet) -> ResolveResult {
+        match attr {
+            // for value reference - only check if property exists in PpropertySet
+            PropertyRef::Value(name) => {
+                match property_set.properties.get(&name[..]) {
+                    Some(_value) => {
+                        ResolveResult::True
+                    },
+                    None => {
+                        ResolveResult::False
+                    }
+                }
+            },
+            // for aspect reference - first check if property exists, then check for aspect
+            PropertyRef::Aspect(name, aspect) => {
+                match property_set.properties.get(&name[..]) {
+                    Some(value) => {
+                        match value {
+                            Property::Explicit(_name, val, aspects) => {
+                                match aspects.get(&aspect[..]) {
+                                    Some(_aspect) => {
+                                        ResolveResult::True
+                                    },
+                                    None => {
+                                        ResolveResult::False
+                                    }
+                                }
+                            },
+                            Property::Implicit(_name) => { // no aspects for implicit properties
+                                ResolveResult::False
+                            }
+                        }
+                    },
+                    None => {
+                        ResolveResult::False
+                    }
+                }
+            }
+        }
+    }
+
+
 }
 
 
@@ -177,7 +251,12 @@ fn build_expression_from_octet_string(oct_string : &OctetString) -> Result<Expre
         ldap_parser::TAG_PRESENT => 
             {
                 match str::from_utf8(&oct_string.inner) {
-                    Ok(s) => Ok(Expression::Present(String::from(s))),
+                    Ok(s) => Ok(Expression::Present(
+                        match parse_prop_ref(s) {
+                            Ok(prop_ref) => prop_ref,
+                            Err(prop_err) => { return Err(ExpressionError::new(&format!("Error parsing property reference {}: {}", s, prop_err))) }
+                        }
+                        )),
                     Err(_err) => Err(ExpressionError::new("Parsing UTF8 from byte array failed"))
                 }
             }
@@ -210,13 +289,17 @@ fn build_simple_expression(expr_type: u64, sequence : &Vec<Tag>) -> Result<Expre
         {
             match expr_type {
                 ldap_parser::TAG_EQUAL => 
-                    Ok(Expression::Equals(String::from(result.0), String::from(result.1))),
+                    Ok(Expression::Equals(
+                        match parse_prop_ref(result.0) {
+                            Ok(prop_ref) => prop_ref,
+                            Err(prop_err) => { return Err(ExpressionError::new(&format!("Error parsing property reference {}: {}", result.0, prop_err))) }
+                        }, 
+                        String::from(result.1))),
                 _ => Err(ExpressionError::new(&format!("Unknown expression type {}", expr_type)))
             }
         },
         Err(err) => Err(err)
     }
-    
 }
 
 fn extract_str_from_octet_string<'a>(tag : &'a Tag) -> Result<&'a str, ExpressionError> {
@@ -252,4 +335,14 @@ fn extract_two_octet_strings<'a>(sequence : &'a Vec<Tag>) -> Result<(&'a str, &'
         Err(ExpressionError::new(&format!("Expected 2 tags, got {} tags", sequence.len())))
     }
 
+}
+
+fn parse_prop_ref(flat_prop : &str) -> Result<PropertyRef, ExpressionError> {
+    // TODO parse the flat_prop using prop_parser and repack to PropertyRef
+    match prop_parser::parse(flat_prop) {
+        Ok((name, opt_aspect, opt_type)) => {
+            Ok(PropertyRef::Value(name.to_string()))
+        },
+        Err(error) => Err(ExpressionError::new("Parse error"))
+    }
 }

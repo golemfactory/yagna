@@ -22,13 +22,16 @@ pub struct Offer {
     pub offer_id : Uuid,
     pub provider_id : NodeId,
 
-    // Explicit properties (with values)
+    // Properties (expressed in flat form, ie. as lines of text)
+    pub properties : Vec<String>,
+
+    // TODO REMOVE Explicit properties (with values)
     pub exp_properties : HashMap<String, String>,
 
     // Filter expression
     pub constraints : String,
 
-    // Implicit properties (no values declared)
+    // TODO REMOVE Implicit properties (no values declared)
     pub imp_properties : Vec<String>,
 }
 
@@ -37,13 +40,16 @@ pub struct Demand {
     pub demand_id : Uuid,
     pub requestor_id : NodeId,
 
-    // Explicit properties (with values)
+    // Properties (expressed in flat form, ie. as lines of text)
+    pub properties : Vec<String>,
+
+    // TODO REMOVE Explicit properties (with values)
     pub exp_properties : HashMap<String, String>,
 
     // Filter expression
     pub constraints : String,
 
-    // Implicit properties (no values declared)
+    // TODO REMOVE Implicit properties (no values declared)
     pub imp_properties : Vec<String>,
 }
 
