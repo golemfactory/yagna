@@ -31,7 +31,7 @@ fn prepare_demand_error_for_empty() {
 fn build_expression_present() {
     let f = "(objectClass=*)";
 
-    let expression = Expression::Present(String::from("objectClass"));
+    let expression = Expression::Present(PropertyRef::Value(String::from("objectClass")));
     
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
@@ -68,7 +68,7 @@ fn resolve_present() {
 fn build_expression_equals() {
     let f = "(cn=Babs Jensen)";
 
-    let expression = Expression::Equals(String::from("cn"), String::from("Babs Jensen"));
+    let expression = Expression::Equals(PropertyRef::Value(String::from("cn")), String::from("Babs Jensen"));
     
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
@@ -97,7 +97,7 @@ fn build_expression_not() {
 
     let expression = Expression::Not( 
             Box::new(Expression::Equals(
-                    String::from("cn"), 
+                    PropertyRef::Value(String::from("cn")), 
                     String::from("Tim Howes")))
     );
     
@@ -128,13 +128,13 @@ fn build_expression_and() {
     let expression = Expression::And( 
             vec![
                 Box::new(Expression::Equals(
-                    String::from("a"), 
+                    PropertyRef::Value(String::from("a")), 
                     String::from("b"))),
                 Box::new(Expression::Equals(
-                    String::from("b"), 
+                    PropertyRef::Value(String::from("b")), 
                     String::from("c"))),
                 Box::new(Expression::Equals(
-                    String::from("c"), 
+                    PropertyRef::Value(String::from("c")), 
                     String::from("d"))),
             ]
     );

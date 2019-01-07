@@ -15,6 +15,8 @@ fn provider_api_subscribe_returns_success() {
         offer_id : Uuid::new_v4(),
         provider_id : NodeId{},
         constraints : String::new(),
+        properties : vec![],
+
         exp_properties : HashMap::new(),
         imp_properties : vec![]
     };
