@@ -87,7 +87,6 @@ pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>), 
             IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
             IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
             IResult::Incomplete(needed) => {
-                println!("Incomplete: {:?}", needed);
                 match prop_with_nothing(input) {
                     IResult::Done(_, t) => Ok((t.0, None)),
                     IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
