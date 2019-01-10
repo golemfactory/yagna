@@ -1,6 +1,39 @@
 use std::error;
 use std::fmt;
 
+// #region ParseError
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseError {
+    msg : String
+}
+
+impl ParseError {
+    pub fn new(message : &str) -> Self 
+    {
+        ParseError{ msg : String::from(message) }
+    }
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.msg)
+    }
+}
+
+impl error::Error for ParseError {
+    fn description(&self) -> &str {
+        &self.msg
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        // Generic error, underlying cause isn't tracked.
+        None
+    }
+}
+
+// #endregion
+
 // #region ResolveError
 
 #[derive(Debug, Clone, PartialEq)]

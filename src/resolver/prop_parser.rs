@@ -1,60 +1,130 @@
-use std::default::Default;
 use std::str;
 
 use nom::IResult;
 
-pub struct PropRef {
-    pub name: Vec<u8>,
-    pub aspect: Option<Vec<u8>>,
-    pub type_name: Option<Vec<u8>>
-}
+named!(prop_def <&str, &str>, 
+    do_parse!(
+            res: take_till!(is_equal_sign) >> 
+            char!('=') >>
+            (res)
+    )
+);
+
+named!(prop_with_nothing <&str, (&str, Option<&str>)>, 
+    tuple!(
+        prop,
+        opt!(end)
+    )
+);
+
+named!(prop_with_aspect <&str, (&str, Option<&str>)>, 
+    tuple!(
+        prop,
+        opt!(delimited!(char!('['), aspect, char!(']')))
+    )
+);
 
 
-// Parse function
+named!(prop_with_type <&str, (&str, Option<&str>)>, 
+    tuple!(
+        prop,
+        opt!(preceded!(char!(':'), type_name))
+    )
+);
 
-pub fn parse(input: &str) -> Result<(&str, Option<&str>, Option<&str>), String> {
-    match prop(input.as_bytes()) {
-        IResult::Done(_, t) => 
-        {   
-            // let result = (str::from_utf8(&t.name).unwrap(),
-            //      match t.aspect {
-            //          Some(a) => Some(str::from_utf8(&a).unwrap()),
-            //          None => None
-            //      },
-            //      match t.type_name {
-            //          Some(a) => Some(str::from_utf8(&a).unwrap()),
-            //          None => None
-            //      },
-            //   );
+named!(prop <&str, &str>, 
+    do_parse!(
+            res: take_till!(is_delimiter) >>
+            (res)
+    )
+);
 
-            let result = ("", None, None);
-            Ok(result)
-        },
-        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-        IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
+named!(aspect <&str, &str>, 
+    do_parse!(
+            res: take_till!(is_delimiter) >>
+            (res)
+    )
+
+);
+
+named!(type_name <&str, &str>, 
+    do_parse!(
+            res: take_till!(is_delimiter) >> 
+            (res)
+    )
+
+);
+
+named!(end <&str, &str >, 
+    do_parse!(
+            eof!() >> 
+            ("")
+    )
+);
+
+// Parse property definition in the form of:
+// <property_name_and_type>=<property_value>
+// Returns a tuple of (property_name_and_type, Option(property_value))
+pub fn parse_prop_def(input : &str) -> Result<(&str, Option<&str>), String>
+{
+        match prop_def(input) {
+            IResult::Done(rest, t) => Ok((t, Some(rest))),
+            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+            IResult::Incomplete(_needed) => {
+                Ok((input, None))
+            }
     }
 }
 
-
-named!(prop <PropRef> , 
-        do_parse!(
-            nam: take_till!(is_delimiter) >>
-            asp: take_till!(is_delimiter) >> 
-            type_name: eof!() >> 
-            (
-                PropRef {
-                    name:nam.to_vec(), 
-                    aspect: Some(asp.to_vec()), 
-                    type_name: Some(type_name.to_vec())
+// Parse property reference string (element of filter expression)
+// in the form of:
+// <property_name>[<aspect_name>]
+// where aspect_name is optional.
+// Returns a tuple of (property_name, Option(aspect_name))
+pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>), String>
+{
+        match prop_with_aspect(input) {
+            IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
+            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+            IResult::Incomplete(needed) => {
+                println!("Incomplete: {:?}", needed);
+                match prop_with_nothing(input) {
+                    IResult::Done(_, t) => Ok((t.0, None)),
+                    IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+                    IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
                 }
-            )
-        )
-    );
+            },
+    }
 
+}
 
+// Parse property declaration string (element of property definition)
+// in the form of:
+// <property_name>:<type_name>]
+// where type_name is optional.
+// Returns a tuple of (property_name, Option(type_name))
+pub fn parse_prop_ref_with_type(input : &str) -> Result<(&str, Option<&str>), String>
+{
+        match prop_with_type(input) {
+            IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
+            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+            IResult::Incomplete(_needed) => {
+                match prop_with_nothing(input) {
+                    IResult::Done(_, t) => Ok((t.0, None)),
+                    IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+                    IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
+                }
+            },
+    }
 
-pub fn is_delimiter(chr: u8) -> bool {
-    chr == '[' as u8 ||
-    chr == ']' as u8 ||
-    chr == ':' as u8 
+}
+
+pub fn is_equal_sign(chr: char) -> bool {
+    chr == '='   
+}
+
+pub fn is_delimiter(chr: char) -> bool {
+    chr == '[' ||
+    chr == ']' ||
+    chr == ':'  
 }

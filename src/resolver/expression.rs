@@ -2,10 +2,9 @@ use std::str;
 
 use asnom::structures::{Tag, OctetString, ExplicitTag};
 
-use super::{Property, PropertySet};
+use super::properties::{Property, PropertySet, PropertyRef, parse_prop_ref };
 use super::errors::{ResolveError, ExpressionError};
 use super::ldap_parser;
-use super::prop_parser;
 
 // Expression resolution result enum
 #[derive(Debug, Clone, PartialEq)]
@@ -16,12 +15,7 @@ pub enum ResolveResult {
     Err(ResolveError)
 }
 
-// Property reference
-#[derive(Debug, Clone, PartialEq)]
-pub enum PropertyRef {
-    Value(String), // reference to property value (prop name)
-    Aspect(String, String), // reference to property aspect (prop name, aspect name)
-}
+
 
 // Expression structure is the vehicle for LDAP filter expression resolution
 #[derive(Clone, Debug, PartialEq)]
@@ -51,6 +45,7 @@ impl Expression {
             Expression::Equals(attr, val) => {
                 self.resolve_equals(attr, val, property_set)
             },
+            // TODO other comparison operators
             Expression::And(inner_expressions) => {
                 self.resolve_and(inner_expressions, property_set)
             },
@@ -115,7 +110,7 @@ impl Expression {
                     Property::Explicit(_name, value, aspects) => {
                         // now decide if we are referring to value or aspect
                         match attr {
-                            PropertyRef::Value(n) => { 
+                            PropertyRef::Value(_n) => { 
                                 // resolve against prop value
                                 if value.equals(val) {
                                     ResolveResult::True
@@ -125,7 +120,7 @@ impl Expression {
                                     ResolveResult::False
                                 }
                             },
-                            PropertyRef::Aspect(n, aspect) => { 
+                            PropertyRef::Aspect(_n, aspect) => { 
                                 // resolve against prop aspect
                                 match aspects.get(&aspect[..]) {
                                     Some(aspect_value) => {
@@ -174,7 +169,7 @@ impl Expression {
                 match property_set.properties.get(&name[..]) {
                     Some(value) => {
                         match value {
-                            Property::Explicit(_name, val, aspects) => {
+                            Property::Explicit(_name, _val, aspects) => {
                                 match aspects.get(&aspect[..]) {
                                     Some(_aspect) => {
                                         ResolveResult::True
@@ -199,9 +194,6 @@ impl Expression {
 
 
 }
-
-
-
 
 
 // Expression building
@@ -337,12 +329,3 @@ fn extract_two_octet_strings<'a>(sequence : &'a Vec<Tag>) -> Result<(&'a str, &'
 
 }
 
-fn parse_prop_ref(flat_prop : &str) -> Result<PropertyRef, ExpressionError> {
-    // TODO parse the flat_prop using prop_parser and repack to PropertyRef
-    match prop_parser::parse(flat_prop) {
-        Ok((name, opt_aspect, opt_type)) => {
-            Ok(PropertyRef::Value(name.to_string()))
-        },
-        Err(error) => Err(ExpressionError::new("Parse error"))
-    }
-}

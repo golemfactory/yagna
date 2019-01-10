@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use market_api::*;
 use market_api::resolver::*;
+use market_api::resolver::properties::*;
 use market_api::resolver::ldap_parser::parse;
 use market_api::resolver::expression::*;
 
@@ -36,17 +37,15 @@ fn build_expression_present() {
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
 
-fn run_resolve_test(expr : &str, props : &Vec<(&str, &str)>, expect_result : ResolveResult) {
+fn run_resolve_test(expr : &str, props : &Vec<&str>, expect_result : ResolveResult) {
     let expression = build_expression(&parse(expr).unwrap()).unwrap();
 
-    let mut exp_properties = HashMap::new();
-
+    let mut properties = vec![];
     for prop in props {
-        exp_properties.insert(String::from(prop.0), String::from(prop.1));
+        properties.push(prop.to_string());
     }
 
-    let imp_props = vec![];
-    let property_set = PropertySet::from(&exp_properties, &imp_props);
+    let property_set = PropertySet::from_flat_props(&properties);
 
     assert_eq!(expression.resolve(&property_set), expect_result);
 }
@@ -57,11 +56,11 @@ fn resolve_present() {
 
     // test positive 
 
-    run_resolve_test(f, &vec![("objectClass", "Babs Jensen")], ResolveResult::True);
+    run_resolve_test(f, &vec!["objectClass=Babs Jensen"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec![("cn", "Dblah")], ResolveResult::False);
+    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False);
 }
 
 #[test]
@@ -79,15 +78,15 @@ fn resolve_equals() {
 
     // test positive
 
-    run_resolve_test(f, &vec![("cn", "Babs Jensen")], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=Babs Jensen"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec![("cn", "Dblah")], ResolveResult::False);
+    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False);
 
     // test undefined
 
-    run_resolve_test(f, &vec![("cnas", "Dblah")], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined);
 }
 
 
@@ -110,15 +109,15 @@ fn resolve_not() {
 
     // test positive
 
-    run_resolve_test(f, &vec![("cn", "Babs Jensen")], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=Babs Jensen"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec![("cn", "Tim Howes")], ResolveResult::False);
+    run_resolve_test(f, &vec!["cn=Tim Howes"], ResolveResult::False);
 
     // test undefined
 
-    run_resolve_test(f, &vec![("cnas", "Dblah")], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined);
 }
 
 #[test]
@@ -148,15 +147,15 @@ fn resolve_and() {
 
     // test positive
 
-    run_resolve_test(f, &vec![("a", "b"), ("b", "c"), ("c", "d")], ResolveResult::True);
+    run_resolve_test(f, &vec!["a=b", "b=c", "c=d"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec![("a", "x"), ("b", "c"), ("c", "d")], ResolveResult::False);
+    run_resolve_test(f, &vec!["a=x", "b=c", "c=d"], ResolveResult::False);
 
     // test undefined
 
-    run_resolve_test(f, &vec![("b", "c"), ("c", "d")], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined);
 }
 
 #[test]
@@ -165,15 +164,15 @@ fn resolve_or() {
 
     // test positive
 
-    run_resolve_test(f, &vec![("a", "b"), ("b", "c"), ("c", "d")], ResolveResult::True);
+    run_resolve_test(f, &vec!["a=b", "b=c", "c=d"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec![("a", "x"), ("b", "y"), ("c", "z")], ResolveResult::False);
+    run_resolve_test(f, &vec!["a=x", "b=y", "c=z"], ResolveResult::False);
 
     // test undefined
 
-    run_resolve_test(f, &vec![("b", "c"), ("c", "d")], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined);
 }
 
 #[test]
@@ -182,5 +181,5 @@ fn resolve_complex() {
 
     // test positive
 
-    run_resolve_test(f, &vec![("a", "b"), ("b", "x"), ("c", "y"), ("x", "notdblah")], ResolveResult::True);
+    run_resolve_test(f, &vec!["a=b", "b=x", "c=y", "x=notdblah"], ResolveResult::True);
 }

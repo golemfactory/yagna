@@ -1,109 +1,51 @@
-#[macro_use]
-extern crate nom;
+extern crate market_api;
 
-use nom::IResult;
+use market_api::resolver::prop_parser::*;
 
-named!(with_nothing <&str, (&str, Option<&str>)>, 
-    tuple!(
-        prop,
-        opt!(end)
-    )
-);
-
-named!(with_aspect <&str, (&str, Option<&str>)>, 
-    tuple!(
-        prop,
-        opt!(delimited!(char!('['), asp, char!(']')))
-    )
-);
-
-
-named!(with_type <&str, (&str, Option<&str>)>, 
-    tuple!(
-        prop,
-        opt!(preceded!(char!(':'), typ))
-    )
-);
-
-named!(prop <&str, &str>, 
-    do_parse!(
-            res: take_till!(is_delimiter) >>
-            (res)
-    )
-);
-
-named!(asp <&str, &str>, 
-    do_parse!(
-            res: take_till!(is_delimiter) >>
-            (res)
-    )
-
-);
-
-named!(typ <&str, &str>, 
-    do_parse!(
-            res: take_till!(is_delimiter) >> 
-            (res)
-    )
-
-);
-
-named!(end <&str, &str >, 
-    do_parse!(
-            eof!() >> 
-            ("")
-    )
-);
-
-fn parse_with_aspect(input : &str) -> Result<(&str, Option<&str>), String>
-{
-        match with_aspect(input) {
-            IResult::Done(_, t) => Ok(t),
-            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-            IResult::Incomplete(needed) => {
-                match with_nothing(input) {
-                    IResult::Done(_, t) => Ok((t.0, None)),
-                    IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-                    IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
-                }
-            },
-    }
-
-}
-
-fn parse_with_type(input : &str) -> Result<(&str, Option<&str>), String>
-{
-        match with_type(input) {
-            IResult::Done(_, t) => Ok(t),
-            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-            IResult::Incomplete(needed) => {
-                match with_nothing(input) {
-                    IResult::Done(_, t) => Ok((t.0, None)),
-                    IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-                    IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
-                }
-            },
-    }
-
+#[test]
+fn parse_prop_def_for_simple_prop() {
+    assert_eq!(parse_prop_def("prop=value"), Ok(("prop", Some("value"))));
 }
 
 #[test]
-fn present() {
-    //let f = "prop[aspect]:type";
-    let a = "prop[aspect]";
-    let b = "prop:type";
-    let c = "prop";
-
-    println!("{:?}", parse_with_aspect(a));
-    println!("{:?}", parse_with_type(b));
-    println!("{:?}", parse_with_aspect(c));
-    println!("{:?}", parse_with_type(c));
-    assert!(false);
-    //assert_eq!(prop(f), IResult::Ok());
+fn parse_prop_def_for_dynamic_prop() {
+    assert_eq!(parse_prop_def("prop*"), Ok(("prop*", None)));
 }
 
-pub fn is_delimiter(chr: char) -> bool {
-    chr == '['  ||
-    chr == ']'  ||
-    chr == ':'  
+#[test]
+fn parse_prop_ref_with_aspect_no_aspect() {
+    assert_eq!(parse_prop_ref_with_aspect("prop"), Ok(("prop", None)));
+}
+
+#[test]
+fn parse_prop_ref_with_aspect_syntax_error_1() {
+    assert_eq!(parse_prop_ref_with_aspect("prop:asda"), Err("Parsing error: unexpected text :asda".to_string()));
+}
+
+#[test]
+#[ignore]
+fn parse_prop_ref_with_aspect_syntax_error_2() {
+    // TODO need to handle syntax error differently
+    println!("{:?}", parse_prop_ref_with_aspect("prop[asda"));
+    assert_eq!(parse_prop_ref_with_aspect("prop[[asda]"), Ok(("pro p", None)));
+}
+
+#[test]
+fn parse_prop_ref_with_aspect_simple() {
+    assert_eq!(parse_prop_ref_with_aspect("prop[aspect]"), Ok(("prop", Some("aspect"))));
+}
+
+#[test]
+fn parse_prop_ref_with_type_no_type() {
+    assert_eq!(parse_prop_ref_with_type("prop"), Ok(("prop", None)));
+}
+
+#[test]
+fn parse_prop_ref_with_type_simple_type() {
+    assert_eq!(parse_prop_ref_with_type("prop:type"), Ok(("prop", Some("type"))));
+}
+
+#[test]
+fn parse_prop_ref_with_type_syntax_error() {
+    assert_eq!(parse_prop_ref_with_type("prop[type"), Err("Parsing error: unexpected text [type".to_string()));
 }
