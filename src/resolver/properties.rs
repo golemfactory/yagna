@@ -113,12 +113,11 @@ impl <'a> PropertySet<'a> {
         match self.properties.remove(prop_name) {
             Some(prop) => {
                 let mut new_prop = match prop {
-                    Property::Explicit(name, val, aspects) => {
-                            let mut new_aspects = aspects.clone();
+                    Property::Explicit(name, val, mut aspects) => {
                             // remove aspect if already exists
-                            new_aspects.remove(aspect_name);
-                            new_aspects.insert(aspect_name, aspect_value);
-                            Property::Explicit(name, val, new_aspects) 
+                            aspects.remove(aspect_name);
+                            aspects.insert(aspect_name, aspect_value);
+                            Property::Explicit(name, val, aspects) 
                         } ,
                     _ => unreachable!()
                 };
