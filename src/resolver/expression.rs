@@ -121,6 +121,7 @@ impl Expression {
                                 }
                             },
                             PropertyRef::Aspect(_n, aspect) => { 
+                                println!("Resolving Equals against Aspect: {}", aspect);
                                 // resolve against prop aspect
                                 match aspects.get(&aspect[..]) {
                                     Some(aspect_value) => {
@@ -287,6 +288,7 @@ fn build_simple_expression(expr_type: u64, sequence : &Vec<Tag>) -> Result<Expre
                             Err(prop_err) => { return Err(ExpressionError::new(&format!("Error parsing property reference {}: {}", result.0, prop_err))) }
                         }, 
                         String::from(result.1))),
+                // TODO add other binary operators handling here
                 _ => Err(ExpressionError::new(&format!("Unknown expression type {}", expr_type)))
             }
         },

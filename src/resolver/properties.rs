@@ -107,6 +107,26 @@ impl <'a> PropertySet<'a> {
             Err(error) => Err(format!("Parsing error: {}", error))
         }
     }
+
+    // Set property aspect
+    pub fn set_property_aspect(&mut self, prop_name: &'a str, aspect_name: &'a str, aspect_value: &'a str) {
+        match self.properties.remove(prop_name) {
+            Some(prop) => {
+                let mut new_prop = match prop {
+                    Property::Explicit(name, val, aspects) => {
+                            let mut new_aspects = aspects.clone();
+                            // remove aspect if already exists
+                            new_aspects.remove(aspect_name);
+                            new_aspects.insert(aspect_name, aspect_value);
+                            Property::Explicit(name, val, new_aspects) 
+                        } ,
+                    _ => unreachable!()
+                };
+                self.properties.insert(prop_name, new_prop);
+            },
+            None => {}
+        }
+    }
 }
 
 // #endregion
@@ -122,8 +142,11 @@ pub fn parse_prop_ref(flat_prop : &str) -> Result<PropertyRef, ParseError> {
     // TODO parse the flat_prop using prop_parser and repack to PropertyRef
     match prop_parser::parse_prop_ref_with_aspect(flat_prop) {
         Ok((name, opt_aspect)) => {
-            // TODO handle aspects properly
-            Ok(PropertyRef::Value(name.to_string()))
+            match opt_aspect {
+                Some(aspect) => Ok(PropertyRef::Aspect(name.to_string(), aspect.to_string())),
+                None => Ok(PropertyRef::Value(name.to_string()))
+            }
+            
         },
         Err(error) => Err(ParseError::new(&format!("Parse error {}", error)))
     }

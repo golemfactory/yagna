@@ -15,6 +15,10 @@ pub enum MatchResult {
 //
 pub fn match_weak(demand : &PreparedDemand, offer : &PreparedOffer) -> Result<MatchResult, MatchError> {
 
+    println!("Demand: {:?}", demand);
+    println!("Offer: {:?}", offer);
+
+
     let result1 = demand.constraints.resolve(&offer.properties);
     let result2 = offer.constraints.resolve(&demand.properties);
 
@@ -28,11 +32,14 @@ pub fn match_weak(demand : &PreparedDemand, offer : &PreparedOffer) -> Result<Ma
         _ => {}
     }
 
+    println!("Result1: {:?}", result1);
+    println!("Result2: {:?}", result2);
+
     if result1 == ResolveResult::Undefined || result2 == ResolveResult::Undefined {
         Ok(MatchResult::Undefined)
     }
     else { 
-        if result1 == ResolveResult::True || result2 == ResolveResult::True {
+        if result1 == ResolveResult::True && result2 == ResolveResult::True {
             Ok(MatchResult::True)
         } 
         else 
