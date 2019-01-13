@@ -2,7 +2,7 @@ extern crate nom;
 extern crate asnom;
 extern crate market_api;
 
-use market_api::resolver::ldap_parser::parse;
+use market_api::resolver::ldap_parser::*;
 
 use std::default::Default;
 use asnom::common::TagClass;
@@ -14,7 +14,7 @@ fn present() {
 
     let tag = Tag::OctetString(OctetString {
         class: TagClass::Context,
-        id: 7,
+        id: TAG_PRESENT,
         inner: vec![
             0x6f, 0x62, 0x6a, 0x65, 0x63, 0x74, 0x43, 0x6c, 0x61, 0x73, 0x73
         ],
@@ -29,7 +29,95 @@ fn simple() {
 
     let tag = Tag::Sequence(Sequence {
         class: TagClass::Context,
-        id: 3,
+        id: TAG_EQUAL,
+        inner: vec![
+                Tag::OctetString(OctetString {
+                    inner: vec![0x63, 0x6e],
+                    .. Default::default()
+                }),
+                Tag::OctetString(OctetString {
+                    inner: vec![0x42, 0x61, 0x62, 0x73, 0x20, 0x4a, 0x65, 0x6e, 0x73, 0x65, 0x6e],
+                    .. Default::default()
+                })
+        ]
+    });
+
+    assert_eq!(parse(f), Ok(tag));
+}
+
+#[test]
+fn greater() {
+    let f = "(cn>Babs Jensen)";
+
+    let tag = Tag::Sequence(Sequence {
+        class: TagClass::Context,
+        id: TAG_GREATER,
+        inner: vec![
+                Tag::OctetString(OctetString {
+                    inner: vec![0x63, 0x6e],
+                    .. Default::default()
+                }),
+                Tag::OctetString(OctetString {
+                    inner: vec![0x42, 0x61, 0x62, 0x73, 0x20, 0x4a, 0x65, 0x6e, 0x73, 0x65, 0x6e],
+                    .. Default::default()
+                })
+        ]
+    });
+
+    assert_eq!(parse(f), Ok(tag));
+}
+
+#[test]
+fn greater_equal() {
+    let f = "(cn>=Babs Jensen)";
+
+    let tag = Tag::Sequence(Sequence {
+        class: TagClass::Context,
+        id: TAG_GREATER_EQUAL,
+        inner: vec![
+                Tag::OctetString(OctetString {
+                    inner: vec![0x63, 0x6e],
+                    .. Default::default()
+                }),
+                Tag::OctetString(OctetString {
+                    inner: vec![0x42, 0x61, 0x62, 0x73, 0x20, 0x4a, 0x65, 0x6e, 0x73, 0x65, 0x6e],
+                    .. Default::default()
+                })
+        ]
+    });
+
+    assert_eq!(parse(f), Ok(tag));
+}
+
+#[test]
+fn less() {
+    let f = "(cn<Babs Jensen)";
+
+    let tag = Tag::Sequence(Sequence {
+        class: TagClass::Context,
+        id: TAG_LESS,
+        inner: vec![
+                Tag::OctetString(OctetString {
+                    inner: vec![0x63, 0x6e],
+                    .. Default::default()
+                }),
+                Tag::OctetString(OctetString {
+                    inner: vec![0x42, 0x61, 0x62, 0x73, 0x20, 0x4a, 0x65, 0x6e, 0x73, 0x65, 0x6e],
+                    .. Default::default()
+                })
+        ]
+    });
+
+    assert_eq!(parse(f), Ok(tag));
+}
+
+#[test]
+fn less_equal() {
+    let f = "(cn<=Babs Jensen)";
+
+    let tag = Tag::Sequence(Sequence {
+        class: TagClass::Context,
+        id: TAG_LESS_EQUAL,
         inner: vec![
                 Tag::OctetString(OctetString {
                     inner: vec![0x63, 0x6e],
@@ -51,10 +139,10 @@ fn not() {
 
     let tag = Tag::ExplicitTag(ExplicitTag {
         class: TagClass::Context,
-        id: 2,
+        id: TAG_NOT,
         inner: Box::new(Tag::Sequence(Sequence {
             class: TagClass::Context,
-            id: 3,
+            id: TAG_EQUAL,
             inner: vec![
                 Tag::OctetString(OctetString {
                     inner: vec![0x63, 0x6e],
@@ -77,10 +165,10 @@ fn not_whitespace() {
 
     let tag = Tag::ExplicitTag(ExplicitTag {
         class: TagClass::Context,
-        id: 2,
+        id: TAG_NOT,
         inner: Box::new(Tag::Sequence(Sequence {
             class: TagClass::Context,
-            id: 3,
+            id: TAG_EQUAL,
             inner: vec![
                 Tag::OctetString(OctetString {
                     inner: vec![0x63, 0x6e],
@@ -103,11 +191,11 @@ fn and() {
 
     let tag = Tag::Sequence(Sequence {
         class: TagClass::Context,
-        id: 0,
+        id: TAG_AND,
         inner: vec![
             Tag::Sequence(Sequence {
                 class: TagClass::Context,
-                id: 3,
+                id: TAG_EQUAL,
                 inner: vec![
                     Tag::OctetString(OctetString {
                         inner: vec![0x61],
@@ -121,7 +209,7 @@ fn and() {
             }),
             Tag::Sequence(Sequence {
                 class: TagClass::Context,
-                id: 3,
+                id: TAG_EQUAL,
                 inner: vec![
                     Tag::OctetString(OctetString {
                         inner: vec![0x62],
@@ -135,7 +223,7 @@ fn and() {
             }),
             Tag::Sequence(Sequence {
                 class: TagClass::Context,
-                id: 3,
+                id: TAG_EQUAL,
                 inner: vec![
                     Tag::OctetString(OctetString {
                         inner: vec![0x63],
@@ -160,11 +248,11 @@ fn and_whitespace() {
 
     let tag = Tag::Sequence(Sequence {
         class: TagClass::Context,
-        id: 0,
+        id: TAG_AND,
         inner: vec![
             Tag::Sequence(Sequence {
                 class: TagClass::Context,
-                id: 3,
+                id: TAG_EQUAL,
                 inner: vec![
                     Tag::OctetString(OctetString {
                         inner: vec![0x61],
@@ -178,7 +266,7 @@ fn and_whitespace() {
             }),
             Tag::Sequence(Sequence {
                 class: TagClass::Context,
-                id: 3,
+                id: TAG_EQUAL,
                 inner: vec![
                     Tag::OctetString(OctetString {
                         inner: vec![0x62],
@@ -192,7 +280,7 @@ fn and_whitespace() {
             }),
             Tag::Sequence(Sequence {
                 class: TagClass::Context,
-                id: 3,
+                id: TAG_EQUAL,
                 inner: vec![
                     Tag::OctetString(OctetString {
                         inner: vec![0x63],

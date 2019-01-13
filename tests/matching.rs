@@ -30,7 +30,20 @@ fn match_weak_simple_no_match() {
     offer.properties.push(String::from("o1=v2"));
     offer.constraints = String::from("(d1=v3)");
 
-    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::False));
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::False(vec![], vec!())));
+}
+
+#[test]
+fn match_weak_simple_undefined() {
+    let mut demand = Demand::default();
+    demand.properties.push(String::from("d1=v1"));
+    demand.constraints = String::from("(o3=v2)"); // unresolved property
+
+    let mut offer = Offer::default();
+    offer.properties.push(String::from("o1=v2"));
+    offer.constraints = String::from("(d1=v3)");
+
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::Undefined(vec![String::from("o3")], vec![])));
 }
 
 #[test]
@@ -56,7 +69,7 @@ fn match_weak_dynamic_property_no_match() {
     offer.properties.push(String::from("o1"));
     offer.constraints = String::from("(d1=v1)");
 
-    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::False));
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::False(vec![], vec![])));
 }
 
 #[test]

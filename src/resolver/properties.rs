@@ -21,12 +21,77 @@ pub enum PropertyValue<'a> {
 
 impl <'a> PropertyValue<'a> {
     
-    // TODO Implement equals() for all types
-    // for now trivial string implementation
+    // TODO Implement equals() for remaining types
     pub fn equals(&self, val : &str) -> bool {
         match self {
             PropertyValue::Str(value) => *value == val,  // trivial string comparison
+            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::DateTime(value) => match self.parse_date(val) { Ok(parsed_value) => { parsed_value == *value }, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
+        }
+    }
+
+    // TODO Implement less() for remaining types
+    pub fn less(&self, val : &str) -> bool {
+        match self {
+            PropertyValue::Str(value) => *value < val,  // trivial string comparison
+            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::DateTime(value) => match self.parse_date(val) { Ok(parsed_value) => { *value < parsed_value }, _ => false }, // ignore parsing error, assume false  
+            _ => panic!("Not implemented")
+        }
+    }
+
+    // TODO Implement less_equal() for remaining types
+    pub fn less_equal(&self, val : &str) -> bool {
+        match self {
+            PropertyValue::Str(value) => *value <= val,  // trivial string comparison
+            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::DateTime(value) => match self.parse_date(val) { Ok(parsed_value) => { *value <= parsed_value }, _ => false }, // ignore parsing error, assume false  
+            _ => panic!("Not implemented")
+        }
+    }
+
+    // TODO Implement greater() for remaining types
+    pub fn greater(&self, val : &str) -> bool {
+        match self {
+            PropertyValue::Str(value) => *value > val,  // trivial string comparison
+            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::DateTime(value) => match self.parse_date(val) { Ok(parsed_value) => { *value > parsed_value }, _ => false }, // ignore parsing error, assume false  
+            _ => panic!("Not implemented")
+        }
+    }
+
+    // TODO Implement greater_equal() for remaining types
+    pub fn greater_equal(&self, val : &str) -> bool {
+        match self {
+            PropertyValue::Str(value) => *value >= val,  // trivial string comparison
+            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::DateTime(value) => match self.parse_date(val) { Ok(parsed_value) => { *value >= parsed_value }, _ => false }, // ignore parsing error, assume false  
+            _ => panic!("Not implemented")
+        }
+    }
+
+    fn parse_date(&self, dt_str : &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+        self.parse_date_from_rfc3339(dt_str)
+    } 
+
+    fn parse_date_from_rfc3339(&self, dt_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+        match DateTime::parse_from_rfc3339(dt_str) {
+            Ok(parsed_value) => {
+                let dt = DateTime::<Utc>::from_utc(parsed_value.naive_utc(), Utc); 
+                Ok(dt)
+            },
+            Err(err) => Err(err)
         }
     }
 

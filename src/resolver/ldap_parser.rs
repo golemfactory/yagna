@@ -92,12 +92,36 @@ named!(simple <Tag>, do_parse!(
     }))
 ));
 
-named!(filtertype <u64>, call!(equal));
+//named!(filtertype <u64>, call!(equal));
+
+named!(filtertype <u64>, alt!(equal | less_equal | less | greater_equal | greater));
+
 
 named!(equal <u64>, do_parse!(
     char!('=') >>
     (TAG_EQUAL)
 ));
+
+named!(less <u64>, do_parse!(
+    char!('<') >>
+    (TAG_LESS)
+));
+
+named!(less_equal <u64>, do_parse!(
+    tag!("<=") >>
+    (TAG_LESS_EQUAL)
+));
+
+named!(greater <u64>, do_parse!(
+    char!('>') >>
+    (TAG_GREATER)
+));
+
+named!(greater_equal <u64>, do_parse!(
+    tag!(">=") >>
+    (TAG_GREATER_EQUAL)
+));
+
 
 pub fn is_delimiter(chr: u8) -> bool {
     chr == '=' as u8 ||

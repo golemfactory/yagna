@@ -2,7 +2,7 @@ use std::str;
 
 use asnom::structures::{Tag, OctetString, ExplicitTag};
 
-use super::properties::{Property, PropertySet, PropertyRef, parse_prop_ref };
+use super::properties::{Property, PropertySet, PropertyRef, PropertyValue, parse_prop_ref };
 use super::errors::{ResolveError, ExpressionError};
 use super::ldap_parser;
 
@@ -10,8 +10,8 @@ use super::ldap_parser;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolveResult {
     True,
-    False,
-    Undefined,
+    False(Vec<String>), // List of props which couldn't be resolved
+    Undefined(Vec<String>), // List of props which couldn't be resolved
     Err(ResolveError)
 }
 
@@ -34,18 +34,32 @@ pub enum Expression {
 
 impl Expression {
     // Implement strong resolution (ie. undefined results are propagated rather than ignored)
-    // TODO: properties of different types (and respective "equals" logic) -> PropertyValue equals(), PropertySet parse_prop() - prop_parser submodule?
-    // TODO: other comparison operators
+    // (DONE) It may be useful to return list of properties which couldn't be resolved 
+    // (DONE) Properties of some simple types plus binary operators.  
+    // TODO: Handling of Version simple type, need to implement operators
+    // TODO: Handling of List type, and equals operator (ignore other comparison operators)
     // TODO: wildcard matching of property values
     // TODO: wildcard matching of value-less properties
     // TODO: aspects
     // TODO: finalize and review the matching relation implementations
-    pub fn resolve(&self, property_set : &PropertySet) -> ResolveResult {
+    pub fn resolve<'a>(&'a self, property_set : &'a PropertySet) -> ResolveResult {
         match self {
             Expression::Equals(attr, val) => {
-                self.resolve_equals(attr, val, property_set)
+                self.resolve_with_function(attr, val, property_set, |prop_value : &PropertyValue, val : &str| -> bool { prop_value.equals(val) } )
             },
-            // TODO other comparison operators
+            Expression::Less(attr, val) => {
+                self.resolve_with_function(attr, val, property_set, |prop_value : &PropertyValue, val : &str| -> bool { prop_value.less(val) } )
+            },
+            Expression::LessEqual(attr, val) => {
+                self.resolve_with_function(attr, val, property_set, |prop_value : &PropertyValue, val : &str| -> bool { prop_value.less_equal(val) } )
+            },
+            Expression::Greater(attr, val) => {
+                self.resolve_with_function(attr, val, property_set, |prop_value : &PropertyValue, val : &str| -> bool { prop_value.greater(val) } )
+            },
+            Expression::GreaterEqual(attr, val) => {
+                self.resolve_with_function(attr, val, property_set, |prop_value : &PropertyValue, val : &str| -> bool { prop_value.greater_equal(val) } )
+            },
+            // other binary operators here if needed...
             Expression::And(inner_expressions) => {
                 self.resolve_and(inner_expressions, property_set)
             },
@@ -54,9 +68,9 @@ impl Expression {
             },
             Expression::Not(inner_expression) => {
                 match inner_expression.resolve(property_set) {
-                    ResolveResult::True => ResolveResult::False,
-                    ResolveResult::False => ResolveResult::True,
-                    ResolveResult::Undefined => ResolveResult::Undefined,
+                    ResolveResult::True => ResolveResult::False(vec![]),
+                    ResolveResult::False(_) => ResolveResult::True,
+                    ResolveResult::Undefined(un_props) => ResolveResult::Undefined(un_props),
                     ResolveResult::Err(err) => ResolveResult::Err(err)
                 }
             },
@@ -67,12 +81,78 @@ impl Expression {
         }
     }
 
-    fn resolve_and(&self, seq : &Vec<Box<Expression>>, property_set : &PropertySet) -> ResolveResult {
+    fn resolve_with_function<'a>(&'a self, attr : &'a PropertyRef, val : &str, property_set : &'a PropertySet, oper_function : impl Fn(&PropertyValue, &str) -> bool) -> ResolveResult  {
+        // TODO this requires rewrite to cater for implicit properties...
+        // test if property exists and then if the value matches
+        let mut name = "";
+
+        // extract referred property name
+        match attr {
+            PropertyRef::Value(n) => { name = n; },
+            PropertyRef::Aspect(n, _a) => { name = n; },
+        }
+
+        match property_set.properties.get(name) {
+            Some(prop) => {
+                match prop {
+                    Property::Explicit(_name, value, aspects) => {
+                        // now decide if we are referring to value or aspect
+                        match attr {
+                            PropertyRef::Value(_n) => { 
+                                // resolve against prop value
+                                if oper_function(value, val) {
+                                    ResolveResult::True
+                                }
+                                else
+                                {
+                                    ResolveResult::False(vec![])
+                                }
+                            },
+                            PropertyRef::Aspect(_n, aspect) => { 
+                                println!("Resolving Equals against Aspect: {}", aspect);
+                                // resolve against prop aspect
+                                match aspects.get(&aspect[..]) {
+                                    Some(aspect_value) => {
+                                        if val == *aspect_value {
+                                            ResolveResult::True
+                                        }
+                                        else {
+                                            ResolveResult::False(vec![])
+                                        }
+                                    },
+                                    None => {
+                                        ResolveResult::Undefined(vec![name.to_string()])
+                                    }
+                                }
+                            },
+                        }
+
+                    },
+                    Property::Implicit(_name) => {
+                        ResolveResult::Undefined(vec![name.to_string()])
+                    }
+                }
+            },
+            None => {
+                ResolveResult::Undefined(vec![name.to_string()])
+            }
+        }
+
+    }
+
+    fn resolve_and<'a>(&'a self, seq : &'a Vec<Box<Expression>>, property_set : &'a PropertySet) -> ResolveResult {
+        let mut all_un_props = vec![];
         for exp in seq {
             match exp.resolve(property_set) {
                 ResolveResult::True => { /* do nothing, keep iterating */ },
-                ResolveResult::False => { return ResolveResult::False },
-                ResolveResult::Undefined => { return ResolveResult::Undefined },
+                ResolveResult::False(mut un_props) => { 
+                        all_un_props.append(& mut un_props);
+                        return ResolveResult::False(un_props) 
+                    },
+                ResolveResult::Undefined(mut un_props) => { 
+                        all_un_props.append(& mut un_props);
+                        return ResolveResult::Undefined(all_un_props) 
+                    },
                 ResolveResult::Err(err) => { return ResolveResult::Err(err) }
             }
         }
@@ -80,20 +160,27 @@ impl Expression {
         ResolveResult::True
     }
 
-    fn resolve_or(&self, seq : &Vec<Box<Expression>>, property_set : &PropertySet) -> ResolveResult {
+    fn resolve_or<'a>(&'a self, seq : &'a Vec<Box<Expression>>, property_set : &'a PropertySet) -> ResolveResult {
+        let mut all_un_props = vec![];
         for exp in seq {
             match exp.resolve(property_set) {
                 ResolveResult::True => { return ResolveResult::True },
-                ResolveResult::False => { /* keep iterating */ },
-                ResolveResult::Undefined => { return ResolveResult::Undefined },
+                ResolveResult::False(mut un_props) => { 
+                        all_un_props.append(& mut un_props);
+                    /* keep iterating */ 
+                    },
+                ResolveResult::Undefined(mut un_props) => { 
+                        all_un_props.append(& mut un_props);
+                        return ResolveResult::Undefined(all_un_props) 
+                    },
                 ResolveResult::Err(err) => { return ResolveResult::Err(err) }
             }
         }
 
-        ResolveResult::False
+        ResolveResult::False(all_un_props)
     }
 
-    fn resolve_equals(&self, attr : &PropertyRef, val : &str, property_set : &PropertySet) -> ResolveResult {
+    fn resolve_equals<'a>(&'a self, attr : &'a PropertyRef, val : &str, property_set : &PropertySet) -> ResolveResult {
         // TODO this requires rewrite to cater for implicit properties...
         // test if property exists and then if the value matches
         let mut name = "";
@@ -117,7 +204,7 @@ impl Expression {
                                 }
                                 else
                                 {
-                                    ResolveResult::False
+                                    ResolveResult::False(vec![])
                                 }
                             },
                             PropertyRef::Aspect(_n, aspect) => { 
@@ -129,11 +216,11 @@ impl Expression {
                                             ResolveResult::True
                                         }
                                         else {
-                                            ResolveResult::False
+                                            ResolveResult::False(vec![])
                                         }
                                     },
                                     None => {
-                                        ResolveResult::Undefined
+                                        ResolveResult::Undefined(vec![name.to_string()])
                                     }
                                 }
                             },
@@ -141,12 +228,12 @@ impl Expression {
 
                     },
                     Property::Implicit(_name) => {
-                        ResolveResult::Undefined
+                        ResolveResult::Undefined(vec![name.to_string()])
                     }
                 }
             },
             None => {
-                ResolveResult::Undefined
+                ResolveResult::Undefined(vec![name.to_string()])
             }
         }
     }
@@ -154,14 +241,14 @@ impl Expression {
     // Resolve property/aspect presence
     fn resolve_present(&self, attr : &PropertyRef, property_set : &PropertySet) -> ResolveResult {
         match attr {
-            // for value reference - only check if property exists in PpropertySet
+            // for value reference - only check if property exists in PropertySet
             PropertyRef::Value(name) => {
                 match property_set.properties.get(&name[..]) {
                     Some(_value) => {
                         ResolveResult::True
                     },
                     None => {
-                        ResolveResult::False
+                        ResolveResult::False(vec![])
                     }
                 }
             },
@@ -176,17 +263,17 @@ impl Expression {
                                         ResolveResult::True
                                     },
                                     None => {
-                                        ResolveResult::False
+                                        ResolveResult::False(vec![format!("{}[{}]", name, aspect)])
                                     }
                                 }
                             },
                             Property::Implicit(_name) => { // no aspects for implicit properties
-                                ResolveResult::False
+                                ResolveResult::False(vec![format!("{}[{}]", name, aspect)])
                             }
                         }
                     },
                     None => {
-                        ResolveResult::False
+                        ResolveResult::False(vec![format!("{}[{}]", name, aspect)])
                     }
                 }
             }
@@ -197,7 +284,7 @@ impl Expression {
 }
 
 
-// Expression building
+// #region Expression building
 
 pub fn build_expression(root : &Tag) -> Result<Expression, ExpressionError> {
     match root {
@@ -331,3 +418,4 @@ fn extract_two_octet_strings<'a>(sequence : &'a Vec<Tag>) -> Result<(&'a str, &'
 
 }
 
+// #endregion

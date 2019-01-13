@@ -60,7 +60,7 @@ fn resolve_present() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False);
+    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![String::from("objectClass")]));
 }
 
 #[test]
@@ -82,11 +82,11 @@ fn resolve_equals() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False);
+    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined(vec![String::from("cn")]));
 }
 
 
@@ -113,11 +113,11 @@ fn resolve_not() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=Tim Howes"], ResolveResult::False);
+    run_resolve_test(f, &vec!["cn=Tim Howes"], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined(vec![String::from("cn")]));
 }
 
 #[test]
@@ -151,11 +151,11 @@ fn resolve_and() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["a=x", "b=c", "c=d"], ResolveResult::False);
+    run_resolve_test(f, &vec!["a=x", "b=c", "c=d"], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined(vec![String::from("a")]));
 }
 
 #[test]
@@ -168,11 +168,11 @@ fn resolve_or() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["a=x", "b=y", "c=z"], ResolveResult::False);
+    run_resolve_test(f, &vec!["a=x", "b=y", "c=z"], ResolveResult::False(vec!()));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined);
+    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined(vec![String::from("a")]));
 }
 
 #[test]
