@@ -1,8 +1,10 @@
 extern crate uuid;
 extern crate chrono;
+extern crate regex;
 
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use regex::Regex;
 
 use super::errors::{ ParseError };
 use super::prop_parser;
@@ -24,7 +26,7 @@ impl <'a> PropertyValue<'a> {
     // TODO Implement equals() for remaining types
     pub fn equals(&self, val : &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value == val,  // trivial string comparison
+            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(val, *value),  // enhanced string comparison
             PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
@@ -78,6 +80,23 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value >= parsed_value }, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
+        }
+    }
+
+    // Implement string equality with * wildcard
+    // Note: Only str1 may contain wildcard
+    // TODO my be sensible to move the Regex building to the point where property is parsed...
+    fn str_equal_with_wildcard(str1 : &str, str2 : &str) -> bool {
+        if str1.contains("*") {
+            let regex_text = format!("^{}$", str1.replace("*", ".*"));
+            match Regex::new(&regex_text) {
+                Ok(regex) => regex.is_match(str2),
+                Err(_error) => false
+            }
+        }
+        else
+        {
+            str1 == str2
         }
     }
 
@@ -164,7 +183,7 @@ impl <'a> PropertySet<'a> {
     fn parse_flat_prop(prop_flat : &'a str) -> Result<(&'a str, Property<'a>), ParseError> {
         // Parse the property string to extract: property name, property type and property value(s)
         println!("parse_flat_prop: {}", prop_flat);
-        
+
         match prop_parser::parse_prop_def(prop_flat) {
             Ok((name, value)) =>
             {

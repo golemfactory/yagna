@@ -3,6 +3,7 @@ extern crate nom;
 extern crate asnom;
 extern crate chrono;
 extern crate uuid;
+extern crate regex;
 
 use std::error;
 use std::fmt;

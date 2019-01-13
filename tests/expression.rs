@@ -91,6 +91,23 @@ fn resolve_equals() {
 }
 
 #[test]
+fn resolve_equals_with_wildcard() {
+    let f = "(cn=Babs *)";
+
+    // test positive
+
+    run_resolve_test(f, &vec!["cn=Babs Jensen"], ResolveResult::True);
+
+    // test negative
+
+    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![]));
+
+    // test undefined
+
+    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined(vec![String::from("cn")]));
+}
+
+#[test]
 fn resolve_equals_int() {
     let f = "(cn=123)";
 

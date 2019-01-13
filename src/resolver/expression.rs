@@ -15,8 +15,6 @@ pub enum ResolveResult {
     Err(ResolveError)
 }
 
-
-
 // Expression structure is the vehicle for LDAP filter expression resolution
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
@@ -37,8 +35,8 @@ impl Expression {
     // (DONE) It may be useful to return list of properties which couldn't be resolved 
     // (DONE) Properties of some simple types plus binary operators.  
     // TODO: Handling of Version simple type, need to implement operators
-    // TODO: Handling of List type, and equals operator (ignore other comparison operators)
-    // TODO: wildcard matching of property values
+    // TODO: Handling of List property type, and equals operator (ignore other comparison operators)
+    // (DONE) wildcard matching of property values
     // TODO: wildcard matching of value-less properties
     // TODO: aspects
     // TODO: finalize and review the matching relation implementations
