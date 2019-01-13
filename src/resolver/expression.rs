@@ -82,15 +82,14 @@ impl Expression {
     fn resolve_with_function<'a>(&'a self, attr : &'a PropertyRef, val : &str, property_set : &'a PropertySet, oper_function : impl Fn(&PropertyValue, &str) -> bool) -> ResolveResult  {
         // TODO this requires rewrite to cater for implicit properties...
         // test if property exists and then if the value matches
-        let mut name = "";
 
         // extract referred property name
-        match attr {
-            PropertyRef::Value(n) => { name = n; },
-            PropertyRef::Aspect(n, _a) => { name = n; },
-        }
+        let name = match attr {
+            PropertyRef::Value(n) => n,
+            PropertyRef::Aspect(n, _a) => n,
+        };
 
-        match property_set.properties.get(name) {
+        match property_set.properties.get(&name[..]) {
             Some(prop) => {
                 match prop {
                     Property::Explicit(_name, value, aspects) => {
@@ -176,64 +175,6 @@ impl Expression {
         }
 
         ResolveResult::False(all_un_props)
-    }
-
-    fn resolve_equals<'a>(&'a self, attr : &'a PropertyRef, val : &str, property_set : &PropertySet) -> ResolveResult {
-        // TODO this requires rewrite to cater for implicit properties...
-        // test if property exists and then if the value matches
-        let mut name = "";
-
-        // extract referred property name
-        match attr {
-            PropertyRef::Value(n) => { name = n; },
-            PropertyRef::Aspect(n, _a) => { name = n; },
-        }
-
-        match property_set.properties.get(name) {
-            Some(prop) => {
-                match prop {
-                    Property::Explicit(_name, value, aspects) => {
-                        // now decide if we are referring to value or aspect
-                        match attr {
-                            PropertyRef::Value(_n) => { 
-                                // resolve against prop value
-                                if value.equals(val) {
-                                    ResolveResult::True
-                                }
-                                else
-                                {
-                                    ResolveResult::False(vec![])
-                                }
-                            },
-                            PropertyRef::Aspect(_n, aspect) => { 
-                                println!("Resolving Equals against Aspect: {}", aspect);
-                                // resolve against prop aspect
-                                match aspects.get(&aspect[..]) {
-                                    Some(aspect_value) => {
-                                        if val == *aspect_value {
-                                            ResolveResult::True
-                                        }
-                                        else {
-                                            ResolveResult::False(vec![])
-                                        }
-                                    },
-                                    None => {
-                                        ResolveResult::Undefined(vec![name.to_string()])
-                                    }
-                                }
-                            },
-                        }
-
-                    },
-                    Property::Implicit(_name) => {
-                        ResolveResult::Undefined(vec![name.to_string()])
-                    }
-                }
-            },
-            None => {
-                ResolveResult::Undefined(vec![name.to_string()])
-            }
-        }
     }
 
     // Resolve property/aspect presence

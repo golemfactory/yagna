@@ -122,16 +122,16 @@ impl <'a> PropertyValue<'a> {
                 "String" => Ok(PropertyValue::Str(value)),
                 "Int" => match value.parse::<i32>() { 
                     Ok(parsed_val) => Ok(PropertyValue::Int(parsed_val)), 
-                    Err(err) => Err(ParseError::new(&format!("Error parsing as Int: '{}'", value))) },
+                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Int: '{}'", value))) },
                 "Long" => match value.parse::<i64>() { 
                     Ok(parsed_val) => Ok(PropertyValue::Long(parsed_val)), 
-                    Err(err) => Err(ParseError::new(&format!("Error parsing as Long: '{}'", value))) },
+                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Long: '{}'", value))) },
                 "Float" => match value.parse::<f64>() { 
                     Ok(parsed_val) => Ok(PropertyValue::Float(parsed_val)), 
-                    Err(err) => Err(ParseError::new(&format!("Error parsing as Float: '{}'", value))) },
+                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Float: '{}'", value))) },
                 "DateTime" => match PropertyValue::parse_date(value) { 
                     Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)), 
-                    Err(err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", value))) },
+                    Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", value))) },
                 //TODO "Version" => ...,
                 // TODO implement List type
                 _ => Ok(PropertyValue::Str(value)) // if no type is specified, String is assumed.

@@ -1,10 +1,7 @@
 extern crate market_api;
 
-use std::collections::HashMap;
-
 use market_api::{ Demand, Offer };
 use market_api::resolver::*;
-use market_api::resolver::properties::*;
 use market_api::resolver::matching::*;
 
 #[test]
