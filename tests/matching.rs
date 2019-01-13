@@ -69,10 +69,13 @@ fn match_weak_dynamic_property_no_match() {
     offer.properties.push(String::from("o1"));
     offer.constraints = String::from("(d1=v1)");
 
-    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::False(vec![], vec![])));
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), 
+                          &PreparedOffer::from(&offer).unwrap()), 
+               Ok(MatchResult::False(vec![String::from("o1dblah")], vec![])));
 }
 
 #[test]
+#[ignore]
 fn match_weak_dynamic_property_wildcard_match() {
     let mut demand = Demand::default();
     demand.properties.push(String::from("d1=v1"));

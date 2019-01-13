@@ -248,7 +248,7 @@ impl Expression {
                         ResolveResult::True
                     },
                     None => {
-                        ResolveResult::False(vec![])
+                        ResolveResult::False(vec![name.to_string()])
                     }
                 }
             },
@@ -296,8 +296,8 @@ pub fn build_expression(root : &Tag) -> Result<Expression, ExpressionError> {
                 ldap_parser::TAG_OR => {
                     build_multi_expression(seq.id, &seq.inner)
                 },
-                ldap_parser::TAG_EQUAL => {
-                    build_simple_expression(ldap_parser::TAG_EQUAL, &seq.inner)
+                ldap_parser::TAG_EQUAL | ldap_parser::TAG_LESS | ldap_parser::TAG_LESS_EQUAL | ldap_parser::TAG_GREATER | ldap_parser::TAG_GREATER_EQUAL => {
+                    build_simple_expression(seq.id, &seq.inner)
                 },
                 _ => { Err(ExpressionError::new(&format!("Unknown sequence type {}", seq.id)))}
             }
@@ -367,15 +367,32 @@ fn build_simple_expression(expr_type: u64, sequence : &Vec<Tag>) -> Result<Expre
     match extract_two_octet_strings(sequence) {
         Ok(result) => 
         {
+            let prop_ref = match parse_prop_ref(result.0) {
+                            Ok(prop_ref) => prop_ref,
+                            Err(prop_err) => { return Err(ExpressionError::new(&format!("Error parsing property reference {}: {}", result.0, prop_err))) }
+                        };
             match expr_type {
                 ldap_parser::TAG_EQUAL => 
                     Ok(Expression::Equals(
-                        match parse_prop_ref(result.0) {
-                            Ok(prop_ref) => prop_ref,
-                            Err(prop_err) => { return Err(ExpressionError::new(&format!("Error parsing property reference {}: {}", result.0, prop_err))) }
-                        }, 
+                        prop_ref, 
                         String::from(result.1))),
-                // TODO add other binary operators handling here
+                ldap_parser::TAG_GREATER => 
+                    Ok(Expression::Greater(
+                        prop_ref, 
+                        String::from(result.1))),
+                ldap_parser::TAG_GREATER_EQUAL => 
+                    Ok(Expression::GreaterEqual(
+                        prop_ref, 
+                        String::from(result.1))),
+                ldap_parser::TAG_LESS => 
+                    Ok(Expression::Less(
+                        prop_ref, 
+                        String::from(result.1))),
+                ldap_parser::TAG_LESS_EQUAL => 
+                    Ok(Expression::LessEqual(
+                        prop_ref, 
+                        String::from(result.1))),
+                // add other binary operators handling here
                 _ => Err(ExpressionError::new(&format!("Unknown expression type {}", expr_type)))
             }
         },

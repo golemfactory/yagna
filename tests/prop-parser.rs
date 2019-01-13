@@ -8,6 +8,11 @@ fn parse_prop_def_for_simple_prop() {
 }
 
 #[test]
+fn parse_prop_def_for_prop_with_type() {
+    assert_eq!(parse_prop_def("prop:Type=value"), Ok(("prop:Type", Some("value"))));
+}
+
+#[test]
 fn parse_prop_def_for_dynamic_prop() {
     assert_eq!(parse_prop_def("prop*"), Ok(("prop*", None)));
 }

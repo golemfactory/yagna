@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use market_api::*;
 use market_api::resolver::*;
+use market_api::resolver::errors::{ ResolveError };
 use market_api::resolver::properties::*;
 use market_api::resolver::ldap_parser::parse;
 use market_api::resolver::expression::*;
@@ -58,7 +59,7 @@ fn resolve_present() {
 
     run_resolve_test(f, &vec!["objectClass=Babs Jensen"], ResolveResult::True);
 
-    // test negative
+    // test negative (must return name of unresolved property)
 
     run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![String::from("objectClass")]));
 }
@@ -89,6 +90,82 @@ fn resolve_equals() {
     run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined(vec![String::from("cn")]));
 }
 
+#[test]
+fn resolve_equals_int() {
+    let f = "(cn=123)";
+
+    // test positive
+
+    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::True);
+
+    // test negative
+
+    run_resolve_test(f, &vec!["cn:Int=456"], ResolveResult::False(vec![]));
+
+    // test false when parsing error
+
+    let f = "(cn=1ds23)";
+    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::False(vec![]));
+
+}
+
+#[test]
+fn resolve_greater_int() {
+    let f = "(cn>123)";
+
+    // test positive
+
+    run_resolve_test(f, &vec!["cn:Int=124"], ResolveResult::True);
+
+    // test negative
+
+    run_resolve_test(f, &vec!["cn:Int=12"], ResolveResult::False(vec![]));
+
+    // test false when parsing error
+
+    let f = "(cn>1ds23)";
+    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::False(vec![]));
+
+}
+
+#[test]
+fn resolve_less_float() {
+    let f = "(cn<123.56)";
+
+    // test positive
+
+    run_resolve_test(f, &vec!["cn:Float=122.674"], ResolveResult::True);
+
+    // test negative
+
+    run_resolve_test(f, &vec!["cn:Float=126"], ResolveResult::False(vec![]));
+
+    // test false when parsing error
+
+    let f = "(cn<1ds23)";
+    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::False(vec![]));
+
+}
+
+#[test]
+fn resolve_less_equal_datetime() {
+    let f = "(cn<=1985-04-12T23:20:50.52Z)";
+
+    // test positive
+
+    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:20:30.52Z"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:20:50.52Z"], ResolveResult::True);
+
+    // test negative
+
+    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:21:50.52Z"], ResolveResult::False(vec![]));
+
+    // test false when parsing error (NOTE the RFC 3339 format is fairly strict)
+
+    let f = "(cn<=1985-04-13)";
+    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:20:50.52Z"], ResolveResult::False(vec![]));
+
+}
 
 #[test]
 fn build_expression_not() {
