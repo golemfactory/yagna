@@ -4,16 +4,16 @@ use super::errors::{MatchError};
 
 // Matching relation result enum
 #[derive(Debug, Clone, PartialEq)]
-pub enum MatchResult {
+pub enum MatchResult<'a> {
     True,
-    False(Vec<String>, Vec<String>), // Unresolved properties in Offer and Demand respectively
-    Undefined(Vec<String>, Vec<String>), // Unresolved properties in Offer and Demand respectively
+    False(Vec<(&'a str, &'a str)>, Vec<(&'a str, &'a str)>), // Unresolved properties in Offer and Demand respectively
+    Undefined(Vec<(&'a str, &'a str)>, Vec<(&'a str, &'a str)>), // Unresolved properties in Offer and Demand respectively
     Err(MatchError)
 }
 
 // Weak match relation
 //
-pub fn match_weak<'a>(demand : &'a PreparedDemand, offer : &'a PreparedOffer) -> Result<MatchResult, MatchError> {
+pub fn match_weak<'a>(demand : &'a PreparedDemand, offer : &'a PreparedOffer) -> Result<MatchResult<'a>, MatchError> {
 
     println!("Demand: {:?}", demand);
     println!("Offer: {:?}", offer);

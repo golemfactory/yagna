@@ -8,10 +8,10 @@ use super::ldap_parser;
 
 // Expression resolution result enum
 #[derive(Debug, Clone, PartialEq)]
-pub enum ResolveResult {
+pub enum ResolveResult<'a> {
     True,
-    False(Vec<String>), // List of props which couldn't be resolved
-    Undefined(Vec<String>), // List of props which couldn't be resolved
+    False(Vec<(&'a str, &'a str)>), // List of props which couldn't be resolved (name, aspect)
+    Undefined(Vec<(&'a str, &'a str)>), // List of props which couldn't be resolved (name, aspect)
     Err(ResolveError)
 }
 
@@ -36,6 +36,7 @@ impl Expression {
     // (DONE) Properties of some simple types plus binary operators.  
     // TODO: Handling of Version simple type, need to implement operators
     // TODO: Handling of List property type, and equals operator (ignore other comparison operators)
+    // TODO: Rework resolve so that ResolveResult is based on strs and not Strings
     // (DONE) wildcard matching of property values
     // TODO: wildcard matching of value-less properties
     // TODO: aspects
@@ -118,7 +119,7 @@ impl Expression {
                                         }
                                     },
                                     None => {
-                                        ResolveResult::Undefined(vec![name.to_string()])
+                                        ResolveResult::Undefined(vec![(name, aspect)])
                                     }
                                 }
                             },
@@ -126,12 +127,12 @@ impl Expression {
 
                     },
                     Property::Implicit(_name) => {
-                        ResolveResult::Undefined(vec![name.to_string()])
+                        ResolveResult::Undefined(vec![(name, "")])
                     }
                 }
             },
             None => {
-                ResolveResult::Undefined(vec![name.to_string()])
+                ResolveResult::Undefined(vec![(name, "")])
             }
         }
 
@@ -178,7 +179,7 @@ impl Expression {
     }
 
     // Resolve property/aspect presence
-    fn resolve_present(&self, attr : &PropertyRef, property_set : &PropertySet) -> ResolveResult {
+    fn resolve_present<'a>(&self, attr : &'a PropertyRef, property_set : &'a PropertySet) -> ResolveResult<'a> {
         match attr {
             // for value reference - only check if property exists in PropertySet
             PropertyRef::Value(name) => {
@@ -187,7 +188,7 @@ impl Expression {
                         ResolveResult::True
                     },
                     None => {
-                        ResolveResult::False(vec![name.to_string()])
+                        ResolveResult::False(vec![(name, "")])
                     }
                 }
             },
@@ -202,17 +203,17 @@ impl Expression {
                                         ResolveResult::True
                                     },
                                     None => {
-                                        ResolveResult::False(vec![format!("{}[{}]", name, aspect)])
+                                        ResolveResult::False(vec![(name, aspect)])
                                     }
                                 }
                             },
                             Property::Implicit(_name) => { // no aspects for implicit properties
-                                ResolveResult::False(vec![format!("{}[{}]", name, aspect)])
+                                ResolveResult::False(vec![(name, aspect)])
                             }
                         }
                     },
                     None => {
-                        ResolveResult::False(vec![format!("{}[{}]", name, aspect)])
+                        ResolveResult::False(vec![(name, aspect)])
                     }
                 }
             }

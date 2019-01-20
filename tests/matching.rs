@@ -40,7 +40,7 @@ fn match_weak_simple_undefined() {
     offer.properties.push(String::from("o1=v2"));
     offer.constraints = String::from("(d1=v3)");
 
-    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::Undefined(vec![String::from("o3")], vec![])));
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::Undefined(vec![("o3", "")], vec![])));
 }
 
 #[test]
@@ -68,7 +68,7 @@ fn match_weak_dynamic_property_no_match() {
 
     assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), 
                           &PreparedOffer::from(&offer).unwrap()), 
-               Ok(MatchResult::False(vec![String::from("o1dblah")], vec![])));
+               Ok(MatchResult::False(vec![("o1dblah", "")], vec![])));
 }
 
 #[ignore]
