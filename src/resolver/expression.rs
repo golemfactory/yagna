@@ -144,7 +144,7 @@ impl Expression {
                 ResolveResult::True => { /* do nothing, keep iterating */ },
                 ResolveResult::False(mut un_props) => { 
                         all_un_props.append(& mut un_props);
-                        return ResolveResult::False(un_props) 
+                        return ResolveResult::False(all_un_props) 
                     },
                 ResolveResult::Undefined(mut un_props) => { 
                         all_un_props.append(& mut un_props);
