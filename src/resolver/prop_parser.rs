@@ -3,15 +3,6 @@ use std::str;
 use nom::IResult;
 use nom::digit;
 
-// Tag constants
-
-pub const TAG_STRING : u64 = 0;
-pub const TAG_NUMBER : u64 = 1;
-pub const TAG_BOOLEAN_TRUE : u64 = 2;
-pub const TAG_BOOLEAN_FALSE : u64 = 3;
-pub const TAG_DATETIME : u64 = 4;
-pub const TAG_VERSION : u64 = 5;
-
 named!(prop_def <&str, &str>, 
     do_parse!(
             res: take_till!(is_equal_sign) >> 
@@ -65,7 +56,26 @@ named!(end <&str, &str >,
 );
 
 // parser of property value literals
-named!(val_literal <(u64, &[u8])>, alt!( string_literal | version_literal | datetime_literal | true_literal | false_literal | number_literal ) );
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal<'a> {
+    Str(&'a str),
+    Number(&'a str),
+    Bool(bool),
+    Version(&'a str),
+    DateTime(&'a str),
+    List(Vec<Box<Literal<'a>>>),
+}
+
+named!(val_literal <Literal>, alt!( 
+    string_literal | 
+    version_literal | 
+    datetime_literal | 
+    true_literal | 
+    false_literal | 
+    number_literal |
+    list_literal
+    ) );
 
 // named!( string_literal <(u64, &[u8])>, ws!(
 //     delimited!(
@@ -81,50 +91,70 @@ named!(val_literal <(u64, &[u8])>, alt!( string_literal | version_literal | date
 //     )
 // ));
 
-named!( string_literal <(u64, &[u8])>, ws!(
+
+named!( list_literal <Literal<'a>>, ws!(
+    delimited!(
+        char!('['), 
+        map!(
+            separated_list!(
+                tag!(","),
+                val_literal
+            ),
+            |v : Vec<Literal<'a>>| { 
+                
+                Literal::List(
+                    v.into_iter().map(|item| { Box::new(item) }).collect()
+                )
+            }
+        ),
+        char!(']')
+    )
+));
+
+named!( string_literal <Literal>, ws!(
     delimited!(
         char!('"'), 
         do_parse!(val : take_until!("\"") >>
-            (TAG_STRING, val)
+            (Literal::Str(str::from_utf8(val).unwrap()))
         ),
         char!('"')
     )
 ));
 
-named!( version_literal <(u64, &[u8])>, ws!(
+named!( version_literal <Literal>, ws!(
     delimited!(
         tag!("v\""), 
         do_parse!(val : take_until!("\"") >>
-            (TAG_VERSION, val)
+            (Literal::Version(str::from_utf8(val).unwrap()))
         ),
         char!('"')
     )
 ));
 
-named!( datetime_literal <(u64, &[u8])>, ws!(
+named!( datetime_literal <Literal>, ws!(
     delimited!(
         tag!("t\""), 
         do_parse!(val : take_until!("\"") >>
-            (TAG_DATETIME, val)
+            (Literal::DateTime(str::from_utf8(val).unwrap()))
         ),
         char!('"')
     )
 ));
 
-named!( true_literal <(u64, &[u8])>, ws!(
+named!( true_literal <Literal>, ws!(
     ws!(
         map!(
             alt!(tag!("true") | tag!("True") | tag!("TRUE")),
-            |val| -> (u64, &[u8]) { (TAG_BOOLEAN_TRUE, val) }
+            |val| { (Literal::Bool(true)) }
         )
     )
 ));
 
-named!( false_literal <(u64, &[u8])>, ws!(
+named!( false_literal <Literal>, ws!(
     ws!(
         map!(
             alt!(tag!("false") | tag!("False") | tag!("FALSE")),
-            |val| -> (u64, &[u8]) { (TAG_BOOLEAN_FALSE, val) }
+            |val| { Literal::Bool(false) }
         )
     )
 ));
@@ -157,10 +187,10 @@ named!(floating_point <&[u8],&[u8]>,
     )
 );
 
-named!(number_literal <(u64, &[u8])> ,
+named!(number_literal <Literal> ,
     do_parse!(
         val : floating_point >>
-        (TAG_NUMBER, val)
+        (Literal::Number(str::from_utf8(val).unwrap()))
     )
 );
 
@@ -209,12 +239,12 @@ pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>), 
 // - v"<version string>" - Version
 // - anything that parses as float - Number
 // - ...anything else - error
-pub fn parse_prop_value_literal(input : &str) -> Result<(u64, &str), String>
+pub fn parse_prop_value_literal(input : &str) -> Result<Literal, String>
 {
     match val_literal(input.as_bytes()) {
         IResult::Done(rest, t) => 
             if rest.len() == 0 { 
-                Ok((t.0, str::from_utf8(t.1).unwrap())) 
+                Ok(t) 
             } 
             else {
                 Err(format!("Unknown literal type: {}", input))

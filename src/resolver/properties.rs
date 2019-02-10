@@ -2,12 +2,15 @@ extern crate uuid;
 extern crate chrono;
 extern crate regex;
 
+use std::str;
+
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use regex::Regex;
 
 use super::errors::{ ParseError };
 use super::prop_parser;
+use super::prop_parser::{ Literal };
 
 // #region PropertyValue
 #[derive(Debug, Clone, PartialEq)]
@@ -19,7 +22,7 @@ pub enum PropertyValue<'a> {
     Number(f64),
     DateTime(DateTime<Utc>),
     Version(&'a str),
-    List(Vec<PropertyValue<'a>>),
+    List(Vec<Box<PropertyValue<'a>>>),
 }
 
 impl <'a> PropertyValue<'a> {
@@ -109,22 +112,38 @@ impl <'a> PropertyValue<'a> {
     pub fn from_value(value : &'a str) -> Result<PropertyValue<'a>, ParseError> {
         
         match prop_parser::parse_prop_value_literal(value) {
-            Ok((tag, val)) => match tag {
-                prop_parser::TAG_STRING => Ok(PropertyValue::Str(val)),
-                prop_parser::TAG_NUMBER => match val.parse::<f64>() { 
-                    Ok(parsed_val) => Ok(PropertyValue::Number(parsed_val)), 
-                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Float: '{}'", val))) },
-                prop_parser::TAG_DATETIME => match PropertyValue::parse_date(val) { 
-                    Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)), 
-                    Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", val))) },
-                prop_parser::TAG_BOOLEAN_TRUE | prop_parser::TAG_BOOLEAN_FALSE => match val.parse::<bool>() { 
-                    Ok(parsed_val) => Ok(PropertyValue::Boolean(parsed_val)), 
-                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Boolean: '{}'", value))) },
-                //TODO "Version" => ...,
-                // TODO implement List type
-                _ => Ok(PropertyValue::Str(val)) // if no type is specified, String is assumed.
-            },
+            Ok(tag) => PropertyValue::from_literal(tag),
             Err(_error) => Err(ParseError::new(&format!("Error parsing literal: '{}'", value)))
+        }
+    }
+
+    fn from_literal(literal : Literal<'a>) -> Result<PropertyValue<'a>, ParseError> {
+        match literal {
+            Literal::Str(val) => Ok(PropertyValue::Str(val)),
+            Literal::Number(val) => match val.parse::<f64>() { 
+                Ok(parsed_val) => Ok(PropertyValue::Number(parsed_val)), 
+                Err(_err) => Err(ParseError::new(&format!("Error parsing as Number: '{}'", val))) },
+            Literal::DateTime(val) => match PropertyValue::parse_date(val) { 
+                Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)), 
+                Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", val))) },
+            Literal::Bool(val) => Ok(PropertyValue::Boolean(val)),
+            //TODO "Version" => ...,
+            // TODO implement List type
+            Literal::List(vals) => {
+                
+                // Attempt parsing...
+                let results : Vec<Result<PropertyValue<'a>, ParseError>> = vals.into_iter().map( |item| { PropertyValue::from_literal(*item) } ).collect();
+
+                // TODO: ...then check if all results are successful.
+
+                // If yes - map all items into PropertyValues
+                
+                Ok(PropertyValue::List(
+                    results.into_iter().map( | item | {match item { Ok(prop_val) => Box::new(prop_val), _ => panic!() } } ).collect()
+                ))
+            },
+
+            _ => panic!("Literal type not implemented!") // if no type is specified, String is assumed.
         }
     }
 }
