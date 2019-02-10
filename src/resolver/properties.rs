@@ -13,9 +13,10 @@ use super::prop_parser;
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyValue<'a> {
     Str(&'a str), // String 
-    Int(i32), 
-    Long(i64),
-    Float(f64),
+    Boolean(bool),
+    //Int(i32), 
+    //Long(i64),
+    Number(f64),
     DateTime(DateTime<Utc>),
     Version(&'a str),
     List(Vec<PropertyValue<'a>>),
@@ -27,9 +28,7 @@ impl <'a> PropertyValue<'a> {
     pub fn equals(&self, val : &str) -> bool {
         match self {
             PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(val, *value),  // enhanced string comparison
-            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { parsed_value == *value }, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
@@ -39,9 +38,7 @@ impl <'a> PropertyValue<'a> {
     pub fn less(&self, val : &str) -> bool {
         match self {
             PropertyValue::Str(value) => *value < val,  // trivial string comparison
-            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value < parsed_value }, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
@@ -51,9 +48,7 @@ impl <'a> PropertyValue<'a> {
     pub fn less_equal(&self, val : &str) -> bool {
         match self {
             PropertyValue::Str(value) => *value <= val,  // trivial string comparison
-            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value <= parsed_value }, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
@@ -63,9 +58,7 @@ impl <'a> PropertyValue<'a> {
     pub fn greater(&self, val : &str) -> bool {
         match self {
             PropertyValue::Str(value) => *value > val,  // trivial string comparison
-            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value > parsed_value }, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
@@ -75,9 +68,7 @@ impl <'a> PropertyValue<'a> {
     pub fn greater_equal(&self, val : &str) -> bool {
         match self {
             PropertyValue::Str(value) => *value >= val,  // trivial string comparison
-            PropertyValue::Int(value) => match val.parse::<i32>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Long(value) => match val.parse::<i64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Float(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value >= parsed_value }, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
@@ -114,28 +105,26 @@ impl <'a> PropertyValue<'a> {
         }
     }
 
-    // Create PropertyValue from (optional) type name and value string.
-    pub fn from_type_and_value(type_name : Option<&str>, value : &'a str) -> Result<PropertyValue<'a>, ParseError> {
-        match type_name {
-            None => Ok(PropertyValue::Str(value)),
-            Some(tn) => match tn {
-                "String" => Ok(PropertyValue::Str(value)),
-                "Int" => match value.parse::<i32>() { 
-                    Ok(parsed_val) => Ok(PropertyValue::Int(parsed_val)), 
-                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Int: '{}'", value))) },
-                "Long" => match value.parse::<i64>() { 
-                    Ok(parsed_val) => Ok(PropertyValue::Long(parsed_val)), 
-                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Long: '{}'", value))) },
-                "Float" => match value.parse::<f64>() { 
-                    Ok(parsed_val) => Ok(PropertyValue::Float(parsed_val)), 
-                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Float: '{}'", value))) },
-                "DateTime" => match PropertyValue::parse_date(value) { 
+    // Create PropertyValue from value string.
+    pub fn from_value(value : &'a str) -> Result<PropertyValue<'a>, ParseError> {
+        
+        match prop_parser::parse_prop_value_literal(value) {
+            Ok((tag, val)) => match tag {
+                prop_parser::TAG_STRING => Ok(PropertyValue::Str(val)),
+                prop_parser::TAG_NUMBER => match val.parse::<f64>() { 
+                    Ok(parsed_val) => Ok(PropertyValue::Number(parsed_val)), 
+                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Float: '{}'", val))) },
+                prop_parser::TAG_DATETIME => match PropertyValue::parse_date(val) { 
                     Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)), 
-                    Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", value))) },
+                    Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", val))) },
+                prop_parser::TAG_BOOLEAN_TRUE | prop_parser::TAG_BOOLEAN_FALSE => match val.parse::<bool>() { 
+                    Ok(parsed_val) => Ok(PropertyValue::Boolean(parsed_val)), 
+                    Err(_err) => Err(ParseError::new(&format!("Error parsing as Boolean: '{}'", value))) },
                 //TODO "Version" => ...,
                 // TODO implement List type
-                _ => Ok(PropertyValue::Str(value)) // if no type is specified, String is assumed.
-            }
+                _ => Ok(PropertyValue::Str(val)) // if no type is specified, String is assumed.
+            },
+            Err(_error) => Err(ParseError::new(&format!("Error parsing literal: '{}'", value)))
         }
     }
 }
@@ -172,6 +161,7 @@ impl <'a> PropertySet<'a> {
                 },
                 Err(_error) => {
                     // do nothing??? ignore the faulty property
+                    println!("Error: {:?}", _error);
                 }
             }
         }
@@ -181,27 +171,17 @@ impl <'a> PropertySet<'a> {
 
     // Parsing of property values/types
     fn parse_flat_prop(prop_flat : &'a str) -> Result<(&'a str, Property<'a>), ParseError> {
-        // Parse the property string to extract: property name, property type and property value(s)
-        println!("parse_flat_prop: {}", prop_flat);
-
+        // Parse the property string to extract: property name and property value(s) - also detecting the property types
         match prop_parser::parse_prop_def(prop_flat) {
             Ok((name, value)) =>
             {
                 match value {
                     Some(val) => 
                     {
-                        match prop_parser::parse_prop_ref_with_type(name) {
-                            Ok((name, opt_type)) => {
-                                println!("From_type_and_value: {:?}, {:?}", opt_type, val);
-                                match PropertyValue::from_type_and_value(opt_type, val) {
-                                    Ok(prop_value) => Ok((name, Property::Explicit(name, prop_value, HashMap::new()))),
-                                    Err(error) => Err(error)
-                                }
-                            },
-                            Err(error) =>
-                                Err(ParseError::new(&error))
+                        match PropertyValue::from_value(val) {
+                            Ok(prop_value) => Ok((name, Property::Explicit(name, prop_value, HashMap::new()))),
+                            Err(error) => Err(error)
                         }
-                        
                     },
                     None => Ok((name, Property::Implicit(name)))
                 }

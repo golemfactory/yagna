@@ -72,11 +72,11 @@ fn resolve_present() {
 
     // test positive 
 
-    run_resolve_test(f, &vec!["objectClass=Babs Jensen"], ResolveResult::True);
+    run_resolve_test(f, &vec!["objectClass=\"Babs Jensen\""], ResolveResult::True);
 
     // test negative (must return name of unresolved property)
 
-    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![("objectClass", "")]));
+    run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![("objectClass", "")]));
 }
 
 #[test]
@@ -85,12 +85,12 @@ fn resolve_present_aspect() {
 
     // test positive 
 
-    run_resolve_test_with_aspect(f, &vec!["objectClass=Babs Jensen"], &vec![("objectClass", "aspect", "asp_val")], ResolveResult::True);
+    run_resolve_test_with_aspect(f, &vec!["objectClass=\"Babs Jensen\""], &vec![("objectClass", "aspect", "asp_val")], ResolveResult::True);
 
     // test negative (must return name of unresolved property and aspect)
 
-    run_resolve_test(f, &vec!["objectClass=Dblah"], ResolveResult::False(vec![("objectClass", "aspect")]));
-    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![("objectClass", "aspect")]));
+    run_resolve_test(f, &vec!["objectClass=\"Dblah\""], ResolveResult::False(vec![("objectClass", "aspect")]));
+    run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![("objectClass", "aspect")]));
 }
 
 #[test]
@@ -108,15 +108,15 @@ fn resolve_equals() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn=Babs Jensen"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=\"Babs Jensen\""], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
 }
 
 #[test]
@@ -125,16 +125,16 @@ fn resolve_equals_aspect() {
 
     // test positive
 
-    run_resolve_test_with_aspect(f, &vec!["cn=Babs Jensen"], &vec![("cn", "aspect", "asp_value")], ResolveResult::True);
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_value")], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test_with_aspect(f, &vec!["cn=Babs Jensen"], &vec![("cn", "aspect", "asp_dif_value")], ResolveResult::False(vec![]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_dif_value")], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test_with_aspect(f, &vec!["cn=Babs Jensen"], &vec![("cn", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
-    run_resolve_test_with_aspect(f, &vec!["cncxc=Babs Jensen"], &vec![("cncxc", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
+    run_resolve_test_with_aspect(f, &vec!["cncxc=\"Babs Jensen\""], &vec![("cncxc", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "")]));
 }
 
 #[test]
@@ -143,15 +143,15 @@ fn resolve_equals_with_wildcard() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn=Babs Jensen"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=\"Babs Jensen\""], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=Dblah"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
 }
 
 #[test]
@@ -160,16 +160,16 @@ fn resolve_equals_int() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=123"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn:Int=456"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=456"], ResolveResult::False(vec![]));
 
     // test false when parsing error
 
     let f = "(cn=1ds23)";
-    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=123"], ResolveResult::False(vec![]));
 
 }
 
@@ -179,16 +179,16 @@ fn resolve_greater_int() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn:Int=124"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=124"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn:Int=12"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=12"], ResolveResult::False(vec![]));
 
     // test false when parsing error
 
     let f = "(cn>1ds23)";
-    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=123"], ResolveResult::False(vec![]));
 
 }
 
@@ -198,16 +198,16 @@ fn resolve_less_float() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn:Float=122.674"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=122.674"], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn:Float=126"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=126"], ResolveResult::False(vec![]));
 
     // test false when parsing error
 
     let f = "(cn<1ds23)";
-    run_resolve_test(f, &vec!["cn:Int=123"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=123"], ResolveResult::False(vec![]));
 
 }
 
@@ -217,17 +217,17 @@ fn resolve_less_equal_datetime() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:20:30.52Z"], ResolveResult::True);
-    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:20:50.52Z"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:20:30.52Z\""], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:20:50.52Z\""], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:21:50.52Z"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:21:50.52Z\""], ResolveResult::False(vec![]));
 
     // test false when parsing error (NOTE the RFC 3339 format is fairly strict)
 
     let f = "(cn<=1985-04-13)";
-    run_resolve_test(f, &vec!["cn:DateTime=1985-04-12T23:20:50.52Z"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:20:50.52Z\""], ResolveResult::False(vec![]));
 
 }
 
@@ -250,15 +250,15 @@ fn resolve_not() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn=Babs Jensen"], ResolveResult::True);
+    run_resolve_test(f, &vec!["cn=\"Babs Jensen\""], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=Tim Howes"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["cn=\"Tim Howes\""], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=Dblah"], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
 }
 
 #[test]
@@ -267,15 +267,15 @@ fn resolve_not_aspect() {
 
     // test positive
 
-    run_resolve_test_with_aspect(f, &vec!["cn=Babs Jensen"], &vec![("cn", "aspect", "asp_dif_value")], ResolveResult::True);
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_dif_value")], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test_with_aspect(f, &vec!["cn=Tim Howes"], &vec![("cn", "aspect", "asp_value")], ResolveResult::False(vec![]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Tim Howes\""], &vec![("cn", "aspect", "asp_value")], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test_with_aspect(f, &vec!["cn=Dblah"], &vec![("cn", "aspect2", "asp2_dif_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![("cn", "aspect2", "asp2_dif_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
 }
 
 #[test]
@@ -305,15 +305,15 @@ fn resolve_and() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["a=b", "b=c", "c=d"], ResolveResult::True);
+    run_resolve_test(f, &vec!["a=\"b\"", "b=\"c\"", "c=\"d\""], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["a=x", "b=c", "c=d"], ResolveResult::False(vec![]));
+    run_resolve_test(f, &vec!["a=\"x\"", "b=\"c\"", "c=\"d\""], ResolveResult::False(vec![]));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined(vec![("a", "")]));
+    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], ResolveResult::Undefined(vec![("a", "")]));
 }
 
 #[test]
@@ -322,15 +322,15 @@ fn resolve_or() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["a=b", "b=c", "c=d"], ResolveResult::True);
+    run_resolve_test(f, &vec!["a=\"b\"", "b=\"c\"", "c=\"d\""], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test(f, &vec!["a=x", "b=y", "c=z"], ResolveResult::False(vec!()));
+    run_resolve_test(f, &vec!["a=\"x\"", "b=\"y\"", "c=\"z\""], ResolveResult::False(vec!()));
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=c", "c=d"], ResolveResult::Undefined(vec![("a", "")]));
+    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], ResolveResult::Undefined(vec![("a", "")]));
 }
 
 #[test]
@@ -339,5 +339,5 @@ fn resolve_complex() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["a=b", "b=x", "c=y", "x=notdblah"], ResolveResult::True);
+    run_resolve_test(f, &vec!["a=\"b\"", "b=\"x\"", "c=\"y\"", "x=\"notdblah\""], ResolveResult::True);
 }

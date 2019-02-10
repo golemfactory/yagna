@@ -31,7 +31,8 @@ pub enum Expression {
 }
 
 impl Expression {
-    // Implement strong resolution (ie. undefined results are propagated rather than ignored)
+    // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
+    // Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
     // (DONE) It may be useful to return list of properties which couldn't be resolved 
     // (DONE) Properties of some simple types plus binary operators.  
     // TODO: Handling of Version simple type, need to implement operators
