@@ -200,9 +200,9 @@ named!(number_literal <Literal> ,
 // Returns a tuple of (property_name, Option(property_value))
 pub fn parse_prop_def(input : &str) -> Result<(&str, Option<&str>), String>
 {
-    println!("parse_prop_def: {}", input);
-    
-    match prop_def(input) {
+    let iresult = prop_def(input);
+
+    match iresult {
         IResult::Done(rest, t) => Ok((t, Some(rest))),
         IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
         IResult::Incomplete(_needed) => {
@@ -241,7 +241,9 @@ pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>), 
 // - ...anything else - error
 pub fn parse_prop_value_literal(input : &str) -> Result<Literal, String>
 {
-    match val_literal(input.as_bytes()) {
+    let iresult = val_literal(input.as_bytes());
+
+    match iresult {
         IResult::Done(rest, t) => 
             if rest.len() == 0 { 
                 Ok(t) 
@@ -249,7 +251,10 @@ pub fn parse_prop_value_literal(input : &str) -> Result<Literal, String>
             else {
                 Err(format!("Unknown literal type: {}", input))
             },
-            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+            IResult::Error(error_kind) => {
+                println!("Error kind: {:?}", error_kind);
+                Err(format!("Parsing error: {} in text '{}'", error_kind.to_string(), input))
+            },
             IResult::Incomplete(_needed) => {
                 println!("Needed {:?}", _needed);
                 Err(format!("Parsing error: {:?}", _needed))

@@ -72,13 +72,80 @@ fn from_value_literal_error() {
 }
 
 #[test]
+fn from_value_list_ok() {
+    let prop_value = PropertyValue::from_value("[\"abc\",\"def\"]");
+
+    assert_eq!(prop_value, Ok(PropertyValue::List(vec![
+        Box::new(PropertyValue::Str("abc")),
+        Box::new(PropertyValue::Str("def"))
+    ]
+    )));
+}
+
+#[test]
+fn from_value_list_error() {
+    let prop_value = PropertyValue::from_value("[\"abc\",asdasdas]");
+
+    assert_eq!(prop_value, Err(ParseError::new("Error parsing literal: '[\"abc\",asdasdas]'" )));
+}
+
+#[test]
 fn from_flat_props_ok() {
 
-    let props = vec![String::from("objectClass=Babs Jensen")];
+    let props = vec![String::from("objectClass=\"Babs Jensen\"")];
     
     let property_set = PropertySet::from_flat_props(&props);
 
     assert_eq!(property_set, PropertySet{ 
-        properties : HashMap::new()
+        properties : { let mut x = HashMap::new(); x.insert("objectClass", Property::Explicit("objectClass", PropertyValue::Str("Babs Jensen"), HashMap::new())); x }
     });
+}
+
+#[test]
+fn equals_for_strings_simple_true() {
+    let prop_value = PropertyValue::Str("abc");
+
+    assert_eq!(prop_value.equals("abc"), true);
+}
+
+#[test]
+fn equals_for_strings_simple_false() {
+    let prop_value = PropertyValue::Str("abc");
+
+    assert_eq!(prop_value.equals("abas"), false);
+}
+
+#[test]
+fn equals_for_strings_wildcard_true() {
+    let prop_value = PropertyValue::Str("abc");
+
+    assert_eq!(prop_value.equals("ab*"), true);
+}
+
+#[test]
+fn equals_for_strings_wildcard_false() {
+    let prop_value = PropertyValue::Str("abc");
+
+    assert_eq!(prop_value.equals("as*"), false);
+}
+
+#[test]
+fn equals_for_list_contains_true() {
+    let prop_value = PropertyValue::List(vec![
+        Box::new(PropertyValue::Str("abc")),
+        Box::new(PropertyValue::Str("def"))
+        ]);
+
+    assert_eq!(prop_value.equals("abc"), true);
+    assert_eq!(prop_value.equals("def"), true);
+}
+
+#[test]
+fn equals_for_list_contains_false() {
+    let prop_value = PropertyValue::List(vec![
+        Box::new(PropertyValue::Str("abc")),
+        Box::new(PropertyValue::Str("def"))
+        ]);
+
+    assert_eq!(prop_value.equals("fds"), false);
 }

@@ -91,6 +91,12 @@ fn parse_prop_value_from_literal_list_string() {
 }
 
 #[test]
+fn parse_prop_value_from_literal_list_error() {
+    assert_eq!(parse_prop_value_literal("[\"abc\",asda33]"), Err(String::from("Parsing error: Alternative in text '[\"abc\",asda33]'")));
+}
+
+
+#[test]
 fn parse_prop_value_from_literal_list_empty() {
     assert_eq!(parse_prop_value_literal("[]"), Ok(Literal::List(
         vec![]

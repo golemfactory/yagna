@@ -134,7 +134,14 @@ impl <'a> PropertyValue<'a> {
                 // Attempt parsing...
                 let results : Vec<Result<PropertyValue<'a>, ParseError>> = vals.into_iter().map( |item| { PropertyValue::from_literal(*item) } ).collect();
 
-                // TODO: ...then check if all results are successful.
+                // ...then check if all results are successful.
+
+                for item in results.iter() {
+                    match item { 
+                        Err(error) => { return Err(ParseError::new(&format!("Error parsing list: '{}'", error))); },
+                        _ => {}
+                        }
+                }
 
                 // If yes - map all items into PropertyValues
                 
