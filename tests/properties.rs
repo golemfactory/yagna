@@ -1,9 +1,11 @@
 extern crate market_api;
 extern crate chrono;
+extern crate semver;
 
 use std::collections::*;
 
 use chrono::*;
+use semver::Version;
 
 use market_api::resolver::properties::*;
 use market_api::resolver::errors::ParseError;
@@ -62,6 +64,13 @@ fn from_value_datetime_error() {
     let prop_value = PropertyValue::from_value("t\"1dblah23\"");
     
     assert_eq!(prop_value, Err(ParseError::new("Error parsing as DateTime: '1dblah23'") ));
+}
+
+#[test]
+fn from_value_version_ok() {
+    let prop_value = PropertyValue::from_value("v\"1.3.0\"");
+
+    assert_eq!(prop_value, Ok(PropertyValue::Version(semver::Version::parse("1.3.0").unwrap())));
 }
 
 #[test]
@@ -128,6 +137,21 @@ fn equals_for_strings_wildcard_false() {
 
     assert_eq!(prop_value.equals("as*"), false);
 }
+
+#[test]
+fn equals_for_version_simple_true() {
+    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
+
+    assert_eq!(prop_value.equals("0.5.0"), true);
+}
+
+#[test]
+fn equals_for_version_simple_false() {
+    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
+
+    assert_eq!(prop_value.equals("0.6.1"), false);
+}
+
 
 #[test]
 fn equals_for_list_contains_true() {

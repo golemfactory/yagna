@@ -1,12 +1,14 @@
 extern crate uuid;
 extern crate chrono;
 extern crate regex;
+extern crate semver;
 
 use std::str;
 
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use regex::Regex;
+use semver::Version;
 
 use super::errors::{ ParseError };
 use super::prop_parser;
@@ -21,7 +23,7 @@ pub enum PropertyValue<'a> {
     //Long(i64),
     Number(f64),
     DateTime(DateTime<Utc>),
-    Version(&'a str),
+    Version(Version),
     List(Vec<Box<PropertyValue<'a>>>),
 }
 
@@ -127,8 +129,9 @@ impl <'a> PropertyValue<'a> {
                 Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)), 
                 Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", val))) },
             Literal::Bool(val) => Ok(PropertyValue::Boolean(val)),
-            //TODO "Version" => ...,
-            // TODO implement List type
+            Literal::Version(val) => match Version::parse(val) { 
+                Ok(parsed_val) => Ok(PropertyValue::Version(parsed_val)), 
+                Err(_err) => Err(ParseError::new(&format!("Error parsing as Version: '{}'", val))) },
             Literal::List(vals) => {
                 
                 // Attempt parsing...

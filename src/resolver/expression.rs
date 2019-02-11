@@ -32,12 +32,13 @@ pub enum Expression {
 
 impl Expression {
     // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
-    // Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
+    // TODO: Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
     // (DONE) It may be useful to return list of properties which couldn't be resolved 
     // (DONE) Properties of some simple types plus binary operators.  
-    // TODO: Handling of Version simple type, need to implement operators
-    // TODO: Handling of List property type, and equals operator (ignore other comparison operators)
-    // TODO: Rework resolve so that ResolveResult is based on strs and not Strings
+    // TODO: Handling of Version simple type, need to implement operators (look at semver crate!)
+    // (DONE) Handling of List property type
+    // TODO: equals operator for List property type (ignore other comparison operators)
+    // (DONE) Rework resolve so that ResolveResult is based on strs and not Strings
     // (DONE) wildcard matching of property values
     // TODO: wildcard matching of value-less properties
     // TODO: aspects
