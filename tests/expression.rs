@@ -48,24 +48,6 @@ fn run_resolve_test(expr : &str, props : &Vec<&str>, expect_result : ResolveResu
     assert_eq!(expression.resolve(&property_set), expect_result);
 }
 
-fn run_resolve_test_with_aspect(expr : &str, props : &Vec<&str>, aspects : &Vec<(&str, &str, &str)>, expect_result : ResolveResult) {
-    let expression = build_expression(&parse(expr).unwrap()).unwrap();
-
-    let mut properties = vec![];
-    for prop in props {
-        properties.push(prop.to_string());
-    }
-
-    let mut property_set = PropertySet::from_flat_props(&properties);
-
-    for aspect in aspects {
-        property_set.set_property_aspect(aspect.0, aspect.1, aspect.2)
-    }
-
-
-    assert_eq!(expression.resolve(&property_set), expect_result);
-}
-
 #[test]
 fn resolve_present() {
     let f = "(objectClass=*)";
@@ -77,20 +59,6 @@ fn resolve_present() {
     // test negative (must return name of unresolved property)
 
     run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![("objectClass", "")]));
-}
-
-#[test]
-fn resolve_present_aspect() {
-    let f = "(objectClass[aspect]=*)";
-
-    // test positive 
-
-    run_resolve_test_with_aspect(f, &vec!["objectClass=\"Babs Jensen\""], &vec![("objectClass", "aspect", "asp_val")], ResolveResult::True);
-
-    // test negative (must return name of unresolved property and aspect)
-
-    run_resolve_test(f, &vec!["objectClass=\"Dblah\""], ResolveResult::False(vec![("objectClass", "aspect")]));
-    run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![("objectClass", "aspect")]));
 }
 
 #[test]
@@ -117,24 +85,6 @@ fn resolve_equals() {
     // test undefined
 
     run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
-}
-
-#[test]
-fn resolve_equals_aspect() {
-    let f = "(cn[aspect]=asp_value)";
-
-    // test positive
-
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_value")], ResolveResult::True);
-
-    // test negative
-
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_dif_value")], ResolveResult::False(vec![]));
-
-    // test undefined
-
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
-    run_resolve_test_with_aspect(f, &vec!["cncxc=\"Babs Jensen\""], &vec![("cncxc", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "")]));
 }
 
 #[test]
@@ -259,23 +209,6 @@ fn resolve_not() {
     // test undefined
 
     run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
-}
-
-#[test]
-fn resolve_not_aspect() {
-    let f = "(!(cn[aspect]=asp_value))";
-
-    // test positive
-
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_dif_value")], ResolveResult::True);
-
-    // test negative
-
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Tim Howes\""], &vec![("cn", "aspect", "asp_value")], ResolveResult::False(vec![]));
-
-    // test undefined
-
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![("cn", "aspect2", "asp2_dif_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
 }
 
 #[test]

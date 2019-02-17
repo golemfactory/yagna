@@ -35,6 +35,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(val, *value),  // enhanced string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { parsed_value == *value }, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
     }
@@ -45,6 +46,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Str(value) => *value < val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value < parsed_value }, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
     }
@@ -55,6 +57,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Str(value) => *value <= val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value <= parsed_value }, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
     }
@@ -65,6 +68,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Str(value) => *value > val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value > parsed_value }, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
     }
@@ -75,6 +79,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Str(value) => *value >= val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value >= parsed_value }, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
     }
