@@ -36,8 +36,16 @@ fn resolve_present_aspect() {
 
     // test negative (must return name of unresolved property and aspect)
 
-    run_resolve_test_with_aspect(f, &vec!["objectClass=\"Dblah\""], &vec![], ResolveResult::False(vec![&PropertyRef::Aspect(String::from("objectClass"), String::from("aspect"))]));
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![], ResolveResult::False(vec![&PropertyRef::Aspect(String::from("objectClass"), String::from("aspect"))]));
+    run_resolve_test_with_aspect(f, &vec!["objectClass=\"Dblah\""], &vec![], 
+                                ResolveResult::False(
+                                    vec![&PropertyRef::Aspect(String::from("objectClass"), String::from("aspect"))],
+                                    Expression::Empty
+                                ));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![], 
+                                ResolveResult::False(
+                                    vec![&PropertyRef::Aspect(String::from("objectClass"), String::from("aspect"))],
+                                    Expression::Present(PropertyRef::Aspect(String::from("objectClass"), String::from("aspect")))
+                                ));
 }
 
 #[test]
@@ -50,12 +58,21 @@ fn resolve_equals_aspect() {
 
     // test negative
 
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_dif_value")], ResolveResult::False(vec![]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_dif_value")], 
+                                ResolveResult::False(vec![], Expression::Empty));
 
     // test undefined
 
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect2", "asp_value")], ResolveResult::Undefined(vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))]));
-    run_resolve_test_with_aspect(f, &vec!["cncxc=\"Babs Jensen\""], &vec![("cncxc", "aspect2", "asp_value")], ResolveResult::Undefined(vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect2", "asp_value")], 
+                                ResolveResult::Undefined(
+                                    vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))],
+                                    Expression::Equals(PropertyRef::Aspect(String::from("cn"), String::from("aspect")), String::from("asp_value"))
+                                ));
+    run_resolve_test_with_aspect(f, &vec!["cncxc=\"Babs Jensen\""], &vec![("cncxc", "aspect2", "asp_value")], 
+                                ResolveResult::Undefined(
+                                    vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))],
+                                    Expression::Equals(PropertyRef::Aspect(String::from("cn"), String::from("aspect")), String::from("asp_value"))
+                                ));
 }
 
 #[test]
@@ -68,10 +85,18 @@ fn resolve_not_aspect() {
 
     // test negative
 
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Tim Howes\""], &vec![("cn", "aspect", "asp_value")], ResolveResult::False(vec![]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Tim Howes\""], &vec![("cn", "aspect", "asp_value")], 
+                                ResolveResult::False(
+                                    vec![],
+                                    Expression::Empty
+                                ));
 
     // test undefined
 
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![("cn", "aspect2", "asp2_dif_value")], ResolveResult::Undefined(vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![("cn", "aspect2", "asp2_dif_value")], 
+                                ResolveResult::Undefined(
+                                    vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))],
+                                    Expression::Not(Box::new(Expression::Equals(PropertyRef::Aspect(String::from("cn"), String::from("aspect")), String::from("asp_value"))))
+                                ));
 }
 

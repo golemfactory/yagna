@@ -36,15 +36,15 @@ pub fn match_weak<'a>(demand : &'a PreparedDemand, offer : &'a PreparedOffer) ->
 
     match result1 {
         ResolveResult::True => { result1_binary = true; },
-        ResolveResult::False(mut un_props) => {  result1_binary = false; un_props1.append(&mut un_props); },
-        ResolveResult::Undefined(mut un_props) => { result1_undefined = true; un_props1.append(&mut un_props); },
+        ResolveResult::False(mut un_props, unresolved_expr) => { result1_binary = false; un_props1.append(&mut un_props); },
+        ResolveResult::Undefined(mut un_props, unresolved_expr) => { result1_undefined = true; un_props1.append(&mut un_props); },
         ResolveResult::Err(error) => { return Err(MatchError::new(&format!("Error resolving Demand constraints: {}", error))); }
     };
 
     match result2 {
         ResolveResult::True => { result2_binary = true; },
-        ResolveResult::False(mut un_props) => {  result2_binary = false; un_props2.append(&mut un_props); },
-        ResolveResult::Undefined(mut un_props) => { result2_undefined = true; un_props2.append(&mut un_props); },
+        ResolveResult::False(mut un_props, unresolved_expr) => {  result2_binary = false; un_props2.append(&mut un_props); },
+        ResolveResult::Undefined(mut un_props, unresolved_expr) => { result2_undefined = true; un_props2.append(&mut un_props); },
         ResolveResult::Err(error) => { return Err(MatchError::new(&format!("Error resolving Offer constraints: {}", error))); }
     };
 

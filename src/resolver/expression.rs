@@ -10,8 +10,8 @@ use super::ldap_parser;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolveResult<'a> {
     True,
-    False(Vec<&'a PropertyRef>), // List of props which couldn't be resolved (name, aspect)
-    Undefined(Vec<&'a PropertyRef>), // List of props which couldn't be resolved (name, aspect)
+    False(Vec<&'a PropertyRef>, Expression), // List of prop references which couldn't be resolved, Reduced expression
+    Undefined(Vec<&'a PropertyRef>, Expression ), // List of props which couldn't be resolved (name, aspect), Reduced expression
     Err(ResolveError)
 }
 
@@ -74,9 +74,9 @@ impl Expression {
             },
             Expression::Not(inner_expression) => {
                 match inner_expression.resolve(property_set) {
-                    ResolveResult::True => ResolveResult::False(vec![]),
-                    ResolveResult::False(_) => ResolveResult::True,
-                    ResolveResult::Undefined(un_props) => ResolveResult::Undefined(un_props),
+                    ResolveResult::True => ResolveResult::False(vec![], Expression::Empty),
+                    ResolveResult::False(_, _) => ResolveResult::True,
+                    ResolveResult::Undefined(un_props, unresolved_expr) => ResolveResult::Undefined(un_props, Expression::Not(Box::new(unresolved_expr))),
                     ResolveResult::Err(err) => ResolveResult::Err(err)
                 }
             },
@@ -113,7 +113,7 @@ impl Expression {
                                 }
                                 else
                                 {
-                                    ResolveResult::False(vec![])
+                                    ResolveResult::False(vec![], Expression::Empty) // if resolved to false - return Empty as reduced expression
                                 }
                             },
                             PropertyRef::Aspect(_n, aspect) => { 
@@ -124,11 +124,11 @@ impl Expression {
                                             ResolveResult::True
                                         }
                                         else {
-                                            ResolveResult::False(vec![])
+                                            ResolveResult::False(vec![], Expression::Empty) // if resolved to false - return Empty as reduced expression
                                         }
                                     },
                                     None => {
-                                        ResolveResult::Undefined(vec![attr])
+                                        ResolveResult::Undefined(vec![attr], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
                                     }
                                 }
                             },
@@ -136,29 +136,30 @@ impl Expression {
 
                     },
                     Property::Implicit(_name) => {
-                        ResolveResult::Undefined(vec![attr])
+                        ResolveResult::Undefined(vec![attr], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
                     }
                 }
             },
             None => {
-                ResolveResult::Undefined(vec![attr])
+                ResolveResult::Undefined(vec![attr], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
             }
         }
 
     }
 
     fn resolve_and<'a>(&'a self, seq : &'a Vec<Box<Expression>>, property_set : &'a PropertySet) -> ResolveResult {
-        let mut all_un_props = vec![];
+        let mut unresolved_refs = vec![];
+        // let mut unresolved_exprs = vec![]; // TODO this may be required if we want to resolve all factor expressions (instead of eager resolution)
         for exp in seq {
             match exp.resolve(property_set) {
                 ResolveResult::True => { /* do nothing, keep iterating */ },
-                ResolveResult::False(mut un_props) => { 
-                        all_un_props.append(& mut un_props);
-                        return ResolveResult::False(all_un_props) 
+                ResolveResult::False(mut un_props, unresolved_expr) => { 
+                        unresolved_refs.append(& mut un_props);
+                        return ResolveResult::False(unresolved_refs, Expression::Empty) // resolved properly to false - return Empty as unreduced expression  
                     },
-                ResolveResult::Undefined(mut un_props) => { 
-                        all_un_props.append(& mut un_props);
-                        return ResolveResult::Undefined(all_un_props) 
+                ResolveResult::Undefined(mut un_props, unresolved_expr) => { 
+                        unresolved_refs.append(& mut un_props);
+                        return ResolveResult::Undefined(unresolved_refs, Expression::And(vec![Box::new(unresolved_expr)])) // for the first undefined element - return And as unreduced expression with seq as single element 
                     },
                 ResolveResult::Err(err) => { return ResolveResult::Err(err) }
             }
@@ -169,22 +170,39 @@ impl Expression {
 
     fn resolve_or<'a>(&'a self, seq : &'a Vec<Box<Expression>>, property_set : &'a PropertySet) -> ResolveResult {
         let mut all_un_props = vec![];
+        let mut unresolved_exprs = vec![]; // TODO this may be required if we want to resolve all factor expressions (instead of eager resolution)
         for exp in seq {
             match exp.resolve(property_set) {
                 ResolveResult::True => { return ResolveResult::True },
-                ResolveResult::False(mut un_props) => { 
+                ResolveResult::False(mut un_props, unresolved_expr) => { 
                         all_un_props.append(& mut un_props);
-                    /* keep iterating */ 
+                        /* keep iterating */ 
+                        // We accumulate the unresolved expressions in a list to return
+                        match unresolved_expr {
+                            Expression::Empty => {},
+                            _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
+                        };
                     },
-                ResolveResult::Undefined(mut un_props) => { 
+                ResolveResult::Undefined(mut un_props, unresolved_expr) => { 
                         all_un_props.append(& mut un_props);
-                        return ResolveResult::Undefined(all_un_props) 
+                        match unresolved_expr {
+                            Expression::Empty => {},
+                            _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
+                        };
+                        return ResolveResult::Undefined(all_un_props, Expression::Or(unresolved_exprs)) 
                     },
                 ResolveResult::Err(err) => { return ResolveResult::Err(err) }
             }
         }
 
-        ResolveResult::False(all_un_props)
+        ResolveResult::False(all_un_props, 
+                if unresolved_exprs.len() > 0 {
+                    Expression::Or(unresolved_exprs)
+                }
+                else {
+                    Expression::Empty
+                }
+            )
     }
 
     // Resolve property/aspect presence
@@ -197,7 +215,7 @@ impl Expression {
                         ResolveResult::True
                     },
                     None => {
-                        ResolveResult::False(vec![attr])
+                        ResolveResult::False(vec![attr], Expression::Empty)
                     }
                 }
             },
@@ -212,17 +230,17 @@ impl Expression {
                                         ResolveResult::True
                                     },
                                     None => {
-                                        ResolveResult::False(vec![attr])
+                                        ResolveResult::False(vec![attr], Expression::Empty)
                                     }
                                 }
                             },
                             Property::Implicit(_name) => { // no aspects for implicit properties
-                                ResolveResult::False(vec![attr])
+                                ResolveResult::False(vec![attr], self.clone())
                             }
                         }
                     },
                     None => {
-                        ResolveResult::False(vec![attr])
+                        ResolveResult::False(vec![attr], self.clone())
                     }
                 }
             }
