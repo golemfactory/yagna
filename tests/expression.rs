@@ -58,7 +58,7 @@ fn resolve_present() {
 
     // test negative (must return name of unresolved property)
 
-    run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![("objectClass", "")]));
+    run_resolve_test(f, &vec!["cn=\"Dblah\""], ResolveResult::False(vec![&PropertyRef::Value(String::from("objectClass"))]));
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn resolve_equals() {
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![&PropertyRef::Value(String::from("cn", ))]));
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn resolve_equals_with_wildcard() {
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![&PropertyRef::Value(String::from("cn"))]));
 }
 
 #[test]
@@ -208,7 +208,7 @@ fn resolve_not() {
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test(f, &vec!["cnas=\"Dblah\""], ResolveResult::Undefined(vec![&PropertyRef::Value(String::from("cn"))]));
 }
 
 #[test]
@@ -246,7 +246,7 @@ fn resolve_and() {
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], ResolveResult::Undefined(vec![("a", "")]));
+    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], ResolveResult::Undefined(vec![&PropertyRef::Value(String::from("a"))]));
 }
 
 #[test]
@@ -263,7 +263,7 @@ fn resolve_or() {
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], ResolveResult::Undefined(vec![("a", "")]));
+    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], ResolveResult::Undefined(vec![&PropertyRef::Value(String::from("a"))]));
 }
 
 #[test]

@@ -4,6 +4,7 @@ extern crate market_api;
 
 use market_api::resolver::*;
 use market_api::resolver::ldap_parser::parse;
+use market_api::resolver::properties::{PropertyRef};
 use market_api::resolver::expression::*;
 
 fn run_resolve_test_with_aspect(expr : &str, props : &Vec<&str>, aspects : &Vec<(&str, &str, &str)>, expect_result : ResolveResult) {
@@ -35,8 +36,8 @@ fn resolve_present_aspect() {
 
     // test negative (must return name of unresolved property and aspect)
 
-    run_resolve_test_with_aspect(f, &vec!["objectClass=\"Dblah\""], &vec![], ResolveResult::False(vec![("objectClass", "aspect")]));
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![], ResolveResult::False(vec![("objectClass", "aspect")]));
+    run_resolve_test_with_aspect(f, &vec!["objectClass=\"Dblah\""], &vec![], ResolveResult::False(vec![&PropertyRef::Aspect(String::from("objectClass"), String::from("aspect"))]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![], ResolveResult::False(vec![&PropertyRef::Aspect(String::from("objectClass"), String::from("aspect"))]));
 }
 
 #[test]
@@ -53,8 +54,8 @@ fn resolve_equals_aspect() {
 
     // test undefined
 
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
-    run_resolve_test_with_aspect(f, &vec!["cncxc=\"Babs Jensen\""], &vec![("cncxc", "aspect2", "asp_value")], ResolveResult::Undefined(vec![("cn", "")]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect2", "asp_value")], ResolveResult::Undefined(vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))]));
+    run_resolve_test_with_aspect(f, &vec!["cncxc=\"Babs Jensen\""], &vec![("cncxc", "aspect2", "asp_value")], ResolveResult::Undefined(vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))]));
 }
 
 #[test]
@@ -71,6 +72,6 @@ fn resolve_not_aspect() {
 
     // test undefined
 
-    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![("cn", "aspect2", "asp2_dif_value")], ResolveResult::Undefined(vec![("cn", "aspect")]));
+    run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![("cn", "aspect2", "asp2_dif_value")], ResolveResult::Undefined(vec![&PropertyRef::Aspect(String::from("cn"), String::from("aspect"))]));
 }
 

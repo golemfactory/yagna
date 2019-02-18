@@ -10,8 +10,8 @@ use super::ldap_parser;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolveResult<'a> {
     True,
-    False(Vec<(&'a str, &'a str)>), // List of props which couldn't be resolved (name, aspect)
-    Undefined(Vec<(&'a str, &'a str)>), // List of props which couldn't be resolved (name, aspect)
+    False(Vec<&'a PropertyRef>), // List of props which couldn't be resolved (name, aspect)
+    Undefined(Vec<&'a PropertyRef>), // List of props which couldn't be resolved (name, aspect)
     Err(ResolveError)
 }
 
@@ -33,7 +33,7 @@ pub enum Expression {
 impl Expression {
     // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
     // TODO: Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
-    //       - Refactor ResolveResult to include vector of PropertyRefs rather than plain strings...
+    //       - (DONE) Refactor ResolveResult to include vector of PropertyRefs rather than plain strings...
     // (DONE) It may be useful to return list of properties which couldn't be resolved 
     // (DONE) Properties of some simple types plus binary operators.  
     // (DONE) Handling of Version simple type, need to implement operators.
@@ -125,7 +125,7 @@ impl Expression {
                                         }
                                     },
                                     None => {
-                                        ResolveResult::Undefined(vec![(name, aspect)])
+                                        ResolveResult::Undefined(vec![attr])
                                     }
                                 }
                             },
@@ -133,12 +133,12 @@ impl Expression {
 
                     },
                     Property::Implicit(_name) => {
-                        ResolveResult::Undefined(vec![(name, "")])
+                        ResolveResult::Undefined(vec![attr])
                     }
                 }
             },
             None => {
-                ResolveResult::Undefined(vec![(name, "")])
+                ResolveResult::Undefined(vec![attr])
             }
         }
 
@@ -194,7 +194,7 @@ impl Expression {
                         ResolveResult::True
                     },
                     None => {
-                        ResolveResult::False(vec![(name, "")])
+                        ResolveResult::False(vec![attr])
                     }
                 }
             },
@@ -209,17 +209,17 @@ impl Expression {
                                         ResolveResult::True
                                     },
                                     None => {
-                                        ResolveResult::False(vec![(name, aspect)])
+                                        ResolveResult::False(vec![attr])
                                     }
                                 }
                             },
                             Property::Implicit(_name) => { // no aspects for implicit properties
-                                ResolveResult::False(vec![(name, aspect)])
+                                ResolveResult::False(vec![attr])
                             }
                         }
                     },
                     None => {
-                        ResolveResult::False(vec![(name, aspect)])
+                        ResolveResult::False(vec![attr])
                     }
                 }
             }

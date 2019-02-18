@@ -1,4 +1,5 @@
 use super::prepare::{PreparedDemand, PreparedOffer};
+use super::properties::{PropertyRef};
 use super::expression::{ResolveResult};
 use super::errors::{MatchError};
 
@@ -6,8 +7,8 @@ use super::errors::{MatchError};
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchResult<'a> {
     True,
-    False(Vec<(&'a str, &'a str)>, Vec<(&'a str, &'a str)>), // Unresolved properties in Offer and Demand respectively
-    Undefined(Vec<(&'a str, &'a str)>, Vec<(&'a str, &'a str)>), // Unresolved properties in Offer and Demand respectively
+    False(Vec<&'a PropertyRef>, Vec<&'a PropertyRef>), // Unresolved properties in Offer and Demand respectively
+    Undefined(Vec<&'a PropertyRef>, Vec<&'a PropertyRef>), // Unresolved properties in Offer and Demand respectively
     Err(MatchError)
 }
 
