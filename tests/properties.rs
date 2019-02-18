@@ -1,11 +1,9 @@
 extern crate market_api;
 extern crate chrono;
-extern crate semver;
 
 use std::collections::*;
 
 use chrono::*;
-use semver::Version;
 
 use market_api::resolver::properties::*;
 use market_api::resolver::errors::ParseError;
@@ -109,108 +107,6 @@ fn from_flat_props_ok() {
     assert_eq!(property_set, PropertySet{ 
         properties : { let mut x = HashMap::new(); x.insert("objectClass", Property::Explicit("objectClass", PropertyValue::Str("Babs Jensen"), HashMap::new())); x }
     });
-}
-
-// #endregion
-
-// #region String type
-
-#[test]
-fn equals_for_strings_simple_true() {
-    let prop_value = PropertyValue::Str("abc");
-
-    assert_eq!(prop_value.equals("abc"), true);
-}
-
-#[test]
-fn equals_for_strings_simple_false() {
-    let prop_value = PropertyValue::Str("abc");
-
-    assert_eq!(prop_value.equals("abas"), false);
-}
-
-#[test]
-fn equals_for_strings_wildcard_true() {
-    let prop_value = PropertyValue::Str("abc");
-
-    assert_eq!(prop_value.equals("ab*"), true);
-}
-
-#[test]
-fn equals_for_strings_wildcard_false() {
-    let prop_value = PropertyValue::Str("abc");
-
-    assert_eq!(prop_value.equals("as*"), false);
-}
-
-// #endregion
-
-// #region Version type
-
-#[test]
-fn equals_for_version_simple_true() {
-    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
-
-    assert_eq!(prop_value.equals("0.5.0"), true);
-}
-
-#[test]
-fn equals_for_version_simple_false() {
-    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
-
-    assert_eq!(prop_value.equals("0.6.1"), false);
-}
-
-#[test]
-fn less_for_version_simple_true() {
-    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
-
-    assert_eq!(prop_value.less("0.6.0"), true);
-}
-
-#[test]
-fn less_equal_for_version_simple_true() {
-    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
-
-    assert_eq!(prop_value.less_equal("0.5.0"), true);
-}
-
-#[test]
-fn greater_for_version_simple_true() {
-    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
-
-    assert_eq!(prop_value.greater("0.4.0"), true);
-}
-
-#[test]
-fn greater_equal_for_version_simple_true() {
-    let prop_value = PropertyValue::Version(Version::parse("0.5.0").unwrap());
-
-    assert_eq!(prop_value.greater_equal("0.5.0"), true);
-}
-
-// #endregion
-
-// #region List type
-#[test]
-fn equals_for_list_contains_true() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
-
-    assert_eq!(prop_value.equals("abc"), true);
-    assert_eq!(prop_value.equals("def"), true);
-}
-
-#[test]
-fn equals_for_list_contains_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
-
-    assert_eq!(prop_value.equals("fds"), false);
 }
 
 // #endregion

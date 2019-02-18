@@ -36,6 +36,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { parsed_value == *value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::List(value) => match PropertyValue::equals_list(value, val) { Ok(result) => result, _ => false }, // ignore parsing error, assume false  
             _ => panic!("Not implemented")
         }
     }
@@ -47,6 +48,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value < parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::List(_) => false, // operator meaningless for List  
             _ => panic!("Not implemented")
         }
     }
@@ -58,6 +60,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value <= parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::List(_) => false, // operator meaningless for List  
             _ => panic!("Not implemented")
         }
     }
@@ -69,6 +72,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value > parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::List(_) => false, // operator meaningless for List  
             _ => panic!("Not implemented")
         }
     }
@@ -80,6 +84,7 @@ impl <'a> PropertyValue<'a> {
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value >= parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::List(_) => false, // operator meaningless for List  
             _ => panic!("Not implemented")
         }
     }
@@ -160,6 +165,19 @@ impl <'a> PropertyValue<'a> {
 
             _ => panic!("Literal type not implemented!") // if no type is specified, String is assumed.
         }
+    }
+
+    fn equals_list(list_items : &Vec<Box<PropertyValue>>, val : &str) -> Result<bool, String> {
+        
+        // TODO implement list parsing (ie. if val is a proper list syntax - parse it and test list equality)
+        
+        for item in list_items {
+            if item.equals(val) {
+                return Ok(true)
+            }
+        }
+
+        Ok(false) // item not found in list
     }
 }
 
