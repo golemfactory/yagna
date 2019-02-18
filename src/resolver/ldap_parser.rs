@@ -3,10 +3,11 @@ use std::default::Default;
 use nom::IResult;
 
 use asnom::common::TagClass;
-use asnom::structures::{Tag, Sequence, OctetString, ExplicitTag};
+use asnom::structures::{Tag, Sequence, OctetString, ExplicitTag, Null};
 
 // Tag constants
 
+pub const TAG_EMPTY : u64 = 0;
 pub const TAG_AND : u64 = 0;
 pub const TAG_OR : u64 = 1;
 pub const TAG_NOT : u64 = 2;
@@ -28,7 +29,10 @@ pub fn parse(input: &str) -> Result<Tag, String> {
     }
 }
 
-named!(filter <Tag>, ws!(delimited!(char!('('), content, char!(')'))));
+named!(filter <Tag>, alt!( match_empty |
+                            ws!(delimited!(char!('('), content, char!(')'))) 
+                          )
+      );
 named!(filterlist <Vec<Tag>>, many1!(filter));
 named!(content <Tag>, alt!(and | or | not | match_f));
 
@@ -59,6 +63,14 @@ named!(not <Tag>, map!(preceded!( ws!(char!('!')), filter),
         })
     }
 ));
+
+named!(match_empty <Tag>, map!( tag!("()"), 
+       |_|  {   Tag::Null( Null {
+                    class: TagClass::Context,
+                    id: TAG_EMPTY,
+                    inner : ()
+                })
+            } ));
 
 named!(match_f <Tag>, alt!(present | simple));
 

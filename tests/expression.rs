@@ -27,6 +27,15 @@ fn prepare_demand_error_for_empty() {
 }
 
 #[test]
+fn build_expression_empty() {
+    let f = "()";
+
+    let expression = Expression::Empty;
+    
+    assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
+}
+
+#[test]
 fn build_expression_present() {
     let f = "(objectClass=*)";
 
@@ -46,6 +55,15 @@ fn run_resolve_test(expr : &str, props : &Vec<&str>, expect_result : ResolveResu
     let property_set = PropertySet::from_flat_props(&properties);
 
     assert_eq!(expression.resolve(&property_set), expect_result);
+}
+
+#[test]
+fn resolve_empty() {
+    let f = "()";
+
+    // test positive 
+
+    run_resolve_test(f, &vec!["objectClass=\"Babs Jensen\""], ResolveResult::True);
 }
 
 #[test]

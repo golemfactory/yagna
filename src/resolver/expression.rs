@@ -83,6 +83,9 @@ impl Expression {
             Expression::Present(attr) => {
                 self.resolve_present(attr, property_set)
             },
+            Expression::Empty => {
+                ResolveResult::True
+            },
             _ => ResolveResult::Err(ResolveError::new(&format!("Unexpected Expression type {:?}", self)))
         }
     }
@@ -253,6 +256,9 @@ pub fn build_expression(root : &Tag) -> Result<Expression, ExpressionError> {
         },
         Tag::OctetString(oct_string) => {
             build_expression_from_octet_string(oct_string)
+        },
+        Tag::Null(_) => {
+            Ok(Expression::Empty)
         },
         _ => { Err(ExpressionError::new(&format!("Unexpected tag type"))) }
 
