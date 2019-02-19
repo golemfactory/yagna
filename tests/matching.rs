@@ -42,8 +42,10 @@ fn match_weak_simple_undefined() {
     offer.constraints = String::from("(d1=v3)");
 
     assert_eq!( match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), 
-                Ok(MatchResult::Undefined(vec![&PropertyRef::Value(String::from("o3"))], 
-                vec![])));
+                Ok(MatchResult::Undefined(
+                    (vec![&PropertyRef::Value(String::from("o3"))], Expression::Equals(PropertyRef::Value(String::from("o3")), String::from("v2"))), 
+                    (vec![], Expression::Empty)
+                )));
 }
 
 #[test]

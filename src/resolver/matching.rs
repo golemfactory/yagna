@@ -1,6 +1,6 @@
 use super::prepare::{PreparedDemand, PreparedOffer};
 use super::properties::{PropertyRef};
-use super::expression::{ResolveResult};
+use super::expression::{Expression, ResolveResult};
 use super::errors::{MatchError};
 
 // Matching relation result enum
@@ -8,7 +8,7 @@ use super::errors::{MatchError};
 pub enum MatchResult<'a> {
     True,
     False(Vec<&'a PropertyRef>, Vec<&'a PropertyRef>), // Unresolved properties in Offer and Demand respectively
-    Undefined(Vec<&'a PropertyRef>, Vec<&'a PropertyRef>), // Unresolved properties in Offer and Demand respectively
+    Undefined((Vec<&'a PropertyRef>, Expression), (Vec<&'a PropertyRef>, Expression)), // Unresolved properties, unreduced expression - in Offer and Demand respectively
     Err(MatchError)
 }
 
@@ -34,23 +34,46 @@ pub fn match_weak<'a>(demand : &'a PreparedDemand, offer : &'a PreparedOffer) ->
     let mut result1_undefined = false;
     let mut result2_undefined = false;
 
+    let mut result1_unres_expr = Expression::Empty;
+    let mut result2_unres_expr = Expression::Empty;
+
     match result1 {
         ResolveResult::True => { result1_binary = true; },
-        ResolveResult::False(mut un_props, unresolved_expr) => { result1_binary = false; un_props1.append(&mut un_props); },
-        ResolveResult::Undefined(mut un_props, unresolved_expr) => { result1_undefined = true; un_props1.append(&mut un_props); },
+        ResolveResult::False(mut un_props, unresolved_expr) => { 
+            result1_binary = false; 
+            un_props1.append(&mut un_props); 
+            result1_unres_expr = unresolved_expr; 
+        },
+        ResolveResult::Undefined(mut un_props, unresolved_expr) => { 
+            result1_undefined = true; 
+            un_props1.append(&mut un_props); 
+            result1_unres_expr = unresolved_expr; 
+        },
         ResolveResult::Err(error) => { return Err(MatchError::new(&format!("Error resolving Demand constraints: {}", error))); }
     };
 
     match result2 {
         ResolveResult::True => { result2_binary = true; },
-        ResolveResult::False(mut un_props, unresolved_expr) => {  result2_binary = false; un_props2.append(&mut un_props); },
-        ResolveResult::Undefined(mut un_props, unresolved_expr) => { result2_undefined = true; un_props2.append(&mut un_props); },
+        ResolveResult::False(mut un_props, unresolved_expr) => {  
+            result2_binary = false; 
+            un_props2.append(&mut un_props);
+            result2_unres_expr = unresolved_expr; 
+        },
+        ResolveResult::Undefined(mut un_props, unresolved_expr) => { 
+            result2_undefined = true; 
+            un_props2.append(&mut un_props);
+            result2_unres_expr = unresolved_expr; 
+        },
         ResolveResult::Err(error) => { return Err(MatchError::new(&format!("Error resolving Offer constraints: {}", error))); }
     };
 
 
     if result1_undefined || result2_undefined {
-        Ok(MatchResult::Undefined(un_props1, un_props2))
+        Ok(MatchResult::Undefined(
+            (un_props1, result1_unres_expr), 
+            (un_props2, result2_unres_expr)
+        )
+        )
     }
     else { 
         if result1_binary == true && result2_binary == true {

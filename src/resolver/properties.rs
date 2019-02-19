@@ -162,8 +162,6 @@ impl <'a> PropertyValue<'a> {
                     results.into_iter().map( | item | {match item { Ok(prop_val) => Box::new(prop_val), _ => panic!() } } ).collect()
                 ))
             },
-
-            _ => panic!("Literal type not implemented!") // if no type is specified, String is assumed.
         }
     }
 

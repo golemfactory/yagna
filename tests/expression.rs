@@ -354,7 +354,7 @@ fn resolve_or() {
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], 
+    run_resolve_test(f, &vec!["b=\"x\"", "c=\"y\""], 
                     ResolveResult::Undefined(
                         vec![&PropertyRef::Value(String::from("a"))],
                         Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
@@ -380,6 +380,42 @@ fn resolve_complex_or_undefined() {
                     ResolveResult::Undefined(
                         vec![&PropertyRef::Value(String::from("a"))],
                         Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
+                    ));
+}
+
+#[test]
+fn resolve_complex_or_undefined_reduced() {
+    let f = "(|(a=b)(b=c)(c=d))";
+
+    // test positive
+
+    run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"y\"", "x=\"notdblah\""], 
+                    ResolveResult::True);
+}
+
+#[test]
+fn resolve_complex_and_undefined() {
+    let f = "(&(a=b)(b=c)(c=d))";
+
+    // test positive
+
+    run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"d\"", "x=\"notdblah\""], 
+                    ResolveResult::Undefined(
+                        vec![&PropertyRef::Value(String::from("a"))],
+                        Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
+                    ));
+}
+
+#[test]
+fn resolve_complex_and_undefined_reduced() {
+    let f = "(&(a=b)(b=c)(c=d))";
+
+    // test positive
+
+    run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"x\"", "x=\"notdblah\""], 
+                    ResolveResult::False(
+                        vec![],
+                        Expression::Empty
                     ));
 }
 

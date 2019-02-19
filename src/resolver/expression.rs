@@ -34,6 +34,7 @@ impl Expression {
     // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
     // (DONE) Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
     //       - (DONE) Refactor ResolveResult to include vector of PropertyRefs rather than plain strings...
+    // TODO: Implement handling of unreduced expressions in "matching" results.
     // (DONE) It may be useful to return list of properties which couldn't be resolved 
     // (DONE) Properties of some simple types plus binary operators.  
     // (DONE) Handling of Version simple type, need to implement operators.
@@ -87,7 +88,6 @@ impl Expression {
             Expression::Empty => {
                 ResolveResult::True
             },
-            _ => ResolveResult::Err(ResolveError::new(&format!("Unexpected Expression type {:?}", self)))
         }
     }
 
@@ -149,27 +149,51 @@ impl Expression {
     }
 
     fn resolve_and<'a>(&'a self, seq : &'a Vec<Box<Expression>>, property_set : &'a PropertySet) -> ResolveResult {
+        let mut undefined_found = false;
         let mut unresolved_refs = vec![];
-        // let mut unresolved_exprs = vec![]; // TODO this may be required if we want to resolve all factor expressions (instead of eager resolution)
+        let mut unresolved_exprs = vec![]; // TODO this may be required if we want to resolve all factor expressions (instead of eager resolution)
         for exp in seq {
             match exp.resolve(property_set) {
                 ResolveResult::True => { /* do nothing, keep iterating */ },
                 ResolveResult::False(mut un_props, unresolved_expr) => { 
                         unresolved_refs.append(& mut un_props);
-                        return ResolveResult::False(unresolved_refs, Expression::Empty) // resolved properly to false - return Empty as unreduced expression  
+                        match unresolved_expr {
+                            Expression::Empty => {},
+                            _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
+                        };
+                        return ResolveResult::False(vec![], Expression::Empty) // resolved properly to false - return Empty as unreduced expression  
                     },
                 ResolveResult::Undefined(mut un_props, unresolved_expr) => { 
                         unresolved_refs.append(& mut un_props);
-                        return ResolveResult::Undefined(unresolved_refs, Expression::And(vec![Box::new(unresolved_expr)])) // for the first undefined element - return And as unreduced expression with seq as single element 
+                        match unresolved_expr {
+                            Expression::Empty => {},
+                            _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
+                        };
+                        undefined_found = true;
                     },
                 ResolveResult::Err(err) => { return ResolveResult::Err(err) }
             }
         }
 
-        ResolveResult::True
+        if undefined_found {
+            ResolveResult::Undefined(unresolved_refs, 
+                if unresolved_exprs.len() > 0 {
+                    Expression::And(unresolved_exprs)
+                }
+                else {
+                    Expression::Empty
+                }
+            )
+        }
+        else
+        {
+            ResolveResult::True 
+        }
+        
     }
 
     fn resolve_or<'a>(&'a self, seq : &'a Vec<Box<Expression>>, property_set : &'a PropertySet) -> ResolveResult {
+        let mut undefined_found = false;
         let mut all_un_props = vec![];
         let mut unresolved_exprs = vec![]; // TODO this may be required if we want to resolve all factor expressions (instead of eager resolution)
         for exp in seq {
@@ -190,13 +214,15 @@ impl Expression {
                             Expression::Empty => {},
                             _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
                         };
-                        return ResolveResult::Undefined(all_un_props, Expression::Or(unresolved_exprs)) 
+                        undefined_found = true;
+                        //return ResolveResult::Undefined(all_un_props, Expression::Or(unresolved_exprs)) 
                     },
                 ResolveResult::Err(err) => { return ResolveResult::Err(err) }
             }
         }
 
-        ResolveResult::False(all_un_props, 
+        if undefined_found {
+            ResolveResult::Undefined(all_un_props, 
                 if unresolved_exprs.len() > 0 {
                     Expression::Or(unresolved_exprs)
                 }
@@ -204,6 +230,18 @@ impl Expression {
                     Expression::Empty
                 }
             )
+        }
+        else {
+            ResolveResult::False(all_un_props, 
+                if unresolved_exprs.len() > 0 {
+                    Expression::Or(unresolved_exprs)
+                }
+                else {
+                    Expression::Empty
+                }
+            )
+
+        }
     }
 
     // Resolve property/aspect presence
