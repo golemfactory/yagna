@@ -167,11 +167,36 @@ impl <'a> PropertyValue<'a> {
 
     fn equals_list(list_items : &Vec<Box<PropertyValue>>, val : &str) -> Result<bool, String> {
         
-        // TODO implement list parsing (ie. if val is a proper list syntax - parse it and test list equality)
-        
-        for item in list_items {
-            if item.equals(val) {
-                return Ok(true)
+        // if val is a proper list syntax - parse it and test list equality
+        // TODO this is lazy list equality comparison (returns invalid results where eg lists include multiple copies of the same item)
+        match prop_parser::parse_prop_ref_as_list(val) {
+            Ok(list_vals) => {
+                // eager test of list length - if different then lists differ
+                if list_vals.len() != list_items.len() {
+                    return Ok(false);
+                }
+
+                // do greedy list comparison
+                for val_item in list_vals {
+                    let mut found = false;
+                    for item in list_items {
+                        if item.equals(val_item) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        return Ok(false);
+                    }
+                }
+                return Ok(true);
+            },
+            Err(_) => {
+                for item in list_items {
+                    if item.equals(val) {
+                        return Ok(true)
+                    }
+                }
             }
         }
 

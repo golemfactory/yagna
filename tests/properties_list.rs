@@ -42,7 +42,7 @@ fn equals_for_list_list_different_length_false() {
         Box::new(PropertyValue::Str("def"))
         ]);
 
-    assert_eq!(prop_value.equals("[abc,def,xyz]"), true);
+    assert_eq!(prop_value.equals("[abc,def,xyz]"), false);
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn equals_for_list_list_different_items_false() {
         Box::new(PropertyValue::Str("def"))
         ]);
 
-    assert_eq!(prop_value.equals("[abc,xyz]"), true);
+    assert_eq!(prop_value.equals("[abc,xyz]"), false);
 }
 
 #[test]

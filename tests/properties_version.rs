@@ -2,13 +2,9 @@ extern crate market_api;
 extern crate chrono;
 extern crate semver;
 
-use std::collections::*;
-
-use chrono::*;
 use semver::Version;
 
 use market_api::resolver::properties::*;
-use market_api::resolver::errors::ParseError;
 
 // #region Version type
 

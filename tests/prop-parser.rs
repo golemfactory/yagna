@@ -41,6 +41,36 @@ fn parse_prop_ref_with_aspect_simple() {
 }
 
 #[test]
+fn parse_prop_ref_as_list_ok() {
+    assert_eq!(parse_prop_ref_as_list("[prop,  234]"), Ok(vec!["prop", "234"]));
+}
+
+#[test]
+fn parse_prop_ref_as_list_with_space_ok() {
+    assert_eq!(parse_prop_ref_as_list("[pr op,  234]"), Ok(vec!["pr op", "234"]));
+}
+
+#[test]
+fn parse_prop_ref_as_list_single_item_ok() {
+    assert_eq!(parse_prop_ref_as_list("[prop]"), Ok(vec!["prop"]));
+}
+
+#[test]
+fn parse_prop_ref_as_list_empty_ok() {
+    assert_eq!(parse_prop_ref_as_list("[]"), Ok(vec![]));
+}
+
+#[test]
+fn parse_prop_ref_as_list_syntax_error() {
+    assert_eq!(parse_prop_ref_as_list("[prop"), Err(String::from("Parsing error: Char")));
+}
+
+#[test]
+fn parse_prop_ref_as_list_syntax_error2() {
+    assert_eq!(parse_prop_ref_as_list("asdas[prop,prop2]"), Err(String::from("Parsing error: Char")));
+}
+
+#[test]
 fn parse_prop_value_from_literal_string() {
     assert_eq!(parse_prop_value_literal("\"dblah\""), Ok(Literal::Str("dblah")));
 }

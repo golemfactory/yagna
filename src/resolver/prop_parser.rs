@@ -55,7 +55,28 @@ named!(end <&str, &str >,
     )
 );
 
-// parser of property value literals
+// #region parser of List in property reference strings
+
+named!(prop_ref_list <&str, Vec<&str>>, 
+    delimited!(char!('['), 
+            separated_list!(
+                tag!(","),
+                ws!(prop_ref_list_item)
+            ) 
+            , char!(']')
+        )
+);
+
+named!(prop_ref_list_item <&str, &str>,
+    do_parse!(
+            res: take_until_either!("[,]") >>
+            (res)
+    )
+);
+
+// #endregion
+
+// #region parser of property value literals
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal<'a> {
@@ -194,6 +215,7 @@ named!(number_literal <Literal> ,
     )
 );
 
+// #endregion
 
 // Parse property definition in the form of:
 // <property_name>=<property_value>
@@ -232,6 +254,22 @@ pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>), 
 
 }
 
+// Parse property reference value as List (element of filter expression)
+// in the form of:
+// [value1,value2,...]
+// Returns a tuple of Vec<&str>
+pub fn parse_prop_ref_as_list(input : &str) -> Result<Vec<&str>, String>
+{
+    match prop_ref_list(input) {
+            IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
+            IResult::Error(error_kind) => {
+                println!("Error kind: {:?}", error_kind);
+                Err(format!("Parsing error: {}", error_kind.to_string()))
+            },
+            IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)) 
+    }
+}
+
 // Parse property value string, detecting the type from literal:
 // - anything in "" - String
 // - true/false, True/False, TRUE/FALSE - Boolean
@@ -252,7 +290,6 @@ pub fn parse_prop_value_literal(input : &str) -> Result<Literal, String>
                 Err(format!("Unknown literal type: {}", input))
             },
             IResult::Error(error_kind) => {
-                println!("Error kind: {:?}", error_kind);
                 Err(format!("Parsing error: {} in text '{}'", error_kind.to_string(), input))
             },
             IResult::Incomplete(_needed) => {
@@ -272,3 +309,4 @@ pub fn is_delimiter(chr: char) -> bool {
     chr == ']' ||
     chr == ':'  
 }
+

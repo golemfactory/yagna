@@ -34,21 +34,21 @@ impl Expression {
     // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
     // (DONE) Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
     //       - (DONE) Refactor ResolveResult to include vector of PropertyRefs rather than plain strings...
-    // TODO: Implement handling of unreduced expressions in "matching" results.
+    // (DONE) Implement handling of unreduced expressions in "matching" results.
     // (DONE) It may be useful to return list of properties which couldn't be resolved 
     // (DONE) Properties of some simple types plus binary operators.  
     // (DONE) Handling of Version simple type, need to implement operators.
     // TODO: Handling of Decimal simple type
     // (DONE) Handling of List property type
     // (DONE) equals operator for List property type with single operand (ignore other comparison operators)
-    // TODO: equals operator for List property type with List operand (list equivalence operator)
+    // (DONE) equals operator for List property type with List operand (list equivalence operator)
     // TODO: Handling of types in constraint filter expressions
     // TODO: Implement allowed characters in property names 
     // (DONE) Rework resolve so that ResolveResult is based on strs and not Strings
     // (DONE) wildcard matching of property values
     // TODO: wildcard matching of value-less properties
     //       - Implement dynamic property "handler" - via trait?
-    // TODO: aspects
+    // (DONE) aspects
     // TODO: finalize and review the matching relation implementations
     pub fn resolve<'a>(&'a self, property_set : &'a PropertySet) -> ResolveResult {
         match self {
