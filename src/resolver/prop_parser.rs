@@ -82,6 +82,7 @@ named!(prop_ref_list_item <&str, &str>,
 pub enum Literal<'a> {
     Str(&'a str),
     Number(&'a str),
+    Decimal(&'a str),
     Bool(bool),
     Version(&'a str),
     DateTime(&'a str),
@@ -93,7 +94,8 @@ named!(val_literal <Literal>, alt!(
     version_literal | 
     datetime_literal | 
     true_literal | 
-    false_literal | 
+    false_literal |
+    decimal_literal | 
     number_literal |
     list_literal
     ) );
@@ -157,6 +159,16 @@ named!( datetime_literal <Literal>, ws!(
         tag!("t\""), 
         do_parse!(val : take_until!("\"") >>
             (Literal::DateTime(str::from_utf8(val).unwrap()))
+        ),
+        char!('"')
+    )
+));
+
+named!( decimal_literal <Literal>, ws!(
+    delimited!(
+        tag!("d\""), 
+        do_parse!(val : take_until!("\"") >>
+            (Literal::Decimal(str::from_utf8(val).unwrap()))
         ),
         char!('"')
     )

@@ -5,6 +5,7 @@ extern crate chrono;
 extern crate uuid;
 extern crate regex;
 extern crate semver;
+extern crate decimal;
 
 use std::error;
 use std::fmt;

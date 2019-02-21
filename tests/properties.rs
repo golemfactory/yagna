@@ -1,9 +1,11 @@
 extern crate market_api;
 extern crate chrono;
+extern crate decimal;
 
 use std::collections::*;
 
 use chrono::*;
+use decimal::*;
 
 use market_api::resolver::properties::*;
 use market_api::resolver::errors::ParseError;
@@ -49,6 +51,34 @@ fn from_value_number_float_ok() {
     let prop_value = PropertyValue::from_value("123.45");
     
     assert_eq!(prop_value, Ok(PropertyValue::Number(123.45)));
+}
+
+#[test]
+fn from_value_decimal_ok() {
+    let prop_value = PropertyValue::from_value("d\"123\"");
+    
+    assert_eq!(prop_value, Ok(PropertyValue::Decimal(d128!(123.0))));
+}
+
+#[test]
+fn from_value_decimal_long_ok() {
+    let prop_value = PropertyValue::from_value("d\"123456789123456789123456789.123456789123456789\"");
+    
+    assert_eq!(prop_value, Ok(PropertyValue::Decimal(d128!(123456789123456789123456789.123456789123456789))));
+}
+
+#[test]
+fn from_value_decimal_error() {
+    let prop_value = PropertyValue::from_value("d\"123");
+    
+    assert_eq!(prop_value, Err(ParseError::new("Error parsing literal: 'd\"123'") ));
+}
+
+#[test]
+fn from_value_decimal_error2() {
+    let prop_value = PropertyValue::from_value("d\"12sasd3\"");
+    
+    assert_eq!(prop_value, Err(ParseError::new("Error parsing as Decimal: '12sasd3'") ));
 }
 
 #[test]

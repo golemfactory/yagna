@@ -38,7 +38,7 @@ impl Expression {
     // (DONE) It may be useful to return list of properties which couldn't be resolved 
     // (DONE) Properties of some simple types plus binary operators.  
     // (DONE) Handling of Version simple type, need to implement operators.
-    // TODO: Handling of Decimal simple type
+    // (DONE) Handling of Decimal simple type
     // (DONE) Handling of List property type
     // (DONE) equals operator for List property type with single operand (ignore other comparison operators)
     // (DONE) equals operator for List property type with List operand (list equivalence operator)

@@ -96,6 +96,12 @@ fn parse_prop_value_from_literal_bool_false() {
 }
 
 #[test]
+fn parse_prop_value_from_literal_decimal() {
+    assert_eq!(parse_prop_value_literal("d\"124.67\""), Ok(Literal::Decimal("124.67")));
+}
+
+
+#[test]
 fn parse_prop_value_from_literal_number() {
     assert_eq!(parse_prop_value_literal("124.67"), Ok(Literal::Number("124.67")));
 }

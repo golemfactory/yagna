@@ -2,6 +2,7 @@ extern crate uuid;
 extern crate chrono;
 extern crate regex;
 extern crate semver;
+extern crate decimal;
 
 use std::str;
 
@@ -9,6 +10,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use semver::Version;
+use decimal::{d128};
 
 use super::errors::{ ParseError };
 use super::prop_parser;
@@ -22,6 +24,7 @@ pub enum PropertyValue<'a> {
     //Int(i32), 
     //Long(i64),
     Number(f64),
+    Decimal(d128),
     DateTime(DateTime<Utc>),
     Version(Version),
     List(Vec<Box<PropertyValue<'a>>>),
@@ -34,6 +37,7 @@ impl <'a> PropertyValue<'a> {
         match self {
             PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(val, *value),  // enhanced string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { parsed_value == *value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::List(value) => match PropertyValue::equals_list(value, val) { Ok(result) => result, _ => false }, // ignore parsing error, assume false  
@@ -46,6 +50,7 @@ impl <'a> PropertyValue<'a> {
         match self {
             PropertyValue::Str(value) => *value < val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value < parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::List(_) => false, // operator meaningless for List  
@@ -58,6 +63,7 @@ impl <'a> PropertyValue<'a> {
         match self {
             PropertyValue::Str(value) => *value <= val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value <= parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::List(_) => false, // operator meaningless for List  
@@ -70,6 +76,7 @@ impl <'a> PropertyValue<'a> {
         match self {
             PropertyValue::Str(value) => *value > val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value > parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::List(_) => false, // operator meaningless for List  
@@ -82,6 +89,7 @@ impl <'a> PropertyValue<'a> {
         match self {
             PropertyValue::Str(value) => *value >= val,  // trivial string comparison
             PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
+            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value >= parsed_value }, _ => false }, // ignore parsing error, assume false  
             PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
             PropertyValue::List(_) => false, // operator meaningless for List  
@@ -135,6 +143,14 @@ impl <'a> PropertyValue<'a> {
             Literal::Number(val) => match val.parse::<f64>() { 
                 Ok(parsed_val) => Ok(PropertyValue::Number(parsed_val)), 
                 Err(_err) => Err(ParseError::new(&format!("Error parsing as Number: '{}'", val))) },
+            Literal::Decimal(val) => match val.parse::<d128>() { 
+                Ok(parsed_val) => if parsed_val.is_nan() {
+                        Err(ParseError::new(&format!("Error parsing as Decimal: '{}'", val)))
+                    }
+                    else { 
+                        Ok(PropertyValue::Decimal(parsed_val))
+                    }, 
+                Err(_err) => Err(ParseError::new(&format!("Error parsing as Decimal: '{}'", val))) },
             Literal::DateTime(val) => match PropertyValue::parse_date(val) { 
                 Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)), 
                 Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", val))) },
