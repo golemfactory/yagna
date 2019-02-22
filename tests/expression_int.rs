@@ -8,43 +8,6 @@ use market_api::resolver::properties::*;
 use market_api::resolver::ldap_parser::parse;
 use market_api::resolver::expression::*;
 
-#[test]
-fn prepare_offer_error_for_empty() {
-    let demand = Demand::default();
-    match PreparedDemand::from(&demand) {
-        Err(_) => {},
-        _ => { assert!(false); }
-    }
-}
-
-#[test]
-fn prepare_demand_error_for_empty() {
-    let offer = Offer::default();
-    match PreparedOffer::from(&offer) {
-        Err(_) => {},
-        _ => { assert!(false); }
-    }
-}
-
-#[test]
-fn build_expression_empty() {
-    let f = "()";
-
-    let expression = Expression::Empty;
-    
-    assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
-}
-
-#[test]
-fn build_expression_present() {
-    let f = "(objectClass=*)";
-
-    let expression = Expression::Present(PropertyRef::Value(String::from("objectClass")));
-    
-    assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
-}
-
-
 fn run_resolve_test(expr : &str, props : &Vec<&str>, expect_result : ResolveResult) {
     let expression = build_expression(&parse(expr).unwrap()).unwrap();
 
@@ -82,15 +45,6 @@ fn resolve_present() {
                         vec![&PropertyRef::Value(String::from("objectClass"))],
                         Expression::Empty
                     ));
-}
-
-#[test]
-fn build_expression_equals() {
-    let f = "(cn=Babs Jensen)";
-
-    let expression = Expression::Equals(PropertyRef::Value(String::from("cn")), String::from("Babs Jensen"));
-    
-    assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
 
 #[test]
@@ -253,19 +207,6 @@ fn resolve_less_equal_datetime() {
 }
 
 #[test]
-fn build_expression_not() {
-    let f = "(!(cn=Tim Howes))";
-
-    let expression = Expression::Not( 
-            Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("cn")), 
-                    String::from("Tim Howes")))
-    );
-    
-    assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
-}
-
-#[test]
 fn resolve_not() {
     let f = "(!(cn=Tim Howes))";
 
@@ -288,27 +229,6 @@ fn resolve_not() {
                         vec![&PropertyRef::Value(String::from("cn"))],
                         Expression::Not(Box::new(Expression::Equals(PropertyRef::Value(String::from("cn")), String::from("Tim Howes"))))
                     ));
-}
-
-#[test]
-fn build_expression_and() {
-    let f = "(&(a=b)(b=c)(c=d))";
-
-    let expression = Expression::And( 
-            vec![
-                Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("a")), 
-                    String::from("b"))),
-                Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("b")), 
-                    String::from("c"))),
-                Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("c")), 
-                    String::from("d"))),
-            ]
-    );
-    
-    assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
 
 #[test]
@@ -335,6 +255,8 @@ fn resolve_and() {
                         Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
                     ));
 }
+
+
 
 #[test]
 fn resolve_or() {
@@ -383,6 +305,7 @@ fn resolve_complex_or_undefined() {
                     ));
 }
 
+
 #[test]
 fn resolve_complex_or_undefined_reduced() {
     let f = "(|(a=b)(b=c)(c=d))";
@@ -418,6 +341,7 @@ fn resolve_complex_and_undefined_reduced() {
                         Expression::Empty
                     ));
 }
+
 
 
 #[test]
