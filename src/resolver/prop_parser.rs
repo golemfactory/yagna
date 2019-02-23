@@ -11,17 +11,75 @@ named!(prop_def <&str, &str>,
     )
 );
 
-named!(prop_with_nothing <&str, (&str, Option<&str>)>, 
-    tuple!(
-        prop,
-        opt!(end)
+named!(prop_ref <&str, (&str, Option<&str>, Option<&str>)> ,
+    alt!( 
+//        prop_with_aspect 
+//        | 
+//        prop_with_nothing 
+        do_parse!(
+            prop : prop >>
+            aspect : delimited!(char!('['), aspect, char!(']')) >> 
+            impl_type : prop_ref_type_code >>
+            ((prop, Some(aspect), Some(impl_type)))
+        )
+        |
+        do_parse!(
+            prop : prop >> 
+            aspect : delimited!(char!('['), aspect, char!(']')) >>
+            ((prop, Some(aspect), None))
+        )
+        | 
+        do_parse!(
+            prop : prop >> 
+            impl_type : prop_ref_type_code >>
+            ((prop, None, Some(impl_type)))
+        )
+        |
+        do_parse!(
+            prop : prop >> 
+            ((prop, None, None))
+        )
     )
 );
 
-named!(prop_with_aspect <&str, (&str, Option<&str>)>, 
-    tuple!(
-        prop,
-        opt!(delimited!(char!('['), aspect, char!(']')))
+named!(prop_with_nothing <&str, (&str, Option<&str>, Option<&str>)>, 
+    alt!(
+        do_parse!(
+            prop : prop >> 
+            end : opt!(end) >>
+            ((prop, end, None))
+        )
+        | 
+        do_parse!(
+            prop : prop >> 
+            impl_type : opt!(prop_ref_type_code) >>
+            ((prop, None, impl_type))
+        ) 
+    )
+);
+
+named!(prop_with_aspect <&str, (&str, Option<&str>, Option<&str>)>, 
+    alt!(
+        do_parse!(
+            prop : prop >> 
+            aspect : opt!(delimited!(char!('['), aspect, char!(']'))) >>
+            ((prop, aspect, None))
+        )
+        | 
+        do_parse!(
+            prop : prop >>
+            aspect : opt!(delimited!(char!('['), aspect, char!(']'))) >> 
+            impl_type : opt!(prop_ref_type_code) >>
+            ((prop, aspect, impl_type))
+        ) 
+    )
+);
+
+named!(prop_ref_type_code <&str, &str>,
+    do_parse!(
+        tag!("@") >>
+        code : alt!(tag!("d") | tag!("v") | tag!("t")) >>
+        (code)
     )
 );
 
@@ -249,21 +307,30 @@ pub fn parse_prop_def(input : &str) -> Result<(&str, Option<&str>), String>
 // in the form of:
 // <property_name>[<aspect_name>]
 // where aspect_name is optional.
-// Returns a tuple of (property_name, Option(aspect_name))
-pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>), String>
+// Returns a tuple of (property_name, Option(aspect_name), implied_property_type_code)
+pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>, Option<&str>), String>
 {
+    match prop_ref(input) {
+            IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
+            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+            IResult::Incomplete(needed) => {
+                Err(format!("Incomplete expression: {:?}", needed))
+            },
+    }
+
+    /*
     match prop_with_aspect(input) {
             IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
             IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
             IResult::Incomplete(_needed) => {
                 match prop_with_nothing(input) {
-                    IResult::Done(_, t) => Ok((t.0, None)),
+                    IResult::Done(_, t) => Ok((t.0, None, t.2)),
                     IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
                     IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
                 }
             },
     }
-
+    */
 }
 
 // Parse property reference value as List (element of filter expression)
@@ -319,6 +386,6 @@ pub fn is_equal_sign(chr: char) -> bool {
 pub fn is_delimiter(chr: char) -> bool {
     chr == '[' ||
     chr == ']' ||
-    chr == ':'  
+    chr == '@'  
 }
 

@@ -97,8 +97,8 @@ impl Expression {
 
         // extract referred property name
         let name = match attr {
-            PropertyRef::Value(n) => n,
-            PropertyRef::Aspect(n, _a) => n,
+            PropertyRef::Value(n, _) => n,
+            PropertyRef::Aspect(n, _a, _) => n,
         };
 
         match property_set.properties.get(&name[..]) {
@@ -107,7 +107,7 @@ impl Expression {
                     Property::Explicit(_name, value, aspects) => {
                         // now decide if we are referring to value or aspect
                         match attr {
-                            PropertyRef::Value(_n) => { 
+                            PropertyRef::Value(_n, impl_type) => { 
                                 // resolve against prop value
                                 if oper_function(value, val_string) {
                                     ResolveResult::True
@@ -117,7 +117,7 @@ impl Expression {
                                     ResolveResult::False(vec![], Expression::Empty) // if resolved to false - return Empty as reduced expression
                                 }
                             },
-                            PropertyRef::Aspect(_n, aspect) => { 
+                            PropertyRef::Aspect(_n, aspect, impl_type) => { 
                                 // resolve against prop aspect
                                 match aspects.get(&aspect[..]) {
                                     Some(aspect_value) => {
@@ -248,7 +248,7 @@ impl Expression {
     fn resolve_present<'a>(&self, attr : &'a PropertyRef, property_set : &'a PropertySet) -> ResolveResult<'a> {
         match attr {
             // for value reference - only check if property exists in PropertySet
-            PropertyRef::Value(name) => {
+            PropertyRef::Value(name, _) => {
                 match property_set.properties.get(&name[..]) {
                     Some(_value) => {
                         ResolveResult::True
@@ -259,7 +259,7 @@ impl Expression {
                 }
             },
             // for aspect reference - first check if property exists, then check for aspect
-            PropertyRef::Aspect(name, aspect) => {
+            PropertyRef::Aspect(name, aspect, _) => {
                 match property_set.properties.get(&name[..]) {
                     Some(value) => {
                         match value {

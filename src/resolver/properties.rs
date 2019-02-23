@@ -306,20 +306,38 @@ impl <'a> PropertySet<'a> {
 // Property reference (element of filter expression)
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyRef {
-    Value(String), // reference to property value (prop name)
-    Aspect(String, String), // reference to property aspect (prop name, aspect name)
+    Value(String, PropertyRefType), // reference to property value (prop name)
+    Aspect(String, String, PropertyRefType), // reference to property aspect (prop name, aspect name)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PropertyRefType {
+    Any,
+    Decimal,
+    Version,
+    DateTime
 }
 
 pub fn parse_prop_ref(flat_prop : &str) -> Result<PropertyRef, ParseError> {
     // TODO parse the flat_prop using prop_parser and repack to PropertyRef
     match prop_parser::parse_prop_ref_with_aspect(flat_prop) {
-        Ok((name, opt_aspect)) => {
+        Ok((name, opt_aspect, impl_type)) => {
             match opt_aspect {
-                Some(aspect) => Ok(PropertyRef::Aspect(name.to_string(), aspect.to_string())),
-                None => Ok(PropertyRef::Value(name.to_string()))
+                Some(aspect) => Ok(PropertyRef::Aspect(name.to_string(), aspect.to_string(), decode_implied_ref_type(impl_type))),
+                None => Ok(PropertyRef::Value(name.to_string(), decode_implied_ref_type(impl_type)))
             }
             
         },
         Err(error) => Err(ParseError::new(&format!("Parse error {}", error)))
+    }
+}
+
+fn decode_implied_ref_type(impl_type : Option<&str>) -> PropertyRefType {
+    match impl_type {
+        Some("d") => PropertyRefType::Decimal,
+        Some("v") => PropertyRefType::Version,
+        Some("t") => PropertyRefType::DateTime,
+        None => PropertyRefType::Any,
+        _ => panic!("Unknown implied type code!")
     }
 }

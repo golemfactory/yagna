@@ -18,13 +18,18 @@ fn parse_prop_def_for_dynamic_prop() {
 }
 
 #[test]
-fn parse_prop_ref_with_aspect_no_aspect() {
-    assert_eq!(parse_prop_ref_with_aspect("prop"), Ok(("prop", None)));
+fn parse_prop_ref_with_aspect_no_aspect_no_impl_type() {
+    assert_eq!(parse_prop_ref_with_aspect("prop"), Ok(("prop", None, None)));
+}
+
+#[test]
+fn parse_prop_ref_with_aspect_no_aspect_impl_type() {
+    assert_eq!(parse_prop_ref_with_aspect("prop@d"), Ok(("prop", None, Some("d"))));
 }
 
 #[test]
 fn parse_prop_ref_with_aspect_syntax_error_1() {
-    assert_eq!(parse_prop_ref_with_aspect("prop:asda"), Err("Parsing error: unexpected text :asda".to_string()));
+    assert_eq!(parse_prop_ref_with_aspect("prop@asda"), Err("Parsing error: unexpected text @asda".to_string()));
 }
 
 #[test]
@@ -32,12 +37,12 @@ fn parse_prop_ref_with_aspect_syntax_error_1() {
 fn parse_prop_ref_with_aspect_syntax_error_2() {
     // TODO need to handle syntax error differently
     println!("{:?}", parse_prop_ref_with_aspect("prop[asda"));
-    assert_eq!(parse_prop_ref_with_aspect("prop[[asda]"), Ok(("pro p", None)));
+    assert_eq!(parse_prop_ref_with_aspect("prop[[asda]"), Ok(("pro p", None, None)));
 }
 
 #[test]
 fn parse_prop_ref_with_aspect_simple() {
-    assert_eq!(parse_prop_ref_with_aspect("prop[aspect]"), Ok(("prop", Some("aspect"))));
+    assert_eq!(parse_prop_ref_with_aspect("prop[aspect]"), Ok(("prop", Some("aspect"), None)));
 }
 
 #[test]

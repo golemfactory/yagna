@@ -43,7 +43,7 @@ fn match_weak_simple_undefined() {
 
     assert_eq!( match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), 
                 Ok(MatchResult::Undefined(
-                    (vec![&PropertyRef::Value(String::from("o3"))], Expression::Equals(PropertyRef::Value(String::from("o3")), String::from("v2"))), 
+                    (vec![&PropertyRef::Value(String::from("o3"), PropertyRefType::Any)], Expression::Equals(PropertyRef::Value(String::from("o3"), PropertyRefType::Any), String::from("v2"))), 
                     (vec![], Expression::Empty)
                 )));
 }
@@ -73,7 +73,7 @@ fn match_weak_dynamic_property_no_match() {
 
     assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), 
                           &PreparedOffer::from(&offer).unwrap()), 
-               Ok(MatchResult::False(vec![&PropertyRef::Value(String::from("o1dblah"))], vec![])));
+               Ok(MatchResult::False(vec![&PropertyRef::Value(String::from("o1dblah"), PropertyRefType::Any)], vec![])));
 }
 
 #[ignore]

@@ -2,7 +2,6 @@ extern crate nom;
 extern crate asnom;
 extern crate market_api;
 
-use market_api::*;
 use market_api::resolver::*;
 use market_api::resolver::properties::*;
 use market_api::resolver::ldap_parser::parse;
@@ -42,7 +41,7 @@ fn resolve_present() {
 
     run_resolve_test(f, &vec!["cn=\"Dblah\""], 
                     ResolveResult::False(
-                        vec![&PropertyRef::Value(String::from("objectClass"))],
+                        vec![&PropertyRef::Value(String::from("objectClass"), PropertyRefType::Any)],
                         Expression::Empty
                     ));
 }
@@ -67,8 +66,8 @@ fn resolve_equals() {
 
     run_resolve_test(f, &vec!["cnas=\"Dblah\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("cn", ))],
-                        Expression::Equals(PropertyRef::Value(String::from("cn")), String::from("Babs Jensen"))
+                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
+                        Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Babs Jensen"))
                     ));
 }
 
@@ -92,8 +91,8 @@ fn resolve_equals_with_wildcard() {
 
     run_resolve_test(f, &vec!["cnas=\"Dblah\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("cn"))],
-                        Expression::Equals(PropertyRef::Value(String::from("cn")), String::from("Babs *"))
+                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
+                        Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Babs *"))
                     ));
 }
 
@@ -226,8 +225,8 @@ fn resolve_not() {
 
     run_resolve_test(f, &vec!["cnas=\"Dblah\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("cn"))],
-                        Expression::Not(Box::new(Expression::Equals(PropertyRef::Value(String::from("cn")), String::from("Tim Howes"))))
+                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
+                        Expression::Not(Box::new(Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Tim Howes"))))
                     ));
 }
 
@@ -251,8 +250,8 @@ fn resolve_and() {
 
     run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"))],
-                        Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
+                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
+                        Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
                     ));
 }
 
@@ -278,8 +277,8 @@ fn resolve_or() {
 
     run_resolve_test(f, &vec!["b=\"x\"", "c=\"y\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"))],
-                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
+                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
+                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
                     ));
 }
 
@@ -300,8 +299,8 @@ fn resolve_complex_or_undefined() {
 
     run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"x\"", "c=\"y\"", "x=\"notdblah\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"))],
-                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
+                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
+                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
                     ));
 }
 
@@ -324,8 +323,8 @@ fn resolve_complex_and_undefined() {
 
     run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"d\"", "x=\"notdblah\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"))],
-                        Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
+                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
+                        Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
                     ));
 }
 
@@ -376,10 +375,10 @@ fn resolve_multistep_with_supplemented_props() {
 
     assert_eq!(resolve_result_partial, 
             ResolveResult::Undefined(
-                vec![&PropertyRef::Value(String::from("a"))],
+                vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
                 Expression::And(vec![
                     Box::new(
-                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a")), String::from("b")))])
+                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
                     )
                 ])
             )
