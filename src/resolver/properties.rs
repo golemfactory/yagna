@@ -137,6 +137,46 @@ impl <'a> PropertyValue<'a> {
         }
     }
 
+    // Convert self into different type of property value
+    // Returns: 
+    // - If conversion possible or not needed: 
+    //   None - if conversion not required
+    //   Some(new PropertyValue) - if conversion required
+    // - If conversion not possible 
+    //   Err 
+    pub fn to_prop_ref_type(&self, impl_type : &PropertyRefType) -> Result<Option<PropertyValue>, String> {
+        
+        match impl_type {
+            PropertyRefType::Any => Ok(None),
+            PropertyRefType::Decimal => match self {
+                PropertyValue::Decimal(_) => Ok(None),
+                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::Decimal(val)) {
+                   Ok(prop_val) => Ok(Some(prop_val)),
+                   Err(error) => Err(format!("{:?}", error))
+                },
+                _ => { Err(format!("Unable to convert {:?} to {:?}", self, impl_type)) }
+            },
+            PropertyRefType::DateTime => match self {
+                PropertyValue::DateTime(_) => Ok(None),
+                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::DateTime(val)) {
+                   Ok(prop_val) => Ok(Some(prop_val)),
+                   Err(error) => Err(format!("{:?}", error))
+                },
+                _ => { Err(format!("Unable to convert {:?} to {:?}", self, impl_type)) }
+            },
+            PropertyRefType::Version => match self {
+                PropertyValue::Version(_) => Ok(None),
+                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::Version(val)) {
+                   Ok(prop_val) => Ok(Some(prop_val)),
+                   Err(error) => { 
+                       Err(format!("{:?}", error))
+                   }
+                },
+                _ => { Err(format!("Unable to convert {:?} to {:?}", self, impl_type)) }
+            }
+        }
+    }
+
     fn from_literal(literal : Literal<'a>) -> Result<PropertyValue<'a>, ParseError> {
         match literal {
             Literal::Str(val) => Ok(PropertyValue::Str(val)),

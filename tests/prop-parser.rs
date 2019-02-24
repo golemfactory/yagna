@@ -33,11 +33,8 @@ fn parse_prop_ref_with_aspect_syntax_error_1() {
 }
 
 #[test]
-#[ignore]
 fn parse_prop_ref_with_aspect_syntax_error_2() {
-    // TODO need to handle syntax error differently
-    println!("{:?}", parse_prop_ref_with_aspect("prop[asda"));
-    assert_eq!(parse_prop_ref_with_aspect("prop[[asda]"), Ok(("pro p", None, None)));
+    assert_eq!(parse_prop_ref_with_aspect("prop[[asda]"), Err("Parsing error: unexpected text [[asda]".to_string()));
 }
 
 #[test]

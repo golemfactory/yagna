@@ -91,14 +91,14 @@ impl Expression {
         }
     }
 
-    fn resolve_with_function<'a>(&'a self, attr : &'a PropertyRef, val_string : &str, property_set : &'a PropertySet, oper_function : impl Fn(&PropertyValue, &str) -> bool) -> ResolveResult  {
+    fn resolve_with_function<'a>(&'a self, prop_ref : &'a PropertyRef, val_string : &str, property_set : &'a PropertySet, oper_function : impl Fn(&PropertyValue, &str) -> bool) -> ResolveResult  {
         // TODO this requires rewrite to cater for implicit properties...
         // test if property exists and then if the value matches
 
         // extract referred property name
-        let name = match attr {
+        let name = match prop_ref {
             PropertyRef::Value(n, _) => n,
-            PropertyRef::Aspect(n, _a, _) => n,
+            PropertyRef::Aspect(n, _a, _) => n
         };
 
         match property_set.properties.get(&name[..]) {
@@ -106,18 +106,33 @@ impl Expression {
                 match prop {
                     Property::Explicit(_name, value, aspects) => {
                         // now decide if we are referring to value or aspect
-                        match attr {
+                        match prop_ref {
                             PropertyRef::Value(_n, impl_type) => { 
-                                // resolve against prop value
-                                if oper_function(value, val_string) {
-                                    ResolveResult::True
+                                
+                                match value.to_prop_ref_type(impl_type) {
+                                    Ok(conv_result) => {
+                                        let resolve_result = match conv_result {
+                                            Some(val) => oper_function(&val, val_string),
+                                            None => oper_function(value, val_string)
+                                        };
+                                        
+                                        // resolve against prop value
+                                        if resolve_result {
+                                            ResolveResult::True
+                                        }
+                                        else
+                                        {
+                                            ResolveResult::False(vec![], Expression::Empty) // if resolved to false - return Empty as reduced expression
+                                        }
+
+                                    },
+                                    Err(_) => {
+                                        ResolveResult::Undefined(vec![], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
+                                    } 
                                 }
-                                else
-                                {
-                                    ResolveResult::False(vec![], Expression::Empty) // if resolved to false - return Empty as reduced expression
-                                }
+                                
                             },
-                            PropertyRef::Aspect(_n, aspect, impl_type) => { 
+                            PropertyRef::Aspect(_n, aspect, _impl_type) => { 
                                 // resolve against prop aspect
                                 match aspects.get(&aspect[..]) {
                                     Some(aspect_value) => {
@@ -129,7 +144,7 @@ impl Expression {
                                         }
                                     },
                                     None => {
-                                        ResolveResult::Undefined(vec![attr], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
+                                        ResolveResult::Undefined(vec![prop_ref], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
                                     }
                                 }
                             },
@@ -137,12 +152,12 @@ impl Expression {
 
                     },
                     Property::Implicit(_name) => {
-                        ResolveResult::Undefined(vec![attr], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
+                        ResolveResult::Undefined(vec![prop_ref], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
                     }
                 }
             },
             None => {
-                ResolveResult::Undefined(vec![attr], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
+                ResolveResult::Undefined(vec![prop_ref], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
             }
         }
 

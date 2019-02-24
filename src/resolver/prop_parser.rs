@@ -11,68 +11,12 @@ named!(prop_def <&str, &str>,
     )
 );
 
-named!(prop_ref <&str, (&str, Option<&str>, Option<&str>)> ,
-    alt!( 
-//        prop_with_aspect 
-//        | 
-//        prop_with_nothing 
-        do_parse!(
-            prop : prop >>
-            aspect : delimited!(char!('['), aspect, char!(']')) >> 
-            impl_type : prop_ref_type_code >>
-            ((prop, Some(aspect), Some(impl_type)))
-        )
-        |
-        do_parse!(
-            prop : prop >> 
-            aspect : delimited!(char!('['), aspect, char!(']')) >>
-            ((prop, Some(aspect), None))
-        )
-        | 
-        do_parse!(
-            prop : prop >> 
-            impl_type : prop_ref_type_code >>
-            ((prop, None, Some(impl_type)))
-        )
-        |
-        do_parse!(
-            prop : prop >> 
-            ((prop, None, None))
-        )
+named!(aspect <&str, &str>, 
+    do_parse!(
+            res: take_till!(is_delimiter) >>
+            (res)
     )
-);
 
-named!(prop_with_nothing <&str, (&str, Option<&str>, Option<&str>)>, 
-    alt!(
-        do_parse!(
-            prop : prop >> 
-            end : opt!(end) >>
-            ((prop, end, None))
-        )
-        | 
-        do_parse!(
-            prop : prop >> 
-            impl_type : opt!(prop_ref_type_code) >>
-            ((prop, None, impl_type))
-        ) 
-    )
-);
-
-named!(prop_with_aspect <&str, (&str, Option<&str>, Option<&str>)>, 
-    alt!(
-        do_parse!(
-            prop : prop >> 
-            aspect : opt!(delimited!(char!('['), aspect, char!(']'))) >>
-            ((prop, aspect, None))
-        )
-        | 
-        do_parse!(
-            prop : prop >>
-            aspect : opt!(delimited!(char!('['), aspect, char!(']'))) >> 
-            impl_type : opt!(prop_ref_type_code) >>
-            ((prop, aspect, impl_type))
-        ) 
-    )
 );
 
 named!(prop_ref_type_code <&str, &str>,
@@ -90,28 +34,75 @@ named!(prop <&str, &str>,
     )
 );
 
-named!(aspect <&str, &str>, 
+named!(prop_ref_aspect_type <&str, (&str, Option<&str>, Option<&str>)> ,
     do_parse!(
-            res: take_till!(is_delimiter) >>
-            (res)
-    )
-
-);
-
-named!(type_name <&str, &str>, 
-    do_parse!(
-            res: take_till!(is_delimiter) >> 
-            (res)
-    )
-
-);
-
-named!(end <&str, &str >, 
-    do_parse!(
-            eof!() >> 
-            ("")
+        prop : prop >>
+        aspect : delimited!(char!('['), aspect, char!(']')) >> 
+        impl_type : prop_ref_type_code >>
+        ((prop, Some(aspect), Some(impl_type)))
     )
 );
+
+named!(prop_ref_aspect <&str, (&str, Option<&str>, Option<&str>)> ,
+    do_parse!(
+        prop : prop >> 
+        aspect : delimited!(char!('['), aspect, char!(']')) >>
+        ((prop, Some(aspect), None))
+    )
+);
+
+named!(prop_ref_type <&str, (&str, Option<&str>, Option<&str>)> ,
+    do_parse!(
+        prop : prop >> 
+        impl_type : prop_ref_type_code >>
+        ((prop, None, Some(impl_type)))
+    )
+);
+
+named!(prop_ref_no_type <&str, (&str, Option<&str>, Option<&str>)> ,
+    do_parse!(
+        prop : prop >> 
+        ((prop, None, None))
+    )
+);
+
+#[test]
+fn test_prop_ref_set()
+{
+    // Correct cases (should be properly parsed): 
+
+    // input[aspect]@d
+    assert_eq!(prop_ref_aspect_type("input[aspect]@d"), IResult::Done("", ("input", Some("aspect"), Some("d"))));
+
+    // input[aspect]
+    assert_eq!(prop_ref_aspect_type("input[aspect]"), IResult::Incomplete(nom::Needed::Size(14)));
+    assert_eq!(prop_ref_aspect("input[aspect]"), IResult::Done("", ("input", Some("aspect"), None)));
+
+    // input@d
+    assert_eq!(prop_ref_aspect_type("input@d"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_aspect("input@d"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_type("input@d"), IResult::Done("", ("input", None, Some("d"))));
+
+    // input
+    assert_eq!(prop_ref_aspect_type("input"), IResult::Incomplete(nom::Needed::Size(6)));
+    assert_eq!(prop_ref_aspect("input"), IResult::Incomplete(nom::Needed::Size(6)));
+    assert_eq!(prop_ref_type("input"), IResult::Incomplete(nom::Needed::Size(6)));
+    assert_eq!(prop_ref_no_type("input"), IResult::Done("", ("input", None, None)));
+
+    // Incorrect cases
+
+    // input@dqwe
+    assert_eq!(prop_ref_aspect_type("input@dqwe"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_aspect("input@dqwe"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_type("input@dqwe"), IResult::Done("qwe", ("input", None, Some("d"))));
+
+    // input[aspect]@dqwe
+    assert_eq!(prop_ref_aspect_type("input[aspect]@dqwe"), IResult::Done("qwe", ("input", Some("aspect"), Some("d"))) );
+
+    // input[aspecdqwe
+    assert_eq!(prop_ref_aspect_type("input[aspecdqwe"), IResult::Incomplete(nom::Needed::Size(16)) );
+
+}
 
 // #region parser of List in property reference strings
 
@@ -157,21 +148,6 @@ named!(val_literal <Literal>, alt!(
     number_literal |
     list_literal
     ) );
-
-// named!( string_literal <(u64, &[u8])>, ws!(
-//     delimited!(
-//         char!('"'), 
-//         map!(
-//             many0!(
-//                 none_of!("\"")
-//             ),
-//              // Make a string from a vector of chars
-//             |v : Vec<char>| -> (u64, &[u8]) { (TAG_STRING, v.iter().collect::<String>()) }
-//         ),
-//         char!('"')
-//     )
-// ));
-
 
 named!( list_literal <Literal<'a>>, ws!(
     delimited!(
@@ -310,27 +286,63 @@ pub fn parse_prop_def(input : &str) -> Result<(&str, Option<&str>), String>
 // Returns a tuple of (property_name, Option(aspect_name), implied_property_type_code)
 pub fn parse_prop_ref_with_aspect(input : &str) -> Result<(&str, Option<&str>, Option<&str>), String>
 {
-    match prop_ref(input) {
-            IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
-            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-            IResult::Incomplete(needed) => {
-                Err(format!("Incomplete expression: {:?}", needed))
-            },
+    match prop_ref_aspect_type(input) {
+        IResult::Done(rest, t) => { 
+            if rest == "" { 
+                Ok(t) 
+            } 
+            else {
+                Err(format!("Parsing error: unexpected text {}", rest)) 
+            }
+        },
+        IResult::Incomplete(_needed) => { // no type, try parsing ref with aspect alone
+            match prop_ref_aspect(input) {
+                IResult::Done(rest, t) => { 
+                    if rest == "" { 
+                        Ok(t) 
+                    } 
+                    else {
+                        Err(format!("Parsing error: unexpected text {}", rest)) 
+                    }
+                },
+                IResult::Incomplete(_) | IResult::Error(_) => 
+                    parse_prop_ref_no_aspect(input)
+            }
+        },
+
+        IResult::Error(_error_kind) => { // no aspect, try parsing simple property ref
+            parse_prop_ref_no_aspect(input)
+        },
+        
+    }
+}
+
+fn parse_prop_ref_no_aspect(input : &str) -> Result<(&str, Option<&str>, Option<&str>), String> {
+    match prop_ref_type(input) {
+        IResult::Done(rest, t) => { 
+            if rest == "" { 
+                Ok(t) 
+            } 
+            else {
+                Err(format!("Parsing error: unexpected text {}", rest)) 
+            }
+        },
+        IResult::Incomplete(_) | IResult::Error(_) => {
+            match prop_ref_no_type(input) {
+                IResult::Done(rest, t) => { 
+                    if rest == "" { 
+                        Ok(t) 
+                    } 
+                    else {
+                        Err(format!("Parsing error: unexpected text {}", rest)) 
+                    }
+                },
+                IResult::Incomplete(_) | IResult::Error(_) => { panic!("unable to parse simple property"); }
+            }
+
+        }
     }
 
-    /*
-    match prop_with_aspect(input) {
-            IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
-            IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-            IResult::Incomplete(_needed) => {
-                match prop_with_nothing(input) {
-                    IResult::Done(_, t) => Ok((t.0, None, t.2)),
-                    IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
-                    IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
-                }
-            },
-    }
-    */
 }
 
 // Parse property reference value as List (element of filter expression)
@@ -342,7 +354,6 @@ pub fn parse_prop_ref_as_list(input : &str) -> Result<Vec<&str>, String>
     match prop_ref_list(input) {
             IResult::Done(rest, t) => if rest == "" { Ok(t) } else { Err(format!("Parsing error: unexpected text {}", rest)) },
             IResult::Error(error_kind) => {
-                println!("Error kind: {:?}", error_kind);
                 Err(format!("Parsing error: {}", error_kind.to_string()))
             },
             IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)) 
@@ -372,7 +383,6 @@ pub fn parse_prop_value_literal(input : &str) -> Result<Literal, String>
                 Err(format!("Parsing error: {} in text '{}'", error_kind.to_string(), input))
             },
             IResult::Incomplete(_needed) => {
-                println!("Needed {:?}", _needed);
                 Err(format!("Parsing error: {:?}", _needed))
         },
     }
