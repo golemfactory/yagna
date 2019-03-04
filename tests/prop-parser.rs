@@ -24,12 +24,12 @@ fn parse_prop_ref_with_aspect_no_aspect_no_impl_type() {
 
 #[test]
 fn parse_prop_ref_with_aspect_no_aspect_impl_type() {
-    assert_eq!(parse_prop_ref_with_aspect("prop@d"), Ok(("prop", None, Some("d"))));
+    assert_eq!(parse_prop_ref_with_aspect("prop$d"), Ok(("prop", None, Some("d"))));
 }
 
 #[test]
 fn parse_prop_ref_with_aspect_syntax_error_1() {
-    assert_eq!(parse_prop_ref_with_aspect("prop@asda"), Err("Parsing error: unexpected text @asda".to_string()));
+    assert_eq!(parse_prop_ref_with_aspect("prop$asda"), Err("Parsing error: unexpected text $asda".to_string()));
 }
 
 #[test]

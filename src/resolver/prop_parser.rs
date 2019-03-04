@@ -21,7 +21,7 @@ named!(aspect <&str, &str>,
 
 named!(prop_ref_type_code <&str, &str>,
     do_parse!(
-        tag!("@") >>
+        tag!("$") >>
         code : alt!(tag!("d") | tag!("v") | tag!("t")) >>
         (code)
     )
@@ -72,16 +72,16 @@ fn test_prop_ref_set()
     // Correct cases (should be properly parsed): 
 
     // input[aspect]@d
-    assert_eq!(prop_ref_aspect_type("input[aspect]@d"), IResult::Done("", ("input", Some("aspect"), Some("d"))));
+    assert_eq!(prop_ref_aspect_type("input[aspect]$d"), IResult::Done("", ("input", Some("aspect"), Some("d"))));
 
     // input[aspect]
     assert_eq!(prop_ref_aspect_type("input[aspect]"), IResult::Incomplete(nom::Needed::Size(14)));
     assert_eq!(prop_ref_aspect("input[aspect]"), IResult::Done("", ("input", Some("aspect"), None)));
 
     // input@d
-    assert_eq!(prop_ref_aspect_type("input@d"), IResult::Error(nom::ErrorKind::Char));
-    assert_eq!(prop_ref_aspect("input@d"), IResult::Error(nom::ErrorKind::Char));
-    assert_eq!(prop_ref_type("input@d"), IResult::Done("", ("input", None, Some("d"))));
+    assert_eq!(prop_ref_aspect_type("input$d"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_aspect("input$d"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_type("input$d"), IResult::Done("", ("input", None, Some("d"))));
 
     // input
     assert_eq!(prop_ref_aspect_type("input"), IResult::Incomplete(nom::Needed::Size(6)));
@@ -92,12 +92,12 @@ fn test_prop_ref_set()
     // Incorrect cases
 
     // input@dqwe
-    assert_eq!(prop_ref_aspect_type("input@dqwe"), IResult::Error(nom::ErrorKind::Char));
-    assert_eq!(prop_ref_aspect("input@dqwe"), IResult::Error(nom::ErrorKind::Char));
-    assert_eq!(prop_ref_type("input@dqwe"), IResult::Done("qwe", ("input", None, Some("d"))));
+    assert_eq!(prop_ref_aspect_type("input$dqwe"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_aspect("input$dqwe"), IResult::Error(nom::ErrorKind::Char));
+    assert_eq!(prop_ref_type("input$dqwe"), IResult::Done("qwe", ("input", None, Some("d"))));
 
     // input[aspect]@dqwe
-    assert_eq!(prop_ref_aspect_type("input[aspect]@dqwe"), IResult::Done("qwe", ("input", Some("aspect"), Some("d"))) );
+    assert_eq!(prop_ref_aspect_type("input[aspect]$dqwe"), IResult::Done("qwe", ("input", Some("aspect"), Some("d"))) );
 
     // input[aspecdqwe
     assert_eq!(prop_ref_aspect_type("input[aspecdqwe"), IResult::Incomplete(nom::Needed::Size(16)) );
@@ -396,6 +396,6 @@ pub fn is_equal_sign(chr: char) -> bool {
 pub fn is_delimiter(chr: char) -> bool {
     chr == '[' ||
     chr == ']' ||
-    chr == '@'  
+    chr == '$'  
 }
 

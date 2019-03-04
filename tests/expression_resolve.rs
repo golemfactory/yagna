@@ -211,7 +211,7 @@ fn resolve_greater_equal_version_with_implied_type() {
 
     // test positive
 
-    run_resolve_test("(cn@v>=1.5.0)", &vec!["cn=\"1.10.0\""], ResolveResult::True);
+    run_resolve_test("(cn$v>=1.5.0)", &vec!["cn=\"1.10.0\""], ResolveResult::True);
 
     // test negative
 
@@ -219,7 +219,7 @@ fn resolve_greater_equal_version_with_implied_type() {
 
     // test - unable to convert
 
-    run_resolve_test("(cn@v>=1.5.0)", &vec!["cn=\"dblah\""], ResolveResult::Undefined(vec![], 
+    run_resolve_test("(cn$v>=1.5.0)", &vec!["cn=\"dblah\""], ResolveResult::Undefined(vec![], 
                     Expression::GreaterEqual(
                         PropertyRef::Value(
                             String::from("cn"), 
@@ -235,11 +235,11 @@ fn resolve_greater_equal_decimal_with_implied_type() {
 
     // test positive
 
-    run_resolve_test("(cn@d>=10)", &vec!["cn=\"1\""], ResolveResult::False(vec![], Expression::Empty));
+    run_resolve_test("(cn$d>=10)", &vec!["cn=\"1\""], ResolveResult::False(vec![], Expression::Empty));
 
     // test - unable to convert
 
-    run_resolve_test("(cn@d>=10)", &vec!["cn=\"dblah\""], ResolveResult::Undefined(vec![], 
+    run_resolve_test("(cn$d>=10)", &vec!["cn=\"dblah\""], ResolveResult::Undefined(vec![], 
                     Expression::GreaterEqual(
                         PropertyRef::Value(
                             String::from("cn"), 
@@ -296,7 +296,7 @@ fn resolve_and() {
     run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], 
                     ResolveResult::Undefined(
                         vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                        Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
+                        Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))
                     ));
 }
 
@@ -323,7 +323,7 @@ fn resolve_or() {
     run_resolve_test(f, &vec!["b=\"x\"", "c=\"y\""], 
                     ResolveResult::Undefined(
                         vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
+                        Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))
                     ));
 }
 
@@ -345,7 +345,7 @@ fn resolve_complex_or_undefined() {
     run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"x\"", "c=\"y\"", "x=\"notdblah\""], 
                     ResolveResult::Undefined(
                         vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
+                        Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))
                     ));
 }
 
@@ -366,10 +366,13 @@ fn resolve_complex_and_undefined() {
 
     // test positive
 
-    run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"d\"", "x=\"notdblah\""], 
+    run_resolve_test(f, &vec![/*"a=\"b\"", "b=\"c\"",*/ "c=\"d\"", "x=\"notdblah\""], 
                     ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                        Expression::And(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
+                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any), &PropertyRef::Value(String::from("b"), PropertyRefType::Any)],
+                        Expression::And(vec![
+                            Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))),
+                            Box::new(Expression::Equals(PropertyRef::Value(String::from("b"), PropertyRefType::Any), String::from("c")))
+                            ])
                     ));
 }
 

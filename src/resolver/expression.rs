@@ -217,8 +217,11 @@ impl Expression {
 
         if undefined_found {
             ResolveResult::Undefined(unresolved_refs, 
-                if unresolved_exprs.len() > 0 {
+                if unresolved_exprs.len() > 1 {
                     Expression::And(unresolved_exprs)
+                }
+                else if unresolved_exprs.len() == 1 {
+                    *unresolved_exprs.pop().unwrap()
                 }
                 else {
                     Expression::Empty
@@ -263,8 +266,11 @@ impl Expression {
 
         if undefined_found {
             ResolveResult::Undefined(all_un_props, 
-                if unresolved_exprs.len() > 0 {
+                if unresolved_exprs.len() > 1 {
                     Expression::Or(unresolved_exprs)
+                }
+                else if unresolved_exprs.len() == 1 {
+                    *unresolved_exprs.pop().unwrap()
                 }
                 else {
                     Expression::Empty
@@ -273,8 +279,11 @@ impl Expression {
         }
         else {
             ResolveResult::False(all_un_props, 
-                if unresolved_exprs.len() > 0 {
+                if unresolved_exprs.len() > 1 {
                     Expression::Or(unresolved_exprs)
+                }
+                else if unresolved_exprs.len() == 1 {
+                    *unresolved_exprs.pop().unwrap()
                 }
                 else {
                     Expression::Empty

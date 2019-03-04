@@ -76,7 +76,7 @@ fn match_weak_dynamic_property_no_match() {
                Ok(MatchResult::False(vec![&PropertyRef::Value(String::from("o1dblah"), PropertyRefType::Any)], vec![])));
 }
 
-//#[ignore]
+#[ignore]
 #[test]
 fn match_weak_dynamic_property_wildcard_match() {
     let mut demand = Demand::default();
