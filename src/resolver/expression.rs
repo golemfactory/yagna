@@ -30,7 +30,32 @@ pub enum Expression {
     Empty
 }
 
+
+
+
 impl Expression {
+
+    // TODO implement the following API:
+
+    pub fn resolve_reduce<'a>(&'a self, property_set : &'a PropertySet) -> Result<Expression, String> { 
+        unimplemented!() 
+    }
+
+    pub fn to_value<'a>(&'a self) -> Option<bool> { 
+        unimplemented!() 
+    }
+
+    pub fn resolve_api<'a>(&'a self, property_set : &'a PropertySet) -> Result<Option<bool>, String>  
+    { 
+        Ok(self.resolve_reduce(property_set)?.to_value()) 
+    }
+
+    pub fn property_refs(&self) -> impl IntoIterator<Item = &PropertyRef> {
+        Vec::new()
+    } 
+
+    // TODO: Implement ultimate reduction of AND and OR expressions where only one factor remains
+     
     // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
     // (DONE) Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
     //       - (DONE) Refactor ResolveResult to include vector of PropertyRefs rather than plain strings...

@@ -11,27 +11,13 @@ use market_api::resolver::expression::*;
 fn resolve_multistep_with_supplemented_props() {
     let f = "(&(|(a=b)(b=c)(c=d))(!(x=dblah)))";
 
-    let props_partial = vec![/*"a=\"b\"",*/ "b=\"x\"", "c=\"y\"", "x=\"notdblah\""];
-    let props_full = vec!["a=\"b\"", "b=\"x\"", "c=\"y\"", "x=\"notdblah\""];
+    let properties_partial = vec![/*"a=\"b\"",*/ "b=\"x\"".to_string(), "c=\"y\"".to_string(), "x=\"notdblah\"".to_string()];
+    let properties_full = vec!["a=\"b\"".to_string(), "b=\"x\"".to_string(), "c=\"y\"".to_string(), "x=\"notdblah\"".to_string()];
 
     let expression = build_expression(&parse(f).unwrap()).unwrap();
 
-    // assemble incomplete properties
-    let mut properties_partial = vec![];
-    for prop in props_partial {
-        properties_partial.push(prop.to_string());
-    }
-
     let property_set_partial = PropertySet::from_flat_props(&properties_partial);
-
-    // assemble full properties
-    let mut properties_full = vec![];
-    for prop in props_full {
-        properties_full.push(prop.to_string());
-    }
-
     let property_set_full = PropertySet::from_flat_props(&properties_full);
-
 
     // run resolve for incomplete props - expect unresolved property refs and a reduced expression
 
@@ -40,11 +26,7 @@ fn resolve_multistep_with_supplemented_props() {
     assert_eq!(resolve_result_partial, 
             ResolveResult::Undefined(
                 vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                Expression::And(vec![
-                    Box::new(
-                        Expression::Or(vec![Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b")))])
-                    )
-                ])
+                Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))
             )
         );
 
