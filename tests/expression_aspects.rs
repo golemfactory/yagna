@@ -39,7 +39,7 @@ fn resolve_present_aspect() {
     run_resolve_test_with_aspect(f, &vec!["objectClass=\"Dblah\""], &vec![], 
                                 ResolveResult::False(
                                     vec![&PropertyRef::Aspect(String::from("objectClass"), String::from("aspect"), PropertyRefType::Any)],
-                                    Expression::Empty
+                                    Expression::Empty(false)
                                 ));
     run_resolve_test_with_aspect(f, &vec!["cn=\"Dblah\""], &vec![], 
                                 ResolveResult::False(
@@ -59,7 +59,7 @@ fn resolve_equals_aspect() {
     // test negative
 
     run_resolve_test_with_aspect(f, &vec!["cn=\"Babs Jensen\""], &vec![("cn", "aspect", "asp_dif_value")], 
-                                ResolveResult::False(vec![], Expression::Empty));
+                                ResolveResult::False(vec![], Expression::Empty(false)));
 
     // test undefined
 
@@ -88,7 +88,7 @@ fn resolve_not_aspect() {
     run_resolve_test_with_aspect(f, &vec!["cn=\"Tim Howes\""], &vec![("cn", "aspect", "asp_value")], 
                                 ResolveResult::False(
                                     vec![],
-                                    Expression::Empty
+                                    Expression::Empty(false)
                                 ));
 
     // test undefined

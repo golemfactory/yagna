@@ -38,7 +38,7 @@ impl error::Error for ParseError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolveError {
-    msg : String
+    pub msg : String
 }
 
 impl ResolveError {

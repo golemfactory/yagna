@@ -44,7 +44,7 @@ fn match_weak_simple_undefined() {
     assert_eq!( match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), 
                 Ok(MatchResult::Undefined(
                     (vec![&PropertyRef::Value(String::from("o3"), PropertyRefType::Any)], Expression::Equals(PropertyRef::Value(String::from("o3"), PropertyRefType::Any), String::from("v2"))), 
-                    (vec![], Expression::Empty)
+                    (vec![], Expression::Empty(false))
                 )));
 }
 

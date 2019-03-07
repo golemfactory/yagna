@@ -27,7 +27,7 @@ pub enum Expression {
     Or(Vec<Box<Expression>>), // operands
     And(Vec<Box<Expression>>), // operands
     Not(Box<Expression>), // operand
-    Empty
+    Empty(bool) // empty expression of specific logical value (true/false)
 }
 
 
@@ -37,21 +37,47 @@ impl Expression {
 
     // TODO implement the following API:
 
+    // Resolve the expression with a give PropertySet and return the reduced result or error message.
     pub fn resolve_reduce<'a>(&'a self, property_set : &'a PropertySet) -> Result<Expression, String> { 
-        unimplemented!() 
+        match self.resolve(property_set) {
+            ResolveResult::True => Ok(Expression::Empty(true)),
+            ResolveResult::False(_, expr) => Ok(expr),
+            ResolveResult::Undefined(_, expr) => Ok(expr),
+            ResolveResult::Err(err) => Err(err.msg)
+        }
     }
 
+    // Resolve the expression to bool value if possible (ie. if an expression has a known boolean value)
     pub fn to_value<'a>(&'a self) -> Option<bool> { 
-        unimplemented!() 
+        match self {
+            Expression::Empty(val) => Some(*val),
+            _ => None
+        }
     }
 
+    // Resolve the expression, returning:
+    // Ok(Some(bool)) if expression can be resolved to boolean value (ie can be reduced to Empty(bool))
+    // Ok(None) if expression does not reduce to Empty(bool)
+    // Err(String) in case of resolution error
     pub fn resolve_api<'a>(&'a self, property_set : &'a PropertySet) -> Result<Option<bool>, String>  
     { 
         Ok(self.resolve_reduce(property_set)?.to_value()) 
     }
 
+    // Fetch all property references from the expression
     pub fn property_refs(&self) -> impl IntoIterator<Item = &PropertyRef> {
-        Vec::new()
+        match self {
+            Expression::Equals(prop, _) |
+            Expression::Greater(prop, _) |
+            Expression::GreaterEqual(prop, _) |
+            Expression::Less(prop, _) |
+            Expression::LessEqual(prop, _) |
+            Expression::Present(prop)  => vec![prop],
+            Expression::And(exprs) |
+            Expression::Or(exprs) => exprs.iter().flat_map( |expr| expr.property_refs() ).collect(),
+            Expression::Not(expr) => expr.property_refs().into_iter().collect(),
+            Expression::Empty(_) => vec![]
+        }
     } 
 
     // TODO: Implement ultimate reduction of AND and OR expressions where only one factor remains
@@ -101,7 +127,7 @@ impl Expression {
             },
             Expression::Not(inner_expression) => {
                 match inner_expression.resolve(property_set) {
-                    ResolveResult::True => ResolveResult::False(vec![], Expression::Empty),
+                    ResolveResult::True => ResolveResult::False(vec![], Expression::Empty(false)),
                     ResolveResult::False(_, _) => ResolveResult::True,
                     ResolveResult::Undefined(un_props, unresolved_expr) => ResolveResult::Undefined(un_props, Expression::Not(Box::new(unresolved_expr))),
                     ResolveResult::Err(err) => ResolveResult::Err(err)
@@ -110,8 +136,14 @@ impl Expression {
             Expression::Present(attr) => {
                 self.resolve_present(attr, property_set)
             },
-            Expression::Empty => {
-                ResolveResult::True
+            Expression::Empty(val) => {
+                if *val {
+                    ResolveResult::True
+                }
+                else
+                {
+                    ResolveResult::False(vec![], Expression::Empty(false))
+                }
             },
         }
     }
@@ -147,7 +179,7 @@ impl Expression {
                                         }
                                         else
                                         {
-                                            ResolveResult::False(vec![], Expression::Empty) // if resolved to false - return Empty as reduced expression
+                                            ResolveResult::False(vec![], Expression::Empty(false)) // if resolved to false - return Empty as reduced expression
                                         }
 
                                     },
@@ -165,7 +197,7 @@ impl Expression {
                                             ResolveResult::True
                                         }
                                         else {
-                                            ResolveResult::False(vec![], Expression::Empty) // if resolved to false - return Empty as reduced expression
+                                            ResolveResult::False(vec![], Expression::Empty(false)) // if resolved to false - return Empty as reduced expression
                                         }
                                     },
                                     None => {
@@ -198,15 +230,15 @@ impl Expression {
                 ResolveResult::False(mut un_props, unresolved_expr) => { 
                         unresolved_refs.append(& mut un_props);
                         match unresolved_expr {
-                            Expression::Empty => {},
+                            Expression::Empty(_) => {},
                             _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
                         };
-                        return ResolveResult::False(vec![], Expression::Empty) // resolved properly to false - return Empty as unreduced expression  
+                        return ResolveResult::False(vec![], Expression::Empty(false)) // resolved properly to false - return Empty as unreduced expression  
                     },
                 ResolveResult::Undefined(mut un_props, unresolved_expr) => { 
                         unresolved_refs.append(& mut un_props);
                         match unresolved_expr {
-                            Expression::Empty => {},
+                            Expression::Empty(_) => {},
                             _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
                         };
                         undefined_found = true;
@@ -224,7 +256,7 @@ impl Expression {
                     *unresolved_exprs.pop().unwrap()
                 }
                 else {
-                    Expression::Empty
+                    Expression::Empty(true)
                 }
             )
         }
@@ -247,14 +279,14 @@ impl Expression {
                         /* keep iterating */ 
                         // We accumulate the unresolved expressions in a list to return
                         match unresolved_expr {
-                            Expression::Empty => {},
+                            Expression::Empty(_) => {},
                             _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
                         };
                     },
                 ResolveResult::Undefined(mut un_props, unresolved_expr) => { 
                         all_un_props.append(& mut un_props);
                         match unresolved_expr {
-                            Expression::Empty => {},
+                            Expression::Empty(_) => {},
                             _ => { unresolved_exprs.push(Box::new(unresolved_expr)); }        
                         };
                         undefined_found = true;
@@ -273,7 +305,7 @@ impl Expression {
                     *unresolved_exprs.pop().unwrap()
                 }
                 else {
-                    Expression::Empty
+                    Expression::Empty(true)
                 }
             )
         }
@@ -286,7 +318,7 @@ impl Expression {
                     *unresolved_exprs.pop().unwrap()
                 }
                 else {
-                    Expression::Empty
+                    Expression::Empty(false)
                 }
             )
 
@@ -303,7 +335,7 @@ impl Expression {
                         ResolveResult::True
                     },
                     None => {
-                        ResolveResult::False(vec![attr], Expression::Empty)
+                        ResolveResult::False(vec![attr], Expression::Empty(false))
                     }
                 }
             },
@@ -318,7 +350,7 @@ impl Expression {
                                         ResolveResult::True
                                     },
                                     None => {
-                                        ResolveResult::False(vec![attr], Expression::Empty)
+                                        ResolveResult::False(vec![attr], Expression::Empty(false))
                                     }
                                 }
                             },
@@ -364,7 +396,7 @@ pub fn build_expression(root : &Tag) -> Result<Expression, ExpressionError> {
             build_expression_from_octet_string(oct_string)
         },
         Tag::Null(_) => {
-            Ok(Expression::Empty)
+            Ok(Expression::Empty(true))
         },
         _ => { Err(ExpressionError::new(&format!("Unexpected tag type"))) }
 

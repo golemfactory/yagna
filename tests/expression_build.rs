@@ -30,7 +30,7 @@ fn prepare_demand_error_for_empty() {
 fn build_expression_empty() {
     let f = "()";
 
-    let expression = Expression::Empty;
+    let expression = Expression::Empty(true);
     
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }

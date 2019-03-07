@@ -34,8 +34,8 @@ pub fn match_weak<'a>(demand : &'a PreparedDemand, offer : &'a PreparedOffer) ->
     let mut result1_undefined = false;
     let mut result2_undefined = false;
 
-    let mut result1_unres_expr = Expression::Empty;
-    let mut result2_unres_expr = Expression::Empty;
+    let mut result1_unres_expr = Expression::Empty(true);
+    let mut result2_unres_expr = Expression::Empty(true);
 
     match result1 {
         ResolveResult::True => { result1_binary = true; },

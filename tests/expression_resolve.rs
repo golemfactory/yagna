@@ -42,7 +42,7 @@ fn resolve_present() {
     run_resolve_test(f, &vec!["cn=\"Dblah\""], 
                     ResolveResult::False(
                         vec![&PropertyRef::Value(String::from("objectClass"), PropertyRefType::Any)],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 }
 
@@ -59,7 +59,7 @@ fn resolve_equals() {
     run_resolve_test(f, &vec!["cn=\"Dblah\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test undefined
@@ -84,7 +84,7 @@ fn resolve_equals_with_wildcard() {
     run_resolve_test(f, &vec!["cn=\"Dblah\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test undefined
@@ -109,7 +109,7 @@ fn resolve_equals_int() {
     run_resolve_test(f, &vec!["cn=456"], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test false when parsing error
@@ -118,7 +118,7 @@ fn resolve_equals_int() {
     run_resolve_test(f, &vec!["cn=123"], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
 }
@@ -136,7 +136,7 @@ fn resolve_greater_int() {
     run_resolve_test(f, &vec!["cn=12"], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test false when parsing error
@@ -145,7 +145,7 @@ fn resolve_greater_int() {
     run_resolve_test(f, &vec!["cn=123"], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
 }
@@ -163,7 +163,7 @@ fn resolve_less_float() {
     run_resolve_test(f, &vec!["cn=126"], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test false when parsing error
@@ -172,7 +172,7 @@ fn resolve_less_float() {
     run_resolve_test(f, &vec!["cn=123"], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
 }
@@ -191,7 +191,7 @@ fn resolve_less_equal_datetime() {
     run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:21:50.52Z\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test false when parsing error (NOTE the RFC 3339 format is fairly strict)
@@ -200,7 +200,7 @@ fn resolve_less_equal_datetime() {
     run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:20:50.52Z\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
 }
@@ -215,7 +215,7 @@ fn resolve_greater_equal_version_with_implied_type() {
 
     // test negative
 
-    run_resolve_test("(cn>=1.5.0)", &vec!["cn=\"1.10.0\""], ResolveResult::False(vec![], Expression::Empty));
+    run_resolve_test("(cn>=1.5.0)", &vec!["cn=\"1.10.0\""], ResolveResult::False(vec![], Expression::Empty(false)));
 
     // test - unable to convert
 
@@ -235,7 +235,7 @@ fn resolve_greater_equal_decimal_with_implied_type() {
 
     // test positive
 
-    run_resolve_test("(cn$d>=10)", &vec!["cn=\"1\""], ResolveResult::False(vec![], Expression::Empty));
+    run_resolve_test("(cn$d>=10)", &vec!["cn=\"1\""], ResolveResult::False(vec![], Expression::Empty(false)));
 
     // test - unable to convert
 
@@ -263,7 +263,7 @@ fn resolve_not() {
     run_resolve_test(f, &vec!["cn=\"Tim Howes\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test undefined
@@ -288,7 +288,7 @@ fn resolve_and() {
     run_resolve_test(f, &vec!["a=\"x\"", "b=\"c\"", "c=\"d\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test undefined
@@ -315,7 +315,7 @@ fn resolve_or() {
     run_resolve_test(f, &vec!["a=\"x\"", "b=\"y\"", "c=\"z\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 
     // test undefined
@@ -385,7 +385,7 @@ fn resolve_complex_and_undefined_reduced() {
     run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"x\"", "x=\"notdblah\""], 
                     ResolveResult::False(
                         vec![],
-                        Expression::Empty
+                        Expression::Empty(false)
                     ));
 }
 
