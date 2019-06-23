@@ -35,8 +35,6 @@ pub enum Expression {
 
 impl Expression {
 
-    // TODO implement the following API:
-
     // Resolve the expression with a give PropertySet and return the reduced result or error message.
     pub fn resolve_reduce<'a>(&'a self, property_set : &'a PropertySet) -> Result<Expression, String> { 
         match self.resolve(property_set) {

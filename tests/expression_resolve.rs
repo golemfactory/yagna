@@ -333,7 +333,12 @@ fn resolve_complex() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["a=\"b\"", "b=\"x\"", "c=\"y\"", "x=\"notdblah\""], ResolveResult::True);
+    run_resolve_test(f, &vec![
+                                r#"a="b""#, 
+                                r#"b="x""#, 
+                                r#"c="y""#, 
+                                r#"x="notdblah""#
+                            ], ResolveResult::True);
 }
 
 #[test]
@@ -356,7 +361,12 @@ fn resolve_complex_or_undefined_reduced() {
 
     // test positive
 
-    run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"y\"", "x=\"notdblah\""], 
+    run_resolve_test(f, &vec![
+                                /*"a=\"b\"",*/ 
+                                r#"b="c""#, 
+                                r#"c="y""#, 
+                                r#"x="notdblah""#
+                            ], 
                     ResolveResult::True);
 }
 
@@ -364,9 +374,16 @@ fn resolve_complex_or_undefined_reduced() {
 fn resolve_complex_and_undefined() {
     let f = "(&(a=b)(b=c)(c=d))";
 
+    //let text = include_str!("somefile.txt");
+
     // test positive
 
-    run_resolve_test(f, &vec![/*"a=\"b\"", "b=\"c\"",*/ "c=\"d\"", "x=\"notdblah\""], 
+    run_resolve_test(f, &vec![
+                        /*"a=\"b\"",
+                        "b=\"c\"",*/ 
+                        r#"c="d""#, 
+                        r#"x="notdblah""#
+                        ], 
                     ResolveResult::Undefined(
                         vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any), &PropertyRef::Value(String::from("b"), PropertyRefType::Any)],
                         Expression::And(vec![
@@ -382,7 +399,12 @@ fn resolve_complex_and_undefined_reduced() {
 
     // test positive
 
-    run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"c\"", "c=\"x\"", "x=\"notdblah\""], 
+    run_resolve_test(f, &vec![
+                            /*"a=\"b\"",*/ 
+                            r#"b="c""#, 
+                            r#"c="x""#, 
+                            r#"x="notdblah""#
+                        ], 
                     ResolveResult::False(
                         vec![],
                         Expression::Empty(false)

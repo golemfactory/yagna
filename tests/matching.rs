@@ -93,7 +93,7 @@ fn match_weak_dynamic_property_wildcard_match() {
 #[test]
 fn match_weak_simple_aspect_match() {
     let mut demand = Demand::default();
-    demand.properties.push(String::from("d1=\"v1\""));
+    demand.properties.push(String::from(r#"d1="v1""#));
     demand.constraints = String::from("(&(o1=v2)(o1[aspect]=dblah))");
 
     let mut offer = Offer::default();
