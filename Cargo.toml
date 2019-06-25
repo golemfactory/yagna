@@ -1,10 +1,11 @@
 [package]
 name = "market-api"
+crate-type=["dylib"]
 version = "0.1.0"
 
-[lib]
-name="market_api"
-crate-type=["dylib"]
+#[lib]
+#name="market_api"
+#crate-type=["dylib"]
 
 [dependencies]
 uuid = { version = "0.7", features = ["v4"] }

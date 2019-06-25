@@ -72,6 +72,31 @@ fn resolve_equals() {
 }
 
 #[test]
+fn resolve_equals_list() {
+    let f = "(cn=Babs Jensen)";
+
+    // test positive
+
+    run_resolve_test(f, &vec!["cn=[\"Babs Jensen\",\"Dblah\"]"], ResolveResult::True);
+
+    // test negative
+
+    run_resolve_test(f, &vec!["cn=[\"Dblah\",\"Argh\"]"], 
+                    ResolveResult::False(
+                        vec![],
+                        Expression::Empty(false)
+                    ));
+
+    // test undefined
+
+    run_resolve_test(f, &vec!["cnas=[\"Dblah\",\"Argh\"]"], 
+                    ResolveResult::Undefined(
+                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
+                        Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Babs Jensen"))
+                    ));
+}
+
+#[test]
 fn resolve_equals_with_wildcard() {
     let f = "(cn=Babs *)";
 
