@@ -224,6 +224,7 @@ impl <'a> PropertyValue<'a> {
     fn equals_list(list_items : &Vec<Box<PropertyValue>>, val : &str) -> Result<bool, String> {
         
         // if val is a proper list syntax - parse it and test list equality
+        // otherwise, if val isnt a list - treat it as a single item and execute "IN" operator
         // TODO this is lazy list equality comparison (returns invalid results where eg lists include multiple copies of the same item)
         match prop_parser::parse_prop_ref_as_list(val) {
             Ok(list_vals) => {

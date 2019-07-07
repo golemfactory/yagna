@@ -78,8 +78,9 @@ impl Expression {
         }
     } 
 
-    // TODO: Implement ultimate reduction of AND and OR expressions where only one factor remains
-     
+    // TODO: Implement handling of pseudo-function properties (note their syntax potentially clashes with aspect syntax!)
+    // 
+    // (DONE): Implement ultimate reduction of AND and OR expressions where only one factor remains
     // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
     // (DONE) Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
     //       - (DONE) Refactor ResolveResult to include vector of PropertyRefs rather than plain strings...
