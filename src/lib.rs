@@ -71,7 +71,28 @@ pub extern fn match_demand_offer(demand_props: *const StringRef, demand_props_co
     offer.properties = unpack_string_ref_array(offer_props, offer_props_count);
     offer.constraints = String::from(unpack_string_ref(&offer_constraints));
 
-    match match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()){
+    let prep_demand_result = PreparedDemand::from(&demand);
+    let prep_offer_result = PreparedOffer::from(&offer);
+
+    // Validate Demand and Offer inputs and return -1 in case of parsing errors.
+
+    match prep_demand_result {
+        Ok(_) => {},
+        Err(_) => {
+            return -1;
+        }
+    }
+
+    match prep_offer_result {
+        Ok(_) => {},
+        Err(_) => {
+            return -1;
+        }
+    }
+
+    // Calculate match...
+    
+    match match_weak(&prep_demand_result.unwrap(), &prep_offer_result.unwrap()){
         Ok(match_result) => {
             match match_result {
                 MatchResult::True => 1,

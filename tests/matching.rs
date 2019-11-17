@@ -22,14 +22,6 @@ fn match_weak_simple_match() {
 #[test]
 fn match_simple_error() {
 
-    /*
-    Assert.AreEqual(GolemMarketResolver.ResultEnum.Error, 
-        resolver.MatchDemandOffer(new string[] { "d5=\"v1\"" }, 
-        "werwer(werwerewro1=v2)",
-                new string[] { "o1=\"v2\"" }, "(d1=v1)"));
-
-    */
-
     let mut demand = Demand::default();
     demand.properties.push(String::from("d5=\"v1\""));
     demand.constraints = String::from("werwer(werwerewro1=v2)");
@@ -38,7 +30,13 @@ fn match_simple_error() {
     offer.properties.push(String::from("o1=\"v2\""));
     offer.constraints = String::from("(d1=v1)");
 
-    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::Err(MatchError::new("asdasd"))));
+    let prep_demand_result = PreparedDemand::from(&demand);
+
+    match prep_demand_result {
+        Ok(_) => { assert!(false, "Demand content error was not caught!") },
+        Err(prep_error) => assert_eq!(prep_error, PrepareError::new("Error parsing Demand constraints: Parsing error: Alternative"))
+    }
+    
 }
 
 #[test]
