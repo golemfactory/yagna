@@ -2,6 +2,7 @@ extern crate market_api;
 
 use market_api::{ Demand, Offer };
 use market_api::resolver::*;
+use market_api::resolver::errors::*;
 use market_api::resolver::matching::*;
 use market_api::resolver::properties::*;
 
@@ -16,6 +17,28 @@ fn match_weak_simple_match() {
     offer.constraints = String::from("(d1=v1)");
 
     assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::True));
+}
+
+#[test]
+fn match_simple_error() {
+
+    /*
+    Assert.AreEqual(GolemMarketResolver.ResultEnum.Error, 
+        resolver.MatchDemandOffer(new string[] { "d5=\"v1\"" }, 
+        "werwer(werwerewro1=v2)",
+                new string[] { "o1=\"v2\"" }, "(d1=v1)"));
+
+    */
+
+    let mut demand = Demand::default();
+    demand.properties.push(String::from("d5=\"v1\""));
+    demand.constraints = String::from("werwer(werwerewro1=v2)");
+
+    let mut offer = Offer::default();
+    offer.properties.push(String::from("o1=\"v2\""));
+    offer.constraints = String::from("(d1=v1)");
+
+    assert_eq!(match_weak(&PreparedDemand::from(&demand).unwrap(), &PreparedOffer::from(&offer).unwrap()), Ok(MatchResult::Err(MatchError::new("asdasd"))));
 }
 
 #[test]

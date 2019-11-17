@@ -183,7 +183,7 @@ impl error::Error for ScanError {
         "scan failed"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -209,7 +209,7 @@ impl error::Error for SubscribeError {
         "subscription failed"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -235,7 +235,7 @@ impl error::Error for UnSubscribeError {
         "un-subscription failed"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -261,7 +261,7 @@ impl error::Error for CollectError {
         "collect failed"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -287,7 +287,7 @@ impl error::Error for ProposalError {
         "post failed"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -313,7 +313,7 @@ impl error::Error for AgreementError {
         "agreement operation failed"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
