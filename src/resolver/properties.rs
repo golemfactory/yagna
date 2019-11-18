@@ -326,7 +326,7 @@ impl <'a> PropertySet<'a> {
     pub fn set_property_aspect(&mut self, prop_name: &'a str, aspect_name: &'a str, aspect_value: &'a str) {
         match self.properties.remove(prop_name) {
             Some(prop) => {
-                let mut new_prop = match prop {
+                let new_prop = match prop {
                     Property::Explicit(name, val, mut aspects) => {
                             // remove aspect if already exists
                             aspects.remove(aspect_name);

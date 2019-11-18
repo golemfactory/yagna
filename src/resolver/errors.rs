@@ -26,7 +26,7 @@ impl error::Error for ParseError {
         &self.msg
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -59,7 +59,7 @@ impl error::Error for ResolveError {
         &self.msg
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -92,7 +92,7 @@ impl error::Error for ExpressionError {
         &self.msg
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -125,7 +125,7 @@ impl error::Error for PrepareError {
         &self.msg
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -158,7 +158,7 @@ impl error::Error for MatchError {
         &self.msg
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
