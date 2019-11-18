@@ -5,13 +5,14 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseError {
-    msg : String
+    msg: String,
 }
 
 impl ParseError {
-    pub fn new(message : &str) -> Self 
-    {
-        ParseError{ msg : String::from(message) }
+    pub fn new(message: &str) -> Self {
+        ParseError {
+            msg: String::from(message),
+        }
     }
 }
 
@@ -38,13 +39,14 @@ impl error::Error for ParseError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolveError {
-    pub msg : String
+    pub msg: String,
 }
 
 impl ResolveError {
-    pub fn new(message : &str) -> Self 
-    {
-        ResolveError{ msg : String::from(message) }
+    pub fn new(message: &str) -> Self {
+        ResolveError {
+            msg: String::from(message),
+        }
     }
 }
 
@@ -68,16 +70,17 @@ impl error::Error for ResolveError {
 // #endregion
 
 // #region ExpressionError
- 
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExpressionError {
-    msg : String
+    msg: String,
 }
 
 impl ExpressionError {
-    pub fn new(message : &str) -> Self 
-    {
-        ExpressionError{ msg : String::from(message) }
+    pub fn new(message: &str) -> Self {
+        ExpressionError {
+            msg: String::from(message),
+        }
     }
 }
 
@@ -98,19 +101,20 @@ impl error::Error for ExpressionError {
     }
 }
 
-// #endregion 
+// #endregion
 
 // #region PrepareError
- 
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrepareError {
-    msg : String
+    msg: String,
 }
 
 impl PrepareError {
-    pub fn new(message : &str) -> Self 
-    {
-        PrepareError{ msg : String::from(message) }
+    pub fn new(message: &str) -> Self {
+        PrepareError {
+            msg: String::from(message),
+        }
     }
 }
 
@@ -131,19 +135,20 @@ impl error::Error for PrepareError {
     }
 }
 
-// #endregion 
+// #endregion
 
 // #region MatchError
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchError {
-    msg : String
+    msg: String,
 }
 
 impl MatchError {
-    pub fn new(message : &str) -> Self 
-    {
-        MatchError{ msg : String::from(message) }
+    pub fn new(message: &str) -> Self {
+        MatchError {
+            msg: String::from(message),
+        }
     }
 }
 
