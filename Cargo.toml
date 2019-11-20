@@ -12,5 +12,5 @@ members = [
     "interfaces/model",
     "service-bus/derive",
     "service-bus/router",
-    "service-bus/service-bus-api"
+    "service-bus/bus"
 ]
