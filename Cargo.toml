@@ -1,4 +1,17 @@
 [workspace]
 members = [
-    "service-bus/service-bus-api"
+    "agent/provider",
+    "agent/requestor",
+    "core/activity",
+    "core/market",
+    "core/net",
+    "core/payment",
+    "core/serv",
+    "exe-unit/wasm-sp",
+    "exe-unit/wasm-wt",
+    "interfaces/client",
+    "interfaces/model",
+    "service-bus/bus",
+    "service-bus/derive",
+    "service-bus/router",
 ]
