@@ -26,8 +26,8 @@ _Modular_ means that all building blocks are to be easily replaceable.
     * [ ] __ERC20 token__
     * [ ] payment matching _(optional)_
 1. Transaction system
-    * [ ] __Usage market
-    * [ ] __Pay per task
+    * [ ] __Usage market__
+    * [ ] __Pay per task__
     * [ ] Pay for dev _(optional)_
 1. Network
     * [ ] __P2P__ (Hybrid P2P) 
