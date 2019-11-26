@@ -73,10 +73,11 @@ impl RpcMessage for GetNetworkStatus {
 struct GetNetworkStatusHandler {}
 
 impl RpcHandler<GetNetworkStatus> for GetNetworkStatusHandler {
-    type Result = Pin<Box<dyn Future<Output = NetworkStatus>>>;
+    type Result = futures::future::Ready<NetworkStatus>; /* dynamic version: Pin<Box<dyn Future<Output = NetworkStatus>>>*/
 
     fn handle(&mut self, _caller: BusPath, _msg: GetNetworkStatus) -> Self::Result {
-        unimplemented!()
+        /* TODO get real network status */
+        futures::future::ready(NetworkStatus::NotConnected) /* dynamic version: add Box::pin(...) */
     }
 }
 
