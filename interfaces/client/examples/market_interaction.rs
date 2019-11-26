@@ -1,7 +1,7 @@
 use actix_rt::System;
 use awc::Client;
 use futures::future::{lazy, Future};
-use ya_model::market::{Demand, Offer, OfferEvent};
+use ya_client::{Error, market};
 
 fn main() {
     System::new("market-interaction")
@@ -9,7 +9,7 @@ fn main() {
             lazy(|| {
                 Client::default()
                     .post("http://localhost:5001/market-api/v1/offers")
-                    .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
+                    .send_json(&market::Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
                     .map_err(Error::SendRequestError)
                     .and_then(|mut response| response.body().from_err())
             })
@@ -19,7 +19,7 @@ fn main() {
 
                 Client::default()
                     .post("http://localhost:5001/market-api/v1/demands")
-                    .send_json(&Demand::new(
+                    .send_json(&market::Demand::new(
                         serde_json::json!("{}"),
                         "(&(zima=już))".into(),
                     ))
@@ -40,7 +40,7 @@ fn main() {
                     .map_err(Error::SendRequestError)
                     .and_then(|mut response| response.json().from_err())
             })
-            .and_then(|v: Vec<OfferEvent>| {
+            .and_then(|v: Vec<market::OfferEvent>| {
                 println!("over events ({}): {:#?}", v.len(), v);
 
                 Client::default()
@@ -52,29 +52,4 @@ fn main() {
         )
         .and_then(|v: serde_json::Value| Ok(println!("market stats: {:#}", v)))
         .unwrap_or_else(|e| println!("{:#?}", e))
-}
-
-#[derive(Debug)]
-pub enum Error {
-    SendRequestError(awc::error::SendRequestError),
-    PayloadError(awc::error::PayloadError),
-    JsonPayloadError(awc::error::JsonPayloadError),
-}
-
-impl From<awc::error::SendRequestError> for Error {
-    fn from(e: awc::error::SendRequestError) -> Self {
-        Error::SendRequestError(e)
-    }
-}
-
-impl From<awc::error::PayloadError> for Error {
-    fn from(e: awc::error::PayloadError) -> Self {
-        Error::PayloadError(e)
-    }
-}
-
-impl From<awc::error::JsonPayloadError> for Error {
-    fn from(e: awc::error::JsonPayloadError) -> Self {
-        Error::JsonPayloadError(e)
-    }
 }

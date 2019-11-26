@@ -6,9 +6,11 @@ edition = "2018"
 
 [dependencies]
 ya-model = { path = "../model" }
+awc = "0.2.8"
+failure = "0.1.6"
+futures = "0.1.25"
+serde_json = "1.0"
+url = "1.7.2"
 
 [dev-dependencies]
 actix-rt = "0.2.2"
-awc = "0.2.8"
-futures = "0.1.25"
-serde_json = "1.0"
