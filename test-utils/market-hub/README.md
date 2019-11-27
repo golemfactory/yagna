@@ -2,7 +2,7 @@
 
 For the first stage of integration testing we will use
 GolemClientMockAPI written in C# on top of .NET Core,
-which supports also on Ubuntu, macOS.
+which beside Windows supports also Ubuntu and macOS.
 
 https://github.com/stranger80/golem-client-mock/
 
@@ -13,6 +13,6 @@ using non persistent (in-memory) repositories.
 
 ## Offer-Demand matching
 
-Offer-Demand matching is implemented in Rust and used as intorop within C# is
+Offer-Demand matching is implemented in Rust and used as intorop within C#
 
 https://github.com/stranger80/golem-market-api
