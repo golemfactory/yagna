@@ -2,6 +2,17 @@
 
 An open platform and marketplace for distributed computations.
 
+## Project Layout
+
+* core - core services for open computation market.
+* agent - applications based on core services. In MVP there is
+basic wasm provider and simple wasm requestor.
+* exe-unit -  execution enviromens implementation. for MVP there is:
+    * dummy - mock exe unit for tests.
+    * wasmtime - wasmtime based provicder.
+* interfaces - public API for core services.
+* service-bus - portable, rust-oriented service bus for IPC.
+
 ## Requirements
 
 * Clean and easy UX, especially during onboarding.
