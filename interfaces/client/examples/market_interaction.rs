@@ -7,10 +7,11 @@ fn main() {
     System::new("market-interaction")
         .block_on(
             lazy(|| {
+                let url = "http://localhost:5001/market-api/v1/offers";
                 Client::default()
-                    .post("http://localhost:5001/market-api/v1/offers")
+                    .post(url)
                     .send_json(&market::Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
-                    .map_err(Error::SendRequestError)
+                    .map_err(|e| Error::SendRequestError(e, url.into()))
                     .and_then(|mut response| response.body().from_err())
             })
             .and_then(|subscription_id| {

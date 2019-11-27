@@ -1,6 +1,7 @@
-#[derive(Fail, Debug)]
+#[derive(failure::Fail, Debug)]
 pub enum Error {
-    SendRequestError(awc::error::SendRequestError),
+    #[fail(display = "error sending request: {}", _1)]
+    SendRequestError(awc::error::SendRequestError, String),
     PayloadError(awc::error::PayloadError),
     JsonPayloadError(awc::error::JsonPayloadError),
     SerdeJsonError(serde_json::Error),
@@ -10,7 +11,7 @@ pub enum Error {
 
 impl From<awc::error::SendRequestError> for Error {
     fn from(e: awc::error::SendRequestError) -> Self {
-        Error::SendRequestError(e)
+        Error::SendRequestError(e, String::new())
     }
 }
 

@@ -1,10 +1,9 @@
-use std::rc::Rc;
-use std::sync::Arc;
+use std::{env, rc::Rc, sync::Arc};
 
 use futures::Future;
 use url::Url;
 
-use error::Error;
+use crate::{error::Error, provider_api::ProviderApi};
 
 /// Connection to an API endpoint.
 #[derive(Clone, Debug)]
@@ -29,7 +28,7 @@ impl ApiConnection {
             .map(|url| ApiConnection { api_url: Arc::new(url) })
     }
 
-    pub fn provider_api(&self) -> &::apis::ProviderApi {
+    pub fn provider_api(&self) -> &ProviderApi {
         self.provider_api.as_ref()
     }
 }
