@@ -21,6 +21,11 @@ info:
     Each of the two roles: Requestors and Providers have their own interface
     in the Market API.
 
+    It conforms with capability level 1 of the
+    <a href="https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg">
+      Market API specification
+    </a>.
+
 basePath: /market-api/v1
 
 tags:
