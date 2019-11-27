@@ -1,7 +1,7 @@
 use actix_rt::System;
 use awc::Client;
 use futures::future::{lazy, Future};
-use ya_client::{Error, market};
+use ya_client::{market, Error};
 
 fn main() {
     System::new("market-interaction")
@@ -10,7 +10,10 @@ fn main() {
                 let url = "http://localhost:5001/market-api/v1/offers";
                 Client::default()
                     .post(url)
-                    .send_json(&market::Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
+                    .send_json(&market::Offer::new(
+                        serde_json::json!({"zima":"już"}),
+                        "()".into(),
+                    ))
                     .map_err(|e| Error::SendRequestError(e, url.into()))
                     .and_then(|mut response| response.body().from_err())
             })

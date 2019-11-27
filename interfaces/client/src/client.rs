@@ -8,7 +8,7 @@ use crate::{error::Error, provider_api::ProviderApi};
 /// Connection to an API endpoint.
 #[derive(Clone, Debug)]
 pub struct ApiConnection {
-    api_url: Arc<Url>
+    api_url: Arc<Url>,
 }
 
 impl Default for ApiConnection {
@@ -25,7 +25,9 @@ impl ApiConnection {
     pub fn from_addr<T: Into<String>>(addr: T) -> Result<ApiConnection, Error> {
         Url::parse(&format!("http://{}/", addr.into()))
             .map_err(Error::InvalidAddress)
-            .map(|url| ApiConnection { api_url: Arc::new(url) })
+            .map(|url| ApiConnection {
+                api_url: Arc::new(url),
+            })
     }
 
     pub fn provider_api(&self) -> &ProviderApi {
