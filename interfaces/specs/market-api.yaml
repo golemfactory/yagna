@@ -1,25 +1,53 @@
 swagger: '2.0'
+
 info:
-  description: Market API
-  version: 1.0.0
-  title: Golem Market API
-host: api.golem.network
+  version: 1.1.0
+  title: Yagna Market API
+  description: |-
+    ## Yagna Market
+
+    The Yagna Market is a core component of the Yagna Network, which enables
+    computational Offersand Demands circulation. The Market is open for all
+    entities willing to buy computations (Demands) or monetize computational
+    resources (Offers).
+
+    ## Yagna Market API
+
+    The Yagna Market API is the entry to the Yagna Market through which
+    Requestors and Providers can publish their Demands and Offers
+    respectively, find matching counterparty, conduct negotiations
+    and make an agreement.
+
+    Each of the two roles: Requestors and Providers have their own interface
+    in the Market API.
+
+    It conforms with capability level 1 of the
+    <a href="https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg">
+      Market API specification
+    </a>.
+
 basePath: /market-api/v1
+
 tags:
   - name: requestor
-    description: Requestor Part
+    description: Requestor interface
   - name: provider
-    description: Provider part
+    description: Provider interface
+
 schemes:
   - https
   - http
+
 paths:
+
+  ##########
+  # Offers #
+  ##########
   /offers:
     post:
       tags:
         - provider
-      summary: ''
-      description: ''
+      summary: Publishes Offer
       operationId: subscribe
       consumes:
         - application/json
@@ -34,10 +62,10 @@ paths:
             $ref: '#/definitions/Offer'
       responses:
         '201':
-          description: OK
+          description: Offer published
           schema:
             type: string
-            description: 'Offer ID'
+            description: Subscription Id
         '400':
           description: Bad offer desciption
 
@@ -53,7 +81,7 @@ paths:
       operationId: unsubscribe
       responses:
         '204':
-          description: Delete
+          description: Offer revoked
         '404':
           description: Subscription not found
 
@@ -72,6 +100,8 @@ paths:
         - provider
       summary: Fetches agreement proposal from proposal id.
       operationId: getProposal
+      produces:
+        - application/json
       responses:
         '200':
           description: OK
@@ -101,6 +131,8 @@ paths:
         - provider
       summary: Creates agreement proposal
       operationId: createProposal
+      consumes:
+        - application/json
       parameters:
         - in: body
           name: proposal
@@ -111,9 +143,7 @@ paths:
           description: OK
           schema:
             type: string
-            description: "Proposal ID"
-
-
+            description: Proposal Id
 
   '/offers/{subscriptionId}/events':
     parameters:
@@ -140,36 +170,17 @@ paths:
             type: array
             items:
               $ref: '#/definitions/ProviderEvent'
+        '404':
+          description: Subscription not found
 
-
-  '/offers/{subscriptionId}/propertyQuery/{queryId}':
-    post:
-      tags:
-        - provider
-      operationId: queryResponse
-      parameters:
-        - name: subscriptionId
-          in: path
-          required: true
-          type: string
-        - name: queryId
-          in: path
-          required: true
-          type: string
-        - name: propertyValues
-          in: body
-          schema:
-            $ref: '#/definitions/PropertyQueryResponse'
-      responses:
-        '200':
-          description: OK
-
-  /demands:
+  ###########
+  # DEMANDS #
+  ###########
+  '/demands':
     post:
       tags:
         - requestor
-      summary: ''
-      description: ''
+      summary: Publishes Demand
       operationId: subscribe
       consumes:
         - application/json
@@ -178,17 +189,19 @@ paths:
       parameters:
         - in: body
           name: body
-          description: Demand description
+          description: Demand scpecification
           required: true
           schema:
             $ref: '#/definitions/Demand'
       responses:
         '201':
-          description: Offer published
+          description: Demand published
           schema:
             type: string
+            description: Subscription id
         '400':
           description: Bad offer desciption
+
   '/demands/{subscriptionId}':
     parameters:
       - name: subscriptionId
@@ -201,9 +214,10 @@ paths:
       operationId: unsubscribe
       responses:
         '204':
-          description: Delete
+          description: Demand revoked
         '404':
           description: Subscription not found
+
   '/demands/{subscriptionId}/events':
     parameters:
       - name: subscriptionId
@@ -229,8 +243,11 @@ paths:
             type: array
             items:
               $ref: '#/definitions/RequestorEvent'
+        '404':
+          description: Subscription not found
+
   '/demands/{subscriptionId}/proposals/{proposalId}':
-    parameters: 
+    parameters:
       - name: subscriptionId
         in: path
         required: true
@@ -244,11 +261,16 @@ paths:
         - requestor
       summary: Fetches agreement proposal from proposal id.
       operationId: getProposal
+      produces:
+        - application/json
       responses:
         '200':
           description: OK
           schema:
             $ref: '#/definitions/AgreementProposal'
+        '404':
+          description: Subscription not found
+
     delete:
       tags:
         - requestor
@@ -259,7 +281,7 @@ paths:
           description: OK
 
   '/demands/{subscriptionId}/proposals/{proposalId}/demand':
-    parameters: 
+    parameters:
       - name: subscriptionId
         in: path
         required: true
@@ -273,6 +295,10 @@ paths:
         - requestor
       summary: Creates agreement proposal
       operationId: createProposal
+      consumes:
+        - application/json
+      produces:
+        - application/json
       parameters:
         - in: body
           name: demandProposal
@@ -283,37 +309,20 @@ paths:
           description: OK
           schema:
             type: string
-            description: "Proposal ID"
+            description: Proposal Id
 
 
-  '/demands/{subscriptionId}/propertyQuery/{queryId}':
-    post:
-      tags:
-        - requestor
-      operationId: queryResponse
-      parameters:
-        - name: subscriptionId
-          in: path
-          required: true
-          type: string
-        - name: queryId
-          in: path
-          required: true
-          type: string
-        - name: propertyValues
-          in: body
-          schema:
-            $ref: '#/definitions/PropertyQueryResponse'
-      responses:
-        '200':
-          description: OK
-
-  /agreements:
+  ##############
+  # Agreements #
+  ##############
+  '/agreements':
     post:
       tags:
         - requestor
       summary: Creates new agreement from proposal
       operationId: createAgreement
+      consumes:
+        - application/json
       parameters:
         - name: agreement
           required: true
@@ -323,7 +332,8 @@ paths:
       responses:
         201:
           description: Created
-  /agreements/{agreementId}:
+
+  '/agreements/{agreementId}':
     parameters:
       - name: agreementId
         in: path
@@ -337,54 +347,58 @@ paths:
       responses:
         204:
           description: Agreement canceled
-  /agreements/{agreementId}/reject:
+
+  '/agreements/{agreementId}/reject':
     parameters:
       - name: agreementId
         in: path
         type: string
         required: true
-    post:
+    get:
       tags:
         - provider
       summary: Rejects agreement.
       operationId: rejectAgreement
       responses:
-        204:
+        200:
           description: Agreement rejected
-  /agreements/{agreementId}/confirm:
+
+  '/agreements/{agreementId}/confirm':
     parameters:
       - name: agreementId
         in: path
         type: string
         required: true
-    post:
+    get:
       tags:
         - requestor
       operationId: confirmAgreement
-      summary: approves 
+      summary: Approves agreement.
       responses:
-         200:
-             description: OK
-  /agreements/{agreementId}/wait:
+        200:
+          description: OK
+
+  '/agreements/{agreementId}/wait':
     parameters:
       - name: agreementId
         in: path
         type: string
         required: true
-    post:
+    get:
       tags:
         - requestor
       operationId: waitForApproval
       responses:
         200:
           description: OK
-  /agreements/{agreementId}/approve:
+
+  '/agreements/{agreementId}/approve':
     parameters:
       - name: agreementId
         in: path
         type: string
         required: true
-    post:
+    get:
       tags:
         - provider
       operationId: approveAgreement
@@ -394,42 +408,43 @@ paths:
 
 definitions:
 
-  RequestorEvent:
+  Demand:
+    type: object
     required:
-      - eventType
-      - providerId
-    discriminator: eventType
-#      propertyName: eventType
-#      mapping:
-#        offer: '#/definitions/OfferEvent'
-#        propertyQuery: '#/definitions/RequestorPropertyQuery'
+      - properties
+      - constraints
     properties:
-      eventType:
-        type: string
-      providerId:
+      properties:
+        type: object
+      constraints:
         type: string
 
-  ProviderEvent:
+  Offer:
+    type: object
     required:
-      - eventType
-      - requestorId
-    discriminator: eventType
-#      propertyName: eventType
-#      mapping:
-#        demand: '#/definitions/DemandEvent'
-#        propertyQuery: '#/definitions/ProviderPropertyQuery'
-#        newAgreement: '#/definitions/NewAgreementEvent'
+      - properties
+      - constraints
     properties:
-      eventType:
+      properties:
+        type: object
+      constraints:
         type: string
-      requestorId:
+
+  Proposal:
+    type: object
+    required:
+      - id
+      - properties
+      - constraints
+    properties:
+      id:
         type: string
-    example:
-      eventType: DemandEvent
-      requestorId: 1172812402961
-      demand:
-        golem:
-          arch: x86
+      properties:
+        type: object
+      constraints:
+        type: string
+      prevProposalId:
+        type: string
 
   AgreementProposal:
     type: object
@@ -445,20 +460,45 @@ definitions:
       offer:
         $ref: '#/definitions/Proposal'
 
-  Proposal:
-      type: object
-      required: 
-        - properties
-        - constraints
-      properties:
-        id: 
-          type: string
-        properties:
-          type: object
-        constraints:
-          type: string
-        prevProposalId:
-          type: string
+  Agreement:
+    type: object
+    required:
+      - proposalId
+      - expirationDate
+    properties:
+      proposalId:
+        type: string
+      expirationDate:
+        type: string
+        format: date-time
+
+  RequestorEvent:
+    required:
+      - eventType
+      - providerId
+    discriminator: eventType
+    properties:
+      eventType:
+        type: string
+      providerId:
+        type: string
+
+  ProviderEvent:
+    required:
+      - eventType
+      - requestorId
+    discriminator: eventType
+    properties:
+      eventType:
+        type: string
+      requestorId:
+        type: string
+    example:
+      eventType: DemandEvent
+      requestorId: 1172812402961
+      demand:
+        golem:
+          arch: x86
 
   DemandEvent:
     allOf:
@@ -491,72 +531,3 @@ definitions:
             type: string
           offer:
             $ref: '#/definitions/Offer'
-
-  RequestorPropertyQuery:
-    allOf:
-      - $ref: '#/definitions/RequestorEvent'
-      - type: object
-        properties:
-          requestorDesc:
-            type: object
-          queryId:
-            type: string
-          queriedProps:
-            type: array
-            items:
-              type: string
-
-  ProviderPropertyQuery:
-    allOf:
-      - $ref: '#/definitions/ProviderEvent'
-      - type: object
-        properties:
-          requestorDesc:
-            type: object
-          queryId:
-            type: string
-          queriedProps:
-            type: array
-            items:
-              type: string
-
-  PropertyQueryResponse:
-    type: object
-
-  Demand:
-    type: object
-    required:
-      - properties
-      - constraints
-    properties:
-      properties:
-        type: object
-      constraints:
-        type: string
-
-  Offer:
-    type: object
-    required:
-      - properties
-      - constraints
-    properties:
-      properties:
-        type: object
-      constraints:
-        type: string
-
-  Agreement:
-    type: object
-    required: 
-      - proposalId
-      - expirationDate
-    properties:
-      proposalId:
-        type: string
-      expirationDate:
-        type: string
-        format: date-time
-
-externalDocs:
-  description: Find out more about Swagger
-  url: 'http://swagger.io'

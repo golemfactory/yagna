@@ -1,29 +1,43 @@
 swagger: '2.0'
+
 info:
   version: v1
-  title: Golem Activity API
+  title: Yagna Activity API
+  description:
+    It conforms with capability level 1 of the
+    <a href="https://docs.google.com/document/d/1BXaN32ediXdBHljEApmznSfbuudTU8TmvOmHKl0gmQM">
+      Activity API specification
+    </a>.
+
 basePath: /activity-api/v1
+
+tags:
+  - name: requestor
+    description: Requestor Part
+  - name: provider
+    description: Provider Part
+
+schemes:
+  - https
+  - http
+
 paths:
+
   /activity:
     post:
       tags:
-        - Control
+        - requestor
       summary: Creates new Activity based on given Agreement.
       operationId: CreateActivity
       consumes:
-        - application/json-patch+json
         - application/json
-        - text/json
-        - application/*+json
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: agreementId
           in: body
           description: ''
-          required: false
+          required: true
           schema:
             type: string
       responses:
@@ -47,21 +61,17 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/CreateActivityError'
+
   '/activity/{activityId}/exec':
     post:
       tags:
-        - Control
+        - requestor
       summary: Executes an ExeScript batch within a given Activity.
       operationId: Exec
       consumes:
-        - application/json-patch+json
         - application/json
-        - text/json
-        - application/*+json
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -71,7 +81,7 @@ paths:
         - name: script
           in: body
           description: ''
-          required: false
+          required: true
           schema:
             $ref: '#/definitions/ExeScriptRequest'
       responses:
@@ -95,17 +105,16 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/ExecError'
+
   '/activity/{activityId}/exec/{batchId}':
     get:
       tags:
-        - Control
+        - requestor
       summary: Queries for ExeScript batch results.
       operationId: GetExecBatchResults
       consumes: []
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -118,6 +127,12 @@ paths:
           required: true
           type: string
         - name: timeout
+          in: query
+          description: ''
+          required: false
+          type: integer
+          format: int32
+        - name: maxCount
           in: query
           description: ''
           required: false
@@ -149,18 +164,13 @@ paths:
             $ref: '#/definitions/ErrorBase'
     put:
       tags:
-        - ProviderGateway
+        - provider
       summary: Pass result of individual ExeScript command executed within the batch.
       operationId: PutExeScriptResult
       consumes:
-        - application/json-patch+json
         - application/json
-        - text/json
-        - application/*+json
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -175,7 +185,7 @@ paths:
         - name: commandResult
           in: body
           description: ''
-          required: false
+          required: true
           schema:
             $ref: '#/definitions/ExeScriptCommandResult'
       responses:
@@ -193,17 +203,16 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/ErrorBase'
+
   '/activity/{activityId}':
     delete:
       tags:
-        - Control
+        - requestor
       summary: Destroys given Activity.
       operationId: DestroyActivity
       consumes: []
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -225,6 +234,7 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/DestroyActivityError'
+
   /activity/events:
     get:
       tags:
@@ -233,9 +243,7 @@ paths:
       operationId: CollectActivityEvents
       consumes: []
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: timeout
           in: query
@@ -259,6 +267,7 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/ErrorBase'
+
   '/activity/{activityId}/state':
     get:
       tags:
@@ -267,9 +276,7 @@ paths:
       operationId: GetState
       consumes: []
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -296,14 +303,9 @@ paths:
       summary: Pass activity state (which may include error details)
       operationId: PutActivityStateDetails
       consumes:
-        - application/json-patch+json
         - application/json
-        - text/json
-        - application/*+json
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -330,6 +332,7 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/ErrorBase'
+
   '/activity/{activityId}/usage':
     get:
       tags:
@@ -338,9 +341,7 @@ paths:
       operationId: GetCurrentUsage
       consumes: []
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -373,9 +374,7 @@ paths:
       operationId: GetRunningCommand
       consumes: []
       produces:
-        - text/plain
         - application/json
-        - text/json
       parameters:
         - name: activityId
           in: path
@@ -396,12 +395,15 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/ErrorBase'
+
 definitions:
+
   CreateActivityError:
     type: object
     properties:
       message:
         type: string
+
   ProblemDetails:
     type: object
     properties:
@@ -418,16 +420,19 @@ definitions:
         type: string
     additionalProperties:
       type: object
+
   ExeScriptRequest:
     type: object
     properties:
       text:
         type: string
+
   ExecError:
     type: object
     properties:
       message:
         type: string
+
   ExeScriptCommandResult:
     type: object
     properties:
@@ -443,16 +448,19 @@ definitions:
         type: string
       message:
         type: string
+
   ErrorBase:
     type: object
     properties:
       message:
         type: string
+
   DestroyActivityError:
     type: object
     properties:
       message:
         type: string
+
   ProviderEvent:
     required:
       - eventType
@@ -468,6 +476,7 @@ definitions:
       activityId:
         type: string
     discriminator: eventType
+
   ActivityStateDetails:
     type: object
     properties:
@@ -494,6 +503,7 @@ definitions:
       errorMessage:
         description: If error caused state change - error message shall be provided.
         type: string
+
   ActivityState:
     type: object
     properties:
@@ -513,16 +523,19 @@ definitions:
       errorMessage:
         description: If error caused state change - error message shall be provided.
         type: string
+
   ExeScriptCommand:
     type: object
     properties:
       command:
+        # TODO: consider enum here
         type: string
       params:
         uniqueItems: false
         type: array
         items:
           type: string
+
   CreateActivityProviderEvent:
     type: object
     allOf:
@@ -532,6 +545,7 @@ definitions:
           agreementId:
             type: string
     properties: {}
+
   ExecProviderEvent:
     type: object
     allOf:
@@ -543,6 +557,7 @@ definitions:
           exeScript:
             $ref: '#/definitions/ExeScriptBatch'
     properties: {}
+
   ExeScriptBatch:
     type: object
     properties:
