@@ -1,18 +1,44 @@
-# Centralized Market Exchange
+# Yagna Exchange Hub
 
-For the first stage of integration testing we will use
-GolemClientMockAPI written in C# on top of .NET Core,
-which beside Windows supports also Ubuntu and macOS.
+For the Mk1 stage of project we will use centralised implementation of the
+Yagna Market as specified [here](
+https://github.com/golemfactory/golem-architecture/blob/market-mk1/docs/market-api/market-api-mk1-central-exchange.md
+).
+
+Below is the source repository, where you will find how to run it:
 
 https://github.com/stranger80/golem-client-mock/
 
-It is a centralised implementation of the Market exchange
-fully supporting
-[Market API](../../interfaces/specs/market-api.yaml),
-using non persistent (in-memory) repositories.
+It is written in C# on top of .NET Core, which beside Windows supports
+also Ubuntu and macOS.
+
+This implementation have no data persistence, which means all objects created
+during the server process lifetime perishes after it is shut down.
+
+It implements the [Market API](../../interfaces/specs/market-api.yaml) and
+conforms with Cabability Level 1 of the [Market API specification](
+https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg/edit#heading=h.8anq3nlk2en7
+).
+
+This mockup implements also the [Activity API](
+../../interfaces/specs/market-api.yaml)
+and conforms with Cabability Level 1 of the [Activity API specification](
+https://docs.google.com/document/d/1BXaN32ediXdBHljEApmznSfbuudTU8TmvOmHKl0gmQM
+).
 
 ## Offer-Demand matching
 
-Offer-Demand matching is implemented in Rust and used as intorop within C#
+Offer-Demand matching is - in turn - implemented in Rust and used as interop
+within aforementioned C# Market implementation.
 
+Here are the sources for it
 https://github.com/stranger80/golem-market-api
+
+## Clients with basic Market
+
+There are also sample Requestor and Provider mockups to interact with this Exchange Hub.
+
+https://github.com/golemfactory/golem-architecture/tree/draft/projects/GolemSampleApp1
+
+They have simple Market API and Activity API with dummy ExeUnit implementation.
+Again, both are written in C# on top of the .NET Core.
