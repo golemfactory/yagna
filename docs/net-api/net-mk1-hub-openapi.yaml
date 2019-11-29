@@ -1,7 +1,7 @@
 openapi: 3.0.2
 info:
-  title: GolemNet Hub
-  description: Centralized hub for GolemNet MK1
+  title: YagnaNet Hub
+  description: Centralized hub for YagnaNet MK1
   version: 0.1.0
 servers:
   - url: /net-api/v0.1

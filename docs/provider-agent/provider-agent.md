@@ -1,7 +1,7 @@
-Light Golem Provider
+Yagna Provider Agent
 ====================
 
-Hi-Level Agent
+Hi-Level Yagna Provider Agent description
 
 
 ## Założenia:
@@ -43,7 +43,7 @@ Kontrowersyjne:
 ## Struktura Oferty
 
 ```yaml
-golem:
+golem:                       ## TODO: should we change to yagna? (requires changes also in specs)
     node:                    # <- Configuration
       id:
         name: node Name

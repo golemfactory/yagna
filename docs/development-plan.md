@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This document describes software development process for Light Golem Provider and technical requirements related to its source code (technology stack, supported platforms, coding standards).
+This document describes software development process for Yagna project and technical requirements related to its source code (technology stack, supported platforms, coding standards).
 
 This document should be updated when project development process or source code requirements change.
 
@@ -10,7 +10,7 @@ This document should be updated when project development process or source code 
 
 ### Software Description
 
-Light Golem Provider will be used to provide computing power to clients.
+Yagna will be used to provide computing power to clients.
 It will run WASM code and measure CPU time spent on computations.
 
 ### Project Artifacts

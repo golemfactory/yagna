@@ -25,17 +25,19 @@
 
 ## Description
 
-GolemNet is a module that is responsible for network communication and discovery between Lightweight Golem nodes.
-The first implementation called GolemNet Mk1 uses a centralized server to allow communication between nodes.
+YagnaNet is a module that is responsible for network communication and discovery between Yagna nodes.
+The first implementation called YagnaNet Mk1 uses a centralized server to allow communication between nodes.
 
 ## Architecture
 
-GolemNet module receives messages from two sources:
+YagnaNet module receives messages from two sources:
 
-- Golem Service Bus (GSB)
+- Yagna Service Bus (GSB)
 - Other nodes in the network
 
-After receiving a message, GolemNet module may put it on the Golem Service Bus if it is addressed to the current node, send it to the centralized server which forwards it to the GolemNet module of the destination node (GolemNet Mk1) or use P2P network to send it to the destination node (GolemNet Mk2).
+After receiving a message, YagnaNet module may put it on the Yagna Service Bus if it is addressed to the current node,
+send it to the centralized server which forwards it to the YagnaNet module of the destination node (YagnaNet Mk1) or
+use P2P network to send it to the destination node (YagnaNet Mk2).
 
 ## Message Format
 
@@ -55,7 +57,7 @@ Every message contains following parts:
 
 #### Prefix
 
-Messages addressed to GolemNet module must start with `net/`.
+Messages addressed to YagnaNet module must start with `net/`.
 
 #### Address
 
@@ -63,11 +65,11 @@ The messages could be sent to a given node address or to a broadcast address.
 
 ##### Node Address
 
-A Lightweight Golem node address, e.g. `0x123...`.
+A Yagna node address, e.g. `0x123...`.
 A message with an address like this should be delivered to the given node.
-In the GolemNet Mk1 implementation it is sent to the centralized server, which sends it directly to the destination node.
-The GolemMk2 implementation should allow P2P messages without a centralized server; sometimes the messages will need to
-travel between many nodes before reaching the destination node.
+In the YagnaNet Mk1 implementation it is sent to the centralized server, which sends it directly to the destination
+node. The YagnaNet Mk2 implementation should allow P2P messages without a centralized server; sometimes the messages
+will need to travel between many nodes before reaching the destination node.
 
 ##### Broadcast Address
 
@@ -78,7 +80,8 @@ from the originating node - this can be used to send broadcast messages only to 
 
 #### Destination Module and Function
 
-The next part of the message should be the destination module name followed by the method name, e.g. `market-api/get-offers`.
+The next part of the message should be the destination module name followed by the method name, e.g. 
+`market-api/get-offers`.
 
 #### Example Destinations
 
@@ -90,11 +93,12 @@ The next part of the message should be the destination module name followed by t
 ### Payload
 
 The payload depends on the destination module and method. It could contain method parameters encoded in JSON
-(for example: `[ "method-name": "param" ]`) or binary data. The GolemNet module does not check payload content format.
+(for example: `[ "method-name": "param" ]`) or binary data. The YagnaNet module does not check payload content format.
 
 ### Reply To
 
-Specifies node address that send this message. It is automatically added by GolemNet module so that the reply could be sent to the originating node.
+Specifies node address that send this message. It is automatically added by YagnaNet module so that the reply could
+be sent to the originating node.
 
 ### Request ID
 
@@ -112,11 +116,13 @@ Request ID is necessary to pair a request with response. It should be a unguessa
 
 ### Requests
 
-When GolemNet receives a network message prefixed with `net/NODE_ID/`, where NODE_ID is the current node identifier, the message is put on the Golem Service Bus without the `net/NODE_ID/` prefix, so that modules subscribed to this type
+When YagnaNet receives a network message prefixed with `net/NODE_ID/`, where NODE_ID is the current node identifier,
+the message is put on the Yagna Service Bus without the `net/NODE_ID/` prefix, so that modules subscribed to this type
 of message receive it.
 
 If the message is prefixed with `net/NODE_ID/`, where NODE_ID is different from the current node identifier,
-the message (in GolemNet Mk1 version) is forwarded to the centralized server (hub) which relays it to the destination node.
+the message (in YagnaNet Mk1 version) is forwarded to the centralized server (hub) which relays it to the destination
+node.
 
 ### Responses and Errors
 
@@ -124,7 +130,8 @@ TODO
 
 ## Hub
 
-An HTTP(S) server and a centralized predecessor of the MK2 P2P network. Provides means to exchange messages between network peers via HTTP requests.
+An HTTP(S) server and a centralized predecessor of the MK2 P2P network. Provides means to exchange messages between
+network peers via HTTP requests.
 
 Functionality provided by the hub:
 
@@ -138,10 +145,11 @@ Note: can be implemented as a WSS server.
 
 ### Technology stack
 
-The programming language used in this project will be [Rust](https://www.rust-lang.org/). The newest stable version of Rust compiler (rustc) should compile all source code without errors.
+The programming language used in this project will be [Rust](https://www.rust-lang.org/). The newest stable version of
+Rust compiler (rustc) should compile all source code without errors.
 
 For the HTTP (/ WS) server code, [Actix Web 1.0](https://actix.rs) will be used.
 
 ### Specification
 
-[OpenAPI specification](golem-net-mk1-hub-openapi.yaml)
+[OpenAPI specification](net-mk1-hub-openapi.yaml)

@@ -1,10 +1,10 @@
-# Golem Service Bus API
+# Yagna Service Bus API
 
-This document describes the Golem Service Bus (GSB) API and its purpose in lightweight Golem.
+This document describes the Yagna Service Bus (YSB) API and its purpose in Yagna.
 
 ## Table of contents
 
-- [Golem Service Bus API](#golem-service-bus-api)
+- [Yagna Service Bus API](#yagna-service-bus-api)
   - [Table of contents](#table-of-contents)
   - [Concepts](#concepts)
     - [Net API](#net-api)
@@ -13,7 +13,7 @@ This document describes the Golem Service Bus (GSB) API and its purpose in light
     - [Service address](#service-address)
     - [Service registration](#service-registration)
     - [Service relaying](#service-relaying)
-    - [GSB API module](#gsb-api-module)
+    - [YSB API module](#ysb-api-module)
   - [Authorization](#authorization)
   - [Authentication and accounting](#authentication-and-accounting)
   - [API definition](#api-definition)
@@ -29,27 +29,34 @@ This document describes the Golem Service Bus (GSB) API and its purpose in light
 
 ### Net API
 
-An access point to the Golem Network. Abstracts away concepts like network addresses, transport and discovery. Nodes are reachable _only_ by their network identifier. The underlying implementation is primarily responsible for establishing communication channels between peers.
+An access point to the Yagna Network. Abstracts away concepts like network addresses, transport and discovery.
+Nodes are reachable _only_ by their network identifier. The underlying implementation is primarily responsible
+for establishing communication channels between peers.
 
 ### Channel
 
-A [PubSub](https://en.wikipedia.org/wiki/Publish–subscribe_pattern) pattern implemented as a network overlay. Channels will be executed as multiplexed logical channels within the Golem protocol. The protocol will enable multiple different callers per registered method.
+A [PubSub](https://en.wikipedia.org/wiki/Publish–subscribe_pattern) pattern implemented as a network overlay.
+Channels will be executed as multiplexed logical channels within the Yagna protocol. The protocol will enable multiple
+different callers per registered method.
 
 **The multiple-caller aspect is out of scope of the PoC** and will only support a single caller.
 
-Channels are mapped to service names and created via registering a service within the Golem Service Bus API module.
+Channels are mapped to service names and created via registering a service within the Yagna Service Bus API module.
 
-Each node is responsible for authorizing calls coming from the network. Typically, a requestor manages this kind of service authorization, i.e. by remotely populating whitelists on providers' Golem daemons.
+Each node is responsible for authorizing calls coming from the network. Typically, a requestor manages this kind of
+service authorization, i.e. by remotely populating whitelists on providers' Yagna daemons.
 
 ### Service
 
-Any entity that benefits from exposing its interface on the Golem Network. Usually an external processes or a (built-in) Golem daemon module.
+Any entity that benefits from exposing its interface on the Yagna Network. Usually an external processes or a
+(built-in) Yagna daemon module.
 
 Foreseen service types:
 
-- an API implementation provider, e.g. a third-party Market API implementation external to the Golem daemon
+- an API implementation provider, e.g. a third-party Market API implementation external to the Yagna daemon
 - an ExeUnit instance, awaiting and responding to requestor's remote calls
-- an application endpoint exposed on the Golem Network, providing functionality beyond the scope of daemon and SDK-provided capabilities; e.g. an FTP service
+- an application endpoint exposed on the Yagna Network, providing functionality beyond the scope of daemon and
+SDK-provided capabilities; e.g. an FTP service
 
 ### Service address
 
@@ -57,35 +64,43 @@ A string that consists of node's id and the registered service name.
 
 ### Service registration
 
-An API call to the GSB API module which binds a given service name string to the registered service process and route any incoming messages to that service. The latter is performed by calling an appropriate interface method, which is required to be implemented by the service.
+An API call to the YSB API module which binds a given service name string to the registered service process and
+route any incoming messages to that service. The latter is performed by calling an appropriate interface method,
+which is required to be implemented by the service.
 
-Registration shares the lifetime of a "connection" between the GSB API module and the registered service.
+Registration shares the lifetime of a "connection" between the YSB API module and the registered service.
 
 ### Service relaying
 
-A state of exposing a Service interface directly on the Golem network. The interface may be called by any third party who poses the knowledge of that service's address.
+A state of exposing a Service interface directly on the Yagna network. The interface may be called by any third
+party who poses the knowledge of that service's address.
 
-The prerequisite for relaying is to register a service within the GSB API module. In consequence, messages addressed to that service will be routed to that service by the GSB API module. Responses are routed back to the caller either as a single reply or a stream.
+The prerequisite for relaying is to register a service within the YSB API module. In consequence, messages addressed
+to that service will be routed to that service by the YSB API module. Responses are routed back to the caller either
+as a single reply or a stream.
 
-### GSB API module
+### YSB API module
 
-A module within the Golem daemon exposing the Golem Service Bus API.
+A module within the Yagna daemon exposing the Yagna Service Bus API.
 
 ## Authorization
 
-**Service authorization in the Golem daemon is out of scope of the PoC version of lightweight Golem.**
+**Service authorization in the Yagna daemon is out of scope of the PoC version of Yagna.**
 
-Requires a service authorization API in the Golem daemon (not defined).
+Requires a service authorization API in the Yagna daemon (not defined).
 
 ## Authentication and accounting
 
-**Currently there are no plans to include service accounting and authentication in the PoC / MVP versions of lightweight Golem.**
+**Currently there are no plans to include service accounting and authentication in the PoC / MVP versions of
+Yagna.**
 
-Proposal: services can only be _authorized_ within the Golem daemon. Accounting will be handled internally by the Golem daemon.
+Proposal: services can only be _authorized_ within the Yagna daemon. Accounting will be handled internally by
+the Yagna daemon.
 
 ## API definition
 
-Due to the PubSub nature of the API, two different services need to be implemented by the GSB API provider and the registering service.
+Due to the PubSub nature of the API, two different services need to be implemented by the YSB API provider
+and the registering service.
 
 Note: authorization is not included in the scope of this proposal.
 
@@ -94,9 +109,9 @@ Note: authorization is not included in the scope of this proposal.
 ```protobuf
 syntax = "proto3";
 
-package GSB_API;
+package YSB_API;
 
-/* Exposed by Golem Service Bus API implementation */
+/* Exposed by Yagna Service Bus API implementation */
 service Bus {
   /* Register a service within the bus */
   rpc Register (RegisterRequest) returns (RegisterReply);
@@ -156,7 +171,7 @@ message CallReply {
 
 ## API implementation details
 
-This section describes implementation hints and requirements for modules exposing the Golem Service Bus API.
+This section describes implementation hints and requirements for modules exposing the Yagna Service Bus API.
 
 ### Message definition
 
@@ -170,7 +185,7 @@ The binary `data` field within the messages must be serialized with [msgpack](ht
 
 ### Transport
 
-GSB API modules utilize a `nanomsg-next-gen` library with 2 transports enabled:
+YSB API modules utilize a `nanomsg-next-gen` library with 2 transports enabled:
 
 - IPC: unix sockets (Linux, macOS) and Named Pipes (Windows)
 - TCP: all supported operating systems

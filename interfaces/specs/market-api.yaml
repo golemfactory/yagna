@@ -497,7 +497,7 @@ definitions:
       eventType: DemandEvent
       requestorId: 1172812402961
       demand:
-        golem:
+        golem: ## TODO: should we change to yagna? (requires changes also in specs)
           arch: x86
 
   DemandEvent:
