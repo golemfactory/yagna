@@ -1,9 +1,7 @@
 # Yagna Exchange Hub
 
 For the Mk1 stage of project we will use centralised implementation of the
-Yagna Market as specified [here](
-https://github.com/golemfactory/golem-architecture/blob/market-mk1/docs/market-api/market-api-mk1-central-exchange.md
-).
+Yagna Market as specified [here](../../docs/market-api/market-api-mk1-central-exchange.md).
 
 Below is the source repository, where you will find how to run it:
 
