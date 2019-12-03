@@ -2,9 +2,8 @@
 
 First incarnation (Mk1) of Yagna Market component is centralized.
 Single Server will handle all the traffic on the market.
-It is to enable prototyping of two actors using Market API - namely:
-Provider Agent and Requestor App. Both of them will have to connect
-to a single host and port.
+It is created to enable prototyping of two actors that are using
+Market API - namely: Provider Agent and Requestor App.
 
 Centralized Market Server implementation for Mk1 is described [here](
 ../../test-utils/market-hub/README.md
@@ -21,7 +20,7 @@ Client lib will be valid for both Mk1 and Mk2, because API itself will be the sa
 
 Yagna Market service Mk1 will **not** be integrated with Yagna Daemon, nor service bus.
 It is not needed since its Market Mk1 implementation already supports also Activity (Mk1)
-and so both actors, which depends on it, just need to connect to a single service (REST).
+and so both prototyped actors need to connect to a single service (REST).
 Provider Agent will need to connect also to ExeUnit (it can be done via service bus
 or directly via ExeUnit CLI). 
 
