@@ -1,15 +1,32 @@
 # Centralised (Mk1) Yagna Market
 
-First incarnation (Mk1) of Yagna Market component will be centralized.
+First incarnation (Mk1) of Yagna Market component is centralized.
 Single Server will handle all the traffic on the market.
+It is to enable prototyping of two actors using Market API - namely:
+Provider Agent and Requestor App. Both of them will have to connect
+to a single host and port.
 
-It will serve REST API conforming with Cabability Level 1 of the 
+Centralized Market Server implementation for Mk1 is described [here](
+../../test-utils/market-hub/README.md
+).
+
+It serves REST API conforming with Cabability Level 1 of the 
 [Market API specification](
 https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg/edit#heading=h.8anq3nlk2en7
-) which means support for the three basic phases of the market interaction: [Discovery](#discovery-phase),
-[Negotiation](#negotiation-phase) and [Agreement](#agreement-phase).
+) which means support for the three basic phases of the market interaction:
+[Discovery](#discovery-phase), [Negotiation](#negotiation-phase) and [Agreement](#agreement-phase).
 
-Actual Centralized (Mk1) Market Server implementation is described [here](../../test-utils/market-hub/README.md).
+We will provide Rust client library with typesafe bindings to Market API.
+Client lib will be valid for both Mk1 and Mk2, because API itself will be the same.
+
+Yagna Market service Mk1 will **not** be integrated with Yagna Daemon, nor service bus.
+It is not needed since its Market Mk1 implementation already supports also Activity (Mk1)
+and so both actors, which depends on it, just need to connect to a single service (REST).
+Provider Agent will need to connect also to ExeUnit (it can be done via service bus
+or directly via ExeUnit CLI). 
+
+![TestBed diagram](Centralised%20(Mk1)%20TestBed.png) 
+
 
 ## Yagna Market
 
@@ -19,7 +36,7 @@ or monetize computational resources (Offers).
 
 ## Yagna Market API
 
-The Yagna Market API is the entry to the Yagna Market through which Requestors and Providers (parties) 
+The Yagna Market API is the entry to the Yagna Market through which Requestors and Providers 
 can publish their Demands and Offers respectively, find matching counterparty, conduct negotiations
 and make an agreement.
 
@@ -34,24 +51,30 @@ communication, but for Mk1 the central server will be an intermediary here.
 
 
 ### Discovery Phase
-Parties are joining the Yagna Network by publishing their Offers or Demands.
-Yagna Market is matching incoming Demands and Offers, and creates Proposals, wchich are then
-fed to both parties: Requestor and Provider.
+Users are joining the Yagna Network by publishing their Offers or Demands.
+Yagna Market is [matching incoming Demands and Offers](
+https://docs.google.com/document/d/1yTupuRsN9DKVrK1TPhM6dBxKCAPk0wCB8KxRf57ZkV4
+) and creates Proposals. Proposal is a pair of Offer and Demand which are matching.
+The matching can be [strong or weak](
+https://docs.google.com/document/d/1tzMrhdBr9wiUXtSn1JO18MmIiP31dkMakdjStnF3eZY/edit#heading=h.jzr5wr9i4uh5
+). Each Proposal is fed to both issuers (parties) of its components.
+
 
 ### Negotiation Phase
-Upon Proposal reception party (usually the Requestor) can start interaction with selected
+Upon Proposal reception a party (usually the Requestor) can start interaction with selected
 counterparty to negotiate the Proposal. During the negotiation parties are alternately
-exchanging Proposals adjusting their properties or/and constraints to fully fit Offer with Demand.
+exchanging Proposals with adjusted properties or/and constraints for owned component
+to strongly match Offer with Demand.
 
-For the Mk1 Market implementation will **not** support [dynamic property resolution nor
+The Mk1 Market implementation will **not** support [dynamic property resolution nor
 pseudo-function support](
 https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg/edit#heading=h.6y5qk7bcl9qy
 ) during the Negotiation phase.
 
 ### Agreement Phase
-After successful negotiation Requestor receives Proposal which satisfies all his constrains
-and is able to promote this Proposal into Agreement. The Agreement is send to Provider
-to be finally accepted.
+The negotiation is successful when the Requestor receives a Proposal with an Offer satisfying
+all constrains from his Demand (strong match). The Requestor can promote such a Proposal
+into an Agreement. The Agreement is send to Provider to be finally accepted.
 
-Provider accept finishes the Market interaction for both parties and enables Requestor to start an Activity.
-
+Provider acceptance finishes the Market interaction for both parties and enables Requestor
+to start an Activity.
