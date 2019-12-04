@@ -1,5 +1,5 @@
-use anyhow::Result;
-use api::core::ExeUnit;
+use anyhow::{anyhow, Result};
+use api::core::{Cmd, Context};
 use futures::future::BoxFuture;
 use std::{
     sync::{Arc, Mutex},
@@ -19,8 +19,12 @@ pub struct DummyExeUnit {
     state: Arc<Mutex<State>>,
 }
 
-impl ExeUnit for DummyExeUnit {
-    type State = State;
+impl DummyExeUnit {
+    pub fn spawn() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(State::Ready)),
+        }
+    }
 
     fn is_running(&self) -> bool {
         *self.state.lock().unwrap() == State::Running
@@ -34,24 +38,44 @@ impl ExeUnit for DummyExeUnit {
         *self.state.lock().unwrap() == State::Finished
     }
 
-    fn state(&self) -> Self::State {
+    fn state(&self) -> State {
         *self.state.lock().unwrap()
     }
+}
 
-    fn start(&mut self, _params: Vec<String>) -> BoxFuture<Result<()>> {
-        let state = self.state.clone();
+impl Context for DummyExeUnit {}
+
+#[derive(Debug)]
+pub struct Start {
+    pub params: Vec<String>,
+}
+
+impl Cmd<DummyExeUnit> for Start {
+    type Response = Result<State>;
+    type Result = BoxFuture<'static, Self::Response>;
+
+    fn action(self, ctx: DummyExeUnit) -> Self::Result {
+        if ctx.is_running() {
+            return Box::pin(async { Err(anyhow!("container is already started")) });
+        }
+
         Box::pin(async move {
             delay_for(Duration::from_secs(5)).await;
-            *state.lock().unwrap() = State::Finished;
-            Ok(())
+            let state = State::Finished;
+            *ctx.state.lock().unwrap() = state;
+            Ok(state)
         })
     }
 }
 
-impl DummyExeUnit {
-    pub fn spawn() -> Self {
-        Self {
-            state: Arc::new(Mutex::new(State::Ready)),
-        }
+#[derive(Debug)]
+pub struct Status;
+
+impl Cmd<DummyExeUnit> for Status {
+    type Response = State;
+    type Result = BoxFuture<'static, Self::Response>;
+
+    fn action(self, ctx: DummyExeUnit) -> Self::Result {
+        Box::pin(async move { ctx.state() })
     }
 }

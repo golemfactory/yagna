@@ -1,8 +1,8 @@
 mod app;
 
-use self::app::DummyExeUnit;
 use anyhow::{anyhow, Context, Result};
-use api::core::{HandleCmd, StartCmd, StatusCmd};
+use api::core::HandleCmd;
+use app::{DummyExeUnit, Start, Status};
 use std::{
     convert::TryFrom,
     io::{self, Write},
@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
             Ok(Cmd::Start) => {
                 // start the container...
                 // block until computation is finished
-                match exe_unit.handle(StartCmd { params: vec![] }).await {
+                match exe_unit.handle(Start { params: vec![] }).await {
                     Ok(state) => {
                         println!("state changed: {:?}", state);
                         println!("computation finished...")
@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
             }
             Ok(Cmd::Status) => {
                 // ask for status...
-                let state = exe_unit.handle(StatusCmd).await;
+                let state = exe_unit.handle(Status).await;
                 println!("current state: {:?}", state)
             }
             Ok(Cmd::Exit) => {
@@ -74,4 +74,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-

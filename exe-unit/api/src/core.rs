@@ -1,73 +1,48 @@
-use crate::ExeUnitError;
-use anyhow::Result;
 use futures::{
     channel::oneshot,
     future::{BoxFuture, Future},
 };
-use std::fmt::Debug;
 
-pub trait HandleCmd<Cmd, Output>
+pub trait Context: Clone + Send + Sync {}
+
+pub trait Cmd<C>
 where
-    Cmd: Sync + Send,
+    Self: Send + Sync,
+    C: Context + 'static,
 {
-    type Result: Future<Output = Output>;
+    type Response: Send + 'static;
+    type Result: Send + Future<Output = Self::Response>;
 
-    fn handle(&mut self, cmd: Cmd) -> Self::Result;
+    fn action(self, ctx: C) -> Self::Result;
 }
 
-pub trait ExeUnit: Send + Sync + Clone {
-    type State: Clone + Send + Sync + Debug;
-
-    fn is_ready(&self) -> bool;
-    fn is_running(&self) -> bool;
-    fn is_finished(&self) -> bool;
-
-    fn state(&self) -> Self::State;
-    fn start(&mut self, params: Vec<String>) -> BoxFuture<Result<()>>;
-}
-
-#[derive(Debug)]
-pub struct StartCmd {
-    pub params: Vec<String>,
-}
-
-impl<T> HandleCmd<StartCmd, Result<T::State>> for T
+pub trait HandleCmd<C>
 where
-    T: ExeUnit + 'static,
+    Self: Context + 'static,
+    C: Cmd<Self> + 'static,
 {
-    type Result = BoxFuture<'static, Result<T::State>>;
+    type Result: Future<Output = C::Response>;
 
-    fn handle(&mut self, cmd: StartCmd) -> Self::Result {
-        if self.is_running() {
-            return Box::pin(async { Err(ExeUnitError::OpInProgress("start".to_string()).into()) });
-        }
+    fn handle(&mut self, cmd: C) -> Self::Result;
+}
 
+impl<T, C> HandleCmd<C> for T
+where
+    T: Context + 'static,
+    C: Cmd<T> + 'static,
+{
+    type Result = BoxFuture<'static, C::Response>;
+
+    fn handle(&mut self, cmd: C) -> Self::Result {
         let (tx, rx) = oneshot::channel();
-        let mut ctx = self.clone();
-        tokio::spawn(async move {
-            let res = ctx.start(cmd.params).await;
-            tx.send(res).expect("sending notification should not fail");
-        });
-
         let ctx = self.clone();
-        Box::pin(async move {
-            rx.await??;
-            Ok(ctx.state())
-        })
+        tokio::spawn(async move {
+            let res = cmd.action(ctx).await;
+            if let Err(_) = tx.send(res) {
+                panic!("send should succeed")
+            }
+        });
+        Box::pin(async move { rx.await.expect("send should succeed") })
     }
 }
 
-#[derive(Debug)]
-pub struct StatusCmd;
-
-impl<T> HandleCmd<StatusCmd, T::State> for T
-where
-    T: ExeUnit + 'static,
-{
-    type Result = BoxFuture<'static, T::State>;
-
-    fn handle(&mut self, _: StatusCmd) -> Self::Result {
-        let state = self.state();
-        Box::pin(async move { state })
-    }
-}
