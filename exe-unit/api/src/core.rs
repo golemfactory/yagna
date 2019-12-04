@@ -45,4 +45,3 @@ where
         Box::pin(async move { rx.await.expect("send should succeed") })
     }
 }
-
