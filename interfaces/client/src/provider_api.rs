@@ -3,38 +3,59 @@ use futures::Future;
 use crate::error::Error;
 
 pub trait ProviderApi {
-    fn approve_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>>;
+
+    /// Publish Provider’s service capabilities (Offer) on the market to declare an
+    /// interest in Demands meeting specified criteria.
+    fn subscribe(&self, offer: ::models::Offer) -> Box<Future<Item = String, Error = Error>>;
+
+    /// Stop subscription by invalidating a previously published Offer.
+    fn unsubscribe(&self, subscription_id: &str) -> Box<Future<Item = (), Error = Error>>;
+
+    /// Get events which have arrived from the market in response to the Offer
+    /// published by the Provider via  [subscribe](self::subscribe).
+    /// Returns collection of [ProviderEvents](models::ProviderEvent) or timeout.
     fn collect(
         &self,
         subscription_id: &str,
         timeout: f32,
         max_events: i64,
-    ) -> Box<Future<Item = Vec<::models::ProviderEvent>, Error = Error>>;
+    ) -> Box<Future<Item = Vec<models::ProviderEvent>, Error = Error>>;
+
+    ///
     fn create_proposal(
         &self,
         subscription_id: &str,
         proposal_id: &str,
         proposal: ::models::Proposal,
     ) -> Box<Future<Item = String, Error = Error>>;
+
     fn get_proposal(
         &self,
         subscription_id: &str,
         proposal_id: &str,
     ) -> Box<Future<Item = ::models::AgreementProposal, Error = Error>>;
+
     fn query_response(
         &self,
         subscription_id: &str,
         query_id: &str,
         property_query_response: ::models::PropertyQueryResponse,
     ) -> Box<Future<Item = (), Error = Error>>;
-    fn reject_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>>;
+
     fn reject_proposal(
         &self,
         subscription_id: &str,
         proposal_id: &str,
     ) -> Box<Future<Item = (), Error = Error>>;
-    fn subscribe(&self, offer: ::models::Offer) -> Box<Future<Item = String, Error = Error>>;
-    fn unsubscribe(&self, subscription_id: &str) -> Box<Future<Item = (), Error = Error>>;
+
+
+    /// Confirms the Agreement received from the Requestor.
+    /// Mutually exclusive with [reject_agreement](self::reject_agreement).
+    fn approve_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>>;
+
+    /// Rejects the Agreement received from the Requestor.
+    /// Mutually exclusive with [approve_agreement](self::approve_agreement).
+    fn reject_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>>;
 }
 
 impl ProviderApi for ProviderApiClient {
