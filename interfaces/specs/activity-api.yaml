@@ -12,8 +12,10 @@ info:
 basePath: /activity-api/v1
 
 tags:
-  - name: requestor
-    description: Requestor Part
+  - name: requestor_control
+    description: Requestor Part (Control)
+  - name: requestor_state
+    description: Requestor Part (State)
   - name: provider
     description: Provider Part
 
@@ -26,8 +28,9 @@ paths:
   /activity:
     post:
       tags:
-        - requestor
+        - requestor_control
       summary: Creates new Activity based on given Agreement.
+      description: '**Note:** This call shall get routed as a provider event (see ProviderEvent structure).' 
       operationId: CreateActivity
       consumes:
         - application/json
@@ -45,6 +48,7 @@ paths:
           description: Success
           schema:
             type: string
+            example: '"activityId"'
         '400':
           description: Bad Request
           schema:
@@ -65,9 +69,9 @@ paths:
   '/activity/{activityId}/exec':
     post:
       tags:
-        - requestor
+        - requestor_control
       summary: Executes an ExeScript batch within a given Activity.
-      operationId: Exec
+      description: '**Note:** This call shall get routed directly to ExeUnit. '      operationId: Exec
       consumes:
         - application/json
       produces:
@@ -89,6 +93,7 @@ paths:
           description: Success
           schema:
             type: string
+            example: '"batchId"'
         '400':
           description: Bad Request
           schema:
@@ -109,8 +114,9 @@ paths:
   '/activity/{activityId}/exec/{batchId}':
     get:
       tags:
-        - requestor
+        - requestor_control
       summary: Queries for ExeScript batch results.
+      description: '**Note:** This call shall collect ExeScriptCommand result objects received directly from ExeUnit.' 
       operationId: GetExecBatchResults
       consumes: []
       produces:
@@ -162,53 +168,12 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/ErrorBase'
-    put:
-      tags:
-        - provider
-      summary: Pass result of individual ExeScript command executed within the batch.
-      operationId: PutExeScriptResult
-      consumes:
-        - application/json
-      produces:
-        - application/json
-      parameters:
-        - name: activityId
-          in: path
-          description: ''
-          required: true
-          type: string
-        - name: batchId
-          in: path
-          description: ''
-          required: true
-          type: string
-        - name: commandResult
-          in: body
-          description: ''
-          required: true
-          schema:
-            $ref: '#/definitions/ExeScriptCommandResult'
-      responses:
-        '200':
-          description: Success
-        '403':
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/ProblemDetails'
-        '404':
-          description: Not Found
-          schema:
-            $ref: '#/definitions/ProblemDetails'
-        '500':
-          description: Server Error
-          schema:
-            $ref: '#/definitions/ErrorBase'
-
   '/activity/{activityId}':
     delete:
       tags:
-        - requestor
+        - requestor_control
       summary: Destroys given Activity.
+      description: '**Note:** This call shall get routed as a provider event (see ProviderEvent structure).' 
       operationId: DestroyActivity
       consumes: []
       produces:
@@ -238,8 +203,8 @@ paths:
   /activity/events:
     get:
       tags:
-        - ProviderGateway
-      summary: Queries for ExeScript batch results.
+        - provider
+      summary: Fetch Requestor command events.
       operationId: CollectActivityEvents
       consumes: []
       produces:
@@ -271,7 +236,7 @@ paths:
   '/activity/{activityId}/state':
     get:
       tags:
-        - State
+        - requestor_state
       summary: Get state of specified Activity.
       operationId: GetState
       consumes: []
@@ -299,7 +264,7 @@ paths:
             $ref: '#/definitions/ErrorBase'
     put:
       tags:
-        - ProviderGateway
+        - provider
       summary: Pass activity state (which may include error details)
       operationId: PutActivityStateDetails
       consumes:
@@ -316,7 +281,7 @@ paths:
           in: body
           required: false
           schema:
-            $ref: '#/definitions/ActivityStateDetails'
+            $ref: '#/definitions/ActivityState'
       responses:
         '200':
           description: Success
@@ -333,10 +298,11 @@ paths:
           schema:
             $ref: '#/definitions/ErrorBase'
 
+
   '/activity/{activityId}/usage':
     get:
       tags:
-        - State
+        - requestor_state
       summary: Get usage of specified Activity.
       operationId: GetCurrentUsage
       consumes: []
@@ -353,11 +319,13 @@ paths:
         '200':
           description: Success
           schema:
+            description: Returns the current vector of usage counters consumed by the Activity. The sequence of values corresponds to Usage Vector property (golem.usage.vector) as indicated in the Agreement (Offer part).
             uniqueItems: false
             type: array
             items:
               format: double
               type: number
+            example: '[123.5, 34000]'
         '404':
           description: Not Found
           schema:
@@ -366,11 +334,49 @@ paths:
           description: Server Error
           schema:
             $ref: '#/definitions/ErrorBase'
+    put:
+      tags:
+        - provider
+      summary: Pass current activity usage (which may include error details)
+      operationId: PutActivityUsageDetails
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: activityId
+          in: path
+          description: ''
+          required: true
+          type: string
+        - name: state
+          in: body
+          required: false
+          schema:
+            $ref: '#/definitions/ActivityUsage'
+      responses:
+        '200':
+          description: Success
+        '403':
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ProblemDetails'
+        '404':
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ProblemDetails'
+        '500':
+          description: Server Error
+          schema:
+            $ref: '#/definitions/ErrorBase'
+
+
   '/activity/{activityId}/command':
     get:
       tags:
-        - State
+        - requestor_state
       summary: Get running command for a specified Activity.
+      description: '**Note:** This call shall get routed directly to ExeUnit.' 
       operationId: GetRunningCommand
       consumes: []
       produces:
@@ -386,7 +392,7 @@ paths:
         '200':
           description: Success
           schema:
-            $ref: '#/definitions/ExeScriptCommand'
+            $ref: '#/definitions/ExeScriptCommandState'
         '404':
           description: Not Found
           schema:
@@ -439,8 +445,6 @@ definitions:
       index:
         format: int32
         type: integer
-      isBatchFinished:
-        type: boolean
       result:
         enum:
           - Ok
@@ -469,15 +473,15 @@ definitions:
       eventType:
         enum:
           - CreateActivity
-          - Exec
           - DestroyActivity
           - GetState
+          - GetUsage
         type: string
       activityId:
         type: string
     discriminator: eventType
 
-  ActivityStateDetails:
+  ActivityUsage:
     type: object
     properties:
       currentUsage:
@@ -487,22 +491,6 @@ definitions:
         items:
           format: double
           type: number
-      state:
-        enum:
-          - New
-          - Deploying
-          - Ready
-          - Starting
-          - Active
-          - Unresponsive
-          - Terminated
-        type: string
-      reason:
-        description: Reason for Activity termination (specified when Activity in Terminated state).
-        type: string
-      errorMessage:
-        description: If error caused state change - error message shall be provided.
-        type: string
 
   ActivityState:
     type: object
@@ -529,6 +517,20 @@ definitions:
     properties:
       command:
         # TODO: consider enum here
+        type: string
+      params:
+        uniqueItems: false
+        type: array
+        items:
+          type: string
+
+  ExeScriptCommandState:
+    type: object
+    properties:
+      command:
+        # TODO: consider enum here
+        type: string
+      progress:
         type: string
       params:
         uniqueItems: false
