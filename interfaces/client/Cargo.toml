@@ -6,11 +6,12 @@ edition = "2018"
 
 [dependencies]
 ya-model = { path = "../model" }
+
 awc = "0.2.8"
 failure = "0.1.6"
-futures = { version = "0.3", features = ["compat"] }
+futures = { version = "0.1" }
 serde_json = "1.0"
 url = "1.7.2"
 
 [dev-dependencies]
-actix-rt = "0.2.2"
+actix-rt = "0.2.6"

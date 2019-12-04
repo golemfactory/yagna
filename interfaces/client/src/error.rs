@@ -1,9 +1,12 @@
 #[derive(failure::Fail, Debug)]
 pub enum Error {
-    #[fail(display = "error sending request: {}", _1)]
-    SendRequestError(awc::error::SendRequestError, String),
+    #[fail(display = "AWC sending request error: {}", _0)]
+    SendRequestError(String),
+    #[fail(display = "AWC payload error: {}", _0)]
     PayloadError(awc::error::PayloadError),
+    #[fail(display = "AWC JSON payload error: {}", _0)]
     JsonPayloadError(awc::error::JsonPayloadError),
+    #[fail(display = "serde JSON error: {}", _0)]
     SerdeJsonError(serde_json::Error),
     #[fail(display = "invalid address: {}", _0)]
     InvalidAddress(#[fail(cause)] url::ParseError),
@@ -11,7 +14,7 @@ pub enum Error {
 
 impl From<awc::error::SendRequestError> for Error {
     fn from(e: awc::error::SendRequestError) -> Self {
-        Error::SendRequestError(e, String::new())
+        Error::SendRequestError(format!("{:?}", e))
     }
 }
 

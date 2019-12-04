@@ -1,6 +1,6 @@
 use actix_rt::System;
 use awc::Client;
-use futures::future::{lazy, Future};
+use futures::future::{Future, lazy};
 use ya_client::{market, Error};
 
 fn main() {
@@ -14,7 +14,7 @@ fn main() {
                         serde_json::json!({"zima":"już"}),
                         "()".into(),
                     ))
-                    .map_err(|e| Error::SendRequestError(e, url.into()))
+                    .map_err(move |e| Error::SendRequestError(format!("{} connecting: {}", e, url)))
                     .and_then(|mut response| response.body().from_err())
             })
             .and_then(|subscription_id| {
@@ -27,7 +27,7 @@ fn main() {
                         serde_json::json!("{}"),
                         "(&(zima=już))".into(),
                     ))
-                    .map_err(Error::SendRequestError)
+                    .map_err(|e| Error::SendRequestError(format!("{}", e)))
                     .and_then(|mut response| response.body().from_err())
             })
             .and_then(|subscription_id| {
@@ -41,16 +41,16 @@ fn main() {
                 Client::default()
                     .get(&url)
                     .send()
-                    .map_err(Error::SendRequestError)
+                    .map_err(|e| Error::SendRequestError(format!("{}", e)))
                     .and_then(|mut response| response.json().from_err())
             })
             .and_then(|v: Vec<market::OfferEvent>| {
-                println!("over events ({}): {:#?}", v.len(), v);
+                println!("offer events ({}): {:#?}", v.len(), v);
 
                 Client::default()
                     .get("http://localhost:5001/admin/marketStats")
                     .send()
-                    .map_err(Error::SendRequestError)
+                    .map_err(|e| Error::SendRequestError(format!("{}", e)))
                     .and_then(|mut response| response.json().from_err())
             }),
         )
