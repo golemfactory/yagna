@@ -1,6 +1,4 @@
 /*
- * Golem Market API
- *
  * Market API
  *
  * OpenAPI spec version: 1.0.0

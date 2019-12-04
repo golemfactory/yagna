@@ -354,7 +354,7 @@ paths:
         in: path
         type: string
         required: true
-    get:
+    post:
       tags:
         - provider
       summary: Rejects agreement.
@@ -369,7 +369,7 @@ paths:
         in: path
         type: string
         required: true
-    get:
+    post:
       tags:
         - requestor
       operationId: confirmAgreement
@@ -384,7 +384,7 @@ paths:
         in: path
         type: string
         required: true
-    get:
+    post:
       tags:
         - requestor
       operationId: waitForApproval
@@ -398,7 +398,7 @@ paths:
         in: path
         type: string
         required: true
-    get:
+    post:
       tags:
         - provider
       operationId: approveAgreement
@@ -497,7 +497,7 @@ definitions:
       eventType: DemandEvent
       requestorId: 1172812402961
       demand:
-        golem:
+        golem: ## TODO: should we change to yagna? (requires changes also in specs)
           arch: x86
 
   DemandEvent:

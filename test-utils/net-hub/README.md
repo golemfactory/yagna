@@ -1,1 +1,1 @@
-This is the network message hub, required for GolemNet Mk1 implementation.
+This is the network message hub, required for YagnaNet Mk1 implementation.
