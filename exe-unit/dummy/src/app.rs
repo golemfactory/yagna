@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
-use api::core::{Cmd, Context};
+use api::{Cmd, Context};
 use futures::future::BoxFuture;
+use serde::Deserialize;
 use std::{
     sync::{Arc, Mutex},
     time::Duration,
@@ -9,7 +10,8 @@ use tokio::time::delay_for;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum State {
-    Ready,
+    Null,
+    Deployed,
     Running,
     Finished,
 }
@@ -22,20 +24,16 @@ pub struct DummyExeUnit {
 impl DummyExeUnit {
     pub fn spawn() -> Self {
         Self {
-            state: Arc::new(Mutex::new(State::Ready)),
+            state: Arc::new(Mutex::new(State::Null)),
         }
+    }
+
+    fn is_null(&self) -> bool {
+        *self.state.lock().unwrap() == State::Null
     }
 
     fn is_running(&self) -> bool {
         *self.state.lock().unwrap() == State::Running
-    }
-
-    fn is_ready(&self) -> bool {
-        *self.state.lock().unwrap() == State::Ready
-    }
-
-    fn is_finished(&self) -> bool {
-        *self.state.lock().unwrap() == State::Finished
     }
 
     fn state(&self) -> State {
@@ -45,16 +43,41 @@ impl DummyExeUnit {
 
 impl Context for DummyExeUnit {}
 
-#[derive(Debug)]
-pub struct Start {
-    pub params: Vec<String>,
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DummyCmd {
+    Deploy { params: Vec<String> },
+    Transfer { from: String, to: String },
+    Start { params: Vec<String> },
+    Status,
 }
 
-impl Cmd<DummyExeUnit> for Start {
-    type Response = Result<State>;
-    type Result = BoxFuture<'static, Self::Response>;
+impl DummyCmd {
+    fn deploy(ctx: DummyExeUnit, _params: Vec<String>) -> BoxFuture<'static, Result<State>> {
+        if !ctx.is_null() {
+            return Box::pin(async { Err(anyhow!("container is already deployed")) });
+        }
 
-    fn action(self, ctx: DummyExeUnit) -> Self::Result {
+        Box::pin(async move {
+            let state = State::Deployed;
+            *ctx.state.lock().unwrap() = state;
+            Ok(state)
+        })
+    }
+
+    fn transfer(
+        ctx: DummyExeUnit,
+        _from: String,
+        _to: String,
+    ) -> BoxFuture<'static, Result<State>> {
+        if ctx.is_running() {
+            return Box::pin(async { Err(anyhow!("container is currently running")) });
+        }
+
+        Box::pin(async move { Ok(*ctx.state.lock().unwrap()) })
+    }
+
+    fn start(ctx: DummyExeUnit, _params: Vec<String>) -> BoxFuture<'static, Result<State>> {
         if ctx.is_running() {
             return Box::pin(async { Err(anyhow!("container is already started")) });
         }
@@ -66,16 +89,22 @@ impl Cmd<DummyExeUnit> for Start {
             Ok(state)
         })
     }
-}
 
-#[derive(Debug)]
-pub struct Status;
-
-impl Cmd<DummyExeUnit> for Status {
-    type Response = State;
-    type Result = BoxFuture<'static, Self::Response>;
-
-    fn action(self, ctx: DummyExeUnit) -> Self::Result {
-        Box::pin(async move { ctx.state() })
+    fn status(ctx: DummyExeUnit) -> BoxFuture<'static, Result<State>> {
+        Box::pin(async move { Ok(ctx.state()) })
     }
 }
+
+impl Cmd<DummyExeUnit> for DummyCmd {
+    type Response = Result<State>;
+
+    fn action(self, ctx: DummyExeUnit) -> BoxFuture<'static, Self::Response> {
+        match self {
+            Self::Deploy { params } => Self::deploy(ctx, params),
+            Self::Transfer { from, to } => Self::transfer(ctx, from, to),
+            Self::Start { params } => Self::start(ctx, params),
+            Self::Status => Self::status(ctx),
+        }
+    }
+}
+
