@@ -5,10 +5,10 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+futures = "0.3"
 ya-model = { path = "../model" }
 
 [dev-dependencies]
 actix-rt = "0.2.2"
 awc = "0.2.8"
-futures = "0.1.25"
 serde_json = "1.0"
