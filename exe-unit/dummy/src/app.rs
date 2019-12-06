@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use api::{Cmd, Context};
+use api::{Command, Context};
 use futures::future::BoxFuture;
 use serde::Deserialize;
 use std::{
@@ -95,7 +95,7 @@ impl DummyCmd {
     }
 }
 
-impl Cmd<DummyExeUnit> for DummyCmd {
+impl Command<DummyExeUnit> for DummyCmd {
     type Response = Result<State>;
 
     fn action(self, ctx: DummyExeUnit) -> BoxFuture<'static, Self::Response> {

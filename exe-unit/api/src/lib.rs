@@ -18,34 +18,34 @@ pub enum ApiError {
 
 pub trait Context: Clone + Send + Sync {}
 
-pub trait Cmd<C>
+pub trait Command<Ctx>
 where
     Self: Send + Sync,
-    C: Context + 'static,
+    Ctx: Context + 'static,
 {
     type Response: Send + 'static;
 
-    fn action(self, ctx: C) -> BoxFuture<'static, Self::Response>;
+    fn action(self, ctx: Ctx) -> BoxFuture<'static, Self::Response>;
 }
 
-pub trait HandleCmd<C>
+pub trait Handle<Cmd>
 where
     Self: Context + 'static,
-    C: Cmd<Self> + 'static,
+    Cmd: Command<Self> + 'static,
 {
-    type Result: Future<Output = Result<C::Response, ApiError>> + Send;
+    type Result: Future<Output = Result<Cmd::Response, ApiError>> + Send;
 
-    fn handle_cmd(&mut self, cmd: C) -> Self::Result;
+    fn handle(&mut self, cmd: Cmd) -> Self::Result;
 }
 
-impl<T, C> HandleCmd<C> for T
+impl<Ctx, Cmd> Handle<Cmd> for Ctx
 where
-    T: Context + 'static,
-    C: Cmd<T> + 'static,
+    Ctx: Context + 'static,
+    Cmd: Command<Ctx> + 'static,
 {
-    type Result = BoxFuture<'static, Result<C::Response, ApiError>>;
+    type Result = BoxFuture<'static, Result<Cmd::Response, ApiError>>;
 
-    fn handle_cmd(&mut self, cmd: C) -> Self::Result {
+    fn handle(&mut self, cmd: Cmd) -> Self::Result {
         let (tx, rx) = oneshot::channel();
         let ctx = self.clone();
         tokio::spawn(async move {
@@ -58,49 +58,22 @@ where
     }
 }
 
-pub trait HandleCmds<C>
+pub trait Exec<Cmd>
 where
     Self: Context + 'static,
-    C: Cmd<Self> + 'static,
+    Cmd: Command<Self> + DeserializeOwned + 'static,
 {
-    type Result: Stream<Item = Result<C::Response, ApiError>>;
+    type Result: Stream<Item = Result<Cmd::Response, ApiError>>;
 
-    fn handle_cmds(&mut self, cmds: Vec<C>) -> Self::Result;
+    fn exec(&mut self, cmd_json: String) -> Self::Result;
 }
 
-impl<T, C> HandleCmds<C> for T
+impl<Ctx, Cmd> Exec<Cmd> for Ctx
 where
-    T: Context + HandleCmd<C> + 'static,
-    C: Cmd<T> + 'static,
+    Ctx: Context + Handle<Cmd> + 'static,
+    Cmd: Command<Ctx> + DeserializeOwned + 'static,
 {
-    type Result = BoxStream<'static, Result<C::Response, ApiError>>;
-
-    fn handle_cmds(&mut self, cmds: Vec<C>) -> Self::Result {
-        let cmds: Vec<_> = cmds.into_iter().map(|cmd| (self.clone(), cmd)).collect();
-        Box::pin(
-            stream::iter(cmds).then(|(mut ctx, cmd)| {
-                async move { ctx.handle_cmd(cmd).await.map_err(Into::into) }
-            }),
-        )
-    }
-}
-
-pub trait Exec<C>
-where
-    Self: Context + 'static,
-    C: Cmd<Self> + DeserializeOwned + 'static,
-{
-    type Result: Stream<Item = Result<C::Response, ApiError>>;
-
-    fn exec(&mut self, cmds: String) -> Self::Result;
-}
-
-impl<T, C> Exec<C> for T
-where
-    T: Context + HandleCmd<C> + 'static,
-    C: Cmd<T> + DeserializeOwned + 'static,
-{
-    type Result = BoxStream<'static, Result<C::Response, ApiError>>;
+    type Result = BoxStream<'static, Result<Cmd::Response, ApiError>>;
 
     fn exec(&mut self, cmd_json: String) -> Self::Result {
         // we expect input to be a JSON Array even if it consists of one element
@@ -114,7 +87,7 @@ where
                 Box::pin(stream::iter(cmds).then(|(mut ctx, cmd)| {
                     async move {
                         let cmd = serde_json::from_value(cmd)?;
-                        ctx.handle_cmd(cmd).await.map_err(Into::into)
+                        ctx.handle(cmd).await.map_err(Into::into)
                     }
                 }))
             }
