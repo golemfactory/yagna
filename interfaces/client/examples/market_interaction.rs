@@ -52,7 +52,7 @@ async fn subscribe_requestor() -> String {
     parse_body!(response)
 }
 
-async fn query_offer_events(requestor_subscription_id: &String) -> Vec<OfferEvent> {
+async fn query_demand_events(requestor_subscription_id: &String) -> Vec<OfferEvent> {
     let url = format!(
         "http://localhost:5001/market-api/v1/demands/{}/events?timeout=1&maxEvents=8",
         requestor_subscription_id
@@ -86,8 +86,8 @@ async fn interact() {
     let requestor_subscription_id = subscribe_requestor().await;
     println!("Requestor subscription id: {}", requestor_subscription_id);
 
-    let offer_events = query_offer_events(&requestor_subscription_id).await;
-    println!("Offer events: {:?}", offer_events);
+    let demand_events = query_demand_events(&requestor_subscription_id).await;
+    println!("Demand events: {:?}", demand_events);
 
     let market_stats = query_market_stats().await;
     println!("Market stats: {:?}", market_stats);
