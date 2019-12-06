@@ -1,11 +1,13 @@
 [package]
-name = "ya-exe-dummy"
+name = "ya-exe-api"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-api = { path = "../api", package = "ya-exe-api" }
 futures = "0.3"
+log = "0.4"
 tokio = { version = "0.2", features = ["full"] }
+thiserror = "1.0"
 anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
