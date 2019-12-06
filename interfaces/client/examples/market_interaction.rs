@@ -3,7 +3,7 @@ use awc::Client;
 use futures::compat::Future01CompatExt;
 use futures::prelude::*;
 use serde_json;
-use ya_model::market::{Demand, Offer, OfferEvent};
+use ya_model::market::{Demand, Offer, RequestorEvent};
 
 macro_rules! parse_body {
     ($r:tt) => {{
@@ -52,7 +52,7 @@ async fn subscribe_requestor() -> String {
     parse_body!(response)
 }
 
-async fn query_demand_events(requestor_subscription_id: &String) -> Vec<OfferEvent> {
+async fn query_demand_events(requestor_subscription_id: &String) -> Vec<RequestorEvent> {
     let url = format!(
         "http://localhost:5001/market-api/v1/demands/{}/events?timeout=1&maxEvents=8",
         requestor_subscription_id
@@ -87,10 +87,10 @@ async fn interact() {
     println!("Requestor subscription id: {}", requestor_subscription_id);
 
     let demand_events = query_demand_events(&requestor_subscription_id).await;
-    println!("Demand events: {:?}", demand_events);
+    println!("Demand events: {:#?}", demand_events);
 
     let market_stats = query_market_stats().await;
-    println!("Market stats: {:?}", market_stats);
+    println!("Market stats: {:#?}", market_stats);
 }
 
 fn main() {
