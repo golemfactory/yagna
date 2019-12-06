@@ -1,76 +1,61 @@
 mod app;
 
-use anyhow::{anyhow, Context, Result};
-use api::core::HandleCmd;
-use app::{DummyExeUnit, Start, Status};
+use anyhow::{Context, Result};
+use api::Exec;
+use app::{DummyCmd, DummyExeUnit};
+use futures::stream::StreamExt;
 use std::{
-    convert::TryFrom,
+    fs,
     io::{self, Write},
+    path::PathBuf,
 };
+use structopt::StructOpt;
 
-#[derive(Debug)]
-enum Cmd {
-    Start,
-    Status,
-    Exit,
+#[derive(StructOpt, Debug)]
+#[structopt(name = "dummy")]
+struct Opt {
+    #[structopt(parse(from_os_str))]
+    input: Option<PathBuf>,
 }
 
-impl TryFrom<&str> for Cmd {
-    type Error = anyhow::Error;
-
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        match s {
-            "start" => Ok(Self::Start),
-            "status" => Ok(Self::Status),
-            "exit" => Ok(Self::Exit),
-            s => Err(anyhow!("unknown command: {}", s)),
-        }
+async fn send_cmds(exe_unit: &mut DummyExeUnit, cmds_json: String) -> Result<()> {
+    let mut stream = <DummyExeUnit as Exec<DummyCmd>>::exec(exe_unit, cmds_json);
+    while let Some(res) = stream.next().await {
+        println!("received response = {:?}", res);
     }
+    Ok(())
+}
+
+async fn run_interactive() -> Result<()> {
+    let mut exe_unit = DummyExeUnit::spawn();
+    loop {
+        print!("> ");
+        io::stdout().flush().context("failed to flush stdout")?;
+        let mut cmd = String::new();
+        io::stdin()
+            .read_line(&mut cmd)
+            .context("failed to read line from stdin")?;
+        if cmd.is_empty() {
+            continue;
+        }
+        // send to the ExeUnit
+        send_cmds(&mut exe_unit, cmd).await?;
+    }
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut exe_unit = DummyExeUnit::spawn();
-
-    loop {
-        print!("> ");
-        io::stdout().flush().context("failed to flush stdout")?;
-        let mut line = String::new();
-        io::stdin()
-            .read_line(&mut line)
-            .context("failed to read line from stdin")?;
-        let args: Vec<&str> = line.split_whitespace().collect();
-        if args.is_empty() {
-            continue;
-        }
-        // parse args...
-        match Cmd::try_from(args[0]) {
-            Err(e) => {
-                println!("{}\npossible commands are: start, status, exit", e);
-                continue;
-            }
-            Ok(Cmd::Start) => {
-                // start the container...
-                // block until computation is finished
-                match exe_unit.handle(Start { params: vec![] }).await {
-                    Ok(state) => {
-                        println!("state changed: {:?}", state);
-                        println!("computation finished...")
-                    }
-                    Err(e) => println!("{}", e),
-                }
-            }
-            Ok(Cmd::Status) => {
-                // ask for status...
-                let state = exe_unit.handle(Status).await;
-                println!("current state: {:?}", state)
-            }
-            Ok(Cmd::Exit) => {
-                println!("exiting...");
-                break;
-            }
-        }
+    let opt = Opt::from_args();
+    if let Some(input) = opt.input {
+        // read JSON
+        let cmds_json = fs::read_to_string(&input)
+            .with_context(|| format!("failed to read contents of {}", input.display()))?;
+        // send to ExeUnit
+        let mut exe_unit = DummyExeUnit::spawn();
+        send_cmds(&mut exe_unit, cmds_json).await
+    } else {
+        run_interactive().await
     }
-
-    Ok(())
 }
