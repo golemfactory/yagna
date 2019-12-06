@@ -5,3 +5,5 @@ mod error;
 mod provider_api;
 mod requestor_api;
 pub use error::Error;
+
+pub mod activity;
