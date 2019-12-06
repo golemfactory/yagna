@@ -15,19 +15,32 @@ pub mod gsb {
     use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct Exec {
-        #[serde(rename = "activityId")]
-        activity_id: String,
-        #[serde(rename = "batchId")]
-        batch_id: String,
-        #[serde(rename = "exeScript")]
-        exe_script: ExeScriptBatch,
-    }
-
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct GetRunningCommand {
-        #[serde(rename = "activityId")]
-        activity_id: String,
+    #[serde(tag = "eventType")]
+    pub enum GsbProviderEvent {
+        #[serde(rename = "Exec")]
+        Exec {
+            #[serde(rename = "activityId")]
+            activity_id: String,
+            #[serde(rename = "batchId")]
+            batch_id: String,
+            #[serde(rename = "exeScript")]
+            exe_script: ExeScriptBatch,
+        },
+        #[serde(rename = "GetRunningCommand")]
+        GetRunningCommand {
+            #[serde(rename = "activityId")]
+            activity_id: String,
+        },
+        #[serde(rename = "GetState")]
+        GetState {
+            #[serde(rename = "activityId")]
+            activity_id: String,
+        },
+        #[serde(rename = "GetUsage")]
+        GetUsage {
+            #[serde(rename = "activityId")]
+            activity_id: String,
+        },
     }
 }
 
