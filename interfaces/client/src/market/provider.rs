@@ -1,11 +1,10 @@
-use std::sync::Arc;
 use futures::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 
-use crate::client::ApiClient;
-use crate::error::Error;
-use crate::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
-
-
+use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
+use super::ApiClient;
+use crate::Error;
 
 pub struct ProviderApiClient {
     //Client::default()

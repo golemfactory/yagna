@@ -3,6 +3,9 @@ use std::{env, rc::Rc, sync::Arc};
 use futures::Future;
 use url::Url;
 
+mod provider;
+mod requestor;
+
 //use crate::{error::Error, provider_api::ProviderApi};
 
 /// Client for an API endpoint.
