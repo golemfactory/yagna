@@ -1,54 +1,31 @@
-use futures::Future;
-use std::pin::Pin;
+use async_trait::async_trait;
+use failure::Fallible;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 
 pub mod gsb {
-    use futures::Future;
-    use std::pin::Pin;
+    use async_trait::async_trait;
+    use failure::Fallible;
     use ya_model::activity::{
         ActivityState, ActivityUsage, ExeScriptBatch, ExeScriptCommandResult, ExeScriptCommandState,
     };
 
+    #[async_trait(?Send)]
     pub trait GsbProviderApi {
-        fn exec<'s>(
-            &'s self,
+        async fn exec(
+            &self,
             activity_id: &str,
             batch_id: &str,
             exe_script: ExeScriptBatch,
-        ) -> Pin<Box<dyn Future<Output = Vec<ExeScriptCommandResult>> + 's>>;
-
-        fn get_running_command<'s>(
-            &'s self,
-            activity_id: &str,
-        ) -> Pin<Box<dyn Future<Output = ExeScriptCommandState> + 's>>;
-
-        fn get_state<'s>(
-            &'s self,
-            activity_id: &str,
-        ) -> Pin<Box<dyn Future<Output = ActivityState> + 's>>;
-
-        fn get_usage<'s>(
-            &'s self,
-            activity_id: &str,
-        ) -> Pin<Box<dyn Future<Output = ActivityUsage> + 's>>;
+        ) -> Fallible<Vec<ExeScriptCommandResult>>;
+        async fn get_running_command(&self, activity_id: &str) -> Fallible<ExeScriptCommandState>;
+        async fn get_state(&self, activity_id: &str) -> Fallible<ActivityState>;
+        async fn get_usage(&self, activity_id: &str) -> Fallible<ActivityUsage>;
     }
 }
 
+#[async_trait(?Send)]
 pub trait ProviderApi {
-    fn get_activity_events<'s>(
-        &'s self,
-        timeout: Option<i32>,
-    ) -> Pin<Box<dyn Future<Output = Vec<ProviderEvent>> + 's>>;
-
-    fn set_activity_state<'s>(
-        &'s self,
-        activity_id: &str,
-        state: Option<ActivityState>,
-    ) -> Pin<Box<dyn Future<Output = ()> + 's>>;
-
-    fn set_activity_usage<'s>(
-        &'s self,
-        activity_id: &str,
-        state: Option<ActivityUsage>,
-    ) -> Pin<Box<dyn Future<Output = ()> + 's>>;
+    async fn get_activity_events(&self, timeout: Option<i32>) -> Fallible<Vec<ProviderEvent>>;
+    async fn set_activity_state(&self, activity_id: &str, state: ActivityState) -> Fallible<()>;
+    async fn set_activity_usage(&self, activity_id: &str, usage: ActivityUsage) -> Fallible<()>;
 }
