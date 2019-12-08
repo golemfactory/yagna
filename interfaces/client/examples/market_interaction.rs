@@ -2,6 +2,7 @@ use actix_rt::System;
 use awc::Client;
 use serde_json;
 use ya_model::market::{Demand, Offer, RequestorEvent};
+use ya_client::market::{ApiClient, ApiConfiguration};
 
 macro_rules! parse_body {
     ($r:tt) => {{
@@ -72,7 +73,9 @@ async fn query_market_stats() -> serde_json::Value {
 }
 
 async fn interact() {
-    let provider_subscription_id = subscribe_provider().await;
+    let client = ApiClient::new(ApiConfiguration::default());
+    let offer = Offer::new(serde_json::json!({"zima":"już"}), "()".into());
+    let provider_subscription_id = client.provider().subscribe(offer).await.unwrap();
     println!("Provider subscription id: {}", provider_subscription_id);
 
     let requestor_subscription_id = subscribe_requestor().await;

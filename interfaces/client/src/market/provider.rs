@@ -1,176 +1,145 @@
-use futures::Future;
-use std::pin::Pin;
+use awc::Client;
+use futures::{future::{BoxFuture, LocalBoxFuture}, Future};
 use std::sync::Arc;
 
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
-use super::ApiClient;
+use super::ApiConfiguration;
 use crate::Error;
 
 pub struct ProviderApiClient {
-    //Client::default()
-    client: Arc<ApiClient>,
+    configuration: Arc<ApiConfiguration>,
 }
 
-//impl {
-//    pub fn new(configuration: Rc<configuration::Configuration<C>>) -> ProviderApiClient<C> {
-//        ProviderApiClient {
-//            configuration: configuration,
-//        }
-//
-//    }
-//}
+impl ProviderApiClient {
+    pub fn new(configuration: Arc<ApiConfiguration>) -> Self {
+        ProviderApiClient {
+            configuration,
+        }
+    }
+}
 
-//pub trait ProviderApi {
-//
-//    /// Publish Provider’s service capabilities (Offer) on the market to declare an
-//    /// interest in Demands meeting specified criteria.
-//    fn subscribe(&self, offer: Offer) -> Box<Future<Item = String, Error = Error>>;
-//
-//    /// Stop subscription by invalidating a previously published Offer.
-//    fn unsubscribe(&self, subscription_id: &str) -> Box<Future<Item = (), Error = Error>>;
-//
-//    /// Get events which have arrived from the market in response to the Offer
-//    /// published by the Provider via  [subscribe](self::subscribe).
-//    /// Returns collection of [ProviderEvents](ProviderEvent) or timeout.
-//    fn collect(
-//        &self,
-//        subscription_id: &str,
-//        timeout: f32,
-//        max_events: i64,
-//    ) -> Box<Future<Item = Vec<ProviderEvent>, Error = Error>>;
-//
-//    /// TODO
-//    fn create_proposal(
-//        &self,
-//        subscription_id: &str,
-//        proposal_id: &str,
-//        proposal: Proposal,
-//    ) -> Box<Future<Item = String, Error = Error>>;
-//
-//    /// TODO
-//    fn get_proposal(
-//        &self,
-//        subscription_id: &str,
-//        proposal_id: &str,
-//    ) -> Box<Future<Item = AgreementProposal, Error = Error>>;
-//
-//    /// TODO
-//    fn reject_proposal(
-//        &self,
-//        subscription_id: &str,
-//        proposal_id: &str,
-//    ) -> Box<Future<Item = (), Error = Error>>;
-//
-//    /// Confirms the Agreement received from the Requestor.
-//    /// Mutually exclusive with [reject_agreement](self::reject_agreement).
-//    fn approve_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>>;
-//
-//    /// Rejects the Agreement received from the Requestor.
-//    /// Mutually exclusive with [approve_agreement](self::approve_agreement).
-//    fn reject_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>>;
-//}
+pub trait ProviderApi {
 
+    /// Publish Provider’s service capabilities (Offer) on the market to declare an
+    /// interest in Demands meeting specified criteria.
+    fn subscribe(&self, offer: Offer) -> LocalBoxFuture<Result<String, Error>>;
 
+    /// Stop subscription by invalidating a previously published Offer.
+    fn unsubscribe(&self, subscription_id: &str) -> LocalBoxFuture<Result<(), Error>>;
 
+    /// Get events which have arrived from the market in response to the Offer
+    /// published by the Provider via  [subscribe](self::subscribe).
+    /// Returns collection of [ProviderEvents](ProviderEvent) or timeout.
+    fn collect(
+        &self,
+        subscription_id: &str,
+        timeout: f32,
+        max_events: i64,
+    ) -> BoxFuture<dyn Future<Output = Result<Vec<ProviderEvent>, Error>>>;
 
-//
-//impl ProviderApi for ProviderApiClient {
-//
-//    fn subscribe(&self, offer: Offer) -> Box<Future<Item = String, Error = Error>> {
-//        __internal_request::Request::new(hyper::Method::Post, "/offers".to_string())
-//            .with_body_param(offer)
-//            .execute(self.configuration.borrow())
-//    }
-//
-//    fn unsubscribe(&self, subscription_id: &str) -> Box<Future<Item = (), Error = Error>> {
-//        __internal_request::Request::new(
-//            hyper::Method::Delete,
-//            "/offers/{subscriptionId}".to_string(),
-//        )
-//            .with_path_param("subscriptionId".to_string(), subscription_id.to_string())
-//            .returns_nothing()
-//            .execute(self.configuration.borrow())
-//    }
-//
-//    fn collect(
-//        &self,
-//        subscription_id: &str,
-//        timeout: f32,
-//        max_events: i64,
-//    ) -> Box<Future<Item = Vec<ProviderEvent>, Error = Error>> {
-//        __internal_request::Request::new(
-//            hyper::Method::Get,
-//            "/offers/{subscriptionId}/events".to_string(),
-//        )
-//        .with_query_param("timeout".to_string(), timeout.to_string())
-//        .with_query_param("maxEvents".to_string(), max_events.to_string())
-//        .with_path_param("subscriptionId".to_string(), subscription_id.to_string())
-//        .execute(self.configuration.borrow())
-//    }
-//
-//    fn create_proposal(
-//        &self,
-//        subscription_id: &str,
-//        proposal_id: &str,
-//        proposal: Proposal,
-//    ) -> Box<Future<Item = String, Error = Error>> {
-//        __internal_request::Request::new(
-//            hyper::Method::Post,
+    /// TODO doc
+    fn create_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+        proposal: Proposal,
+    ) -> BoxFuture<dyn Future<Output = Result<String, Error>>>;
+
+    /// TODO doc
+    fn get_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<AgreementProposal, Error>>>;
+
+    /// TODO doc
+    fn reject_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<(), Error>>>;
+
+    /// Confirms the Agreement received from the Requestor.
+    /// Mutually exclusive with [reject_agreement](self::reject_agreement).
+    fn approve_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>>;
+
+    /// Rejects the Agreement received from the Requestor.
+    /// Mutually exclusive with [approve_agreement](self::approve_agreement).
+    fn reject_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>>;
+}
+
+impl ProviderApi for ProviderApiClient {
+
+    fn subscribe(&self, offer: Offer) -> LocalBoxFuture<Result<String, Error>> {
+        Box::pin(async move {
+            let vec = Client::default()
+                .post(self.configuration.api_endpoint("offers"))
+                .send_json(&offer)
+                .await?
+                .body()
+                .await?
+                .to_vec();
+            String::from_utf8(vec).map_err(Error::InvalidString)
+        })
+    }
+
+    fn unsubscribe(&self, subscription_id: &str) -> LocalBoxFuture<Result<(), Error>> {
+//        Box::pin(async {
+//            Client::default()
+//                .delete(self.configuration.api_endpoint(format!("/offers/{}", subscription_id))?)
+//                .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
+//                .await
+//                .expect("Offers POST request failed")
+//        })
+        unimplemented!()
+    }
+
+    fn collect(
+        &self,
+        subscription_id: &str,
+        timeout: f32,
+        max_events: i64,
+    ) -> BoxFuture<dyn Future<Output = Result<Vec<ProviderEvent>, Error>>> {
+//            "/offers/{subscriptionId}/events",
+        unimplemented!()
+    }
+
+    fn create_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+        proposal: Proposal,
+    ) -> BoxFuture<dyn Future<Output = Result<String, Error>>> {
 //            "/offers/{subscriptionId}/proposals/{proposalId}/offer".to_string(),
-//        )
-//        .with_path_param("subscriptionId".to_string(), subscription_id.to_string())
-//        .with_path_param("proposalId".to_string(), proposal_id.to_string())
-//        .with_body_param(proposal)
-//        .execute(self.configuration.borrow())
-//    }
-//
-//    fn get_proposal(
-//        &self,
-//        subscription_id: &str,
-//        proposal_id: &str,
-//    ) -> Box<Future<Item = AgreementProposal, Error = Error>> {
-//        __internal_request::Request::new(
-//            hyper::Method::Get,
+        unimplemented!()
+    }
+
+    fn get_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<AgreementProposal, Error>>> {
 //            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
-//        )
-//        .with_path_param("subscriptionId".to_string(), subscription_id.to_string())
-//        .with_path_param("proposalId".to_string(), proposal_id.to_string())
-//        .execute(self.configuration.borrow())
-//    }
-//
-//    fn reject_proposal(
-//        &self,
-//        subscription_id: &str,
-//        proposal_id: &str,
-//    ) -> Box<Future<Item = (), Error = Error>> {
-//        __internal_request::Request::new(
-//            hyper::Method::Delete,
+        unimplemented!()
+    }
+
+    fn reject_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
 //            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
-//        )
-//            .with_path_param("subscriptionId".to_string(), subscription_id.to_string())
-//            .with_path_param("proposalId".to_string(), proposal_id.to_string())
-//            .returns_nothing()
-//            .execute(self.configuration.borrow())
-//    }
-//
-//    fn approve_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>> {
-//        __internal_request::Request::new(
-//            hyper::Method::Post,
+        unimplemented!()
+    }
+
+    fn approve_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
 //            "/agreements/{agreementId}/approve".to_string(),
-//        )
-//            .with_path_param("agreementId".to_string(), agreement_id.to_string())
-//            .returns_nothing()
-//            .execute(self.configuration.borrow())
-//    }
-//
-//    fn reject_agreement(&self, agreement_id: &str) -> Box<Future<Item = (), Error = Error>> {
-//        __internal_request::Request::new(
-//            hyper::Method::Post,
+        unimplemented!()
+    }
+
+    fn reject_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
 //            "/agreements/{agreementId}/reject".to_string(),
-//        )
-//        .with_path_param("agreementId".to_string(), agreement_id.to_string())
-//        .returns_nothing()
-//        .execute(self.configuration.borrow())
-//    }
-//
-//}
+        unimplemented!()
+    }
+
+}

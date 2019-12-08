@@ -9,7 +9,9 @@ pub enum Error {
     #[fail(display = "serde JSON error: {}", _0)]
     SerdeJsonError(serde_json::Error),
     #[fail(display = "invalid address: {}", _0)]
-    InvalidAddress(#[fail(cause)] url::ParseError),
+    InvalidAddress(#[fail(cause)] std::convert::Infallible),
+    #[fail(display = "invalid UTF8 string: {}", _0)]
+    InvalidString(#[fail(cause)] std::string::FromUtf8Error),
 }
 
 impl From<awc::error::SendRequestError> for Error {
