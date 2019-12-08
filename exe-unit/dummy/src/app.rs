@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Result};
 use api::core::{Cmd, Context};
-use futures::future::BoxFuture;
+use futures::{
+    future::BoxFuture,
+    lock::Mutex,
+};
 use std::{
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::Duration,
 };
 use tokio::time::delay_for;
@@ -31,15 +34,15 @@ impl DummyExeUnit {
     }
 
     fn is_ready(&self) -> bool {
-        *self.state.lock().unwrap() == State::Ready
+        *self.state.try_lock().unwrap() == State::Ready
     }
 
     fn is_finished(&self) -> bool {
-        *self.state.lock().unwrap() == State::Finished
+        *self.state.try_lock().unwrap() == State::Finished
     }
 
     fn state(&self) -> State {
-        *self.state.lock().unwrap()
+        *self.state.try_lock().unwrap()
     }
 }
 
@@ -62,7 +65,7 @@ impl Cmd<DummyExeUnit> for Start {
         Box::pin(async move {
             delay_for(Duration::from_secs(5)).await;
             let state = State::Finished;
-            *ctx.state.lock().unwrap() = state;
+            *ctx.state.lock().await = state;
             Ok(state)
         })
     }
