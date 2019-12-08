@@ -1,7 +1,5 @@
-use actix_rt::Runtime;
+use actix_rt::System;
 use awc::Client;
-use futures::compat::Future01CompatExt;
-use futures::prelude::*;
 use serde_json;
 use ya_model::market::{Demand, Offer, RequestorEvent};
 
@@ -9,7 +7,6 @@ macro_rules! parse_body {
     ($r:tt) => {{
         let vec = $r
             .body()
-            .compat()
             .await
             .expect("Response reading failed")
             .to_vec();
@@ -21,7 +18,6 @@ macro_rules! parse_body {
 macro_rules! parse_json {
     ($r:tt) => {{
         $r.json()
-            .compat()
             .await
             .expect("JSON response decoding failed")
     }};
@@ -31,7 +27,6 @@ async fn subscribe_provider() -> String {
     let mut response = Client::default()
         .post("http://localhost:5001/market-api/v1/offers")
         .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
-        .compat()
         .await
         .expect("Offers POST request failed");
 
@@ -45,14 +40,13 @@ async fn subscribe_requestor() -> String {
             serde_json::json!("{}"),
             "(&(zima=już))".into(),
         ))
-        .compat()
         .await
         .expect("Demands POST request failed");
 
     parse_body!(response)
 }
 
-async fn query_demand_events(requestor_subscription_id: &String) -> Vec<RequestorEvent> {
+async fn query_requestor_events(requestor_subscription_id: &String) -> Vec<RequestorEvent> {
     let url = format!(
         "http://localhost:5001/market-api/v1/demands/{}/events?timeout=1&maxEvents=8",
         requestor_subscription_id
@@ -61,7 +55,6 @@ async fn query_demand_events(requestor_subscription_id: &String) -> Vec<Requesto
     let mut response = Client::default()
         .get(&url)
         .send()
-        .compat()
         .await
         .expect("Demand events GET request failed");
 
@@ -72,7 +65,6 @@ async fn query_market_stats() -> serde_json::Value {
     let mut response = Client::default()
         .get("http://localhost:5001/admin/marketStats")
         .send()
-        .compat()
         .await
         .expect("Market stats GET request failed");
 
@@ -86,16 +78,13 @@ async fn interact() {
     let requestor_subscription_id = subscribe_requestor().await;
     println!("Requestor subscription id: {}", requestor_subscription_id);
 
-    let demand_events = query_demand_events(&requestor_subscription_id).await;
-    println!("Demand events: {:#?}", demand_events);
+    let requestor_events = query_requestor_events(&requestor_subscription_id).await;
+    println!("Requestor events: {:#?}", requestor_events);
 
     let market_stats = query_market_stats().await;
     println!("Market stats: {:#?}", market_stats);
 }
 
 fn main() {
-    Runtime::new()
-        .expect("Cannot create runtime")
-        .block_on(interact().boxed_local().unit_error().compat())
-        .expect("Runtime error");
+    System::new("test").block_on(interact());
 }
