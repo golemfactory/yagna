@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin};
-use ya_service_bus::{BusMessage, BusPath, RpcHandler, RpcMessage};
+use ya_service_bus::{BusMessage, RpcHandler, RpcMessage};
 
 // handler: send message to other node
 
@@ -36,15 +36,16 @@ impl BusMessage for SendMessage {}
 
 impl RpcMessage for SendMessage {
     const ID: &'static str = "send-message";
-    type Reply = SendMessage; /* TODO should we use the same type for replies? */
+    type Item = SendMessage; /* TODO should we use the same type for replies? */
+    type Error = (); /* TODO */
 }
 
 struct SendMessageHandler {}
 
 impl RpcHandler<SendMessage> for SendMessageHandler {
-    type Result = Pin<Box<dyn Future<Output = SendMessage>>>;
+    type Result = Pin<Box<dyn Future<Output = Result<SendMessage, ()>>>>;
 
-    fn handle(&mut self, _caller: BusPath, _msg: SendMessage) -> Self::Result {
+    fn handle(&mut self, _caller: &str, _msg: SendMessage) -> Self::Result {
         unimplemented!()
     }
 }
@@ -67,17 +68,18 @@ impl BusMessage for GetNetworkStatus {}
 
 impl RpcMessage for GetNetworkStatus {
     const ID: &'static str = "get-network-status";
-    type Reply = NetworkStatus;
+    type Item = NetworkStatus;
+    type Error = ();
 }
 
 struct GetNetworkStatusHandler {}
 
 impl RpcHandler<GetNetworkStatus> for GetNetworkStatusHandler {
-    type Result = futures::future::Ready<NetworkStatus>; /* dynamic version: Pin<Box<dyn Future<Output = NetworkStatus>>>*/
+    type Result = futures::future::Ready<Result<NetworkStatus, ()>>; /* dynamic version: Pin<Box<dyn Future<Output = NetworkStatus>>>*/
 
-    fn handle(&mut self, _caller: BusPath, _msg: GetNetworkStatus) -> Self::Result {
+    fn handle(&mut self, _caller: &str, _msg: GetNetworkStatus) -> Self::Result {
         /* TODO get real network status */
-        futures::future::ready(NetworkStatus::NotConnected) /* dynamic version: add Box::pin(...) */
+        futures::future::ready(Ok(NetworkStatus::NotConnected)) /* dynamic version: add Box::pin(...) */
     }
 }
 
