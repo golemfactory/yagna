@@ -1,10 +1,8 @@
-use actix_rt::Runtime;
+use actix_rt::System;
 use async_trait::async_trait;
 use awc::Client;
 use failure::{Fail, Fallible};
-use futures::compat::Future01CompatExt;
 use futures::prelude::*;
-use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use ya_client::activity::provider::ProviderApi;
 use ya_model::activity::activity_state::State;
@@ -45,11 +43,10 @@ impl ProviderApi for HttpProviderApiClient {
         let mut response = Client::default()
             .get(&url)
             .send()
-            .compat()
             .map_err(ActivityApiError::from)
             .await?;
 
-        match response.json().compat().await {
+        match response.json().await {
             Ok(events) => Ok(events),
             Err(e) => Err(ActivityApiError::from(e).into()),
         }
@@ -60,7 +57,6 @@ impl ProviderApi for HttpProviderApiClient {
         Client::default()
             .put(&url)
             .send_json(&state)
-            .compat()
             .map_err(ActivityApiError::from)
             .await?;
         Ok(())
@@ -71,7 +67,6 @@ impl ProviderApi for HttpProviderApiClient {
         Client::default()
             .put(&url)
             .send_json(&usage)
-            .compat()
             .map_err(ActivityApiError::from)
             .await?;
         Ok(())
@@ -101,8 +96,6 @@ async fn interact() -> () {
 }
 
 fn main() {
-    Runtime::new()
-        .expect("Cannot create runtime")
-        .block_on(interact().boxed_local().unit_error().compat())
-        .expect("Runtime error");
+    System::new("test")
+        .block_on(interact());
 }
