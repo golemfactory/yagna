@@ -13,7 +13,7 @@ members = [
     "exe-unit/wasmtime",
     "interfaces/client",
     "interfaces/model",
-    "service-bus/api",
+    "service-bus/proto",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/router",
