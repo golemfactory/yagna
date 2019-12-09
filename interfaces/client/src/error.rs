@@ -11,7 +11,7 @@ pub enum Error {
     #[fail(display = "invalid address: {}", _0)]
     InvalidAddress(#[fail(cause)] std::convert::Infallible),
     #[fail(display = "invalid UTF8 string: {}", _0)]
-    InvalidString(#[fail(cause)] std::string::FromUtf8Error),
+    FromUtf8Error(#[fail(cause)] std::string::FromUtf8Error),
 }
 
 impl From<awc::error::SendRequestError> for Error {
@@ -29,5 +29,11 @@ impl From<awc::error::PayloadError> for Error {
 impl From<awc::error::JsonPayloadError> for Error {
     fn from(e: awc::error::JsonPayloadError) -> Self {
         Error::JsonPayloadError(e)
+    }
+}
+
+impl From<std::string::FromUtf8Error> for Error {
+    fn from(e: std::string::FromUtf8Error) -> Self {
+        Error::FromUtf8Error(e)
     }
 }

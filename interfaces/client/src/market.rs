@@ -7,8 +7,8 @@ mod configuration;
 pub use configuration::ApiConfiguration;
 
 pub struct ApiClient {
-    provider: Box<dyn provider::ProviderApi>,
-    //    requestor: Box<dyn requestor::RequestorApi>,
+    provider: provider::ProviderApi,
+    //    requestor: requestor::RequestorApi,
 }
 
 impl ApiClient {
@@ -16,16 +16,16 @@ impl ApiClient {
         let arc = Arc::new(configuration);
 
         ApiClient {
-            provider: Box::new(provider::ProviderApiClient::new(arc.clone())),
-            //            requestor: Box::new(requestor::RequestorApiClient::new(arc.clone())),
+            provider: provider::ProviderApi::new(arc.clone()),
+            //            requestor: requestor::RequestorApi::new(arc.clone()),
         }
     }
 
-    pub fn provider(&self) -> &dyn provider::ProviderApi {
-        self.provider.as_ref()
+    pub fn provider(&self) -> &provider::ProviderApi {
+        &self.provider
     }
 
-    //    pub fn requestor(&self) -> &dyn requestor::RequestorApi{
+    //    pub fn requestor(&self) -> &requestor::RequestorApi{
     //        self.requestor.as_ref()
     //    }
 }
