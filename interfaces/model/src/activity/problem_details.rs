@@ -25,10 +25,10 @@ pub struct ProblemDetails {
 }
 
 impl ProblemDetails {
-    pub fn new() -> ProblemDetails {
+    pub fn new(problem_type: String, title: String) -> ProblemDetails {
         ProblemDetails {
-            _type: None,
-            title: None,
+            _type: Some(problem_type),
+            title: Some(title),
             status: None,
             detail: None,
             instance: None,

@@ -18,9 +18,9 @@ pub struct ActivityUsage {
 }
 
 impl ActivityUsage {
-    pub fn new() -> ActivityUsage {
+    pub fn new(current_usage: Option<Vec<f64>>) -> ActivityUsage {
         ActivityUsage {
-            current_usage: None,
+            current_usage,
         }
     }
 }
