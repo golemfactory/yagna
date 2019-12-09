@@ -1,14 +1,8 @@
 use anyhow::{anyhow, Result};
 use api::{Command, Context};
-use futures::{
-    future::BoxFuture,
-    lock::Mutex,
-};
+use futures::{future::BoxFuture, lock::Mutex};
 use serde::Deserialize;
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tokio::time::delay_for;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

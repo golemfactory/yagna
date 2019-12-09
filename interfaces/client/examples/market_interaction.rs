@@ -1,16 +1,12 @@
 use actix_rt::System;
 use awc::Client;
 use serde_json;
-use ya_model::market::{Demand, Offer, RequestorEvent};
 use ya_client::market::{ApiClient, ApiConfiguration};
+use ya_model::market::{Demand, Offer, RequestorEvent};
 
 macro_rules! parse_body {
     ($r:tt) => {{
-        let vec = $r
-            .body()
-            .await
-            .expect("Response reading failed")
-            .to_vec();
+        let vec = $r.body().await.expect("Response reading failed").to_vec();
 
         String::from_utf8(vec).expect("String response decoding failed")
     }};
@@ -18,9 +14,7 @@ macro_rules! parse_body {
 
 macro_rules! parse_json {
     ($r:tt) => {{
-        $r.json()
-            .await
-            .expect("JSON response decoding failed")
+        $r.json().await.expect("JSON response decoding failed")
     }};
 }
 

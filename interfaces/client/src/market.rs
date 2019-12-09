@@ -8,7 +8,7 @@ pub use configuration::ApiConfiguration;
 
 pub struct ApiClient {
     provider: Box<dyn provider::ProviderApi>,
-//    requestor: Box<dyn requestor::RequestorApi>,
+    //    requestor: Box<dyn requestor::RequestorApi>,
 }
 
 impl ApiClient {
@@ -17,19 +17,15 @@ impl ApiClient {
 
         ApiClient {
             provider: Box::new(provider::ProviderApiClient::new(arc.clone())),
-//            requestor: Box::new(requestor::RequestorApiClient::new(arc.clone())),
+            //            requestor: Box::new(requestor::RequestorApiClient::new(arc.clone())),
         }
     }
 
-    pub fn provider(&self) -> &dyn provider::ProviderApi{
+    pub fn provider(&self) -> &dyn provider::ProviderApi {
         self.provider.as_ref()
     }
 
-//    pub fn requestor(&self) -> &dyn requestor::RequestorApi{
-//        self.requestor.as_ref()
-//    }
-
+    //    pub fn requestor(&self) -> &dyn requestor::RequestorApi{
+    //        self.requestor.as_ref()
+    //    }
 }
-
-
-

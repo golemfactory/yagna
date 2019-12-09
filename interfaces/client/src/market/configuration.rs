@@ -21,11 +21,10 @@ impl Default for ApiConfiguration {
 impl ApiConfiguration {
     /// creates an API connection to a given address
     pub fn from_addr<T: Into<String>>(addr: T) -> Result<ApiConfiguration, Error> {
-       format!("http://{}/", addr.into()).parse()
+        format!("http://{}/", addr.into())
+            .parse()
             .map_err(Error::InvalidAddress)
-            .map(|api_url| ApiConfiguration {
-                api_url,
-            })
+            .map(|api_url| ApiConfiguration { api_url })
     }
 
     pub fn api_endpoint<T: Into<String>>(&self, input: T) -> String {

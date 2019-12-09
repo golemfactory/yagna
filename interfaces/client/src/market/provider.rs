@@ -1,10 +1,13 @@
 use awc::Client;
-use futures::{future::{BoxFuture, LocalBoxFuture}, Future};
+use futures::{
+    future::{BoxFuture, LocalBoxFuture},
+    Future,
+};
 use std::sync::Arc;
 
-use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 use super::ApiConfiguration;
 use crate::Error;
+use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 pub struct ProviderApiClient {
     configuration: Arc<ApiConfiguration>,
@@ -12,14 +15,11 @@ pub struct ProviderApiClient {
 
 impl ProviderApiClient {
     pub fn new(configuration: Arc<ApiConfiguration>) -> Self {
-        ProviderApiClient {
-            configuration,
-        }
+        ProviderApiClient { configuration }
     }
 }
 
 pub trait ProviderApi {
-
     /// Publish Provider’s service capabilities (Offer) on the market to declare an
     /// interest in Demands meeting specified criteria.
     fn subscribe(&self, offer: Offer) -> LocalBoxFuture<Result<String, Error>>;
@@ -61,15 +61,20 @@ pub trait ProviderApi {
 
     /// Confirms the Agreement received from the Requestor.
     /// Mutually exclusive with [reject_agreement](self::reject_agreement).
-    fn approve_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>>;
+    fn approve_agreement(
+        &self,
+        agreement_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<(), Error>>>;
 
     /// Rejects the Agreement received from the Requestor.
     /// Mutually exclusive with [approve_agreement](self::approve_agreement).
-    fn reject_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>>;
+    fn reject_agreement(
+        &self,
+        agreement_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<(), Error>>>;
 }
 
 impl ProviderApi for ProviderApiClient {
-
     fn subscribe(&self, offer: Offer) -> LocalBoxFuture<Result<String, Error>> {
         Box::pin(async move {
             let vec = Client::default()
@@ -84,13 +89,13 @@ impl ProviderApi for ProviderApiClient {
     }
 
     fn unsubscribe(&self, subscription_id: &str) -> LocalBoxFuture<Result<(), Error>> {
-//        Box::pin(async {
-//            Client::default()
-//                .delete(self.configuration.api_endpoint(format!("/offers/{}", subscription_id))?)
-//                .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
-//                .await
-//                .expect("Offers POST request failed")
-//        })
+        //        Box::pin(async {
+        //            Client::default()
+        //                .delete(self.configuration.api_endpoint(format!("/offers/{}", subscription_id))?)
+        //                .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
+        //                .await
+        //                .expect("Offers POST request failed")
+        //        })
         unimplemented!()
     }
 
@@ -100,7 +105,7 @@ impl ProviderApi for ProviderApiClient {
         timeout: f32,
         max_events: i64,
     ) -> BoxFuture<dyn Future<Output = Result<Vec<ProviderEvent>, Error>>> {
-//            "/offers/{subscriptionId}/events",
+        //            "/offers/{subscriptionId}/events",
         unimplemented!()
     }
 
@@ -110,7 +115,7 @@ impl ProviderApi for ProviderApiClient {
         proposal_id: &str,
         proposal: Proposal,
     ) -> BoxFuture<dyn Future<Output = Result<String, Error>>> {
-//            "/offers/{subscriptionId}/proposals/{proposalId}/offer".to_string(),
+        //            "/offers/{subscriptionId}/proposals/{proposalId}/offer".to_string(),
         unimplemented!()
     }
 
@@ -119,7 +124,7 @@ impl ProviderApi for ProviderApiClient {
         subscription_id: &str,
         proposal_id: &str,
     ) -> BoxFuture<dyn Future<Output = Result<AgreementProposal, Error>>> {
-//            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
+        //            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
         unimplemented!()
     }
 
@@ -128,18 +133,23 @@ impl ProviderApi for ProviderApiClient {
         subscription_id: &str,
         proposal_id: &str,
     ) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
-//            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
+        //            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
         unimplemented!()
     }
 
-    fn approve_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
-//            "/agreements/{agreementId}/approve".to_string(),
+    fn approve_agreement(
+        &self,
+        agreement_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
+        //            "/agreements/{agreementId}/approve".to_string(),
         unimplemented!()
     }
 
-    fn reject_agreement(&self, agreement_id: &str) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
-//            "/agreements/{agreementId}/reject".to_string(),
+    fn reject_agreement(
+        &self,
+        agreement_id: &str,
+    ) -> BoxFuture<dyn Future<Output = Result<(), Error>>> {
+        //            "/agreements/{agreementId}/reject".to_string(),
         unimplemented!()
     }
-
 }
