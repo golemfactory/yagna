@@ -1,87 +1,94 @@
-use actix_rt::System;
 use awc::Client;
+use futures::{compat::Future01CompatExt, FutureExt, TryFutureExt};
 use serde_json;
-use ya_client::market::{ApiClient, ApiConfiguration};
+
+use ya_client::{
+    market::{ApiClient, ApiConfiguration},
+    Error, Result,
+};
 use ya_model::market::{Demand, Offer, RequestorEvent};
 
-macro_rules! parse_body {
-    ($r:tt) => {{
-        let vec = $r.body().await.expect("Response reading failed").to_vec();
+macro_rules! http_client {
+    ($http_method:ident, $url:expr, $payload:expr, $response_method:ident) => {{
+        Client::default()
+            .$http_method($url)
+            .send_json($payload)
+            .compat()
+            .map_err(Error::from)
+            .await?
+            .$response_method()
+            .compat()
+            .map_err(Error::from)
+            .await
+    }};
 
-        String::from_utf8(vec).expect("String response decoding failed")
+    ($http_method:ident, $url:expr, $response_method:ident) => {{
+        Client::default()
+            .$http_method($url)
+            .send()
+            .compat()
+            .map_err(Error::from)
+            .await?
+            .$response_method()
+            .compat()
+            .map_err(Error::from)
+            .await
     }};
 }
 
-macro_rules! parse_json {
-    ($r:tt) => {{
-        $r.json().await.expect("JSON response decoding failed")
+macro_rules! to_utf8_string {
+    ($r:expr) => {{
+        String::from_utf8($r.to_vec()).map_err(Error::from)
     }};
 }
+//
+//async fn subscribe_provider() -> Result<String> {
+//    let url = "http://localhost:5001/market-api/v1/offers";
+//    let offer = Offer::new(serde_json::json!({"zima":"już"}), "()".into());
+//    to_utf8_string!( http_client!(post, url, send_json, &offer, body )? )
+//}
 
-async fn subscribe_provider() -> String {
-    let mut response = Client::default()
-        .post("http://localhost:5001/market-api/v1/offers")
-        .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
-        .await
-        .expect("Offers POST request failed");
+async fn subscribe_requestor() -> Result<String> {
+    let url = "http://localhost:5001/market-api/v1/demands";
+    let demand =         Demand::new(
+        serde_json::json!("{}"),
+        "(&(zima=już))".into(),
+    );
 
-    parse_body!(response)
+    to_utf8_string!( http_client!(post, url, &demand, body )? )
 }
 
-async fn subscribe_requestor() -> String {
-    let mut response = Client::default()
-        .post("http://localhost:5001/market-api/v1/demands")
-        .send_json(&Demand::new(
-            serde_json::json!("{}"),
-            "(&(zima=już))".into(),
-        ))
-        .await
-        .expect("Demands POST request failed");
-
-    parse_body!(response)
-}
-
-async fn query_requestor_events(requestor_subscription_id: &String) -> Vec<RequestorEvent> {
+async fn query_requestor_events(requestor_subscription_id: &String) -> Result<Vec<RequestorEvent>> {
     let url = format!(
         "http://localhost:5001/market-api/v1/demands/{}/events?timeout=1&maxEvents=8",
         requestor_subscription_id
     );
-
-    let mut response = Client::default()
-        .get(&url)
-        .send()
-        .await
-        .expect("Demand events GET request failed");
-
-    parse_json!(response)
+    http_client!(get, url, json)
 }
 
-async fn query_market_stats() -> serde_json::Value {
-    let mut response = Client::default()
-        .get("http://localhost:5001/admin/marketStats")
-        .send()
-        .await
-        .expect("Market stats GET request failed");
-
-    parse_json!(response)
+async fn query_market_stats() -> Result<serde_json::Value> {
+    let url = "http://localhost:5001/admin/marketStats";
+    http_client!(get, url, json)
 }
 
-async fn interact() {
+async fn interact() -> Result<()> {
     let client = ApiClient::new(ApiConfiguration::default());
     let offer = Offer::new(serde_json::json!({"zima":"już"}), "()".into());
-    let provider_subscription_id = client.provider().subscribe(offer).await.unwrap();
+    let provider_subscription_id = client.provider().subscribe(offer).await?;
     println!("Provider subscription id: {}", provider_subscription_id);
 
-    let requestor_subscription_id = subscribe_requestor().await;
+    let requestor_subscription_id = subscribe_requestor().await?;
     println!("Requestor subscription id: {}", requestor_subscription_id);
 
-    let requestor_events = query_requestor_events(&requestor_subscription_id).await;
+    let requestor_events = query_requestor_events(&requestor_subscription_id).await?;
     println!("Requestor events: {:#?}", requestor_events);
 
-    let market_stats = query_market_stats().await;
+    let market_stats = query_market_stats().await?;
     println!("Market stats: {:#?}", market_stats);
+    Ok(())
 }
 
 fn main() {
-    System::new("test").block_on(interact());
+    actix_rt::System::new("test").block_on(interact().boxed_local().compat())
+        .expect("Runtime error")
 }

@@ -1,5 +1,5 @@
 use awc::Client;
-use futures::{Future, TryFutureExt};
+use futures::{compat::Future01CompatExt, Future};
 use std::sync::Arc;
 
 use super::ApiConfiguration;
@@ -23,8 +23,10 @@ impl ProviderApi {
             let vec = Client::default()
                 .post(endpoint_url)
                 .send_json(&offer)
+                .compat()
                 .await?
                 .body()
+                .compat()
                 .await?
                 .to_vec();
             Ok(String::from_utf8(vec)?)
