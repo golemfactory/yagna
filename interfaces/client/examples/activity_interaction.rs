@@ -96,6 +96,5 @@ async fn interact() -> () {
 }
 
 fn main() {
-    System::new("test")
-        .block_on(interact());
+    System::new("test").block_on(interact());
 }
