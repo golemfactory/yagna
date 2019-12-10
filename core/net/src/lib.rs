@@ -1,13 +1,16 @@
+use awc::Client;
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin};
 use ya_service_bus::{BusMessage, RpcHandler, RpcMessage};
+
+pub type NodeID = String; /* TODO: proper NodeID */
 
 // handler: send message to other node
 
 #[derive(Serialize, Deserialize, Clone)]
 enum MessageAddress {
     BroadcastAddress { distance: u32 },
-    Node(String), /* TODO: replace with NodeID */
+    Node(NodeID),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -22,7 +25,7 @@ struct Message {
     destination: MessageAddress,
     module: String,
     method: String,
-    reply_to: String, /* TODO: replace with NodeID */
+    reply_to: NodeID,
     request_id: u64,
     message_type: MessageType,
 }
@@ -47,6 +50,14 @@ impl RpcHandler<SendMessage> for SendMessageHandler {
 
     fn handle(&mut self, _caller: &str, _msg: SendMessage) -> Self::Result {
         unimplemented!()
+        /* TODO */
+        //futures::future::ready(Ok(NetworkStatus::NotConnected))
+        /*Box::pin(
+            Client::default()
+                .get("http://localhost:8000")
+                .send()
+                .and_then(|response| futures::future::ready(Ok(SendMessage { message: None }))),
+        )*/
     }
 }
 
