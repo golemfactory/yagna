@@ -1,0 +1,8 @@
+[package]
+name = "ya-scheduler"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+job_scheduler = "1.1.0"
