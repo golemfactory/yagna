@@ -50,12 +50,9 @@ macro_rules! to_utf8_string {
 
 async fn subscribe_requestor() -> Result<String> {
     let url = "http://localhost:5001/market-api/v1/demands";
-    let demand =         Demand::new(
-        serde_json::json!("{}"),
-        "(&(zima=już))".into(),
-    );
+    let demand = Demand::new(serde_json::json!("{}"), "(&(zima=już))".into());
 
-    to_utf8_string!( http_client!(post, url, &demand, body )? )
+    to_utf8_string!(http_client!(post, url, &demand, body)?)
 }
 
 async fn query_requestor_events(requestor_subscription_id: &String) -> Result<Vec<RequestorEvent>> {
@@ -89,6 +86,7 @@ async fn interact() -> Result<()> {
 }
 
 fn main() {
-    actix_rt::System::new("test").block_on(interact().boxed_local().compat())
+    actix_rt::System::new("test")
+        .block_on(interact().boxed_local().compat())
         .expect("Runtime error")
 }
