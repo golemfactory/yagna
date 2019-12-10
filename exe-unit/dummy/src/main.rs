@@ -1,8 +1,5 @@
-mod app;
-
 use anyhow::{Context, Result};
 use api::Exec;
-use app::{DummyCmd, DummyExeUnit};
 use futures::stream::StreamExt;
 use std::{
     fs,
@@ -10,6 +7,7 @@ use std::{
     path::PathBuf,
 };
 use structopt::StructOpt;
+use ya_exe_dummy::{DummyCmd, DummyExeUnit};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "dummy")]
