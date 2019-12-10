@@ -1,8 +1,11 @@
 use anyhow::{anyhow, Result};
 use api::{Command, Context};
-use futures::{future::BoxFuture, lock::Mutex};
+use futures::future::BoxFuture;
 use serde::Deserialize;
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio::time::delay_for;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -26,15 +29,15 @@ impl DummyExeUnit {
     }
 
     fn is_null(&self) -> bool {
-        *self.state.try_lock().unwrap() == State::Null
+        *self.state.lock().unwrap() == State::Null
     }
 
     fn is_running(&self) -> bool {
-        *self.state.try_lock().unwrap() == State::Running
+        *self.state.lock().unwrap() == State::Running
     }
 
     fn state(&self) -> State {
-        *self.state.try_lock().unwrap()
+        *self.state.lock().unwrap()
     }
 }
 
@@ -57,7 +60,7 @@ impl DummyCmd {
 
         Box::pin(async move {
             let state = State::Deployed;
-            *ctx.state.lock().await = state;
+            *ctx.state.lock().unwrap() = state;
             Ok(state)
         })
     }
@@ -71,7 +74,7 @@ impl DummyCmd {
             return Box::pin(async { Err(anyhow!("container is currently running")) });
         }
 
-        Box::pin(async move { Ok(*ctx.state.lock().await) })
+        Box::pin(async move { Ok(*ctx.state.lock().unwrap()) })
     }
 
     fn start(ctx: DummyExeUnit, _params: Vec<String>) -> BoxFuture<'static, Result<State>> {
@@ -82,7 +85,7 @@ impl DummyCmd {
         Box::pin(async move {
             delay_for(Duration::from_secs(5)).await;
             let state = State::Finished;
-            *ctx.state.lock().await = state;
+            *ctx.state.lock().unwrap() = state;
             Ok(state)
         })
     }
