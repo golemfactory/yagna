@@ -1,22 +1,24 @@
-#[derive(failure::Fail, Debug)]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum Error {
-    #[fail(display = "AWC sending request error: {}", _0)]
-    SendRequestError(String),
-    #[fail(display = "AWC payload error: {}", _0)]
+    #[error("AWC sending request error: {0}")]
+    SendRequestError(awc::error::SendRequestError),
+    #[error("AWC payload error: {0}")]
     PayloadError(awc::error::PayloadError),
-    #[fail(display = "AWC JSON payload error: {}", _0)]
+    #[error("AWC JSON payload error: {0}")]
     JsonPayloadError(awc::error::JsonPayloadError),
-    #[fail(display = "serde JSON error: {}", _0)]
+    #[error("serde JSON error: {0}")]
     SerdeJsonError(serde_json::Error),
-    #[fail(display = "invalid address: {}", _0)]
-    InvalidAddress(#[fail(cause)] std::convert::Infallible),
-    #[fail(display = "invalid UTF8 string: {}", _0)]
-    FromUtf8Error(#[fail(cause)] std::string::FromUtf8Error),
+    #[error("invalid address: {0}")]
+    InvalidAddress(std::convert::Infallible),
+    #[error("invalid UTF8 string: {0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
 }
 
 impl From<awc::error::SendRequestError> for Error {
     fn from(e: awc::error::SendRequestError) -> Self {
-        Error::SendRequestError(format!("{:?}", e))
+        Error::SendRequestError(e)
     }
 }
 
@@ -29,11 +31,5 @@ impl From<awc::error::PayloadError> for Error {
 impl From<awc::error::JsonPayloadError> for Error {
     fn from(e: awc::error::JsonPayloadError) -> Self {
         Error::JsonPayloadError(e)
-    }
-}
-
-impl From<std::string::FromUtf8Error> for Error {
-    fn from(e: std::string::FromUtf8Error) -> Self {
-        Error::FromUtf8Error(e)
     }
 }
