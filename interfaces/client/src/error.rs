@@ -12,6 +12,8 @@ pub enum Error {
     SerdeJsonError(serde_json::Error),
     #[error("invalid address: {0}")]
     InvalidAddress(std::convert::Infallible),
+    #[error("invalid header: {0}")]
+    HeaderError(String),
     #[error("invalid UTF8 string: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
 }

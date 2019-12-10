@@ -14,7 +14,7 @@ futures = { version = "0.3", features = ["compat"] }
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "1.0"
+url = "2.1"
 
 [dev-dependencies]
 actix-rt = "0.2"
-#actix = "0.8"
