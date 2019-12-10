@@ -1,7 +1,7 @@
 use actix_rt::Runtime;
 use async_trait::async_trait;
 use awc::Client;
-use failure::Fallible;
+use failure::{Fail, Fallible};
 use futures::compat::Future01CompatExt;
 use futures::prelude::*;
 use futures::FutureExt;
