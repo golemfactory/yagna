@@ -1,7 +1,10 @@
+#[macro_use]
+pub mod rest;
+
 pub mod activity;
 pub mod market;
 
-mod error;
+pub mod error;
 pub use error::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
