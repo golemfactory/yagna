@@ -2,11 +2,7 @@ use awc::Client;
 use futures::{compat::Future01CompatExt, FutureExt, TryFutureExt};
 use serde_json;
 
-use ya_client::{
-    web::WebClient,
-    market::ApiClient,
-    Error, Result,
-};
+use ya_client::{market::ApiClient, web::WebClient, Error, Result};
 use ya_model::market::{Demand, Offer};
 
 async fn query_market_stats() -> Result<serde_json::Value> {
@@ -60,5 +56,5 @@ async fn interact() -> Result<()> {
 fn main() {
     actix_rt::System::new("test")
         .block_on(interact().boxed_local().compat())
-        .expect("Runtime error")
+        .expect("Runtime error");
 }

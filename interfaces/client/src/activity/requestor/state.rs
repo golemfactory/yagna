@@ -1,10 +1,7 @@
 use futures::{compat::Future01CompatExt, TryFutureExt};
 use std::mem;
 
-use crate::{
-    web::WebClient,
-    Error, Result,
-};
+use crate::{web::WebClient, Error, Result};
 use ya_model::activity::{ActivityState, ExeScriptCommandState};
 
 pub struct RequestorStateApiClient {

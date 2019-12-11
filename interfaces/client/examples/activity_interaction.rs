@@ -1,12 +1,13 @@
 use actix_rt::Runtime;
 use futures::prelude::*;
-use ya_client::activity::provider::ProviderApiClient;
-use ya_client::web::WebClient;
-use ya_client::activity::API_ROOT;
-use ya_client::activity::{RequestorControlApiClient, RequestorStateApiClient};
-use ya_client::Result;
-use ya_model::activity::activity_state::State;
-use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptRequest};
+use ya_client::{
+    activity::{
+        provider::ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, API_ROOT,
+    },
+    web::WebClient,
+    Result,
+};
+use ya_model::activity::{activity_state::State, ActivityState, ActivityUsage, ExeScriptRequest};
 
 fn new_client() -> Result<WebClient> {
     WebClient::builder().api_root(API_ROOT).build()
@@ -105,6 +106,6 @@ async fn interact() -> Result<()> {
 fn main() {
     Runtime::new()
         .expect("Cannot create runtime")
-        .block_on(interact().boxed_local().unit_error().compat())
+        .block_on(interact().boxed_local().compat())
         .expect("Runtime error");
 }

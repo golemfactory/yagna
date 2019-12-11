@@ -1,5 +1,5 @@
+use crate::{web::WebClientBuilder, Result};
 use std::sync::Arc;
-use crate::{Result, web::WebClientBuilder};
 
 pub mod provider;
 pub mod requestor;

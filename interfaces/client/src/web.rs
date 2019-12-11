@@ -1,8 +1,8 @@
+use crate::{configuration::ApiConfiguration, Result};
 use awc::http::{HeaderMap, HeaderName, HeaderValue};
 use std::str::FromStr;
 use std::time::Duration;
 use url::form_urlencoded;
-use crate::{configuration::ApiConfiguration, Result};
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
