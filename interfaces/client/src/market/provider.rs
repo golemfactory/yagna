@@ -30,23 +30,13 @@ rest_interface! {
         /// Publish Provider’s service capabilities (Offer) on the market to declare an
         /// interest in Demands meeting specified criteria.
         pub async fn subscribe(&self, offer: Offer) -> Result<String> {
-            let result = self.client()
-                .post("/offers")
-                .send_json( &offer )
-                .await?
-                .body()
-                .await?;
+            let result = self.client().post("/offers").send_json( &offer ).body();
             { Ok( String::from_utf8( result.to_vec() )? ) }
         }
 
         /// Stop subscription by invalidating a previously published Offer.
         pub async fn unsubscribe(&self, #[path] subscription_id: String) -> Result<String> {
-            let result = self.client()
-                .delete("/offers/{subscription_id}")
-                .send()
-                .await?
-                .body()
-                .await?;
+            let result = self.client().delete("/offers/{subscription_id}").send().body();
             { Ok( String::from_utf8( result.to_vec() )? ) }
         }
     }

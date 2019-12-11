@@ -12,9 +12,7 @@ macro_rules! rest_interface {
                     let $result:ident = self.client()
                         .$http_method:ident($rest_uri:expr)
                         .$send_method:ident $send_args:tt
-                        .await?
-                        .$response_extractor:ident()
-                        .await?;
+                        .$response_extractor:ident();
                     $( $body:tt )?
                 }
             )+
