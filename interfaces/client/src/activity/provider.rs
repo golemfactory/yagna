@@ -1,9 +1,10 @@
-use crate::activity::web::{QueryParamsBuilder, WebClient};
-use crate::error::Error;
-use crate::Result;
-use futures::compat::Future01CompatExt;
-use futures::prelude::*;
+use futures::{compat::Future01CompatExt, TryFutureExt};
 use std::mem;
+
+use crate::{
+    web::{QueryParamsBuilder, WebClient},
+    Error, Result,
+};
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 
 pub mod gsb {

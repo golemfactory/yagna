@@ -1,6 +1,5 @@
 pub mod provider;
 pub mod requestor;
-pub mod web;
 
 pub use provider::ProviderApiClient;
 pub use requestor::control::RequestorControlApiClient;
