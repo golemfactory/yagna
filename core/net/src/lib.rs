@@ -7,27 +7,27 @@ pub type NodeID = String; /* TODO: proper NodeID */
 
 // handler: send message to other node
 
-#[derive(Serialize, Deserialize, Clone)]
-enum MessageAddress {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum MessageAddress {
     BroadcastAddress { distance: u32 },
     Node(NodeID),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-enum MessageType {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum MessageType {
     Request,
     Reply,
     Error,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct Message {
-    destination: MessageAddress,
-    module: String,
-    method: String,
-    reply_to: NodeID,
-    request_id: u64,
-    message_type: MessageType,
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Message {
+    pub destination: MessageAddress,
+    pub module: String,
+    pub method: String,
+    pub reply_to: NodeID,
+    pub request_id: u64,
+    pub message_type: MessageType,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -96,8 +96,20 @@ impl RpcHandler<GetNetworkStatus> for GetNetworkStatusHandler {
 
 #[cfg(test)]
 mod tests {
+    use crate::MessageAddress::BroadcastAddress;
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_serialization() {
+        use crate::{Message, MessageAddress, MessageType};
+        let m: Message = Message {
+            //destination: MessageAddress::Node("0x123".into()),
+            destination: BroadcastAddress { distance: 5 },
+            module: "module".into(),
+            method: "method".into(),
+            reply_to: "0x999".into(),
+            request_id: 1000,
+            message_type: MessageType::Request,
+        };
+        eprintln!("{}", serde_json::to_string(&m).unwrap())
     }
 }
