@@ -1,61 +1,56 @@
 use awc::Client;
-use futures::{compat::Future01CompatExt, Future};
+use futures::compat::Future01CompatExt;
 use std::sync::Arc;
 
 use super::ApiConfiguration;
 use crate::Result;
-use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
+//use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
+use ya_model::market::Offer;
+pub struct ProviderApi {
+    configuration: Arc<ApiConfiguration>,
+}
 
-//pub struct ProviderApi {
-//    configuration: Arc<ApiConfiguration>,
-//}
-//
-//impl ProviderApi {
-//    pub fn new(configuration: Arc<ApiConfiguration>) -> Self {
-//        ProviderApi { configuration }
-//    }
-//
-//    /// Publish Provider’s service capabilities (Offer) on the market to declare an
-//    /// interest in Demands meeting specified criteria.
-//    pub async fn subscribe(&self, offer: Offer) -> Result<String> {
-//        let result = Client::default()
-//            .post(self.configuration.api_endpoint("offers"))
-//            .send_json(&offer)
-//            .compat()
-//            .await?
-//            .body()
-//            .compat()
-//            .await?;
-//        let vec = result
-//            .to_vec();
-//        Ok(String::from_utf8(vec)?)
-//    }
-//}
+impl ProviderApi {
+    pub fn new(configuration: Arc<ApiConfiguration>) -> Self {
+        ProviderApi { configuration }
+    }
 
-rest_interface! {
-    pub ProviderApi {
-        #[field] configuration: Arc<ApiConfiguration>;
+    fn client(&self) -> Client {
+        Client::default()
+    }
 
-        #[REST(post, "offers", body)]
-        fn subscribe(&self, offer: Offer) -> Result<String> {
-            #[result] result;
-            { Ok(String::from_utf8(result.to_vec())?) }
-        }
+    fn uri<T: Into<String>>(&self, suffix: T) -> String {
+        self.configuration.api_endpoint(suffix)
     }
 }
 
+rest_interface! {
+    impl ProviderApi {
 
-//    /// Stop subscription by invalidating a previously published Offer.
-//    pub fn unsubscribe(&self, subscription_id: &str) -> impl Future<Output = Result<()>> {
-//        //        Box::pin(async {
-//        //            Client::default()
-//        //                .delete(self.configuration.api_endpoint(format!("/offers/{}", subscription_id))?)
-//        //                .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
-//        //                .await
-//        //                .expect("Offers POST request failed")
-//        //        })
-//        async { unimplemented!() }
-//    }
+        /// Publish Provider’s service capabilities (Offer) on the market to declare an
+        /// interest in Demands meeting specified criteria.
+        pub async fn subscribe(&self, offer: Offer) -> Result<String> {
+            let result = self.client()
+                .post("/offers")
+                .send_json( &offer )
+                .await?
+                .body()
+                .await?;
+            { Ok( String::from_utf8( result.to_vec() )? ) }
+        }
+
+        /// Stop subscription by invalidating a previously published Offer.
+        pub async fn unsubscribe(&self, #[path] subscription_id: String) -> Result<String> {
+            let result = self.client()
+                .delete("/offers/{subscription_id}")
+                .send()
+                .await?
+                .body()
+                .await?;
+            { Ok( String::from_utf8( result.to_vec() )? ) }
+        }
+    }
+}
 //
 //    /// Get events which have arrived from the market in response to the Offer
 //    /// published by the Provider via  [subscribe](self::subscribe).

@@ -73,6 +73,11 @@ async fn interact() -> Result<()> {
     let offer = Offer::new(serde_json::json!({"zima":"już"}), "()".into());
     let provider_subscription_id = client.provider().subscribe(offer).await?;
     println!("Provider subscription id: {}", provider_subscription_id);
+    let unsubscribe_result = client
+        .provider()
+        .unsubscribe(provider_subscription_id)
+        .await?;
+    println!("unsubscribe result: {}", unsubscribe_result);
 
     let requestor_subscription_id = subscribe_requestor().await?;
     println!("Requestor subscription id: {}", requestor_subscription_id);
