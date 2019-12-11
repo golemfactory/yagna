@@ -1,59 +1,41 @@
 use awc::Client;
-use futures::compat::Future01CompatExt;
-use std::sync::Arc;
 
-use super::ApiConfiguration;
 use crate::Result;
 //use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
-use ya_model::market::Offer;
-pub struct ProviderApi {
-    configuration: Arc<ApiConfiguration>,
-}
-
-impl ProviderApi {
-    pub fn new(configuration: Arc<ApiConfiguration>) -> Self {
-        ProviderApi { configuration }
-    }
-
-    fn client(&self) -> Client {
-        Client::default()
-    }
-
-    fn uri<T: Into<String>>(&self, suffix: T) -> String {
-        self.configuration.api_endpoint(suffix)
-    }
-}
+use ya_model::market::{Offer, ProviderEvent};
 
 rest_interface! {
+    /// Bindings for Provider part of the Market API.
     impl ProviderApi {
 
         /// Publish Provider’s service capabilities (Offer) on the market to declare an
         /// interest in Demands meeting specified criteria.
         pub async fn subscribe(&self, offer: Offer) -> Result<String> {
-            let result = self.client().post("/offers").send_json( &offer ).body();
-            { Ok( String::from_utf8( result.to_vec() )? ) }
+            let response = post("/offers").send_json( &offer ).body();
+            { Ok( String::from_utf8( response?.to_vec() )? ) }
         }
 
         /// Stop subscription by invalidating a previously published Offer.
-        pub async fn unsubscribe(&self, #[path] subscription_id: String) -> Result<String> {
-            let result = self.client().delete("/offers/{subscription_id}").send().body();
-            { Ok( String::from_utf8( result.to_vec() )? ) }
+        pub async fn unsubscribe(&self, #[path] subscription_id: &str) -> Result<String> {
+            let response = delete("/offers/{subscription_id}").send().body();
+            { Ok( String::from_utf8( response?.to_vec() )? ) }
+        }
+
+        /// Get events which have arrived from the market in response to the Offer
+        /// published by the Provider via  [`subscribe`](#method.subscribe).
+        /// Returns collection of at most `max_events` `ProviderEvents` or times out.
+        pub async fn collect(
+            &self,
+            #[path] subscription_id: &str,
+            #[path] timeout: f32,
+            #[path] max_events: i64
+        ) -> Result<Vec<ProviderEvent>> {
+            let response = get("/offers/{subscription_id}/events/?timeout={timeout}&maxEvents={max_events}")
+                .send().json();
+            { response }
         }
     }
 }
-//
-//    /// Get events which have arrived from the market in response to the Offer
-//    /// published by the Provider via  [subscribe](self::subscribe).
-//    /// Returns collection of [ProviderEvents](ProviderEvent) or timeout.
-//    pub fn collect(
-//        &self,
-//        subscription_id: &str,
-//        timeout: f32,
-//        max_events: i64,
-//    ) -> impl Future<Output = Result<Vec<ProviderEvent>>> {
-//        //            "/offers/{subscriptionId}/events",
-//        async { unimplemented!() }
-//    }
 //
 //    /// TODO doc
 //    pub fn create_proposal(
