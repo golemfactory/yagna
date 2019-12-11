@@ -1,13 +1,14 @@
 use std::env;
 
-use crate::Error;
+use crate::Result;
+use url::Url;
 
 const API_HOST_PORT: &str = "localhost:5001";
 
 /// API configuration.
 #[derive(Clone, Debug)]
 pub struct ApiConfiguration {
-    api_uri: String,
+    api_url: Url,
 }
 
 impl Default for ApiConfiguration {
@@ -17,28 +18,19 @@ impl Default for ApiConfiguration {
 }
 
 impl ApiConfiguration {
-    /// creates an API connection to a given address
-    pub fn from_addr<T: Into<String>>(addr: T) -> Result<ApiConfiguration, Error> {
-        format!("http://{}", addr.into())
-            .parse()
-            .map_err(Error::InvalidAddress)
-            .map(|api_uri| ApiConfiguration { api_uri })
-    }
-
-    pub fn from(
-        host_port: Option<String>,
-        api_root: Option<String>,
-    ) -> Result<ApiConfiguration, Error> {
-        ApiConfiguration::from_addr(format!(
-            "{}{}",
-            host_port
+    pub fn from(host_port: Option<String>, path: Option<String>) -> Result<ApiConfiguration> {
+        Url::parse(&format!(
+            "http://{host_port}{path}",
+            host_port = host_port
                 .or_else(|| env::var("API_ADDR").ok())
                 .unwrap_or(API_HOST_PORT.into()),
-            api_root.unwrap_or("".into())
+            path = path.unwrap_or("".into())
         ))
+        .map(|api_url| ApiConfiguration { api_url })
+        .map_err(From::from)
     }
 
-    pub fn api_endpoint<T: Into<String>>(&self, input: T) -> String {
-        format!("{}{}", self.api_uri, input.into())
+    pub fn endpoint_url<T: Into<String>>(&self, endpoint: T) -> Url {
+        self.api_url.join(&endpoint.into()).unwrap()
     }
 }

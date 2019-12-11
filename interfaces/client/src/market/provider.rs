@@ -8,14 +8,22 @@ rest_interface! {
 
         /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
         /// interest in Demands meeting specified criteria.
-        pub async fn subscribe(&self, offer: Offer) -> Result<String> {
-            let response = post("/offers").send_json( &offer ).body();
+        pub async fn subscribe(
+            &self,
+            offer: Offer
+        ) -> Result<String> {
+            let response = post("offers/").send_json( &offer ).body();
+
             { Ok( String::from_utf8( response?.to_vec() )? ) }
         }
 
         /// Stop subscription by invalidating a previously published Offer.
-        pub async fn unsubscribe(&self, #[path] subscription_id: &str) -> Result<String> {
-            let response = delete("/offers/{subscription_id}").send().body();
+        pub async fn unsubscribe(
+            &self,
+            #[path] subscription_id: &str
+        ) -> Result<String> {
+            let response = delete("offers/{subscription_id}/").send().body();
+
             { Ok( String::from_utf8( response?.to_vec() )? ) }
         }
 
@@ -25,11 +33,12 @@ rest_interface! {
         pub async fn collect(
             &self,
             #[path] subscription_id: &str,
-            #[path] timeout: f32,
-            #[path] max_events: i64
+            #[query] timeout: Option<i32>,
+            #[query] maxEvents: Option<i32>  // TODO: max_events
         ) -> Result<Vec<ProviderEvent>> {
-            let response = get("/offers/{subscription_id}/events/?timeout={timeout}&maxEvents={max_events}")
+            let response = get("offers/{subscription_id}/events/")
                 .send().json();
+
             { response }
         }
     }

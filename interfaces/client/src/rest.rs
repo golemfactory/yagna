@@ -9,9 +9,10 @@ macro_rules! rest_interface {
                     &self
                     $(, $arg:ident : $arg_t:ty )*
                     $(, #[path] $argp:ident : $argp_t:ty )*
+                    $(, #[query] $argq:ident : $argq_t:ty )*
                 ) -> Result<$ret:ty> {
                     let $response:ident =
-                        $http_method:ident($rest_uri:expr)
+                        $http_method:ident($rest_url:expr)
                         .$send_method:ident $send_args:tt
                         .$response_extractor:ident();
                     $body:tt
@@ -22,8 +23,9 @@ macro_rules! rest_interface {
     => {
         use futures::compat::Future01CompatExt;
         use std::sync::Arc;
+        use url::Url;
 
-        use crate::web::WebClient;
+        use crate::web::{WebClient, QueryParamsBuilder};
 
         $(#[doc = $interface_doc])*
         pub struct $interface_name {
@@ -32,28 +34,40 @@ macro_rules! rest_interface {
 
         impl $interface_name {
             pub fn new(client: Arc<WebClient>) -> Self {
-                $interface_name { client }
+                Self { client }
             }
 
-            fn uri<T: Into<String>>(&self, suffix: T) -> String {
-                self.client.configuration.api_endpoint(suffix)
+            pub fn replace_client(&mut self, client: WebClient) {
+                std::mem::replace(&mut self.client, Arc::new(client));
+            }
+
+
+            fn url<T: Into<String>>(&self, suffix: T) -> Url {
+                self.client.configuration.endpoint_url(suffix)
             }
 
             $(
                 $(#[doc = $api_doc])*
                 #[doc = "<br><br>Uses `"]
 //                #[doc = stringify!($http_method)]
-                #[doc = $rest_uri]
-                #[doc = "` REST URI."]
+                #[doc = $rest_url]
+                #[doc = "` REST URL."]
                 pub async fn $fn_name (
-                    &self,
-                    $( $arg : $arg_t ),*
-                    $( $argp : $argp_t ),*
+                    &self
+                    $(, $arg : $arg_t )*
+                    $(, $argp : $argp_t )*
+                    $(, $argq : $argq_t )*
                 ) -> Result<$ret> {
-                    let uri = self.uri(format!( $rest_uri $(, $argp = $argp)* ));
-                    println!("doing {} on {}", stringify!($http_method), uri);
+                    let mut url = self.url(format!( $rest_url $(, $argp = $argp)* ));
+                    let query = QueryParamsBuilder::new()
+                        $(.put(stringify!($argq), $argq))*
+                        .build();
+                    if query.len() > 0 {
+                        url = url.join(&query)?
+                    }
+                    println!("doing {} on {}", stringify!($http_method), url);
                     let $response = self.client.awc
-                        .$http_method(uri)
+                        .$http_method(url.as_str())
                         .$send_method $send_args
                         .compat()
                         .await?

@@ -7,14 +7,22 @@ rest_interface! {
 
         /// Publish Requestor’s service capabilities (`Demand`) on the market to declare an
         /// interest in Offers meeting specified criteria.
-        pub async fn subscribe(&self, demand: Demand) -> Result<String> {
-            let response = post("/demands").send_json( &demand ).body();
+        pub async fn subscribe(
+            &self,
+            demand: Demand
+        ) -> Result<String> {
+            let response = post("demands/").send_json( &demand ).body();
+
             { Ok( String::from_utf8( response?.to_vec() )? ) }
         }
 
         /// Stop subscription by invalidating a previously published Demand.
-        pub async fn unsubscribe(&self, #[path] subscription_id: &str) -> Result<String> {
-            let response = delete("/demands/{subscription_id}").send().body();
+        pub async fn unsubscribe(
+            &self,
+            #[path] subscription_id: &str
+        ) -> Result<String> {
+            let response = delete("demands/{subscription_id}/").send().body();
+
             { Ok( String::from_utf8( response?.to_vec() )? ) }
         }
 
@@ -24,11 +32,12 @@ rest_interface! {
         pub async fn collect(
             &self,
             #[path] subscription_id: &str,
-            #[path] timeout: f32,
-            #[path] max_events: i64
+            #[query] timeout: Option<i32>,
+            #[query] maxEvents: Option<i32>  // TODO: max_events
         ) -> Result<Vec<RequestorEvent>> {
-            let response = get("/demands/{subscription_id}/events/?timeout={timeout}&maxEvents={max_events}")
+            let response = get("demands/{subscription_id}/events/")
                 .send().json();
+
             { response }
         }
     }

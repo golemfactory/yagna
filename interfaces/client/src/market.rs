@@ -9,7 +9,7 @@ pub struct ApiClient {
     requestor: requestor::RequestorApi,
 }
 
-pub const API_ROOT: &str = "/market-api/v1";
+pub const API_ROOT: &str = "/market-api/v1/";
 
 impl ApiClient {
     pub fn new(client: WebClientBuilder) -> Result<Self> {

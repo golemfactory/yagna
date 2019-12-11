@@ -98,7 +98,7 @@ pub struct QueryParamsBuilder<'a> {
 
 impl<'a> QueryParamsBuilder<'a> {
     pub fn new() -> Self {
-        let serializer = form_urlencoded::Serializer::new(String::new());
+        let serializer = form_urlencoded::Serializer::new("?".into());
         QueryParamsBuilder { serializer }
     }
 
