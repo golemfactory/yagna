@@ -1,10 +1,8 @@
-use crate::error::Error;
 use awc::http::{HeaderMap, HeaderName, HeaderValue};
 use std::str::FromStr;
 use std::time::Duration;
 use url::form_urlencoded;
-
-const API_HOST: &str = "http://localhost:5001";
+use crate::{configuration::ApiConfiguration, Result};
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -12,7 +10,7 @@ pub enum WebAuth {
 }
 
 pub struct WebClient {
-    pub(crate) endpoint: String,
+    pub(crate) configuration: ApiConfiguration,
     pub(crate) awc: awc::Client,
 }
 
@@ -24,7 +22,8 @@ impl WebClient {
 
 #[derive(Clone, Debug)]
 pub struct WebClientBuilder {
-    pub(crate) endpoint: Option<String>,
+    pub(crate) host_port: Option<String>,
+    pub(crate) api_root: Option<String>,
     pub(crate) auth: Option<WebAuth>,
     pub(crate) headers: HeaderMap,
     pub(crate) timeout: Option<Duration>,
@@ -36,8 +35,13 @@ impl WebClientBuilder {
         self
     }
 
-    pub fn endpoint(mut self, endpoint: String) -> Self {
-        self.endpoint = Some(endpoint);
+    pub fn host_port<T: Into<String>>(mut self, host_port: T) -> Self {
+        self.host_port = Some(host_port.into());
+        self
+    }
+
+    pub fn api_root<T: Into<String>>(mut self, api_root: T) -> Self {
+        self.api_root = Some(api_root.into());
         self
     }
 
@@ -46,26 +50,16 @@ impl WebClientBuilder {
         self
     }
 
-    pub fn header(mut self, name: String, value: String) -> Result<Self, Error> {
-        let name = match HeaderName::from_str(name.as_str()) {
-            Ok(name) => name,
-            Err(e) => return Err(Error::HeaderError(format!("{:?}", e))),
-        };
-        let value = match HeaderValue::from_str(value.as_str()) {
-            Ok(value) => value,
-            Err(e) => return Err(Error::HeaderError(format!("{:?}", e))),
-        };
+    pub fn header(mut self, name: String, value: String) -> Result<Self> {
+        let name = HeaderName::from_str(name.as_str())?;
+        let value = HeaderValue::from_str(value.as_str())?;
 
         self.headers.insert(name, value);
         Ok(self)
     }
 
-    pub fn build(self) -> WebClient {
+    pub fn build(self) -> Result<WebClient> {
         let mut builder = awc::Client::build();
-        let endpoint = match self.endpoint {
-            Some(endpoint) => endpoint,
-            None => API_HOST.to_string(),
-        };
 
         if let Some(timeout) = self.timeout {
             builder = builder.timeout(timeout);
@@ -79,17 +73,18 @@ impl WebClientBuilder {
             builder = builder.header(key.clone(), value.clone());
         }
 
-        WebClient {
-            endpoint,
+        Ok(WebClient {
+            configuration: ApiConfiguration::from(self.host_port, self.api_root)?,
             awc: builder.finish(),
-        }
+        })
     }
 }
 
 impl Default for WebClientBuilder {
     fn default() -> Self {
         WebClientBuilder {
-            endpoint: None,
+            host_port: None,
+            api_root: None,
             auth: None,
             headers: HeaderMap::new(),
             timeout: None,

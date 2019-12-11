@@ -23,24 +23,20 @@ macro_rules! rest_interface {
         use futures::compat::Future01CompatExt;
         use std::sync::Arc;
 
-        use super::ApiConfiguration;
+        use crate::web::WebClient;
 
         $(#[doc = $interface_doc])*
         pub struct $interface_name {
-            configuration: Arc<ApiConfiguration>,
+            client: Arc<WebClient>,
         }
 
         impl $interface_name {
-            pub fn new(configuration: Arc<ApiConfiguration>) -> Self {
-                $interface_name { configuration }
-            }
-
-            fn client(&self) -> Client {
-                Client::default()
+            pub fn new(client: Arc<WebClient>) -> Self {
+                $interface_name { client }
             }
 
             fn uri<T: Into<String>>(&self, suffix: T) -> String {
-                self.configuration.api_endpoint(suffix)
+                self.client.configuration.api_endpoint(suffix)
             }
 
             $(
@@ -54,10 +50,10 @@ macro_rules! rest_interface {
                     $( $arg : $arg_t ),*
                     $( $argp : $argp_t ),*
                 ) -> Result<$ret> {
-                    let uri = format!( $rest_uri $(, $argp = $argp)* );
+                    let uri = self.uri(format!( $rest_uri $(, $argp = $argp)* ));
                     println!("doing {} on {}", stringify!($http_method), uri);
-                    let $response = self.client()
-                        .$http_method(self.uri(uri))
+                    let $response = self.client.awc
+                        .$http_method(uri)
                         .$send_method $send_args
                         .compat()
                         .await?

@@ -1,5 +1,3 @@
-use awc::Client;
-
 use crate::Result;
 //use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 use ya_model::market::{Offer, ProviderEvent};
@@ -8,7 +6,7 @@ rest_interface! {
     /// Bindings for Provider part of the Market API.
     impl ProviderApi {
 
-        /// Publish Provider’s service capabilities (Offer) on the market to declare an
+        /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
         /// interest in Demands meeting specified criteria.
         pub async fn subscribe(&self, offer: Offer) -> Result<String> {
             let response = post("/offers").send_json( &offer ).body();

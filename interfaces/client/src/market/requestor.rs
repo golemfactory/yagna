@@ -1,5 +1,3 @@
-use awc::Client;
-
 use crate::Result;
 use ya_model::market::{Demand, RequestorEvent};
 
@@ -7,7 +5,7 @@ rest_interface! {
     /// Bindings for Requestor part of the Market API.
     impl RequestorApi {
 
-        /// Publish Requestor’s service capabilities (Demand) on the market to declare an
+        /// Publish Requestor’s service capabilities (`Demand`) on the market to declare an
         /// interest in Offers meeting specified criteria.
         pub async fn subscribe(&self, demand: Demand) -> Result<String> {
             let response = post("/demands").send_json( &demand ).body();

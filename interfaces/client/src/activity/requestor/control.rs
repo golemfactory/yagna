@@ -23,7 +23,7 @@ impl RequestorControlApiClient {
 
 impl RequestorControlApiClient {
     pub async fn create_activity(&self, agreement_id: &str) -> Result<String> {
-        let url = format!("{}/activity", self.client.endpoint);
+        let url = self.client.configuration.api_endpoint("/activity");
         let mut response = self
             .client
             .awc
@@ -40,7 +40,8 @@ impl RequestorControlApiClient {
     }
 
     pub async fn destroy_activity(&self, activity_id: &str) -> Result<()> {
-        let url = format!("{}/activity/{}", self.client.endpoint, activity_id);
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}", endpoint, activity_id);
         self.client
             .awc
             .delete(&url)
@@ -53,7 +54,8 @@ impl RequestorControlApiClient {
     }
 
     pub async fn exec(&self, activity_id: &str, script: ExeScriptRequest) -> Result<String> {
-        let url = format!("{}/activity/{}/exec", self.client.endpoint, activity_id);
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}/exec", endpoint, activity_id);
         let mut response = self
             .client
             .awc
@@ -80,10 +82,8 @@ impl RequestorControlApiClient {
             .put("timeout", timeout)
             .put("max_count", max_count)
             .build();
-        let url = format!(
-            "{}/activity/{}/exec/{}?{}",
-            self.client.endpoint, activity_id, batch_id, params
-        );
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}/exec/{}?{}", endpoint, activity_id, batch_id, params);
         let mut response = self
             .client
             .awc

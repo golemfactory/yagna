@@ -3,7 +3,8 @@ use futures::{compat::Future01CompatExt, FutureExt, TryFutureExt};
 use serde_json;
 
 use ya_client::{
-    market::{ApiClient, ApiConfiguration},
+    web::WebClient,
+    market::ApiClient,
     Error, Result,
 };
 use ya_model::market::{Demand, Offer};
@@ -23,7 +24,7 @@ async fn query_market_stats() -> Result<serde_json::Value> {
 }
 
 async fn interact() -> Result<()> {
-    let client = ApiClient::new(ApiConfiguration::default());
+    let client = ApiClient::new(WebClient::builder())?;
 
     let offer = Offer::new(serde_json::json!({"zima":"już"}), "(&(lato=nie))".into());
     let provider_subscription_id = client.provider().subscribe(offer).await?;

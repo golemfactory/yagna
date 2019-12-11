@@ -2,7 +2,7 @@ use futures::{compat::Future01CompatExt, TryFutureExt};
 use std::mem;
 
 use crate::{
-    web::{QueryParamsBuilder, WebClient},
+    web::WebClient,
     Error, Result,
 };
 use ya_model::activity::{ActivityState, ExeScriptCommandState};
@@ -23,7 +23,8 @@ impl RequestorStateApiClient {
 
 impl RequestorStateApiClient {
     pub async fn get_running_command(&self, activity_id: &str) -> Result<ExeScriptCommandState> {
-        let url = format!("{}/activity/{}/command", self.client.endpoint, activity_id);
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}/command", endpoint, activity_id);
         let mut response = self
             .client
             .awc
@@ -40,7 +41,8 @@ impl RequestorStateApiClient {
     }
 
     pub async fn get_state(&self, activity_id: &str) -> Result<ActivityState> {
-        let url = format!("{}/activity/{}/state", self.client.endpoint, activity_id);
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}/state", endpoint, activity_id);
         let mut response = self
             .client
             .awc
@@ -57,7 +59,8 @@ impl RequestorStateApiClient {
     }
 
     pub async fn get_usage(&self, activity_id: &str) -> Result<Vec<f64>> {
-        let url = format!("{}/activity/{}/usage", self.client.endpoint, activity_id);
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}/usage", endpoint, activity_id);
         let mut response = self
             .client
             .awc

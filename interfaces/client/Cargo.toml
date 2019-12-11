@@ -11,6 +11,7 @@ async-trait = "0.1"
 awc = "0.2"
 failure = "0.1.6"
 futures = { version = "0.3", features = ["compat"] }
+http = "0.1"
 serde = "1.0"
 serde_json = "1.0"
 thiserror = "1.0"
