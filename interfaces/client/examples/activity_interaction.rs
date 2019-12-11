@@ -1,15 +1,18 @@
 use actix_rt::Runtime;
 use futures::prelude::*;
+use std::sync::Arc;
 use ya_client::{
     activity::{ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, API_ROOT},
     web::WebClient,
     Result,
 };
 use ya_model::activity::{activity_state::State, ActivityState, ActivityUsage, ExeScriptRequest};
-use std::sync::Arc;
 
 fn new_client() -> Result<Arc<WebClient>> {
-    WebClient::builder().api_root(API_ROOT).build().map(Arc::new)
+    WebClient::builder()
+        .api_root(API_ROOT)
+        .build()
+        .map(Arc::new)
 }
 
 async fn provider(activity_id: &str) -> Result<()> {
