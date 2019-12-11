@@ -5,13 +5,28 @@ use actix::Actor;
 use futures::Future;
 
 pub fn send(addr: &str, from: &str, bytes: &[u8]) -> impl Future<Output = Result<Vec<u8>, Error>> {
-    router().lock().unwrap().forward_bytes(addr, from, bytes)
+    router()
+        .lock()
+        .unwrap()
+        .forward_bytes(addr, from, bytes.into())
 }
 
 pub trait RawHandler {
     type Result: Future<Output = Result<Vec<u8>, Error>>;
 
     fn handle(&mut self, caller: &str, addr: &str, msg: &[u8]) -> Self::Result;
+}
+
+impl<
+        Output: Future<Output = Result<Vec<u8>, Error>>,
+        F: FnMut(&str, &str, &[u8]) -> Output + 'static,
+    > RawHandler for F
+{
+    type Result = Output;
+
+    fn handle(&mut self, caller: &str, addr: &str, msg: &[u8]) -> Self::Result {
+        self(caller, addr, msg)
+    }
 }
 
 mod raw_actor {

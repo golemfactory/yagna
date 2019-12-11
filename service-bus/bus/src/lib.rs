@@ -7,11 +7,14 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 pub mod actix_rpc;
-mod connection;
+pub mod connection;
 mod error;
 mod local_router;
+mod remote_router;
 pub mod typed;
 pub mod untyped;
+
+pub use error::Error;
 
 pub trait BusMessage {}
 

@@ -1,11 +1,11 @@
 use std::convert::TryInto;
 use std::mem::size_of;
 
-use crate::gsb_api::*;
 use bytes::BytesMut;
 use prost::Message;
 use tokio_codec::{Decoder, Encoder};
 
+use crate::gsb_api::*;
 use crate::{MessageHeader, MessageType};
 
 const MSG_HEADER_LENGTH: usize = size_of::<MessageHeader>();
@@ -147,6 +147,7 @@ fn encode_message_unpacked(
     Ok(())
 }
 
+#[derive(Default)]
 pub struct GsbMessageDecoder {
     msg_header: Option<MessageHeader>,
 }
@@ -181,6 +182,7 @@ impl Decoder for GsbMessageDecoder {
     }
 }
 
+#[derive(Default)]
 pub struct GsbMessageEncoder;
 
 impl Encoder for GsbMessageEncoder {
@@ -189,5 +191,29 @@ impl Encoder for GsbMessageEncoder {
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
         encode_message(dst, item)
+    }
+}
+
+#[derive(Default)]
+pub struct GsbMessageCodec {
+    encoder: GsbMessageEncoder,
+    decoder: GsbMessageDecoder,
+}
+
+impl Encoder for GsbMessageCodec {
+    type Item = GsbMessage;
+    type Error = failure::Error;
+
+    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        self.encoder.encode(item, dst)
+    }
+}
+
+impl Decoder for GsbMessageCodec {
+    type Item = GsbMessage;
+    type Error = failure::Error;
+
+    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        self.decoder.decode(src)
     }
 }
