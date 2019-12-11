@@ -1,15 +1,14 @@
-mod app;
-
 use anyhow::{Context, Result};
 use api::Exec;
-use app::{DummyCmd, DummyExeUnit};
-use futures::stream::StreamExt;
+use futures::{future::FutureExt, pin_mut, select, stream::StreamExt};
 use std::{
     fs,
     io::{self, Write},
     path::PathBuf,
 };
 use structopt::StructOpt;
+use tokio::signal;
+use ya_exe_dummy::{DummyCmd, DummyExeUnit};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "dummy")]
@@ -18,16 +17,10 @@ struct Opt {
     input: Option<PathBuf>,
 }
 
-async fn send_cmds(exe_unit: &mut DummyExeUnit, cmds_json: String) -> Result<()> {
-    let mut stream = <DummyExeUnit as Exec<DummyCmd>>::exec(exe_unit, cmds_json);
-    while let Some(res) = stream.next().await {
-        println!("received response = {:?}", res);
-    }
-    Ok(())
-}
-
 async fn run_interactive() -> Result<()> {
     let mut exe_unit = DummyExeUnit::spawn();
+    let ctrl_c = signal::ctrl_c().fuse();
+    pin_mut!(ctrl_c);
     loop {
         print!("> ");
         io::stdout().flush().context("failed to flush stdout")?;
@@ -38,8 +31,15 @@ async fn run_interactive() -> Result<()> {
         if cmd.is_empty() {
             continue;
         }
-        // send to the ExeUnit
-        send_cmds(&mut exe_unit, cmd).await?;
+        // send to the ExeUnit or break on Ctrl-C
+        let mut stream = <DummyExeUnit as Exec<DummyCmd>>::exec(&mut exe_unit, cmd).fuse();
+        select! {
+            _ = ctrl_c => break,
+            res = stream.select_next_some() => {
+                println!("received response = {:?}", res);
+            }
+            complete => {},
+        }
     }
 
     Ok(())
@@ -54,7 +54,11 @@ async fn main() -> Result<()> {
             .with_context(|| format!("failed to read contents of {}", input.display()))?;
         // send to ExeUnit
         let mut exe_unit = DummyExeUnit::spawn();
-        send_cmds(&mut exe_unit, cmds_json).await
+        let mut stream = <DummyExeUnit as Exec<DummyCmd>>::exec(&mut exe_unit, cmds_json);
+        while let Some(res) = stream.next().await {
+            println!("received response = {:?}", res);
+        }
+        Ok(())
     } else {
         run_interactive().await
     }
