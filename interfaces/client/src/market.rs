@@ -1,31 +1,31 @@
+use crate::{web::WebClientBuilder, Result};
 use std::sync::Arc;
 
 pub mod provider;
 pub mod requestor;
 
-mod configuration;
-pub use configuration::ApiConfiguration;
-
 pub struct ApiClient {
     provider: provider::ProviderApi,
-    //    requestor: requestor::RequestorApi,
+    requestor: requestor::RequestorApi,
 }
 
-impl ApiClient {
-    pub fn new(configuration: ApiConfiguration) -> ApiClient {
-        let arc = Arc::new(configuration);
+pub const API_ROOT: &str = "/market-api/v1";
 
-        ApiClient {
-            provider: provider::ProviderApi::new(arc.clone()),
-            //            requestor: requestor::RequestorApi::new(arc.clone()),
-        }
+impl ApiClient {
+    pub fn new(client: WebClientBuilder) -> Result<Self> {
+        let client = Arc::new(client.api_root(API_ROOT).build()?);
+
+        Ok(ApiClient {
+            provider: provider::ProviderApi::new(client.clone()),
+            requestor: requestor::RequestorApi::new(client.clone()),
+        })
     }
 
     pub fn provider(&self) -> &provider::ProviderApi {
         &self.provider
     }
 
-    //    pub fn requestor(&self) -> &requestor::RequestorApi{
-    //        self.requestor.as_ref()
-    //    }
+    pub fn requestor(&self) -> &requestor::RequestorApi {
+        &self.requestor
+    }
 }

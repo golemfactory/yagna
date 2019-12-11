@@ -1,20 +1,20 @@
 use actix_rt::Runtime;
 use futures::prelude::*;
-use ya_client::activity::provider::ProviderApiClient;
-use ya_client::activity::web::WebClient;
-use ya_client::activity::API_ROOT;
-use ya_client::activity::{RequestorControlApiClient, RequestorStateApiClient};
-use ya_model::activity::activity_state::State;
-use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptRequest};
+use ya_client::{
+    activity::{
+        provider::ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, API_ROOT,
+    },
+    web::WebClient,
+    Result,
+};
+use ya_model::activity::{activity_state::State, ActivityState, ActivityUsage, ExeScriptRequest};
 
-fn new_client() -> WebClient {
-    WebClient::builder()
-        .endpoint(format!("http://127.0.0.1:5001/{}", API_ROOT))
-        .build()
+fn new_client() -> Result<WebClient> {
+    WebClient::builder().api_root(API_ROOT).build()
 }
 
-async fn provider(activity_id: &str) {
-    let client = ProviderApiClient::new(new_client());
+async fn provider(activity_id: &str) -> Result<()> {
+    let client = ProviderApiClient::new(new_client()?);
 
     println!("[?] Events for activity {}", activity_id);
     let activity_events = client.get_activity_events(Some(60i32)).await.unwrap();
@@ -35,35 +35,37 @@ async fn provider(activity_id: &str) {
         .await
         .unwrap();
     println!("[<] Done");
+    Ok(())
 }
 
-async fn requestor(agreement_id: &str) {
-    let activity_id = requestor_start(agreement_id).await;
-    requestor_exec(&activity_id).await;
-    requestor_state(&activity_id).await;
-    requestor_stop(&activity_id).await;
+async fn requestor(agreement_id: &str) -> Result<()> {
+    let activity_id = requestor_start(agreement_id).await?;
+    requestor_exec(&activity_id).await?;
+    requestor_state(&activity_id).await?;
+    requestor_stop(&activity_id).await
 }
 
-async fn requestor_start(agreement_id: &str) -> String {
-    let client = RequestorControlApiClient::new(new_client());
+async fn requestor_start(agreement_id: &str) -> Result<String> {
+    let client = RequestorControlApiClient::new(new_client()?);
 
     println!("[+] Activity, agreement {}", agreement_id);
     let activity_id = client.create_activity(agreement_id).await.unwrap();
     println!("[<] Activity: {}", activity_id);
 
-    activity_id
+    Ok(activity_id)
 }
 
-async fn requestor_stop(activity_id: &str) {
-    let client = RequestorControlApiClient::new(new_client());
+async fn requestor_stop(activity_id: &str) -> Result<()> {
+    let client = RequestorControlApiClient::new(new_client()?);
 
     println!("[-] Activity {}", activity_id);
     client.destroy_activity(&activity_id).await.unwrap();
     println!("[<] Destroyed");
+    Ok(())
 }
 
-async fn requestor_exec(activity_id: &str) {
-    let client = RequestorControlApiClient::new(new_client());
+async fn requestor_exec(activity_id: &str) -> Result<()> {
+    let client = RequestorControlApiClient::new(new_client()?);
 
     let exe_request = ExeScriptRequest::new("STOP".to_string());
     println!("[+] Batch exe script:{:?}", exe_request);
@@ -76,10 +78,11 @@ async fn requestor_exec(activity_id: &str) {
         .await
         .unwrap();
     println!("[<] Batch results: {:?}", results);
+    Ok(())
 }
 
-async fn requestor_state(activity_id: &str) {
-    let client = RequestorStateApiClient::new(new_client());
+async fn requestor_state(activity_id: &str) -> Result<()> {
+    let client = RequestorStateApiClient::new(new_client()?);
 
     println!("[?] State for activity {}", activity_id);
     let state = client.get_state(activity_id).await.unwrap();
@@ -92,16 +95,17 @@ async fn requestor_state(activity_id: &str) {
     println!("[?] Command state for activity {}", activity_id);
     let command_state = client.get_running_command(activity_id).await.unwrap();
     println!("[<] Command state: {:?}", command_state);
+    Ok(())
 }
 
-async fn interact() -> () {
-    requestor("agreement_id").await;
-    provider("activity_id").await;
+async fn interact() -> Result<()> {
+    requestor("agreement_id").await?;
+    provider("activity_id").await
 }
 
 fn main() {
     Runtime::new()
         .expect("Cannot create runtime")
-        .block_on(interact().boxed_local().unit_error().compat())
+        .block_on(interact().boxed_local().compat())
         .expect("Runtime error");
 }

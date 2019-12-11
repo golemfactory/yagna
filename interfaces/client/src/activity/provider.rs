@@ -1,9 +1,10 @@
-use crate::activity::web::{QueryParamsBuilder, WebClient};
-use crate::error::Error;
-use crate::Result;
-use futures::compat::Future01CompatExt;
-use futures::prelude::*;
+use futures::{compat::Future01CompatExt, TryFutureExt};
 use std::mem;
+
+use crate::{
+    web::{QueryParamsBuilder, WebClient},
+    Error, Result,
+};
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 
 pub mod gsb {
@@ -57,8 +58,9 @@ impl ProviderApiClient {
 
 impl ProviderApiClient {
     pub async fn get_activity_events(&self, timeout: Option<i32>) -> Result<Vec<ProviderEvent>> {
+        let endpoint = self.client.configuration.api_endpoint("/events");
         let params = QueryParamsBuilder::new().put("timeout", timeout).build();
-        let url = format!("{}/events?{}", self.client.endpoint, params);
+        let url = format!("{}?{}", endpoint, params);
 
         let mut response = self
             .client
@@ -76,7 +78,8 @@ impl ProviderApiClient {
     }
 
     pub async fn set_activity_state(&self, activity_id: &str, state: ActivityState) -> Result<()> {
-        let url = format!("{}/activity/{}/state", self.client.endpoint, activity_id);
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}/state", endpoint, activity_id);
 
         self.client
             .awc
@@ -90,7 +93,8 @@ impl ProviderApiClient {
     }
 
     pub async fn set_activity_usage(&self, activity_id: &str, usage: ActivityUsage) -> Result<()> {
-        let url = format!("{}/activity/{}/usage", self.client.endpoint, activity_id);
+        let endpoint = self.client.configuration.api_endpoint("/activity");
+        let url = format!("{}/{}/usage", endpoint, activity_id);
 
         self.client
             .awc

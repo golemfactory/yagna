@@ -13,7 +13,9 @@ pub enum Error {
     #[error("invalid address: {0}")]
     InvalidAddress(std::convert::Infallible),
     #[error("invalid header: {0}")]
-    HeaderError(String),
+    InvalidHeadeName(#[from] http::header::InvalidHeaderName),
+    #[error("invalid header: {0}")]
+    InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
     #[error("invalid UTF8 string: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
 }

@@ -1,105 +1,82 @@
-use awc::Client;
-use futures::{compat::Future01CompatExt, Future};
-use std::sync::Arc;
+use crate::Result;
+//use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
+use ya_model::market::{Offer, ProviderEvent};
 
-use super::ApiConfiguration;
-use crate::Error;
-use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
+rest_interface! {
+    /// Bindings for Provider part of the Market API.
+    impl ProviderApi {
 
-pub struct ProviderApi {
-    configuration: Arc<ApiConfiguration>,
-}
+        /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
+        /// interest in Demands meeting specified criteria.
+        pub async fn subscribe(&self, offer: Offer) -> Result<String> {
+            let response = post("/offers").send_json( &offer ).body();
+            { Ok( String::from_utf8( response?.to_vec() )? ) }
+        }
 
-impl ProviderApi {
-    pub fn new(configuration: Arc<ApiConfiguration>) -> Self {
-        ProviderApi { configuration }
-    }
+        /// Stop subscription by invalidating a previously published Offer.
+        pub async fn unsubscribe(&self, #[path] subscription_id: &str) -> Result<String> {
+            let response = delete("/offers/{subscription_id}").send().body();
+            { Ok( String::from_utf8( response?.to_vec() )? ) }
+        }
 
-    /// Publish Provider’s service capabilities (Offer) on the market to declare an
-    /// interest in Demands meeting specified criteria.
-    pub fn subscribe(&self, offer: Offer) -> impl Future<Output = Result<String, Error>> {
-        let endpoint_url = self.configuration.api_endpoint("offers");
-        async move {
-            let vec = Client::default()
-                .post(endpoint_url)
-                .send_json(&offer)
-                .compat()
-                .await?
-                .body()
-                .compat()
-                .await?
-                .to_vec();
-            Ok(String::from_utf8(vec)?)
+        /// Get events which have arrived from the market in response to the Offer
+        /// published by the Provider via  [`subscribe`](#method.subscribe).
+        /// Returns collection of at most `max_events` `ProviderEvents` or times out.
+        pub async fn collect(
+            &self,
+            #[path] subscription_id: &str,
+            #[path] timeout: f32,
+            #[path] max_events: i64
+        ) -> Result<Vec<ProviderEvent>> {
+            let response = get("/offers/{subscription_id}/events/?timeout={timeout}&maxEvents={max_events}")
+                .send().json();
+            { response }
         }
     }
-
-    /// Stop subscription by invalidating a previously published Offer.
-    pub fn unsubscribe(&self, subscription_id: &str) -> impl Future<Output = Result<(), Error>> {
-        //        Box::pin(async {
-        //            Client::default()
-        //                .delete(self.configuration.api_endpoint(format!("/offers/{}", subscription_id))?)
-        //                .send_json(&Offer::new(serde_json::json!({"zima":"już"}), "()".into()))
-        //                .await
-        //                .expect("Offers POST request failed")
-        //        })
-        async { unimplemented!() }
-    }
-
-    /// Get events which have arrived from the market in response to the Offer
-    /// published by the Provider via  [subscribe](self::subscribe).
-    /// Returns collection of [ProviderEvents](ProviderEvent) or timeout.
-    pub fn collect(
-        &self,
-        subscription_id: &str,
-        timeout: f32,
-        max_events: i64,
-    ) -> impl Future<Output = Result<Vec<ProviderEvent>, Error>> {
-        //            "/offers/{subscriptionId}/events",
-        async { unimplemented!() }
-    }
-
-    /// TODO doc
-    pub fn create_proposal(
-        &self,
-        subscription_id: &str,
-        proposal_id: &str,
-        proposal: Proposal,
-    ) -> impl Future<Output = Result<String, Error>> {
-        //            "/offers/{subscriptionId}/proposals/{proposalId}/offer".to_string(),
-        async { unimplemented!() }
-    }
-
-    /// TODO doc
-    pub fn get_proposal(
-        &self,
-        subscription_id: &str,
-        proposal_id: &str,
-    ) -> impl Future<Output = Result<AgreementProposal, Error>> {
-        //            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
-        async { unimplemented!() }
-    }
-
-    /// TODO doc
-    pub fn reject_proposal(
-        &self,
-        subscription_id: &str,
-        proposal_id: &str,
-    ) -> impl Future<Output = Result<(), Error>> {
-        //            "/offers/{subscriptionId}/proposals/{proposalId}".to_string(),
-        async { unimplemented!() }
-    }
-
-    /// Confirms the Agreement received from the Requestor.
-    /// Mutually exclusive with [reject_agreement](self::reject_agreement).
-    pub fn approve_agreement(&self, agreement_id: &str) -> impl Future<Output = Result<(), Error>> {
-        //            "/agreements/{agreementId}/approve".to_string(),
-        async { unimplemented!() }
-    }
-
-    /// Rejects the Agreement received from the Requestor.
-    /// Mutually exclusive with [approve_agreement](self::approve_agreement).
-    pub fn reject_agreement(&self, agreement_id: &str) -> impl Future<Output = Result<(), Error>> {
-        //            "/agreements/{agreementId}/reject".to_string(),
-        async { unimplemented!() }
-    }
 }
+//
+//    /// TODO doc
+//    pub fn create_proposal(
+//        &self,
+//        subscription_id: &str,
+//        proposal_id: &str,
+//        proposal: Proposal,
+//    ) -> impl Future<Output = Result<String>> {
+//        //            "/offers/{subscriptionId}/proposals/{proposalId}/offer"
+//        async { unimplemented!() }
+//    }
+//
+//    /// TODO doc
+//    pub fn get_proposal(
+//        &self,
+//        subscription_id: &str,
+//        proposal_id: &str,
+//    ) -> impl Future<Output = Result<AgreementProposal>> {
+//        //            "/offers/{subscriptionId}/proposals/{proposalId}"
+//        async { unimplemented!() }
+//    }
+//
+//    /// TODO doc
+//    pub fn reject_proposal(
+//        &self,
+//        subscription_id: &str,
+//        proposal_id: &str,
+//    ) -> impl Future<Output = Result<()>> {
+//        //            "/offers/{subscriptionId}/proposals/{proposalId}"
+//        async { unimplemented!() }
+//    }
+//
+//    /// Confirms the Agreement received from the Requestor.
+//    /// Mutually exclusive with [reject_agreement](self::reject_agreement).
+//    pub fn approve_agreement(&self, agreement_id: &str) -> impl Future<Output = Result<()>> {
+//        //            "/agreements/{agreementId}/approve"
+//        async { unimplemented!() }
+//    }
+//
+//    /// Rejects the Agreement received from the Requestor.
+//    /// Mutually exclusive with [approve_agreement](self::approve_agreement).
+//    pub fn reject_agreement(&self, agreement_id: &str) -> impl Future<Output = Result<()>> {
+//        //            "/agreements/{agreementId}/reject"
+//        async { unimplemented!() }
+//    }
+//}
