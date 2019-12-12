@@ -1,9 +1,15 @@
 [package]
 name = "ya-core-serv"
 version = "0.1.0"
+description = "Yagna server daemon and CLI"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
+actix-web = "1.0"
+appdirs="0.2"
+clap = "2.33"
+failure = "0.1"
+flexi_logger = "0.14"
+log = "0.4"
+structopt = "0.3"
