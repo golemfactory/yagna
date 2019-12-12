@@ -1,70 +1,29 @@
-use serde::{Deserialize, Serialize};
+use awc::Client;
 use std::{future::Future, pin::Pin};
-use ya_service_bus::{RpcHandler, RpcMessage};
+use ya_core_model::net::{GetNetworkStatus, NetworkStatus, SendMessage, SendMessageError};
+use ya_service_bus::RpcHandler;
 
 // handler: send message to other node
-
-#[derive(Serialize, Deserialize, Clone)]
-enum MessageAddress {
-    BroadcastAddress { distance: u32 },
-    Node(String), /* TODO: replace with NodeID */
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-enum MessageType {
-    Request,
-    Reply,
-    Error,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct Message {
-    destination: MessageAddress,
-    module: String,
-    method: String,
-    reply_to: String, /* TODO: replace with NodeID */
-    request_id: u64,
-    message_type: MessageType,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct SendMessage {
-    message: Message,
-}
-
-impl RpcMessage for SendMessage {
-    const ID: &'static str = "send-message";
-    type Item = SendMessage; /* TODO should we use the same type for replies? */
-    type Error = (); /* TODO */
-}
 
 struct SendMessageHandler {}
 
 impl RpcHandler<SendMessage> for SendMessageHandler {
-    type Result = Pin<Box<dyn Future<Output = Result<SendMessage, ()>>>>;
+    type Result = Pin<Box<dyn Future<Output = Result<SendMessage, SendMessageError>>>>;
 
     fn handle(&mut self, _caller: &str, _msg: SendMessage) -> Self::Result {
         unimplemented!()
+        /* TODO */
+        //futures::future::ready(Ok(NetworkStatus::NotConnected))
+        /*Box::pin(
+            Client::default()
+                .get("http://localhost:8000")
+                .send()
+                .and_then(|response| futures::future::ready(Ok(SendMessage { message: None }))),
+        )*/
     }
 }
 
 // handler: network status
-
-#[derive(Serialize, Deserialize, Clone)]
-enum NetworkStatus {
-    ConnectedToCentralizedServer,
-    ConnectedToP2PNetwork,
-    NotConnected,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct GetNetworkStatus {}
-
-impl RpcMessage for GetNetworkStatus {
-    const ID: &'static str = "get-network-status";
-    type Item = NetworkStatus;
-    type Error = ();
-}
 
 struct GetNetworkStatusHandler {}
 
@@ -79,8 +38,19 @@ impl RpcHandler<GetNetworkStatus> for GetNetworkStatusHandler {
 
 #[cfg(test)]
 mod tests {
+    use ya_core_model::net::{Message, MessageAddress, MessageType};
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_serialization() {
+        let m: Message = Message {
+            //destination: MessageAddress::Node("0x123".into()),
+            destination: MessageAddress::BroadcastAddress { distance: 5 },
+            module: "module".into(),
+            method: "method".into(),
+            reply_to: "0x999".into(),
+            request_id: 1000,
+            message_type: MessageType::Request,
+        };
+        eprintln!("{}", serde_json::to_string(&m).unwrap())
     }
 }

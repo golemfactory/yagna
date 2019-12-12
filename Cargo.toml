@@ -4,6 +4,7 @@ members = [
     "agent/requestor",
     "core/activity",
     "core/market",
+    "core/model",
     "core/net",
     "core/payment",
     "core/serv",
