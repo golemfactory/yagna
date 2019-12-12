@@ -1,3 +1,4 @@
+//! Requestor control part of Activity API
 use crate::Result;
 use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
 

@@ -1,3 +1,4 @@
+//! Macro to facilitate REST API async bindings
 #[macro_export]
 /// Facilitates defining of REST interfaces by generating boilerplate code from concise definition.
 ///

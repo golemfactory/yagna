@@ -1,3 +1,4 @@
+//! Configuration tools
 use std::env;
 
 use crate::Result;

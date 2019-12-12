@@ -1,3 +1,4 @@
+//! Provider part of Activity API
 use crate::Result;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 

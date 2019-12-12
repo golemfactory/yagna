@@ -1,3 +1,4 @@
+//! Provider part of Market API
 use crate::Result;
 //use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
@@ -79,7 +80,7 @@ rest_interface! {
         }
 
         /// Approves the Agreement received from the Requestor.
-        /// Mutually exclusive with [reject_agreement](self::reject_agreement).
+        /// Mutually exclusive with [`reject_agreement`](#method.reject_agreement).
         pub async fn approve_agreement(
             &self,
             #[path] agreement_id: &str
@@ -90,7 +91,7 @@ rest_interface! {
         }
 
         /// Rejects the Agreement received from the Requestor.
-        /// Mutually exclusive with [approve_agreement](self::approve_agreement).
+        /// Mutually exclusive with [`approve_agreement`](#method.approve_agreement).
         pub async fn reject_agreement(
             &self,
             #[path] agreement_id: &str

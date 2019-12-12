@@ -48,15 +48,15 @@ async fn interact() -> Result<()> {
         println!("First come first served: {:#?}", first_proposal);
 
         // TODO: test bed not compatible with current yaml
-//                let proposal = client.requestor().get_proposal(&requestor_subscription_id, &first_proposal.id).await?;
-//                println!("First proposal: {:#?}", proposal);
+        //                let proposal = client.requestor().get_proposal(&requestor_subscription_id, &first_proposal.id).await?;
+        //                println!("First proposal: {:#?}", proposal);
         let a = Agreement::new(first_proposal.id.clone(), "now".into());
         client.requestor().create_agreement(a).await?;
         println!(">>> agreement created with id: {}", &first_proposal.id);
 
         // TODO: test bed not compatible with current yaml
-//        let proposal = client.provider().get_proposal(&provider_subscription_id, &first_proposal.id).await?;
-//        println!("First proposal: {:#?}", proposal);
+        //        let proposal = client.provider().get_proposal(&provider_subscription_id, &first_proposal.id).await?;
+        //        println!("First proposal: {:#?}", proposal);
     }
 
     let provider_events = client

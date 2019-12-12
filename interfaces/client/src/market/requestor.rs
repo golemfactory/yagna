@@ -1,3 +1,4 @@
+//! Requestor part of Market API
 use crate::Result;
 use ya_model::market::{Agreement, AgreementProposal, Demand, Proposal, RequestorEvent};
 
@@ -91,7 +92,7 @@ rest_interface! {
 
         // TODO: seems not needed -- wait_for_approval is enough
         /// Finally confirms the Agreement approved by the Provider.
-        /// Mutually exclusive with [cancel_agreement](self::cancel_agreement).
+        /// Mutually exclusive with [`cancel_agreement`](#method.cancel_agreement).
         pub async fn confirm_agreement(
             &self,
             #[path] agreement_id: &str
@@ -103,7 +104,7 @@ rest_interface! {
 
         /// Waits for the response from Provider after an Agreement has been sent,
         /// expecting corresponding ApproveAgreement message.
-        /// Mutually exclusive with [cancel_agreement](self::cancel_agreement).
+        /// Mutually exclusive with [`cancel_agreement`](#method.cancel_agreement).
         pub async fn wait_for_approval(
             &self,
             #[path] agreement_id: &str
@@ -114,7 +115,8 @@ rest_interface! {
         }
 
         /// Cancels the Agreement while still in the Proposed state.
-        /// Mutually exclusive with [confirm_agreement](self::confirm_agreement).
+        /// Mutually exclusive with [`confirm_agreement`](#method.confirm_agreement)
+        /// and [`wait_for_approval`](#method.wait_for_approval).
         pub async fn cancel_agreement(
             &self,
             #[path] agreement_id: &str
