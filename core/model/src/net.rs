@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use ya_service_bus::{BusMessage, RpcMessage};
+use ya_service_bus::RpcMessage;
 
 pub type NodeID = String; /* TODO: proper NodeID */
 
