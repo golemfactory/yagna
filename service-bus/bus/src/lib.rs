@@ -7,8 +7,14 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 pub mod actix_rpc;
+pub mod connection;
 mod error;
 mod local_router;
+mod remote_router;
+pub mod typed;
+pub mod untyped;
+
+pub use error::Error;
 
 pub trait BusMessage {}
 
@@ -21,6 +27,16 @@ pub trait RpcMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
 pub struct RpcEnvelope<T: RpcMessage> {
     caller: String,
     body: T,
+}
+
+pub struct RpcRawCall {
+    pub caller: String,
+    pub addr: String,
+    pub body: Vec<u8>,
+}
+
+impl Message for RpcRawCall {
+    type Result = Result<Vec<u8>, error::Error>;
 }
 
 impl<T: RpcMessage> RpcEnvelope<T> {
@@ -97,38 +113,4 @@ pub trait RpcStreamHandler<T: RpcMessage> {
 
 pub struct Handle {
     pub(crate) _inner: (),
-}
-
-pub fn bind<T: RpcMessage>(addr: &str, endpoint: impl RpcHandler<T>) -> Handle {
-    unimplemented!()
-}
-
-pub fn service<T: RpcMessage>(addr: &str) -> impl RpcEndpoint<T> {
-    MockEndpoint(PhantomData::default())
-}
-
-pub fn send_untyped(
-    addr: &str,
-    bytes: &[u8],
-) -> impl Future<Output = Result<Vec<u8>, error::Error>> {
-    local_router::router()
-        .lock()
-        .unwrap()
-        .forward_bytes(addr, "local", bytes)
-}
-
-struct MockEndpoint<T>(PhantomData<T>);
-
-impl<T> Clone for MockEndpoint<T> {
-    fn clone(&self) -> Self {
-        MockEndpoint(PhantomData::default())
-    }
-}
-
-impl<M: RpcMessage> RpcEndpoint<M> for MockEndpoint<M> {
-    type Result = futures::future::Ready<Result<<RpcEnvelope<M> as Message>::Result, error::Error>>;
-
-    fn send(&self, msg: M) -> Self::Result {
-        unimplemented!()
-    }
 }

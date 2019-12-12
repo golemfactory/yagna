@@ -18,6 +18,12 @@ pub enum Error {
     EncodingProblem(String),
     #[fail(display = "Message delivery timed out")]
     Timeout,
+    #[fail(display = "bad request: {}", _0)]
+    GsbBadRequest(String),
+    #[fail(display = "already registered: {}", _0)]
+    GsbAlreadyRegistered(String),
+    #[fail(display = "{}", _0)]
+    GsbFailure(String),
 }
 
 impl From<MailboxError> for Error {
@@ -26,6 +32,12 @@ impl From<MailboxError> for Error {
             MailboxError::Closed => Error::Closed,
             MailboxError::Timeout => Error::Timeout,
         }
+    }
+}
+
+impl From<futures_01::sync::oneshot::Canceled> for Error {
+    fn from(_: futures_01::sync::oneshot::Canceled) -> Self {
+        Error::Closed
     }
 }
 
