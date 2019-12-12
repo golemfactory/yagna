@@ -1,3 +1,4 @@
+//! Error definitions and mappings
 use thiserror::Error;
 
 #[derive(Error, Debug)]

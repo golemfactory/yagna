@@ -1,3 +1,4 @@
+//! Activity API part of the Yagna API
 pub mod provider;
 pub mod requestor;
 
