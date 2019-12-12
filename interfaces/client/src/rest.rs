@@ -62,7 +62,7 @@ macro_rules! rest_interface {
                     let query = QueryParamsBuilder::new()
                         $(.put(stringify!($argq), $argq))*
                         .build();
-                    if query.len() > 0 {
+                    if query.len() > 1 {
                         url = url.join(&query)?
                     }
                     println!("doing {} on {}", stringify!($http_method), url);
