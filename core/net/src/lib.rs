@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin};
-use ya_service_bus::{BusMessage, RpcHandler, RpcMessage};
+use ya_service_bus::{RpcHandler, RpcMessage};
 
 // handler: send message to other node
 
@@ -32,8 +32,6 @@ struct SendMessage {
     message: Message,
 }
 
-impl BusMessage for SendMessage {}
-
 impl RpcMessage for SendMessage {
     const ID: &'static str = "send-message";
     type Item = SendMessage; /* TODO should we use the same type for replies? */
@@ -59,12 +57,8 @@ enum NetworkStatus {
     NotConnected,
 }
 
-impl BusMessage for NetworkStatus {}
-
 #[derive(Serialize, Deserialize, Clone)]
 struct GetNetworkStatus {}
-
-impl BusMessage for GetNetworkStatus {}
 
 impl RpcMessage for GetNetworkStatus {
     const ID: &'static str = "get-network-status";
