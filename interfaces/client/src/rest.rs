@@ -10,7 +10,9 @@
 ///
 /// Current limitations and restrictions:
 ///   * first statement in fn body has to be strictly compatible with matcher
-///     `let <var_name> = <http_method>(<url>).<send_method>[(<args>)].<response_extractor>();`
+///     ```no-run
+///     let <var_name> = <http_method>(<url>).<send_method>[(<args>)].<response_extractor>();
+///     ```
 ///     where
 ///       - `<http_method>` is lower case: eg. `get`, `post` or others available for [awc::Client](
 ///         https://docs.rs/awc/0.2.8/awc/struct.Client.html).
@@ -19,7 +21,7 @@
 ///          - [`body`](https://docs.rs/awc/0.2.8/awc/struct.ClientResponse.html#method.body)
 ///          - or [`json`](https://docs.rs/awc/0.2.8/awc/struct.ClientResponse.html#method.json)
 ///   * rest of the fn body has to be single token (eg. `response`) or token tree in brackets
-///     `{` and `}` (eg. `{ Ok(()) }`).<br> This is a [`tt` fragment specifier](
+///     (eg. `{ Ok(()) }`).<br> This is a [`tt` fragment specifier](
 ///     https://doc.rust-lang.org/reference/macros-by-example.html#metavariables) limitation.
 ///   * `url` must not start with `/` (a [Url](
 ///     https://docs.rs/url/2.1.0/url/struct.Url.html#method.join) lib limitation)
