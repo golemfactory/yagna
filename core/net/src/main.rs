@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpServer, Responder};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use std::collections::{HashMap, VecDeque};
 use std::default::Default;
 use std::sync::Mutex;
@@ -12,8 +12,8 @@ struct ServerData {
 fn get_messages(state: web::Data<Mutex<ServerData>>, path: web::Path<String>) -> impl Responder {
     let server_data = state.lock().unwrap();
     match server_data.messages_to.get(&path.into_inner()) {
-        Some(queue) => format!("{:#?}", queue),
-        None => "TODO 404".into(),
+        Some(queue) => HttpResponse::Ok().json(queue),
+        None => HttpResponse::NotFound().finish(),
     }
 }
 
@@ -39,7 +39,7 @@ fn send_message(
             }
         }
     }
-    "Message sent." /* TODO */
+    HttpResponse::Ok()
 }
 
 fn authorize() -> impl Responder {
