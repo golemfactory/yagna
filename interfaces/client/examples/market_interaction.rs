@@ -32,7 +32,7 @@ async fn interact() -> Result<()> {
 
     let requestor_events = client
         .requestor()
-        .collect(&requestor_subscription_id, Some(1), Some(3))
+        .collect(&requestor_subscription_id, Some(1), Some(2))
         .await?;
     println!("Requestor events: {:#?}", requestor_events);
 

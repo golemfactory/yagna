@@ -358,6 +358,7 @@ paths:
         '200':
           description: Agreement rejected
 
+  # TODO: seems not needed -- waitForApproval is enough
   /agreements/{agreementId}/confirm:
     parameters:
       - name: agreementId

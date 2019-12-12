@@ -41,7 +41,7 @@ rest_interface! {
             { response }
         }
 
-        /// Sends a bespoke Offer in response to specific Demand
+        /// Sends a bespoke Offer in response to specific Demand.
         pub async fn create_proposal(
             &self,
             proposal: Proposal,
@@ -66,7 +66,7 @@ rest_interface! {
             { response }
         }
 
-        /// Rejects a bespoke Offer
+        /// Rejects a bespoke Offer.
         pub async fn reject_proposal(
             &self,
             #[path] subscription_id: &str,
@@ -78,7 +78,7 @@ rest_interface! {
             { Ok(()) }
         }
 
-        /// Confirms the Agreement received from the Requestor.
+        /// Approves the Agreement received from the Requestor.
         /// Mutually exclusive with [reject_agreement](self::reject_agreement).
         pub async fn approve_agreement(
             &self,
