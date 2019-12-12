@@ -38,7 +38,7 @@ rest_interface! {
             let response = get("demands/{subscription_id}/events/")
                 .send().json();
 
-            { response }
+            response
         }
 
         /// Sends a bespoke Demand in response to specific Offer.
@@ -63,7 +63,7 @@ rest_interface! {
             let response = get("demands/{subscription_id}/proposals/{proposal_id}/")
                 .send().json();
 
-            { response }
+            response
         }
 
         /// Rejects a bespoke Demand.

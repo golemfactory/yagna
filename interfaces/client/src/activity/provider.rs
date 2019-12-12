@@ -46,7 +46,7 @@ rest_interface! {
         ) -> Result<Vec<ProviderEvent>> {
             let response = get("activity/events/").send().json();
 
-            { response }
+            response
         }
 
         pub async fn set_activity_state(

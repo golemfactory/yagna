@@ -38,7 +38,7 @@ rest_interface! {
         ) -> Result<Vec<ProviderEvent>> {
             let response = get("offers/{subscription_id}/events/").send().json();
 
-            { response }
+            response
         }
 
         /// Sends a bespoke Offer in response to specific Demand.
@@ -63,7 +63,7 @@ rest_interface! {
             let response = get("offers/{subscription_id}/proposals/{proposal_id}/")
                 .send().json();
 
-            { response }
+            response
         }
 
         /// Rejects a bespoke Offer.

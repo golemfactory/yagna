@@ -10,7 +10,7 @@ rest_interface! {
         ) -> Result<ExeScriptCommandState> {
             let response = get("activity/{activity_id}/command/").send().json();
 
-            { response }
+            response
         }
 
         pub async fn get_state(
@@ -19,7 +19,7 @@ rest_interface! {
         ) -> Result<ActivityState> {
             let response = get("activity/{activity_id}/state/").send().json();
 
-            { response }
+            response
         }
 
         pub async fn get_usage(
@@ -28,7 +28,7 @@ rest_interface! {
         ) -> Result<Vec<f64>> {
             let response = get("activity/{activity_id}/usage/").send().json();
 
-            { response }
+            response
         }
     }
 }

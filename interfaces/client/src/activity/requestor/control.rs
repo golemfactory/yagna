@@ -29,7 +29,7 @@ rest_interface! {
         ) -> Result<String> {
             let response = post("activity/{activity_id}/state/").send_json( &script ).json();
 
-            { response }
+            response
         }
 
         pub async fn get_exec_batch_results(
@@ -41,7 +41,7 @@ rest_interface! {
         ) -> Result<Vec<ExeScriptCommandResult>> {
             let response = get("activity/{activity_id}/exec/{batch_id}/").send().json();
 
-            { response }
+            response
         }
     }
 }

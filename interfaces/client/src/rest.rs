@@ -37,6 +37,8 @@ macro_rules! rest_interface {
                 Self { client }
             }
 
+            // TODO: ask @mfranciszkiewicz if it is needed
+            // TODO: maybe its better to implement it one level up
             pub fn replace_client(&mut self, client: WebClient) {
                 std::mem::replace(&mut self.client, Arc::new(client));
             }
