@@ -38,14 +38,13 @@ impl RpcHandler<GetNetworkStatus> for GetNetworkStatusHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::MessageAddress::BroadcastAddress;
+    use ya_core_model::net::{Message, MessageAddress, MessageType};
 
     #[test]
     fn test_serialization() {
-        use crate::{Message, MessageAddress, MessageType};
         let m: Message = Message {
             //destination: MessageAddress::Node("0x123".into()),
-            destination: BroadcastAddress { distance: 5 },
+            destination: MessageAddress::BroadcastAddress { distance: 5 },
             module: "module".into(),
             method: "method".into(),
             reply_to: "0x999".into(),

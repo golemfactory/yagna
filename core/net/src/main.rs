@@ -10,8 +10,8 @@ struct ServerData {
 }
 
 fn get_messages(state: web::Data<Mutex<ServerData>>, path: web::Path<String>) -> impl Responder {
-    let server_data = state.lock().unwrap();
-    match server_data.messages_to.get(&path.into_inner()) {
+    let mut server_data = state.lock().unwrap();
+    match server_data.messages_to.remove(&path.into_inner()) {
         Some(queue) => HttpResponse::Ok().json(queue),
         None => HttpResponse::NotFound().finish(),
     }
