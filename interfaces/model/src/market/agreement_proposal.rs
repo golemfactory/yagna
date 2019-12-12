@@ -29,3 +29,33 @@ impl AgreementProposal {
         AgreementProposal { id, demand, offer }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::market::AgreementProposal;
+
+    #[test]
+    fn parse_agreement_proposal() {
+        let str = r#"{
+  "id": "0fb68c29-f2e9-4c87-b126-cf2ed4c067f0",
+  "demand": {
+    "id": "zima",
+    "properties": {
+      "lato": "\"nie\""
+    },
+    "constraints": "(&(zima=już))",
+    "prevProposalId": null
+  },
+  "offer": {
+    "id": "0fb68c29-f2e9-4c87-b126-cf2ed4c067f0",
+    "properties": {
+      "zima": "\"już\""
+    },
+    "constraints": "(&(lato=nie))",
+    "prevProposalId": null
+  }
+}"#;
+        let ap: AgreementProposal = serde_json::from_str(str).unwrap();
+        println!("ap: {:#?}", ap);
+    }
+}
