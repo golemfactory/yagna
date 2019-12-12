@@ -1,52 +1,14 @@
 use awc::Client;
-use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin};
-use ya_service_bus::{BusMessage, RpcHandler, RpcMessage};
-
-pub type NodeID = String; /* TODO: proper NodeID */
+use ya_core_model::net::{GetNetworkStatus, NetworkStatus, SendMessage, SendMessageError};
+use ya_service_bus::RpcHandler;
 
 // handler: send message to other node
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum MessageAddress {
-    BroadcastAddress { distance: u32 },
-    Node(NodeID),
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum MessageType {
-    Request,
-    Reply,
-    Error,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Message {
-    pub destination: MessageAddress,
-    pub module: String,
-    pub method: String,
-    pub reply_to: NodeID,
-    pub request_id: u64,
-    pub message_type: MessageType,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct SendMessage {
-    message: Message,
-}
-
-impl BusMessage for SendMessage {}
-
-impl RpcMessage for SendMessage {
-    const ID: &'static str = "send-message";
-    type Item = SendMessage; /* TODO should we use the same type for replies? */
-    type Error = (); /* TODO */
-}
 
 struct SendMessageHandler {}
 
 impl RpcHandler<SendMessage> for SendMessageHandler {
-    type Result = Pin<Box<dyn Future<Output = Result<SendMessage, ()>>>>;
+    type Result = Pin<Box<dyn Future<Output = Result<SendMessage, SendMessageError>>>>;
 
     fn handle(&mut self, _caller: &str, _msg: SendMessage) -> Self::Result {
         unimplemented!()
@@ -62,26 +24,6 @@ impl RpcHandler<SendMessage> for SendMessageHandler {
 }
 
 // handler: network status
-
-#[derive(Serialize, Deserialize, Clone)]
-enum NetworkStatus {
-    ConnectedToCentralizedServer,
-    ConnectedToP2PNetwork,
-    NotConnected,
-}
-
-impl BusMessage for NetworkStatus {}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct GetNetworkStatus {}
-
-impl BusMessage for GetNetworkStatus {}
-
-impl RpcMessage for GetNetworkStatus {
-    const ID: &'static str = "get-network-status";
-    type Item = NetworkStatus;
-    type Error = ();
-}
 
 struct GetNetworkStatusHandler {}
 

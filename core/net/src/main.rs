@@ -2,7 +2,7 @@ use actix_web::{web, App, HttpServer, Responder};
 use std::collections::{HashMap, VecDeque};
 use std::default::Default;
 use std::sync::Mutex;
-use ya_net::{Message, MessageAddress, NodeID};
+use ya_core_model::net::{Message, MessageAddress, NodeID};
 
 #[derive(Default)]
 struct ServerData {
