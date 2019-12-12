@@ -1,3 +1,4 @@
+//! Error definitions and mappings
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -18,6 +19,8 @@ pub enum Error {
     InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
     #[error("invalid UTF8 string: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
+    #[error("Url parse error: {0}")]
+    UrlParseError(#[from] url::ParseError),
 }
 
 impl From<awc::error::SendRequestError> for Error {

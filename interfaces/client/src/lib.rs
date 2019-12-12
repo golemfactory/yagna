@@ -1,3 +1,5 @@
+//! Async bindings for the Yagna API (REST)
+
 pub mod configuration;
 pub mod web;
 

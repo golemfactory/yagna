@@ -150,13 +150,13 @@ paths:
       - name: timeout
         in: query
         schema:
-          type: number
-          format: float
+          type: integer
+          format: int32
       - name: maxEvents
         in: query
         schema:
           type: integer
-          format: int64
+          format: int32
     get:
       tags:
         - provider
@@ -224,13 +224,13 @@ paths:
       - name: timeout
         in: query
         schema:
-          type: number
-          format: float
+          type: integer
+          format: int32
       - name: maxEvents
         in: query
         schema:
           type: integer
-          format: int64
+          format: int32
     get:
       tags:
         - requestor
@@ -358,6 +358,7 @@ paths:
         '200':
           description: Agreement rejected
 
+  # TODO: seems not needed -- waitForApproval is enough
   /agreements/{agreementId}/confirm:
     parameters:
       - name: agreementId

@@ -1,3 +1,4 @@
+//! Web utils
 use crate::{configuration::ApiConfiguration, Result};
 use awc::http::{HeaderMap, HeaderName, HeaderValue};
 use std::str::FromStr;
@@ -9,6 +10,8 @@ pub enum WebAuth {
     Bearer(String),
 }
 
+/// Convenient wrapper for the [`awc::Client`](
+/// https://docs.rs/awc/0.2.8/awc/struct.Client.html) with builder.
 pub struct WebClient {
     pub(crate) configuration: ApiConfiguration,
     pub(crate) awc: awc::Client,
@@ -92,13 +95,14 @@ impl Default for WebClientBuilder {
     }
 }
 
+/// Builder for the query part of the URLs.
 pub struct QueryParamsBuilder<'a> {
     serializer: form_urlencoded::Serializer<'a, String>,
 }
 
 impl<'a> QueryParamsBuilder<'a> {
     pub fn new() -> Self {
-        let serializer = form_urlencoded::Serializer::new(String::new());
+        let serializer = form_urlencoded::Serializer::new("?".into());
         QueryParamsBuilder { serializer }
     }
 

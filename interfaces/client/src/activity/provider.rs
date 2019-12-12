@@ -1,10 +1,5 @@
-use futures::{compat::Future01CompatExt, TryFutureExt};
-use std::mem;
-
-use crate::{
-    web::{QueryParamsBuilder, WebClient},
-    Error, Result,
-};
+//! Provider part of Activity API
+use crate::Result;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 
 pub mod gsb {
@@ -42,68 +37,37 @@ pub mod gsb {
     }
 }
 
-pub struct ProviderApiClient {
-    client: WebClient,
-}
+rest_interface! {
+    /// Bindings for Provider part of the Activity API.
+    impl ProviderApiClient {
 
-impl ProviderApiClient {
-    pub fn new(client: WebClient) -> Self {
-        Self { client }
-    }
+        pub async fn get_activity_events(
+            &self,
+            #[query] timeout: Option<i32>
+        ) -> Result<Vec<ProviderEvent>> {
+            let response = get("activity/events/").send().json();
 
-    pub fn replace_client(&mut self, client: WebClient) {
-        mem::replace(&mut self.client, client);
-    }
-}
-
-impl ProviderApiClient {
-    pub async fn get_activity_events(&self, timeout: Option<i32>) -> Result<Vec<ProviderEvent>> {
-        let endpoint = self.client.configuration.api_endpoint("/events");
-        let params = QueryParamsBuilder::new().put("timeout", timeout).build();
-        let url = format!("{}?{}", endpoint, params);
-
-        let mut response = self
-            .client
-            .awc
-            .get(&url)
-            .send()
-            .compat()
-            .map_err(Error::from)
-            .await?;
-
-        match response.json().compat().await {
-            Ok(result) => Ok(result),
-            Err(e) => Err(Error::from(e).into()),
+            response
         }
-    }
 
-    pub async fn set_activity_state(&self, activity_id: &str, state: ActivityState) -> Result<()> {
-        let endpoint = self.client.configuration.api_endpoint("/activity");
-        let url = format!("{}/{}/state", endpoint, activity_id);
+        pub async fn set_activity_state(
+            &self,
+            state: ActivityState,
+            #[path] activity_id: &str
+        ) -> Result<()> {
+            let _response = put("activity/{activity_id}/state/").send_json( &state ).body();
 
-        self.client
-            .awc
-            .put(&url)
-            .send_json(&state)
-            .compat()
-            .map_err(Error::from)
-            .await?;
+            { Ok(()) }
+        }
 
-        Ok(())
-    }
+        pub async fn set_activity_usage(
+            &self,
+            usage: ActivityUsage,
+            #[path] activity_id: &str
+        ) -> Result<()> {
+            let _response = put("activity/{activity_id}/usage/").send_json( &usage ).body();
 
-    pub async fn set_activity_usage(&self, activity_id: &str, usage: ActivityUsage) -> Result<()> {
-        let endpoint = self.client.configuration.api_endpoint("/activity");
-        let url = format!("{}/{}/usage", endpoint, activity_id);
-
-        self.client
-            .awc
-            .put(&url)
-            .send_json(&usage)
-            .compat()
-            .map_err(Error::from)
-            .await?;
-
-        Ok(())
+            { Ok(()) }
+        }
     }
 }
