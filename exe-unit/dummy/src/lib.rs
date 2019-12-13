@@ -83,29 +83,24 @@ pub enum DummyCmd {
     Stop {},
 }
 
-macro_rules! impl_dummy_cmd {
-    (
-        $name:ident => transition on ($transition:path; $($param:ident: $param_ty:ty),*) {
-            $($body:tt)*
+macro_rules! lock_or_bail {
+    ($ctx:ident) => {
+        match $ctx.inner.try_lock() {
+            None => bail!("couldn't acquire lock; another Op in progress"),
+            Some(inner) => inner,
         }
-    ) => {
-        async fn $name(ctx: DummyExeUnit, $($param: $param_ty),*) -> Result<State> {
-            let mut inner = match ctx.inner.try_lock() {
-                None => bail!("couldn't acquire lock; another Op in progress"),
-                Some(inner) => inner,
-            };
-            match inner.next_state($transition) {
-                None => bail!(
-                    "transition {:?} from {:?} is invalid",
-                    $transition,
-                    inner.current_state,
-                ),
-                Some(state) => {
-                    $($body)*
-                    inner.current_state = state;
-                    Ok(state)
-                }
-            }
+    };
+}
+
+macro_rules! transition_or_bail {
+    ($inner:ident, $transition:ident) => {
+        match $inner.next_state($transition) {
+            None => bail!(
+                "transition {:?} from {:?} is invalid",
+                $transition,
+                $inner.current_state,
+            ),
+            Some(state) => state,
         }
     };
 }
@@ -113,29 +108,54 @@ macro_rules! impl_dummy_cmd {
 impl DummyCmd {
     // TODO the logic for state transitioning and Mutex locking is common;
     // find a way to refactor and create a re-usable API
-    impl_dummy_cmd! { deploy => transition on (Transition::Deploy; _params: Vec<String>) {
+    async fn deploy(ctx: DummyExeUnit, params: Vec<String>) -> Result<(State, String)> {
+        let transition = Transition::Deploy;
+        let mut inner = lock_or_bail!(ctx);
+        let state = transition_or_bail!(inner, transition);
         delay_for(Duration::from_secs(5)).await;
-    } }
+        inner.current_state = state;
+        Ok((state, format!("params={{{}}}", params.join(","))))
+    }
 
-    impl_dummy_cmd! { start => transition on (Transition::Start; _params: Vec<String>) {
+    async fn start(ctx: DummyExeUnit, params: Vec<String>) -> Result<(State, String)> {
+        let transition = Transition::Start;
+        let mut inner = lock_or_bail!(ctx);
+        let state = transition_or_bail!(inner, transition);
         delay_for(Duration::from_secs(2)).await;
-    } }
+        inner.current_state = state;
+        Ok((state, format!("params={{{}}}", params.join(","))))
+    }
 
-    impl_dummy_cmd! { run => transition on (Transition::Run; _cmd: String) {
+    async fn run(ctx: DummyExeUnit, cmd: String) -> Result<(State, String)> {
+        let transition = Transition::Run;
+        let mut inner = lock_or_bail!(ctx);
+        let state = transition_or_bail!(inner, transition);
         delay_for(Duration::from_secs(3)).await;
-    } }
+        inner.current_state = state;
+        Ok((state, format!("cmd={}", cmd)))
+    }
 
-    impl_dummy_cmd! { transfer => transition on (Transition::Transfer; _from: String, _to: String) {
+    async fn transfer(ctx: DummyExeUnit, from: String, to: String) -> Result<(State, String)> {
+        let transition = Transition::Transfer;
+        let mut inner = lock_or_bail!(ctx);
+        let state = transition_or_bail!(inner, transition);
         delay_for(Duration::from_secs(3)).await;
-    } }
+        inner.current_state = state;
+        Ok((state, format!("from={},to={}", from, to)))
+    }
 
-    impl_dummy_cmd! { stop => transition on (Transition::Stop;) {
+    async fn stop(ctx: DummyExeUnit) -> Result<(State, String)> {
+        let transition = Transition::Stop;
+        let mut inner = lock_or_bail!(ctx);
+        let state = transition_or_bail!(inner, transition);
         delay_for(Duration::from_secs(2)).await;
-    } }
+        inner.current_state = state;
+        Ok((state, "".to_owned()))
+    }
 }
 
 impl Command<DummyExeUnit> for DummyCmd {
-    type Response = Result<State>;
+    type Response = Result<(State, String)>;
 
     fn action(self, ctx: DummyExeUnit) -> BoxFuture<'static, Self::Response> {
         match self {
@@ -149,7 +169,7 @@ impl Command<DummyExeUnit> for DummyCmd {
 }
 
 #[cfg(test)]
-mod tests {
+mod dummy_exe_unit {
     use super::*;
 
     #[test]
@@ -230,7 +250,9 @@ mod tests {
             format!("{}", results[0].as_ref().unwrap_err()),
             "couldn't acquire lock; another Op in progress",
         );
-        assert_eq!(results[1].as_ref().unwrap(), &State::Deployed);
+        let res = results[1].as_ref().unwrap();
+        assert_eq!(res.0, State::Deployed);
+        assert_eq!(res.1, "params={}".to_owned());
     }
 
     #[tokio::test]
@@ -242,26 +264,32 @@ mod tests {
 [
 	{"deploy": { "params": [] }},
 	{"start": { "params": [] }},
-	{"run": { "cmd": "" }},
-	{"transfer": {"from": "dumy-src", "to": "dummy-dst"}},
+	{"run": { "cmd": "hello" }},
+	{"transfer": {"from": "dummy-src", "to": "dummy-dst"}},
     {"stop": {}},
-	{"transfer": {"from": "dumy-src", "to": "dummy-dst"}}
+	{"transfer": {"from": "dummy-src", "to": "dummy-dst"}}
 ]
         "#;
 
         let mut unit = DummyExeUnit::spawn();
         let mut stream = <DummyExeUnit as Exec<DummyCmd>>::exec(&mut unit, json.to_string());
         let state = stream.next().await.unwrap().unwrap();
-        assert_eq!(state.unwrap(), State::Deployed);
+        assert_eq!(state.unwrap(), (State::Deployed, "params={}".to_owned()));
         let state = stream.next().await.unwrap().unwrap();
-        assert_eq!(state.unwrap(), State::Active);
+        assert_eq!(state.unwrap(), (State::Active, "params={}".to_owned()));
         let state = stream.next().await.unwrap().unwrap();
-        assert_eq!(state.unwrap(), State::Active);
+        assert_eq!(state.unwrap(), (State::Active, "cmd=hello".to_owned()));
         let state = stream.next().await.unwrap().unwrap();
-        assert_eq!(state.unwrap(), State::Active);
+        assert_eq!(
+            state.unwrap(),
+            (State::Active, "from=dummy-src,to=dummy-dst".to_owned())
+        );
         let state = stream.next().await.unwrap().unwrap();
-        assert_eq!(state.unwrap(), State::Terminated);
+        assert_eq!(state.unwrap(), (State::Terminated, "".to_owned()));
         let state = stream.next().await.unwrap().unwrap();
-        assert_eq!(state.unwrap(), State::Terminated);
+        assert_eq!(
+            state.unwrap(),
+            (State::Terminated, "from=dummy-src,to=dummy-dst".to_owned())
+        );
     }
 }
