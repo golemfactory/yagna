@@ -4,6 +4,8 @@ use std::default::Default;
 use std::sync::Mutex;
 use ya_core_model::net::{Message, MessageAddress, NodeID};
 
+pub const HUB_URL: &str = "localhost:8080";
+
 #[derive(Default)]
 struct ServerData {
     messages_to: HashMap<NodeID, VecDeque<Message>>,
@@ -21,7 +23,6 @@ fn send_message(
     state: web::Data<Mutex<ServerData>>,
     message: web::Json<Message>,
 ) -> impl Responder {
-    eprintln!("Sending... {:?}", message);
     let mut server_data = state.lock().unwrap();
     match &message.destination {
         MessageAddress::Node(node_id) => {
@@ -63,7 +64,7 @@ fn main() {
                     .route(web::delete().to(deactivate_authorization)),
             )
     })
-    .bind("127.0.0.1:8080")
+    .bind("localhost:8080")
     .unwrap()
     .run();
 }

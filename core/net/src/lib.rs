@@ -1,39 +1,33 @@
 use awc::Client;
-use std::{future::Future, pin::Pin};
-use ya_core_model::net::{GetNetworkStatus, NetworkStatus, SendMessage, SendMessageError};
-use ya_service_bus::RpcHandler;
+use futures::prelude::*;
+use futures03::compat::Future01CompatExt;
+use ya_core_model::net::{GetMessages, Message, SendMessage, SendMessageError};
+use ya_service_bus::typed as bus;
 
-// handler: send message to other node
+pub const HUB_URL: &str = "localhost:8080";
 
-struct SendMessageHandler {}
+pub const SERVICE_ID: &str = "/local/net";
 
-impl RpcHandler<SendMessage> for SendMessageHandler {
-    type Result = Pin<Box<dyn Future<Output = Result<SendMessage, SendMessageError>>>>;
-
-    fn handle(&mut self, _caller: &str, _msg: SendMessage) -> Self::Result {
-        unimplemented!()
-        /* TODO */
-        //futures::future::ready(Ok(NetworkStatus::NotConnected))
-        /*Box::pin(
-            Client::default()
-                .get("http://localhost:8000")
-                .send()
-                .and_then(|response| futures::future::ready(Ok(SendMessage { message: None }))),
-        )*/
-    }
-}
-
-// handler: network status
-
-struct GetNetworkStatusHandler {}
-
-impl RpcHandler<GetNetworkStatus> for GetNetworkStatusHandler {
-    type Result = futures::future::Ready<Result<NetworkStatus, ()>>; /* dynamic version: Pin<Box<dyn Future<Output = NetworkStatus>>>*/
-
-    fn handle(&mut self, _caller: &str, _msg: GetNetworkStatus) -> Self::Result {
-        /* TODO get real network status */
-        futures::future::ready(Ok(NetworkStatus::NotConnected)) /* dynamic version: add Box::pin(...) */
-    }
+pub fn init_service() {
+    let _ = bus::bind(SERVICE_ID, |command: SendMessage| {
+        Client::default()
+            .post(HUB_URL)
+            .send_json(&command)
+            .map_err(|e| SendMessageError(e.to_string()))
+            .and_then(|_| Ok(()))
+            .compat()
+    });
+    let _ = bus::bind(SERVICE_ID, |command: GetMessages| {
+        Client::default()
+            .get(format!("{}/{}", HUB_URL, command.0))
+            .send()
+            .map_err(|e| SendMessageError(e.to_string()))
+            .and_then(|mut x| x.json().map_err(|e| SendMessageError(e.to_string())))
+            .and_then(|x: Vec<Message>| Ok(x))
+            .compat()
+    });
+    //bus::service(SERVICE_ID).send(SendMessage(...));
+    //bus::service(SERVICE_ID).send(GetMessages("0x123".into()));
 }
 
 #[cfg(test)]

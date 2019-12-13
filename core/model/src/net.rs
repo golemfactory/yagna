@@ -28,15 +28,27 @@ pub struct Message {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SendMessage {
-    message: Message,
+    pub message: Message,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SendMessageError(String);
+pub struct SendMessageError(pub String);
 
 impl RpcMessage for SendMessage {
     const ID: &'static str = "send-message";
-    type Item = SendMessage; /* TODO should we use the same type for replies? */
+    type Item = (); /* TODO what should we use for replies? */
+    type Error = SendMessageError;
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GetMessages(pub NodeID);
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GetMessagesError(pub String);
+
+impl RpcMessage for GetMessages {
+    const ID: &'static str = "get-messages";
+    type Item = Vec<Message>;
     type Error = SendMessageError;
 }
 
