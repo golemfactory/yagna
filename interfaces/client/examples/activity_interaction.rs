@@ -1,16 +1,18 @@
 use actix_rt::Runtime;
 use futures::prelude::*;
+use std::sync::Arc;
 use ya_client::{
-    activity::{
-        provider::ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, API_ROOT,
-    },
+    activity::{ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, API_ROOT},
     web::WebClient,
     Result,
 };
 use ya_model::activity::{activity_state::State, ActivityState, ActivityUsage, ExeScriptRequest};
 
-fn new_client() -> Result<WebClient> {
-    WebClient::builder().api_root(API_ROOT).build()
+fn new_client() -> Result<Arc<WebClient>> {
+    WebClient::builder()
+        .api_root(API_ROOT)
+        .build()
+        .map(Arc::new)
 }
 
 async fn provider(activity_id: &str) -> Result<()> {
@@ -23,7 +25,7 @@ async fn provider(activity_id: &str) -> Result<()> {
     let activity_state = ActivityState::new(State::Ready);
     println!("[+] Setting activity state to: {:?}", activity_state);
     client
-        .set_activity_state(activity_id, activity_state)
+        .set_activity_state(activity_state, activity_id)
         .await
         .unwrap();
     println!("[<] Done");
@@ -31,7 +33,7 @@ async fn provider(activity_id: &str) -> Result<()> {
     let activity_usage = ActivityUsage::new(Some(vec![10f64, 0.5f64]));
     println!("[+] Setting activity usage to: {:?}", activity_usage);
     client
-        .set_activity_usage(activity_id, activity_usage)
+        .set_activity_usage(activity_usage, activity_id)
         .await
         .unwrap();
     println!("[<] Done");
@@ -69,7 +71,7 @@ async fn requestor_exec(activity_id: &str) -> Result<()> {
 
     let exe_request = ExeScriptRequest::new("STOP".to_string());
     println!("[+] Batch exe script:{:?}", exe_request);
-    let batch_id = client.exec(&activity_id, exe_request).await.unwrap();
+    let batch_id = client.exec(exe_request, &activity_id).await.unwrap();
     println!("[<] Batch id: {}", batch_id);
 
     println!("[?] Batch results for activity {}", activity_id);
