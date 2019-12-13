@@ -48,14 +48,17 @@ async fn interact() -> Result<()> {
         println!("First come first served: {:#?}", first_proposal);
 
         // test bed adjusted to fit the yaml
-        let proposal = client.requestor().get_proposal(&requestor_subscription_id, &first_proposal.id).await?;
+        let proposal = client
+            .requestor()
+            .get_proposal(&requestor_subscription_id, &first_proposal.id)
+            .await?;
         println!("First Offer proposal: {:#?}", proposal);
 
         let a = Agreement::new(first_proposal.id.clone(), "now".into());
         client.requestor().create_agreement(a).await?;
         println!(">>> agreement created with id: {}", &first_proposal.id);
 
-        // TODO: test bed adjusted to fit yaml, BUT the call below is with invalid proposal id 
+        // TODO: test bed adjusted to fit yaml, BUT the call below is with invalid proposal id
         // (note the proposal id is different on requestor and provider side)
         //let proposal = client.provider().get_proposal(&provider_subscription_id, &first_proposal.id).await?;
         //println!("First Demand proposal: {:#?}", proposal);
