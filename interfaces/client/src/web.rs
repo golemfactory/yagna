@@ -1,9 +1,17 @@
 //! Web utils
-use crate::{configuration::ApiConfiguration, Result};
-use awc::http::{HeaderMap, HeaderName, HeaderValue};
-use std::str::FromStr;
-use std::time::Duration;
+use actix_http::{encoding::Decoder, Payload};
+use awc::{
+    http::{HeaderMap, HeaderName, HeaderValue, HttpTryFrom, Uri},
+    ClientRequest, ClientResponse, SendClientRequest,
+};
+use bytes::Bytes;
+use futures::compat::Future01CompatExt;
+use serde::{Deserialize, Serialize};
+use std::{str::FromStr, time::Duration};
 use url::form_urlencoded;
+
+use crate::{configuration::ApiConfiguration, Result};
+use serde::de::DeserializeOwned;
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -20,6 +28,73 @@ pub struct WebClient {
 impl WebClient {
     pub fn builder() -> WebClientBuilder {
         WebClientBuilder::default()
+    }
+
+    pub fn get<U>(&self, url: U) -> WebRequest
+    where
+        Uri: HttpTryFrom<U>,
+    {
+        WebRequest(self.awc.get(url))
+    }
+    pub fn post<U>(&self, url: U) -> WebRequest
+    where
+        Uri: HttpTryFrom<U>,
+    {
+        WebRequest(self.awc.post(url))
+    }
+
+    pub fn put<U>(&self, url: U) -> WebRequest
+    where
+        Uri: HttpTryFrom<U>,
+    {
+        WebRequest(self.awc.put(url))
+    }
+
+    pub fn delete<U>(&self, url: U) -> WebRequest
+    where
+        Uri: HttpTryFrom<U>,
+    {
+        WebRequest(self.awc.delete(url))
+    }
+}
+
+pub struct WebRequest(ClientRequest);
+
+impl WebRequest {
+    pub async fn send_json<T: Serialize>(self, value: &T) -> crate::Result<WebResponse> {
+        self.0
+            .send_json(value)
+            .compat()
+            .await
+            .map_err(crate::Error::from)
+            .map(|r| WebResponse(r))
+    }
+
+    pub async fn send(self) -> Result<WebResponse> {
+        self.0
+            .send()
+            .compat()
+            .await
+            .map_err(crate::Error::from)
+            .map(|r| WebResponse(r))
+    }
+}
+
+pub struct WebResponse(ClientResponse<Decoder<Payload>>);
+
+impl WebResponse {
+    pub async fn json<T: DeserializeOwned>(&mut self) -> crate::Result<T> {
+        self.0.json()
+            .compat()
+            .await
+            .map_err(crate::Error::from)
+    }
+
+    pub async fn body<T>(&mut self) -> crate::Result<Bytes> {
+        self.0.body()
+            .compat()
+            .await
+            .map_err(crate::Error::from)
     }
 }
 

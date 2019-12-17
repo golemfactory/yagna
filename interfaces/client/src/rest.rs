@@ -111,3 +111,9 @@ macro_rules! rest_interface {
         }
     };
 }
+
+macro_rules! url_format {
+    ($path:expr $(, $var:ident )* ) => (
+        format!($path $(, $var=$var)*)
+    )
+}

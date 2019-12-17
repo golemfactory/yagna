@@ -34,34 +34,37 @@ async fn interact() -> Result<()> {
         .requestor()
         .collect(&requestor_subscription_id, Some(1), Some(2))
         .await?;
-    let len = std::cmp::max(requestor_events.len() - 1, 3);
-    //    println!("Requestor events: {:#?}", &requestor_events[..len]);
-    if len > 0 {
+
+    println!("Got {} Requestor events. Yay!", requestor_events.len());
+    if requestor_events.len() > 0 {
         let first_req_event: &RequestorEvent = &requestor_events[0];
         println!(
             "First come first served Requestor Event: {:#?}",
             first_req_event
         );
-        let first_proposal = match first_req_event {
-            RequestorEvent::OfferEvent { offer, .. } => offer.as_ref().map(|p| p).unwrap(),
-        };
-        println!("First come first served: {:#?}", first_proposal);
+
+        let RequestorEvent::OfferEvent { offer, .. } = first_req_event;
+        println!("First come first served: {:#?}", offer);
+        let offer = offer.as_ref().unwrap();
 
         // test bed adjusted to fit the yaml
         let proposal = client
             .requestor()
-            .get_proposal(&requestor_subscription_id, &first_proposal.id)
+            .get_proposal(&requestor_subscription_id, &offer.id)
             .await?;
-        println!("First Offer proposal: {:#?}", proposal);
+        println!("First proposal: {:#?}", proposal);
 
-        let a = Agreement::new(first_proposal.id.clone(), "now".into());
+        let a = Agreement::new(offer.id.clone(), "now".into());
         client.requestor().create_agreement(a).await?;
-        println!(">>> agreement created with id: {}", &first_proposal.id);
+        println!(">>> agreement created with id: {}", offer.id);
 
         // TODO: test bed adjusted to fit yaml, BUT the call below is with invalid proposal id
         // (note the proposal id is different on requestor and provider side)
-        //let proposal = client.provider().get_proposal(&provider_subscription_id, &first_proposal.id).await?;
-        //println!("First Demand proposal: {:#?}", proposal);
+        let proposal = client
+            .provider()
+            .get_proposal(&provider_subscription_id, &proposal.offer.id)
+            .await?;
+        println!("First Demand proposal: {:#?}", proposal);
     }
 
     let provider_events = client
