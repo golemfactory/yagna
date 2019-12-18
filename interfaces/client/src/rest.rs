@@ -88,13 +88,7 @@ macro_rules! rest_interface {
                     $(, $argp : $argp_t )*
                     $(, $argq : $argq_t )*
                 ) -> Result<$ret> {
-                    let mut url = self.url(format!( $rest_url $(, $argp = $argp)* ));
-                    let query = QueryParamsBuilder::new()
-                        $(.put(stringify!($argq), $argq))*
-                        .build();
-                    if query.len() > 1 {
-                        url = url.join(&query)?
-                    }
+                    let url = self.url(url_format!( $rest_url $(, $argp)* $(, #[query] $argq)* ));
                     println!("doing {} on {}", stringify!($http_method), url);
                     let $response = self.client.awc
                         .$http_method(url.as_str())
@@ -113,7 +107,16 @@ macro_rules! rest_interface {
 }
 
 macro_rules! url_format {
-    ($path:expr $(, $var:ident )* ) => (
-        format!($path $(, $var=$var)*)
-    )
+    {
+        $path:expr $(, $var:ident )* $(, #[query] $varq:ident )*
+    } => {{
+        let mut url = format!( $path $(, $var=$var)* );
+        let query = QueryParamsBuilder::new()
+            $( .put( stringify!($varq), $varq ) )*
+            .build();
+        if query.len() > 1 {
+            url = format!("{}?{}", url, query)
+        }
+        url
+    }};
 }

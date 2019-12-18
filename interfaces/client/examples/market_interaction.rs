@@ -87,5 +87,9 @@ async fn interact() -> Result<()> {
 fn main() {
     actix_rt::System::new("test")
         .block_on(interact().boxed_local().compat())
+        .map_err(|e| {
+            println!("{}", e);
+            e
+        })
         .expect("Runtime error");
 }

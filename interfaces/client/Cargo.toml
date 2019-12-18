@@ -7,9 +7,9 @@ edition = "2018"
 [dependencies]
 ya-model = { path = "../model" }
 
-actix-http = "0.2"
 async-trait = "0.1"
 awc = "0.2"
+backtrace = "0.3"
 bytes = "0.4"
 failure = "0.1.6"
 futures = { version = "0.3", features = ["compat"] }

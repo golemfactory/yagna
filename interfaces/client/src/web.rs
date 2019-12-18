@@ -1,17 +1,15 @@
 //! Web utils
-use actix_http::{encoding::Decoder, Payload};
 use awc::{
-    http::{HeaderMap, HeaderName, HeaderValue, HttpTryFrom, Uri},
-    ClientRequest, ClientResponse, SendClientRequest,
+    http::{HeaderMap, HeaderName, HeaderValue},
+    ClientRequest, SendClientRequest,
 };
 use bytes::Bytes;
 use futures::compat::Future01CompatExt;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{str::FromStr, time::Duration};
 use url::form_urlencoded;
 
 use crate::{configuration::ApiConfiguration, Result};
-use serde::de::DeserializeOwned;
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -25,73 +23,93 @@ pub struct WebClient {
     pub(crate) awc: awc::Client,
 }
 
+pub struct WebRequest<T> {
+    inner_request: T,
+    url: String,
+}
+
 impl WebClient {
     pub fn builder() -> WebClientBuilder {
         WebClientBuilder::default()
     }
 
-    pub fn get<U>(&self, url: U) -> WebRequest
-    where
-        Uri: HttpTryFrom<U>,
-    {
-        WebRequest(self.awc.get(url))
-    }
-    pub fn post<U>(&self, url: U) -> WebRequest
-    where
-        Uri: HttpTryFrom<U>,
-    {
-        WebRequest(self.awc.post(url))
+    fn url<T: Into<String>>(&self, suffix: T) -> url::Url {
+        self.configuration.endpoint_url(suffix)
     }
 
-    pub fn put<U>(&self, url: U) -> WebRequest
-    where
-        Uri: HttpTryFrom<U>,
-    {
-        WebRequest(self.awc.put(url))
+    pub fn get(&self, url: &str) -> WebRequest<ClientRequest> {
+        let url = format!("{}", self.url(url));
+        println!("doing get on {}", url);
+        WebRequest {
+            inner_request: self.awc.get(url.clone()),
+            url,
+        }
     }
 
-    pub fn delete<U>(&self, url: U) -> WebRequest
-    where
-        Uri: HttpTryFrom<U>,
-    {
-        WebRequest(self.awc.delete(url))
-    }
-}
-
-pub struct WebRequest(ClientRequest);
-
-impl WebRequest {
-    pub async fn send_json<T: Serialize>(self, value: &T) -> crate::Result<WebResponse> {
-        self.0
-            .send_json(value)
-            .compat()
-            .await
-            .map_err(crate::Error::from)
-            .map(|r| WebResponse(r))
+    pub fn post(&self, url: &str) -> WebRequest<ClientRequest> {
+        let url = format!("{}", self.url(url));
+        println!("doing post on {}", url);
+        WebRequest {
+            inner_request: self.awc.post(url.clone()),
+            url,
+        }
     }
 
-    pub async fn send(self) -> Result<WebResponse> {
-        self.0
-            .send()
-            .compat()
-            .await
-            .map_err(crate::Error::from)
-            .map(|r| WebResponse(r))
+    pub fn put(&self, url: &str) -> WebRequest<ClientRequest> {
+        let url = format!("{}", self.url(url));
+        println!("doing put on {}", url);
+        WebRequest {
+            inner_request: self.awc.put(url.clone()),
+            url,
+        }
+    }
+
+    pub fn delete(&self, url: &str) -> WebRequest<ClientRequest> {
+        let url = format!("{}", self.url(url));
+        println!("doing delete on {}", url);
+        WebRequest {
+            inner_request: self.awc.delete(url.clone()),
+            url,
+        }
     }
 }
 
-pub struct WebResponse(ClientResponse<Decoder<Payload>>);
+impl WebRequest<ClientRequest> {
+    pub fn send_json<T: Serialize>(self, value: &T) -> WebRequest<SendClientRequest> {
+        WebRequest {
+            inner_request: self.inner_request.send_json(value),
+            url: self.url,
+        }
+    }
 
-impl WebResponse {
-    pub async fn json<T: DeserializeOwned>(&mut self) -> crate::Result<T> {
-        self.0.json()
+    pub fn send(self) -> WebRequest<SendClientRequest> {
+        WebRequest {
+            inner_request: self.inner_request.send(),
+            url: self.url,
+        }
+    }
+}
+
+impl WebRequest<SendClientRequest> {
+    pub async fn json<T: DeserializeOwned>(self) -> crate::Result<T> {
+        let url = self.url.clone();
+        self.inner_request
+            .compat()
+            .await
+            .map_err(|e| crate::Error::SendRequestError { e, url })?
+            .json()
             .compat()
             .await
             .map_err(crate::Error::from)
     }
 
-    pub async fn body<T>(&mut self) -> crate::Result<Bytes> {
-        self.0.body()
+    pub async fn body(self) -> crate::Result<Bytes> {
+        let url = self.url.clone();
+        self.inner_request
+            .compat()
+            .await
+            .map_err(|e| crate::Error::SendRequestError { e, url })?
+            .body()
             .compat()
             .await
             .map_err(crate::Error::from)

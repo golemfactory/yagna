@@ -18,36 +18,40 @@ impl ProviderApi {
     /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
     /// interest in Demands meeting specified criteria.
     pub async fn subscribe(&self, offer: Offer) -> Result<String> {
-        self.client.post("offers/").send_json(&offer).await?.json().await?
+        Ok(String::from_utf8(
+            self.client
+                .post("offers/")
+                .send_json(&offer)
+                .body()
+                .await?
+                .to_vec(),
+        )?)
     }
 
     /// Stop subscription by invalidating a previously published Offer.
     pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
         let url = url_format!("offers/{subscription_id}/", subscription_id);
-        self.client.delete(url).send().await?.json().await?
+        self.client.delete(&url).send().json().await
     }
 
     /// Get events which have arrived from the market in response to the Offer
     /// published by the Provider via  [`subscribe`](#method.subscribe).
     /// Returns collection of at most `max_events` `ProviderEvents` or times out.
+    #[rustfmt::skip]
     pub async fn collect(
         &self,
         subscription_id: &str,
         timeout: Option<i32>,
+        #[allow(non_snake_case)]
         maxEvents: Option<i32>, // TODO: max_events
     ) -> Result<Vec<ProviderEvent>> {
-        let query = QueryParamsBuilder::new()
-            .put("timeout", timeout)
-            .put("maxEvents", maxEvents)
-            .build();
-
         let url = url_format!(
-            "offers/{subscription_id}/events?{query}",
+            "offers/{subscription_id}/events",
             subscription_id,
-            query
+            #[query] timeout,
+            #[query] maxEvents
         );
-
-        self.client.get(url).send().await?.json().await?
+        self.client.get(&url).send().json().await
     }
 
     /// Sends a bespoke Offer in response to specific Demand.
@@ -62,8 +66,7 @@ impl ProviderApi {
             subscription_id,
             proposal_id
         );
-
-        self.client.post(url).send_json(&proposal).await?.json().await?
+        self.client.post(&url).send_json(&proposal).json().await
     }
 
     /// Fetches `AgreementProposal` from proposal id.
@@ -77,8 +80,7 @@ impl ProviderApi {
             subscription_id,
             proposal_id
         );
-
-        self.client.get(url).send().await?.json().await?
+        self.client.get(&url).send().json().await
     }
 
     /// Rejects a bespoke Offer.
@@ -92,20 +94,20 @@ impl ProviderApi {
             subscription_id,
             proposal_id
         );
-        self.client.delete(url).send().await?.json().await?
+        self.client.delete(&url).send().json().await
     }
 
     /// Approves the Agreement received from the Requestor.
     /// Mutually exclusive with [`reject_agreement`](#method.reject_agreement).
     pub async fn approve_agreement(&self, agreement_id: &str) -> Result<String> {
         let url = url_format!("agreements/{agreement_id}/approve/", agreement_id);
-        self.client.post(url).send().await?.json().await?
+        self.client.post(&url).send().json().await
     }
 
     /// Rejects the Agreement received from the Requestor.
     /// Mutually exclusive with [`approve_agreement`](#method.approve_agreement).
     pub async fn reject_agreement(&self, agreement_id: &str) -> Result<()> {
         let url = url_format!("agreements/{agreement_id}/reject/", agreement_id);
-        self.client.post(url).send().await?.json().await?
+        self.client.post(&url).send().json().await
     }
 }
