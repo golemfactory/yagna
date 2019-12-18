@@ -1,22 +1,32 @@
 //! Error definitions and mappings
+use backtrace::Backtrace;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("AWC sending request error: {0}")]
-    SendRequestError(awc::error::SendRequestError),
-    #[error("AWC payload error: {0}")]
-    PayloadError(awc::error::PayloadError),
-    #[error("AWC JSON payload error: {0}")]
-    JsonPayloadError(awc::error::JsonPayloadError),
+    #[error("AWC sending request error: {e}, {url}")]
+    SendRequestError {
+        e: awc::error::SendRequestError,
+        url: String,
+    },
+    #[error("AWC payload error: {e}, {b}")]
+    PayloadError {
+        e: awc::error::PayloadError,
+        b: String,
+    },
+    #[error("AWC JSON payload error: {e}, {b}")]
+    JsonPayloadError {
+        e: awc::error::JsonPayloadError,
+        b: String,
+    },
     #[error("serde JSON error: {0}")]
     SerdeJsonError(serde_json::Error),
     #[error("invalid address: {0}")]
     InvalidAddress(std::convert::Infallible),
     #[error("invalid header: {0}")]
-    InvalidHeadeName(#[from] http::header::InvalidHeaderName),
+    InvalidHeadeName(#[from] awc::http::header::InvalidHeaderName),
     #[error("invalid header: {0}")]
-    InvalidHeaderValue(#[from] http::header::InvalidHeaderValue),
+    InvalidHeaderValue(#[from] awc::http::header::InvalidHeaderValue),
     #[error("invalid UTF8 string: {0}")]
     FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("Url parse error: {0}")]
@@ -25,18 +35,27 @@ pub enum Error {
 
 impl From<awc::error::SendRequestError> for Error {
     fn from(e: awc::error::SendRequestError) -> Self {
-        Error::SendRequestError(e)
+        Error::SendRequestError {
+            e,
+            url: format!("{:#?}", Backtrace::new()),
+        }
     }
 }
 
 impl From<awc::error::PayloadError> for Error {
     fn from(e: awc::error::PayloadError) -> Self {
-        Error::PayloadError(e)
+        Error::PayloadError {
+            e,
+            b: format!("{:#?}", Backtrace::new()),
+        }
     }
 }
 
 impl From<awc::error::JsonPayloadError> for Error {
     fn from(e: awc::error::JsonPayloadError) -> Self {
-        Error::JsonPayloadError(e)
+        Error::JsonPayloadError {
+            e,
+            b: format!("{:#?}", Backtrace::new()),
+        }
     }
 }
