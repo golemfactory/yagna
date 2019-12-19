@@ -25,12 +25,13 @@ pub fn init_service() {
                 bus::send(&addr, &caller, &data)
             },
         );
+        /* TODO: register with the local node id */
+        c_ref.bind("0x123");
         let _ = bus::subscribe(SERVICE_ID, move |caller: &str, addr: &str, msg: &[u8]| {
             eprintln!("[Net Mk1] Called by: {}, addr: {}.", caller, addr);
             /* TODO: 1. get address. 2. forward to router through connection.rs */
             /* 2. */
             c_ref.call(caller, addr, msg);
-            //bus::send(addr, caller, msg)
             futures03::future::ok(vec![])
         });
         Ok(())
