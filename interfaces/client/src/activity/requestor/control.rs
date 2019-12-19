@@ -18,9 +18,9 @@ rest_interface! {
             &self,
             #[path] activity_id: &str
         ) -> Result<()> {
-            let _response = delete("activity/{activity_id}/").send().body();
+            let response = delete("activity/{activity_id}/").send().body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
 
         pub async fn exec(

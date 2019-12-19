@@ -96,7 +96,14 @@ impl WebRequest<SendClientRequest> {
         self.inner_request
             .compat()
             .await
-            .map_err(|e| crate::Error::SendRequestError { e, url })?
+            .map_err(|e| crate::Error::SendRequestError { e, url })
+            .and_then (|response|
+                match response.status() {
+                    // TODO: different endpoints requires different responses
+                    awc::http::StatusCode::OK => Ok(response),
+                    status => Err(crate::Error::HttpError(status))
+                }
+            )?
             .json()
             .compat()
             .await
@@ -108,7 +115,14 @@ impl WebRequest<SendClientRequest> {
         self.inner_request
             .compat()
             .await
-            .map_err(|e| crate::Error::SendRequestError { e, url })?
+            .map_err(|e| crate::Error::SendRequestError { e, url })
+            .and_then (|response|
+                match response.status() {
+                    // TODO: different endpoints requires different responses
+                    awc::http::StatusCode::OK => Ok(response),
+                    status => Err(crate::Error::HttpError(status))
+                }
+            )?
             .body()
             .compat()
             .await

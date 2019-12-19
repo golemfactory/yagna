@@ -48,7 +48,7 @@ async fn interact() -> Result<()> {
     println!("Requestor - Got {} events. Yay!", requestor_events.len());
 
     // requestor - support first event
-    println!("Requestor - First come first served: {:#?}", &requestor_events[0]);
+    println!("Requestor - First come first served event: {:#?}", &requestor_events[0]);
     let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
     let offer = offer.as_ref().unwrap();
 
@@ -59,7 +59,7 @@ async fn interact() -> Result<()> {
     println!("Requestor - First agreement proposal: {:#?}", proposal);
 
     println!("Requestor - Creating agreement...");
-    let a = Agreement::new(offer.id.clone(), "now".into());
+    let a = Agreement::new(offer.id.clone(), "12/19/2019 17:43:57".into());
     client.requestor().create_agreement(a).await?;
     println!("Requestor - agreement created: {}. Confirming...", offer.id);
     client.requestor().confirm_agreement(&offer.id).await?;
@@ -79,13 +79,9 @@ async fn interact() -> Result<()> {
     println!("Provider - Got {} events. Yay!", provider_events.len());
 
     // provider - support first event
-    let first_prov_event = &provider_events[0];
-    println!(
-        "Provider - First come first served Requestor event: {:#?}",
-        first_prov_event
-    );
+    println!("Provider - First come first served event: {:#?}", &provider_events[0]);
 
-    match first_prov_event {
+    match &provider_events[0] {
         // provider - demand proposal received --> respond with an counter offer
         ProviderEvent::DemandEvent { demand, .. } => {
             println!("Provider - Got demand event: {:#?}.", demand);
@@ -107,18 +103,12 @@ async fn interact() -> Result<()> {
             println!("Provider - counter proposal created: {}", res)
         }
         // provider - agreement proposal received --> approve it
-        ProviderEvent::NewAgreementEvent {
-            agreement_id,
-            demand,
-            ..
-        } => {
-            println!(
-                "Provider - Got new agreement proposal event {:?} {:#?}.",
-                agreement_id, demand
-            );
+        ProviderEvent::NewAgreementEvent {agreement_id, ..} => {
+            let agreement_id = agreement_id.as_ref().unwrap();
+            println!("Provider - Got new agreement proposal event {}.", agreement_id);
             let agreement_proposal = client
                 .provider()
-                .get_proposal(&provider_subscription_id, agreement_id.as_ref().unwrap())
+                .get_proposal(&provider_subscription_id, agreement_id)
                 .await?;
             println!(
                 "Provider - Wooha! Got Agreement Proposal: {:#?}. Approving...",
@@ -127,7 +117,7 @@ async fn interact() -> Result<()> {
 
             let res = client
                 .provider()
-                .approve_agreement(agreement_id.as_ref().unwrap())
+                .approve_agreement(agreement_id)
                 .await?;
             println!("Provider - Agreement approved {}", res);
         }
