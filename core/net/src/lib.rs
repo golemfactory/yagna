@@ -1,30 +1,39 @@
 use awc::Client;
 use futures::prelude::*;
 use futures03::compat::Future01CompatExt;
+use std::pin::Pin;
 use ya_core_model::net::{GetMessages, Message, SendMessage, SendMessageError};
-use ya_service_bus::typed as bus;
+use ya_service_bus::connection;
+use ya_service_bus::connection::LocalRouterHandler;
+use ya_service_bus::untyped::RawHandler;
+use ya_service_bus::{untyped as bus, Error};
 
-pub const HUB_URL: &str = "http://localhost:8080";
+pub const HUB_ADDR: &str = "127.0.0.1:8245";
 
-pub const SERVICE_ID: &str = "/local/net";
+pub const SERVICE_ID: &str = "/net";
+
+#[derive(Default)]
+struct SubscribeHelper {}
 
 pub fn init_service() {
-    let _ = bus::bind(SERVICE_ID, |command: SendMessage| {
-        Client::default()
-            .post(format!("{}/message", HUB_URL))
-            .send_json(&command.message)
-            .map_err(|e| SendMessageError(e.to_string()))
-            .and_then(|_| Ok(()))
-            .compat()
-    });
-    let _ = bus::bind(SERVICE_ID, |command: GetMessages| {
-        Client::default()
-            .get(format!("{}/message/{}", HUB_URL, command.0))
-            .send()
-            .map_err(|e| SendMessageError(e.to_string()))
-            .and_then(|mut x| x.json().map_err(|e| SendMessageError(e.to_string())))
-            .and_then(|x: Vec<Message>| Ok(x))
-            .compat()
+    /* TODO: launch this; currently this function does nothing */
+    let connection = connection::tcp(&HUB_ADDR.parse().unwrap()).and_then(|c| {
+        let c_ref = connection::connect_with_handler(
+            c,
+            |r_id: String, caller: String, addr: String, data: Vec<u8>| {
+                /* TODO: process data before sending to the bus */
+                bus::send(&addr, &caller, &data)
+            },
+        );
+        let _ = bus::subscribe(SERVICE_ID, move |caller: &str, addr: &str, msg: &[u8]| {
+            eprintln!("[Net Mk1] Called by: {}, addr: {}.", caller, addr);
+            /* TODO: 1. get address. 2. forward to router through connection.rs */
+            /* 2. */
+            c_ref.call(caller, addr, msg);
+            //bus::send(addr, caller, msg)
+            futures03::future::ok(vec![])
+        });
+        Ok(())
     });
 }
 
