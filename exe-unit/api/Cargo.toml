@@ -5,9 +5,16 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-futures = "0.3"
+actix = "0.8.3"
+futures = "0.1"
 log = "0.4"
-tokio = { version = "0.2", features = ["full"] }
 thiserror = "1.0"
-serde = "1.0"
 serde_json = "1.0"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
+[dependencies.bus]
+path = "../../service-bus/bus"
+package = "ya-service-bus"
