@@ -1,104 +1,113 @@
 //! Provider part of Market API
 use crate::Result;
 //use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
+use crate::web::{QueryParamsBuilder, WebClient};
+use std::sync::Arc;
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
-rest_interface! {
-    /// Bindings for Provider part of the Market API.
-    impl ProviderApi {
+/// Bindings for Provider part of the Market API.
+pub struct ProviderApi {
+    client: Arc<WebClient>,
+}
 
-        /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
-        /// interest in Demands meeting specified criteria.
-        pub async fn subscribe(
-            &self,
-            offer: Offer
-        ) -> Result<String> {
-            let response = post("offers/").send_json( &offer ).body();
+impl ProviderApi {
+    pub fn new(client: Arc<WebClient>) -> Self {
+        Self { client }
+    }
 
-            { Ok( String::from_utf8( response?.to_vec() )? ) }
-        }
+    /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
+    /// interest in Demands meeting specified criteria.
+    pub async fn subscribe(&self, offer: Offer) -> Result<String> {
+        Ok(String::from_utf8(
+            self.client
+                .post("offers/")
+                .send_json(&offer)
+                .body()
+                .await?
+                .to_vec(),
+        )?)
+    }
 
-        /// Stop subscription by invalidating a previously published Offer.
-        pub async fn unsubscribe(
-            &self,
-            #[path] subscription_id: &str
-        ) -> Result<String> {
-            let response = delete("offers/{subscription_id}/").send().body();
+    /// Stop subscription by invalidating a previously published Offer.
+    pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
+        let url = url_format!("offers/{subscription_id}/", subscription_id);
+        self.client.delete(&url).send().json().await
+    }
 
-            { Ok( String::from_utf8( response?.to_vec() )? ) }
-        }
+    /// Get events which have arrived from the market in response to the Offer
+    /// published by the Provider via  [`subscribe`](#method.subscribe).
+    /// Returns collection of at most `max_events` `ProviderEvents` or times out.
+    #[rustfmt::skip]
+    pub async fn collect(
+        &self,
+        subscription_id: &str,
+        timeout: Option<i32>,
+        #[allow(non_snake_case)]
+        maxEvents: Option<i32>, // TODO: max_events
+    ) -> Result<Vec<ProviderEvent>> {
+        let url = url_format!(
+            "offers/{subscription_id}/events",
+            subscription_id,
+            #[query] timeout,
+            #[query] maxEvents
+        );
+        self.client.get(&url).send().json().await
+    }
 
-        /// Get events which have arrived from the market in response to the Offer
-        /// published by the Provider via  [`subscribe`](#method.subscribe).
-        /// Returns collection of at most `max_events` `ProviderEvents` or times out.
-        pub async fn collect(
-            &self,
-            #[path] subscription_id: &str,
-            #[query] timeout: Option<i32>,
-            #[query] maxEvents: Option<i32>  // TODO: max_events
-        ) -> Result<Vec<ProviderEvent>> {
-            let response = get("offers/{subscription_id}/events/").send().json();
+    /// Sends a bespoke Offer in response to specific Demand.
+    pub async fn create_proposal(
+        &self,
+        proposal: Proposal,
+        subscription_id: &str,
+        proposal_id: &str,
+    ) -> Result<String> {
+        let url = url_format!(
+            "offers/{subscription_id}/proposals/{proposal_id}/offer/",
+            subscription_id,
+            proposal_id
+        );
+        self.client.post(&url).send_json(&proposal).json().await
+    }
 
-            response
-        }
+    /// Fetches `AgreementProposal` from proposal id.
+    pub async fn get_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+    ) -> Result<AgreementProposal> {
+        let url = url_format!(
+            "offers/{subscription_id}/proposals/{proposal_id}/",
+            subscription_id,
+            proposal_id
+        );
+        self.client.get(&url).send().json().await
+    }
 
-        /// Sends a bespoke Offer in response to specific Demand.
-        pub async fn create_proposal(
-            &self,
-            proposal: Proposal,
-            #[path] subscription_id: &str,
-            #[path] proposal_id: &str
-        ) -> Result<String> {
-            let response = post("offers/{subscription_id}/proposals/{proposal_id}/offer/")
-                .send_json( &proposal ).body();
+    /// Rejects a bespoke Offer.
+    pub async fn reject_proposal(
+        &self,
+        subscription_id: &str,
+        proposal_id: &str,
+    ) -> Result<String> {
+        let url = url_format!(
+            "offers/{subscription_id}/proposals/{proposal_id}/",
+            subscription_id,
+            proposal_id
+        );
+        self.client.delete(&url).send().json().await
+    }
 
-            { Ok( String::from_utf8( response?.to_vec() )? ) }
-        }
+    /// Approves the Agreement received from the Requestor.
+    /// Mutually exclusive with [`reject_agreement`](#method.reject_agreement).
+    pub async fn approve_agreement(&self, agreement_id: &str) -> Result<String> {
+        let url = url_format!("agreements/{agreement_id}/approve/", agreement_id);
+        self.client.post(&url).send().json().await
+    }
 
-        /// Fetches `AgreementProposal` from proposal id.
-        pub async fn get_proposal(
-            &self,
-            #[path] subscription_id: &str,
-            #[path] proposal_id: &str
-        ) -> Result<AgreementProposal> {
-            let response = get("offers/{subscription_id}/proposals/{proposal_id}/")
-                .send().json();
-
-            response
-        }
-
-        /// Rejects a bespoke Offer.
-        pub async fn reject_proposal(
-            &self,
-            #[path] subscription_id: &str,
-            #[path] proposal_id: &str
-        ) -> Result<()> {
-            let _response = delete("offers/{subscription_id}/proposals/{proposal_id}/")
-                .send().body();
-
-            { Ok(()) }
-        }
-
-        /// Approves the Agreement received from the Requestor.
-        /// Mutually exclusive with [`reject_agreement`](#method.reject_agreement).
-        pub async fn approve_agreement(
-            &self,
-            #[path] agreement_id: &str
-        ) -> Result<()> {
-            let _response = post("agreements/{agreement_id}/approve/").send().body();
-
-            { Ok(()) }
-        }
-
-        /// Rejects the Agreement received from the Requestor.
-        /// Mutually exclusive with [`approve_agreement`](#method.approve_agreement).
-        pub async fn reject_agreement(
-            &self,
-            #[path] agreement_id: &str
-        ) -> Result<()> {
-            let _response = post("agreements/{agreement_id}/reject/").send().body();
-
-            { Ok(()) }
-        }
+    /// Rejects the Agreement received from the Requestor.
+    /// Mutually exclusive with [`approve_agreement`](#method.approve_agreement).
+    pub async fn reject_agreement(&self, agreement_id: &str) -> Result<()> {
+        let url = url_format!("agreements/{agreement_id}/reject/", agreement_id);
+        self.client.post(&url).send().json().await
     }
 }
