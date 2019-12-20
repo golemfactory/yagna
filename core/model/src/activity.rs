@@ -1,16 +1,18 @@
 use serde::{Deserialize, Serialize};
 use ya_model::activity::{
-    ActivityState, ActivityUsage, ExeScriptBatch, ExeScriptCommandResult, ExeScriptCommandState,
+    ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateActivity {
     pub agreement_id: String,
     pub timeout: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DestroyActivity {
     pub agreement_id: String,
     pub activity_id: String,
@@ -18,14 +20,16 @@ pub struct DestroyActivity {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Exec {
     pub activity_id: String,
     pub batch_id: String,
-    pub exe_script: ExeScriptBatch,
+    pub exe_script: Vec<ExeScriptCommand>,
     pub timeout: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
@@ -33,24 +37,28 @@ pub struct GetExecBatchResults {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetRunningCommand {
     pub activity_id: String,
     pub timeout: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetActivityState {
     pub activity_id: String,
     pub timeout: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetActivityUsage {
     pub activity_id: String,
     pub timeout: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum RpcMessageError {
     Service(String),
     Activity(String),

@@ -11,9 +11,7 @@ use futures::lock::Mutex;
 use futures::prelude::*;
 use serde::Deserialize;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
-use ya_model::activity::{
-    ExeScriptBatch, ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest,
-};
+use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest};
 
 #[derive(Deserialize)]
 pub struct PathActivityBatch {
@@ -76,14 +74,15 @@ impl RequestorControlApi {
         query: web::Query<QueryTimeout>,
         body: web::Json<ExeScriptRequest>,
     ) -> Result<String, Error> {
+        let commands: Vec<ExeScriptCommand> =
+            serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
         let uri = Self::uri(&agreement.provider_id, "destroy_activity");
         let batch_id = generate_id();
-
         let msg = Exec {
             activity_id: path.activity_id.clone(),
             batch_id: batch_id.clone(),
-            exe_script: parse_commands(&body)?,
+            exe_script: commands,
             timeout: query.timeout.clone(),
         };
 
@@ -144,35 +143,4 @@ impl RestfulApi for RequestorControlApi {
             ))),
         )
     }
-}
-
-fn parse_commands(request: &ExeScriptRequest) -> Result<ExeScriptBatch, Error> {
-    let commands: Vec<ExeScriptCommand> = request
-        .text
-        .lines()
-        .into_iter()
-        .map(|line| match shlex::split(line) {
-            Some(input) => parse_vec(input),
-            None => None,
-        })
-        .flatten()
-        .collect();
-
-    match commands.len() {
-        0 => Err(Error::BadRequest("Empty command list".to_string())),
-        _ => Ok(ExeScriptBatch { commands }),
-    }
-}
-
-fn parse_vec(mut input: Vec<String>) -> Option<ExeScriptCommand> {
-    if !input.is_empty() {
-        return None;
-    }
-
-    let command = input.remove(0);
-    let params = match input.len() {
-        0 => None,
-        _ => Some(input),
-    };
-    Some(ExeScriptCommand { command, params })
 }

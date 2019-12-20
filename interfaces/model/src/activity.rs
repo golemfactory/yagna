@@ -1,7 +1,6 @@
 pub mod activity_state;
 pub mod activity_usage;
 pub mod error_message;
-pub mod exe_script_batch;
 pub mod exe_script_command;
 pub mod exe_script_command_result;
 pub mod exe_script_command_state;
@@ -12,7 +11,6 @@ pub mod provider_event;
 pub use self::activity_state::{ActivityState, State};
 pub use self::activity_usage::ActivityUsage;
 pub use self::error_message::ErrorMessage;
-pub use self::exe_script_batch::ExeScriptBatch;
 pub use self::exe_script_command::ExeScriptCommand;
 pub use self::exe_script_command_result::{ExeScriptCommandResult, Result as CommandResult};
 pub use self::exe_script_command_state::ExeScriptCommandState;
