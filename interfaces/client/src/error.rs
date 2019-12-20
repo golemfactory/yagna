@@ -4,10 +4,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("AWC error requesting {url}: {e}, ")]
+    #[error("AWC error requesting {url}: {e}, backtrace: {b}")]
     SendRequestError {
         e: awc::error::SendRequestError,
         url: String,
+        b: String,
     },
     #[error("AWC payload error: {e}, {b}")]
     PayloadError {
@@ -39,7 +40,18 @@ impl From<awc::error::SendRequestError> for Error {
     fn from(e: awc::error::SendRequestError) -> Self {
         Error::SendRequestError {
             e,
-            url: format!("{:#?}", Backtrace::new()),
+            url: "".into(),
+            b: format!("{:#?}", Backtrace::new()),
+        }
+    }
+}
+
+impl From<(awc::error::SendRequestError, String)> for Error {
+    fn from(pair: (awc::error::SendRequestError, String)) -> Self {
+        Error::SendRequestError {
+            e: pair.0,
+            url: pair.1,
+            b: "".into(),
         }
     }
 }

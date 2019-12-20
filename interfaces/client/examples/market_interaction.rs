@@ -2,6 +2,7 @@ use awc::Client;
 use futures::{compat::Future01CompatExt, FutureExt, TryFutureExt};
 use serde_json;
 
+use awc::error::SendRequestError;
 use std::thread;
 use std::time::Duration;
 use ya_client::{market::ApiClient, web::WebClient, Error, Result};
@@ -24,6 +25,9 @@ async fn query_market_stats() -> Result<serde_json::Value> {
 async fn interact() -> Result<()> {
     let client = ApiClient::new(WebClient::builder())?;
 
+    //////////////
+    // PROVIDER //
+    //////////////
     // provider - publish offer
     let offer = Offer::new(serde_json::json!({"zima":"już"}), "(&(lato=nie))".into());
     let provider_subscription_id = client.provider().subscribe(&offer).await?;
@@ -32,6 +36,9 @@ async fn interact() -> Result<()> {
         provider_subscription_id, &offer
     );
 
+    //\\\\\\\\\\\//
+    // REQUESTOR //
+    //\\\\\\\\\\\//
     // requestor - publish demand
     let demand = Demand::new(serde_json::json!({"lato":"nie"}), "(&(zima=już))".into());
     let requestor_subscription_id = client.requestor().subscribe(&demand).await?;
@@ -80,6 +87,9 @@ async fn interact() -> Result<()> {
         .await?;
     println!("Requestor - agreement {} confirmed", &agreement.proposal_id);
 
+    //////////////
+    // PROVIDER //
+    //////////////
     // provider - get events
     let mut provider_events = vec![];
 
@@ -100,23 +110,32 @@ async fn interact() -> Result<()> {
     );
 
     match &provider_events[0] {
+        // TODO: UNTESTED YET
         // provider - demand proposal received --> respond with an counter offer
         ProviderEvent::DemandEvent { demand, .. } => {
             println!(
                 "SHOULD NOT HAPPEND! Provider - Got demand event: {:#?}.",
                 demand
             );
-            // TODO: test bed adjusted to fit yaml, BUT the call below is with invalid proposal id
-            // (note the proposal id is different on requestor and provider side)
-            let propsal_id = &demand.as_ref().unwrap().id;
+            let proposal_id = &demand.as_ref().unwrap().id;
+            // THIS CALL WAS NOT TESTED
+            let agreement_proposal = client
+                .provider()
+                .get_proposal(&provider_subscription_id, &proposal_id)
+                .await?;
+            println!(
+                "Provider - Wooha! Got Agreement Proposal: {:#?}. Approving...",
+                agreement_proposal
+            );
+
             let counter_proposal = Proposal::new(
-                propsal_id.clone(),
+                proposal_id.clone(),
                 serde_json::json!({"wiosna":"kiedy?"}),
                 "(&(jesień=stop))".into(),
             );
             let res = client
                 .provider()
-                .create_proposal(&counter_proposal, &provider_subscription_id, &propsal_id)
+                .create_proposal(&counter_proposal, &provider_subscription_id, &proposal_id)
                 .await?;
             println!("Provider - counter proposal created: {}", res)
         }
@@ -127,36 +146,35 @@ async fn interact() -> Result<()> {
                 "Provider - Got new agreement proposal event {}.",
                 agreement_id
             );
-            //            let agreement_proposal = client
-            //                .provider()
-            //                .get_proposal(&provider_subscription_id, agreement_id)
-            //                .await?;
-            //            println!(
-            //                "Provider - Wooha! Got Agreement Proposal: {:#?}. Approving...",
-            //                agreement_proposal
-            //            );
 
+            // TODO: test reject
             let res = client.provider().approve_agreement(agreement_id).await?;
             println!("Provider - Agreement approved {}", res);
         }
     }
 
+    //\\\\\\\\\\\//
+    // REQUESTOR //
+    //\\\\\\\\\\\//
     println!("Requestor - Waiting for Agreement approval...");
-    client
+    match client
         .requestor()
         .wait_for_approval(&agreement.proposal_id)
-        .await?;
-    println!("Requestor - OK! Agreement approved by Provider!");
+        .await
+    {
+        Err(Error::SendRequestError {e: SendRequestError::Timeout,.. }) => {
+            println!("Requestor - Timeout waiting for Agreement approval...");
+            Ok(())
+        }
+        Ok(r) => {
+            println!("Requestor - OK! Agreement approved by Provider!");
+            Ok(r)
+        }
+        e => e,
+    }?;
 
     let market_stats = query_market_stats().await?;
     println!("Market stats: {:#?}", market_stats);
-
-    println!("Provider - Unsubscribing...");
-    let unsubscribe_result = client
-        .provider()
-        .unsubscribe(&provider_subscription_id)
-        .await?;
-    println!("Provider - Unsubscribed: {}", unsubscribe_result);
 
     println!("Requestor - Unsunscribing...");
     let unsubscribe_result = client
@@ -164,6 +182,16 @@ async fn interact() -> Result<()> {
         .unsubscribe(&requestor_subscription_id)
         .await?;
     println!("Requestor - Unsubscribed: {}", unsubscribe_result);
+
+    //////////////
+    // PROVIDER //
+    //////////////
+    println!("Provider - Unsubscribing...");
+    let unsubscribe_result = client
+        .provider()
+        .unsubscribe(&provider_subscription_id)
+        .await?;
+    println!("Provider - Unsubscribed: {}", unsubscribe_result);
 
     let market_stats = query_market_stats().await?;
     println!("Market stats: {:#?}", market_stats);

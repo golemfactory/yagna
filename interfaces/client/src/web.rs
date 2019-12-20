@@ -94,9 +94,9 @@ impl WebRequest<SendClientRequest> {
         self.inner_request
             .compat()
             .await
-            .map_err(|e| crate::Error::SendRequestError { e, url })
+            .map_err(|e| (e, url).into())
             .and_then(handle_http_status)?
-            .json()
+            .json() // only difference
             .compat()
             .await
             .map_err(crate::Error::from)
@@ -107,9 +107,9 @@ impl WebRequest<SendClientRequest> {
         self.inner_request
             .compat()
             .await
-            .map_err(|e| crate::Error::SendRequestError { e, url })
+            .map_err(|e| (e, url).into())
             .and_then(handle_http_status)?
-            .body()
+            .body() // only difference
             .compat()
             .await
             .map_err(crate::Error::from)
