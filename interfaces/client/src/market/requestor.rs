@@ -10,7 +10,7 @@ rest_interface! {
         /// interest in Offers meeting specified criteria.
         pub async fn subscribe(
             &self,
-            demand: Demand
+            demand: &Demand
         ) -> Result<String> {
             let response = post("demands/").send_json( &demand ).body();
 
@@ -45,7 +45,7 @@ rest_interface! {
         /// Sends a bespoke Demand in response to specific Offer.
         pub async fn create_proposal(
             &self,
-            proposal: Proposal,
+            proposal: &Proposal,
             #[path] subscription_id: &str,
             #[path] proposal_id: &str
         ) -> Result<String> {
@@ -73,21 +73,21 @@ rest_interface! {
             #[path] subscription_id: &str,
             #[path] proposal_id: &str
         ) -> Result<()> {
-            let _response = delete("demands/{subscription_id}/proposals/{proposal_id}/")
+            let response = delete("demands/{subscription_id}/proposals/{proposal_id}/")
                 .send().body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
 
         /// Creates new Agreement from Proposal and sends to the Provider.
         /// Initiates the Agreement handshake phase.
         pub async fn create_agreement(
             &self,
-            agreement: Agreement
+            agreement: &Agreement
         ) -> Result<()> {
-            let _response = post("agreements/").send_json( &agreement ).body();
+            let response = post("agreements/").send_json( &agreement ).body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
 
         // TODO: seems not needed -- wait_for_approval is enough
@@ -97,9 +97,9 @@ rest_interface! {
             &self,
             #[path] agreement_id: &str
         ) -> Result<()> {
-            let _response = post("agreements/{agreement_id}/confirm/").send().body();
+            let response = post("agreements/{agreement_id}/confirm/").send().body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
 
         /// Waits for the response from Provider after an Agreement has been sent,
@@ -109,9 +109,9 @@ rest_interface! {
             &self,
             #[path] agreement_id: &str
         ) -> Result<()> {
-            let _response = post("agreements/{agreement_id}/wait/").send().body();
+            let response = post("agreements/{agreement_id}/wait/").send().body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
 
         /// Cancels the Agreement while still in the Proposed state.
@@ -121,9 +121,9 @@ rest_interface! {
             &self,
             #[path] agreement_id: &str
         ) -> Result<()> {
-            let _response = delete("agreements/{agreement_id}/").send().body();
+            let response = delete("agreements/{agreement_id}/").send().body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
 
     }

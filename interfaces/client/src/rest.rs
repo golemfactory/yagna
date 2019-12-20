@@ -89,7 +89,7 @@ macro_rules! rest_interface {
                     $(, $argq : $argq_t )*
                 ) -> Result<$ret> {
                     let url = self.url(url_format!( $rest_url $(, $argp)* $(, #[query] $argq)* ));
-                    println!("doing {} on {}", stringify!($http_method), url);
+                    println!("  _,.-~'^  {:>5}  {}", stringify!($http_method), url);
                     let $response = self.client.awc
                         .$http_method(url.as_str())
                         .$send_method $send_args

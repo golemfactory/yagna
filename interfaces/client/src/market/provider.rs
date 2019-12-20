@@ -1,8 +1,11 @@
 //! Provider part of Market API
-use crate::Result;
-//use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
-use crate::web::{QueryParamsBuilder, WebClient};
+use awc::http::StatusCode;
 use std::sync::Arc;
+
+use crate::{
+    web::{QueryParamsBuilder, WebClient},
+    Error, Result,
+};
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 /// Bindings for Provider part of the Market API.
@@ -17,21 +20,17 @@ impl ProviderApi {
 
     /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
     /// interest in Demands meeting specified criteria.
-    pub async fn subscribe(&self, offer: Offer) -> Result<String> {
-        Ok(String::from_utf8(
-            self.client
-                .post("offers/")
-                .send_json(&offer)
-                .body()
-                .await?
-                .to_vec(),
-        )?)
+    pub async fn subscribe(&self, offer: &Offer) -> Result<String> {
+        self.client.post("offers/").send_json(&offer).json().await
     }
 
     /// Stop subscription by invalidating a previously published Offer.
     pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
         let url = url_format!("offers/{subscription_id}/", subscription_id);
-        self.client.delete(&url).send().json().await
+        match self.client.delete(&url).send().json().await {
+            Err(Error::HttpStatusCode(StatusCode::NO_CONTENT)) => Ok("OK".into()),
+            r => r,
+        }
     }
 
     /// Get events which have arrived from the market in response to the Offer
@@ -42,7 +41,6 @@ impl ProviderApi {
         &self,
         subscription_id: &str,
         timeout: Option<i32>,
-        #[allow(non_snake_case)]
         maxEvents: Option<i32>, // TODO: max_events
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
@@ -57,7 +55,7 @@ impl ProviderApi {
     /// Sends a bespoke Offer in response to specific Demand.
     pub async fn create_proposal(
         &self,
-        proposal: Proposal,
+        proposal: &Proposal,
         subscription_id: &str,
         proposal_id: &str,
     ) -> Result<String> {
@@ -106,7 +104,7 @@ impl ProviderApi {
 
     /// Rejects the Agreement received from the Requestor.
     /// Mutually exclusive with [`approve_agreement`](#method.approve_agreement).
-    pub async fn reject_agreement(&self, agreement_id: &str) -> Result<()> {
+    pub async fn reject_agreement(&self, agreement_id: &str) -> Result<String> {
         let url = url_format!("agreements/{agreement_id}/reject/", agreement_id);
         self.client.post(&url).send().json().await
     }

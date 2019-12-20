@@ -1,7 +1,7 @@
 //! Web utils
 use awc::{
-    http::{HeaderMap, HeaderName, HeaderValue},
-    ClientRequest, SendClientRequest,
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
+    ClientRequest, ClientResponse, SendClientRequest,
 };
 use bytes::Bytes;
 use futures::compat::Future01CompatExt;
@@ -9,7 +9,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{str::FromStr, time::Duration};
 use url::form_urlencoded;
 
-use crate::{configuration::ApiConfiguration, Result};
+use crate::{configuration::ApiConfiguration, Error, Result};
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -37,40 +37,29 @@ impl WebClient {
         self.configuration.endpoint_url(suffix)
     }
 
-    pub fn get(&self, url: &str) -> WebRequest<ClientRequest> {
+    pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
         let url = format!("{}", self.url(url));
-        println!("doing get on {}", url);
+        println!("  ^'~-.,_  {:>5}  {}", format!("{}", method), url);
         WebRequest {
-            inner_request: self.awc.get(url.clone()),
+            inner_request: self.awc.request(method, &url),
             url,
         }
+    }
+
+    pub fn get(&self, url: &str) -> WebRequest<ClientRequest> {
+        self.request(Method::GET, url)
     }
 
     pub fn post(&self, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
-        println!("doing post on {}", url);
-        WebRequest {
-            inner_request: self.awc.post(url.clone()),
-            url,
-        }
+        self.request(Method::POST, url)
     }
 
     pub fn put(&self, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
-        println!("doing put on {}", url);
-        WebRequest {
-            inner_request: self.awc.put(url.clone()),
-            url,
-        }
+        self.request(Method::PUT, url)
     }
 
     pub fn delete(&self, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
-        println!("doing delete on {}", url);
-        WebRequest {
-            inner_request: self.awc.delete(url.clone()),
-            url,
-        }
+        self.request(Method::DELETE, url)
     }
 }
 
@@ -90,29 +79,39 @@ impl WebRequest<ClientRequest> {
     }
 }
 
+fn handle_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
+    match response.status() {
+        StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED => Ok(response),
+        status => Err(Error::HttpStatusCode(status)),
+    }
+}
+
 impl WebRequest<SendClientRequest> {
-    pub async fn json<T: DeserializeOwned>(self) -> crate::Result<T> {
+    pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
         let url = self.url.clone();
         self.inner_request
             .compat()
             .await
-            .map_err(|e| crate::Error::SendRequestError { e, url })?
+            .map_err(|e| (e, url).into())
+            .and_then(handle_http_status)?
+            // TODO: support empty body here
             .json()
             .compat()
             .await
-            .map_err(crate::Error::from)
+            .map_err(From::from)
     }
 
-    pub async fn body(self) -> crate::Result<Bytes> {
+    pub async fn body(self) -> Result<Bytes> {
         let url = self.url.clone();
         self.inner_request
             .compat()
             .await
-            .map_err(|e| crate::Error::SendRequestError { e, url })?
+            .map_err(|e| (e, url).into())
+            .and_then(handle_http_status)?
             .body()
             .compat()
             .await
-            .map_err(crate::Error::from)
+            .map_err(From::from)
     }
 }
 
@@ -195,7 +194,7 @@ pub struct QueryParamsBuilder<'a> {
 
 impl<'a> QueryParamsBuilder<'a> {
     pub fn new() -> Self {
-        let serializer = form_urlencoded::Serializer::new("?".into());
+        let serializer = form_urlencoded::Serializer::new("".into());
         QueryParamsBuilder { serializer }
     }
 
