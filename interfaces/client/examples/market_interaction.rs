@@ -192,12 +192,11 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
 async fn interact() -> Result<()> {
     let client = ApiClient::new(WebClient::builder())?;
 
-    let (p, r) = futures::join!(
+    futures::try_join!(
         provider_interact(client.provider()),
         requestor_interact(client.requestor())
-    );
-
-    p.and(r)
+    )
+    .map(|_| ())
 }
 
 fn main() {
