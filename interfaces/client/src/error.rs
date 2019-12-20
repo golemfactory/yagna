@@ -4,7 +4,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("AWC sending request error: {e}, {url}")]
+    #[error("AWC error requesting {url}: {e}, ")]
     SendRequestError {
         e: awc::error::SendRequestError,
         url: String,
@@ -20,7 +20,7 @@ pub enum Error {
         b: String,
     },
     #[error("HTTP status code: {0}")]
-    HttpError(awc::http::StatusCode),
+    HttpStatusCode(awc::http::StatusCode),
     #[error("serde JSON error: {0}")]
     SerdeJsonError(serde_json::Error),
     #[error("invalid address: {0}")]

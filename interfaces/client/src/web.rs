@@ -1,7 +1,7 @@
 //! Web utils
 use awc::{
-    http::{HeaderMap, HeaderName, HeaderValue},
-    ClientRequest, SendClientRequest,
+    http::{HeaderMap, HeaderName, HeaderValue, Method},
+    ClientRequest, SendClientRequest, ClientResponse
 };
 use bytes::Bytes;
 use futures::compat::Future01CompatExt;
@@ -37,44 +37,35 @@ impl WebClient {
         self.configuration.endpoint_url(suffix)
     }
 
-    pub fn get(&self, url: &str) -> WebRequest<ClientRequest> {
+    pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
+
         let url = format!("{}", self.url(url));
-        println!("doing get on {}", url);
+        println!("  ^'~-.,_  {:>5}  {}", format!("{}", method), url);
         WebRequest {
-            inner_request: self.awc.get(url.clone()),
+            inner_request: self.awc.request(method, url.clone()),
             url,
         }
+    }
+
+    pub fn get(&self, url: &str) -> WebRequest<ClientRequest> {
+        self.request(Method::GET, url)
     }
 
     pub fn post(&self, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
-        println!("doing post on {}", url);
-        WebRequest {
-            inner_request: self.awc.post(url.clone()),
-            url,
-        }
+        self.request(Method::POST, url)
     }
 
     pub fn put(&self, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
-        println!("doing put on {}", url);
-        WebRequest {
-            inner_request: self.awc.put(url.clone()),
-            url,
-        }
+        self.request(Method::PUT, url)
     }
 
     pub fn delete(&self, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
-        println!("doing delete on {}", url);
-        WebRequest {
-            inner_request: self.awc.delete(url.clone()),
-            url,
-        }
+        self.request(Method::DELETE, url)
     }
 }
 
 impl WebRequest<ClientRequest> {
+
     pub fn send_json<T: Serialize>(self, value: &T) -> WebRequest<SendClientRequest> {
         WebRequest {
             inner_request: self.inner_request.send_json(value),
@@ -90,6 +81,15 @@ impl WebRequest<ClientRequest> {
     }
 }
 
+fn handle_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
+    match response.status() {
+        awc::http::StatusCode::OK => Ok(response),
+        awc::http::StatusCode::CREATED => Ok(response),
+        awc::http::StatusCode::ACCEPTED => Ok(response),
+        status => Err(crate::Error::HttpStatusCode(status))
+    }
+}
+
 impl WebRequest<SendClientRequest> {
     pub async fn json<T: DeserializeOwned>(self) -> crate::Result<T> {
         let url = self.url.clone();
@@ -97,18 +97,13 @@ impl WebRequest<SendClientRequest> {
             .compat()
             .await
             .map_err(|e| crate::Error::SendRequestError { e, url })
-            .and_then (|response|
-                match response.status() {
-                    // TODO: different endpoints requires different responses
-                    awc::http::StatusCode::OK => Ok(response),
-                    status => Err(crate::Error::HttpError(status))
-                }
-            )?
+            .and_then(handle_http_status)?
             .json()
             .compat()
             .await
             .map_err(crate::Error::from)
     }
+
 
     pub async fn body(self) -> crate::Result<Bytes> {
         let url = self.url.clone();
@@ -116,13 +111,7 @@ impl WebRequest<SendClientRequest> {
             .compat()
             .await
             .map_err(|e| crate::Error::SendRequestError { e, url })
-            .and_then (|response|
-                match response.status() {
-                    // TODO: different endpoints requires different responses
-                    awc::http::StatusCode::OK => Ok(response),
-                    status => Err(crate::Error::HttpError(status))
-                }
-            )?
+            .and_then(handle_http_status)?
             .body()
             .compat()
             .await

@@ -26,13 +26,13 @@ async fn interact() -> Result<()> {
 
     // provider - publish offer
     let offer = Offer::new(serde_json::json!({"zima":"już"}), "(&(lato=nie))".into());
-    let provider_subscription_id = client.provider().subscribe(offer).await?;
-    println!("Provider subscription id: {}", provider_subscription_id);
+    let provider_subscription_id = client.provider().subscribe(&offer).await?;
+    println!("Provider subscription id: {} for {:?}", provider_subscription_id, &offer);
 
     // requestor - publish demand
     let demand = Demand::new(serde_json::json!({"lato":"nie"}), "(&(zima=już))".into());
-    let requestor_subscription_id = client.requestor().subscribe(demand).await?;
-    println!("Requestor subscription id: {}", requestor_subscription_id);
+    let requestor_subscription_id = client.requestor().subscribe(&demand).await?;
+    println!("Requestor subscription id: {} for {:?}", requestor_subscription_id, &demand);
 
     // requestor - get events
     let mut requestor_events = vec![];
@@ -59,11 +59,11 @@ async fn interact() -> Result<()> {
     println!("Requestor - First agreement proposal: {:#?}", proposal);
 
     println!("Requestor - Creating agreement...");
-    let a = Agreement::new(offer.id.clone(), "12/19/2019 17:43:57".into());
-    client.requestor().create_agreement(a).await?;
-    println!("Requestor - agreement created: {}. Confirming...", offer.id);
-    client.requestor().confirm_agreement(&offer.id).await?;
-    println!("Requestor - agreement {} confirmed", &offer.id);
+    let agreement = Agreement::new(offer.id.clone(), "12/19/2019 17:43:57".into());
+    client.requestor().create_agreement(&agreement).await?;
+    println!("Requestor - agreement created: {:?}. Confirming...", &agreement);
+    client.requestor().confirm_agreement(&agreement.proposal_id).await?;
+    println!("Requestor - agreement {} confirmed", &agreement.proposal_id);
 
     // provider - get events
     let mut provider_events = vec![];
@@ -84,18 +84,19 @@ async fn interact() -> Result<()> {
     match &provider_events[0] {
         // provider - demand proposal received --> respond with an counter offer
         ProviderEvent::DemandEvent { demand, .. } => {
-            println!("Provider - Got demand event: {:#?}.", demand);
+            println!("SHOULD NOT HAPPEND! Provider - Got demand event: {:#?}.", demand);
             // TODO: test bed adjusted to fit yaml, BUT the call below is with invalid proposal id
             // (note the proposal id is different on requestor and provider side)
             let propsal_id = &demand.as_ref().unwrap().id;
+            let counter_proposal = Proposal::new(
+                propsal_id.clone(),
+                serde_json::json!({"wiosna":"kiedy?"}),
+                "(&(jesień=stop))".into(),
+            );
             let res = client
                 .provider()
                 .create_proposal(
-                    Proposal::new(
-                        propsal_id.clone(),
-                        serde_json::json!({"wiosna":"kiedy?"}),
-                        "(&(jesień=stop))".into(),
-                    ),
+                    &counter_proposal,
                     &provider_subscription_id,
                     &propsal_id,
                 )
@@ -106,14 +107,14 @@ async fn interact() -> Result<()> {
         ProviderEvent::NewAgreementEvent {agreement_id, ..} => {
             let agreement_id = agreement_id.as_ref().unwrap();
             println!("Provider - Got new agreement proposal event {}.", agreement_id);
-            let agreement_proposal = client
-                .provider()
-                .get_proposal(&provider_subscription_id, agreement_id)
-                .await?;
-            println!(
-                "Provider - Wooha! Got Agreement Proposal: {:#?}. Approving...",
-                agreement_proposal
-            );
+//            let agreement_proposal = client
+//                .provider()
+//                .get_proposal(&provider_subscription_id, agreement_id)
+//                .await?;
+//            println!(
+//                "Provider - Wooha! Got Agreement Proposal: {:#?}. Approving...",
+//                agreement_proposal
+//            );
 
             let res = client
                 .provider()
@@ -123,10 +124,14 @@ async fn interact() -> Result<()> {
         }
     }
 
+    println!("Requestor - Waiting for Agreement approval...");
+    client.requestor().wait_for_approval(&agreement.proposal_id).await?;
+    println!("Requestor - OK! Agreement approved by Provider!");
+
     let market_stats = query_market_stats().await?;
     println!("Market stats: {:#?}", market_stats);
 
-    println!("Provider - Unsunscribing...");
+    println!("Provider - Unsubscribing...");
     let unsubscribe_result = client
         .provider()
         .unsubscribe(&provider_subscription_id)
@@ -149,9 +154,5 @@ async fn interact() -> Result<()> {
 fn main() {
     actix_rt::System::new("test")
         .block_on(interact().boxed_local().compat())
-        .map_err(|e| {
-            println!("{}", e);
-            e
-        })
-        .expect("Runtime error");
+        .unwrap_or_else(|e| println!("{}", e));
 }

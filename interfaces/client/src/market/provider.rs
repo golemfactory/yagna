@@ -17,7 +17,7 @@ impl ProviderApi {
 
     /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
     /// interest in Demands meeting specified criteria.
-    pub async fn subscribe(&self, offer: Offer) -> Result<String> {
+    pub async fn subscribe(&self, offer: &Offer) -> Result<String> {
         Ok(String::from_utf8(
             self.client
                 .post("offers/")
@@ -31,7 +31,10 @@ impl ProviderApi {
     /// Stop subscription by invalidating a previously published Offer.
     pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
         let url = url_format!("offers/{subscription_id}/", subscription_id);
-        self.client.delete(&url).send().json().await
+        match self.client.delete(&url).send().json().await {
+            Err(crate::Error::HttpStatusCode(awc::http::StatusCode::NO_CONTENT)) => Ok("".into()),
+            x => x
+        }
     }
 
     /// Get events which have arrived from the market in response to the Offer
@@ -42,7 +45,6 @@ impl ProviderApi {
         &self,
         subscription_id: &str,
         timeout: Option<i32>,
-        #[allow(non_snake_case)]
         maxEvents: Option<i32>, // TODO: max_events
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
@@ -57,7 +59,7 @@ impl ProviderApi {
     /// Sends a bespoke Offer in response to specific Demand.
     pub async fn create_proposal(
         &self,
-        proposal: Proposal,
+        proposal: &Proposal,
         subscription_id: &str,
         proposal_id: &str,
     ) -> Result<String> {
@@ -101,7 +103,7 @@ impl ProviderApi {
     /// Mutually exclusive with [`reject_agreement`](#method.reject_agreement).
     pub async fn approve_agreement(&self, agreement_id: &str) -> Result<String> {
         let url = url_format!("agreements/{agreement_id}/approve/", agreement_id);
-        self.client.post(&url).send().json().await
+        Ok(String::from_utf8(self.client.post(&url).send().body().await?.to_vec())?)
     }
 
     /// Rejects the Agreement received from the Requestor.

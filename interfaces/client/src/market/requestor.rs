@@ -10,7 +10,7 @@ rest_interface! {
         /// interest in Offers meeting specified criteria.
         pub async fn subscribe(
             &self,
-            demand: Demand
+            demand: &Demand
         ) -> Result<String> {
             let response = post("demands/").send_json( &demand ).body();
 
@@ -45,7 +45,7 @@ rest_interface! {
         /// Sends a bespoke Demand in response to specific Offer.
         pub async fn create_proposal(
             &self,
-            proposal: Proposal,
+            proposal: &Proposal,
             #[path] subscription_id: &str,
             #[path] proposal_id: &str
         ) -> Result<String> {
@@ -83,7 +83,7 @@ rest_interface! {
         /// Initiates the Agreement handshake phase.
         pub async fn create_agreement(
             &self,
-            agreement: Agreement
+            agreement: &Agreement
         ) -> Result<()> {
             let response = post("agreements/").send_json( &agreement ).body();
 
