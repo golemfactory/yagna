@@ -75,7 +75,9 @@ impl TimeoutInterval {
     pub fn check(&mut self) -> bool {
         let now = Instant::now();
         let result = now >= self.deadline;
-        self.deadline = now + self.timeout;
+        if result {
+            self.deadline = now + self.timeout;
+        }
         result
     }
 }
