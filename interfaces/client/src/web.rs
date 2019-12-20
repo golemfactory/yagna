@@ -1,7 +1,7 @@
 //! Web utils
 use awc::{
     http::{HeaderMap, HeaderName, HeaderValue, Method},
-    ClientRequest, SendClientRequest, ClientResponse
+    ClientRequest, ClientResponse, SendClientRequest,
 };
 use bytes::Bytes;
 use futures::compat::Future01CompatExt;
@@ -38,7 +38,6 @@ impl WebClient {
     }
 
     pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
-
         let url = format!("{}", self.url(url));
         println!("  ^'~-.,_  {:>5}  {}", format!("{}", method), url);
         WebRequest {
@@ -65,7 +64,6 @@ impl WebClient {
 }
 
 impl WebRequest<ClientRequest> {
-
     pub fn send_json<T: Serialize>(self, value: &T) -> WebRequest<SendClientRequest> {
         WebRequest {
             inner_request: self.inner_request.send_json(value),
@@ -86,7 +84,7 @@ fn handle_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T
         awc::http::StatusCode::OK => Ok(response),
         awc::http::StatusCode::CREATED => Ok(response),
         awc::http::StatusCode::ACCEPTED => Ok(response),
-        status => Err(crate::Error::HttpStatusCode(status))
+        status => Err(crate::Error::HttpStatusCode(status)),
     }
 }
 
@@ -103,7 +101,6 @@ impl WebRequest<SendClientRequest> {
             .await
             .map_err(crate::Error::from)
     }
-
 
     pub async fn body(self) -> crate::Result<Bytes> {
         let url = self.url.clone();

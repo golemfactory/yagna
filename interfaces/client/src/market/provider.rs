@@ -33,7 +33,7 @@ impl ProviderApi {
         let url = url_format!("offers/{subscription_id}/", subscription_id);
         match self.client.delete(&url).send().json().await {
             Err(crate::Error::HttpStatusCode(awc::http::StatusCode::NO_CONTENT)) => Ok("".into()),
-            x => x
+            x => x,
         }
     }
 
@@ -103,7 +103,9 @@ impl ProviderApi {
     /// Mutually exclusive with [`reject_agreement`](#method.reject_agreement).
     pub async fn approve_agreement(&self, agreement_id: &str) -> Result<String> {
         let url = url_format!("agreements/{agreement_id}/approve/", agreement_id);
-        Ok(String::from_utf8(self.client.post(&url).send().body().await?.to_vec())?)
+        Ok(String::from_utf8(
+            self.client.post(&url).send().body().await?.to_vec(),
+        )?)
     }
 
     /// Rejects the Agreement received from the Requestor.
