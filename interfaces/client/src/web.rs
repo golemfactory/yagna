@@ -9,7 +9,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{str::FromStr, time::Duration};
 use url::form_urlencoded;
 
-use crate::{configuration::ApiConfiguration, Result};
+use crate::{configuration::ApiConfiguration, Error, Result};
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -82,12 +82,12 @@ impl WebRequest<ClientRequest> {
 fn handle_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
     match response.status() {
         StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED => Ok(response),
-        status => Err(crate::Error::HttpStatusCode(status)),
+        status => Err(Error::HttpStatusCode(status)),
     }
 }
 
 impl WebRequest<SendClientRequest> {
-    pub async fn json<T: DeserializeOwned>(self) -> crate::Result<T> {
+    pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
         let url = self.url.clone();
         self.inner_request
             .compat()
@@ -97,10 +97,10 @@ impl WebRequest<SendClientRequest> {
             .json()
             .compat()
             .await
-            .map_err(crate::Error::from)
+            .map_err(From::from)
     }
 
-    pub async fn body(self) -> crate::Result<Bytes> {
+    pub async fn body(self) -> Result<Bytes> {
         let url = self.url.clone();
         self.inner_request
             .compat()
@@ -110,7 +110,7 @@ impl WebRequest<SendClientRequest> {
             .body()
             .compat()
             .await
-            .map_err(crate::Error::from)
+            .map_err(From::from)
     }
 }
 

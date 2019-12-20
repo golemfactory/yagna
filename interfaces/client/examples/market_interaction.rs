@@ -205,5 +205,5 @@ async fn interact() -> Result<()> {
 fn main() {
     actix_rt::System::new("test")
         .block_on(interact().boxed_local().compat())
-        .unwrap_or_else(|e| println!("{}", e));
+        .unwrap_or_else(|e| println!("{:#?}", e));
 }
