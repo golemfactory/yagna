@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use ya_model::activity::{ExeScriptBatch, ExeScriptCommandResult, ExeScriptCommandState, ActivityState, ActivityUsage};
+use ya_model::activity::{
+    ActivityState, ActivityUsage, ExeScriptBatch, ExeScriptCommandResult, ExeScriptCommandState,
+};
 use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
