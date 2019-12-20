@@ -15,7 +15,7 @@ fn main() -> std::io::Result<()> {
     };
 
     System::run(|| {
-        ya_net::init_service();
+        ya_net::init_service("127.0.0.1:8245", "0x123");
         Arbiter::spawn(
             bus::service("/local/net")
                 .send(SendMessage { message })
