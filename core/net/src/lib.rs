@@ -14,7 +14,7 @@ pub fn init_service_future(
     hub_addr: &str,
     source_node_id: &str,
 ) -> impl Future03<Output = Result<(), std::io::Error>> {
-    let source_node_id_clone = format!("/net/{}", source_node_id);
+    let source_node_id_clone = format!("{}/{}", SERVICE_ID, source_node_id);
     connection::tcp(&hub_addr.parse().unwrap())
         .and_then(move |c| {
             let connection_ref = connection::connect_with_handler(
@@ -59,8 +59,8 @@ pub fn send_message_future(
         source_node_id, dest_node_id
     );
     bus::send(
-        &format!("/net/{}", dest_node_id),
-        &format!("/net/{}", source_node_id),
+        &format!("{}/{}", SERVICE_ID, dest_node_id),
+        &format!("{}/{}", SERVICE_ID, source_node_id),
         &data,
     )
 }
