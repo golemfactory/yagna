@@ -15,32 +15,6 @@ use ya_model::activity::{
     ExeScriptBatch, ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest,
 };
 
-fn parse_commands(request: &ExeScriptRequest) -> Result<ExeScriptBatch, Error> {
-    let mut commands: Vec<ExeScriptCommand> = Vec::new();
-
-    for line in request.text.lines() {
-        if line.is_empty() {
-            continue;
-        }
-        let mut result =
-            shlex::split(line).ok_or(Error::BadRequest(format!("Invalid command: {}", line)))?;
-
-        if result.is_empty() {
-            continue;
-        }
-
-        let command = result.remove(0);
-        let params = match result.len() {
-            0 => None,
-            _ => Some(result),
-        };
-
-        commands.push(ExeScriptCommand { command, params })
-    }
-
-    Ok(ExeScriptBatch { commands })
-}
-
 #[derive(Deserialize)]
 pub struct PathActivityBatch {
     activity_id: String,
@@ -166,4 +140,35 @@ impl RestfulApi for RequestorControlApi {
             ))),
         )
     }
+}
+
+fn parse_commands(request: &ExeScriptRequest) -> Result<ExeScriptBatch, Error> {
+    let commands: Vec<ExeScriptCommand> = request
+        .text
+        .lines()
+        .into_iter()
+        .map(|line| match shlex::split(line) {
+            Some(input) => parse_vec(input),
+            None => None,
+        })
+        .flatten()
+        .collect();
+
+    match commands.len() {
+        0 => Err(Error::BadRequest("Empty command list".to_string())),
+        _ => Ok(ExeScriptBatch { commands }),
+    }
+}
+
+fn parse_vec(mut input: Vec<String>) -> Option<ExeScriptCommand> {
+    if !input.is_empty() {
+        return None;
+    }
+
+    let command = input.remove(0);
+    let params = match input.len() {
+        0 => None,
+        _ => Some(input),
+    };
+    Some(ExeScriptCommand { command, params })
 }

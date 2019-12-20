@@ -5,6 +5,7 @@ use std::pin::Pin;
 use std::time::{Duration, Instant};
 
 pub type Timeout = Option<u32>;
+
 type FutureOutput<F> = <F as Future>::Output;
 type MapType<F> = Map<F, fn(FutureOutput<F>) -> Result<FutureOutput<F>, TimeoutError>>;
 
@@ -49,24 +50,22 @@ impl_into_duration!(u32);
 impl_into_duration!(i64);
 impl_into_duration!(i128);
 impl_into_duration!(u128);
-
 impl_into_duration!(f32);
 impl_into_duration!(f64);
 
 #[derive(Debug)]
-pub struct TimeoutInterval {
+pub struct Interval {
     timeout: Duration,
     deadline: Instant,
 }
 
-impl TimeoutInterval {
+impl Interval {
     pub fn new<T>(timeout: T) -> Self
     where
         T: IntoDuration,
     {
-        let timeout = timeout.into_duration();
         Self {
-            timeout,
+            timeout: timeout.into_duration(),
             deadline: Instant::now(),
         }
     }
@@ -74,11 +73,12 @@ impl TimeoutInterval {
     #[inline]
     pub fn check(&mut self) -> bool {
         let now = Instant::now();
-        let result = now >= self.deadline;
-        if result {
+        let due = now >= self.deadline;
+
+        if due {
             self.deadline = now + self.timeout;
         }
-        result
+        due
     }
 }
 

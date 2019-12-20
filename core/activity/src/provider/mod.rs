@@ -1,6 +1,4 @@
-use crate::common::{
-    generate_id, PathActivity, QueryTimeoutMaxCount, RpcMessageResult, DEFAULT_REQUEST_TIMEOUT,
-};
+use crate::common::{generate_id, PathActivity, QueryTimeoutMaxCount, RpcMessageResult};
 use crate::dao::{ActivityDao, AgreementDao, EventDao, InnerIntoOption};
 use crate::db::{ConnType, DbExecutor};
 use crate::error::Error;
@@ -20,7 +18,6 @@ pub struct ProviderActivityApi {
 impl ProviderActivityApi {
     pub fn new(db_executor: Mutex<DbExecutor>) -> Self {
         Self { db_executor }
-        // DbExecutor::new(":memory:").unwrap()
     }
 
     #[inline(always)]
@@ -107,11 +104,9 @@ impl ProviderActivityApi {
         &self,
         query: web::Query<QueryTimeoutMaxCount>,
     ) -> Result<Vec<ProviderEvent>, Error> {
-        let timeout = query.timeout.unwrap_or(DEFAULT_REQUEST_TIMEOUT);
-
         EventDao::new(&self.conn().await?)
             .get_events_fut(query.max_count)
-            .timeout(Some(timeout))
+            .timeout(query.timeout)
             .map_err(Error::from)
             .await
             .map_err(Error::from)

@@ -1,4 +1,4 @@
-use actix_web::ResponseError;
+use actix_web::error::ResponseError;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError;
 use ya_model::activity::{ErrorMessage, ProblemDetails};
@@ -6,13 +6,13 @@ use ya_model::activity::{ErrorMessage, ProblemDetails};
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("DB connection error: {0}")]
-    Db(r2d2::Error),
+    Db(#[from] r2d2::Error),
     #[error("DAO error: {0}")]
-    Dao(diesel::result::Error),
+    Dao(#[from] diesel::result::Error),
     #[error("GSB error: {0}")]
     Gsb(ya_service_bus::error::Error),
     #[error("Serialization error: {0}")]
-    Serialization(serde_json::Error),
+    Serialization(#[from] serde_json::Error),
     #[error("Service error: {0}")]
     Service(String),
     #[error("Bad request: {0}")]
@@ -39,43 +39,15 @@ macro_rules! internal_error_http_response {
     };
 }
 
-impl Error {
-    pub fn convert<E, F>(value: E) -> F
-    where
-        Error: From<E>,
-        Error: Into<F>,
-    {
-        Into::<F>::into(Self::from(value))
-    }
-}
-
 impl Into<actix_web::HttpResponse> for Error {
     fn into(self) -> actix_web::HttpResponse {
         self.error_response()
     }
 }
 
-impl From<r2d2::Error> for Error {
-    fn from(e: r2d2::Error) -> Self {
-        Error::Db(e)
-    }
-}
-
-impl From<diesel::result::Error> for Error {
-    fn from(e: diesel::result::Error) -> Self {
-        Error::Dao(e)
-    }
-}
-
 impl From<ya_service_bus::error::Error> for Error {
     fn from(e: ya_service_bus::error::Error) -> Self {
         Error::Gsb(e)
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(e: serde_json::Error) -> Self {
-        Error::Serialization(e)
     }
 }
 

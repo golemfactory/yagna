@@ -1,6 +1,6 @@
 use crate::dao::Result;
 use crate::db::ConnType;
-use crate::timeout::TimeoutInterval;
+use crate::timeout::Interval;
 use chrono::Utc;
 use diesel::prelude::*;
 use futures::future::Future;
@@ -71,12 +71,12 @@ impl<'c> EventDao<'c> {
 pub struct EventsFuture<'d, 'c: 'd> {
     dao: &'d EventDao<'c>,
     max_count: Option<u32>,
-    interval: TimeoutInterval,
+    interval: Interval,
 }
 
 impl<'d, 'c: 'd> EventsFuture<'d, 'c> {
     fn new(dao: &'d EventDao<'c>, max_count: Option<u32>) -> Self {
-        let interval = TimeoutInterval::new(1000);
+        let interval = Interval::new(1000);
         Self {
             max_count,
             dao,

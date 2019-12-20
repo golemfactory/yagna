@@ -1,6 +1,6 @@
 use crate::dao::{FlattenInnerOption, Result};
 use crate::db::ConnType;
-use crate::timeout::TimeoutInterval;
+use crate::timeout::Interval;
 use diesel::prelude::*;
 use futures::task::{Context, Poll};
 use futures::Future;
@@ -122,12 +122,12 @@ pub struct StateFuture<'l, 'c: 'l> {
     dao: &'l ActivityDao<'c>,
     activity_id: &'l str,
     state: Option<State>,
-    interval: TimeoutInterval,
+    interval: Interval,
 }
 
 impl<'l, 'c: 'l> StateFuture<'l, 'c> {
     fn new(dao: &'l ActivityDao<'c>, activity_id: &'l str, state: Option<State>) -> Self {
-        let interval = TimeoutInterval::new(500);
+        let interval = Interval::new(500);
         Self {
             dao,
             activity_id,
