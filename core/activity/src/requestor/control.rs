@@ -39,6 +39,7 @@ impl RequestorControlApi {
 }
 
 impl RequestorControlApi {
+    /// Creates new Activity based on given Agreement.
     async fn create_activity(
         &self,
         query: web::Query<QueryTimeout>,
@@ -51,6 +52,7 @@ impl RequestorControlApi {
         gsb_send!(body.into_inner(), &uri, query.timeout)
     }
 
+    /// Destroys given Activity.
     async fn destroy_activity(
         &self,
         path: web::Path<PathActivity>,
@@ -67,6 +69,7 @@ impl RequestorControlApi {
         gsb_send!(msg, &uri, query.timeout)
     }
 
+    /// Executes an ExeScript batch within a given Activity.
     async fn exec(
         &self,
         path: web::Path<PathActivity>,
@@ -88,6 +91,7 @@ impl RequestorControlApi {
         Ok(batch_id)
     }
 
+    /// Queries for ExeScript batch results.
     async fn get_exec_batch_results(
         &self,
         path: web::Path<PathActivityBatch>,

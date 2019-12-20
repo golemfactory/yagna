@@ -29,6 +29,7 @@ impl RequestorStateApi {
 }
 
 impl RequestorStateApi {
+    /// Get state of specified Activity.
     pub async fn get_activity_state(
         &self,
         path: web::Path<PathActivity>,
@@ -44,6 +45,7 @@ impl RequestorStateApi {
         gsb_send!(msg, &uri, query.timeout)
     }
 
+    /// Get usage of specified Activity.
     pub async fn get_activity_usage(
         &self,
         path: web::Path<PathActivity>,
@@ -59,6 +61,7 @@ impl RequestorStateApi {
         gsb_send!(msg, &uri, query.timeout)
     }
 
+    /// Get running command for a specified Activity.
     pub async fn get_running_command(
         &self,
         path: web::Path<PathActivity>,

@@ -5,6 +5,7 @@ use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
 rest_interface! {
     /// Bindings for Requestor Control part of the Activity API.
     impl RequestorControlApiClient {
+        /// Creates new Activity based on given Agreement.
         pub async fn create_activity(
             &self,
             agreement_id: &str
@@ -14,6 +15,7 @@ rest_interface! {
             { Ok( String::from_utf8( response?.to_vec() )? ) }
         }
 
+        /// Destroys given Activity.
         pub async fn destroy_activity(
             &self,
             #[path] activity_id: &str
@@ -23,6 +25,7 @@ rest_interface! {
             { Ok(()) }
         }
 
+        /// Executes an ExeScript batch within a given Activity.
         pub async fn exec(
             &self,
             script: ExeScriptRequest,
@@ -33,6 +36,7 @@ rest_interface! {
             response
         }
 
+        /// Queries for ExeScript batch results.
         pub async fn get_exec_batch_results(
             &self,
             #[path] activity_id: &str,

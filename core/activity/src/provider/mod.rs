@@ -27,6 +27,7 @@ impl ProviderActivityApi {
 }
 
 impl ProviderActivityApi {
+    /// Creates new Activity based on given Agreement.
     async fn create_activity(&self, msg: CreateActivity) -> RpcMessageResult<CreateActivity> {
         let conn = self.conn().await?;
         let activity_id = generate_id();
@@ -57,6 +58,7 @@ impl ProviderActivityApi {
         Ok(activity_id)
     }
 
+    /// Destroys given Activity.
     async fn destroy_activity(&self, msg: DestroyActivity) -> RpcMessageResult<DestroyActivity> {
         let conn = self.conn().await?;
 
@@ -76,6 +78,7 @@ impl ProviderActivityApi {
         Ok(())
     }
 
+    /// Get state of specified Activity.
     async fn get_activity_state(
         &self,
         msg: GetActivityState,
@@ -87,6 +90,7 @@ impl ProviderActivityApi {
             .ok_or(Error::NotFound.into())
     }
 
+    /// Get usage of specified Activity.
     async fn get_activity_usage(
         &self,
         msg: GetActivityUsage,
@@ -100,6 +104,7 @@ impl ProviderActivityApi {
 }
 
 impl ProviderActivityApi {
+    /// Fetch Requestor command events.
     async fn get_events(
         &self,
         query: web::Query<QueryTimeoutMaxCount>,
@@ -112,6 +117,7 @@ impl ProviderActivityApi {
             .map_err(Error::from)
     }
 
+    /// Pass activity state (which may include error details).
     async fn set_activity_state(
         &self,
         path: web::Path<PathActivity>,
@@ -122,6 +128,7 @@ impl ProviderActivityApi {
             .map_err(Error::from)
     }
 
+    /// Pass current activity usage (which may include error details).
     async fn set_activity_usage(
         &self,
         path: web::Path<PathActivity>,
