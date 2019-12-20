@@ -20,6 +20,8 @@ pub enum Error {
         e: awc::error::JsonPayloadError,
         b: String,
     },
+//    #[error("JSON error: {0}")]
+//    JsonError(#[from] serde_json::error::Error),
     #[error("HTTP status code: {0}")]
     HttpStatusCode(awc::http::StatusCode),
     #[error("serde JSON error: {0}")]

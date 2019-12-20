@@ -1,6 +1,6 @@
 //! Web utils
 use awc::{
-    http::{HeaderMap, HeaderName, HeaderValue, Method},
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     ClientRequest, ClientResponse, SendClientRequest,
 };
 use bytes::Bytes;
@@ -81,9 +81,7 @@ impl WebRequest<ClientRequest> {
 
 fn handle_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
     match response.status() {
-        awc::http::StatusCode::OK => Ok(response),
-        awc::http::StatusCode::CREATED => Ok(response),
-        awc::http::StatusCode::ACCEPTED => Ok(response),
+        StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED => Ok(response),
         status => Err(crate::Error::HttpStatusCode(status)),
     }
 }
@@ -96,7 +94,7 @@ impl WebRequest<SendClientRequest> {
             .await
             .map_err(|e| (e, url).into())
             .and_then(handle_http_status)?
-            .json() // only difference
+            .json()
             .compat()
             .await
             .map_err(crate::Error::from)
@@ -109,7 +107,7 @@ impl WebRequest<SendClientRequest> {
             .await
             .map_err(|e| (e, url).into())
             .and_then(handle_http_status)?
-            .body() // only difference
+            .body()
             .compat()
             .await
             .map_err(crate::Error::from)

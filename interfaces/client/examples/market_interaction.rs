@@ -56,7 +56,7 @@ async fn interact() -> Result<()> {
             .collect(&requestor_subscription_id, Some(1), Some(2))
             .await?;
         println!("Requestor - waiting for events");
-        thread::sleep(Duration::from_millis(5000))
+        thread::sleep(Duration::from_millis(3000))
     }
     println!("Requestor - Got {} events. Yay!", requestor_events.len());
 
@@ -147,9 +147,9 @@ async fn interact() -> Result<()> {
                 agreement_id
             );
 
-            // TODO: test reject
             let res = client.provider().approve_agreement(agreement_id).await?;
-            println!("Provider - Agreement approved {}", res);
+            //let res = client.provider().reject_agreement(agreement_id).await?;
+            println!("Provider - Agreement approved {:?}", res);
         }
     }
 
@@ -162,7 +162,10 @@ async fn interact() -> Result<()> {
         .wait_for_approval(&agreement.proposal_id)
         .await
     {
-        Err(Error::SendRequestError {e: SendRequestError::Timeout,.. }) => {
+        Err(Error::SendRequestError {
+            e: SendRequestError::Timeout,
+            ..
+        }) => {
             println!("Requestor - Timeout waiting for Agreement approval...");
             Ok(())
         }
