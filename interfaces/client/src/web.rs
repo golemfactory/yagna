@@ -41,7 +41,7 @@ impl WebClient {
         let url = format!("{}", self.url(url));
         println!("  ^'~-.,_  {:>5}  {}", format!("{}", method), url);
         WebRequest {
-            inner_request: self.awc.request(method, url.clone()),
+            inner_request: self.awc.request(method, &url),
             url,
         }
     }
@@ -94,6 +94,7 @@ impl WebRequest<SendClientRequest> {
             .await
             .map_err(|e| (e, url).into())
             .and_then(handle_http_status)?
+            // TODO: support empty body here
             .json()
             .compat()
             .await

@@ -2,13 +2,15 @@
 use crate::{web::WebClientBuilder, Result};
 use std::sync::Arc;
 
-pub mod provider;
-pub mod requestor;
+mod provider;
+pub use provider::ProviderApi;
+mod requestor;
+pub use requestor::RequestorApi;
 
 /// Client for the Market API. Supports both sides: Provider and Requestor.
 pub struct ApiClient {
-    provider: provider::ProviderApi,
-    requestor: requestor::RequestorApi,
+    provider: ProviderApi,
+    requestor: RequestorApi,
 }
 
 pub const API_ROOT: &str = "/market-api/v1/";
@@ -19,18 +21,18 @@ impl ApiClient {
         let client = Arc::new(client.api_root(API_ROOT).build()?);
 
         Ok(ApiClient {
-            provider: provider::ProviderApi::new(client.clone()),
-            requestor: requestor::RequestorApi::new(client.clone()),
+            provider: ProviderApi::new(client.clone()),
+            requestor: RequestorApi::new(client.clone()),
         })
     }
 
     /// Provider's part of the Market API.
-    pub fn provider(&self) -> &provider::ProviderApi {
+    pub fn provider(&self) -> &ProviderApi {
         &self.provider
     }
 
     /// Requestor's part of the Market API.
-    pub fn requestor(&self) -> &requestor::RequestorApi {
+    pub fn requestor(&self) -> &RequestorApi {
         &self.requestor
     }
 }
