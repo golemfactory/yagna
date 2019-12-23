@@ -51,9 +51,8 @@ macro_rules! rest_interface {
     => {
         use futures::compat::Future01CompatExt;
         use std::sync::Arc;
-        use url::Url;
 
-        use crate::web::{WebClient, QueryParamsBuilder};
+        use crate::web::WebClient;
 
         $(#[doc = $interface_doc])*
         pub struct $interface_name {
@@ -72,7 +71,7 @@ macro_rules! rest_interface {
             }
 
 
-            fn url<T: Into<String>>(&self, suffix: T) -> Url {
+            fn url<T: Into<String>>(&self, suffix: T) -> url::Url {
                 self.client.configuration.endpoint_url(suffix)
             }
 
@@ -111,7 +110,7 @@ macro_rules! url_format {
         $path:expr $(, $var:ident )* $(, #[query] $varq:ident )*
     } => {{
         let mut url = format!( $path $(, $var=$var)* );
-        let query = QueryParamsBuilder::new()
+        let query = crate::web::QueryParamsBuilder::new()
             $( .put( stringify!($varq), $varq ) )*
             .build();
         if query.len() > 1 {

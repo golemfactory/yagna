@@ -1,10 +1,7 @@
 //! Provider part of Market API
 use std::sync::Arc;
 
-use crate::{
-    web::{QueryParamsBuilder, WebClient},
-    Result,
-};
+use crate::{web::WebClient, Result};
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 /// Bindings for Provider part of the Market API.
