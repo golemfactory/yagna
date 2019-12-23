@@ -12,19 +12,19 @@ struct CliArgs {
     #[structopt(short, long)]
     interactive: bool,
 
-    /// Yagna daemon address
+    /// Daemon address
     #[structopt(short, long)]
     #[structopt(display_order = 500)]
     #[structopt(set = clap::ArgSettings::Global)]
     address: Option<String>,
 
-    /// Yagna daemon port
+    /// Daemon port
     #[structopt(short, long)]
     #[structopt(display_order = 500)]
     #[structopt(set = clap::ArgSettings::Global)]
     port: Option<u16>,
 
-    /// Yagna daemon data dir
+    /// Daemon data dir
     #[structopt(short, long = "datadir")]
     #[structopt(set = clap::ArgSettings::Global)]
     data_dir: Option<PathBuf>,
@@ -34,8 +34,16 @@ struct CliArgs {
     #[structopt(display_order = 500)]
     #[structopt(set = clap::ArgSettings::Global)]
     json: bool,
-    //    #[structopt(subcommand)]
-    //    command: Option<commands::CommandSection>,
+
+    #[structopt(subcommand)]
+    command: Option<Commands>,
+}
+#[derive(StructOpt, Debug)]
+pub enum Commands {
+    /// Identity Management
+    #[structopt(name = "id")]
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Id(ya_identity::IdentityCommand),
 }
 
 impl CliArgs {

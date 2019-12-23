@@ -6,6 +6,8 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-identity = { path = "../identity" }
+
 actix-web = "1.0"
 appdirs="0.2"
 clap = "2.33"
