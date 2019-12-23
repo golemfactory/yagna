@@ -97,6 +97,7 @@ impl WebRequest<SendClientRequest> {
             .map_err(|e| (e, url).into())
             .and_then(filter_http_status)?;
 
+        log::debug!("{:?}", response.headers());
         // allow empty body and no content (204) to pass smoothly
         if StatusCode::NO_CONTENT == response.status()
             || Some("0")

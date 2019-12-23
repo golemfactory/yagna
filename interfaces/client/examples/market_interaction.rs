@@ -92,7 +92,7 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
         ProviderEvent::NewAgreementEvent { agreement_id, .. } => {
             let agreement_id = agreement_id.as_ref().unwrap();
             println!(
-                "  <=PROVIDER | Got new agreement proposal event {}.",
+                "  <=PROVIDER | Wooha! Got new Agreement event {}. Approving...",
                 agreement_id
             );
 
@@ -107,8 +107,8 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
     println!("  <=PROVIDER | Market stats: {:#?}", market_stats);
 
     println!("  <=PROVIDER | Unsubscribing...");
-    let unsubscribe_result = client.unsubscribe(&provider_subscription_id).await?;
-    println!("  <=PROVIDER | Unsubscribed: {}", unsubscribe_result);
+    let res = client.unsubscribe(&provider_subscription_id).await?;
+    println!("  <=PROVIDER | Unsubscribed: {}", res);
 
     let market_stats = query_market_stats().await?;
     println!("  <=PROVIDER | Market stats: {:#?}", market_stats);
@@ -163,15 +163,15 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
     println!("REQUESTOR=>  | Creating agreement...");
     let now = format!("{}", humantime::format_rfc3339_seconds(SystemTime::now()));
     let agreement = Agreement::new(offer.id.clone(), now);
-    client.create_agreement(&agreement).await?;
+    let res = client.create_agreement(&agreement).await?;
     println!(
-        "REQUESTOR=>  | agreement created: {:#?}. Confirming...",
-        &agreement
+        "REQUESTOR=>  | agreement created {}: {:#?} Confirming...",
+        res, &agreement
     );
-    client.confirm_agreement(&agreement.proposal_id).await?;
+    let res = client.confirm_agreement(&agreement.proposal_id).await?;
     println!(
-        "REQUESTOR=>  | agreement {} confirmed",
-        &agreement.proposal_id
+        "REQUESTOR=>  | agreement {} confirmed: {}",
+        &agreement.proposal_id, res
     );
 
     println!("REQUESTOR=>  | Waiting for Agreement approval...");
@@ -181,10 +181,10 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
             ..
         }) => {
             println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
-            Ok(())
+            Ok("".into())
         }
         Ok(r) => {
-            println!("REQUESTOR=>  | OK! Agreement approved by Provider!");
+            println!("REQUESTOR=>  | OK! Agreement approved by Provider!: {}", r);
             Ok(r)
         }
         e => e,
@@ -194,8 +194,8 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
     println!("REQUESTOR=>  | Market stats: {:#?}", market_stats);
 
     println!("REQUESTOR=>  | Unsunscribing...");
-    let unsubscribe_result = client.unsubscribe(&requestor_subscription_id).await?;
-    println!("REQUESTOR=>  | Unsubscribed: {}", unsubscribe_result);
+    let res = client.unsubscribe(&requestor_subscription_id).await?;
+    println!("REQUESTOR=>  | Unsubscribed: {}", res);
 
     let market_stats = query_market_stats().await?;
     println!("REQUESTOR=>  | Market stats: {:#?}", market_stats);

@@ -22,7 +22,7 @@ impl ApiClient {
 
         Ok(ApiClient {
             provider: ProviderApi::new(&client),
-            requestor: RequestorApi::new(client.clone()),
+            requestor: RequestorApi::new(&client),
         })
     }
 
