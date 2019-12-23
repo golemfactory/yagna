@@ -1,6 +1,6 @@
 //! Web utils
 use awc::{
-    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
+    http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     ClientRequest, ClientResponse, SendClientRequest,
 };
 use bytes::Bytes;
@@ -39,7 +39,7 @@ impl WebClient {
 
     pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
         let url = format!("{}", self.url(url));
-        println!("  ^'~-.,_  {:>5}  {}", format!("{}", method), url);
+        log::info!("doing {} on {}", method, url);
         WebRequest {
             inner_request: self.awc.request(method, &url),
             url,
@@ -89,12 +89,33 @@ fn handle_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T
 impl WebRequest<SendClientRequest> {
     pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
         let url = self.url.clone();
-        self.inner_request
+        let response = self
+            .inner_request
             .compat()
             .await
-            .map_err(|e| (e, url).into())
+            .map_err(|e| (e, url).into());
+
+        // allow empty body and no content (201) to pass smoothly
+        if let Ok(response) = &response {
+            if StatusCode::NO_CONTENT == response.status() {
+                return Ok(serde_json::from_str("\"[ NO CONTENT (http: 201) ]\"")?);
+            }
+
+            if let Some(Ok(Ok(0))) = response
+                .headers()
+                .get(header::CONTENT_LENGTH)
+                .map(HeaderValue::to_str)
+                .map(|r| r.map(usize::from_str))
+            {
+                return Ok(serde_json::from_str(&format!(
+                    "\"[ EMPTY BODY (http: {}) ]\"",
+                    response.status()
+                ))?);
+            }
+        }
+
+        response
             .and_then(handle_http_status)?
-            // TODO: support empty body here
             .json()
             .compat()
             .await

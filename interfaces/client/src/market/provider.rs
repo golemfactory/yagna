@@ -1,10 +1,9 @@
 //! Provider part of Market API
-use awc::http::StatusCode;
 use std::sync::Arc;
 
 use crate::{
     web::{QueryParamsBuilder, WebClient},
-    Error, Result,
+    Result,
 };
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
@@ -14,8 +13,10 @@ pub struct ProviderApi {
 }
 
 impl ProviderApi {
-    pub fn new(client: Arc<WebClient>) -> Self {
-        Self { client }
+    pub fn new(client: &Arc<WebClient>) -> Self {
+        Self {
+            client: client.clone(),
+        }
     }
 
     /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
@@ -27,10 +28,7 @@ impl ProviderApi {
     /// Stop subscription by invalidating a previously published Offer.
     pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
         let url = url_format!("offers/{subscription_id}/", subscription_id);
-        match self.client.delete(&url).send().json().await {
-            Err(Error::HttpStatusCode(StatusCode::NO_CONTENT)) => Ok("OK".into()),
-            r => r,
-        }
+        self.client.delete(&url).send().json().await
     }
 
     /// Get events which have arrived from the market in response to the Offer
@@ -41,6 +39,7 @@ impl ProviderApi {
         &self,
         subscription_id: &str,
         timeout: Option<i32>,
+        #[allow(non_snake_case)]
         maxEvents: Option<i32>, // TODO: max_events
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(

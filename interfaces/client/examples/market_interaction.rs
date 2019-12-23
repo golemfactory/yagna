@@ -1,10 +1,11 @@
-use awc::Client;
+use awc::{error::SendRequestError, Client};
 use futures::{compat::Future01CompatExt, FutureExt, TryFutureExt};
 use serde_json;
+use std::{
+    thread,
+    time::{Duration, SystemTime},
+};
 
-use awc::error::SendRequestError;
-use std::thread;
-use std::time::Duration;
 use ya_client::{
     market::{ApiClient, ProviderApi, RequestorApi},
     web::WebClient,
@@ -34,7 +35,7 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
     let offer = Offer::new(serde_json::json!({"zima":"już"}), "(&(lato=nie))".into());
     let provider_subscription_id = client.subscribe(&offer).await?;
     println!(
-        "Provider subscription id: {} for\n\t {:?}",
+        "  <=PROVIDER | subscription id: {} for\n\t {:#?}",
         provider_subscription_id, &offer
     );
 
@@ -45,14 +46,17 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
         provider_events = client
             .collect(&provider_subscription_id, Some(1), Some(2))
             .await?;
-        println!("Provider - waiting for events");
+        println!("  <=PROVIDER | waiting for events");
         thread::sleep(Duration::from_millis(3000))
     }
-    println!("Provider - Got {} events. Yay!", provider_events.len());
+    println!(
+        "  <=PROVIDER | Got {} event(s). Yay!",
+        provider_events.len()
+    );
 
     // provider - support first event
     println!(
-        "Provider - First come first served event: {:#?}",
+        "  <=PROVIDER | First come first served event: {:#?}",
         &provider_events[0]
     );
 
@@ -61,7 +65,7 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
         // provider - demand proposal received --> respond with an counter offer
         ProviderEvent::DemandEvent { demand, .. } => {
             println!(
-                "SHOULD NOT HAPPEND! Provider - Got demand event: {:#?}.",
+                "SHOULD NOT HAPPEND!   <=PROVIDER | Got demand event: {:#?}.",
                 demand
             );
             let proposal_id = &demand.as_ref().unwrap().id;
@@ -70,7 +74,7 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
                 .get_proposal(&provider_subscription_id, &proposal_id)
                 .await?;
             println!(
-                "Provider - Wooha! Got Agreement Proposal: {:#?}. Approving...",
+                "  <=PROVIDER | Wooha! Got Agreement Proposal: {:#?}. Approving...",
                 agreement_proposal
             );
 
@@ -82,32 +86,32 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
             let res = client
                 .create_proposal(&counter_proposal, &provider_subscription_id, &proposal_id)
                 .await?;
-            println!("Provider - counter proposal created: {}", res)
+            println!("  <=PROVIDER | counter proposal created: {}", res)
         }
         // provider - agreement proposal received --> approve it
         ProviderEvent::NewAgreementEvent { agreement_id, .. } => {
             let agreement_id = agreement_id.as_ref().unwrap();
             println!(
-                "Provider - Got new agreement proposal event {}.",
+                "  <=PROVIDER | Got new agreement proposal event {}.",
                 agreement_id
             );
 
             let res = client.approve_agreement(agreement_id).await?;
             //let res = client.reject_agreement(agreement_id).await?;
             // TODO: this should return _before_ requestor.wait_for_approval
-            println!("Provider - Agreement approved: {}", res);
+            println!("  <=PROVIDER | Agreement approved: {}", res);
         }
     }
 
     let market_stats = query_market_stats().await?;
-    println!("Provider - Market stats: {:#?}", market_stats);
+    println!("  <=PROVIDER | Market stats: {:#?}", market_stats);
 
-    println!("Provider - Unsubscribing...");
+    println!("  <=PROVIDER | Unsubscribing...");
     let unsubscribe_result = client.unsubscribe(&provider_subscription_id).await?;
-    println!("Provider - Unsubscribed: {}", unsubscribe_result);
+    println!("  <=PROVIDER | Unsubscribed: {}", unsubscribe_result);
 
     let market_stats = query_market_stats().await?;
-    println!("Provider - Market stats: {:#?}", market_stats);
+    println!("  <=PROVIDER | Market stats: {:#?}", market_stats);
 
     Ok(())
 }
@@ -121,7 +125,7 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
     let demand = Demand::new(serde_json::json!({"lato":"nie"}), "(&(zima=już))".into());
     let requestor_subscription_id = client.subscribe(&demand).await?;
     println!(
-        "Requestor subscription id: {} for\n\t {:?}",
+        "REQUESTOR=>  | subscription id: {} for\n\t {:#?}",
         requestor_subscription_id, &demand
     );
 
@@ -132,14 +136,17 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
         requestor_events = client
             .collect(&requestor_subscription_id, Some(1), Some(2))
             .await?;
-        println!("Requestor - waiting for events");
+        println!("REQUESTOR=>  | waiting for events");
         thread::sleep(Duration::from_millis(3000))
     }
-    println!("Requestor - Got {} events. Yay!", requestor_events.len());
+    println!(
+        "REQUESTOR=>  | Got {} event(s). Yay!",
+        requestor_events.len()
+    );
 
     // requestor - support first event
     println!(
-        "Requestor - First come first served event: {:#?}",
+        "REQUESTOR=>  | First come first served event: {:#?}",
         &requestor_events[0]
     );
     let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
@@ -148,43 +155,50 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
     let proposal = client
         .get_proposal(&requestor_subscription_id, &offer.id)
         .await?;
-    println!("Requestor - First agreement proposal: {:#?}", proposal);
+    println!(
+        "REQUESTOR=>  | Fetched first agreement proposal: {:#?}",
+        proposal
+    );
 
-    println!("Requestor - Creating agreement...");
-    let agreement = Agreement::new(offer.id.clone(), "12/19/2019 17:43:57".into());
+    println!("REQUESTOR=>  | Creating agreement...");
+    let now = format!("{}", humantime::format_rfc3339_seconds(SystemTime::now()));
+    let agreement = Agreement::new(offer.id.clone(), now);
     client.create_agreement(&agreement).await?;
     println!(
-        "Requestor - agreement created: {:?}. Confirming...",
+        "REQUESTOR=>  | agreement created: {:#?}. Confirming...",
         &agreement
     );
     client.confirm_agreement(&agreement.proposal_id).await?;
-    println!("Requestor - agreement {} confirmed", &agreement.proposal_id);
+    println!(
+        "REQUESTOR=>  | agreement {} confirmed",
+        &agreement.proposal_id
+    );
 
-    println!("Requestor - Waiting for Agreement approval...");
+    println!("REQUESTOR=>  | Waiting for Agreement approval...");
     match client.wait_for_approval(&agreement.proposal_id).await {
         Err(Error::SendRequestError {
             e: SendRequestError::Timeout,
             ..
         }) => {
-            println!("Requestor - Timeout waiting for Agreement approval...");
+            println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
             Ok(())
         }
         Ok(r) => {
-            println!("Requestor - OK! Agreement approved by Provider!");
+            println!("REQUESTOR=>  | OK! Agreement approved by Provider!");
             Ok(r)
         }
         e => e,
     }?;
 
     let market_stats = query_market_stats().await?;
-    println!("Requestor - Market stats: {:#?}", market_stats);
+    println!("REQUESTOR=>  | Market stats: {:#?}", market_stats);
 
-    println!("Requestor - Unsunscribing...");
+    println!("REQUESTOR=>  | Unsunscribing...");
     let unsubscribe_result = client.unsubscribe(&requestor_subscription_id).await?;
-    println!("Requestor - Unsubscribed: {}", unsubscribe_result);
+    println!("REQUESTOR=>  | Unsubscribed: {}", unsubscribe_result);
 
     let market_stats = query_market_stats().await?;
-    println!("Requestor - Market stats: {:#?}", market_stats);
+    println!("REQUESTOR=>  | Market stats: {:#?}", market_stats);
 
     Ok(())
 }
@@ -200,6 +214,11 @@ async fn interact() -> Result<()> {
 }
 
 fn main() {
+    println!("\nrun this example with RUST_LOG=info to see REST calls\n");
+    flexi_logger::Logger::with_env_or_str("warn")
+        .start()
+        .unwrap();
+
     actix_rt::System::new("test")
         .block_on(interact().boxed_local().compat())
         .unwrap_or_else(|e| println!("{:#?}", e));

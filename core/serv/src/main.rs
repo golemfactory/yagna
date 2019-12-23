@@ -67,8 +67,7 @@ fn index() -> impl Responder {
 fn main() -> failure::Fallible<()> {
     let args = CliArgs::from_args();
 
-    std::env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
-    flexi_logger::Logger::with_env_or_str("error")
+    flexi_logger::Logger::with_env_or_str("actix_server=info,actix_web=info")
         .start()
         .unwrap();
 

@@ -21,7 +21,7 @@ impl ApiClient {
         let client = Arc::new(client.api_root(API_ROOT).build()?);
 
         Ok(ApiClient {
-            provider: ProviderApi::new(client.clone()),
+            provider: ProviderApi::new(&client),
             requestor: RequestorApi::new(client.clone()),
         })
     }

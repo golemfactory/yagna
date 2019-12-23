@@ -125,6 +125,5 @@ rest_interface! {
 
             { response.map(|_| ()) }
         }
-
     }
 }
