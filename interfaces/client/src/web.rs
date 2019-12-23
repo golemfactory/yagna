@@ -79,47 +79,39 @@ impl WebRequest<ClientRequest> {
     }
 }
 
-fn handle_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
-    match response.status() {
-        StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED => Ok(response),
-        status => Err(Error::HttpStatusCode(status)),
+fn filter_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
+    if response.status().is_success() {
+        Ok(response)
+    } else {
+        Err(Error::HttpStatusCode(response.status()))
     }
 }
 
 impl WebRequest<SendClientRequest> {
     pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
         let url = self.url.clone();
-        let response = self
+        let mut response = self
             .inner_request
             .compat()
             .await
-            .map_err(|e| (e, url).into());
+            .map_err(|e| (e, url).into())
+            .and_then(filter_http_status)?;
 
-        // allow empty body and no content (201) to pass smoothly
-        if let Ok(response) = &response {
-            if StatusCode::NO_CONTENT == response.status() {
-                return Ok(serde_json::from_str("\"[ NO CONTENT (http: 201) ]\"")?);
-            }
-
-            if let Some(Ok(Ok(0))) = response
-                .headers()
-                .get(header::CONTENT_LENGTH)
-                .map(HeaderValue::to_str)
-                .map(|r| r.map(usize::from_str))
-            {
-                return Ok(serde_json::from_str(&format!(
-                    "\"[ EMPTY BODY (http: {}) ]\"",
-                    response.status()
-                ))?);
-            }
+        // allow empty body and no content (204) to pass smoothly
+        if StatusCode::NO_CONTENT == response.status()
+            || Some("0")
+                == response
+                    .headers()
+                    .get(header::CONTENT_LENGTH)
+                    .and_then(|h| h.to_str().ok())
+        {
+            return Ok(serde_json::from_str(&format!(
+                "\"[ EMPTY BODY (http: {}) ]\"",
+                response.status()
+            ))?);
         }
 
-        response
-            .and_then(handle_http_status)?
-            .json()
-            .compat()
-            .await
-            .map_err(From::from)
+        response.json().compat().await.map_err(From::from)
     }
 
     pub async fn body(self) -> Result<Bytes> {
@@ -128,7 +120,7 @@ impl WebRequest<SendClientRequest> {
             .compat()
             .await
             .map_err(|e| (e, url).into())
-            .and_then(handle_http_status)?
+            .and_then(filter_http_status)?
             .body()
             .compat()
             .await
