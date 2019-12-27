@@ -51,15 +51,15 @@ pub fn init_service_future(
 /// Sends message to another node through a hub. Returns a future with the result.
 pub fn send_message_future(
     source_node_id: &str,
-    dest_node_id: &str,
+    destination: &str,
     data: Vec<u8>,
 ) -> impl Future03<Output = Result<Vec<u8>, Error>> {
     eprintln!(
         "[Net Mk1] Sending message from {} to {}.",
-        source_node_id, dest_node_id
+        source_node_id, destination
     );
     bus::send(
-        &format!("{}/{}", SERVICE_ID, dest_node_id),
+        &format!("{}/{}", SERVICE_ID, destination),
         &format!("{}/{}", SERVICE_ID, source_node_id),
         &data,
     )
