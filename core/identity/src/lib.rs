@@ -37,6 +37,17 @@ pub enum IdentityCommand {
     },
 }
 
+impl IdentityCommand {
+    pub fn run_command(&self) -> anyhow::Result<()> {
+        match self {
+            IdentityCommand::List => println!("identity list"),
+            _ => anyhow::bail!("command id {:?} is not implemented yet", self),
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ethkey::prelude::*;
