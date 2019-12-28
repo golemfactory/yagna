@@ -63,12 +63,12 @@ impl<'c> EventDao<'c> {
         })
     }
 
-    pub fn get_events_fut(&self, max_count: Option<u32>) -> EventsFuture {
+    pub fn get_events_fut(&self, max_count: Option<u32>) -> EventsFuture<'_, '_> {
         EventsFuture::new(self, max_count)
     }
 }
 
-pub struct EventsFuture<'d, 'c: 'd> {
+pub struct EventsFuture<'d, 'c> {
     dao: &'d EventDao<'c>,
     max_count: Option<u32>,
     interval: Interval,

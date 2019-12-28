@@ -59,7 +59,7 @@ pub struct Complete {
 }
 
 impl Debug for Complete {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         writeln!(f, "complete({})", self.shell)
     }
 }
