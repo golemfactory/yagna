@@ -4,7 +4,7 @@ use std::{convert::TryInto, fmt::Debug, path::PathBuf};
 use structopt::*;
 
 pub(crate) mod configuration;
-use configuration::{CliCtx, Complete, DEFAULT_PORT};
+use configuration::{CliCtx, Complete};
 
 #[derive(StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
@@ -18,13 +18,13 @@ struct CliArgs {
 
     /// Daemon address
     #[structopt(short, long)]
-    #[structopt(set = clap::ArgSettings::Global)]
-    address: Option<String>,
+    #[structopt(default_value = "127.0.0.1")]
+    address: String,
 
     /// Daemon port
     #[structopt(short, long)]
-    #[structopt(set = clap::ArgSettings::Global)]
-    port: Option<u16>,
+    #[structopt(default_value = "7465")]
+    port: u16,
 
     /// Return results in JSON format
     #[structopt(long)]
@@ -107,14 +107,7 @@ impl CliArgs {
     }
 
     pub fn get_address(&self) -> Result<(String, u16)> {
-        Ok((
-            self.address
-                .as_ref()
-                .map(String::as_str)
-                .unwrap_or("127.0.0.1")
-                .into(),
-            self.port.unwrap_or(DEFAULT_PORT),
-        ))
+        Ok((self.address.clone(), self.port))
     }
 
     fn run_command(&self) -> Result<()> {
