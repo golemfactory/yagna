@@ -5,6 +5,7 @@ use structopt::*;
 
 pub const DEFAULT_PORT: u16 = 7465;
 
+#[allow(dead_code)]
 pub struct CliCtx {
     data_dir: PathBuf,
     addr: (String, u16),
