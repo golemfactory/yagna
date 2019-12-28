@@ -6,10 +6,11 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-service-api = { path = "../serv-api"}
 ya-identity = { path = "../identity" }
 
-anyhow = "1.0"
 actix-web = "1.0"
+anyhow = "1.0"
 appdirs="0.2"
 flexi_logger = "0.14"
 log = "0.4"

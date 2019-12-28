@@ -1,5 +1,8 @@
+use serde_json::json;
 use std::path::PathBuf;
 use structopt::*;
+
+use ya_service_api::{CliCtx, Command, CommandOutput, ResponseTable};
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
@@ -37,14 +40,16 @@ pub enum IdentityCommand {
     },
 }
 
-impl IdentityCommand {
-    pub fn run_command(&self) -> anyhow::Result<()> {
+impl Command for IdentityCommand {
+    fn run_command(&self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            IdentityCommand::List => println!("identity list"),
+            IdentityCommand::List => Ok(ResponseTable {
+                columns: vec!["id".into(), "addr".into()],
+                values: vec![json!(["some id", "0xFEE1600D"])],
+            }
+            .into()),
             _ => anyhow::bail!("command id {:?} is not implemented yet", self),
         }
-
-        Ok(())
     }
 }
 

@@ -1,10 +1,17 @@
 use actix_web::{get, middleware, App, HttpServer, Responder};
 use anyhow::{Context, Result};
-use std::{convert::TryInto, fmt::Debug, path::PathBuf};
-use structopt::*;
+use flexi_logger::Logger;
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt::Debug,
+    path::PathBuf,
+};
+use structopt::{clap, StructOpt};
 
-pub(crate) mod configuration;
-use configuration::{CliCtx, Complete};
+use ya_service_api::{CliCtx, Command, CommandOutput};
+
+mod autocomplete;
+pub use autocomplete::CompleteCommand;
 
 #[derive(StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
@@ -36,63 +43,7 @@ struct CliArgs {
     interactive: bool,
 
     #[structopt(subcommand)]
-    command: Command,
-}
-
-#[derive(StructOpt, Debug)]
-pub enum Command {
-    /// Core service usage
-    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Service(Service),
-
-    /// Identity management
-    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Id(ya_identity::IdentityCommand),
-
-    #[structopt(name = "complete")]
-    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
-    Complete(Complete),
-}
-
-impl Command {
-    fn run_command(&self, ctx: &mut CliCtx) -> Result<()> {
-        match self {
-            Command::Service(service) => service.run_command(ctx),
-            Command::Id(id) => id.run_command(),
-            Command::Complete(complete) => complete.run_command(),
-        }
-    }
-}
-
-#[derive(StructOpt, Debug)]
-pub enum Service {
-    /// Runs server in foreground
-    Run,
-    /// Spawns daemon
-    Start,
-    /// Stops daemonm
-    Stop,
-    /// Checks if daemon is running
-    Status,
-}
-
-impl Service {
-    fn run_command(&self, ctx: &CliCtx) -> Result<()> {
-        match self {
-            Self::Run => {
-                println!("Running {} service!", structopt::clap::crate_name!());
-                Ok(HttpServer::new(|| {
-                    App::new()
-                        .wrap(middleware::Logger::default())
-                        .service(index)
-                })
-                .bind(ctx.address())
-                .context(format!("Failed to bind {:?}", ctx.address()))?
-                .run()?)
-            }
-            _ => anyhow::bail!("command service {:?} is not implemented yet", self),
-        }
-    }
+    command: CliCommand,
 }
 
 impl CliArgs {
@@ -110,10 +61,90 @@ impl CliArgs {
         Ok((self.address.clone(), self.port))
     }
 
-    fn run_command(&self) -> Result<()> {
-        let mut ctx: CliCtx = self.try_into()?;
-        self.command.run_command(&mut ctx)
-        //                ctx.output(resp?);
+    pub fn run_command(&self) -> Result<()> {
+        let ctx: CliCtx = self.try_into()?;
+        Ok(ctx.output(self.command.run_command(&ctx)?))
+    }
+}
+
+impl TryFrom<&CliArgs> for CliCtx {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
+        let data_dir = args.get_data_dir();
+        let addr = args.get_address()?;
+        let json_output = args.json;
+        //        let net = value.net.clone();
+        //        let accept_any_prompt = args.accept_any_prompt;
+        let interactive = args.interactive;
+        //        let sys = actix::System::new("golemcli");
+
+        Ok(CliCtx {
+            addr,
+            data_dir,
+            json_output,
+            //            accept_any_prompt,
+            //            net,
+            interactive,
+            //            sys,
+        })
+    }
+}
+
+#[derive(StructOpt, Debug)]
+enum CliCommand {
+    /// Core service usage
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Service(ServiceCommand),
+
+    /// Identity management
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Id(ya_identity::IdentityCommand),
+
+    #[structopt(name = "complete")]
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Complete(CompleteCommand),
+}
+
+impl Command for CliCommand {
+    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        match self {
+            CliCommand::Service(service) => service.run_command(ctx),
+            CliCommand::Id(id) => id.run_command(ctx),
+            CliCommand::Complete(complete) => complete.run_command(ctx),
+        }
+    }
+}
+
+#[derive(StructOpt, Debug)]
+enum ServiceCommand {
+    /// Runs server in foreground
+    Run,
+    /// Spawns daemon
+    Start,
+    /// Stops daemonm
+    Stop,
+    /// Checks if daemon is running
+    Status,
+}
+
+impl Command for ServiceCommand {
+    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        match self {
+            Self::Run => {
+                println!("Running {} service!", structopt::clap::crate_name!());
+                HttpServer::new(|| {
+                    App::new()
+                        .wrap(middleware::Logger::default())
+                        .service(index)
+                })
+                .bind(ctx.address())
+                .context(format!("Failed to bind {:?}", ctx.address()))?
+                .run()?;
+                Ok(CommandOutput::NoOutput)
+            }
+            _ => anyhow::bail!("command service {:?} is not implemented yet", self),
+        }
     }
 }
 
@@ -125,7 +156,7 @@ fn index() -> impl Responder {
 fn main() -> Result<()> {
     let args = CliArgs::from_args();
 
-    flexi_logger::Logger::with_env_or_str("actix_server=info,actix_web=info")
+    Logger::with_env_or_str("actix_server=info,actix_web=info")
         .start()
         .unwrap();
 
