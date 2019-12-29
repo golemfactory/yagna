@@ -15,7 +15,12 @@ pub enum IdentityCommand {
     /// Display identity
     Show {
         /// Identity alias to show
-        alias: Option<String>,
+        alias: String,
+
+        /// password for keystore
+        #[structopt(short, long)]
+        #[structopt(default_value = "")]
+        password: String,
     },
 
     /// Create identity
@@ -37,7 +42,16 @@ pub enum IdentityCommand {
     Update {
         /// Identity alias to update
         #[structopt(long)]
-        alias: Option<String>,
+        alias: String,
+
+        /// password for keystore
+        #[structopt(short, long)]
+        #[structopt(default_value = "")]
+        password: String,
+
+        /// password for keystore
+        #[structopt(short, long)]
+        new_password: String,
     },
 
     /// Drop given identity
@@ -75,6 +89,13 @@ impl Command for IdentityCommand {
                     .collect(),
             }
             .into()),
+            IdentityCommand::Show { alias, password } => {
+                let file_path = keys_dir.join(alias);
+                let account = EthAccount::load_or_generate(&file_path, password.clone())
+                    .map_err(|e| anyhow::Error::msg(e))
+                    .context(format!("reading keystore from {:?}", &file_path))?;
+                CommandOutput::object(format!("{:#?}", account))
+            }
             IdentityCommand::Create {
                 alias,
                 from_keystore,
