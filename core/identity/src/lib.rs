@@ -6,6 +6,8 @@ use ethkey::EthAccount;
 use std::fs;
 use ya_service_api::{CliCtx, Command, CommandOutput, ResponseTable};
 
+const DEFAULT_IDENTITY: &str = "primary";
+
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 pub enum IdentityCommand {
@@ -15,6 +17,7 @@ pub enum IdentityCommand {
     /// Display identity
     Show {
         /// Identity alias to show
+        #[structopt(default_value = DEFAULT_IDENTITY)]
         alias: String,
 
         /// password for keystore
@@ -26,8 +29,8 @@ pub enum IdentityCommand {
     /// Create identity
     Create {
         /// Identity alias to create
-        #[structopt(long)]
-        alias: Option<String>,
+        #[structopt(default_value = DEFAULT_IDENTITY)]
+        alias: String,
 
         /// Existing keystore to use
         #[structopt(long = "from-keystore")]
@@ -41,6 +44,7 @@ pub enum IdentityCommand {
     /// Update given identity
     Update {
         /// Identity alias to update
+        #[structopt(default_value = DEFAULT_IDENTITY)]
         alias: String,
 
         /// password for keystore
@@ -117,19 +121,25 @@ impl Command for IdentityCommand {
                 from_keystore,
                 password,
             } => {
-                let dest_file = keys_dir.join(alias.as_ref().unwrap_or(&"primary".into()));
-                if let Some(file_path) = from_keystore {
-                    let account = EthAccount::load_or_generate(file_path, password.clone())
+                let dest_path = keys_dir.join(alias);
+                if let Some(from_path) = from_keystore {
+                    fs::copy(from_path, &dest_path).context(format!(
+                        "copying keystore from {:?} to {:?}",
+                        &from_path, &dest_path
+                    ))?;
+                    let account = EthAccount::load_or_generate(&dest_path, password.clone())
                         .map_err(|e| anyhow::Error::msg(e))
-                        .context(format!("reading keystore from {:?}", file_path))?;
-                    fs::copy(file_path, dest_file)?;
+                        .context(format!("reading keystore from {:?}", &from_path))?;
 
-                    return CommandOutput::object(format!("{} read from {:?}", account, file_path));
+                    return CommandOutput::object(format!(
+                        "{} read from {:?}",
+                        account, &from_path
+                    ));
                 }
 
-                let account = EthAccount::load_or_generate(&dest_file, password.clone())
+                let account = EthAccount::load_or_generate(&dest_path, password.clone())
                     .map_err(|e| anyhow::Error::msg(e))
-                    .context(format!("creating keystore at {:?}", dest_file))?;
+                    .context(format!("creating keystore at {:?}", dest_path))?;
 
                 CommandOutput::object(format!("{} created", account))
             }
