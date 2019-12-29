@@ -133,7 +133,12 @@ impl Command for IdentityCommand {
 
                 CommandOutput::object(format!("{} created", account))
             }
-            _ => anyhow::bail!("command id {:?} is not implemented yet", self),
+            IdentityCommand::Drop { alias } => {
+                let file_path = keys_dir.join(alias);
+                fs::remove_file(&file_path)
+                    .context(format!("Error removing file {:?}", &file_path))?;
+                CommandOutput::object(format!("identity '{}' removed", alias))
+            }
         }
     }
 }
