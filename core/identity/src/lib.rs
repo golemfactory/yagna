@@ -41,7 +41,6 @@ pub enum IdentityCommand {
     /// Update given identity
     Update {
         /// Identity alias to update
-        #[structopt(long)]
         alias: String,
 
         /// password for keystore
@@ -95,6 +94,23 @@ impl Command for IdentityCommand {
                     .map_err(|e| anyhow::Error::msg(e))
                     .context(format!("reading keystore from {:?}", &file_path))?;
                 CommandOutput::object(format!("{:#?}", account))
+            }
+            IdentityCommand::Update {
+                alias,
+                password,
+                new_password,
+            } => {
+                let file_path = keys_dir.join(alias);
+                let account = EthAccount::load_or_generate(&file_path, password.clone())
+                    .map_err(|e| anyhow::Error::msg(e))
+                    .context(format!("reading keystore from {:?}", &file_path))?;
+
+                account
+                    .change_password(new_password.clone())
+                    .map_err(|e| anyhow::Error::msg(e))
+                    .context(format!("changing password for {:?}", &file_path))?;
+
+                CommandOutput::object(format!("password changed for {}", account))
             }
             IdentityCommand::Create {
                 alias,
