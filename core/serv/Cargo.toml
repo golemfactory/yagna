@@ -10,6 +10,7 @@ ya-service-api = { path = "../serv-api"}
 ya-identity = { path = "../identity" }
 
 actix-web = "1.0"
+
 anyhow = "1.0"
 appdirs="0.2"
 flexi_logger = "0.14"

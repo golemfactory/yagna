@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[allow(dead_code)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
-    pub addr: (String, u16),
+    pub address: (String, u16),
     pub json_output: bool,
     //    accept_any_prompt: bool,
     //    net: Option<Net>,
@@ -16,7 +16,7 @@ pub struct CliCtx {
 
 impl CliCtx {
     pub fn address(&self) -> (&str, u16) {
-        (&self.addr.0, self.addr.1)
+        (&self.address.0, self.address.1)
     }
 
     pub fn output(&self, output: CommandOutput) {

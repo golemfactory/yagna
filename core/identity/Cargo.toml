@@ -9,5 +9,6 @@ ya-service-api = { path = "../serv-api"}
 
 anyhow = "1.0"
 ethkey = "0.3"
+log = "0.4"
 serde_json = "1.0"
 structopt = "0.3"

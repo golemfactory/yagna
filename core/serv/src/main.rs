@@ -72,7 +72,8 @@ impl TryFrom<&CliArgs> for CliCtx {
 
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
         let data_dir = args.get_data_dir();
-        let addr = args.get_address()?;
+        log::info!("Using data dir: {:?} ", data_dir);
+        let address = args.get_address()?;
         let json_output = args.json;
         //        let net = value.net.clone();
         //        let accept_any_prompt = args.accept_any_prompt;
@@ -80,7 +81,7 @@ impl TryFrom<&CliArgs> for CliCtx {
         //        let sys = actix::System::new("golemcli");
 
         Ok(CliCtx {
-            addr,
+            address,
             data_dir,
             json_output,
             //            accept_any_prompt,
