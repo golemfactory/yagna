@@ -48,7 +48,7 @@ pub fn init_service_future(
         .compat()
 }
 
-/// Sends message to another node through a hub. Returns a future with the result.
+/// Send message to another node through a hub. Returns a future with the result.
 pub fn send_message_future(
     source_node_id: &str,
     destination: &str,
@@ -63,23 +63,4 @@ pub fn send_message_future(
         &format!("{}/{}", SERVICE_ID, source_node_id),
         &data,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use ya_core_model::net::{Message, MessageAddress, MessageType};
-
-    #[test]
-    fn test_serialization() {
-        let m: Message = Message {
-            //destination: MessageAddress::Node("0x123".into()),
-            destination: MessageAddress::BroadcastAddress { distance: 5 },
-            module: "module".into(),
-            method: "method".into(),
-            reply_to: "0x999".into(),
-            request_id: 1000,
-            message_type: MessageType::Request,
-        };
-        eprintln!("{}", serde_json::to_string(&m).unwrap())
-    }
 }
