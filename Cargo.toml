@@ -21,4 +21,5 @@ members = [
     "service-bus/derive",
     "service-bus/proto",
     "service-bus/router",
+    "service-bus/util",
 ]

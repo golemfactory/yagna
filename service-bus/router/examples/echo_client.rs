@@ -7,18 +7,18 @@ use uuid::Uuid;
 
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::*;
-use ya_sb_router::connect;
+use ya_sb_router::tcp_connect;
 
 async fn run_client() {
     let router_addr = "127.0.0.1:8245".parse().unwrap();
-    let (reader, writer) = connect(&router_addr).await;
+    let (reader, writer) = tcp_connect(&router_addr).await;
 
     println!("Sending call request...");
     let request_id = Uuid::new_v4().to_hyphenated().to_string();
     let hello_msg = "Hello";
     let call_request = CallRequest {
         caller: "".to_string(),
-        address: "echo".to_string(),
+        address: "echo/test".to_string(),
         request_id: request_id.clone(),
         data: hello_msg.to_string().into_bytes(),
     };
