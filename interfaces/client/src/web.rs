@@ -1,9 +1,15 @@
 //! Web utils
-use crate::{configuration::ApiConfiguration, Result};
-use awc::http::{HeaderMap, HeaderName, HeaderValue};
-use std::str::FromStr;
-use std::time::Duration;
+use awc::{
+    http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
+    ClientRequest, ClientResponse, SendClientRequest,
+};
+use bytes::Bytes;
+use futures::compat::Future01CompatExt;
+use serde::{de::DeserializeOwned, Serialize};
+use std::{str::FromStr, time::Duration};
 use url::form_urlencoded;
+
+use crate::{configuration::ApiConfiguration, Error, Result};
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -17,9 +23,109 @@ pub struct WebClient {
     pub(crate) awc: awc::Client,
 }
 
+pub struct WebRequest<T> {
+    inner_request: T,
+    url: String,
+}
+
 impl WebClient {
     pub fn builder() -> WebClientBuilder {
         WebClientBuilder::default()
+    }
+
+    fn url<T: Into<String>>(&self, suffix: T) -> url::Url {
+        self.configuration.endpoint_url(suffix)
+    }
+
+    pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
+        let url = format!("{}", self.url(url));
+        log::info!("doing {} on {}", method, url);
+        WebRequest {
+            inner_request: self.awc.request(method, &url),
+            url,
+        }
+    }
+
+    pub fn get(&self, url: &str) -> WebRequest<ClientRequest> {
+        self.request(Method::GET, url)
+    }
+
+    pub fn post(&self, url: &str) -> WebRequest<ClientRequest> {
+        self.request(Method::POST, url)
+    }
+
+    pub fn put(&self, url: &str) -> WebRequest<ClientRequest> {
+        self.request(Method::PUT, url)
+    }
+
+    pub fn delete(&self, url: &str) -> WebRequest<ClientRequest> {
+        self.request(Method::DELETE, url)
+    }
+}
+
+impl WebRequest<ClientRequest> {
+    pub fn send_json<T: Serialize>(self, value: &T) -> WebRequest<SendClientRequest> {
+        WebRequest {
+            inner_request: self.inner_request.send_json(value),
+            url: self.url,
+        }
+    }
+
+    pub fn send(self) -> WebRequest<SendClientRequest> {
+        WebRequest {
+            inner_request: self.inner_request.send(),
+            url: self.url,
+        }
+    }
+}
+
+fn filter_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
+    if response.status().is_success() {
+        Ok(response)
+    } else {
+        Err(Error::HttpStatusCode(response.status()))
+    }
+}
+
+impl WebRequest<SendClientRequest> {
+    pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
+        let url = self.url.clone();
+        let mut response = self
+            .inner_request
+            .compat()
+            .await
+            .map_err(|e| (e, url).into())
+            .and_then(filter_http_status)?;
+
+        log::debug!("{:?}", response.headers());
+        // allow empty body and no content (204) to pass smoothly
+        if StatusCode::NO_CONTENT == response.status()
+            || Some("0")
+                == response
+                    .headers()
+                    .get(header::CONTENT_LENGTH)
+                    .and_then(|h| h.to_str().ok())
+        {
+            return Ok(serde_json::from_str(&format!(
+                "\"[ EMPTY BODY (http: {}) ]\"",
+                response.status()
+            ))?);
+        }
+
+        response.json().compat().await.map_err(From::from)
+    }
+
+    pub async fn body(self) -> Result<Bytes> {
+        let url = self.url.clone();
+        self.inner_request
+            .compat()
+            .await
+            .map_err(|e| (e, url).into())
+            .and_then(filter_http_status)?
+            .body()
+            .compat()
+            .await
+            .map_err(From::from)
     }
 }
 
@@ -102,7 +208,7 @@ pub struct QueryParamsBuilder<'a> {
 
 impl<'a> QueryParamsBuilder<'a> {
     pub fn new() -> Self {
-        let serializer = form_urlencoded::Serializer::new("?".into());
+        let serializer = form_urlencoded::Serializer::new("".into());
         QueryParamsBuilder { serializer }
     }
 

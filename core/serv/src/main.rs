@@ -1,41 +1,49 @@
 use actix_web::{get, middleware, App, HttpServer, Responder};
-use std::fmt::Debug;
-use std::path::PathBuf;
-use structopt::*;
+use anyhow::{Context, Result};
+use flexi_logger::Logger;
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt::Debug,
+    path::PathBuf,
+};
+use structopt::{clap, StructOpt};
+
+use ya_service_api::{CliCtx, Command, CommandOutput};
+
+mod autocomplete;
+pub use autocomplete::CompleteCommand;
 
 #[derive(StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(about = clap::crate_description!())]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
-    #[cfg(feature = "interactive_cli")]
-    /// Enter interactive mode
-    #[structopt(short, long)]
-    interactive: bool,
-
-    /// Yagna daemon address
-    #[structopt(short, long)]
-    #[structopt(display_order = 500)]
-    #[structopt(set = clap::ArgSettings::Global)]
-    address: Option<String>,
-
-    /// Yagna daemon port
-    #[structopt(short, long)]
-    #[structopt(display_order = 500)]
-    #[structopt(set = clap::ArgSettings::Global)]
-    port: Option<u16>,
-
-    /// Yagna daemon data dir
+    /// Daemon data dir
     #[structopt(short, long = "datadir")]
     #[structopt(set = clap::ArgSettings::Global)]
     data_dir: Option<PathBuf>,
 
+    /// Daemon address
+    #[structopt(short, long)]
+    #[structopt(default_value = "127.0.0.1")]
+    address: String,
+
+    /// Daemon port
+    #[structopt(short, long)]
+    #[structopt(default_value = "7465")]
+    port: u16,
+
     /// Return results in JSON format
     #[structopt(long)]
-    #[structopt(display_order = 500)]
     #[structopt(set = clap::ArgSettings::Global)]
     json: bool,
-    //    #[structopt(subcommand)]
-    //    command: Option<commands::CommandSection>,
+
+    /// Enter interactive mode
+    #[structopt(short, long)]
+    interactive: bool,
+
+    #[structopt(subcommand)]
+    command: CliCommand,
 }
 
 impl CliArgs {
@@ -49,13 +57,95 @@ impl CliArgs {
         }
     }
 
-    pub fn get_address(&self) -> failure::Fallible<(&str, u16)> {
-        let address = match &self.address {
-            Some(a) => a.as_str(),
-            None => "127.0.0.1",
-        };
+    pub fn get_address(&self) -> Result<(String, u16)> {
+        Ok((self.address.clone(), self.port))
+    }
 
-        Ok((address.into(), self.port.unwrap_or(7465)))
+    pub fn run_command(&self) -> Result<()> {
+        let ctx: CliCtx = self.try_into()?;
+        Ok(ctx.output(self.command.run_command(&ctx)?))
+    }
+}
+
+impl TryFrom<&CliArgs> for CliCtx {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
+        let data_dir = args.get_data_dir();
+        log::info!("Using data dir: {:?} ", data_dir);
+        let address = args.get_address()?;
+        let json_output = args.json;
+        //        let net = value.net.clone();
+        //        let accept_any_prompt = args.accept_any_prompt;
+        let interactive = args.interactive;
+        //        let sys = actix::System::new("golemcli");
+
+        Ok(CliCtx {
+            address,
+            data_dir,
+            json_output,
+            //            accept_any_prompt,
+            //            net,
+            interactive,
+            //            sys,
+        })
+    }
+}
+
+#[derive(StructOpt, Debug)]
+enum CliCommand {
+    /// Core service usage
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Service(ServiceCommand),
+
+    /// Identity management
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Id(ya_identity::IdentityCommand),
+
+    #[structopt(name = "complete")]
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Complete(CompleteCommand),
+}
+
+impl Command for CliCommand {
+    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        match self {
+            CliCommand::Service(service) => service.run_command(ctx),
+            CliCommand::Id(id) => id.run_command(ctx),
+            CliCommand::Complete(complete) => complete.run_command(ctx),
+        }
+    }
+}
+
+#[derive(StructOpt, Debug)]
+enum ServiceCommand {
+    /// Runs server in foreground
+    Run,
+    /// Spawns daemon
+    Start,
+    /// Stops daemonm
+    Stop,
+    /// Checks if daemon is running
+    Status,
+}
+
+impl Command for ServiceCommand {
+    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        match self {
+            Self::Run => {
+                println!("Running {} service!", structopt::clap::crate_name!());
+                HttpServer::new(|| {
+                    App::new()
+                        .wrap(middleware::Logger::default())
+                        .service(index)
+                })
+                .bind(ctx.address())
+                .context(format!("Failed to bind {:?}", ctx.address()))?
+                .run()?;
+                Ok(CommandOutput::NoOutput)
+            }
+            _ => anyhow::bail!("command service {:?} is not implemented yet", self),
+        }
     }
 }
 
@@ -64,21 +154,12 @@ fn index() -> impl Responder {
     format!("Hello {}!", clap::crate_description!())
 }
 
-fn main() -> failure::Fallible<()> {
+fn main() -> Result<()> {
     let args = CliArgs::from_args();
 
-    std::env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
-    flexi_logger::Logger::with_env_or_str("error")
+    Logger::with_env_or_str("actix_server=info,actix_web=info")
         .start()
         .unwrap();
 
-    println!("Hello {}!", clap::crate_description!());
-
-    Ok(HttpServer::new(|| {
-        App::new()
-            .wrap(middleware::Logger::default())
-            .service(index)
-    })
-    .bind(args.get_address()?)?
-    .run()?)
+    args.run_command()
 }

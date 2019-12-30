@@ -51,9 +51,8 @@ macro_rules! rest_interface {
     => {
         use futures::compat::Future01CompatExt;
         use std::sync::Arc;
-        use url::Url;
 
-        use crate::web::{WebClient, QueryParamsBuilder};
+        use crate::web::WebClient;
 
         $(#[doc = $interface_doc])*
         pub struct $interface_name {
@@ -72,7 +71,7 @@ macro_rules! rest_interface {
             }
 
 
-            fn url<T: Into<String>>(&self, suffix: T) -> Url {
+            fn url<T: Into<String>>(&self, suffix: T) -> url::Url {
                 self.client.configuration.endpoint_url(suffix)
             }
 
@@ -88,14 +87,8 @@ macro_rules! rest_interface {
                     $(, $argp : $argp_t )*
                     $(, $argq : $argq_t )*
                 ) -> Result<$ret> {
-                    let mut url = self.url(format!( $rest_url $(, $argp = $argp)* ));
-                    let query = QueryParamsBuilder::new()
-                        $(.put(stringify!($argq), $argq))*
-                        .build();
-                    if query.len() > 1 {
-                        url = url.join(&query)?
-                    }
-                    println!("doing {} on {}", stringify!($http_method), url);
+                    let url = self.url(url_format!( $rest_url $(, $argp)* $(, #[query] $argq)* ));
+                    log::info!("doing {} on {}", stringify!($http_method), url);
                     let $response = self.client.awc
                         .$http_method(url.as_str())
                         .$send_method $send_args
@@ -110,4 +103,19 @@ macro_rules! rest_interface {
             )+
         }
     };
+}
+
+macro_rules! url_format {
+    {
+        $path:expr $(, $var:ident )* $(, #[query] $varq:ident )*
+    } => {{
+        let mut url = format!( $path $(, $var=$var)* );
+        let query = crate::web::QueryParamsBuilder::new()
+            $( .put( stringify!($varq), $varq ) )*
+            .build();
+        if query.len() > 1 {
+            url = format!("{}?{}", url, query)
+        }
+        url
+    }};
 }
