@@ -1,6 +1,5 @@
 use crate::{
     error::Error,
-    local_router::util::PrefixLookupBag,
     remote_router::{RemoteRouter, UpdateService},
     Handle, RpcEnvelope, RpcHandler, RpcMessage, RpcRawCall,
 };
@@ -15,9 +14,9 @@ use std::{
     any::Any,
     sync::{Arc, Mutex},
 };
+use ya_sb_util::PrefixLookupBag;
 
 mod into_actix;
-mod util;
 
 trait RawEndpoint: Any {
     fn send(&self, msg: RpcRawCall) -> Box<dyn Future01<Item = Vec<u8>, Error = Error>>;
