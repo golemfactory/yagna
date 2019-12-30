@@ -1,9 +1,8 @@
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use ethkey::EthAccount;
+use std::{fs, path::PathBuf};
 use structopt::*;
 
-use ethkey::EthAccount;
-use std::fs;
 use ya_service_api::{CliCtx, Command, CommandOutput, ResponseTable};
 
 const KEYS_SUBDIR: &str = "keys";
@@ -47,6 +46,10 @@ pub enum IdentityCommand {
         #[structopt(short, long)]
         #[structopt(default_value = DEFAULT_PASSWORD)]
         password: String,
+
+        /// force recreation of existing identity
+        #[structopt(short, long)]
+        force: bool,
     },
     /// Update given identity
     Update {
@@ -101,7 +104,9 @@ impl Command for IdentityCommand {
             .into()),
             IdentityCommand::Show { alias, password } => {
                 let file_path = key_path(&keys_path, &alias);
-                // FIXME: this would create not existend key
+                if let Err(e) = fs::File::open(&file_path) {
+                    return CommandOutput::object(format!("identity '{}': {}", alias, e));
+                }
                 let account = EthAccount::load_or_generate(&file_path, password.as_str())
                     .map_err(|e| anyhow::Error::msg(e))
                     .context(format!("reading keystore from {:?}", file_path))?;
@@ -128,8 +133,20 @@ impl Command for IdentityCommand {
                 alias,
                 from_keystore,
                 password,
+                force,
             } => {
                 let dest_path = key_path(&keys_path, alias);
+                let mut msg = format!("identity '{}' created", alias);
+                if fs::File::open(&dest_path).is_ok() {
+                    if !force {
+                        return CommandOutput::object(format!(
+                            "identity '{}' already exists. Use -f to override",
+                            alias
+                        ));
+                    }
+                    msg = format!("identity '{}' already existed. Recreated", alias);
+                }
+
                 if let Some(from_path) = from_keystore {
                     fs::copy(from_path, &dest_path).context(format!(
                         "copying keystore from {:?} to {:?}",
@@ -140,8 +157,8 @@ impl Command for IdentityCommand {
                         .context(format!("reading keystore from {:?}", from_path))?;
 
                     return CommandOutput::object(format!(
-                        "identity '{}' created from {:?}: {}",
-                        alias, from_path, account
+                        "{} from {:?}: {}",
+                        msg, from_path, account
                     ));
                 }
 
@@ -149,7 +166,7 @@ impl Command for IdentityCommand {
                     .map_err(|e| anyhow::Error::msg(e))
                     .context(format!("creating keystore at {:?}", dest_path))?;
 
-                CommandOutput::object(format!("identity '{}' created: {}", alias, account))
+                CommandOutput::object(format!("{}: {}", msg, account))
             }
             IdentityCommand::Drop { alias } => {
                 let file_path = key_path(&keys_path, alias);
