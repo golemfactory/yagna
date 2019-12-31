@@ -14,6 +14,7 @@ pub struct CliCtx {
     //    accept_any_prompt: bool,
     //    net: Option<Net>,
     pub interactive: bool,
+    // TODO: Option is ugly here - it was added bc run() eats sys
     pub sys: Mutex<Option<SystemRunner>>,
 }
 
@@ -41,6 +42,7 @@ impl CliCtx {
 }
 
 pub trait Command {
+    // TODO: make this async
     fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
 }
 

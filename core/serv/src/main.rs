@@ -130,6 +130,7 @@ enum ServiceCommand {
     Status,
 }
 
+// TODO: distinguish service commands from other CLI commands
 impl Command for ServiceCommand {
     fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
