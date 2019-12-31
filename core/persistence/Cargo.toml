@@ -6,13 +6,11 @@ edition = "2018"
 build = "build.rs"
 
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 chrono = { version = "0.4.6", features = ["serde"] }
-r2d2 = "0.8"
+diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 dotenv = "0.14"
+r2d2 = "0.8"
 
 
 [target.'cfg(target_env = "msvc")'.build-dependencies]

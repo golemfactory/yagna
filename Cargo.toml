@@ -23,3 +23,13 @@ members = [
     "service-bus/router",
     "service-bus/util",
 ]
+
+[patch.crates-io]
+ya-core-model = { path = "core/model" }
+ya-exe-api = { path = "exe-unit/api" }
+ya-identity = { path = "core/identity" }
+ya-model = { path = "interfaces/model" }
+ya-sb-proto = { path = "service-bus/proto" }
+ya-sb-util = { path = "service-bus/util" }
+ya-service-api = { path = "core/serv-api"}
+ya-service-bus = { path = "service-bus/bus/" }

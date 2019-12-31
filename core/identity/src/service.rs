@@ -1,3 +1,5 @@
+/// Identity service
+
 use std::error::Error;
 use ya_core_model::identity as model;
 use ya_service_bus::typed as bus;
