@@ -1,5 +1,4 @@
 /// Identity management CLI parser and runner
-
 use anyhow::{Context, Result};
 use ethkey::EthAccount;
 use std::{fs, path::PathBuf};
