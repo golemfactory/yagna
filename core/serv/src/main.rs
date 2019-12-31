@@ -12,6 +12,7 @@ use ya_service_api::{CliCtx, Command, CommandOutput};
 
 mod autocomplete;
 pub use autocomplete::CompleteCommand;
+use std::sync::Mutex;
 
 #[derive(StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
@@ -78,7 +79,7 @@ impl TryFrom<&CliArgs> for CliCtx {
         //        let net = value.net.clone();
         //        let accept_any_prompt = args.accept_any_prompt;
         let interactive = args.interactive;
-        //        let sys = actix::System::new("golemcli");
+        let sys = Mutex::new(Some(actix::System::new("yg")));
 
         Ok(CliCtx {
             address,
@@ -87,7 +88,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             //            accept_any_prompt,
             //            net,
             interactive,
-            //            sys,
+            sys,
         })
     }
 }
@@ -100,7 +101,7 @@ enum CliCommand {
 
     /// Identity management
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Id(ya_identity::IdentityCommand),
+    Id(ya_identity::cli::IdentityCommand),
 
     #[structopt(name = "complete")]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
@@ -133,6 +134,10 @@ impl Command for ServiceCommand {
     fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             Self::Run => {
+                let a = ya_identity::service::activate();
+                futures::pin_mut!(a);
+                ctx.block_on(a);
+
                 println!("Running {} service!", structopt::clap::crate_name!());
                 HttpServer::new(|| {
                     App::new()
@@ -141,7 +146,10 @@ impl Command for ServiceCommand {
                 })
                 .bind(ctx.address())
                 .context(format!("Failed to bind {:?}", ctx.address()))?
-                .run()?;
+                .start();
+
+                ctx.run()?;
+
                 Ok(CommandOutput::NoOutput)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),

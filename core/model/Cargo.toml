@@ -4,6 +4,11 @@ version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+default = ['activity', 'identity']
+activity=[]
+identity=[]
+
 [dependencies]
 serde = { version = "^1.0", features = ["derive"] }
 ya-model = { path = "../../interfaces/model" }
