@@ -28,9 +28,14 @@ CREATE TABLE [ActivityState](
 
 CREATE TABLE [Agreement](
 	[Id] [integer] NOT NULL PRIMARY KEY AUTOINCREMENT,
+	[NaturalId] [varchar](255) NOT NULL,
 	[StateId] [integer] NOT NULL,
+	[DemandNaturalId] [varchar](255) NOT NULL,
+	[DemandNodeId] [varchar](255) NOT NULL,
 	[DemandPropertiesJson] TEXT NOT NULL,
 	[DemandConstraintsJson] TEXT NOT NULL,
+	[OfferNaturalId] [varchar](255) NOT NULL,
+	[OfferNodeId] [varchar](255) NOT NULL,
 	[OfferPropertiesJson] TEXT NOT NULL,
 	[OfferConstraintsJson] TEXT NOT NULL,
 	[ProposedSignature] TEXT NOT NULL,
@@ -76,7 +81,7 @@ CREATE TABLE [DebitNote](
 	[CreatedDate] [datetime] NOT NULL,
 	[ActivityId] [integer] NULL,
 	[TotalAmountDue] [varchar](36) NOT NULL,
-	[UsageVectorJson] TEXT NULL,
+	[UsageCounterJson] TEXT NULL,
 	[CreditAccount] [varchar](255) NOT NULL,
 	[PaymentDueDate] [datetime] NULL,
     FOREIGN KEY([ActivityId]) REFERENCES [Activity] ([Id]),

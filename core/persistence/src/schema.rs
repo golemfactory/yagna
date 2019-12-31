@@ -33,9 +33,14 @@ table! {
 table! {
     Agreement (Id) {
         Id -> Integer,
+        NaturalId -> Text,
         StateId -> Integer,
+        DemandNaturalId -> Text,
+        DemandNodeId -> Text,
         DemandPropertiesJson -> Text,
         DemandConstraintsJson -> Text,
+        OfferNaturalId -> Text,
+        OfferNodeId -> Text,
         OfferPropertiesJson -> Text,
         OfferConstraintsJson -> Text,
         ProposedSignature -> Text,
@@ -88,7 +93,7 @@ table! {
         CreatedDate -> Timestamp,
         ActivityId -> Nullable<Integer>,
         TotalAmountDue -> Text,
-        UsageVectorJson -> Nullable<Text>,
+        UsageCounterJson -> Nullable<Text>,
         CreditAccount -> Text,
         PaymentDueDate -> Nullable<Timestamp>,
     }
