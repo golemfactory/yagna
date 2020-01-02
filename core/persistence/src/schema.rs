@@ -1,194 +1,194 @@
 table! {
-    Activity (Id) {
-        Id -> Integer,
-        NaturalId -> Text,
-        AgreementId -> Integer,
-        StateId -> Integer,
+    activity {
+        id -> Integer,
+        natural_id -> Text,
+        agreement_id -> Integer,
+        state_id -> Integer,
     }
 }
 
 table! {
-    ActivityEvent (Id) {
-        Id -> Integer,
-        ActivityId -> Integer,
-        EventDate -> Timestamp,
-        EventTypeId -> Integer,
+    activity_event {
+        id -> Integer,
+        activity_id -> Integer,
+        event_date -> Timestamp,
+        event_type_id -> Integer,
     }
 }
 
 table! {
-    ActivityEventType (Id) {
-        Id -> Integer,
-        Name -> Text,
+    activity_event_type {
+        id -> Integer,
+        name -> Text,
     }
 }
 
 table! {
-    ActivityState (Id) {
-        Id -> Integer,
-        Name -> Text,
+    activity_state {
+        id -> Integer,
+        name -> Text,
     }
 }
 
 table! {
-    Agreement (Id) {
-        Id -> Integer,
-        NaturalId -> Text,
-        StateId -> Integer,
-        DemandNaturalId -> Text,
-        DemandNodeId -> Text,
-        DemandPropertiesJson -> Text,
-        DemandConstraintsJson -> Text,
-        OfferNaturalId -> Text,
-        OfferNodeId -> Text,
-        OfferPropertiesJson -> Text,
-        OfferConstraintsJson -> Text,
-        ProposedSignature -> Text,
-        ApprovedSignature -> Text,
-        CommittedSignature -> Text,
+    agreement {
+        id -> Integer,
+        natural_id -> Text,
+        state_id -> Integer,
+        demand_natural_id -> Text,
+        demand_node_id -> Text,
+        demand_properties_json -> Text,
+        demand_constraints_json -> Text,
+        offer_natural_id -> Text,
+        offer_node_id -> Text,
+        offer_properties_json -> Text,
+        offer_constraints_json -> Text,
+        proposed_signature -> Text,
+        approved_signature -> Text,
+        committed_signature -> Text,
     }
 }
 
 table! {
-    AgreementEvent (Id) {
-        Id -> Integer,
-        AgreementId -> Integer,
-        EventDate -> Timestamp,
-        EventTypeId -> Integer,
+    agreement_event {
+        id -> Integer,
+        agreement_id -> Integer,
+        event_date -> Timestamp,
+        event_type_id -> Integer,
     }
 }
 
 table! {
-    AgreementEventType (Id) {
-        Id -> Integer,
-        Name -> Text,
+    agreement_event_type {
+        id -> Integer,
+        name -> Text,
     }
 }
 
 table! {
-    AgreementState (Id) {
-        Id -> Integer,
-        Name -> Text,
+    agreement_state {
+        id -> Integer,
+        name -> Text,
     }
 }
 
 table! {
-    Allocation (Id) {
-        Id -> Integer,
-        NaturalId -> Text,
-        CreatedDate -> Timestamp,
-        Amount -> Text,
-        RemainingAmount -> Text,
-        IsDeposit -> Text,
+    allocation {
+        id -> Integer,
+        natural_id -> Text,
+        created_date -> Timestamp,
+        amount -> Text,
+        remaining_amount -> Text,
+        is_deposit -> Bool,
     }
 }
 
 table! {
-    DebitNote (Id) {
-        Id -> Integer,
-        NaturalId -> Text,
-        AgreementId -> Integer,
-        StateId -> Integer,
-        PreviousNoteId -> Nullable<Integer>,
-        CreatedDate -> Timestamp,
-        ActivityId -> Nullable<Integer>,
-        TotalAmountDue -> Text,
-        UsageCounterJson -> Nullable<Text>,
-        CreditAccount -> Text,
-        PaymentDueDate -> Nullable<Timestamp>,
+    debit_note {
+        id -> Integer,
+        natural_id -> Text,
+        agreement_id -> Integer,
+        state_id -> Integer,
+        previous_note_id -> Nullable<Integer>,
+        created_date -> Timestamp,
+        activity_id -> Nullable<Integer>,
+        total_amount_due -> Text,
+        usage_counter_json -> Nullable<Text>,
+        credit_account -> Text,
+        payment_due_date -> Nullable<Timestamp>,
     }
 }
 
 table! {
-    Invoice (Id) {
-        Id -> Integer,
-        NaturalId -> Text,
-        StateId -> Integer,
-        LastDebitNoteId -> Nullable<Integer>,
-        CreatedDate -> Timestamp,
-        AgreementId -> Integer,
-        Amount -> Text,
-        UsageCounterJson -> Nullable<Text>,
-        CreditAccount -> Text,
-        PaymentDueDate -> Timestamp,
+    invoice {
+        id -> Integer,
+        natural_id -> Text,
+        state_id -> Integer,
+        last_debit_note_id -> Nullable<Integer>,
+        created_date -> Timestamp,
+        agreement_id -> Integer,
+        amount -> Text,
+        usage_counter_json -> Nullable<Text>,
+        credit_account -> Text,
+        payment_due_date -> Timestamp,
     }
 }
 
 table! {
-    InvoiceDebitNoteState (Id) {
-        Id -> Integer,
-        Name -> Text,
+    invoice_debit_note_state {
+        id -> Integer,
+        name -> Text,
     }
 }
 
 table! {
-    InvoiceXActivity (Id) {
-        Id -> Integer,
-        InvoiceId -> Integer,
-        ActivityId -> Integer,
+    invoice_x_activity {
+        id -> Integer,
+        invoice_id -> Integer,
+        activity_id -> Integer,
     }
 }
 
 table! {
-    Payment (Id) {
-        Id -> Integer,
-        NaturalId -> Text,
-        Amount -> Text,
-        DebitAccount -> Text,
-        CreatedDate -> Timestamp,
+    payment {
+        id -> Integer,
+        natural_id -> Text,
+        amount -> Text,
+        debit_account -> Text,
+        created_date -> Timestamp,
     }
 }
 
 table! {
-    PaymentXDebitNote (Id) {
-        Id -> Integer,
-        PaymentId -> Integer,
-        DebitNoteId -> Integer,
+    payment_x_debit_note {
+        id -> Integer,
+        payment_id -> Integer,
+        debit_note_id -> Integer,
     }
 }
 
 table! {
-    PaymentXInvoice (Id) {
-        Id -> Integer,
-        PaymentId -> Integer,
-        InvoiceId -> Integer,
+    payment_x_invoice {
+        id -> Integer,
+        payment_id -> Integer,
+        invoice_id -> Integer,
     }
 }
 
-joinable!(Activity -> ActivityState (StateId));
-joinable!(Activity -> Agreement (AgreementId));
-joinable!(ActivityEvent -> Activity (ActivityId));
-joinable!(ActivityEvent -> ActivityEventType (EventTypeId));
-joinable!(Agreement -> AgreementState (StateId));
-joinable!(AgreementEvent -> Agreement (AgreementId));
-joinable!(AgreementEvent -> AgreementEventType (EventTypeId));
-joinable!(DebitNote -> Activity (ActivityId));
-joinable!(DebitNote -> Agreement (AgreementId));
-joinable!(DebitNote -> InvoiceDebitNoteState (StateId));
-joinable!(Invoice -> Agreement (AgreementId));
-joinable!(Invoice -> InvoiceDebitNoteState (StateId));
-joinable!(InvoiceXActivity -> Activity (ActivityId));
-joinable!(InvoiceXActivity -> Invoice (InvoiceId));
-joinable!(PaymentXDebitNote -> DebitNote (DebitNoteId));
-joinable!(PaymentXDebitNote -> Payment (PaymentId));
-joinable!(PaymentXInvoice -> Invoice (InvoiceId));
-joinable!(PaymentXInvoice -> Payment (PaymentId));
+joinable!(activity -> activity_state (state_id));
+joinable!(activity -> agreement (agreement_id));
+joinable!(activity_event -> activity (activity_id));
+joinable!(activity_event -> activity_event_type (event_type_id));
+joinable!(agreement -> agreement_state (state_id));
+joinable!(agreement_event -> agreement (agreement_id));
+joinable!(agreement_event -> agreement_event_type (event_type_id));
+joinable!(debit_note -> activity (activity_id));
+joinable!(debit_note -> agreement (agreement_id));
+joinable!(debit_note -> invoice_debit_note_state (state_id));
+joinable!(invoice -> agreement (agreement_id));
+joinable!(invoice -> invoice_debit_note_state (state_id));
+joinable!(invoice_x_activity -> activity (activity_id));
+joinable!(invoice_x_activity -> invoice (invoice_id));
+joinable!(payment_x_debit_note -> debit_note (debit_note_id));
+joinable!(payment_x_debit_note -> payment (payment_id));
+joinable!(payment_x_invoice -> invoice (invoice_id));
+joinable!(payment_x_invoice -> payment (payment_id));
 
 allow_tables_to_appear_in_same_query!(
-    Activity,
-    ActivityEvent,
-    ActivityEventType,
-    ActivityState,
-    Agreement,
-    AgreementEvent,
-    AgreementEventType,
-    AgreementState,
-    Allocation,
-    DebitNote,
-    Invoice,
-    InvoiceDebitNoteState,
-    InvoiceXActivity,
-    Payment,
-    PaymentXDebitNote,
-    PaymentXInvoice,
+    activity,
+    activity_event,
+    activity_event_type,
+    activity_state,
+    agreement,
+    agreement_event,
+    agreement_event_type,
+    agreement_state,
+    allocation,
+    debit_note,
+    invoice,
+    invoice_debit_note_state,
+    invoice_x_activity,
+    payment,
+    payment_x_debit_note,
+    payment_x_invoice,
 );
