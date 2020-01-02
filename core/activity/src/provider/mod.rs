@@ -169,17 +169,15 @@ impl RestfulApi for ProviderActivityApi {
         ))
         .service(
             web::resource("/events")
-                .route(web::get().to_async(impl_restful_handler!(api, get_events, query))),
+                .route(web::get().to(impl_restful_handler!(api, get_events, query))),
         )
         .service(
-            web::resource("/activity/{activity_id}/state").route(
-                web::put().to_async(impl_restful_handler!(api, set_activity_state, path, body)),
-            ),
+            web::resource("/activity/{activity_id}/state")
+                .route(web::put().to(impl_restful_handler!(api, set_activity_state, path, body))),
         )
         .service(
-            web::resource("/activity/{activity_id}/usage").route(
-                web::put().to_async(impl_restful_handler!(api, set_activity_usage, path, body)),
-            ),
+            web::resource("/activity/{activity_id}/usage")
+                .route(web::put().to(impl_restful_handler!(api, set_activity_usage, path, body))),
         )
     }
 }

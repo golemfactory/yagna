@@ -6,7 +6,6 @@ use crate::requestor::get_agreement;
 use crate::timeout::IntoTimeoutFuture;
 use crate::{RestfulApi, ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION, NET_SERVICE_ID};
 use actix_web::web;
-use futures::compat::Future01CompatExt;
 use futures::lock::Mutex;
 use futures::prelude::*;
 use serde::Deserialize;
@@ -114,20 +113,21 @@ impl RestfulApi for RequestorControlApi {
             "/{}/v{}",
             ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION
         ))
-        .service(web::resource("/activity/{activity_id}").route(
-            web::delete().to_async(impl_restful_handler!(api, destroy_activity, path, query)),
-        ))
         .service(
-            web::resource("/activity/{activity_id}/exec")
-                .route(web::post().to_async(impl_restful_handler!(api, exec, path, query, body))),
+            web::resource("/activity/{activity_id}")
+                .route(web::delete().to(impl_restful_handler!(api, destroy_activity, path, query))),
         )
         .service(
-            web::resource("/activity/{activity_id}/exec/{batch_id}").route(web::get().to_async(
+            web::resource("/activity/{activity_id}/exec")
+                .route(web::post().to(impl_restful_handler!(api, exec, path, query, body))),
+        )
+        .service(
+            web::resource("/activity/{activity_id}/exec/{batch_id}").route(web::get().to(
                 impl_restful_handler!(api, get_exec_batch_results, path, query),
             )),
         )
         .service(
-            web::resource("/activity").route(web::post().to_async(impl_restful_handler!(
+            web::resource("/activity").route(web::post().to(impl_restful_handler!(
                 api,
                 create_activity,
                 path,
@@ -135,7 +135,7 @@ impl RestfulApi for RequestorControlApi {
             ))),
         )
         .service(
-            web::resource("/activity").route(web::get().to_async(impl_restful_handler!(
+            web::resource("/activity").route(web::get().to(impl_restful_handler!(
                 api,
                 create_activity,
                 path,
