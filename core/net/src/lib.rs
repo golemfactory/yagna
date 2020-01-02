@@ -1,9 +1,9 @@
 use futures::prelude::*;
 use futures03::compat::Future01CompatExt;
 use futures03::future::Future as Future03;
+use std::net::ToSocketAddrs;
 use ya_service_bus::connection;
 use ya_service_bus::{untyped as bus, Error};
-use std::net::ToSocketAddrs;
 
 pub const SERVICE_ID: &str = "/net";
 
