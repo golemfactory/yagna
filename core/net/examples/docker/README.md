@@ -1,6 +1,8 @@
 # Net Mk1 Example
 
-## Test
+## Instructions
+
+Please enter:
 
 ```
 cd core/net/examples/docker
