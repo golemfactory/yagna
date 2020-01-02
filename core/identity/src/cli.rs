@@ -149,6 +149,8 @@ impl Command for IdentityCommand {
                             alias
                         ));
                     }
+                    fs::remove_file(&dest_path)
+                        .context(format!("Error removing file {:?}", &dest_path))?;
                     msg = format!("identity '{}' already existed. Recreated", alias);
                 }
 
