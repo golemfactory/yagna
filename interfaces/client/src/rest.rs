@@ -49,7 +49,6 @@ macro_rules! rest_interface {
         }
     }
     => {
-        use futures::compat::Future01CompatExt;
         use std::sync::Arc;
 
         use crate::web::WebClient;
@@ -92,10 +91,8 @@ macro_rules! rest_interface {
                     let $response = self.client.awc
                         .$http_method(url.as_str())
                         .$send_method $send_args
-                        .compat()
                         .await?
                         .$response_extractor()
-                        .compat()
                         .await
                         .map_err(crate::Error::from);
                     $body
