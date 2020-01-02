@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 
-pub const ID: &str = "/local/identity";
+pub const BUS_ID: &str = "/local/identity";
+pub const DEFAULT_IDENTITY: &str = "primary";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Error {}
 
 /// Lists identities.
-///
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct List {}
 

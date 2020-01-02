@@ -6,7 +6,7 @@ use ya_service_bus::typed as bus;
 // TODO: is anyhow appropriate Error here?
 pub async fn activate() -> Result<(), anyhow::Error> {
     // TODO: move real logic here
-    let _ = bus::bind(model::ID, |_: model::List| {
+    let _ = bus::bind(model::BUS_ID, |_: model::List| {
         eprintln!("ask for");
         async {
             Ok(vec![model::IdentityInfo {
@@ -16,7 +16,7 @@ pub async fn activate() -> Result<(), anyhow::Error> {
             }])
         }
     });
-    let _ = bus::bind(model::ID, |create: model::CreateGenerated| {
+    let _ = bus::bind(model::BUS_ID, |create: model::CreateGenerated| {
         eprintln!("create generated called: {:?}", create);
         async {
             Ok(model::IdentityInfo {

@@ -6,9 +6,9 @@ use structopt::*;
 
 use futures::Future;
 use ya_service_api::{CliCtx, Command, CommandOutput, ResponseTable};
+use ya_core_model::identity::DEFAULT_IDENTITY;
 
 const KEYS_SUBDIR: &str = "keys";
-const DEFAULT_IDENTITY: &str = "primary";
 const DEFAULT_PASSWORD: &str = "";
 
 #[derive(StructOpt, Debug)]
@@ -85,7 +85,7 @@ impl Command for IdentityCommand {
                 use ya_service_bus::typed as bus;
                 use ya_service_bus::RpcEndpoint;
                 let a = async {
-                    let identities: Vec<identity::IdentityInfo> = bus::service(identity::ID)
+                    let identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
                         .send(identity::List::default())
                         .await
                         .map_err(|e| anyhow::Error::msg(e))?
