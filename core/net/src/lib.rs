@@ -3,6 +3,7 @@ use futures03::compat::Future01CompatExt;
 use futures03::future::Future as Future03;
 use ya_service_bus::connection;
 use ya_service_bus::{untyped as bus, Error};
+use std::net::ToSocketAddrs;
 
 pub const SERVICE_ID: &str = "/net";
 
@@ -15,7 +16,7 @@ pub fn init_service_future(
     source_node_id: &str,
 ) -> impl Future03<Output = Result<(), std::io::Error>> {
     let source_node_id_clone = format!("{}/{}", SERVICE_ID, source_node_id);
-    connection::tcp(&hub_addr.parse().unwrap())
+    connection::tcp(&hub_addr.to_socket_addrs().unwrap().next().unwrap())
         .and_then(move |c| {
             let connection_ref = connection::connect_with_handler(
                 c,

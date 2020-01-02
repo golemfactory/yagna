@@ -1,0 +1,21 @@
+version: "3.0"
+services:
+        hub:
+                build:
+                        context: ../../../..
+                        dockerfile: core/net/examples/docker/hub.Dockerfile
+                image: hub
+        provider-1:
+                build:
+                        context: ../../../..
+                        dockerfile: core/net/examples/docker/provider-1.Dockerfile
+                image: provider-1
+                depends_on:
+                        - hub
+        provider-2:
+                build:
+                        context: ../../../..
+                        dockerfile: core/net/examples/docker/provider-2.Dockerfile
+                image: provider-2
+                depends_on:
+                        - provider-1
