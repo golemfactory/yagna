@@ -1,6 +1,6 @@
 openapi: 3.0.2
 info:
-  version: "1.3.0"
+  version: "1.3.1"
   title: Yagna Market API
   description: >-
     ## Yagna Market
@@ -194,7 +194,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Demand'
-        description: Demand scpecification
+        description: Demand specification
         required: true
 
   /demands/{subscriptionId}:
@@ -319,6 +319,12 @@ paths:
       responses:
         '201':
           description: Created
+          content:
+            application/json:
+              schema:
+                type: string
+                description: Agreement Id
+          
       requestBody:
         content:
           application/json:
@@ -414,13 +420,14 @@ components:
   schemas:
     DemandOffer:
       type: object
+      
       required:
-        - id
         - properties
         - constraints
       properties:
         id:
           type: string
+          readOnly: true
         properties:
           type: object
         constraints:
@@ -429,20 +436,18 @@ components:
       allOf:
         - $ref: '#/components/schemas/DemandOffer'
         - type: object
-          required:
-            - requestorId
           properties:
             requestorId:
               type: string
+              readOnly: true
     Offer:
       allOf:
         - $ref: '#/components/schemas/DemandOffer'
         - type: object
-          required:
-            - providerId
           properties:
             providerId:
               type: string
+              readOnly: true
     Proposal:
       allOf:
         - $ref: '#/components/schemas/DemandOffer'
