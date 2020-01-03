@@ -26,14 +26,19 @@ info:
     Market API contains two roles: Requestors and Providers which are
     symmetrical most of the time (excluding agreement phase).
 '
+
 servers:
   - url: /market-api/v1
+
+security:
+  - ApiKeyAuth: []
 
 tags:
   - name: requestor
     description: Requestor part
   - name: provider
     description: Provider part
+
 
 paths:
 
@@ -492,6 +497,15 @@ paths:
 
 components:
 
+
+
+  securitySchemes:
+
+
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
 
 
   parameters:
