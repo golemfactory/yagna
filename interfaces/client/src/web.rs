@@ -4,7 +4,6 @@ use awc::{
     ClientRequest, ClientResponse, SendClientRequest,
 };
 use bytes::Bytes;
-use futures::compat::Future01CompatExt;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{str::FromStr, time::Duration};
 use url::form_urlencoded;
@@ -92,7 +91,6 @@ impl WebRequest<SendClientRequest> {
         let url = self.url.clone();
         let mut response = self
             .inner_request
-            .compat()
             .await
             .map_err(|e| (e, url).into())
             .and_then(filter_http_status)?;
@@ -112,18 +110,16 @@ impl WebRequest<SendClientRequest> {
             ))?);
         }
 
-        response.json().compat().await.map_err(From::from)
+        response.json().await.map_err(From::from)
     }
 
     pub async fn body(self) -> Result<Bytes> {
         let url = self.url.clone();
         self.inner_request
-            .compat()
             .await
             .map_err(|e| (e, url).into())
             .and_then(filter_http_status)?
             .body()
-            .compat()
             .await
             .map_err(From::from)
     }

@@ -1,5 +1,5 @@
 use awc::{error::SendRequestError, Client};
-use futures::{compat::Future01CompatExt, FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 use serde_json;
 use std::{
     thread,
@@ -18,11 +18,9 @@ async fn query_market_stats() -> Result<serde_json::Value> {
     Client::default()
         .get(url)
         .send()
-        .compat()
         .map_err(Error::from)
         .await?
         .json()
-        .compat()
         .map_err(Error::from)
         .await
 }
@@ -220,6 +218,6 @@ fn main() {
         .unwrap();
 
     actix_rt::System::new("test")
-        .block_on(interact().boxed_local().compat())
+        .block_on(interact())
         .unwrap_or_else(|e| println!("{:#?}", e));
 }
