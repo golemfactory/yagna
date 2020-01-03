@@ -89,13 +89,15 @@ paths:
       operationId: collectDemands
       responses:
         '200':
-          description: Provider event list.
+          description: Proposal or Agreement event list.
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ProviderEvent'
+                  oneOf:
+                    - $ref: '#/components/schemas/AgreementEvent'
+                    - $ref: '#/components/schemas/ProposalEvent'
               # links: TODO
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -218,13 +220,13 @@ paths:
       operationId: collectOffers
       responses:
         '200':
-          description: Requestor event list.
+          description: Proposal event list.
           content:
             application/json4:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/RequestorEvent'
+                  $ref: '#/components/schemas/ProposalEvent'
           # links: TODO
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -775,18 +777,15 @@ components:
           type: string
           format: date-time
 
-    RequestorEvent:
+    ProposalEvent:
       allOf:
         - $ref: '#/components/schemas/Event'
-        - oneOf:
-            - $ref: '#/components/schemas/Proposal'
+        - $ref: '#/components/schemas/Proposal'
 
-    ProviderEvent:
+    AgreementEvent:
       allOf:
         - $ref: '#/components/schemas/Event'
-        - oneOf:
-            - $ref: '#/components/schemas/Proposal'
-            - $ref: '#/components/schemas/Agreement'
+        - $ref: '#/components/schemas/Agreement'
 
     Error:
       type: object
