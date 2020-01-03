@@ -72,6 +72,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Already unsubscribed.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -119,6 +121,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Proposal rejected.
         default:
           $ref: '#/components/responses/UnexpectedError'
     delete:
@@ -133,6 +137,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Proposal already rejected.
         default:
           $ref: '#/components/responses/UnexpectedError'
     post:
@@ -156,6 +162,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Proposal rejected.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -193,6 +201,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Already unsubscribed.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -240,6 +250,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Proposal rejected.
         default:
           $ref: '#/components/responses/UnexpectedError'
     delete:
@@ -254,6 +266,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Proposal already rejected.
         default:
           $ref: '#/components/responses/UnexpectedError'
     post:
@@ -277,6 +291,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Proposal rejected.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -343,14 +359,15 @@ paths:
       operationId: cancelAgreement
       responses:
         '204':
-          description: Agreement canceled.
+          description: Agreement cancelled.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Agreement already approved.
         default:
           $ref: '#/components/responses/UnexpectedError'
-          description: Agreement canceled
 
 
   /agreements/{agreementId}/confirm:
@@ -369,8 +386,11 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '410':
+          description: Agreement cancelled.
         default:
           $ref: '#/components/responses/UnexpectedError'
+
 
   /agreements/{agreementId}/wait:
     parameters:
@@ -412,6 +432,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Agreement already rejected.
+        '410':
+          description: Agreement cancelled by Requstor.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -431,6 +455,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Agreement already approved.
+        '410':
+          description: Agreement cancelled by Requstor.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -451,6 +479,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: Agreement not in Approved state.
+        '410':
+          description: Agreement cancelled by Requstor.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
