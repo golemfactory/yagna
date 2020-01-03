@@ -1,30 +1,22 @@
-use crate::error::Error;
-use crate::{Handle, RpcEnvelope, RpcHandler, RpcMessage, RpcRawCall};
-use actix::{MailboxError, Message, Recipient};
-use futures::channel::mpsc;
-use futures::prelude::*;
+use crate::{
+    error::Error,
+    remote_router::{RemoteRouter, UpdateService},
+    Handle, RpcEnvelope, RpcHandler, RpcMessage, RpcRawCall,
+};
+use actix::{Actor, Message, Recipient, SystemService};
 use futures::{
     compat::Future01CompatExt,
-    future::{FutureExt, TryFutureExt},
+    future::{ready, Either},
     Future,
 };
-use futures::{future, TryStreamExt};
-use serde::{Deserialize, Serialize};
-use std::any::Any;
-use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::pin::Pin;
-mod into_actix;
-mod util;
+use futures_01::future::{Either as Either01, Future as Future01};
+use std::{
+    any::Any,
+    sync::{Arc, Mutex},
+};
+use ya_sb_util::PrefixLookupBag;
 
-use crate::local_router::into_actix::RpcHandlerWrapper;
-use crate::local_router::util::PrefixLookupBag;
-use crate::remote_router::{RemoteRouter, UpdateService};
-use crate::untyped::RawHandler;
-use actix::{Actor, SystemService};
-use futures::future::ErrInto;
-use futures_01::future::Future as Future01;
-use std::sync::{Arc, Mutex};
+mod into_actix;
 
 trait RawEndpoint: Any {
     fn send(&self, msg: RpcRawCall) -> Box<dyn Future01<Item = Vec<u8>, Error = Error>>;
@@ -56,7 +48,7 @@ impl RawEndpoint for Recipient<RpcRawCall> {
         )
     }
 
-    fn recipient(&self) -> &Any {
+    fn recipient(&self) -> &dyn Any {
         self
     }
 }
@@ -145,15 +137,15 @@ impl Router {
         &mut self,
         addr: &str,
         msg: T,
-    ) -> impl futures_01::future::Future<Item = Result<T::Item, T::Error>, Error = Error> {
+    ) -> impl Future01<Item = Result<T::Item, T::Error>, Error = Error> {
         let caller = "local";
         let addr = format!("{}/{}", addr, T::ID);
         if let Some(slot) = self.handlers.get_mut(&addr) {
-            futures_01::future::Either::A(if let Some(h) = slot.recipient() {
-                futures_01::future::Either::A(h.send(RpcEnvelope::local(msg)).map_err(Error::from))
+            Either01::A(if let Some(h) = slot.recipient() {
+                Either01::A(h.send(RpcEnvelope::local(msg)).map_err(Error::from))
             } else {
                 let body = rmp_serde::to_vec(&msg).unwrap();
-                futures_01::future::Either::B(
+                Either01::B(
                     slot.send(RpcRawCall {
                         caller: caller.into(),
                         addr,
@@ -164,7 +156,7 @@ impl Router {
             })
         } else {
             let body = rmp_serde::to_vec(&msg).unwrap();
-            futures_01::future::Either::B(
+            Either01::B(
                 RemoteRouter::from_registry()
                     .send(RpcRawCall {
                         caller: caller.into(),
@@ -184,7 +176,7 @@ impl Router {
         msg: Vec<u8>,
     ) -> impl Future<Output = Result<Vec<u8>, Error>> {
         if let Some(slot) = self.handlers.get_mut(addr) {
-            future::Either::Left(
+            Either::Left(
                 slot.send(RpcRawCall {
                     caller: from.into(),
                     addr: addr.into(),
@@ -193,7 +185,7 @@ impl Router {
                 .compat(),
             )
         } else {
-            future::Either::Right(
+            Either::Right(
                 RemoteRouter::from_registry()
                     .send(RpcRawCall {
                         caller: from.into(),
@@ -213,7 +205,7 @@ impl Router {
         msg: &[u8],
     ) -> impl Future<Output = Result<Vec<u8>, Error>> {
         if let Some(slot) = self.handlers.get_mut(addr) {
-            future::Either::Left(
+            Either::Left(
                 slot.send(RpcRawCall {
                     caller: from.into(),
                     addr: addr.into(),
@@ -223,7 +215,7 @@ impl Router {
             )
         } else {
             log::warn!("no endpoint: {}", addr);
-            future::Either::Right(future::ready(Err(Error::NoEndpoint)))
+            Either::Right(ready(Err(Error::NoEndpoint)))
         }
     }
 }

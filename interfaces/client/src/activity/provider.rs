@@ -22,9 +22,9 @@ rest_interface! {
             state: ActivityState,
             #[path] activity_id: &str
         ) -> Result<()> {
-            let _response = put("activity/{activity_id}/state/").send_json( &state ).body();
+            let response = put("activity/{activity_id}/state/").send_json( &state ).body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
 
         /// Pass current activity usage (which may include error details)
@@ -33,9 +33,9 @@ rest_interface! {
             usage: ActivityUsage,
             #[path] activity_id: &str
         ) -> Result<()> {
-            let _response = put("activity/{activity_id}/usage/").send_json( &usage ).body();
+            let response = put("activity/{activity_id}/usage/").send_json( &usage ).body();
 
-            { Ok(()) }
+            { response.map(|_| ()) }
         }
     }
 }

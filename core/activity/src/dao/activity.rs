@@ -118,7 +118,7 @@ impl<'c> ActivityDao<'c> {
     }
 }
 
-pub struct StateFuture<'l, 'c: 'l> {
+pub struct StateFuture<'l, 'c> {
     dao: &'l ActivityDao<'c>,
     activity_id: &'l str,
     state: Option<State>,

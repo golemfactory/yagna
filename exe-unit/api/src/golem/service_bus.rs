@@ -102,7 +102,7 @@ where
         {
             type Value = Execute<M, R, Ctx>;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 formatter.write_str("struct Execute")
             }
 

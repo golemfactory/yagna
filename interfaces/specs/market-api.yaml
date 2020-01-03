@@ -350,6 +350,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/UnexpectedError'
+          description: Agreement canceled
 
 
   /agreements/{agreementId}/confirm:
@@ -370,7 +371,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/UnexpectedError'
-
 
   /agreements/{agreementId}/wait:
     parameters:

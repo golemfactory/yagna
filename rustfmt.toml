@@ -58,3 +58,4 @@ force_explicit_abi = true
 #ignore = []
 #emit_mode = "Files"
 #make_backup = false
+#inline_attribute_width=50 # unstable
