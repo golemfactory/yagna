@@ -1,12 +1,12 @@
 openapi: 3.0.2
 info:
-  version: "1.3.1"
+  version: 1.4.0
   title: Yagna Market API
-  description: >-
+  description: '
     ## Yagna Market
 
     The Yagna Market is a core component of the Yagna Network, which enables
-    computational Offersand Demands circulation. The Market is open for all
+    computational Offers and Demands circulation. The Market is open for all
     entities willing to buy computations (Demands) or monetize computational
     resources (Offers).
 
@@ -23,10 +23,9 @@ info:
     Market API specification</a>.
 
 
-    Each of the two roles: Requestors and Providers have their own interface
-    in the Market API.
-
-
+    Market API contains two roles: Requestors and Providers which are
+    symmetrical most of the time (excluding agreement phase).
+'
 servers:
   - url: /market-api/v1
 
@@ -38,140 +37,127 @@ tags:
 
 paths:
 
+
   /offers:
     post:
       tags:
         - provider
       summary: Publishes Offer
       operationId: subscribeOffer
+      requestBody:
+        $ref: '#/components/requestBodies/Offer'
       responses:
         '201':
-          description: Offer published
-          content:
-            application/json:
-              schema:
-                type: string
-                description: Subscription Id
+          $ref: '#/components/responses/SubscriptionId'
+          # links: TODO
         '400':
-          description: Bad offer desciption
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Offer'
-        description: Offer description
-        required: true
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /offers/{subscriptionId}:
     parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: '#/components/parameters/subscriptionId'
     delete:
       tags:
         - provider
       operationId: unsubscribeOffer
       responses:
         '204':
-          description: Offer revoked
+          description: Offer revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Subscription not found
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
-  /offers/{subscriptionId}/proposals/{proposalId}:
-    parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: proposalId
-        in: path
-        required: true
-        schema:
-          type: string
-    get:
-      tags:
-        - provider
-      summary: Fetches agreement proposal from proposal id.
-      operationId: getProposalDemand
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgreementProposal'
-    delete:
-      tags:
-        - provider
-      summary: Rejects offer
-      operationId: rejectProposal
-      responses:
-        '204':
-          description: OK
-
-  /offers/{subscriptionId}/proposals/{proposalId}/offer:
-    parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: proposalId
-        in: path
-        required: true
-        schema:
-          type: string
-    post:
-      tags:
-        - provider
-      summary: Creates agreement proposal
-      operationId: createProposalOffer
-      responses:
-        '200':
-          description: OK
-          content:
-            '*/*':
-              schema:
-                type: string
-                description: Proposal Id
-      requestBody:
-        $ref: '#/components/requestBodies/Proposal'
 
   /offers/{subscriptionId}/events:
     parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: timeout
-        in: query
-        schema:
-          type: integer
-          format: int32
-      - name: maxEvents
-        in: query
-        schema:
-          type: integer
-          format: int32
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/timeout'
+      - $ref: '#/components/parameters/maxEvents'
     get:
       tags:
         - provider
       operationId: collectDemands
       responses:
         '200':
-          description: OK
+          description: Provider event list.
           content:
-            '*/*':
+            application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Event'
+                  $ref: '#/components/schemas/ProviderEvent'
+              # links: TODO
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Subscription not found
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+
+  /offers/{subscriptionId}/proposals/{proposalId}:
+    parameters:
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/proposalId'
+    get:
+      tags:
+        - provider
+      summary: Fetches Proposal (ie. Demand) with given proposal id.
+      operationId: getProposalDemand
+      responses:
+        '200':
+          $ref: '#/components/responses/Proposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+    delete:
+      tags:
+        - provider
+      summary: Rejects Proposal (ie. Demand)
+      operationId: rejectProposalDemand
+      responses:
+        '204':
+          description: Proposal rejected.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags:
+        - provider
+      summary: Responds with a bespoke Offer to received Demand.
+      description: >
+        Creates and sends a modified version of original Offer (a
+        counter-proposal) adjusted to previously received Proposal (ie. Demand).
+        Changes Proposal state to `Draft`. Returns created Proposal id.
+      operationId: createProposalOffer
+      requestBody:
+        $ref: '#/components/requestBodies/Proposal'
+      responses:
+        '201':
+          $ref: '#/components/responses/ProposalId'
+          # links: TODO
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
   /demands:
     post:
@@ -179,166 +165,177 @@ paths:
         - requestor
       summary: Publishes Demand
       operationId: subscribeDemand
+      requestBody:
+        $ref: '#/components/requestBodies/Demand'
       responses:
         '201':
-          description: Demand published
-          content:
-            application/json:
-              schema:
-                type: string
-                description: Subscription id
+          $ref: '#/components/responses/SubscriptionId'
+          # links: TODO
         '400':
-          description: Bad offer desciption
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Demand'
-        description: Demand specification
-        required: true
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /demands/{subscriptionId}:
     parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: '#/components/parameters/subscriptionId'
     delete:
       tags:
         - requestor
       operationId: unsubscribeDemand
       responses:
         '204':
-          description: Demand revoked
+          description: Demand revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Subscription not found
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /demands/{subscriptionId}/events:
     parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: timeout
-        in: query
-        schema:
-          type: integer
-          format: int32
-      - name: maxEvents
-        in: query
-        schema:
-          type: integer
-          format: int32
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/timeout'
+      - $ref: '#/components/parameters/maxEvents'
     get:
       tags:
         - requestor
       operationId: collectOffers
       responses:
         '200':
-          description: OK
+          description: Requestor event list.
           content:
-            '*/*':
+            application/json4:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Event'
+                  $ref: '#/components/schemas/RequestorEvent'
+          # links: TODO
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Subscription not found
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /demands/{subscriptionId}/proposals/{proposalId}:
     parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: proposalId
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/proposalId'
     get:
       tags:
         - requestor
-      summary: Fetches agreement proposal from proposal id.
+      summary: Fetches Proposal (ie. Offer) with given proposal id.
       operationId: getProposalOffer
       responses:
         '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgreementProposal'
+          $ref: '#/components/responses/Proposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Subscription not found
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
     delete:
       tags:
         - requestor
-      summary: Rejects offer
+      summary: Rejects Proposal (ie. Offer)
       operationId: rejectProposalOffer
       responses:
         '204':
-          description: OK
-
-  /demands/{subscriptionId}/proposals/{proposalId}/demand:
-    parameters:
-      - name: subscriptionId
-        in: path
-        required: true
-        schema:
-          type: string
-      - name: proposalId
-        in: path
-        required: true
-        schema:
-          type: string
+          description: Proposal rejected.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
     post:
       tags:
         - requestor
-      summary: Creates agreement proposal
+      summary: Responds with a bespoke Demand to received Offer.
+      description: >
+        Creates and sends a modified version of original Demand (a
+        counter-proposal) adjusted to previously received Proposal (ie. Offer).
+        Changes Proposal state to `Draft`. Returns created Proposal id.
       operationId: createProposalDemand
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: string
-                description: Proposal Id
       requestBody:
         $ref: '#/components/requestBodies/Proposal'
+      responses:
+        '201':
+          $ref: '#/components/responses/ProposalId'
+          # links: TODO
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /agreements:
     post:
       tags:
         - requestor
-      summary: Creates new agreement from proposal
+      summary: Creates Agreement from selected Proposal.
+      description: Moves given Proposal to `Approved` state.
       operationId: createAgreement
+      requestBody:
+        $ref: '#/components/requestBodies/AgreementProposal'
       responses:
         '201':
-          description: Created
+          description: Agreement created.
           content:
             application/json:
               schema:
                 type: string
                 description: Agreement Id
-          
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Agreement'
-        required: true
+          links:
+            GetAgreementById:
+              description: The response value can be used to fetch Agreement in `GET /agreement/{agreementId}`
+              operationId: getAgreement
+              #operationRef: '#/paths/~1agreements~1{agreementId}/get'
+              parameters:
+                agreementId: '$response.body'
+            # TODO: more links
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /agreements/{agreementId}:
     parameters:
-      - name: agreementId
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: '#/components/parameters/agreementId'
+    get:
+      tags:
+        - requestor
+        - provider
+      summary: Fetches agreement with given agreement id.
+      operationId: getAgreement
+      responses:
+        '200':
+          description: Agreement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
     delete:
       tags:
         - requestor
@@ -346,144 +343,351 @@ paths:
       operationId: cancelAgreement
       responses:
         '204':
-          description: Agreement canceled
+          description: Agreement canceled.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
-  /agreements/{agreementId}/reject:
-    parameters:
-      - name: agreementId
-        in: path
-        required: true
-        schema:
-          type: string
-    post:
-      tags:
-        - provider
-      summary: Rejects agreement.
-      operationId: rejectAgreement
-      responses:
-        '200':
-          description: Agreement rejected
 
-  # TODO: seems not needed -- waitForApproval is enough
   /agreements/{agreementId}/confirm:
     parameters:
-      - name: agreementId
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: '#/components/parameters/agreementId'
     post:
       tags:
         - requestor
       operationId: confirmAgreement
-      summary: Approves agreement.
+      summary: Sends Agreement draft to the Provider.
+      description: Confirms Agreement self-created via `POST /agreements`
       responses:
-        '200':
-          description: OK
+        '204':
+          description: Agreement confirmed.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /agreements/{agreementId}/wait:
     parameters:
-      - name: agreementId
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: '#/components/parameters/agreementId'
+      - $ref: '#/components/parameters/timeout'
     post:
       tags:
         - requestor
       operationId: waitForApproval
+      summary: Waits for Agreement approval by the Provider.
       responses:
         '200':
-          description: OK
+          description: Agreement approval result.
+          content:
+            application/json:
+              schema:
+                type: string
+                enum: [Approved, Rejected, Cancelled, TimedOut]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
 
   /agreements/{agreementId}/approve:
     parameters:
-      - name: agreementId
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: '#/components/parameters/agreementId'
     post:
       tags:
         - provider
       operationId: approveAgreement
+      summary: Approves Agreement proposed by the Reqestor.
       responses:
-        '200':
-          description: OK
+        '204':
+          description: Agreement approved.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+
+  /agreements/{agreementId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/agreementId'
+    post:
+      tags:
+        - provider
+      summary: Rejects Agreement proposed by the Requestor.
+      operationId: rejectAgreement
+      responses:
+        '204':
+          description: Agreement rejected.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+
+  /agreements/{agreementId}/terminate:
+    parameters:
+      - $ref: '#/components/parameters/agreementId'
+    post:
+      tags:
+        - provider
+        - requestor
+      summary: Terminates approved Agreement.
+      operationId: terminateAgreement
+      responses:
+        '204':
+          description: Agreement terminated.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+
+
 components:
+
+
+
+  parameters:
+
+
+    subscriptionId:
+      name: subscriptionId
+      in: path
+      required: true
+      schema:
+        type: string
+
+    proposalId:
+      name: proposalId
+      in: path
+      required: true
+      schema:
+        type: string
+
+    timeout:
+      name: timeout
+      in: query
+      schema:
+        type: integer
+        format: int32
+
+    maxEvents:
+      name: maxEvents
+      in: query
+      schema:
+        type: integer
+        format: int32
+
+    agreementId:
+      name: agreementId
+      in: path
+      required: true
+      schema:
+        type: string
+
+
   requestBodies:
+
+
+    Offer:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Offer'
+
+    Demand:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Demand'
+
     Proposal:
+      required: true
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Proposal'
+
+    AgreementProposal:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AgreementProposal'
+
+
+  responses:
+
+
+    SubscriptionId:
+      description: Subscribed.
+      content:
+        application/json:
+          schema:
+            type: string
+            description: Subscription id
+
+    Proposal:
+      description: Proposal.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Proposal'
+
+    ProposalId:
+      description: Counter Proposal created.
+      content:
+        application/json:
+          schema:
+            type: string
+            description: Proposal Id
+
+    BadRequest:
+      description: Bad request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Authorization information is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: The specified resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    UnexpectedError:
+      description: Unexpected error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
-    DemandOffer:
+
+    DemandOfferBase:
       type: object
-      
       required:
         - properties
         - constraints
       properties:
-        id:
-          type: string
-          readOnly: true
         properties:
           type: object
         constraints:
           type: string
+
     Demand:
       allOf:
-        - $ref: '#/components/schemas/DemandOffer'
+        - $ref: '#/components/schemas/DemandOfferBase'
         - type: object
+          required:
+            - demandId
+            - requestorId
           properties:
+            demandId:
+              type: string
+              readOnly: true
             requestorId:
               type: string
               readOnly: true
+
     Offer:
       allOf:
-        - $ref: '#/components/schemas/DemandOffer'
+        - $ref: '#/components/schemas/DemandOfferBase'
         - type: object
+          required:
+            - offerId
+            - providerId
           properties:
+            offerId:
+              type: string
+              readOnly: true
             providerId:
               type: string
               readOnly: true
+
     Proposal:
       allOf:
-        - $ref: '#/components/schemas/DemandOffer'
+        - $ref: '#/components/schemas/DemandOfferBase'
         - type: object
           required:
+            - proposalId
             - issuerId
+            - state
           properties:
+            proposalId:
+              type: string
+              readOnly: true
             issuerId:
               type: string
+              readOnly: true
+            state:
+              type: string
+              readOnly: true
+              enum: [Initial, Draft, Rejected, Accepted, Expired]
+              description: >
+                * `Initial` - proposal arrived from the market as response
+                to subscription
+
+                * `Draft` - bespoke counter-proposal issued by one party
+                directly to other party (negotiation phase)
+
+                * `Rejected` by other party
+
+                * `Accepted` - promoted into the Agreement draft
+
+                * `Expired` - not accepted nor rejected before validity period
             prevProposalId:
               type: string
+              description: >
+                id of the proposal from other side which this proposal responds to
+
     AgreementProposal:
       type: object
       required:
-        - id
-        - demand
-        - offer
-        - expirationDate
+        - proposalId
+        - validTo
       properties:
-        id:
+        proposalId:
           type: string
-        demand:
-          $ref: '#/components/schemas/Proposal'
-        offer:
-          $ref: '#/components/schemas/Proposal'
-        expirationDate:
+          description: id of the proposal to be promoted to the Agreement
+        validTo:
           type: string
           format: date-time
+          description: >
+            End of validity period. Agreement needs to be accepted, rejected or
+            cancellled before this date; otherwise will expire
+
     Agreement:
       type: object
       required:
         - agreementId
         - demand
         - offer
-        - date
-        # TODO: signatures
+        - validTo
+        - state
       properties:
         agreementId:
           type: string
@@ -491,33 +695,74 @@ components:
           $ref: '#/components/schemas/Demand'
         offer:
           $ref: '#/components/schemas/Offer'
-        date:
+        validTo:
           type: string
           format: date-time
+          description: >
+            End of validity period. Agreement needs to be accepted, rejected or
+            cancellled before this date; otherwise will expire
+        approvedDate:
+          type: string
+          format: date-time
+          description: date of the Agreement approval
+        state:
+          type: string
+          enum: [Proposal, Pending, Cancelled, Rejected, Approved, Expired, Terminated]
+          description: >
+            * `Proposal` - newly created by a Requestor (based on Proposal)
+
+            * `Pending` - confirmed by a Requestor and send to Provider for approval
+
+            * `Cancelled` by a Requestor
+
+            * `Rejected` by a Provider
+
+            * `Approved` by both sides
+
+            * `Expired` - not accepted, rejected nor cancelled within validity period
+
+            * `Terminated` - finished after approval.
+        proposed_signature:
+          type: string
+        approved_signature:
+          type: string
+        committed_signature:
+          type: string
+
     Event:
       type: object
       required:
         - eventType
+        - eventDate
       discriminator:
         propertyName: eventType
       properties:
         eventType:
           type: string
-    ProposalEvent:
+        eventDate:
+          type: string
+          format: date-time
+
+    RequestorEvent:
       allOf:
         - $ref: '#/components/schemas/Event'
-        - type: object
-          required:
-            - proposal
-          properties:
-            proposal:
-              $ref: '#/components/schemas/Proposal'
-    AgreementProposalEvent:
+        - oneOf:
+            - $ref: '#/components/schemas/Proposal'
+
+    ProviderEvent:
       allOf:
         - $ref: '#/components/schemas/Event'
-        - type: object
-          required:
-            - agreementProposal
-          properties:
-            agreementProposal:
-              $ref: '#/components/schemas/AgreementProposal'
+        - oneOf:
+            - $ref: '#/components/schemas/Proposal'
+            - $ref: '#/components/schemas/Agreement'
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
