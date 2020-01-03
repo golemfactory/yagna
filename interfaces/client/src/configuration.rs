@@ -2,8 +2,6 @@
 use std::env;
 
 use crate::Result;
-// TODO: consider using Uri instead Url
-//use awc::http::Uri;
 use url::Url;
 
 const API_HOST_PORT: &str = "localhost:5001";

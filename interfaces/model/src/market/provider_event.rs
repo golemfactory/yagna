@@ -11,24 +11,26 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Proposal {
-    #[serde(rename = "id")]
-    pub id: String,
-    #[serde(rename = "properties")]
-    pub properties: serde_json::Value,
-    #[serde(rename = "constraints")]
-    pub constraints: String,
-    #[serde(rename = "prevProposalId", skip_serializing_if = "Option::is_none")]
-    pub prev_proposal_id: Option<String>,
-}
-
-impl Proposal {
-    pub fn new(id: String, properties: serde_json::Value, constraints: String) -> Proposal {
-        Proposal {
-            id,
-            properties,
-            constraints,
-            prev_proposal_id: None,
-        }
-    }
+#[serde(tag = "eventType")]
+pub enum ProviderEvent {
+    #[serde(rename = "demand")]
+    DemandEvent {
+        #[serde(rename = "requestorId")]
+        requestor_id: String,
+        #[serde(rename = "demand", skip_serializing_if = "Option::is_none")]
+        demand: Option<crate::market::Proposal>,
+    },
+    #[serde(rename = "newAgreement")]
+    NewAgreementEvent {
+        #[serde(rename = "requestorId")]
+        requestor_id: String,
+        #[serde(rename = "agreementId", skip_serializing_if = "Option::is_none")]
+        agreement_id: Option<String>,
+        #[serde(rename = "demand", skip_serializing_if = "Option::is_none")]
+        demand: Option<crate::market::Demand>,
+        #[serde(rename = "providerId", skip_serializing_if = "Option::is_none")]
+        provider_id: Option<String>,
+        #[serde(rename = "offer", skip_serializing_if = "Option::is_none")]
+        offer: Option<crate::market::Offer>,
+    },
 }
