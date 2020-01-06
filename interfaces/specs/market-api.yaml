@@ -1,6 +1,6 @@
 openapi: 3.0.2
 info:
-  version: 1.4.0
+  version: 1.4.1
   title: Yagna Market API
   description: '
     ## Yagna Market
@@ -111,6 +111,25 @@ paths:
         default:
           $ref: '#/components/responses/UnexpectedError'
 
+  /offers/{subscriptionId}/propertyQuery/{queryId}:
+    parameters:
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/queryId'
+    post:
+      tags:
+        - provider
+      operationId: postQueryResponseOffers
+      requestBody:
+        $ref: '#/components/requestBodies/PropertyQueryResponse'
+      responses:
+        '200':
+          description: OK. Query response posted successfully.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
   /offers/{subscriptionId}/proposals/{proposalId}:
     parameters:
@@ -240,6 +259,25 @@ paths:
         default:
           $ref: '#/components/responses/UnexpectedError'
 
+  /demands/{subscriptionId}/propertyQuery/{queryId}:
+    parameters:
+      - $ref: '#/components/parameters/subscriptionId'
+      - $ref: '#/components/parameters/queryId'
+    post:
+      tags:
+        - requestor
+      operationId: postQueryResponseDemands
+      requestBody:
+        $ref: '#/components/requestBodies/PropertyQueryResponse'
+      responses:
+        '200':
+          description: OK. Query response posted successfully.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
 
   /demands/{subscriptionId}/proposals/{proposalId}:
     parameters:
@@ -518,6 +556,13 @@ components:
       schema:
         type: string
 
+    queryId:
+      name: queryId
+      in: path
+      required: true
+      schema:
+        type: string
+
     proposalId:
       name: proposalId
       in: path
@@ -577,6 +622,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/AgreementProposal'
+
+    PropertyQueryResponse:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PropertyQueryResponse'
 
 
   responses:
@@ -650,9 +702,6 @@ components:
       allOf:
         - $ref: '#/components/schemas/DemandOfferBase'
         - type: object
-          required:
-            - demandId
-            - requestorId
           properties:
             demandId:
               type: string
@@ -665,9 +714,6 @@ components:
       allOf:
         - $ref: '#/components/schemas/DemandOfferBase'
         - type: object
-          required:
-            - offerId
-            - providerId
           properties:
             offerId:
               type: string
@@ -680,10 +726,6 @@ components:
       allOf:
         - $ref: '#/components/schemas/DemandOfferBase'
         - type: object
-          required:
-            - proposalId
-            - issuerId
-            - state
           properties:
             proposalId:
               type: string
@@ -770,11 +812,11 @@ components:
             * `Expired` - not accepted, rejected nor cancelled within validity period
 
             * `Terminated` - finished after approval.
-        proposed_signature:
+        proposedSignature:
           type: string
-        approved_signature:
+        approvedSignature:
           type: string
-        committed_signature:
+        committedSignature:
           type: string
 
     Event:
@@ -794,12 +836,37 @@ components:
     ProposalEvent:
       allOf:
         - $ref: '#/components/schemas/Event'
-        - $ref: '#/components/schemas/Proposal'
+        - type: object
+          properties:
+            proposal:
+              $ref: '#/components/schemas/Proposal'
 
     AgreementEvent:
       allOf:
         - $ref: '#/components/schemas/Event'
-        - $ref: '#/components/schemas/Agreement'
+        - type: object
+          properties:
+            agreement:
+              $ref: '#/components/schemas/Agreement'
+
+    PropertyQuery:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+      properties:
+        issuerProperties:
+          type: object
+        queryId:
+          type: string
+        queriedProperties:
+          uniqueItems: false
+          type: array
+          items:
+            type: string
+
+    PropertyQueryResponse:
+      type: object
+      properties: {}
 
     Error:
       type: object
