@@ -120,14 +120,16 @@ paths:
         - provider
       operationId: postQueryResponseOffers
       requestBody:
-        $ref: '#/components/requestBodies/PropertyQueryResponse'
+        $ref: '#/components/requestBodies/PropertyQuery'
       responses:
         '200':
-          description: OK. Query response posted successfully.
+          $ref: '#/components/responses/PropertyQueryResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -268,14 +270,16 @@ paths:
         - requestor
       operationId: postQueryResponseDemands
       requestBody:
-        $ref: '#/components/requestBodies/PropertyQueryResponse'
+        $ref: '#/components/requestBodies/PropertyQuery'
       responses:
         '200':
-          description: OK. Query response posted successfully.
+          $ref: '#/components/responses/PropertyQueryResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -480,7 +484,7 @@ paths:
         '409':
           description: Agreement already rejected.
         '410':
-          description: Agreement cancelled by Requstor.
+          description: Agreement cancelled by the Requstor.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -503,7 +507,7 @@ paths:
         '409':
           description: Agreement already approved.
         '410':
-          description: Agreement cancelled by Requstor.
+          description: Agreement cancelled by the Requstor.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -527,7 +531,7 @@ paths:
         '409':
           description: Agreement not in Approved state.
         '410':
-          description: Agreement cancelled by Requstor.
+          description: Agreement cancelled by the Requstor.
         default:
           $ref: '#/components/responses/UnexpectedError'
 
@@ -623,12 +627,12 @@ components:
           schema:
             $ref: '#/components/schemas/AgreementProposal'
 
-    PropertyQueryResponse:
+    PropertyQuery:
       required: true
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/PropertyQueryResponse'
+            $ref: '#/components/schemas/PropertyQuery'
 
 
   responses:
@@ -656,6 +660,13 @@ components:
           schema:
             type: string
             description: Proposal Id
+
+    PropertyQueryResponse:
+      description: Property query response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PropertyQueryResponse'
 
     BadRequest:
       description: Bad request.
@@ -819,6 +830,23 @@ components:
         committedSignature:
           type: string
 
+    PropertyQuery:
+      type: object
+      properties:
+        issuerProperties:
+          type: object
+        queryId:
+          type: string
+        queriedProperties:
+          uniqueItems: false
+          type: array
+          items:
+            type: string
+
+    PropertyQueryResponse:
+      type: object
+      additionalProperties: true
+
     Event:
       type: object
       required:
@@ -849,24 +877,13 @@ components:
             agreement:
               $ref: '#/components/schemas/Agreement'
 
-    PropertyQuery:
+    PropertyQueryEvent:
       allOf:
         - $ref: '#/components/schemas/Event'
         - type: object
       properties:
-        issuerProperties:
-          type: object
-        queryId:
-          type: string
-        queriedProperties:
-          uniqueItems: false
-          type: array
-          items:
-            type: string
-
-    PropertyQueryResponse:
-      type: object
-      properties: {}
+        propertyQuery:
+          $ref: '#/components/schemas/PropertyQuery'
 
     Error:
       type: object
