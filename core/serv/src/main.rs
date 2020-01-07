@@ -1,6 +1,8 @@
-use actix_web::{get, middleware, App, HttpServer, Responder};
+use actix::SystemRunner;
+use actix_web::{dev::Service, get, middleware, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use flexi_logger::Logger;
+use futures::{TryFuture, TryFutureExt};
 use std::{
     convert::{TryFrom, TryInto},
     fmt::Debug,
@@ -8,11 +10,10 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 
-use ya_service_api::{CliCtx, Command, CommandOutput};
+use ya_service_api::{CliCtx, CommandOutput};
 
 mod autocomplete;
-pub use autocomplete::CompleteCommand;
-use std::sync::Mutex;
+use autocomplete::CompleteCommand;
 
 #[derive(StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
@@ -62,9 +63,17 @@ impl CliArgs {
         Ok((self.address.clone(), self.port))
     }
 
-    pub fn run_command(&self) -> Result<()> {
-        let ctx: CliCtx = self.try_into()?;
-        Ok(ctx.output(self.command.run_command(&ctx)?))
+    pub fn run_command(self) -> Result<()> {
+        let mut sys = actix::System::new(clap::crate_name!());
+        let ctx: CliCtx = (&self).try_into()?;
+
+        if let CliCommand::Service(service) = self.command {
+            Ok(ctx.output(service.run_command(sys, &ctx)?))
+        } else {
+            let run = self.command.run_command(&ctx);
+            futures::pin_mut!(run);
+            Ok(ctx.output(sys.block_on(run.compat())?))
+        }
     }
 }
 
@@ -76,19 +85,13 @@ impl TryFrom<&CliArgs> for CliCtx {
         log::info!("Using data dir: {:?} ", data_dir);
         let address = args.get_address()?;
         let json_output = args.json;
-        //        let net = value.net.clone();
-        //        let accept_any_prompt = args.accept_any_prompt;
         let interactive = args.interactive;
-        let sys = Mutex::new(Some(actix::System::new("yg")));
 
         Ok(CliCtx {
             address,
             data_dir,
             json_output,
-            //            accept_any_prompt,
-            //            net,
             interactive,
-            sys,
         })
     }
 }
@@ -108,11 +111,11 @@ enum CliCommand {
     Complete(CompleteCommand),
 }
 
-impl Command for CliCommand {
-    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+impl CliCommand {
+    pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::Service(service) => service.run_command(ctx),
-            CliCommand::Id(id) => id.run_command(ctx),
+            CliCommand::Service(service) => anyhow::bail!("service should be handled elswere"),
+            CliCommand::Id(id) => id.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
         }
     }
@@ -131,15 +134,13 @@ enum ServiceCommand {
 }
 
 // TODO: distinguish service commands from other CLI commands
-impl Command for ServiceCommand {
-    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+impl ServiceCommand {
+    pub fn run_command(&self, sys: SystemRunner, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             Self::Run => {
-                let a = ya_identity::service::activate();
-                futures::pin_mut!(a);
-                ctx.block_on(a);
+                let a = ya_identity::service::activate()?;
 
-                println!("Running {} service!", structopt::clap::crate_name!());
+                println!("Running {} service!", clap::crate_name!());
                 HttpServer::new(|| {
                     App::new()
                         .wrap(middleware::Logger::default())
@@ -149,7 +150,7 @@ impl Command for ServiceCommand {
                 .context(format!("Failed to bind {:?}", ctx.address()))?
                 .start();
 
-                ctx.run()?;
+                sys.run();
 
                 Ok(CommandOutput::NoOutput)
             }

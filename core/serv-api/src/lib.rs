@@ -1,6 +1,5 @@
 use actix::prelude::*;
 use anyhow::Result;
-use futures::{TryFuture, TryFutureExt};
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -14,8 +13,6 @@ pub struct CliCtx {
     //    accept_any_prompt: bool,
     //    net: Option<Net>,
     pub interactive: bool,
-    // TODO: Option is ugly here - it was added bc run() eats sys
-    pub sys: Mutex<Option<SystemRunner>>,
 }
 
 impl CliCtx {
@@ -36,15 +33,15 @@ impl CliCtx {
             .block_on(f.compat())
     }
 
-    pub fn run(&self) -> anyhow::Result<()> {
-        Ok(self.sys.lock().unwrap().take().unwrap().run()?)
+    pub fn output(&self, output: CommandOutput) {
+        output.print(self.json_output)
     }
 }
 
-pub trait Command {
-    // TODO: make this async
-    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
-}
+// commented out until Rust enables async or return impl Trait for Trait fns
+//pub trait Command {
+//    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
+//}
 
 pub enum CommandOutput {
     NoOutput,

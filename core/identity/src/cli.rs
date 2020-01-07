@@ -6,7 +6,7 @@ use structopt::*;
 
 use futures::Future;
 use ya_core_model::identity::DEFAULT_IDENTITY;
-use ya_service_api::{CliCtx, Command, CommandOutput, ResponseTable};
+use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 
 const KEYS_SUBDIR: &str = "keys";
 const DEFAULT_PASSWORD: &str = "";
@@ -76,37 +76,34 @@ pub enum IdentityCommand {
     },
 }
 
-impl Command for IdentityCommand {
-    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+impl IdentityCommand {
+    pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         let keys_path = keys_path(&ctx.data_dir);
         match self {
             IdentityCommand::List { password } => {
                 use ya_core_model::identity;
                 use ya_service_bus::typed as bus;
                 use ya_service_bus::RpcEndpoint;
-                let a = async {
-                    let identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
-                        .send(identity::List::default())
-                        .await
-                        .map_err(|e| anyhow::Error::msg(e))?
-                        .unwrap();
-                    Ok(ResponseTable {
-                        columns: vec!["alias".into(), "address".into()],
-                        values: identities
-                            .into_iter()
-                            .map(|identity| {
-                                serde_json::json! {
-                                    [identity.alias, identity.node_id]
-                                }
-                            })
-                            .collect(),
-                    }
-                    .into())
-                };
-                futures::pin_mut!(a);
-                ctx.block_on(a)
+                let identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
+                    .send(identity::List::default())
+                    .await
+                    .map_err(|e| anyhow::Error::msg(e))
+                    .context("sending id List to BUS")?
+                    .unwrap();
+                eprintln!("ids: {:?}", identities);
+                Ok(ResponseTable {
+                    columns: vec!["alias".into(), "address".into()],
+                    values: identities
+                        .into_iter()
+                        .map(|identity| {
+                            serde_json::json! {
+                                [identity.alias, identity.node_id]
+                            }
+                        })
+                        .collect(),
+                }
+                .into())
             }
-
             IdentityCommand::Show { alias, password } => {
                 let file_path = key_path(&keys_path, &alias);
                 if let Err(e) = fs::File::open(&file_path) {
