@@ -1,7 +1,10 @@
+use actix::prelude::*;
 use anyhow::Result;
+use futures::{TryFuture, TryFutureExt};
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 #[allow(dead_code)]
 pub struct CliCtx {
@@ -11,7 +14,8 @@ pub struct CliCtx {
     //    accept_any_prompt: bool,
     //    net: Option<Net>,
     pub interactive: bool,
-    //    sys: SystemRunner,
+    // TODO: Option is ugly here - it was added bc run() eats sys
+    pub sys: Mutex<Option<SystemRunner>>,
 }
 
 impl CliCtx {
@@ -21,6 +25,19 @@ impl CliCtx {
 
     pub fn output(&self, output: CommandOutput) {
         output.print(self.json_output)
+    }
+
+    pub fn block_on<F: TryFuture + Unpin>(&self, f: F) -> Result<F::Ok, F::Error> {
+        self.sys
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .block_on(f.compat())
+    }
+
+    pub fn run(&self) -> anyhow::Result<()> {
+        Ok(self.sys.lock().unwrap().take().unwrap().run()?)
     }
 }
 

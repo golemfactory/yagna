@@ -7,8 +7,10 @@ edition = "2018"
 
 [dependencies]
 ya-service-api = { path = "../serv-api"}
+ya-appkey = { path = "../appkey" }
 ya-identity = { path = "../identity" }
 
+actix = "0.8"
 actix-web = "1.0"
 
 anyhow = "1.0"

@@ -12,6 +12,7 @@ use ya_service_api::{CliCtx, Command, CommandOutput};
 
 mod autocomplete;
 pub use autocomplete::CompleteCommand;
+use std::sync::Mutex;
 
 #[derive(StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
@@ -78,7 +79,7 @@ impl TryFrom<&CliArgs> for CliCtx {
         //        let net = value.net.clone();
         //        let accept_any_prompt = args.accept_any_prompt;
         let interactive = args.interactive;
-        //        let sys = actix::System::new("golemcli");
+        let sys = Mutex::new(Some(actix::System::new("yg")));
 
         Ok(CliCtx {
             address,
@@ -87,7 +88,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             //            accept_any_prompt,
             //            net,
             interactive,
-            //            sys,
+            sys,
         })
     }
 }
@@ -102,6 +103,9 @@ enum CliCommand {
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
     Id(ya_identity::IdentityCommand),
 
+    /// AppKey management
+    AppKey(ya_appkey::cli::AppKeyCommand),
+
     #[structopt(name = "complete")]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
     Complete(CompleteCommand),
@@ -112,6 +116,7 @@ impl Command for CliCommand {
         match self {
             CliCommand::Service(service) => service.run_command(ctx),
             CliCommand::Id(id) => id.run_command(ctx),
+            CliCommand::AppKey(appkey) => appkey.run_command(ctx),
             CliCommand::Complete(complete) => complete.run_command(ctx),
         }
     }

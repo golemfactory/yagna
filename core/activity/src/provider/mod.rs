@@ -12,11 +12,11 @@ use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, State};
 use ya_service_bus::typed as bus;
 
 pub struct ProviderActivityApi {
-    db_executor: Mutex<DbExecutor>,
+    db_executor: Mutex<DbExecutor<Error>>,
 }
 
 impl ProviderActivityApi {
-    pub fn new(db_executor: Mutex<DbExecutor>) -> Self {
+    pub fn new(db_executor: Mutex<DbExecutor<Error>>) -> Self {
         Self { db_executor }
     }
 
