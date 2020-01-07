@@ -1,5 +1,4 @@
 use actix_rt::Runtime;
-use futures::prelude::*;
 use std::sync::Arc;
 use ya_client::{
     activity::{ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, API_ROOT},
@@ -108,6 +107,6 @@ async fn interact() -> Result<()> {
 fn main() {
     Runtime::new()
         .expect("Cannot create runtime")
-        .block_on(interact().boxed_local().compat())
+        .block_on(interact())
         .expect("Runtime error");
 }

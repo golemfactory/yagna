@@ -5,8 +5,8 @@ use std::{fs, path::PathBuf};
 use structopt::*;
 
 use futures::Future;
-use ya_service_api::{CliCtx, Command, CommandOutput, ResponseTable};
 use ya_core_model::identity::DEFAULT_IDENTITY;
+use ya_service_api::{CliCtx, Command, CommandOutput, ResponseTable};
 
 const KEYS_SUBDIR: &str = "keys";
 const DEFAULT_PASSWORD: &str = "";

@@ -5,7 +5,6 @@ use crate::requestor::get_agreement;
 use crate::timeout::IntoTimeoutFuture;
 use crate::{RestfulApi, ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION, NET_SERVICE_ID};
 use actix_web::web;
-use futures::compat::Future01CompatExt;
 use futures::lock::Mutex;
 use futures::prelude::*;
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
@@ -84,14 +83,17 @@ impl RestfulApi for RequestorStateApi {
             "/{}/v{}",
             ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION
         ))
-        .service(web::resource("/activity/{activity_id}/state").route(
-            web::get().to_async(impl_restful_handler!(api, get_activity_state, path, query)),
-        ))
-        .service(web::resource("/activity/{activity_id}/usage").route(
-            web::get().to_async(impl_restful_handler!(api, get_activity_usage, path, query)),
-        ))
-        .service(web::resource("/activity/{activity_id}/command").route(
-            web::get().to_async(impl_restful_handler!(api, get_running_command, path, query)),
-        ))
+        .service(
+            web::resource("/activity/{activity_id}/state")
+                .route(web::get().to(impl_restful_handler!(api, get_activity_state, path, query))),
+        )
+        .service(
+            web::resource("/activity/{activity_id}/usage")
+                .route(web::get().to(impl_restful_handler!(api, get_activity_usage, path, query))),
+        )
+        .service(
+            web::resource("/activity/{activity_id}/command")
+                .route(web::get().to(impl_restful_handler!(api, get_running_command, path, query))),
+        )
     }
 }

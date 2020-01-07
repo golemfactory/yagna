@@ -1,32 +1,31 @@
-DROP TABLE [Activity];
+DROP TABLE "activity";
 
-DROP TABLE [ActivityEvent];
+DROP TABLE "activity_event";
 
-DROP TABLE [ActivityEventType];
+DROP TABLE "activity_event_type";
 
-DROP TABLE [ActivityState];
+DROP TABLE "activity_state";
 
-DROP TABLE [Agreement];
+DROP TABLE "agreement";
 
-DROP TABLE [AgreementEvent];
+DROP TABLE "agreement_event";
 
-DROP TABLE [AgreementEventType];
+DROP TABLE "agreement_event_type";
 
-DROP TABLE [AgreementState];
+DROP TABLE "agreement_state";
 
-DROP TABLE [Allocation];
+DROP TABLE "allocation";
 
-DROP TABLE [DebitNote];
+DROP TABLE "debit_note";
 
-DROP TABLE [Invoice];
+DROP TABLE "invoice";
 
-DROP TABLE [InvoiceDebitNoteState];
+DROP TABLE "invoice_debit_note_state";
 
-DROP TABLE [InvoiceXActivity];
+DROP TABLE "invoice_x_activity";
 
-DROP TABLE [Payment];
+DROP TABLE "payment";
 
-DROP TABLE [PaymentXDebitNote];
+DROP TABLE "payment_x_debit_note";
 
-DROP TABLE [PaymentXInvoice];
-
+DROP TABLE "payment_x_invoice";
