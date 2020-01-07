@@ -1,4 +1,4 @@
-use actix::SystemRunner;
+use actix_rt::SystemRunner;
 use actix_web::{dev::Service, get, middleware, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use flexi_logger::Logger;
@@ -67,7 +67,7 @@ impl CliArgs {
     }
 
     pub fn run_command(self) -> Result<()> {
-        let mut sys = actix::System::new(clap::crate_name!());
+        let mut sys = actix_rt::System::new(clap::crate_name!());
         let ctx: CliCtx = (&self).try_into()?;
 
         if let CliCommand::Service(service) = self.command {
