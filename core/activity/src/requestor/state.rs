@@ -11,11 +11,11 @@ use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningComm
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState};
 
 pub struct RequestorStateApi {
-    db_executor: Mutex<DbExecutor>,
+    db_executor: Mutex<DbExecutor<Error>>,
 }
 
 impl RequestorStateApi {
-    pub fn new(db_executor: Mutex<DbExecutor>) -> Self {
+    pub fn new(db_executor: Mutex<DbExecutor<Error>>) -> Self {
         Self { db_executor }
     }
 
