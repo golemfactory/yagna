@@ -8,29 +8,19 @@ use std::sync::Mutex;
 #[allow(dead_code)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
-    pub address: (String, u16),
+    pub http_address: (String, u16),
+    pub router_address: (String, u16),
     pub json_output: bool,
-    //    accept_any_prompt: bool,
-    //    net: Option<Net>,
     pub interactive: bool,
 }
 
 impl CliCtx {
-    pub fn address(&self) -> (&str, u16) {
-        (&self.address.0, self.address.1)
+    pub fn http_address(&self) -> (&str, u16) {
+        (&self.http_address.0, self.http_address.1)
     }
 
-    pub fn output(&self, output: CommandOutput) {
-        output.print(self.json_output)
-    }
-
-    pub fn block_on<F: TryFuture + Unpin>(&self, f: F) -> Result<F::Ok, F::Error> {
-        self.sys
-            .lock()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .block_on(f.compat())
+    pub fn router_address(&self) -> (&str, u16) {
+        (&self.router_address.0, self.router_address.1)
     }
 
     pub fn output(&self, output: CommandOutput) {

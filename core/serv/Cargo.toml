@@ -6,8 +6,9 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-service-api = "0.1"
 ya-identity = "0.1"
+ya-service-api = "0.1"
+ya-sb-router = "0.1"
 
 actix = "0.8"
 actix-web = "1.0"

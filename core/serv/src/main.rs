@@ -16,28 +16,27 @@ mod autocomplete;
 use autocomplete::CompleteCommand;
 
 #[derive(StructOpt, Debug)]
-#[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(about = clap::crate_description!())]
+#[structopt(setting = clap::AppSettings::ColoredHelp)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
     /// Daemon data dir
-    #[structopt(short, long = "datadir")]
-    #[structopt(set = clap::ArgSettings::Global)]
+    #[structopt(short, long = "datadir", set = clap::ArgSettings::Global)]
     data_dir: Option<PathBuf>,
 
     /// Daemon address
-    #[structopt(short, long)]
-    #[structopt(default_value = "127.0.0.1")]
+    #[structopt(short, long, default_value = "127.0.0.1")]
     address: String,
 
-    /// Daemon port
-    #[structopt(short, long)]
-    #[structopt(default_value = "7465")]
-    port: u16,
+    /// Daemon HTTP port
+    #[structopt(short, long, default_value = "7465")]
+    http_port: u16,
+
+    #[structopt(short = "l", default_value = "8245")]
+    router_port: u16,
 
     /// Return results in JSON format
-    #[structopt(long)]
-    #[structopt(set = clap::ArgSettings::Global)]
+    #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
 
     /// Enter interactive mode
@@ -59,8 +58,12 @@ impl CliArgs {
         }
     }
 
-    pub fn get_address(&self) -> Result<(String, u16)> {
-        Ok((self.address.clone(), self.port))
+    pub fn get_http_address(&self) -> Result<(String, u16)> {
+        Ok((self.address.clone(), self.http_port))
+    }
+
+    pub fn get_router_address(&self) -> Result<(String, u16)> {
+        Ok((self.address.clone(), self.router_port))
     }
 
     pub fn run_command(self) -> Result<()> {
@@ -83,15 +86,13 @@ impl TryFrom<&CliArgs> for CliCtx {
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
         let data_dir = args.get_data_dir();
         log::info!("Using data dir: {:?} ", data_dir);
-        let address = args.get_address()?;
-        let json_output = args.json;
-        let interactive = args.interactive;
 
         Ok(CliCtx {
-            address,
+            http_address: args.get_http_address()?,
+            router_address: args.get_router_address()?,
             data_dir,
-            json_output,
-            interactive,
+            json_output: args.json,
+            interactive: args.interactive,
         })
     }
 }
@@ -146,9 +147,12 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .service(index)
                 })
-                .bind(ctx.address())
-                .context(format!("Failed to bind {:?}", ctx.address()))?
+                .bind(ctx.http_address())
+                .context(format!("Failed to bind {:?}", ctx.http_address()))?
                 .start();
+
+                // TODO: plug GSB router here
+//                let router = ya_sb_router::Router::new();
 
                 sys.run();
 
