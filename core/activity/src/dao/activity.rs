@@ -87,7 +87,8 @@ impl<'c> ActivityDao<'c> {
                             (state_id as i32).into_sql::<Integer>(),
                             (usage_id as i32).into_sql::<Integer>(),
                         ))
-                        .filter(dsl_agreement::natural_id.eq(agreement_id)),
+                        .filter(dsl_agreement::natural_id.eq(agreement_id))
+                        .limit(1),
                 )
                 .into_columns((
                     dsl::natural_id,

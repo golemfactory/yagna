@@ -50,7 +50,8 @@ impl<'c> EventDao<'c> {
                             dsl_type::id,
                         ))
                         .filter(dsl::natural_id.eq(activity_id))
-                        .filter(dsl_type::name.eq(event_type)),
+                        .filter(dsl_type::name.eq(event_type))
+                        .limit(1),
                 )
                 .into_columns((
                     dsl_event::activity_id,
