@@ -1,9 +1,7 @@
-use actix::prelude::*;
 use anyhow::Result;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::{net::SocketAddr, path::PathBuf};
 
 #[allow(dead_code)]
 pub struct CliCtx {
@@ -19,8 +17,11 @@ impl CliCtx {
         (&self.http_address.0, self.http_address.1)
     }
 
-    pub fn router_address(&self) -> (&str, u16) {
-        (&self.router_address.0, self.router_address.1)
+    pub fn router_address(&self) -> Result<SocketAddr> {
+        Ok(SocketAddr::new(
+            self.router_address.0.parse()?,
+            self.router_address.1,
+        ))
     }
 
     pub fn output(&self, output: CommandOutput) {

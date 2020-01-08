@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.1.1"
+version = "0.2.0"
 description = "Yagna server daemon and CLI"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"

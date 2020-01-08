@@ -1,8 +1,8 @@
 use actix_rt::SystemRunner;
-use actix_web::{dev::Service, get, middleware, App, HttpServer, Responder};
+use actix_web::{get, middleware, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use flexi_logger::Logger;
-use futures::{TryFuture, TryFutureExt};
+use futures::{FutureExt, TryFutureExt};
 use std::{
     convert::{TryFrom, TryInto},
     fmt::Debug,
@@ -32,6 +32,7 @@ struct CliArgs {
     #[structopt(short, long, default_value = "7465")]
     http_port: u16,
 
+    /// Service bus router port
     #[structopt(short = "l", default_value = "8245")]
     router_port: u16,
 
@@ -115,9 +116,9 @@ enum CliCommand {
 impl CliCommand {
     pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::Service(service) => anyhow::bail!("service should be handled elswere"),
             CliCommand::Id(id) => id.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
+            CliCommand::Service(_service) => anyhow::bail!("service should be handled elsewhere"),
         }
     }
 }
@@ -128,20 +129,26 @@ enum ServiceCommand {
     Run,
     /// Spawns daemon
     Start,
-    /// Stops daemonm
+    /// Stops daemon
     Stop,
     /// Checks if daemon is running
     Status,
 }
 
-// TODO: distinguish service commands from other CLI commands
 impl ServiceCommand {
     pub fn run_command(&self, sys: SystemRunner, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             Self::Run => {
-                let a = ya_identity::service::activate()?;
+                log::info!("Running {} service!", clap::crate_name!());
 
-                println!("Running {} service!", clap::crate_name!());
+                actix_rt::spawn(
+                    ya_sb_router::bind_router(ctx.router_address()?)
+                        .boxed()
+                        .compat(),
+                );
+
+                ya_identity::service::activate()?;
+
                 HttpServer::new(|| {
                     App::new()
                         .wrap(middleware::Logger::default())
@@ -151,10 +158,7 @@ impl ServiceCommand {
                 .context(format!("Failed to bind {:?}", ctx.http_address()))?
                 .start();
 
-                // TODO: plug GSB router here
-//                let router = ya_sb_router::Router::new();
-
-                sys.run();
+                sys.run()?;
 
                 Ok(CommandOutput::NoOutput)
             }
@@ -171,7 +175,7 @@ fn index() -> impl Responder {
 fn main() -> Result<()> {
     let args = CliArgs::from_args();
 
-    Logger::with_env_or_str("actix_server=info,actix_web=info")
+    Logger::with_env_or_str("info,actix_server=info,actix_web=info")
         .start()
         .unwrap();
 
