@@ -169,7 +169,10 @@ impl ServiceCommand {
                 sys.run()?;
 
                 log::info!("{} service finished!", name);
-                Ok(CommandOutput::object(format!("\n{} daemon successfully finished.", name))?)
+                Ok(CommandOutput::object(format!(
+                    "\n{} daemon successfully finished.",
+                    name
+                ))?)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
         }
