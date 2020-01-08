@@ -1,22 +1,27 @@
 use anyhow::Result;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::{net::SocketAddr, path::PathBuf};
 
 #[allow(dead_code)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
-    pub address: (String, u16),
+    pub http_address: (String, u16),
+    pub router_address: (String, u16),
     pub json_output: bool,
-    //    accept_any_prompt: bool,
-    //    net: Option<Net>,
     pub interactive: bool,
-    //    sys: SystemRunner,
 }
 
 impl CliCtx {
-    pub fn address(&self) -> (&str, u16) {
-        (&self.address.0, self.address.1)
+    pub fn http_address(&self) -> (&str, u16) {
+        (&self.http_address.0, self.http_address.1)
+    }
+
+    pub fn router_address(&self) -> Result<SocketAddr> {
+        Ok(SocketAddr::new(
+            self.router_address.0.parse()?,
+            self.router_address.1,
+        ))
     }
 
     pub fn output(&self, output: CommandOutput) {
@@ -24,9 +29,10 @@ impl CliCtx {
     }
 }
 
-pub trait Command {
-    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
-}
+// commented out until Rust enables async or return impl Trait for Trait fns
+//pub trait Command {
+//    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
+//}
 
 pub enum CommandOutput {
     NoOutput,
