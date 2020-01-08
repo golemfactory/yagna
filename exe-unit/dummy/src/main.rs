@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use anyhow::{Context, Result};
 use api::{golem::service_bus::BusEntrypoint, prelude::*};
-use futures::future;
+use futures::prelude::*;
 use std::{
     fs,
     io::{self, Write},
@@ -50,11 +50,11 @@ fn main() -> Result<()> {
                     dispatcher
                         .send(CommandFromJson::<Command, _, _>::new(cmd))
                         .then(|stream| match stream {
-                            Ok(stream) => future::Either::A(stream.into_inner().for_each(|x| {
+                            Ok(stream) => stream.into_inner().for_each(|x| {
                                 println!("{:?}", x);
-                                future::ok(())
-                            })),
-                            Err(_) => future::Either::B(future::err(())),
+                                future::ready(())
+                            }).left_future(),
+                            Err(_) => future::ready(()).right_future(),
                         }),
                 );
             }
@@ -71,11 +71,11 @@ fn main() -> Result<()> {
                 dispatcher
                     .send(CommandFromJson::<Command, _, _>::new(cmd))
                     .then(|stream| match stream {
-                        Ok(stream) => future::Either::A(stream.into_inner().for_each(|x| {
+                        Ok(stream) => stream.into_inner().for_each(|x| {
                             println!("{:?}", x);
-                            future::ok(())
-                        })),
-                        Err(_) => future::Either::B(future::err(())),
+                            future::ready(())
+                        }).left_future(),
+                        Err(_) => future::ready(()).right_future(),
                     }),
             );
         }

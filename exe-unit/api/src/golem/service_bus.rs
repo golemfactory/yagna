@@ -13,6 +13,7 @@ use serde::{
     Deserialize, Serialize,
 };
 use std::{fmt, marker::PhantomData};
+use futures::TryStreamExt;
 
 pub struct BusEntrypoint<M, R, Ctx>
 where
@@ -196,28 +197,13 @@ where
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let dispatcher = self.recipient.clone();
-        let fut = dispatcher
-            .send(Commands::new(msg.into_inner().cmds))
-            .map_err(From::from)
-            .and_then(|res| {
-                res.into_inner().collect().then(|res: Result<Vec<_>, _>| {
-                    let res: Vec<_> = res
-                        .unwrap()
-                        .into_iter()
-                        .filter_map(|resp| {
-                            if let Ok(resp) = resp {
-                                Some(resp)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    match serde_json::to_string(&res) {
-                        Ok(res) => Ok(res),
-                        Err(e) => Err(Error::from(e)),
-                    }
-                })
-            });
-        ActorResponse::r#async(fut.into_actor(self))
+        ActorResponse::r#async(async move {
+            let response_stream = dispatcher.send(Commands::new(msg.into_inner().cmds)).await?.into_inner();
+            let v : Result<Vec<_>, ()> = response_stream.try_collect().await;
+            match serde_json::to_string(v.as_ref().unwrap()) {
+                Ok(res) => Ok(res),
+                Err(e) => Err(Error::from(e)),
+            }
+        }.into_actor(self))
     }
 }

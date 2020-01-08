@@ -3,10 +3,12 @@ use super::{
     Error, Result,
 };
 use actix::prelude::*;
-use futures::future::{self, Future};
+use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
-use tokio::timer::Delay;
+use tokio::time::Delay;
+use futures::FutureExt;
+
 
 #[derive(Default)]
 pub struct Worker {
@@ -18,6 +20,7 @@ impl Actor for Worker {
 }
 
 #[derive(Message)]
+#[rtype(result = "()")]
 struct UpdateState {
     state: State,
 }
@@ -65,13 +68,13 @@ impl Handler<Command> for Worker {
                 let fut = if let Some(state) = self.states.next_state(transition) {
                     let addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(5);
-                    future::Either::A(Delay::new(when).map_err(Into::into).and_then(move |_| {
-                        addr.send(UpdateState { state })
-                            .map_err(Into::into)
-                            .and_then(move |_| Ok((state, "".to_owned())))
-                    }))
+                    async move {
+                        tokio::time::delay_until(when.into()).await;
+                        addr.send(UpdateState { state }).await?;
+                        Ok((state, "".to_owned()))
+                    }.left_future()
                 } else {
-                    future::Either::B(future::err(Error::InvalidTransition { transition, state }))
+                    future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
                 ActorResponse::r#async(fut.into_actor(self))
             }
@@ -80,41 +83,36 @@ impl Handler<Command> for Worker {
                 let state = self.states.current_state;
                 let fut = if let Some(state) = self.states.next_state(Transition::Start) {
                     let addr = ctx.address().clone();
-                    let when = Instant::now() + Duration::from_secs(2);
-                    future::Either::A(Delay::new(when).map_err(Into::into).and_then(move |_| {
-                        addr.send(UpdateState { state })
-                            .map_err(Into::into)
-                            .and_then(move |_| Ok((state, format!("args={{{}}}", args.join(",")))))
-                    }))
+                    async move {
+                        tokio::time::delay_for(Duration::from_secs(2)).await;
+                        let r = addr.send(UpdateState { state }).await?;
+                        Ok((state, format!("args={{{}}}", args.join(","))))
+                    }.left_future()
                 } else {
-                    future::Either::B(future::err(Error::InvalidTransition { transition, state }))
+                    future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
                 ActorResponse::r#async(fut.into_actor(self))
             }
             Command::Run { entry_point, args } => {
                 let transition = Transition::Run;
                 let state = self.states.current_state;
-                let fut = if let Some(state) = self.states.next_state(transition) {
+                if let Some(state) = self.states.next_state(transition) {
                     let addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(3);
-                    future::Either::A(Delay::new(when).map_err(Into::into).and_then(move |_| {
-                        addr.send(UpdateState { state })
-                            .map_err(Into::into)
-                            .and_then(move |_| {
-                                Ok((
-                                    state,
-                                    format!(
-                                        "entry_point={},args={{{}}}",
-                                        entry_point,
-                                        args.join(",")
-                                    ),
-                                ))
-                            })
-                    }))
+                    ActorResponse::r#async(async move {
+                        tokio::time::delay_until(when.into()).await;
+                        Ok((
+                            state,
+                            format!(
+                                "entry_point={},args={{{}}}",
+                                entry_point,
+                                args.join(",")
+                            ),
+                        ))
+                    }.into_actor(self))
                 } else {
-                    future::Either::B(future::err(Error::InvalidTransition { transition, state }))
-                };
-                ActorResponse::r#async(fut.into_actor(self))
+                    ActorResponse::reply(Err(Error::InvalidTransition { transition, state }))
+                }
             }
             Command::Transfer { from, to } => {
                 let transition = Transition::Transfer;
@@ -122,13 +120,13 @@ impl Handler<Command> for Worker {
                 let fut = if let Some(state) = self.states.next_state(transition) {
                     let addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(3);
-                    future::Either::A(Delay::new(when).map_err(Into::into).and_then(move |_| {
-                        addr.send(UpdateState { state })
-                            .map_err(Into::into)
-                            .and_then(move |_| Ok((state, format!("from={},to={}", from, to))))
-                    }))
+                    async move {
+                        tokio::time::delay_until(when.into()).await;
+                        let _ = addr.send(UpdateState { state }).await?;
+                        Ok((state, format!("from={},to={}", from, to)))
+                    }.left_future()
                 } else {
-                    future::Either::B(future::err(Error::InvalidTransition { transition, state }))
+                    future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
                 ActorResponse::r#async(fut.into_actor(self))
             }
@@ -138,13 +136,13 @@ impl Handler<Command> for Worker {
                 let fut = if let Some(state) = self.states.next_state(transition) {
                     let addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(2);
-                    future::Either::A(Delay::new(when).map_err(Into::into).and_then(move |_| {
-                        addr.send(UpdateState { state })
-                            .map_err(Into::into)
-                            .and_then(move |_| Ok((state, "".to_owned())))
-                    }))
+                    async move {
+                        tokio::time::delay_until(when.into()).await;
+                        let _r = addr.send(UpdateState { state }).await?;
+                        Ok((state, "".to_owned()))
+                    }.left_future()
                 } else {
-                    future::Either::B(future::err(Error::InvalidTransition { transition, state }))
+                    future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
                 ActorResponse::r#async(fut.into_actor(self))
             }
