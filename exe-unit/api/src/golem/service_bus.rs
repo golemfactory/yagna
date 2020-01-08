@@ -7,12 +7,12 @@ use actix::{
     prelude::*,
 };
 use bus::{actix_rpc, Handle, RpcEnvelope, RpcMessage};
+use futures::prelude::*;
 use serde::{
     de::{self, DeserializeOwned, Deserializer, SeqAccess, Visitor},
     Deserialize, Serialize,
 };
 use std::{fmt, marker::PhantomData};
-use futures::prelude::*;
 
 pub struct BusEntrypoint<M, R, Ctx>
 where
@@ -200,7 +200,7 @@ where
             .send(Commands::new(msg.into_inner().cmds))
             .map_err(From::from)
             .and_then(|res| {
-                res.into_inner().collect().then(|res:Vec<_>| {
+                res.into_inner().collect().then(|res: Result<Vec<_>, _>| {
                     let res: Vec<_> = res
                         .unwrap()
                         .into_iter()

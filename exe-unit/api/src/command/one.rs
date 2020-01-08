@@ -1,6 +1,11 @@
 use crate::{command::Dispatcher, Error, Result};
 use actix::{dev::ToEnvelope, prelude::*};
-use futures::{channel::oneshot, future::{self, Future}, prelude::*, FutureExt};
+use futures::{
+    channel::oneshot,
+    future::{self, Future},
+    prelude::*,
+    FutureExt,
+};
 use std::marker::PhantomData;
 
 pub struct Command<M, R, Ctx>
@@ -54,6 +59,6 @@ where
             }
             future::ready(())
         }));
-        ActorResponse::r#async(rx.then(|v| async{v?}).into_actor(self))
+        ActorResponse::r#async(rx.then(|v| async { v? }).into_actor(self))
     }
 }

@@ -83,7 +83,9 @@ where
                     }
                 }))
             }
-            Ok(value) => StreamResponse::new(stream::once(future::ok(Err(Error::WrongJson(value))))),
+            Ok(value) => {
+                StreamResponse::new(stream::once(future::ok(Err(Error::WrongJson(value)))))
+            }
             Err(e) => StreamResponse::new(stream::once(future::ok(Err(e)))),
         }
     }
