@@ -23,23 +23,14 @@ enum Args {
     Client(AppKeyCommand),
 }
 
-fn main() -> Result<(), anyhow::Error> {
-    let bus_addr = "127.0.0.1:8245".parse().unwrap();
+#[actix_rt::main]
+async fn main() -> anyhow::Result<()> {
     let args = Args::from_args();
 
     match args {
         Args::Server => {
-            System::run(move || {
-                let fut = connection::tcp(&bus_addr)
-                    .and_then(|_| {
-                        bind(&APP_KEY_SERVICE);
-                        Ok(())
-                    })
-                    .map_err(|e| eprintln!("Error: {:?}", e));
-                Arbiter::spawn(fut)
-            })?;
-
-            eprintln!("done");
+            ya_sb_router::bind_router("127.0.0.1:8245".parse()?).await;
+            eprintln!("done")
         }
         Args::Client(cmd) => {
             let cli_ctx = CliCtx {
@@ -49,9 +40,7 @@ fn main() -> Result<(), anyhow::Error> {
                 json_output: false,
                 interactive: false,
             };
-            let mut sys = System::new("appkey-example");
-            sys.block_on(cmd.run_command(&cli_ctx).boxed_local().compat())?
-                .print(false);
+            cmd.run_command(&cli_ctx).await?;
         }
     }
     Ok(())

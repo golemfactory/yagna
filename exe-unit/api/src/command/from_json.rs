@@ -5,7 +5,8 @@ use crate::{
 use actix::{dev::ToEnvelope, prelude::*};
 use futures::{
     prelude::*,
-    stream::{self, Stream},
+    stream::{self, Stream, StreamExt},
+    FutureExt,
 };
 use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
@@ -49,7 +50,7 @@ where
 
 impl<M, R, Ctx> Handler<CommandFromJson<M, R, Ctx>> for Dispatcher<Ctx>
 where
-    M: Message<Result = R> + DeserializeOwned + Send + 'static,
+    M: Message<Result = R> + DeserializeOwned + Send + 'static + Unpin,
     R: Send + 'static,
     Ctx: Actor + Handler<M> + Send + 'static,
     <Ctx as Actor>::Context: AsyncContext<Ctx> + ToEnvelope<Ctx, M>,
@@ -68,25 +69,22 @@ where
                     .into_iter()
                     .map(|cmd| (dispatcher.clone(), cmd))
                     .collect();
-                StreamResponse::new(stream::iter_ok(cmds).and_then(|(dispatcher, cmd)| {
+                StreamResponse::new(stream::iter(cmds).then(|(dispatcher, cmd)| {
                     let cmd: Result<M> = serde_json::from_value(cmd).map_err(Into::into);
                     match cmd {
-                        Ok(cmd) => {
-                            future::Either::A(dispatcher.send(Command::new(cmd)).then(|res| {
-                                async move {
-                                    match res {
-                                        Err(e) => future::ok(Err(Error::from(e))),
-                                        Ok(res) => future::ok(res),
-                                    }
-                                }
-                            }))
-                        }
-                        Err(e) => future::Either::B(future::ok(Err(e))),
+                        Ok(cmd) => dispatcher
+                            .send(Command::new(cmd))
+                            .then(|res| match res {
+                                Err(e) => future::ok(Err(Error::from(e))),
+                                Ok(res) => future::ok(res),
+                            })
+                            .left_future(),
+                        Err(e) => future::ok(Err(e)).right_future(),
                     }
                 }))
             }
-            Ok(value) => StreamResponse::new(stream::once(Ok(Err(Error::WrongJson(value))))),
-            Err(e) => StreamResponse::new(stream::once(Ok(Err(e)))),
+            Ok(value) => StreamResponse::new(stream::once(future::ok(Err(Error::WrongJson(value))))),
+            Err(e) => StreamResponse::new(stream::once(future::ok(Err(e)))),
         }
     }
 }

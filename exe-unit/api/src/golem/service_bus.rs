@@ -12,6 +12,7 @@ use serde::{
     Deserialize, Serialize,
 };
 use std::{fmt, marker::PhantomData};
+use futures::prelude::*;
 
 pub struct BusEntrypoint<M, R, Ctx>
 where
@@ -53,7 +54,7 @@ where
 
 impl<M, R, Ctx> Actor for BusEntrypoint<M, R, Ctx>
 where
-    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static,
+    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static + Unpin,
     R: Serialize + Send + Sync + 'static,
     Ctx: Actor + Handler<M> + Send + Sync + 'static,
     <Ctx as Actor>::Context: AsyncContext<Ctx> + ToEnvelope<Ctx, M>,
@@ -182,7 +183,7 @@ where
 
 impl<M, R, Ctx> Handler<RpcEnvelope<Execute<M, R, Ctx>>> for BusEntrypoint<M, R, Ctx>
 where
-    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static,
+    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static + Unpin,
     R: Serialize + Send + Sync + 'static,
     Ctx: Actor + Handler<M> + Send + Sync + 'static,
     <Ctx as Actor>::Context: AsyncContext<Ctx> + ToEnvelope<Ctx, M>,
@@ -197,9 +198,9 @@ where
         let dispatcher = self.recipient.clone();
         let fut = dispatcher
             .send(Commands::new(msg.into_inner().cmds))
-            .from_err()
+            .map_err(From::from)
             .and_then(|res| {
-                res.into_inner().collect().then(|res| {
+                res.into_inner().collect().then(|res:Vec<_>| {
                     let res: Vec<_> = res
                         .unwrap()
                         .into_iter()
