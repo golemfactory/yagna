@@ -26,3 +26,6 @@ uuid = { version = "0.8", features = ["v4"] }
 actix = "0.8"
 futures = { version = "0.3", features = ["compat"] }
 lazy_static = "1.4"
+
+[target.'cfg(target_env = "msvc")'.build-dependencies]
+vcpkg = "0.2"
