@@ -5,9 +5,11 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [features]
-default = ['activity', 'identity']
+default = []
+full = ['activity', 'appkey', 'identity']
 activity = []
 identity = []
+appkey = []
 
 [dependencies]
 ya-model = "0.1"

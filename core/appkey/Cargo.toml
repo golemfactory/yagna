@@ -6,10 +6,10 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-ya-core-model = { path = "../model" }
-ya-persistence = { path = "../persistence" }
-ya-service-api = { path = "../serv-api" }
-ya-service-bus = { path = "../../service-bus/bus" }
+ya-core-model = { version = "0.1", features = ["appkey"] }
+ya-persistence = "0.1"
+ya-service-api = "0.1"
+ya-service-bus = "0.1"
 
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
