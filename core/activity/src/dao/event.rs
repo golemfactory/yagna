@@ -1,15 +1,24 @@
 use crate::dao::Result;
-use crate::db::ConnType;
 use crate::timeout::Interval;
-use chrono::Utc;
+use chrono::Local;
 use diesel::prelude::*;
+use diesel::sql_types::Timestamp;
 use futures::future::Future;
 use futures::task::{Context, Poll};
 use std::cmp::min;
 use std::pin::Pin;
-use ya_model::activity::ProviderEvent;
+use ya_persistence::executor::ConnType;
+use ya_persistence::schema;
 
 pub const MAX_EVENTS: u32 = 100;
+
+#[derive(Queryable)]
+pub struct Event {
+    pub id: i32,
+    pub name: String,
+    pub activity_natural_id: String,
+    pub agreement_natural_id: String,
+}
 
 pub struct EventDao<'c> {
     conn: &'c ConnType,
@@ -22,44 +31,69 @@ impl<'c> EventDao<'c> {
 }
 
 impl<'c> EventDao<'c> {
-    pub fn create(&self, event: &ProviderEvent) -> Result<()> {
-        use crate::db::schema::events::dsl;
+    pub fn create(&self, activity_id: &str, event_type: &str) -> Result<()> {
+        use schema::activity::dsl;
+        use schema::activity_event::dsl as dsl_event;
+        use schema::activity_event_type::dsl as dsl_type;
 
-        diesel::insert_into(dsl::events)
-            .values((
-                dsl::created_at.eq(Utc::now().naive_utc()),
-                dsl::data.eq(serde_json::to_string(&event).unwrap()),
-            ))
-            .execute(self.conn)
-            .map(|_| ())
+        let now = Local::now().naive_local();
+
+        self.conn.transaction(|| {
+            diesel::insert_into(dsl_event::activity_event)
+                .values(
+                    dsl_event::activity_event
+                        .inner_join(schema::activity::table)
+                        .inner_join(schema::activity_event_type::table)
+                        .select((
+                            dsl_event::activity_id,
+                            now.into_sql::<Timestamp>(),
+                            dsl_type::id,
+                        ))
+                        .filter(dsl::natural_id.eq(activity_id))
+                        .filter(dsl_type::name.eq(event_type)),
+                )
+                .into_columns((
+                    dsl_event::activity_id,
+                    dsl_event::event_date,
+                    dsl_event::event_type_id,
+                ))
+                .execute(self.conn)
+                .map(|_| ())
+        })
     }
 
-    pub fn get_events(&self, max_count: Option<u32>) -> Result<Vec<ProviderEvent>> {
-        use crate::db::schema::events::dsl;
+    pub fn get_events(&self, max_count: Option<u32>) -> Result<Vec<Event>> {
+        use schema::activity::dsl;
+        use schema::activity_event::dsl as dsl_event;
+        use schema::activity_event_type::dsl as dsl_type;
+        use schema::agreement::dsl as dsl_agreement;
 
         let limit = match max_count {
             Some(val) => min(MAX_EVENTS, val),
             None => MAX_EVENTS,
         };
 
-        self.conn.transaction::<_, _, _>(|| {
-            let mut ids = Vec::new();
-            let mut events = Vec::new();
-
-            let results = dsl::events
-                .select((dsl::id, dsl::data))
-                .order(dsl::created_at.asc())
+        self.conn.transaction(|| {
+            let results: Vec<Event> = dsl_event::activity_event
+                .inner_join(schema::activity_event_type::table)
+                .inner_join(schema::activity::table)
+                .inner_join(dsl_agreement::agreement.on(dsl_agreement::id.eq(dsl::agreement_id)))
+                .select((
+                    dsl_event::id,
+                    dsl_type::name,
+                    dsl::natural_id,
+                    dsl_agreement::natural_id,
+                ))
+                .order(dsl_event::event_date.asc())
                 .limit(limit as i64)
-                .load::<(i32, String)>(self.conn)?;
+                .load::<Event>(self.conn)?;
 
-            results.iter().for_each(|(id, data)| {
-                ids.push(id);
-                events.push(serde_json::from_str::<ProviderEvent>(&data).unwrap());
-            });
+            let mut ids = Vec::new();
+            results.iter().for_each(|event| ids.push(event.id));
+            diesel::delete(dsl_event::activity_event.filter(dsl_event::id.eq_any(ids)))
+                .execute(self.conn)?;
 
-            diesel::delete(dsl::events.filter(dsl::id.eq_any(ids))).execute(self.conn)?;
-
-            Ok(events)
+            Ok(results)
         })
     }
 
@@ -86,7 +120,7 @@ impl<'d, 'c: 'd> EventsFuture<'d, 'c> {
 }
 
 impl<'d, 'c: 'd> Future for EventsFuture<'d, 'c> {
-    type Output = Vec<ProviderEvent>;
+    type Output = Vec<Event>;
 
     fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
         if self.interval.check() {

@@ -3,7 +3,9 @@ CREATE TABLE "activity"(
 	"natural_id" VARCHAR(255) NOT NULL,
 	"agreement_id" INTEGER NOT NULL,
 	"state_id" INTEGER NOT NULL,
+	"usage_id" INTEGER NOT NULL,
     FOREIGN KEY("state_id") REFERENCES "activity_state" ("id"),
+    FOREIGN KEY("usage_id") REFERENCES "activity_usage" ("id"),
     FOREIGN KEY("agreement_id") REFERENCES "agreement" ("id")
 );
 
@@ -23,7 +25,16 @@ CREATE TABLE "activity_event_type"(
 
 CREATE TABLE "activity_state"(
 	"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-	"name" VARCHAR(50) NOT NULL
+	"name" VARCHAR(50) NOT NULL,
+	"reason" TEXT,
+	"error_message" TEXT,
+    "updated_date" DATETIME NOT NULL
+);
+
+CREATE TABLE "activity_usage"(
+	"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"vector_json" TEXT,
+    "updated_date" DATETIME NOT NULL
 );
 
 CREATE TABLE "agreement"(
@@ -141,3 +152,6 @@ CREATE TABLE "payment_x_invoice"(
     FOREIGN KEY("payment_id") REFERENCES "payment" ("id")
 );
 
+INSERT INTO "activity_event_type"("name") VALUES
+    ("CreateActivity"),
+    ("DestroyActivity");

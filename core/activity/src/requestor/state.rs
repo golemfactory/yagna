@@ -1,5 +1,4 @@
 use crate::common::{PathActivity, QueryTimeout};
-use crate::db::DbExecutor;
 use crate::error::Error;
 use crate::requestor::get_agreement;
 use crate::timeout::IntoTimeoutFuture;
@@ -9,6 +8,7 @@ use futures::lock::Mutex;
 use futures::prelude::*;
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState};
+use ya_persistence::executor::DbExecutor;
 
 pub struct RequestorStateApi {
     db_executor: Mutex<DbExecutor<Error>>,
@@ -35,7 +35,7 @@ impl RequestorStateApi {
         query: web::Query<QueryTimeout>,
     ) -> Result<ActivityState, Error> {
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "get_activity_state");
+        let uri = Self::uri(&agreement.offer_node_id, "get_activity_state");
         let msg = GetActivityState {
             activity_id: path.activity_id.to_string(),
             timeout: query.timeout.clone(),
@@ -51,7 +51,7 @@ impl RequestorStateApi {
         query: web::Query<QueryTimeout>,
     ) -> Result<ActivityUsage, Error> {
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "get_activity_usage");
+        let uri = Self::uri(&agreement.offer_node_id, "get_activity_usage");
         let msg = GetActivityUsage {
             activity_id: path.activity_id.to_string(),
             timeout: query.timeout.clone(),
@@ -67,7 +67,7 @@ impl RequestorStateApi {
         query: web::Query<QueryTimeout>,
     ) -> Result<ExeScriptCommandState, Error> {
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "get_running_command");
+        let uri = Self::uri(&agreement.offer_node_id, "get_running_command");
         let msg = GetRunningCommand {
             activity_id: path.activity_id.to_string(),
             timeout: query.timeout.clone(),
