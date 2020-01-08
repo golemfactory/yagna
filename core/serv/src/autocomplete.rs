@@ -2,7 +2,7 @@ use std::fmt;
 use structopt::{clap, StructOpt};
 
 use crate::{CliArgs, CliCtx};
-use ya_service_api::{Command, CommandOutput};
+use ya_service_api::CommandOutput;
 
 #[derive(StructOpt)]
 /// Generates autocomplete script from given shell
@@ -22,8 +22,8 @@ impl fmt::Debug for CompleteCommand {
     }
 }
 
-impl Command for CompleteCommand {
-    fn run_command(&self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+impl CompleteCommand {
+    pub fn run_command(&self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         let binary_name = clap::crate_name!();
         println!(
             "# generating {} completions for {}",

@@ -1,49 +1,38 @@
-use actix::prelude::*;
 use anyhow::Result;
-use futures::{TryFuture, TryFutureExt};
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::{net::SocketAddr, path::PathBuf};
 
 #[allow(dead_code)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
-    pub address: (String, u16),
+    pub http_address: (String, u16),
+    pub router_address: (String, u16),
     pub json_output: bool,
-    //    accept_any_prompt: bool,
-    //    net: Option<Net>,
     pub interactive: bool,
-    // TODO: Option is ugly here - it was added bc run() eats sys
-    pub sys: Mutex<Option<SystemRunner>>,
 }
 
 impl CliCtx {
-    pub fn address(&self) -> (&str, u16) {
-        (&self.address.0, self.address.1)
+    pub fn http_address(&self) -> (&str, u16) {
+        (&self.http_address.0, self.http_address.1)
+    }
+
+    pub fn router_address(&self) -> Result<SocketAddr> {
+        Ok(SocketAddr::new(
+            self.router_address.0.parse()?,
+            self.router_address.1,
+        ))
     }
 
     pub fn output(&self, output: CommandOutput) {
         output.print(self.json_output)
     }
-
-    pub fn block_on<F: TryFuture + Unpin>(&self, f: F) -> Result<F::Ok, F::Error> {
-        self.sys
-            .lock()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .block_on(f.compat())
-    }
-
-    pub fn run(&self) -> anyhow::Result<()> {
-        Ok(self.sys.lock().unwrap().take().unwrap().run()?)
-    }
 }
 
-pub trait Command {
-    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
-}
+// commented out until Rust enables async or return impl Trait for Trait fns
+//pub trait Command {
+//    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
+//}
 
 pub enum CommandOutput {
     NoOutput,

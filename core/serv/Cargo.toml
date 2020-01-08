@@ -1,20 +1,23 @@
 [package]
 name = "yagna"
-version = "0.1.1"
+version = "0.2.0"
 description = "Yagna server daemon and CLI"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-service-api = { path = "../serv-api"}
-ya-appkey = { path = "../appkey" }
-ya-identity = { path = "../identity" }
+ya-appkey = "0.1"
+ya-identity = "0.1"
+ya-persistence = "0.1"
+ya-sb-router = "0.1"
+ya-service-api = "0.1"
 
-actix = "0.8"
+actix-rt = "0.2"
 actix-web = "1.0"
-
 anyhow = "1.0"
-appdirs="0.2"
+appdirs = "0.2"
 flexi_logger = "0.14"
+futures = "0.3"
 log = "0.4"
+lazy_static = "1.4"
 structopt = "0.3"

@@ -1,12 +1,13 @@
 use actix::prelude::*;
-use futures::lock::Mutex;
+use futures::{lock::Mutex, prelude::*};
 use std::path::PathBuf;
 use structopt::StructOpt;
+
 use ya_appkey::cli::AppKeyCommand;
 use ya_appkey::error::Error;
 use ya_appkey::service::{bind, AppKeyService};
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{CliCtx, Command};
+use ya_service_api::CliCtx;
 use ya_service_bus::connection;
 
 lazy_static::lazy_static! {
@@ -36,23 +37,22 @@ fn main() -> Result<(), anyhow::Error> {
                     })
                     .map_err(|e| eprintln!("Error: {:?}", e));
                 Arbiter::spawn(fut)
-            })
-            .unwrap();
+            })?;
 
             eprintln!("done");
-            Ok(())
         }
         Args::Client(cmd) => {
             let cli_ctx = CliCtx {
                 data_dir: PathBuf::new(),
-                address: ("127.0.0.1".to_string(), 65535),
+                http_address: ("127.0.0.1".to_string(), 65535),
+                router_address: ("127.0.0.1".to_string(), 0),
                 json_output: false,
                 interactive: false,
-                sys: std::sync::Mutex::new(Some(System::new("client"))),
             };
-
-            cmd.run_command(&cli_ctx)?.print(false);
-            Ok(())
+            let mut sys = System::new("appkey-example");
+            sys.block_on(cmd.run_command(&cli_ctx).boxed_local().compat())?
+                .print(false);
         }
     }
+    Ok(())
 }
