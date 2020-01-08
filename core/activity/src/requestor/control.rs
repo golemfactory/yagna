@@ -1,6 +1,5 @@
 use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount};
 use crate::dao::AgreementDao;
-use crate::db::DbExecutor;
 use crate::error::Error;
 use crate::requestor::get_agreement;
 use crate::timeout::IntoTimeoutFuture;
@@ -11,6 +10,7 @@ use futures::prelude::*;
 use serde::Deserialize;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest};
+use ya_persistence::executor::DbExecutor;
 
 #[derive(Deserialize)]
 pub struct PathActivityBatch {
@@ -44,7 +44,7 @@ impl RequestorControlApi {
     ) -> Result<String, Error> {
         let agreement =
             AgreementDao::new(&self.db_executor.lock().await.conn()?).get(&body.agreement_id)?;
-        let uri = Self::uri(&agreement.provider_id, "create_activity");
+        let uri = Self::uri(&agreement.offer_node_id, "create_activity");
 
         gsb_send!(body.into_inner(), &uri, query.timeout)
     }
@@ -56,10 +56,10 @@ impl RequestorControlApi {
         query: web::Query<QueryTimeout>,
     ) -> Result<(), Error> {
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "destroy_activity");
+        let uri = Self::uri(&agreement.offer_node_id, "destroy_activity");
         let msg = DestroyActivity {
             activity_id: path.activity_id.to_string(),
-            agreement_id: agreement.id,
+            agreement_id: agreement.natural_id,
             timeout: query.timeout.clone(),
         };
 
@@ -76,7 +76,7 @@ impl RequestorControlApi {
         let commands: Vec<ExeScriptCommand> =
             serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "destroy_activity");
+        let uri = Self::uri(&agreement.offer_node_id, "destroy_activity");
         let batch_id = generate_id();
         let msg = Exec {
             activity_id: path.activity_id.clone(),
@@ -96,7 +96,7 @@ impl RequestorControlApi {
         query: web::Query<QueryTimeoutMaxCount>,
     ) -> Result<Vec<ExeScriptCommandResult>, Error> {
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "get_exec_batch_results");
+        let uri = Self::uri(&agreement.offer_node_id, "get_exec_batch_results");
         let msg = GetExecBatchResults {
             activity_id: path.activity_id.to_string(),
             batch_id: path.batch_id.to_string(),

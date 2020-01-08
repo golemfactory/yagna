@@ -1,15 +1,36 @@
 use crate::common::{generate_id, PathActivity, QueryTimeoutMaxCount, RpcMessageResult};
-use crate::dao::{ActivityDao, AgreementDao, EventDao, InnerIntoOption};
-use crate::db::{ConnType, DbExecutor};
+use crate::dao::{
+    ActivityDao, ActivityStateDao, ActivityUsageDao, AgreementDao, Event, EventDao,
+    NotFoundAsOption,
+};
 use crate::error::Error;
 use crate::timeout::IntoTimeoutFuture;
 use crate::{GsbApi, RestfulApi, ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION};
 use actix_web::web;
 use futures::lock::Mutex;
 use futures::prelude::*;
+use std::convert::From;
 use ya_core_model::activity::*;
+use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, State};
+use ya_persistence::executor::{ConnType, DbExecutor};
 use ya_service_bus::typed as bus;
+
+impl From<Event> for ProviderEvent {
+    fn from(value: Event) -> Self {
+        let event_type = serde_json::from_str::<ProviderEventType>(&value.name).unwrap();
+        match event_type {
+            ProviderEventType::CreateActivity => ProviderEvent::CreateActivity {
+                activity_id: value.activity_natural_id,
+                agreement_id: value.agreement_natural_id,
+            },
+            ProviderEventType::DestroyActivity => ProviderEvent::DestroyActivity {
+                activity_id: value.activity_natural_id,
+                agreement_id: value.agreement_natural_id,
+            },
+        }
+    }
+}
 
 pub struct ProviderActivityApi {
     db_executor: Mutex<DbExecutor<Error>>,
@@ -38,18 +59,20 @@ impl ProviderActivityApi {
             .map_err(Error::from)?;
 
         ActivityDao::new(&conn)
-            .create(&activity_id, &msg.agreement_id, None, None)
+            .create(&activity_id, &msg.agreement_id)
             .map_err(Error::from)?;
 
         EventDao::new(&conn)
-            .create(&ProviderEvent::CreateActivity {
-                activity_id: activity_id.clone(),
-                agreement_id: msg.agreement_id,
-            })
+            .create(
+                &activity_id,
+                serde_json::to_string(&ProviderEventType::CreateActivity)
+                    .unwrap()
+                    .as_str(),
+            )
             .map_err(Error::from)?;
 
-        ActivityDao::new(&conn)
-            .get_state_fut(&activity_id, None)
+        ActivityStateDao::new(&conn)
+            .get_future(&activity_id, None)
             .timeout(msg.timeout)
             .map_err(Error::from)
             .await
@@ -63,14 +86,16 @@ impl ProviderActivityApi {
         let conn = self.conn().await?;
 
         EventDao::new(&conn)
-            .create(&ProviderEvent::DestroyActivity {
-                activity_id: msg.activity_id.clone(),
-                agreement_id: msg.agreement_id,
-            })
+            .create(
+                &msg.activity_id,
+                serde_json::to_string(&ProviderEventType::DestroyActivity)
+                    .unwrap()
+                    .as_str(),
+            )
             .map_err(Error::from)?;
 
-        ActivityDao::new(&conn)
-            .get_state_fut(&msg.activity_id, Some(State::Terminated))
+        ActivityStateDao::new(&conn)
+            .get_future(&msg.activity_id, Some(State::Terminated))
             .timeout(msg.timeout)
             .map_err(Error::from)
             .await?;
@@ -83,10 +108,15 @@ impl ProviderActivityApi {
         &self,
         msg: GetActivityState,
     ) -> RpcMessageResult<GetActivityState> {
-        ActivityDao::new(&self.conn().await?)
-            .get_state(&msg.activity_id)
-            .inner_into_option()
+        ActivityStateDao::new(&self.conn().await?)
+            .get(&msg.activity_id)
+            .not_found_as_option()
             .map_err(Error::from)?
+            .map(|state| ActivityState {
+                state: serde_json::from_str(&state.name).unwrap(),
+                reason: state.reason,
+                error_message: state.error_message,
+            })
             .ok_or(Error::NotFound.into())
     }
 
@@ -95,10 +125,15 @@ impl ProviderActivityApi {
         &self,
         msg: GetActivityUsage,
     ) -> RpcMessageResult<GetActivityUsage> {
-        ActivityDao::new(&self.conn().await?)
-            .get_usage(&msg.activity_id)
-            .inner_into_option()
+        ActivityUsageDao::new(&self.conn().await?)
+            .get(&msg.activity_id)
+            .not_found_as_option()
             .map_err(Error::from)?
+            .map(|usage| ActivityUsage {
+                current_usage: usage
+                    .vector_json
+                    .map(|json| serde_json::from_str(&json).unwrap()),
+            })
             .ok_or(Error::NotFound.into())
     }
 }
@@ -115,6 +150,12 @@ impl ProviderActivityApi {
             .map_err(Error::from)
             .await
             .map_err(Error::from)
+            .map(|events| {
+                events
+                    .into_iter()
+                    .map(|event| ProviderEvent::from(event))
+                    .collect()
+            })
     }
 
     /// Pass activity state (which may include error details).
@@ -123,8 +164,13 @@ impl ProviderActivityApi {
         path: web::Path<PathActivity>,
         activity_state: web::Json<ActivityState>,
     ) -> Result<(), Error> {
-        ActivityDao::new(&self.conn().await?)
-            .set_state(&path.activity_id, &activity_state)
+        ActivityStateDao::new(&self.conn().await?)
+            .set(
+                &path.activity_id,
+                activity_state.state.clone(),
+                activity_state.reason.clone(),
+                activity_state.error_message.clone(),
+            )
             .map_err(Error::from)
     }
 
@@ -134,30 +180,22 @@ impl ProviderActivityApi {
         path: web::Path<PathActivity>,
         activity_usage: web::Json<ActivityUsage>,
     ) -> Result<(), Error> {
-        ActivityDao::new(&self.conn().await?)
-            .set_usage(&path.activity_id, &activity_usage)
+        ActivityUsageDao::new(&self.conn().await?)
+            .set(&path.activity_id, &activity_usage.current_usage)
             .map_err(Error::from)
     }
 }
 
 impl GsbApi for ProviderActivityApi {
     fn bind(instance: &'static Self) {
-        let _ = bus::bind(
-            &format!("/{}/create_activity", ACTIVITY_SERVICE_ID),
-            move |m| instance.create_activity(m),
-        );
-        let _ = bus::bind(
-            &format!("/{}/destroy_activity", ACTIVITY_SERVICE_ID),
-            move |m| instance.destroy_activity(m),
-        );
-        let _ = bus::bind(
-            &format!("/{}/get_activity_state", ACTIVITY_SERVICE_ID),
-            move |m| instance.get_activity_state(m),
-        );
-        let _ = bus::bind(
-            &format!("/{}/get_activity_usage", ACTIVITY_SERVICE_ID),
-            move |m| instance.get_activity_usage(m),
-        );
+        let _ = bus::bind(&ACTIVITY_SERVICE_ID, move |m| instance.create_activity(m));
+        let _ = bus::bind(&ACTIVITY_SERVICE_ID, move |m| instance.destroy_activity(m));
+        let _ = bus::bind(&ACTIVITY_SERVICE_ID, move |m| {
+            instance.get_activity_state(m)
+        });
+        let _ = bus::bind(&ACTIVITY_SERVICE_ID, move |m| {
+            instance.get_activity_usage(m)
+        });
     }
 }
 

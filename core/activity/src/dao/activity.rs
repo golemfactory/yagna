@@ -1,12 +1,12 @@
-use crate::dao::{FlattenInnerOption, Result};
-use crate::db::ConnType;
-use crate::timeout::Interval;
+use crate::dao::{last_insert_rowid, Result};
+use chrono::Local;
 use diesel::prelude::*;
-use futures::task::{Context, Poll};
-use futures::Future;
+use diesel::sql_types::{Integer, VarChar};
 use serde_json;
-use std::pin::Pin;
-use ya_model::activity::{ActivityState, ActivityUsage, State};
+use ya_model::activity::State;
+use ya_persistence::executor::ConnType;
+use ya_persistence::models::Activity;
+use ya_persistence::schema;
 
 pub struct ActivityDao<'c> {
     conn: &'c ConnType,
@@ -19,139 +19,87 @@ impl<'c> ActivityDao<'c> {
 }
 
 impl<'c> ActivityDao<'c> {
-    pub fn create(
-        &self,
-        activity_id: &str,
-        agreement_id: &str,
-        state: Option<ActivityState>,
-        usage: Option<ActivityUsage>,
-    ) -> Result<()> {
-        use crate::db::schema::activities::dsl;
+    #[allow(dead_code)]
+    pub fn get(&self, activity_id: &str) -> Result<Activity> {
+        use schema::activity::dsl;
 
-        let state = state.map(|s| serde_json::to_string(&s).unwrap());
-        let usage = usage.map(|u| serde_json::to_string(&u).unwrap());
-
-        diesel::insert_into(dsl::activities)
-            .values((
-                dsl::id.eq(activity_id),
-                dsl::agreement_id.eq(agreement_id),
-                dsl::state.eq(state),
-                dsl::usage.eq(usage),
-            ))
-            .execute(self.conn)
-            .map(|_| ())
+        self.conn.transaction(|| {
+            dsl::activity
+                .filter(dsl::natural_id.eq(activity_id))
+                .first(self.conn)
+        })
     }
 
     pub fn get_agreement_id(&self, activity_id: &str) -> Result<String> {
-        use crate::db::schema::activities::dsl;
-
-        dsl::activities
-            .select(dsl::agreement_id)
-            .filter(dsl::id.eq(activity_id))
-            .first(self.conn)
-    }
-
-    pub fn get_state(&self, activity_id: &str) -> Result<ActivityState> {
-        use crate::db::schema::activities::dsl;
-
-        dsl::activities
-            .select(dsl::state)
-            .filter(dsl::id.eq(activity_id))
-            .first::<Option<String>>(self.conn)
-            .map(|opt| opt.and_then(|json| serde_json::from_str::<ActivityState>(&json).ok()))
-            .flatten_inner_option()
-    }
-
-    pub fn get_state_fut<'l>(
-        &'l self,
-        activity_id: &'l str,
-        state: Option<State>,
-    ) -> StateFuture<'l, '_> {
-        StateFuture::new(self, activity_id, state)
-    }
-
-    pub fn set_state(&self, activity_id: &str, activity_state: &ActivityState) -> Result<()> {
-        use crate::db::schema::activities::dsl;
-
-        let state = Some(serde_json::to_string(&activity_state).unwrap());
+        use schema::activity::dsl;
+        use schema::agreement::dsl as dsl_agreement;
 
         self.conn.transaction(|| {
-            let updated = diesel::update(dsl::activities.filter(dsl::id.eq(activity_id)))
-                .set(dsl::state.eq(state))
-                .execute(self.conn)?;
+            let agreement: String = dsl::activity
+                .inner_join(schema::agreement::table)
+                .select(dsl_agreement::natural_id)
+                .filter(dsl::natural_id.eq(activity_id))
+                .first(self.conn)?;
 
-            match updated {
-                0 => Err(diesel::result::Error::NotFound),
-                1 => Ok(()),
-                _ => Err(diesel::result::Error::RollbackTransaction),
-            }
+            Ok(agreement)
         })
     }
 
-    pub fn get_usage(&self, activity_id: &str) -> Result<ActivityUsage> {
-        use crate::db::schema::activities::dsl;
+    pub fn create(&self, activity_id: &str, agreement_id: &str) -> Result<()> {
+        use schema::activity::dsl;
+        use schema::activity_state::dsl as dsl_state;
+        use schema::activity_usage::dsl as dsl_usage;
+        use schema::agreement::dsl as dsl_agreement;
 
-        dsl::activities
-            .filter(dsl::id.eq(activity_id.to_string()))
-            .select(dsl::usage)
-            .first::<Option<String>>(self.conn)
-            .map(|opt| opt.and_then(|json| serde_json::from_str::<ActivityUsage>(&json).ok()))
-            .flatten_inner_option()
-    }
-
-    pub fn set_usage(&self, activity_id: &str, activity_usage: &ActivityUsage) -> Result<()> {
-        use crate::db::schema::activities::dsl;
-
-        let usage = Some(serde_json::to_string(&activity_usage).unwrap());
+        let reason: Option<String> = None;
+        let error_message: Option<String> = None;
+        let vector_json: Option<String> = None;
+        let state = serde_json::to_string(&State::New).unwrap();
+        let now = Local::now().naive_local();
 
         self.conn.transaction(|| {
-            let updated = diesel::update(dsl::activities.filter(dsl::id.eq(activity_id)))
-                .set(dsl::usage.eq(usage))
+            diesel::insert_into(dsl_state::activity_state)
+                .values((
+                    dsl_state::name.eq(&state),
+                    dsl_state::reason.eq(reason),
+                    dsl_state::error_message.eq(error_message),
+                    dsl_state::updated_date.eq(now),
+                ))
                 .execute(self.conn)?;
 
-            match updated {
-                0 => Err(diesel::result::Error::NotFound),
-                1 => Ok(()),
-                _ => Err(diesel::result::Error::RollbackTransaction),
-            }
+            let state_id: i64 = diesel::select(last_insert_rowid).first(self.conn)?;
+
+            diesel::insert_into(dsl_usage::activity_usage)
+                .values((
+                    dsl_usage::vector_json.eq(vector_json),
+                    dsl_usage::updated_date.eq(now),
+                ))
+                .execute(self.conn)?;
+
+            let usage_id: i64 = diesel::select(last_insert_rowid).first(self.conn)?;
+
+            diesel::insert_into(dsl::activity)
+                .values(
+                    dsl_agreement::agreement
+                        .select((
+                            activity_id.into_sql::<VarChar>(),
+                            dsl_agreement::id,
+                            (state_id as i32).into_sql::<Integer>(),
+                            (usage_id as i32).into_sql::<Integer>(),
+                        ))
+                        .filter(dsl_agreement::natural_id.eq(agreement_id))
+                        .limit(1),
+                )
+                .into_columns((
+                    dsl::natural_id,
+                    dsl::agreement_id,
+                    dsl::state_id,
+                    dsl::usage_id,
+                ))
+                .execute(self.conn)
+                .map(|_| ())?;
+
+            Ok(())
         })
     }
 }
-
-pub struct StateFuture<'l, 'c> {
-    dao: &'l ActivityDao<'c>,
-    activity_id: &'l str,
-    state: Option<State>,
-    interval: Interval,
-}
-
-impl<'l, 'c: 'l> StateFuture<'l, 'c> {
-    fn new(dao: &'l ActivityDao<'c>, activity_id: &'l str, state: Option<State>) -> Self {
-        let interval = Interval::new(500);
-        Self {
-            dao,
-            activity_id,
-            state,
-            interval,
-        }
-    }
-}
-
-impl<'l, 'c: 'l> Future for StateFuture<'l, 'c> {
-    type Output = ActivityState;
-
-    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.interval.check() {
-            if let Ok(state) = self.dao.get_state(&self.activity_id) {
-                if self.state.is_none() || self.state.unwrap() == state.state {
-                    return Poll::Ready(state);
-                }
-            }
-        }
-
-        ctx.waker().wake_by_ref();
-        Poll::Pending
-    }
-}
-
-impl<'l, 'c: 'l> Unpin for StateFuture<'l, 'c> {}
