@@ -4,7 +4,6 @@ use ethkey::EthAccount;
 use std::{fs, path::PathBuf};
 use structopt::*;
 
-use futures::Future;
 use ya_core_model::identity::DEFAULT_IDENTITY;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 

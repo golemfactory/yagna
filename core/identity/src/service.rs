@@ -6,9 +6,9 @@ use ya_service_bus::typed as bus;
 // TODO: is anyhow appropriate Error here?
 pub fn activate() -> Result<(), anyhow::Error> {
     // TODO: move real logic here
-    eprintln!("starting id service");
+    log::info!("activating identity service");
     let _ = bus::bind(model::BUS_ID, |_: model::List| {
-        eprintln!("ask for");
+        log::debug!("asked for identity List");
         async {
             Ok(vec![model::IdentityInfo {
                 alias: "mock".to_string(),
@@ -18,7 +18,7 @@ pub fn activate() -> Result<(), anyhow::Error> {
         }
     });
     let _ = bus::bind(model::BUS_ID, |create: model::CreateGenerated| {
-        eprintln!("create generated called: {:?}", create);
+        log::debug!("creating generated identity List: {:?}", create);
         async {
             Ok(model::IdentityInfo {
                 alias: create.alias.unwrap_or_else(|| "default".into()),
@@ -27,7 +27,7 @@ pub fn activate() -> Result<(), anyhow::Error> {
             })
         }
     });
-    eprintln!("started");
+    log::info!("identity service activated");
 
     Ok(())
 }
