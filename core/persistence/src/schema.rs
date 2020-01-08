@@ -1,14 +1,15 @@
 table! {
-    activity {
+    activity (id) {
         id -> Integer,
         natural_id -> Text,
         agreement_id -> Integer,
         state_id -> Integer,
+        usage_id -> Integer,
     }
 }
 
 table! {
-    activity_event {
+    activity_event (id) {
         id -> Integer,
         activity_id -> Integer,
         event_date -> Timestamp,
@@ -17,21 +18,32 @@ table! {
 }
 
 table! {
-    activity_event_type {
+    activity_event_type (id) {
         id -> Integer,
         name -> Text,
     }
 }
 
 table! {
-    activity_state {
+    activity_state (id) {
         id -> Integer,
         name -> Text,
+        reason -> Nullable<Text>,
+        error_message -> Nullable<Text>,
+        updated_date -> Timestamp,
     }
 }
 
 table! {
-    agreement {
+    activity_usage (id) {
+        id -> Integer,
+        vector_json -> Nullable<Text>,
+        updated_date -> Timestamp,
+    }
+}
+
+table! {
+    agreement (id) {
         id -> Integer,
         natural_id -> Text,
         state_id -> Integer,
@@ -50,7 +62,7 @@ table! {
 }
 
 table! {
-    agreement_event {
+    agreement_event (id) {
         id -> Integer,
         agreement_id -> Integer,
         event_date -> Timestamp,
@@ -59,21 +71,21 @@ table! {
 }
 
 table! {
-    agreement_event_type {
+    agreement_event_type (id) {
         id -> Integer,
         name -> Text,
     }
 }
 
 table! {
-    agreement_state {
+    agreement_state (id) {
         id -> Integer,
         name -> Text,
     }
 }
 
 table! {
-    allocation {
+    allocation (id) {
         id -> Integer,
         natural_id -> Text,
         created_date -> Timestamp,
@@ -84,7 +96,7 @@ table! {
 }
 
 table! {
-    debit_note {
+    debit_note (id) {
         id -> Integer,
         natural_id -> Text,
         agreement_id -> Integer,
@@ -100,7 +112,7 @@ table! {
 }
 
 table! {
-    invoice {
+    invoice (id) {
         id -> Integer,
         natural_id -> Text,
         state_id -> Integer,
@@ -115,14 +127,14 @@ table! {
 }
 
 table! {
-    invoice_debit_note_state {
+    invoice_debit_note_state (id) {
         id -> Integer,
         name -> Text,
     }
 }
 
 table! {
-    invoice_x_activity {
+    invoice_x_activity (id) {
         id -> Integer,
         invoice_id -> Integer,
         activity_id -> Integer,
@@ -130,7 +142,7 @@ table! {
 }
 
 table! {
-    payment {
+    payment (id) {
         id -> Integer,
         natural_id -> Text,
         amount -> Text,
@@ -140,7 +152,7 @@ table! {
 }
 
 table! {
-    payment_x_debit_note {
+    payment_x_debit_note (id) {
         id -> Integer,
         payment_id -> Integer,
         debit_note_id -> Integer,
@@ -148,7 +160,7 @@ table! {
 }
 
 table! {
-    payment_x_invoice {
+    payment_x_invoice (id) {
         id -> Integer,
         payment_id -> Integer,
         invoice_id -> Integer,
@@ -156,6 +168,7 @@ table! {
 }
 
 joinable!(activity -> activity_state (state_id));
+joinable!(activity -> activity_usage (usage_id));
 joinable!(activity -> agreement (agreement_id));
 joinable!(activity_event -> activity (activity_id));
 joinable!(activity_event -> activity_event_type (event_type_id));
@@ -179,6 +192,7 @@ allow_tables_to_appear_in_same_query!(
     activity_event,
     activity_event_type,
     activity_state,
+    activity_usage,
     agreement,
     agreement_event,
     agreement_event_type,

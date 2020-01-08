@@ -27,14 +27,10 @@ pub enum ProviderEvent {
         #[serde(rename = "agreementId")]
         agreement_id: String,
     },
-    #[serde(rename = "GetActivityState")]
-    GetActivityState {
-        #[serde(rename = "activityId")]
-        activity_id: String,
-    },
-    #[serde(rename = "GetActivityUsage")]
-    GetActivityUsage {
-        #[serde(rename = "activityId")]
-        activity_id: String,
-    },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum ProviderEventType {
+    CreateActivity,
+    DestroyActivity,
 }

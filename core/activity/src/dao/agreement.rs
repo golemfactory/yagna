@@ -1,13 +1,8 @@
 use crate::dao::Result;
-use crate::db::ConnType;
 use diesel::prelude::*;
-
-#[derive(Clone, Debug)]
-pub struct Agreement {
-    pub id: String,
-    pub requestor_id: String,
-    pub provider_id: String,
-}
+use ya_persistence::executor::ConnType;
+use ya_persistence::models::Agreement;
+use ya_persistence::schema;
 
 pub struct AgreementDao<'c> {
     conn: &'c ConnType,
@@ -20,31 +15,11 @@ impl<'c> AgreementDao<'c> {
 }
 
 impl<'c> AgreementDao<'c> {
-    #[allow(dead_code)]
-    pub fn create(&self, agreement_id: &str, requestor_id: &str, provider_id: &str) -> Result<()> {
-        use crate::db::schema::agreements::dsl;
-
-        diesel::insert_into(dsl::agreements)
-            .values((
-                dsl::id.eq(agreement_id),
-                dsl::requestor_id.eq(requestor_id),
-                dsl::provider_id.eq(provider_id),
-            ))
-            .execute(self.conn)
-            .map(|_| ())
-    }
-
     pub fn get(&self, agreement_id: &str) -> Result<Agreement> {
-        use crate::db::schema::agreements::dsl;
+        use schema::agreement::dsl;
 
-        dsl::agreements
-            .filter(dsl::id.eq(agreement_id))
-            .select((dsl::id, dsl::requestor_id, dsl::provider_id))
+        dsl::agreement
+            .filter(dsl::natural_id.eq(agreement_id))
             .first(self.conn)
-            .map(|(id, requestor_id, provider_id)| Agreement {
-                id,
-                requestor_id,
-                provider_id,
-            })
     }
 }
