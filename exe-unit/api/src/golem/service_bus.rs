@@ -26,6 +26,14 @@ where
     p2: PhantomData<R>,
 }
 
+impl<M, R, Ctx> Unpin for BusEntrypoint<M, R, Ctx>
+where
+    M: Message<Result = R>,
+    R: 'static,
+    Ctx: Actor + Handler<M>,
+{
+}
+
 impl<M, R, Ctx> BusEntrypoint<M, R, Ctx>
 where
     M: Message<Result = R>,
