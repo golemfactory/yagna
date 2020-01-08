@@ -2,7 +2,7 @@ use crate::{command::Dispatcher, Error, Result};
 use actix::{dev::ToEnvelope, prelude::*};
 use futures::{
     channel::oneshot,
-    future::{self, Future},
+    future::{self},
     prelude::*,
     FutureExt,
 };
@@ -51,7 +51,7 @@ where
     type Result = ActorResponse<Self, M::Result, Error>;
 
     fn handle(&mut self, msg: Command<M, R, Ctx>, _: &mut Self::Context) -> Self::Result {
-        let (mut tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot::channel();
         let recipient = self.worker.clone();
         Arbiter::new().send(recipient.send(msg.inner).then(move |res| {
             if let Err(_) = tx.send(res.map_err(From::from)) {

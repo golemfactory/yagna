@@ -1,14 +1,14 @@
-use actix::prelude::*;
-use futures::{lock::Mutex, prelude::*};
+
+use futures::{lock::Mutex};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 use ya_appkey::cli::AppKeyCommand;
 use ya_appkey::error::Error;
-use ya_appkey::service::{bind, AppKeyService};
+use ya_appkey::service::{AppKeyService};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::CliCtx;
-use ya_service_bus::connection;
+
 
 lazy_static::lazy_static! {
     pub static ref APP_KEY_SERVICE: AppKeyService = {

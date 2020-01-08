@@ -6,7 +6,7 @@ use actix::prelude::*;
 use futures::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
-use tokio::time::Delay;
+
 use futures::FutureExt;
 
 
@@ -85,7 +85,7 @@ impl Handler<Command> for Worker {
                     let addr = ctx.address().clone();
                     async move {
                         tokio::time::delay_for(Duration::from_secs(2)).await;
-                        let r = addr.send(UpdateState { state }).await?;
+                        let _r = addr.send(UpdateState { state }).await?;
                         Ok((state, format!("args={{{}}}", args.join(","))))
                     }.left_future()
                 } else {
@@ -97,7 +97,7 @@ impl Handler<Command> for Worker {
                 let transition = Transition::Run;
                 let state = self.states.current_state;
                 if let Some(state) = self.states.next_state(transition) {
-                    let addr = ctx.address().clone();
+                    let _addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(3);
                     ActorResponse::r#async(async move {
                         tokio::time::delay_until(when.into()).await;

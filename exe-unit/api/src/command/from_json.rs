@@ -5,7 +5,7 @@ use crate::{
 use actix::{dev::ToEnvelope, prelude::*};
 use futures::{
     prelude::*,
-    stream::{self, Stream, StreamExt},
+    stream::{self, StreamExt},
     FutureExt,
 };
 use serde::de::DeserializeOwned;
