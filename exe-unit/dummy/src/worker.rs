@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 
 use futures::FutureExt;
 
-
 #[derive(Default)]
 pub struct Worker {
     states: StateMachine,
@@ -72,7 +71,8 @@ impl Handler<Command> for Worker {
                         tokio::time::delay_until(when.into()).await;
                         addr.send(UpdateState { state }).await?;
                         Ok((state, "".to_owned()))
-                    }.left_future()
+                    }
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
@@ -87,7 +87,8 @@ impl Handler<Command> for Worker {
                         tokio::time::delay_for(Duration::from_secs(2)).await;
                         let _r = addr.send(UpdateState { state }).await?;
                         Ok((state, format!("args={{{}}}", args.join(","))))
-                    }.left_future()
+                    }
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
@@ -99,17 +100,16 @@ impl Handler<Command> for Worker {
                 if let Some(state) = self.states.next_state(transition) {
                     let _addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(3);
-                    ActorResponse::r#async(async move {
-                        tokio::time::delay_until(when.into()).await;
-                        Ok((
-                            state,
-                            format!(
-                                "entry_point={},args={{{}}}",
-                                entry_point,
-                                args.join(",")
-                            ),
-                        ))
-                    }.into_actor(self))
+                    ActorResponse::r#async(
+                        async move {
+                            tokio::time::delay_until(when.into()).await;
+                            Ok((
+                                state,
+                                format!("entry_point={},args={{{}}}", entry_point, args.join(",")),
+                            ))
+                        }
+                            .into_actor(self),
+                    )
                 } else {
                     ActorResponse::reply(Err(Error::InvalidTransition { transition, state }))
                 }
@@ -124,7 +124,8 @@ impl Handler<Command> for Worker {
                         tokio::time::delay_until(when.into()).await;
                         let _ = addr.send(UpdateState { state }).await?;
                         Ok((state, format!("from={},to={}", from, to)))
-                    }.left_future()
+                    }
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
@@ -140,7 +141,8 @@ impl Handler<Command> for Worker {
                         tokio::time::delay_until(when.into()).await;
                         let _r = addr.send(UpdateState { state }).await?;
                         Ok((state, "".to_owned()))
-                    }.left_future()
+                    }
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };

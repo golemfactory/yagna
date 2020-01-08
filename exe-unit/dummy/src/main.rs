@@ -50,10 +50,13 @@ fn main() -> Result<()> {
                     dispatcher
                         .send(CommandFromJson::<Command, _, _>::new(cmd))
                         .then(|stream| match stream {
-                            Ok(stream) => stream.into_inner().for_each(|x| {
-                                println!("{:?}", x);
-                                future::ready(())
-                            }).left_future(),
+                            Ok(stream) => stream
+                                .into_inner()
+                                .for_each(|x| {
+                                    println!("{:?}", x);
+                                    future::ready(())
+                                })
+                                .left_future(),
                             Err(_) => future::ready(()).right_future(),
                         }),
                 );
@@ -71,10 +74,13 @@ fn main() -> Result<()> {
                 dispatcher
                     .send(CommandFromJson::<Command, _, _>::new(cmd))
                     .then(|stream| match stream {
-                        Ok(stream) => stream.into_inner().for_each(|x| {
-                            println!("{:?}", x);
-                            future::ready(())
-                        }).left_future(),
+                        Ok(stream) => stream
+                            .into_inner()
+                            .for_each(|x| {
+                                println!("{:?}", x);
+                                future::ready(())
+                            })
+                            .left_future(),
                         Err(_) => future::ready(()).right_future(),
                     }),
             );

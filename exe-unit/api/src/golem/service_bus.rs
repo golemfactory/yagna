@@ -8,12 +8,12 @@ use actix::{
 };
 use bus::{actix_rpc, Handle, RpcEnvelope, RpcMessage};
 use futures::prelude::*;
+use futures::TryStreamExt;
 use serde::{
     de::{self, DeserializeOwned, Deserializer, SeqAccess, Visitor},
     Deserialize, Serialize,
 };
 use std::{fmt, marker::PhantomData};
-use futures::TryStreamExt;
 
 pub struct BusEntrypoint<M, R, Ctx>
 where
@@ -197,13 +197,19 @@ where
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let dispatcher = self.recipient.clone();
-        ActorResponse::r#async(async move {
-            let response_stream = dispatcher.send(Commands::new(msg.into_inner().cmds)).await?.into_inner();
-            let v : Result<Vec<_>, ()> = response_stream.try_collect().await;
-            match serde_json::to_string(v.as_ref().unwrap()) {
-                Ok(res) => Ok(res),
-                Err(e) => Err(Error::from(e)),
+        ActorResponse::r#async(
+            async move {
+                let response_stream = dispatcher
+                    .send(Commands::new(msg.into_inner().cmds))
+                    .await?
+                    .into_inner();
+                let v: Result<Vec<_>, ()> = response_stream.try_collect().await;
+                match serde_json::to_string(v.as_ref().unwrap()) {
+                    Ok(res) => Ok(res),
+                    Err(e) => Err(Error::from(e)),
+                }
             }
-        }.into_actor(self))
+                .into_actor(self),
+        )
     }
 }
