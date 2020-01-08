@@ -2,7 +2,7 @@ use actix_rt::SystemRunner;
 use actix_web::{get, middleware, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use flexi_logger::Logger;
-use futures::{FutureExt, TryFutureExt};
+use futures::{lock::Mutex, prelude::*};
 use std::{
     convert::{TryFrom, TryInto},
     fmt::Debug,
@@ -10,6 +10,8 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 
+use ya_appkey::{error::Error, service::AppKeyService};
+use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 
 mod autocomplete;
@@ -100,9 +102,8 @@ impl TryFrom<&CliArgs> for CliCtx {
 
 #[derive(StructOpt, Debug)]
 enum CliCommand {
-    /// Core service usage
-    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Service(ServiceCommand),
+    /// AppKey management
+    AppKey(ya_appkey::cli::AppKeyCommand),
 
     /// Identity management
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
@@ -111,14 +112,19 @@ enum CliCommand {
     #[structopt(name = "complete")]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
     Complete(CompleteCommand),
+
+    /// Core service usage
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Service(ServiceCommand),
 }
 
 impl CliCommand {
     pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::Id(id) => id.run_command(ctx).await,
+            CliCommand::AppKey(appkey) => appkey.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
-            CliCommand::Service(_service) => anyhow::bail!("service should be handled elsewhere"),
+            CliCommand::Id(id) => id.run_command(ctx).await,
+            CliCommand::Service(_) => anyhow::bail!("service should be handled elsewhere"),
         }
     }
 }
@@ -148,6 +154,7 @@ impl ServiceCommand {
                 );
 
                 ya_identity::service::activate()?;
+                ya_appkey::service::bind(&APP_KEY_SERVICE);
 
                 HttpServer::new(|| {
                     App::new()
@@ -165,6 +172,15 @@ impl ServiceCommand {
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
         }
     }
+}
+
+// TODO: move this to app-key crate
+lazy_static::lazy_static! {
+    pub static ref APP_KEY_SERVICE: AppKeyService = {
+        let db_file_path = "core/appkey/appkey.sqlite3";
+        let db_executor: DbExecutor<Error> = DbExecutor::new(db_file_path).unwrap();
+        AppKeyService::new(Mutex::new(db_executor))
+    };
 }
 
 #[get("/")]

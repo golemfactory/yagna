@@ -13,4 +13,5 @@ identity = []
 ya-model = "0.1"
 ya-service-bus = "0.1"
 
+chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }

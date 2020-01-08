@@ -3,6 +3,7 @@ members = [
     "agent/provider",
     "agent/requestor",
     "core/activity",
+    "core/appkey",
     "core/identity",
     "core/market",
     "core/model",

@@ -19,11 +19,11 @@ pub struct PathActivityBatch {
 }
 
 pub struct RequestorControlApi {
-    db_executor: Mutex<DbExecutor>,
+    db_executor: Mutex<DbExecutor<Error>>,
 }
 
 impl RequestorControlApi {
-    pub fn new(db_executor: Mutex<DbExecutor>) -> Self {
+    pub fn new(db_executor: Mutex<DbExecutor<Error>>) -> Self {
         Self { db_executor }
     }
 

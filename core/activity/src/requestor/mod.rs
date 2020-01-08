@@ -7,7 +7,7 @@ pub mod control;
 pub mod state;
 
 async fn get_agreement(
-    db_executor: &Mutex<DbExecutor>,
+    db_executor: &Mutex<DbExecutor<Error>>,
     activity_id: &str,
 ) -> Result<Agreement, Error> {
     let conn = db_executor.lock().await.conn()?;

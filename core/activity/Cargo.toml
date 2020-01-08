@@ -8,6 +8,7 @@ edition = "2018"
 ya-core-model = "0.1"
 ya-model = "0.1"
 ya-service-bus = "0.1"
+ya-persistence = "0.1"
 
 actix-web = "2.0"
 anyhow = "1.0"

@@ -27,6 +27,7 @@ impl CliCtx {
     pub fn output(&self, output: CommandOutput) {
         output.print(self.json_output)
     }
+
 }
 
 // commented out until Rust enables async or return impl Trait for Trait fns
