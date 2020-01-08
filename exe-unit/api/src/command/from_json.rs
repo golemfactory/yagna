@@ -4,7 +4,6 @@ use crate::{
 };
 use actix::{dev::ToEnvelope, prelude::*};
 use futures::{
-    future,
     prelude::*,
     stream::{self, Stream},
 };
@@ -74,9 +73,11 @@ where
                     match cmd {
                         Ok(cmd) => {
                             future::Either::A(dispatcher.send(Command::new(cmd)).then(|res| {
-                                match res {
-                                    Err(e) => future::ok(Err(Error::from(e))),
-                                    Ok(res) => future::ok(res),
+                                async move {
+                                    match res {
+                                        Err(e) => future::ok(Err(Error::from(e))),
+                                        Ok(res) => future::ok(res),
+                                    }
                                 }
                             }))
                         }

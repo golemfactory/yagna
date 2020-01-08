@@ -1,8 +1,9 @@
 use crate::{command::Dispatcher, Error, Result};
 use actix::{dev::ToEnvelope, prelude::*};
 use futures::{
+    channel::oneshot,
     future::{self, Future},
-    sync::oneshot,
+    prelude::*,
 };
 use std::marker::PhantomData;
 

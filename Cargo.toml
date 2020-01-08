@@ -23,3 +23,21 @@ members = [
     "service-bus/router",
     "service-bus/util",
 ]
+default-members=[
+    "service-bus/bus",
+    "service-bus/derive",
+    "service-bus/proto",
+    "service-bus/router",
+    "service-bus/util",
+    "core/activity",
+    "core/identity",
+    "core/market",
+    "core/model",
+    "core/net",
+    "core/payment",
+    "core/persistence",
+    "core/serv",
+    "core/serv-api",
+
+
+]

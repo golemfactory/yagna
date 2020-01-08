@@ -1,6 +1,5 @@
 use actix::{Arbiter, System};
-use futures::future::Future;
-use futures03::future::TryFutureExt;
+use futures::prelude::*;
 
 fn main() -> std::io::Result<()> {
     System::run(|| {
@@ -13,7 +12,6 @@ fn main() -> std::io::Result<()> {
                         })
                 })
                 .map_err(|e| eprintln!("Error: {}", e))
-                .compat()
                 .map(|r| {
                     eprintln!("Result: {:?}", r);
                 }),
