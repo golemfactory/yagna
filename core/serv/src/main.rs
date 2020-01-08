@@ -145,7 +145,8 @@ impl ServiceCommand {
     pub fn run_command(&self, sys: SystemRunner, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             Self::Run => {
-                log::info!("Running {} service!", clap::crate_name!());
+                let name = clap::crate_name!();
+                log::info!("Starting {} service!", name);
 
                 actix_rt::spawn(
                     ya_sb_router::bind_router(ctx.router_address()?)
@@ -167,7 +168,8 @@ impl ServiceCommand {
 
                 sys.run()?;
 
-                Ok(CommandOutput::NoOutput)
+                log::info!("{} service finished!", name);
+                Ok(CommandOutput::object(format!("\n{} daemon successfully finished.", name))?)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
         }
