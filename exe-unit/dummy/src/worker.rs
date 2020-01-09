@@ -72,7 +72,7 @@ impl Handler<Command> for Worker {
                         addr.send(UpdateState { state }).await?;
                         Ok((state, "".to_owned()))
                     }
-                    .left_future()
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
@@ -88,7 +88,7 @@ impl Handler<Command> for Worker {
                         let _r = addr.send(UpdateState { state }).await?;
                         Ok((state, format!("args={{{}}}", args.join(","))))
                     }
-                    .left_future()
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
@@ -108,7 +108,7 @@ impl Handler<Command> for Worker {
                                 format!("entry_point={},args={{{}}}", entry_point, args.join(",")),
                             ))
                         }
-                        .into_actor(self),
+                            .into_actor(self),
                     )
                 } else {
                     ActorResponse::reply(Err(Error::InvalidTransition { transition, state }))
@@ -125,7 +125,7 @@ impl Handler<Command> for Worker {
                         let _ = addr.send(UpdateState { state }).await?;
                         Ok((state, format!("from={},to={}", from, to)))
                     }
-                    .left_future()
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
@@ -142,7 +142,7 @@ impl Handler<Command> for Worker {
                         let _r = addr.send(UpdateState { state }).await?;
                         Ok((state, "".to_owned()))
                     }
-                    .left_future()
+                        .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
                 };
