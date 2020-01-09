@@ -2,7 +2,7 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 
-pub const ID: &str = "/local/appkey";
+pub const APP_KEY_SERVICE_ID: &str = "/local/appkey";
 pub const DEFAULT_IDENTITY: &str = "primary";
 pub const DEFAULT_ROLE: &str = "manager";
 

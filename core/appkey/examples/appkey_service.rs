@@ -2,18 +2,12 @@ use futures::lock::Mutex;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+use std::sync::Arc;
 use ya_appkey::cli::AppKeyCommand;
 use ya_appkey::error::Error;
-use ya_appkey::service::AppKeyService;
+use ya_appkey::service;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::CliCtx;
-
-lazy_static::lazy_static! {
-    pub static ref APP_KEY_SERVICE: AppKeyService = {
-        let db_executor: DbExecutor<Error> = DbExecutor::from_env().unwrap();
-        AppKeyService::new(Mutex::new(db_executor))
-    };
-}
 
 #[derive(StructOpt)]
 enum Args {
@@ -27,7 +21,12 @@ async fn main() -> anyhow::Result<()> {
 
     match args {
         Args::Server => {
-            ya_sb_router::bind_router("127.0.0.1:8245".parse()?).await?;
+            let db_executor: DbExecutor<Error> = DbExecutor::from_env().unwrap();
+            // FIXME: bind _after_ router starts
+            service::bind_gsb(Arc::new(Mutex::new(db_executor)));
+            ya_sb_router::bind_router("127.0.0.1:8245".parse()?)
+                .await
+                .unwrap();
             eprintln!("done")
         }
         Args::Client(cmd) => {
