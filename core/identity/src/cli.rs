@@ -79,7 +79,7 @@ impl IdentityCommand {
     pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         let keys_path = keys_path(&ctx.data_dir);
         match self {
-            IdentityCommand::List { password: _ } => {
+            IdentityCommand::List { .. } => {
                 use ya_core_model::identity;
                 use ya_service_bus::typed as bus;
                 use ya_service_bus::RpcEndpoint;
@@ -187,49 +187,4 @@ fn keys_path(path: &PathBuf) -> PathBuf {
 
 fn key_path(keys_path: &PathBuf, alias: &String) -> PathBuf {
     keys_path.join(alias).with_extension("json")
-}
-
-fn files(dir_path: &PathBuf) -> Result<Vec<PathBuf>> {
-    Ok(fs::read_dir(dir_path)
-        .context(format!("Error reading directory contents {:?}", dir_path))?
-        .flat_map(Result::ok)
-        .filter(|entry| {
-            let metadata = entry.metadata().ok();
-            let file_name = entry.file_name();
-            let name = file_name.to_string_lossy();
-            metadata.map_or(false, |m| !m.is_dir())
-                && !name.starts_with(".")
-                && !["thumbs.db"].contains(&&*name)
-        })
-        .map(|entry| entry.path())
-        .collect::<Vec<PathBuf>>())
-}
-
-#[cfg(test)]
-mod tests {
-    use ethkey::prelude::*;
-
-    #[test]
-    fn test_ethkey() {
-        let key = EthAccount::load_or_generate("/tmp/path/to/keystore", "passwd")
-            .expect("should load or generate new eth key");
-
-        println!("{:?}", key.address());
-
-        let message = [7_u8; 32];
-
-        // sign the message
-        let signature = key.sign(&message).unwrap();
-
-        // verify the signature
-        let result = key.verify(&signature, &message).unwrap();
-        println!(
-            "{}",
-            if result {
-                "verification ok"
-            } else {
-                "wrong signature"
-            }
-        );
-    }
 }

@@ -1,6 +1,6 @@
 name: CI
 
-on: 
+on:
   push:
     branches:
       - master
@@ -14,38 +14,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v1
+      - name: Checkout
+        uses: actions/checkout@v1
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-        components: rustfmt,clippy
-        
-    - name: Install libsqlite3-dev
-      run: sudo apt-get install libsqlite3-dev # needed by ya-activity 
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt,clippy
 
-    - name: Cargo fmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --all -- --check
+      - name: Install libsqlite3-dev
+        run: sudo apt-get install libsqlite3-dev # needed by ya-activity
 
-    - name: Build
-      uses: actions-rs/cargo@v1
-      with:
-        command: build
-        args: --verbose
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
 
-    - name: Run tests
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --verbose
-      
+      - name: Check
+        env:
+          RUSTFLAGS: "-D warnings"
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --verbose --tests --all-features
+
 #    - name: Clippy
 #      uses: actions-rs/clippy-check@v1
 #      with:
