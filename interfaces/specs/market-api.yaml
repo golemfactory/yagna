@@ -1,6 +1,6 @@
 openapi: 3.0.2
 info:
-  version: 1.4.1
+  version: 1.4.2
   title: Yagna Market API
   description: '
     ## Yagna Market
@@ -164,12 +164,12 @@ paths:
 
 
         **Note**: This method must be implemented for Market API Capability Level 2.
-      operationId: postQueryResponseOffers
+      operationId: postQueryReplyOffers
       requestBody:
-        $ref: '#/components/requestBodies/PropertyQuery'
+        $ref: '#/components/requestBodies/PropertyQueryReply'
       responses:
-        '200':
-          $ref: '#/components/responses/PropertyQueryResponse'
+        '204': 
+          description: OK, query reply posted.
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -365,12 +365,12 @@ paths:
 
 
         **Note**: This method must be implemented for Market API Capability Level 2.
-      operationId: postQueryResponseDemands
+      operationId: postQueryReplyDemands
       requestBody:
-        $ref: '#/components/requestBodies/PropertyQuery'
+        $ref: '#/components/requestBodies/PropertyQueryReply'
       responses:
-        '200':
-          $ref: '#/components/responses/PropertyQueryResponse'
+        '204': 
+          description: OK, query reply posted.
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -802,12 +802,12 @@ components:
           schema:
             $ref: '#/components/schemas/AgreementProposal'
 
-    PropertyQuery:
+    PropertyQueryReply:
       required: true
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/PropertyQuery'
+            $ref: '#/components/schemas/PropertyQueryReply'
 
 
   responses:
@@ -835,13 +835,6 @@ components:
           schema:
             type: string
             description: Proposal Id
-
-    PropertyQueryResponse:
-      description: Property query response.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/PropertyQueryResponse'
 
     BadRequest:
       description: Bad request.
@@ -1018,9 +1011,8 @@ components:
           items:
             type: string
 
-    PropertyQueryResponse:
+    PropertyQueryReply:
       type: object
-      additionalProperties: true
 
     Event:
       type: object
