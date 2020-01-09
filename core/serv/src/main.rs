@@ -6,10 +6,11 @@ use std::{
     convert::{TryFrom, TryInto},
     fmt::Debug,
     path::PathBuf,
+    sync::Arc,
 };
 use structopt::{clap, StructOpt};
 
-use ya_appkey::{error::Error, service::AppKeyService};
+use ya_appkey::error::Error;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 
@@ -147,7 +148,7 @@ impl ServiceCommand {
                     .map_err(|e| anyhow::Error::msg(e))?;
 
                 ya_identity::service::activate()?;
-                ya_appkey::service::bind(&APP_KEY_SERVICE);
+                ya_appkey::service::bind_gsb(DB_EXECUTOR.clone());
 
                 HttpServer::new(|| {
                     App::new()
@@ -169,12 +170,12 @@ impl ServiceCommand {
     }
 }
 
-// TODO: move this to app-key crate
+// TODO: move this to app-key crate (?)
 lazy_static::lazy_static! {
-    pub static ref APP_KEY_SERVICE: AppKeyService = {
+    pub static ref DB_EXECUTOR: Arc<Mutex<DbExecutor<Error>>> = {
         let db_file_path = "core/appkey/appkey.sqlite3";
-        let db_executor: DbExecutor<Error> = DbExecutor::new(db_file_path).unwrap();
-        AppKeyService::new(Mutex::new(db_executor))
+        let db_executor = DbExecutor::new(db_file_path).unwrap();
+        Arc::new(Mutex::new(db_executor))
     };
 }
 
