@@ -1,11 +1,8 @@
-use std::sync::PoisonError;
 use thiserror::Error;
 use ya_core_model::appkey as model;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Internal error: {0}")]
-    Internal(String),
     #[error("DB connection error: {0}")]
     Db(#[from] r2d2::Error),
     #[error("DAO error: {0}")]
@@ -18,12 +15,6 @@ pub enum Error {
     NotFound,
     #[error("Forbidden")]
     Forbidden,
-}
-
-impl<T> From<PoisonError<T>> for Error {
-    fn from(e: PoisonError<T>) -> Self {
-        Error::Internal(e.to_string())
-    }
 }
 
 impl From<ya_service_bus::error::Error> for Error {
@@ -44,7 +35,6 @@ macro_rules! into_error {
 impl Into<model::Error> for Error {
     fn into(self) -> model::Error {
         match self {
-            Error::Internal(_) => into_error!(self, 500),
             Error::Db(_) => into_error!(self, 500),
             Error::Dao(_) => into_error!(self, 500),
             Error::Gsb(_) => into_error!(self, 500),
