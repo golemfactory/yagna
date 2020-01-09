@@ -1,14 +1,16 @@
 use crate::{command::Dispatcher, Error, Result};
 use actix::{dev::ToEnvelope, prelude::*};
 use futures::{
-    future::{self, Future},
-    sync::oneshot,
+    channel::oneshot,
+    future::{self},
+    prelude::*,
+    FutureExt,
 };
 use std::marker::PhantomData;
 
 pub struct Command<M, R, Ctx>
 where
-    M: Message<Result = R>,
+    M: Message<Result = R> + Unpin,
     R: 'static,
     Ctx: Actor + Handler<M> + 'static,
 {
@@ -18,7 +20,7 @@ where
 
 impl<M, R, Ctx> Command<M, R, Ctx>
 where
-    M: Message<Result = R>,
+    M: Message<Result = R> + Unpin,
     R: 'static,
     Ctx: Actor + Handler<M> + 'static,
 {
@@ -32,7 +34,7 @@ where
 
 impl<M, R, Ctx> Message for Command<M, R, Ctx>
 where
-    M: Message<Result = R>,
+    M: Message<Result = R> + Unpin,
     R: 'static,
     Ctx: Actor + Handler<M> + 'static,
 {
@@ -41,7 +43,7 @@ where
 
 impl<M, R, Ctx> Handler<Command<M, R, Ctx>> for Dispatcher<Ctx>
 where
-    M: Message<Result = R> + Send + 'static,
+    M: Message<Result = R> + Send + Unpin + 'static,
     R: Send + 'static,
     Ctx: Actor + Handler<M> + Send + 'static,
     <Ctx as Actor>::Context: AsyncContext<Ctx> + ToEnvelope<Ctx, M>,
@@ -51,12 +53,12 @@ where
     fn handle(&mut self, msg: Command<M, R, Ctx>, _: &mut Self::Context) -> Self::Result {
         let (tx, rx) = oneshot::channel();
         let recipient = self.worker.clone();
-        Arbiter::new().send(recipient.send(msg.inner).map_err(Error::from).then(|res| {
-            if let Err(_) = tx.send(res) {
+        Arbiter::new().send(recipient.send(msg.inner).then(move |res| {
+            if let Err(_) = tx.send(res.map_err(From::from)) {
                 log::error!("send should succeed");
             }
-            future::ok(())
+            future::ready(())
         }));
-        ActorResponse::r#async(rx.flatten().into_actor(self))
+        ActorResponse::r#async(rx.then(|v| async { v? }).into_actor(self))
     }
 }

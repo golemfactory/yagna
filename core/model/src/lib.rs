@@ -1,2 +1,8 @@
+#[cfg(feature = "activity")]
 pub mod activity;
-pub mod net;
+
+#[cfg(feature = "appkey")]
+pub mod appkey;
+
+#[cfg(feature = "identity")]
+pub mod identity;

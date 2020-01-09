@@ -1,48 +1,69 @@
-use awc::Client;
 use futures::prelude::*;
-use futures03::compat::Future01CompatExt;
-use ya_core_model::net::{GetMessages, Message, SendMessage, SendMessageError};
-use ya_service_bus::typed as bus;
+use std::net::ToSocketAddrs;
+use ya_service_bus::connection;
+use ya_service_bus::{untyped as bus, Error};
 
-pub const HUB_URL: &str = "http://localhost:8080";
+pub const SERVICE_ID: &str = "/net";
 
-pub const SERVICE_ID: &str = "/local/net";
+#[derive(Default)]
+struct SubscribeHelper {}
 
-pub fn init_service() {
-    let _ = bus::bind(SERVICE_ID, |command: SendMessage| {
-        Client::default()
-            .post(format!("{}/message", HUB_URL))
-            .send_json(&command.message)
-            .map_err(|e| SendMessageError(e.to_string()))
-            .and_then(|_| Ok(()))
-            .compat()
-    });
-    let _ = bus::bind(SERVICE_ID, |command: GetMessages| {
-        Client::default()
-            .get(format!("{}/message/{}", HUB_URL, command.0))
-            .send()
-            .map_err(|e| SendMessageError(e.to_string()))
-            .and_then(|mut x| x.json().map_err(|e| SendMessageError(e.to_string())))
-            .and_then(|x: Vec<Message>| Ok(x))
-            .compat()
-    });
+/// Initialize net module.
+pub fn init_service_future(
+    hub_addr: &str,
+    source_node_id: &str,
+) -> impl Future<Output = Result<(), std::io::Error>> {
+    let source_node_id_clone = format!("{}/{}", SERVICE_ID, source_node_id);
+    connection::tcp(hub_addr.to_socket_addrs().unwrap().next().unwrap()).and_then(move |c| {
+        let connection_ref = connection::connect_with_handler(
+            c,
+            |_request_id: String, caller: String, addr: String, data: Vec<u8>| {
+                let new_addr: String =
+                    format!("/{}", addr.split('/').skip(3).collect::<Vec<_>>().join("/"));
+                /* TODO: request_id? */
+                eprintln!(
+                    "[Net Mk1] Incoming message from hub. Called by: {}, addr: {}, new_addr: {}.",
+                    caller, addr, new_addr
+                );
+                bus::send(&new_addr, &caller, &data)
+            },
+        );
+        connection_ref
+            .bind(source_node_id_clone)
+            .and_then(|_| {
+                async move {
+                    let _ =
+                        bus::subscribe(SERVICE_ID, move |caller: &str, addr: &str, msg: &[u8]| {
+                            eprintln!(
+                                "[Net Mk1] Sending message to hub. Called by: {}, addr: {}.",
+                                caller, addr
+                            );
+                            connection_ref.call(
+                                caller.to_string(),
+                                addr.to_string(),
+                                Vec::from(msg),
+                            )
+                        });
+                    Ok(())
+                }
+            })
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))
+    })
 }
 
-#[cfg(test)]
-mod tests {
-    use ya_core_model::net::{Message, MessageAddress, MessageType};
-
-    #[test]
-    fn test_serialization() {
-        let m: Message = Message {
-            //destination: MessageAddress::Node("0x123".into()),
-            destination: MessageAddress::BroadcastAddress { distance: 5 },
-            module: "module".into(),
-            method: "method".into(),
-            reply_to: "0x999".into(),
-            request_id: 1000,
-            message_type: MessageType::Request,
-        };
-        eprintln!("{}", serde_json::to_string(&m).unwrap())
-    }
+/// Send message to another node through a hub. Returns a future with the result.
+pub fn send_message_future(
+    source_node_id: &str,
+    destination: &str,
+    data: Vec<u8>,
+) -> impl Future<Output = Result<Vec<u8>, Error>> {
+    eprintln!(
+        "[Net Mk1] Sending message from {} to {}.",
+        source_node_id, destination
+    );
+    bus::send(
+        &format!("{}/{}", SERVICE_ID, destination),
+        &format!("{}/{}", SERVICE_ID, source_node_id),
+        &data,
+    )
 }

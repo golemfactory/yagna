@@ -1,8 +1,7 @@
 //! Provider part of Market API
-use crate::Result;
-//use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
-use crate::web::{QueryParamsBuilder, WebClient};
 use std::sync::Arc;
+
+use crate::{web::WebClient, Result};
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 /// Bindings for Provider part of the Market API.
@@ -11,21 +10,16 @@ pub struct ProviderApi {
 }
 
 impl ProviderApi {
-    pub fn new(client: Arc<WebClient>) -> Self {
-        Self { client }
+    pub fn new(client: &Arc<WebClient>) -> Self {
+        Self {
+            client: client.clone(),
+        }
     }
 
     /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
     /// interest in Demands meeting specified criteria.
-    pub async fn subscribe(&self, offer: Offer) -> Result<String> {
-        Ok(String::from_utf8(
-            self.client
-                .post("offers/")
-                .send_json(&offer)
-                .body()
-                .await?
-                .to_vec(),
-        )?)
+    pub async fn subscribe(&self, offer: &Offer) -> Result<String> {
+        self.client.post("offers/").send_json(&offer).json().await
     }
 
     /// Stop subscription by invalidating a previously published Offer.
@@ -57,7 +51,7 @@ impl ProviderApi {
     /// Sends a bespoke Offer in response to specific Demand.
     pub async fn create_proposal(
         &self,
-        proposal: Proposal,
+        proposal: &Proposal,
         subscription_id: &str,
         proposal_id: &str,
     ) -> Result<String> {
@@ -106,7 +100,7 @@ impl ProviderApi {
 
     /// Rejects the Agreement received from the Requestor.
     /// Mutually exclusive with [`approve_agreement`](#method.approve_agreement).
-    pub async fn reject_agreement(&self, agreement_id: &str) -> Result<()> {
+    pub async fn reject_agreement(&self, agreement_id: &str) -> Result<String> {
         let url = url_format!("agreements/{agreement_id}/reject/", agreement_id);
         self.client.post(&url).send().json().await
     }

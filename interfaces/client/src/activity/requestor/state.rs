@@ -5,6 +5,7 @@ use ya_model::activity::{ActivityState, ExeScriptCommandState};
 rest_interface! {
     /// Bindings for Requestor State part of the Activity API.
     impl RequestorStateApiClient {
+        /// Get running command for a specified Activity.
         pub async fn get_running_command(
             &self,
             #[path] activity_id: &str
@@ -14,6 +15,7 @@ rest_interface! {
             response
         }
 
+        /// Get state of specified Activity.
         pub async fn get_state(
             &self,
             #[path] activity_id: &str
@@ -23,6 +25,7 @@ rest_interface! {
             response
         }
 
+        /// Get usage of specified Activity.
         pub async fn get_usage(
             &self,
             #[path] activity_id: &str

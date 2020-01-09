@@ -19,12 +19,6 @@ pub enum Error {
         #[from]
         api::prelude::Error,
     ),
-    #[error("received tokio timer error {0}")]
-    TokioTimer(
-        #[serde(skip)]
-        #[from]
-        tokio::timer::Error,
-    ),
     #[error("invalid transition {transition:?} from state {state:?}")]
     InvalidTransition {
         transition: state::Transition,

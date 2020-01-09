@@ -4,7 +4,6 @@ extern crate diesel;
 #[macro_use]
 pub(crate) mod common;
 pub(crate) mod dao;
-pub(crate) mod db;
 
 pub mod error;
 pub mod provider;

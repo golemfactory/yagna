@@ -1,24 +1,29 @@
 //! Error definitions and mappings
-use backtrace::Backtrace;
+use backtrace::Backtrace as Trace; // needed b/c of thiserror magic
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("AWC sending request error: {e}, {url}")]
+    #[error("AWC error requesting {url}: {e}")]
     SendRequestError {
         e: awc::error::SendRequestError,
         url: String,
+        bt: Trace,
     },
-    #[error("AWC payload error: {e}, {b}")]
+    #[error("AWC payload error: {e}")]
     PayloadError {
         e: awc::error::PayloadError,
-        b: String,
+        bt: Trace,
     },
-    #[error("AWC JSON payload error: {e}, {b}")]
+    #[error("AWC JSON payload error: {e}")]
     JsonPayloadError {
         e: awc::error::JsonPayloadError,
-        b: String,
+        bt: Trace,
     },
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::error::Error),
+    #[error("HTTP status code: {0}")]
+    HttpStatusCode(awc::http::StatusCode),
     #[error("serde JSON error: {0}")]
     SerdeJsonError(serde_json::Error),
     #[error("invalid address: {0}")]
@@ -37,7 +42,18 @@ impl From<awc::error::SendRequestError> for Error {
     fn from(e: awc::error::SendRequestError) -> Self {
         Error::SendRequestError {
             e,
-            url: format!("{:#?}", Backtrace::new()),
+            url: "".into(),
+            bt: Trace::new(),
+        }
+    }
+}
+
+impl From<(awc::error::SendRequestError, String)> for Error {
+    fn from(pair: (awc::error::SendRequestError, String)) -> Self {
+        Error::SendRequestError {
+            e: pair.0,
+            url: pair.1,
+            bt: Trace::new(),
         }
     }
 }
@@ -46,7 +62,7 @@ impl From<awc::error::PayloadError> for Error {
     fn from(e: awc::error::PayloadError) -> Self {
         Error::PayloadError {
             e,
-            b: format!("{:#?}", Backtrace::new()),
+            bt: Trace::new(),
         }
     }
 }
@@ -55,7 +71,7 @@ impl From<awc::error::JsonPayloadError> for Error {
     fn from(e: awc::error::JsonPayloadError) -> Self {
         Error::JsonPayloadError {
             e,
-            b: format!("{:#?}", Backtrace::new()),
+            bt: Trace::new(),
         }
     }
 }

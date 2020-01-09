@@ -1,19 +1,16 @@
 use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount};
 use crate::dao::AgreementDao;
-use crate::db::DbExecutor;
 use crate::error::Error;
 use crate::requestor::get_agreement;
 use crate::timeout::IntoTimeoutFuture;
 use crate::{RestfulApi, ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION, NET_SERVICE_ID};
 use actix_web::web;
-use futures::compat::Future01CompatExt;
 use futures::lock::Mutex;
 use futures::prelude::*;
 use serde::Deserialize;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
-use ya_model::activity::{
-    ExeScriptBatch, ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest,
-};
+use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest};
+use ya_persistence::executor::DbExecutor;
 
 #[derive(Deserialize)]
 pub struct PathActivityBatch {
@@ -22,11 +19,11 @@ pub struct PathActivityBatch {
 }
 
 pub struct RequestorControlApi {
-    db_executor: Mutex<DbExecutor>,
+    db_executor: Mutex<DbExecutor<Error>>,
 }
 
 impl RequestorControlApi {
-    pub fn new(db_executor: Mutex<DbExecutor>) -> Self {
+    pub fn new(db_executor: Mutex<DbExecutor<Error>>) -> Self {
         Self { db_executor }
     }
 
@@ -39,6 +36,7 @@ impl RequestorControlApi {
 }
 
 impl RequestorControlApi {
+    /// Creates new Activity based on given Agreement.
     async fn create_activity(
         &self,
         query: web::Query<QueryTimeout>,
@@ -46,41 +44,44 @@ impl RequestorControlApi {
     ) -> Result<String, Error> {
         let agreement =
             AgreementDao::new(&self.db_executor.lock().await.conn()?).get(&body.agreement_id)?;
-        let uri = Self::uri(&agreement.provider_id, "create_activity");
+        let uri = Self::uri(&agreement.offer_node_id, "create_activity");
 
         gsb_send!(body.into_inner(), &uri, query.timeout)
     }
 
+    /// Destroys given Activity.
     async fn destroy_activity(
         &self,
         path: web::Path<PathActivity>,
         query: web::Query<QueryTimeout>,
     ) -> Result<(), Error> {
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "destroy_activity");
+        let uri = Self::uri(&agreement.offer_node_id, "destroy_activity");
         let msg = DestroyActivity {
             activity_id: path.activity_id.to_string(),
-            agreement_id: agreement.id,
+            agreement_id: agreement.natural_id,
             timeout: query.timeout.clone(),
         };
 
         gsb_send!(msg, &uri, query.timeout)
     }
 
+    /// Executes an ExeScript batch within a given Activity.
     async fn exec(
         &self,
         path: web::Path<PathActivity>,
         query: web::Query<QueryTimeout>,
         body: web::Json<ExeScriptRequest>,
     ) -> Result<String, Error> {
+        let commands: Vec<ExeScriptCommand> =
+            serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "destroy_activity");
+        let uri = Self::uri(&agreement.offer_node_id, "destroy_activity");
         let batch_id = generate_id();
-
         let msg = Exec {
             activity_id: path.activity_id.clone(),
             batch_id: batch_id.clone(),
-            exe_script: parse_commands(&body)?,
+            exe_script: commands,
             timeout: query.timeout.clone(),
         };
 
@@ -88,13 +89,14 @@ impl RequestorControlApi {
         Ok(batch_id)
     }
 
+    /// Queries for ExeScript batch results.
     async fn get_exec_batch_results(
         &self,
         path: web::Path<PathActivityBatch>,
         query: web::Query<QueryTimeoutMaxCount>,
     ) -> Result<Vec<ExeScriptCommandResult>, Error> {
         let agreement = get_agreement(&self.db_executor, &path.activity_id).await?;
-        let uri = Self::uri(&agreement.provider_id, "get_exec_batch_results");
+        let uri = Self::uri(&agreement.offer_node_id, "get_exec_batch_results");
         let msg = GetExecBatchResults {
             activity_id: path.activity_id.to_string(),
             batch_id: path.batch_id.to_string(),
@@ -111,20 +113,21 @@ impl RestfulApi for RequestorControlApi {
             "/{}/v{}",
             ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION
         ))
-        .service(web::resource("/activity/{activity_id}").route(
-            web::delete().to_async(impl_restful_handler!(api, destroy_activity, path, query)),
-        ))
         .service(
-            web::resource("/activity/{activity_id}/exec")
-                .route(web::post().to_async(impl_restful_handler!(api, exec, path, query, body))),
+            web::resource("/activity/{activity_id}")
+                .route(web::delete().to(impl_restful_handler!(api, destroy_activity, path, query))),
         )
         .service(
-            web::resource("/activity/{activity_id}/exec/{batch_id}").route(web::get().to_async(
+            web::resource("/activity/{activity_id}/exec")
+                .route(web::post().to(impl_restful_handler!(api, exec, path, query, body))),
+        )
+        .service(
+            web::resource("/activity/{activity_id}/exec/{batch_id}").route(web::get().to(
                 impl_restful_handler!(api, get_exec_batch_results, path, query),
             )),
         )
         .service(
-            web::resource("/activity").route(web::post().to_async(impl_restful_handler!(
+            web::resource("/activity").route(web::post().to(impl_restful_handler!(
                 api,
                 create_activity,
                 path,
@@ -132,7 +135,7 @@ impl RestfulApi for RequestorControlApi {
             ))),
         )
         .service(
-            web::resource("/activity").route(web::get().to_async(impl_restful_handler!(
+            web::resource("/activity").route(web::get().to(impl_restful_handler!(
                 api,
                 create_activity,
                 path,
@@ -140,35 +143,4 @@ impl RestfulApi for RequestorControlApi {
             ))),
         )
     }
-}
-
-fn parse_commands(request: &ExeScriptRequest) -> Result<ExeScriptBatch, Error> {
-    let commands: Vec<ExeScriptCommand> = request
-        .text
-        .lines()
-        .into_iter()
-        .map(|line| match shlex::split(line) {
-            Some(input) => parse_vec(input),
-            None => None,
-        })
-        .flatten()
-        .collect();
-
-    match commands.len() {
-        0 => Err(Error::BadRequest("Empty command list".to_string())),
-        _ => Ok(ExeScriptBatch { commands }),
-    }
-}
-
-fn parse_vec(mut input: Vec<String>) -> Option<ExeScriptCommand> {
-    if !input.is_empty() {
-        return None;
-    }
-
-    let command = input.remove(0);
-    let params = match input.len() {
-        0 => None,
-        _ => Some(input),
-    };
-    Some(ExeScriptCommand { command, params })
 }

@@ -10,9 +10,10 @@ pub const DEFAULT_REQUEST_TIMEOUT: u32 = 120 * 1000; // ms
 macro_rules! gsb_send {
     ($msg:expr, $uri:expr, $timeout:expr) => {{
         use ya_service_bus::actix_rpc;
+        use $crate::timeout::IntoTimeoutFuture;
+
         actix_rpc::service($uri)
             .send($msg)
-            .compat()
             .timeout($timeout)
             .map_err(Error::from)
             .await?
@@ -72,11 +73,7 @@ where
 
 macro_rules! json_response_future {
     ($future:expr) => {
-        $future
-            .map(crate::common::into_json_response)
-            .unit_error()
-            .boxed_local()
-            .compat()
+        $future.map(crate::common::into_json_response)
     };
 }
 

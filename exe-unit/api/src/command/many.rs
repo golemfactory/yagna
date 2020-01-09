@@ -6,13 +6,15 @@ use actix::{
     dev::{MessageResponse, ResponseChannel, ToEnvelope},
     prelude::*,
 };
+use futures::prelude::*;
 use futures::{
     future,
     stream::{self, Stream},
 };
 use std::marker::PhantomData;
+use std::result::Result as StdResult;
 
-type BoxStream<I, E> = Box<dyn Stream<Item = I, Error = E> + Send>;
+type BoxStream<I, E> = stream::BoxStream<'static, std::result::Result<I, E>>;
 
 pub struct StreamResponse<I, E>(BoxStream<I, E>)
 where
@@ -24,11 +26,11 @@ where
     I: 'static,
     E: 'static,
 {
-    pub fn new(inner: impl Stream<Item = I, Error = E> + Send + 'static) -> Self {
-        Self(Box::new(inner))
+    pub fn new(inner: impl Stream<Item = StdResult<I, E>> + Send + 'static) -> Self {
+        Self(Box::pin(inner))
     }
 
-    pub fn into_inner(self) -> impl Stream<Item = I, Error = E> + Send {
+    pub fn into_inner(self) -> impl Stream<Item = StdResult<I, E>> + Send {
         self.0
     }
 }
@@ -82,7 +84,7 @@ where
 
 impl<M, R, Ctx> Handler<Commands<M, R, Ctx>> for Dispatcher<Ctx>
 where
-    M: Message<Result = R> + Send + 'static,
+    M: Message<Result = R> + Send + 'static + Unpin,
     R: Send + 'static,
     Ctx: Actor + Handler<M> + Send + 'static,
     <Ctx as Actor>::Context: AsyncContext<Ctx> + ToEnvelope<Ctx, M>,
@@ -96,7 +98,7 @@ where
             .into_iter()
             .map(|cmd| (dispatcher.clone(), cmd))
             .collect();
-        StreamResponse::new(stream::iter_ok(cmds).and_then(|(dispatcher, cmd)| {
+        StreamResponse::new(stream::iter(cmds).then(|(dispatcher, cmd)| {
             dispatcher.send(Command::new(cmd)).then(|res| match res {
                 Err(e) => future::ok(Err(Error::from(e))),
                 Ok(res) => future::ok(res),

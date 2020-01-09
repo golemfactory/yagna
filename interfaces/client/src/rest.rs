@@ -49,11 +49,9 @@ macro_rules! rest_interface {
         }
     }
     => {
-        use futures::compat::Future01CompatExt;
         use std::sync::Arc;
-        use url::Url;
 
-        use crate::web::{WebClient, QueryParamsBuilder};
+        use crate::web::WebClient;
 
         $(#[doc = $interface_doc])*
         pub struct $interface_name {
@@ -72,7 +70,7 @@ macro_rules! rest_interface {
             }
 
 
-            fn url<T: Into<String>>(&self, suffix: T) -> Url {
+            fn url<T: Into<String>>(&self, suffix: T) -> url::Url {
                 self.client.configuration.endpoint_url(suffix)
             }
 
@@ -89,14 +87,12 @@ macro_rules! rest_interface {
                     $(, $argq : $argq_t )*
                 ) -> Result<$ret> {
                     let url = self.url(url_format!( $rest_url $(, $argp)* $(, #[query] $argq)* ));
-                    println!("doing {} on {}", stringify!($http_method), url);
+                    log::info!("doing {} on {}", stringify!($http_method), url);
                     let $response = self.client.awc
                         .$http_method(url.as_str())
                         .$send_method $send_args
-                        .compat()
                         .await?
                         .$response_extractor()
-                        .compat()
                         .await
                         .map_err(crate::Error::from);
                     $body
@@ -111,7 +107,7 @@ macro_rules! url_format {
         $path:expr $(, $var:ident )* $(, #[query] $varq:ident )*
     } => {{
         let mut url = format!( $path $(, $var=$var)* );
-        let query = QueryParamsBuilder::new()
+        let query = crate::web::QueryParamsBuilder::new()
             $( .put( stringify!($varq), $varq ) )*
             .build();
         if query.len() > 1 {

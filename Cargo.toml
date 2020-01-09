@@ -3,19 +3,38 @@ members = [
     "agent/provider",
     "agent/requestor",
     "core/activity",
+    "core/appkey",
+    "core/identity",
     "core/market",
     "core/model",
     "core/net",
     "core/payment",
+    "core/persistence",
     "core/serv",
+    "core/serv-api",
     "exe-unit/api",
     "exe-unit/dummy",
     "exe-unit/wasm-mozjs",
     "exe-unit/wasmtime",
     "interfaces/client",
     "interfaces/model",
-    "service-bus/proto",
     "service-bus/bus",
     "service-bus/derive",
+    "service-bus/proto",
     "service-bus/router",
+    "service-bus/util",
 ]
+
+[patch.crates-io]
+ya-appkey = { path = "core/appkey" }
+ya-core-model = { path = "core/model" }
+ya-exe-api = { path = "exe-unit/api" }
+ya-identity = { path = "core/identity" }
+ya-model = { path = "interfaces/model" }
+ya-persistence = { path = "core/persistence" }
+ya-sb-proto = { path = "service-bus/proto" }
+ya-sb-router = { path = "service-bus/router" }
+ya-sb-util = { path = "service-bus/util" }
+ya-service-api = { path = "core/serv-api"}
+ya-service-bus = { path = "service-bus/bus/" }
+

@@ -22,7 +22,7 @@ pub enum Error {
     OneshotCanceled(
         #[serde(skip)]
         #[from]
-        futures::sync::oneshot::Canceled,
+        futures::channel::oneshot::Canceled,
     ),
     #[error("actix mailbox error occurred {0}")]
     MailboxError(
@@ -50,7 +50,7 @@ impl<'de> Deserialize<'de> for Error {
         impl<'de> Visitor<'de> for Vis {
             type Value = Error;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
                 formatter.write_str("enum Error")
             }
 
