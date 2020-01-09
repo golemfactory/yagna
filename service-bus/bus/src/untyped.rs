@@ -4,7 +4,11 @@ use crate::local_router::router;
 
 use futures::Future;
 
-pub fn send(addr: &str, from: &str, bytes: &[u8]) -> impl Future<Output = Result<Vec<u8>, Error>> {
+pub fn send(
+    addr: &str,
+    from: &str,
+    bytes: &[u8],
+) -> impl Future<Output = Result<Vec<u8>, Error>> + Unpin {
     router()
         .lock()
         .unwrap()
@@ -33,17 +37,17 @@ mod raw_actor {
     use super::{Error, RawHandler};
     use crate::RpcRawCall;
     use actix::prelude::*;
-    use futures::{FutureExt, TryFutureExt};
+    use futures::FutureExt;
 
     struct RawHandlerActor<T> {
         inner: T,
     }
 
-    impl<T: RawHandler + 'static> Actor for RawHandlerActor<T> {
+    impl<T: RawHandler + Unpin + 'static> Actor for RawHandlerActor<T> {
         type Context = Context<Self>;
     }
 
-    impl<T: RawHandler + 'static> Handler<RpcRawCall> for RawHandlerActor<T> {
+    impl<T: RawHandler + Unpin + 'static> Handler<RpcRawCall> for RawHandlerActor<T> {
         type Result = ActorResponse<Self, Vec<u8>, Error>;
 
         fn handle(&mut self, msg: RpcRawCall, _ctx: &mut Self::Context) -> Self::Result {
@@ -51,18 +55,17 @@ mod raw_actor {
                 self.inner
                     .handle(&msg.caller, &msg.addr, msg.body.as_ref())
                     .boxed_local()
-                    .compat()
                     .into_actor(self),
             )
         }
     }
 
-    pub fn recipient(h: impl RawHandler + 'static) -> Recipient<RpcRawCall> {
+    pub fn recipient(h: impl RawHandler + Unpin + 'static) -> Recipient<RpcRawCall> {
         RawHandlerActor { inner: h }.start().recipient()
     }
 }
 
-pub fn subscribe(addr: &str, h: impl RawHandler + 'static) -> Handle {
+pub fn subscribe(addr: &str, h: impl RawHandler + Unpin + 'static) -> Handle {
     router()
         .lock()
         .unwrap()

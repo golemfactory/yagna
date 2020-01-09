@@ -8,11 +8,10 @@ struct Options {
     ip_port: String,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let options = Options::from_args();
     let listen_addr = options.ip_port.parse().expect("Invalid ip:port");
 
-    let server = ya_sb_router::bind_router(listen_addr).boxed().compat();
-
-    tokio::run(server);
+    ya_sb_router::bind_router(listen_addr).await;
 }

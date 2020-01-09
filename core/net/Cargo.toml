@@ -5,14 +5,13 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-core-model = { path = "../model/" }
 ya-service-bus = "0.1"
 
-futures = "0.1"
+[dependencies.futures]
+package="futures"
+version="0.3"
 
-[dependencies.futures03]
-package = "futures"
-version = "0.3"
-features = ["compat"]
 
 [dev-dependencies]
-actix = "0.8"
+actix = "0.9"

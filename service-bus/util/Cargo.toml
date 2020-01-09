@@ -5,3 +5,5 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+bytes = "0.4"
+tokio-bytes = {version="0.5", package="bytes" }

@@ -23,9 +23,11 @@ thiserror = "1.0"
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
-actix = "0.8"
-futures = { version = "0.3", features = ["compat"] }
+actix-rt = "1.0"
+actix = "0.9"
+futures = { version = "0.3" }
 lazy_static = "1.4"
+ya-sb-router="0.1"
 
 [target.'cfg(target_env = "msvc")'.build-dependencies]
 vcpkg = "0.2"

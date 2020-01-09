@@ -1,35 +1,30 @@
+use futures::prelude::*;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-
-use futures::compat::Future01CompatExt;
-
-use tokio::codec::{FramedRead, FramedWrite};
-use tokio::io::{AsyncRead, ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::prelude::*;
 use tokio::sync::mpsc;
+use tokio_util::codec::*;
 
-use ya_sb_proto::codec::{GsbMessage, GsbMessageDecoder, GsbMessageEncoder};
+use ya_sb_proto::codec::{GsbMessage, GsbMessageCodec, ProtocolError};
 use ya_sb_proto::*;
 use ya_sb_util::PrefixLookupBag;
 
-struct MessageDispatcher<A, B>
+struct MessageDispatcher<A, M, E>
 where
     A: Hash + Eq,
-    B: Sink,
 {
-    senders: HashMap<A, mpsc::Sender<B::SinkItem>>,
+    senders: HashMap<A, mpsc::Sender<Result<M, E>>>,
 }
 
-impl<A, B> MessageDispatcher<A, B>
+impl<A, M, E> MessageDispatcher<A, M, E>
 where
     A: Hash + Eq,
-    B: Sink + Send + 'static,
-    B::SinkItem: Send + 'static,
-    B::SinkError: From<mpsc::error::RecvError> + Debug,
+    M: Send + 'static,
+    E: Send + 'static + From<mpsc::error::RecvError> + Debug,
 {
     fn new() -> Self {
         MessageDispatcher {
@@ -37,16 +32,22 @@ where
         }
     }
 
-    fn register(&mut self, addr: A, sink: B) -> failure::Fallible<()> {
+    fn register<B: Sink<M, Error = E> + Send + 'static>(
+        &mut self,
+        addr: A,
+        sink: B,
+    ) -> failure::Fallible<()> {
         match self.senders.entry(addr) {
             Entry::Occupied(_) => Err(failure::err_msg("Sender already registered")),
             Entry::Vacant(entry) => {
                 let (tx, rx) = mpsc::channel(1000);
-                tokio::spawn(
-                    sink.send_all(rx)
-                        .map(|_| ())
-                        .map_err(|e| log::error!("Send failed: {:?}", e)),
-                );
+                tokio::spawn(async move {
+                    let mut rx = rx;
+                    futures::pin_mut!(sink);
+                    if let Err(e) = sink.send_all(&mut rx).await {
+                        log::error!("Send failed: {:?}", e)
+                    }
+                });
                 entry.insert(tx);
                 Ok(())
             }
@@ -62,18 +63,20 @@ where
 
     fn send_message<T>(&mut self, addr: &A, msg: T) -> failure::Fallible<()>
     where
-        T: Into<B::SinkItem>,
+        T: Into<M>,
     {
         match self.senders.get_mut(addr) {
             None => Err(failure::err_msg("Sender not registered")),
             Some(sender) => {
                 let sender = sender.clone();
-                tokio::spawn(
-                    sender
-                        .send(msg.into())
-                        .map(|_| ())
-                        .map_err(|e| log::error!("Send failed: {:?}", e)),
-                );
+                let msg = msg.into();
+                tokio::spawn(async move {
+                    futures::pin_mut!(sender);
+                    let _ = sender
+                        .send(Ok(msg))
+                        .await
+                        .unwrap_or_else(|e| log::error!("Send message failed: {}", e));
+                });
                 Ok(())
             }
         }
@@ -97,12 +100,11 @@ where
     service_id: ServiceId,
 }
 
-pub struct Router<A, B>
+pub struct Router<A, M, E>
 where
     A: Hash + Eq,
-    B: Sink,
 {
-    dispatcher: MessageDispatcher<A, B>,
+    dispatcher: MessageDispatcher<A, M, E>,
     registered_endpoints: PrefixLookupBag<A>,
     reversed_endpoints: HashMap<A, HashSet<ServiceId>>,
     pending_calls: HashMap<RequestId, PendingCall<A>>,
@@ -110,12 +112,11 @@ where
     endpoint_calls: HashMap<ServiceId, HashSet<RequestId>>,
 }
 
-impl<A, B> Router<A, B>
+impl<A, M, E> Router<A, M, E>
 where
     A: Hash + Eq + Display + Clone,
-    B: Sink + Send + 'static,
-    B::SinkItem: Send + 'static + From<GsbMessage>,
-    B::SinkError: From<mpsc::error::RecvError> + Debug,
+    M: Send + 'static + From<GsbMessage>,
+    E: Send + 'static + From<mpsc::error::RecvError> + Debug,
 {
     pub fn new() -> Self {
         Router {
@@ -128,8 +129,12 @@ where
         }
     }
 
-    pub fn connect(&mut self, addr: A, sink: B) -> failure::Fallible<()> {
-        log::info!("Accepted connection from {}", addr);
+    pub fn connect<B: Sink<M, Error = E> + Send + 'static>(
+        &mut self,
+        addr: A,
+        sink: B,
+    ) -> failure::Fallible<()> {
+        println!("Accepted connection from {}", addr);
         self.dispatcher.register(addr, sink)
     }
 
@@ -238,7 +243,7 @@ where
                 }
             }
         };
-        log::info!("{}", msg.message);
+        log::debug!("{}", msg.message);
         self.send_message(addr, msg)
     }
 
@@ -261,7 +266,7 @@ where
                 }
             }
             _ => {
-                log::info!("Service not registered or registered by another server");
+                log::warn!("Service not registered or registered by another server");
                 UnregisterReply {
                     code: UnregisterReplyCode::NotRegistered as i32,
                 }
@@ -271,7 +276,7 @@ where
     }
 
     fn call(&mut self, caller_addr: &A, msg: CallRequest) -> failure::Fallible<()> {
-        log::info!(
+        log::debug!(
             "Received CallRequest from {}. caller = {}, address = {}, request_id = {}",
             caller_addr,
             &msg.caller,
@@ -301,11 +306,11 @@ where
         };
         match server_addr {
             Ok(server_addr) => {
-                log::info!("Forwarding CallRequest to {}", server_addr);
+                log::debug!("Forwarding CallRequest to {}", server_addr);
                 self.send_message(&server_addr, msg)
             }
             Err(err) => {
-                log::info!("{}", err);
+                log::debug!("{}", err);
                 let msg = CallReply {
                     request_id: msg.request_id,
                     code: CallReplyCode::CallReplyBadRequest as i32,
@@ -318,7 +323,7 @@ where
     }
 
     fn reply(&mut self, server_addr: &A, msg: CallReply) -> failure::Fallible<()> {
-        log::info!(
+        log::debug!(
             "Received CallReply from {} request_id = {}",
             server_addr,
             &msg.request_id
@@ -362,20 +367,18 @@ where
     }
 }
 
-pub async fn bind_router(addr: SocketAddr) -> Result<(), ()> {
-    let listener =
-        TcpListener::bind(&addr).expect(&format!("Unable to bind TCP listener at {}", addr));
+pub async fn bind_router(addr: SocketAddr) {
+    let mut listener = TcpListener::bind(&addr)
+        .await
+        .expect(&format!("Unable to bind TCP listener at {}", addr));
     let router = Arc::new(Mutex::new(Router::new()));
 
     listener
         .incoming()
         .map_err(|e| log::error!("Accept failed: {:?}", e))
-        .for_each(move |sock| {
+        .try_for_each(move |sock| {
             let addr = sock.peer_addr().unwrap();
-            let (reader, writer) = sock.split();
-            let writer = FramedWrite::new(writer, GsbMessageEncoder {});
-            let reader = FramedRead::new(reader, GsbMessageDecoder::new());
-
+            let (writer, reader) = Framed::new(sock, GsbMessageCodec::default()).split();
             router
                 .lock()
                 .unwrap()
@@ -384,32 +387,31 @@ pub async fn bind_router(addr: SocketAddr) -> Result<(), ()> {
             let router1 = router.clone();
             let router2 = router.clone();
 
-            tokio::spawn(
+            let _ = tokio::spawn(
                 reader
-                    .from_err()
-                    .for_each(move |msg: GsbMessage| {
-                        future::done(router1.lock().unwrap().handle_message(addr.clone(), msg))
+                    .map_err(From::from)
+                    .try_for_each(move |msg: GsbMessage| {
+                        future::ready(router1.lock().unwrap().handle_message(addr.clone(), msg))
                     })
-                    .and_then(move |_| future::done(router2.lock().unwrap().disconnect(&addr)))
+                    .and_then(move |_| future::ready(router2.lock().unwrap().disconnect(&addr)))
                     .map_err(|e| log::error!("Error occurred handling message: {:?}", e)),
-            )
+            );
+            future::ok(())
         })
-        .compat()
-        .await
+        .await;
 }
 
 pub async fn tcp_connect(
     addr: &SocketAddr,
 ) -> (
-    FramedRead<ReadHalf<TcpStream>, GsbMessageDecoder>,
-    FramedWrite<WriteHalf<TcpStream>, GsbMessageEncoder>,
+    impl Sink<GsbMessage, Error = ProtocolError>,
+    impl Stream<Item = Result<GsbMessage, ProtocolError>>,
 ) {
-    let sock = TcpStream::connect(&addr)
-        .compat()
-        .await
-        .expect("Connect failed");
-    let (reader, writer) = sock.split();
+    let sock = TcpStream::connect(&addr).await.expect("Connect failed");
+    let framed = tokio_util::codec::Framed::new(sock, GsbMessageCodec::default());
+    framed.split()
+    /*let (reader, writer) = sock.split();
     let reader = FramedRead::new(reader, GsbMessageDecoder::new());
     let writer = FramedWrite::new(writer, GsbMessageEncoder {});
-    (reader, writer)
+    (reader, writer)*/
 }

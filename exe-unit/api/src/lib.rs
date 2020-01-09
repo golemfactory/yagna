@@ -22,7 +22,7 @@ pub enum Error {
     OneshotCanceled(
         #[serde(skip)]
         #[from]
-        futures::sync::oneshot::Canceled,
+        futures::channel::oneshot::Canceled,
     ),
     #[error("actix mailbox error occurred {0}")]
     MailboxError(

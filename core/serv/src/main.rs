@@ -76,9 +76,12 @@ impl CliArgs {
         if let CliCommand::Service(service) = self.command {
             Ok(ctx.output(service.run_command(sys, &ctx)?))
         } else {
-            let run = self.command.run_command(&ctx);
-            futures::pin_mut!(run);
-            Ok(ctx.output(sys.block_on(run.compat())?))
+            let command = self.command;
+            let run = async move {
+                ctx.output(command.run_command(&ctx).await?);
+                Ok::<_, anyhow::Error>(())
+            };
+            Ok(sys.block_on(run)?)
         }
     }
 }
@@ -119,7 +122,7 @@ enum CliCommand {
 }
 
 impl CliCommand {
-    pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::AppKey(appkey) => appkey.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -148,11 +151,7 @@ impl ServiceCommand {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                actix_rt::spawn(
-                    ya_sb_router::bind_router(ctx.router_address()?)
-                        .boxed()
-                        .compat(),
-                );
+                actix_rt::spawn(ya_sb_router::bind_router(ctx.router_address()?));
 
                 ya_identity::service::activate()?;
                 ya_appkey::service::bind(&APP_KEY_SERVICE);

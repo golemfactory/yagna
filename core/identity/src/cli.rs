@@ -79,7 +79,7 @@ impl IdentityCommand {
     pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         let keys_path = keys_path(&ctx.data_dir);
         match self {
-            IdentityCommand::List { password } => {
+            IdentityCommand::List { password: _ } => {
                 use ya_core_model::identity;
                 use ya_service_bus::typed as bus;
                 use ya_service_bus::RpcEndpoint;

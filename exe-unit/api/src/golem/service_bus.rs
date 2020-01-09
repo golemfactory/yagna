@@ -7,6 +7,8 @@ use actix::{
     prelude::*,
 };
 use bus::{actix_rpc, Handle, RpcEnvelope, RpcMessage};
+use futures::prelude::*;
+use futures::TryStreamExt;
 use serde::{
     de::{self, DeserializeOwned, Deserializer, SeqAccess, Visitor},
     Deserialize, Serialize,
@@ -24,6 +26,14 @@ where
     recipient: Addr<Dispatcher<Ctx>>,
     p1: PhantomData<M>,
     p2: PhantomData<R>,
+}
+
+impl<M, R, Ctx> Unpin for BusEntrypoint<M, R, Ctx>
+where
+    M: Message<Result = R>,
+    R: 'static,
+    Ctx: Actor + Handler<M>,
+{
 }
 
 impl<M, R, Ctx> BusEntrypoint<M, R, Ctx>
@@ -45,7 +55,7 @@ where
 
 impl<M, R, Ctx> Actor for BusEntrypoint<M, R, Ctx>
 where
-    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static,
+    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static + Unpin,
     R: Serialize + Send + Sync + 'static,
     Ctx: Actor + Handler<M> + Send + Sync + 'static,
     <Ctx as Actor>::Context: AsyncContext<Ctx> + ToEnvelope<Ctx, M>,
@@ -174,7 +184,7 @@ where
 
 impl<M, R, Ctx> Handler<RpcEnvelope<Execute<M, R, Ctx>>> for BusEntrypoint<M, R, Ctx>
 where
-    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static,
+    M: Message<Result = R> + Serialize + DeserializeOwned + Send + Sync + 'static + Unpin,
     R: Serialize + Send + Sync + 'static,
     Ctx: Actor + Handler<M> + Send + Sync + 'static,
     <Ctx as Actor>::Context: AsyncContext<Ctx> + ToEnvelope<Ctx, M>,
@@ -187,28 +197,19 @@ where
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let dispatcher = self.recipient.clone();
-        let fut = dispatcher
-            .send(Commands::new(msg.into_inner().cmds))
-            .from_err()
-            .and_then(|res| {
-                res.into_inner().collect().then(|res| {
-                    let res: Vec<_> = res
-                        .unwrap()
-                        .into_iter()
-                        .filter_map(|resp| {
-                            if let Ok(resp) = resp {
-                                Some(resp)
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    match serde_json::to_string(&res) {
-                        Ok(res) => Ok(res),
-                        Err(e) => Err(Error::from(e)),
-                    }
-                })
-            });
-        ActorResponse::r#async(fut.into_actor(self))
+        ActorResponse::r#async(
+            async move {
+                let response_stream = dispatcher
+                    .send(Commands::new(msg.into_inner().cmds))
+                    .await?
+                    .into_inner();
+                let v: Result<Vec<_>, ()> = response_stream.try_collect().await;
+                match serde_json::to_string(v.as_ref().unwrap()) {
+                    Ok(res) => Ok(res),
+                    Err(e) => Err(Error::from(e)),
+                }
+            }
+            .into_actor(self),
+        )
     }
 }

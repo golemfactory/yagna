@@ -4,8 +4,8 @@ use super::Handle;
 use crate::local_router::{router, Router};
 use crate::{RpcEnvelope, RpcMessage};
 use actix::prelude::*;
+use futures::prelude::*;
 
-use futures_01::Future;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
@@ -31,10 +31,11 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
-    pub fn send<M: RpcMessage + Serialize + DeserializeOwned + Sync + Send>(
+    pub fn send<M: RpcMessage + Serialize + DeserializeOwned + Sync + Send + Unpin>(
         &self,
         msg: M,
-    ) -> impl Future<Item = <RpcEnvelope<M> as Message>::Result, Error = BusError> + 'static {
+    ) -> impl Future<Output = Result<<RpcEnvelope<M> as Message>::Result, BusError>> + Unpin + 'static
+    {
         let mut b = self.router.lock().unwrap();
         b.forward(self.addr.as_ref(), msg)
     }

@@ -1,9 +1,7 @@
 use crate::error::Error;
 use crate::local_router::{router, Router};
 use crate::{Handle, RpcEndpoint, RpcHandler, RpcMessage};
-
-use futures::compat::Future01CompatExt;
-use futures::{Future, FutureExt};
+use futures::prelude::*;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +17,7 @@ struct Forward {
 
 impl<T: RpcMessage> RpcEndpoint<T> for Forward
 where
-    T: Send,
+    T: Send + Unpin,
 {
     type Result = Pin<Box<dyn Future<Output = Result<Result<T::Item, T::Error>, Error>>>>;
 
@@ -28,12 +26,11 @@ where
             .lock()
             .unwrap()
             .forward(&self.addr, msg)
-            .compat()
             .boxed_local()
     }
 }
 
-pub fn service<T: RpcMessage>(addr: &str) -> impl RpcEndpoint<T> {
+pub fn service<T: RpcMessage + Unpin>(addr: &str) -> impl RpcEndpoint<T> {
     Forward {
         router: router(),
         addr: addr.to_string(),
