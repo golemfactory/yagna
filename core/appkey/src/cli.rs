@@ -39,7 +39,7 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::service(model::ID)
+                let _ = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(create)
                     .await
                     .map_err(|e| anyhow::Error::msg(e))?
@@ -51,7 +51,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::service(model::ID)
+                let _ = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(remove)
                     .await
                     .map_err(|e| anyhow::Error::msg(e))?
@@ -64,7 +64,7 @@ impl AppKeyCommand {
                     page: page.clone(),
                     per_page: per_page.clone(),
                 };
-                let result: (Vec<model::AppKey>, u32) = bus::service(model::ID)
+                let result: (Vec<model::AppKey>, u32) = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(list)
                     .await
                     .map_err(|e| anyhow::Error::msg(e))?
@@ -74,18 +74,18 @@ impl AppKeyCommand {
                     columns: vec![
                         "name".into(),
                         "key".into(),
-                        "role".into(),
                         "id".into(),
+                        "role".into(),
                         "created".into(),
                     ],
                     values: result
                         .0
                         .into_iter()
                         .map(|app_key| {
-                            serde_json::json! {
-                                [app_key.name, app_key.key, app_key.role,
-                                 app_key.identity, app_key.created_date]
-                            }
+                            serde_json::json! {[
+                                app_key.name, app_key.key, app_key.identity,
+                                app_key.role, app_key.created_date
+                            ]}
                         })
                         .collect(),
                 }
