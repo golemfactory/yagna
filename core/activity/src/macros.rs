@@ -15,13 +15,13 @@ macro_rules! bind_gsb_method {
 }
 
 macro_rules! gsb_send {
-    ($msg:expr, $tri:expr, $dbimeout:expr) => {{
+    ($msg:expr, $uri:expr, $timeout:expr) => {{
         use ya_service_bus::actix_rpc;
         use $crate::timeout::IntoTimeoutFuture;
 
-        actix_rpc::service($tri)
+        actix_rpc::service($uri)
             .send($msg)
-            .timeout($dbimeout)
+            .timeout($timeout)
             .map_err(Error::from)
             .await?
             .map_err(Error::from)?
