@@ -35,6 +35,6 @@ ya-persistence = { path = "core/persistence" }
 ya-sb-proto = { path = "service-bus/proto" }
 ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
-ya-service-api = { path = "core/serv-api"}
+ya-service-api = { path = "core/serv-api" }
 ya-service-bus = { path = "service-bus/bus/" }
 

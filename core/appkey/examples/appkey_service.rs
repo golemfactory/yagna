@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
 
     match args {
         Args::Server => {
-            ya_sb_router::bind_router("127.0.0.1:8245".parse()?).await;
+            ya_sb_router::bind_router("127.0.0.1:8245".parse()?).await?;
             eprintln!("done")
         }
         Args::Client(cmd) => {

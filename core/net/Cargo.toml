@@ -9,8 +9,8 @@ ya-core-model = { path = "../model/" }
 ya-service-bus = "0.1"
 
 [dependencies.futures]
-package="futures"
-version="0.3"
+package = "futures"
+version = "0.3"
 
 
 [dev-dependencies]

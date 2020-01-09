@@ -1,7 +1,6 @@
 use crate::common::{PathActivity, QueryTimeout};
 use crate::error::Error;
 use crate::requestor::get_agreement;
-use crate::timeout::IntoTimeoutFuture;
 use crate::{RestfulApi, ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_VERSION, NET_SERVICE_ID};
 use actix_web::web;
 use futures::lock::Mutex;
