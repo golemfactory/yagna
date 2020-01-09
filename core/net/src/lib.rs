@@ -1,6 +1,6 @@
 use futures::prelude::*;
 use std::net::ToSocketAddrs;
-use ya_service_bus::connection;
+use ya_service_bus::{connection, ResponseChunk};
 use ya_service_bus::{untyped as bus, Error};
 
 pub const SERVICE_ID: &str = "/net";
@@ -25,7 +25,8 @@ pub fn init_service_future(
                     "[Net Mk1] Incoming message from hub. Called by: {}, addr: {}, new_addr: {}.",
                     caller, addr, new_addr
                 );
-                bus::send(&new_addr, &caller, &data)
+                stream::once(
+                bus::send(&new_addr, &caller, &data).and_then(|v| future::ok(ResponseChunk::Full(v))))
             },
         );
         connection_ref

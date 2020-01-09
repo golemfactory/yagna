@@ -2,7 +2,7 @@ use actix_rt::SystemRunner;
 use actix_web::{get, middleware, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use flexi_logger::Logger;
-use futures::{lock::Mutex, prelude::*};
+use futures::{lock::Mutex};
 use std::{
     convert::{TryFrom, TryInto},
     fmt::Debug,
