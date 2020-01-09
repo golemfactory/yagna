@@ -28,3 +28,6 @@ actix = "0.9"
 futures = { version = "0.3" }
 lazy_static = "1.4"
 ya-sb-router="0.1"
+
+[target.'cfg(target_env = "msvc")'.build-dependencies]
+vcpkg = "0.2"
