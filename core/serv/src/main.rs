@@ -1,8 +1,7 @@
-use actix_rt::SystemRunner;
 use actix_web::{get, middleware, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use flexi_logger::Logger;
-use futures::{lock::Mutex, prelude::*};
+use futures::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
     fmt::Debug,
@@ -69,20 +68,11 @@ impl CliArgs {
         Ok((self.address.clone(), self.router_port))
     }
 
-    pub fn run_command(self) -> Result<()> {
-        let mut sys = actix_rt::System::new(clap::crate_name!());
+    pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
-        if let CliCommand::Service(service) = self.command {
-            Ok(ctx.output(service.run_command(sys, &ctx)?))
-        } else {
-            let command = self.command;
-            let run = async move {
-                ctx.output(command.run_command(&ctx).await?);
-                Ok::<_, anyhow::Error>(())
-            };
-            Ok(sys.block_on(run)?)
-        }
+        ctx.output(self.command.run_command(&ctx).await?);
+        Ok::<_, anyhow::Error>(())
     }
 }
 
@@ -127,7 +117,7 @@ impl CliCommand {
             CliCommand::AppKey(appkey) => appkey.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
             CliCommand::Id(id) => id.run_command(ctx).await,
-            CliCommand::Service(_) => anyhow::bail!("service should be handled elsewhere"),
+            CliCommand::Service(service) => service.run_command(ctx).await,
         }
     }
 }
@@ -145,13 +135,16 @@ enum ServiceCommand {
 }
 
 impl ServiceCommand {
-    pub fn run_command(&self, sys: SystemRunner, ctx: &CliCtx) -> Result<CommandOutput> {
+    // FIXME: router is not starting properly now
+    async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             Self::Run => {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                actix_rt::spawn(ya_sb_router::bind_router(ctx.router_address()?));
+                ya_sb_router::bind_router(ctx.router_address()?)
+                    .await
+                    .map_err(|e| anyhow::Error::msg(e))?;
 
                 ya_identity::service::activate()?;
                 ya_appkey::service::bind(&APP_KEY_SERVICE);
@@ -164,8 +157,6 @@ impl ServiceCommand {
                 .bind(ctx.http_address())
                 .context(format!("Failed to bind {:?}", ctx.http_address()))?
                 .start();
-
-                sys.run()?;
 
                 log::info!("{} service finished!", name);
                 Ok(CommandOutput::object(format!(
@@ -192,12 +183,13 @@ fn index() -> impl Responder {
     format!("Hello {}!", clap::crate_description!())
 }
 
-fn main() -> Result<()> {
+#[actix_rt::main]
+async fn main() -> Result<()> {
     let args = CliArgs::from_args();
 
     Logger::with_env_or_str("info,actix_server=info,actix_web=info")
         .start()
         .unwrap();
 
-    args.run_command()
+    args.run_command().await
 }
