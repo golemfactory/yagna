@@ -3,7 +3,7 @@ use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
 use std::{net::SocketAddr, path::PathBuf};
 
-#[allow(dead_code)]
+#[derive(Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
     pub http_address: (String, u16),

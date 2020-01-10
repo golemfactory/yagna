@@ -141,7 +141,8 @@ impl ServiceCommand {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                ya_sb_router::bind_router(ctx.router_address()?).await
+                ya_sb_router::bind_router(ctx.router_address()?)
+                    .await
                     .context("binding service bus router")?;
                 // FIXME: gsb is not binding services remotely; just random one
                 ya_identity::service::activate();
