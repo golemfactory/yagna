@@ -34,13 +34,20 @@ jobs:
           command: fmt
           args: --all -- --check
 
-      - name: Check
+      - name: Cargo check
         env:
           RUSTFLAGS: "-D warnings"
         uses: actions-rs/cargo@v1
         with:
           command: check
           args: --verbose --tests --all-features
+
+      - name: Cargo Test
+        env:
+          RUSTFLAGS: "-D warnings"
+        with:
+          command: test
+          args: --verbose
 
 #    - name: Clippy
 #      uses: actions-rs/clippy-check@v1
