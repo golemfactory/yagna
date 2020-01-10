@@ -3,7 +3,7 @@ use ya_core_model::identity as model;
 use ya_service_bus::typed as bus;
 
 // TODO: is anyhow appropriate Error here?
-pub fn activate() -> Result<(), anyhow::Error> {
+pub fn activate() {
     // TODO: move real logic here
     log::info!("activating identity service");
     let _ = bus::bind(model::BUS_ID, |_: model::List| {
@@ -27,6 +27,4 @@ pub fn activate() -> Result<(), anyhow::Error> {
         }
     });
     log::info!("identity service activated");
-
-    Ok(())
 }

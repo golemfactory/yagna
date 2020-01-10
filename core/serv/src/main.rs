@@ -1,4 +1,4 @@
-use actix_web::{get, middleware, App, HttpServer, Responder};
+use actix_web::{get, middleware, App, HttpServer};
 use anyhow::{Context, Result};
 use flexi_logger::Logger;
 use futures::lock::Mutex;
@@ -51,7 +51,6 @@ struct CliArgs {
 }
 
 impl CliArgs {
-    #[allow(dead_code)]
     pub fn get_data_dir(&self) -> PathBuf {
         match &self.data_dir {
             Some(data_dir) => data_dir.to_owned(),
@@ -136,18 +135,16 @@ enum ServiceCommand {
 }
 
 impl ServiceCommand {
-    // FIXME: router is not starting properly now
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             Self::Run => {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                ya_sb_router::bind_router(ctx.router_address()?)
-                    .await
-                    .map_err(|e| anyhow::Error::msg(e))?;
-
-                ya_identity::service::activate()?;
+                ya_sb_router::bind_router(ctx.router_address()?).await
+                    .context("binding service bus router")?;
+                // FIXME: gsb is not binding services remotely; just random one
+                ya_identity::service::activate();
                 ya_appkey::service::bind_gsb(DB_EXECUTOR.clone());
 
                 HttpServer::new(|| {
@@ -156,8 +153,12 @@ impl ServiceCommand {
                         .service(index)
                 })
                 .bind(ctx.http_address())
-                .context(format!("Failed to bind {:?}", ctx.http_address()))?
-                .start();
+                .context(format!(
+                    "Failed to bind http server on {:?}",
+                    ctx.http_address
+                ))?
+                .run()
+                .await?;
 
                 log::info!("{} service finished!", name);
                 Ok(CommandOutput::object(format!(
@@ -180,13 +181,13 @@ lazy_static::lazy_static! {
 }
 
 #[get("/")]
-fn index() -> impl Responder {
+async fn index() -> String {
     format!("Hello {}!", clap::crate_description!())
 }
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
-    let args = CliArgs::from_args();
+    let args: CliArgs = CliArgs::from_args();
 
     Logger::with_env_or_str("info,actix_server=info,actix_web=info")
         .start()
