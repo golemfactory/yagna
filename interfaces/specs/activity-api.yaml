@@ -250,6 +250,7 @@ paths:
   /activity/{activityId}/state:
     get:
       tags:
+      - provider
       - requestor_state
       summary: Get state of specified Activity.
       operationId: GetActivityState
@@ -278,49 +279,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
-    put:
-      tags:
-      - provider
-      summary: Pass activity state (which may include error details)
-      operationId: SetActivityState
-      parameters:
-      - name: activityId
-        in: path
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActivityState'
-        required: false
-      responses:
-        200:
-          description: Success
-          content: {}
-        403:
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        404:
-          description: Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorMessage'
-        500:
-          description: Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorMessage'
-      x-codegen-request-body-name: state
   /activity/{activityId}/usage:
     get:
       tags:
+      - provider
       - requestor_state
       summary: Get usage of specified Activity.
       operationId: GetActivityUsage
@@ -357,46 +319,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
-    put:
-      tags:
-      - provider
-      summary: Pass current activity usage (which may include error details)
-      operationId: SetActivityUsage
-      parameters:
-      - name: activityId
-        in: path
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActivityUsage'
-        required: false
-      responses:
-        200:
-          description: Success
-          content: {}
-        403:
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        404:
-          description: Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        500:
-          description: Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorMessage'
-      x-codegen-request-body-name: state
   /activity/{activityId}/command:
     get:
       tags:
