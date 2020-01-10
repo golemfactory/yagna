@@ -51,8 +51,8 @@ impl From<ya_service_bus::error::Error> for Error {
     }
 }
 
-impl From<crate::timeout::TimeoutError> for Error {
-    fn from(_: crate::timeout::TimeoutError) -> Self {
+impl From<tokio::time::Elapsed> for Error {
+    fn from(_: tokio::time::Elapsed) -> Self {
         Error::Timeout
     }
 }

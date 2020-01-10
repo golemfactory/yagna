@@ -1,13 +1,7 @@
 use futures::future::{Either, Future, Map};
-use futures::task::{Context, Poll};
 use futures::FutureExt;
-use std::pin::Pin;
 use std::time::{Duration, Instant};
-
-pub type Timeout = Option<u32>;
-
-type FutureOutput<F> = <F as Future>::Output;
-type MapType<F> = Map<F, fn(FutureOutput<F>) -> Result<FutureOutput<F>, TimeoutError>>;
+use tokio::time::{timeout, Elapsed, Timeout};
 
 pub trait IntoDuration {
     fn into_duration(self) -> Duration;
@@ -55,17 +49,14 @@ impl_into_duration!(f64);
 
 #[derive(Debug)]
 pub struct Interval {
-    timeout: Duration,
+    duration: Duration,
     deadline: Instant,
 }
 
 impl Interval {
-    pub fn new<T>(timeout: T) -> Self
-    where
-        T: IntoDuration,
-    {
+    pub fn new<D: IntoDuration>(duration: D) -> Self {
         Self {
-            timeout: timeout.into_duration(),
+            duration: duration.into_duration(),
             deadline: Instant::now(),
         }
     }
@@ -73,67 +64,32 @@ impl Interval {
     #[inline]
     pub fn check(&mut self) -> bool {
         let now = Instant::now();
-        let due = now >= self.deadline;
-
-        if due {
-            self.deadline = now + self.timeout;
+        let elapsed = now >= self.deadline;
+        if elapsed {
+            self.deadline = now + self.duration;
         }
-        due
+        elapsed
     }
 }
 
-#[derive(Debug)]
-pub struct TimeoutError {}
+type MapType<F> = Map<F, fn(<F as Future>::Output) -> Result<<F as Future>::Output, Elapsed>>;
 
-#[derive(Debug)]
-pub struct TimeoutFuture<F: Future + Unpin> {
-    future: F,
-    deadline: Instant,
-}
-
-impl<F: Future + Unpin> TimeoutFuture<F> {
-    pub fn new(future: F, timeout: Duration) -> Self {
-        Self {
-            future,
-            deadline: Instant::now() + timeout,
-        }
-    }
-}
-
-impl<F: Future + Unpin> Future for TimeoutFuture<F> {
-    type Output = Result<<F as Future>::Output, TimeoutError>;
-
-    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        if let Poll::Ready(output) = self.future.poll_unpin(ctx) {
-            return Poll::Ready(Ok(output));
-        };
-        if Instant::now() >= self.deadline {
-            return Poll::Ready(Err(TimeoutError {}));
-        }
-
-        ctx.waker().wake_by_ref();
-        Poll::Pending
-    }
-}
-
-impl<F: Future + Unpin> Unpin for TimeoutFuture<F> {}
-
-pub trait IntoTimeoutFuture<T>: Future
+pub trait IntoTimeoutFuture<D>: Future
 where
-    Self: Future + Unpin + Sized,
-    T: IntoDuration,
+    Self: Future + Sized,
+    D: IntoDuration,
 {
-    fn timeout(self, timeout: Option<T>) -> Either<TimeoutFuture<Self>, MapType<Self>>;
+    fn timeout(self, duration: Option<D>) -> Either<Timeout<Self>, MapType<Self>>;
 }
 
-impl<F, T> IntoTimeoutFuture<T> for F
+impl<F, D> IntoTimeoutFuture<D> for F
 where
-    Self: Future + Unpin + Sized,
-    T: IntoDuration,
+    Self: Future + Sized,
+    D: IntoDuration,
 {
-    fn timeout(self, timeout: Option<T>) -> Either<TimeoutFuture<Self>, MapType<Self>> {
-        match timeout {
-            Some(t) => Either::Left(TimeoutFuture::new(self, t.into_duration())),
+    fn timeout(self, duration: Option<D>) -> Either<Timeout<Self>, MapType<Self>> {
+        match duration {
+            Some(d) => Either::Left(timeout(d.into_duration(), self)),
             None => Either::Right(self.map(|v| Result::Ok(v))),
         }
     }
