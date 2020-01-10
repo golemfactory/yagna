@@ -1,8 +1,5 @@
 use crate::common::{generate_id, PathActivity, QueryTimeoutMaxCount, RpcMessageResult};
-use crate::dao::{
-    ActivityDao, ActivityStateDao, ActivityUsageDao, AgreementDao, Event, EventDao,
-    NotFoundAsOption,
-};
+use crate::dao::*;
 use crate::error::Error;
 use crate::timeout::IntoTimeoutFuture;
 use crate::{ACTIVITY_SERVICE_ID, ACTIVITY_SERVICE_URI};
@@ -17,16 +14,18 @@ use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, State};
 use ya_persistence::executor::DbExecutor;
 
 pub fn bind_gsb(db: Arc<Mutex<DbExecutor<Error>>>) {
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, create_activity);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, destroy_activity);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, get_activity_state);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, get_activity_usage);
+    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, create_activity_gsb);
+    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, destroy_activity_gsb);
+    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, get_activity_state_gsb);
+    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, set_activity_state_gsb);
+    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, get_activity_usage_gsb);
+    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, set_activity_usage_gsb);
 }
 
 pub fn web_scope(db: Arc<Mutex<DbExecutor<Error>>>) -> actix_web::Scope {
-    let events = web::get().to(impl_restful_handler!(get_events, query));
-    let state = web::put().to(impl_restful_handler!(set_activity_state, path, body));
-    let usage = web::put().to(impl_restful_handler!(set_activity_usage, path, body));
+    let events = web::get().to(impl_restful_handler!(get_events_web, query));
+    let state = web::get().to(impl_restful_handler!(get_activity_state_web, path));
+    let usage = web::get().to(impl_restful_handler!(get_activity_usage_web, path));
 
     web::scope(&ACTIVITY_SERVICE_URI)
         .data(db)
@@ -52,7 +51,7 @@ impl From<Event> for ProviderEvent {
 }
 
 /// Creates new Activity based on given Agreement.
-async fn create_activity(
+async fn create_activity_gsb(
     db: Arc<Mutex<DbExecutor<Error>>>,
     msg: CreateActivity,
 ) -> RpcMessageResult<CreateActivity> {
@@ -88,7 +87,7 @@ async fn create_activity(
 }
 
 /// Destroys given Activity.
-async fn destroy_activity(
+async fn destroy_activity_gsb(
     db: Arc<Mutex<DbExecutor<Error>>>,
     msg: DestroyActivity,
 ) -> RpcMessageResult<DestroyActivity> {
@@ -114,11 +113,11 @@ async fn destroy_activity(
 
 /// Get state of specified Activity.
 async fn get_activity_state(
-    db: Arc<Mutex<DbExecutor<Error>>>,
-    msg: GetActivityState,
-) -> RpcMessageResult<GetActivityState> {
+    db: &Arc<Mutex<DbExecutor<Error>>>,
+    activity_id: &str,
+) -> Result<ActivityState, Error> {
     ActivityStateDao::new(&db_conn!(db)?)
-        .get(&msg.activity_id)
+        .get(activity_id)
         .not_found_as_option()
         .map_err(Error::from)?
         .map(|state| ActivityState {
@@ -129,29 +128,45 @@ async fn get_activity_state(
         .ok_or(Error::NotFound.into())
 }
 
-/// Pass activity state (which may include error details).
-async fn set_activity_state(
+async fn get_activity_state_gsb(
+    db: Arc<Mutex<DbExecutor<Error>>>,
+    msg: GetActivityState,
+) -> RpcMessageResult<GetActivityState> {
+    get_activity_state(&db, &msg.activity_id)
+        .await
+        .map_err(Into::into)
+}
+
+async fn get_activity_state_web(
     db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
     path: web::Path<PathActivity>,
-    activity_state: web::Json<ActivityState>,
-) -> Result<(), Error> {
+) -> Result<ActivityState, Error> {
+    get_activity_state(&db, &path.activity_id).await
+}
+
+/// Pass activity state (which may include error details).
+async fn set_activity_state_gsb(
+    db: Arc<Mutex<DbExecutor<Error>>>,
+    msg: SetActivityState,
+) -> RpcMessageResult<SetActivityState> {
+    // TODO: caller authorization
     ActivityStateDao::new(&db_conn!(db)?)
         .set(
-            &path.activity_id,
-            activity_state.state.clone(),
-            activity_state.reason.clone(),
-            activity_state.error_message.clone(),
+            &msg.activity_id,
+            msg.state.state.clone(),
+            msg.state.reason.clone(),
+            msg.state.error_message.clone(),
         )
-        .map_err(Error::from)
+        .map_err(|e| Error::from(e).into())
 }
 
 /// Get usage of specified Activity.
 async fn get_activity_usage(
-    db: Arc<Mutex<DbExecutor<Error>>>,
-    msg: GetActivityUsage,
-) -> RpcMessageResult<GetActivityUsage> {
+    db: &Arc<Mutex<DbExecutor<Error>>>,
+    activity_id: &str,
+) -> Result<ActivityUsage, Error> {
     ActivityUsageDao::new(&db_conn!(db)?)
-        .get(&msg.activity_id)
+        .get(activity_id)
         .not_found_as_option()
         .map_err(Error::from)?
         .map(|usage| ActivityUsage {
@@ -159,22 +174,38 @@ async fn get_activity_usage(
                 .vector_json
                 .map(|json| serde_json::from_str(&json).unwrap()),
         })
-        .ok_or(Error::NotFound.into())
+        .ok_or(Error::NotFound)
+}
+
+async fn get_activity_usage_gsb(
+    db: Arc<Mutex<DbExecutor<Error>>>,
+    msg: GetActivityUsage,
+) -> RpcMessageResult<GetActivityUsage> {
+    get_activity_usage(&db, &msg.activity_id)
+        .await
+        .map_err(Error::into)
+}
+
+async fn get_activity_usage_web(
+    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    path: web::Path<PathActivity>,
+) -> Result<ActivityUsage, Error> {
+    get_activity_usage(&db, &path.activity_id).await
 }
 
 /// Pass current activity usage (which may include error details).
-async fn set_activity_usage(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
-    path: web::Path<PathActivity>,
-    activity_usage: web::Json<ActivityUsage>,
-) -> Result<(), Error> {
+async fn set_activity_usage_gsb(
+    db: Arc<Mutex<DbExecutor<Error>>>,
+    msg: SetActivityUsage,
+) -> RpcMessageResult<SetActivityUsage> {
+    // TODO: caller authorization
     ActivityUsageDao::new(&db_conn!(db)?)
-        .set(&path.activity_id, &activity_usage.current_usage)
-        .map_err(Error::from)
+        .set(&msg.activity_id, &msg.usage.current_usage)
+        .map_err(|e| Error::from(e).into())
 }
 
 /// Fetch Requestor command events.
-async fn get_events(
+async fn get_events_web(
     db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ProviderEvent>, Error> {

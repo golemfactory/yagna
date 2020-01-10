@@ -52,8 +52,24 @@ pub struct GetActivityState {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SetActivityState {
+    pub activity_id: String,
+    pub state: ActivityState,
+    pub timeout: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetActivityUsage {
     pub activity_id: String,
+    pub timeout: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetActivityUsage {
+    pub activity_id: String,
+    pub usage: ActivityUsage,
     pub timeout: Option<u32>,
 }
 
@@ -104,8 +120,20 @@ impl RpcMessage for GetActivityState {
     type Error = RpcMessageError;
 }
 
+impl RpcMessage for SetActivityState {
+    const ID: &'static str = "SetState";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
 impl RpcMessage for GetActivityUsage {
     const ID: &'static str = "GetUsage";
     type Item = ActivityUsage;
+    type Error = RpcMessageError;
+}
+
+impl RpcMessage for SetActivityUsage {
+    const ID: &'static str = "SetUsage";
+    type Item = ();
     type Error = RpcMessageError;
 }
