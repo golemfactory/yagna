@@ -1,6 +1,6 @@
 use crate::common::{PathActivity, QueryTimeout};
 use crate::error::Error;
-use crate::requestor::{get_agreement, uri};
+use crate::requestor::{get_agreement, provider_activity_uri};
 use crate::ACTIVITY_SERVICE_URI;
 use actix_web::web;
 use futures::lock::Mutex;
@@ -29,7 +29,7 @@ async fn get_activity_state(
     query: web::Query<QueryTimeout>,
 ) -> Result<ActivityState, Error> {
     let agreement = get_agreement(&db, &path.activity_id).await?;
-    let uri = uri(&agreement.offer_node_id, "get_activity_state");
+    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetActivityState {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -45,7 +45,7 @@ async fn get_activity_usage(
     query: web::Query<QueryTimeout>,
 ) -> Result<ActivityUsage, Error> {
     let agreement = get_agreement(&db, &path.activity_id).await?;
-    let uri = uri(&agreement.offer_node_id, "get_activity_usage");
+    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetActivityUsage {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -61,7 +61,7 @@ async fn get_running_command(
     query: web::Query<QueryTimeout>,
 ) -> Result<ExeScriptCommandState, Error> {
     let agreement = get_agreement(&db, &path.activity_id).await?;
-    let uri = uri(&agreement.offer_node_id, "get_running_command");
+    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetRunningCommand {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
