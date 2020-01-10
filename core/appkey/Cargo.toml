@@ -15,6 +15,8 @@ ya-service-bus = "0.1"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "1.4"
+env_logger = "0.7"
 futures = "0.3"
 log = "0.4"
 r2d2 = "0.8"
@@ -26,7 +28,6 @@ uuid = { version = "0.8", features = ["v4"] }
 [dev-dependencies]
 actix = "0.9"
 actix-rt = "1.0"
-flexi_logger = "0.14"
 futures = "0.3"
 
 [target.'cfg(target_env = "msvc")'.build-dependencies]

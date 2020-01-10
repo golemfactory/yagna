@@ -14,9 +14,8 @@ enum Args {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    flexi_logger::Logger::with_env_or_str("debug")
-        .start()
-        .unwrap();
+    std::env::set_var("RUST_LOG", "debug");
+    env_logger::init();
     let args = Args::from_args();
 
     match args {
@@ -24,7 +23,6 @@ async fn main() -> anyhow::Result<()> {
             ya_sb_router::bind_router("127.0.0.1:8245".parse()?).await?;
             service::bind_gsb(Arc::new(Mutex::new(DbExecutor::from_env()?)));
             actix_rt::signal::ctrl_c().await?;
-            println!();
             log::info!("SIGINT received, exiting");
         }
         Args::Client(cmd) => {
