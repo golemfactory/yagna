@@ -2,7 +2,7 @@ use awc::{error::SendRequestError, Client};
 use futures::TryFutureExt;
 use serde_json;
 use std::{
-    thread,
+    env, thread,
     time::{Duration, SystemTime},
 };
 
@@ -213,9 +213,7 @@ async fn interact() -> Result<()> {
 
 fn main() {
     println!("\nrun this example with RUST_LOG=info to see REST calls\n");
-    flexi_logger::Logger::with_env_or_str("warn")
-        .start()
-        .unwrap();
+    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("warn".into()));
 
     actix_rt::System::new("test")
         .block_on(interact())

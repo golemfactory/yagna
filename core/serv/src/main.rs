@@ -1,9 +1,9 @@
 use actix_web::{get, middleware, App, HttpServer};
 use anyhow::{Context, Result};
-use flexi_logger::Logger;
 use futures::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
+    env,
     fmt::Debug,
     path::PathBuf,
     sync::Arc,
@@ -31,11 +31,11 @@ struct CliArgs {
     address: String,
 
     /// Daemon HTTP port
-    #[structopt(short, long, default_value = "7465")]
+    #[structopt(short = "p", long, default_value = "7465")]
     http_port: u16,
 
     /// Service bus router port
-    #[structopt(short = "l", default_value = "8245")]
+    #[structopt(long, set = clap::ArgSettings::Global, default_value = "8245")]
     router_port: u16,
 
     /// Return results in JSON format
@@ -45,6 +45,10 @@ struct CliArgs {
     /// Enter interactive mode
     #[structopt(short, long)]
     interactive: bool,
+
+    /// Log verbosity level
+    #[structopt(long, default_value = "debug")]
+    log_level: String,
 
     #[structopt(subcommand)]
     command: CliCommand,
@@ -66,6 +70,10 @@ impl CliArgs {
 
     pub fn get_router_address(&self) -> Result<(String, u16)> {
         Ok((self.address.clone(), self.router_port))
+    }
+
+    pub fn log_level(&self) -> String {
+        self.log_level.clone()
     }
 
     pub async fn run_command(self) -> Result<()> {
@@ -189,10 +197,7 @@ async fn index() -> String {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     let args: CliArgs = CliArgs::from_args();
-
-    Logger::with_env_or_str("info,actix_server=info,actix_web=info")
-        .start()
-        .unwrap();
-
+    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
+    env_logger::init();
     args.run_command().await
 }
