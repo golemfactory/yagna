@@ -19,10 +19,12 @@ macro_rules! bind_gsb_method {
 }
 
 pub fn bind_gsb(db: Arc<Mutex<DbExecutor<Error>>>) {
+    log::info!("activating appkey service");
     bind_gsb_method!(db, create);
     bind_gsb_method!(db, get);
     bind_gsb_method!(db, list);
     bind_gsb_method!(db, remove);
+    log::info!("appkey service activated");
 }
 
 macro_rules! db_conn {
