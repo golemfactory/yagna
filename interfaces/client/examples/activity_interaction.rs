@@ -6,6 +6,7 @@ use ya_client::{
     Result,
 };
 use ya_model::activity::{activity_state::State, ActivityState, ActivityUsage, ExeScriptRequest};
+use futures::FutureExt;
 
 fn new_client() -> Result<Arc<WebClient>> {
     WebClient::builder()
