@@ -10,7 +10,7 @@ pub use activity_usage::ActivityUsageDao;
 pub use agreement::AgreementDao;
 pub use event::{Event, EventDao};
 
-pub type Result<T> = std::result::Result<T, diesel::result::Error>;
+type Result<T> = std::result::Result<T, diesel::result::Error>;
 
 no_arg_sql_function!(last_insert_rowid, diesel::sql_types::Bigint);
 

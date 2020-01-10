@@ -9,10 +9,11 @@ use ya_persistence::models::Agreement;
 pub mod control;
 pub mod state;
 
-fn uri(provider_id: &str, cmd: &str) -> String {
+#[inline(always)]
+fn provider_activity_uri(provider_id: &str) -> String {
     format!(
-        "/{}/{}/{}/{}",
-        NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID, cmd
+        "/{}/{}/{}",
+        NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID
     )
 }
 

@@ -1,7 +1,7 @@
 use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount};
 use crate::dao::AgreementDao;
 use crate::error::Error;
-use crate::requestor::{get_agreement, uri};
+use crate::requestor::{get_agreement, provider_activity_uri};
 use crate::ACTIVITY_SERVICE_URI;
 use actix_web::web;
 use futures::lock::Mutex;
@@ -33,7 +33,7 @@ async fn create_activity(
     body: web::Json<CreateActivity>,
 ) -> Result<String, Error> {
     let agreement = AgreementDao::new(&db_conn!(db)?).get(&body.agreement_id)?;
-    let uri = uri(&agreement.offer_node_id, "create_activity");
+    let uri = provider_activity_uri(&agreement.offer_node_id);
 
     gsb_send!(body.into_inner(), &uri, query.timeout)
 }
@@ -45,7 +45,7 @@ async fn destroy_activity(
     query: web::Query<QueryTimeout>,
 ) -> Result<(), Error> {
     let agreement = get_agreement(&db, &path.activity_id).await?;
-    let uri = uri(&agreement.offer_node_id, "destroy_activity");
+    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = DestroyActivity {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.natural_id,
@@ -65,7 +65,7 @@ async fn exec(
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
     let agreement = get_agreement(&db, &path.activity_id).await?;
-    let uri = uri(&agreement.offer_node_id, "destroy_activity");
+    let uri = provider_activity_uri(&agreement.offer_node_id);
     let batch_id = generate_id();
     let msg = Exec {
         activity_id: path.activity_id.clone(),
@@ -85,7 +85,7 @@ async fn get_batch_results(
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {
     let agreement = get_agreement(&db, &path.activity_id).await?;
-    let uri = uri(&agreement.offer_node_id, "get_exec_batch_results");
+    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
