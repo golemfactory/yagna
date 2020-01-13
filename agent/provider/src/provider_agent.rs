@@ -28,9 +28,9 @@ impl ProviderAgent {
 
     pub async fn run(&mut self) {
 
-        match self.market.start() {
-            Err(error) => error!("Market error: {}", error),
-            _ => {}
+        if let Err(error) = self.market.start().await {
+            error!("Error while starting market: {}", error);
+            return ();
         }
 
         //TODO: We should replace this loop with scheduler in future.

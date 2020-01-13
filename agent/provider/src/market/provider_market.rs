@@ -28,7 +28,7 @@ impl ProviderMarket {
         return ProviderMarket{api, negotiator, offers: vec![]};
     }
 
-    pub fn start(&mut self) -> Result<()> {
+    pub async fn start(&mut self) -> Result<()> {
         info!("Creating initial offer.");
 
         let cpu = CpuInfo{ architecture: "wasm32".to_string(), cores: 1, threads: 1 };
@@ -38,7 +38,7 @@ impl ProviderMarket {
 
         info!("Subscribing to events.");
 
-        let subscription_id = block_on(self.api.provider().subscribe(&offer))?;
+        let subscription_id = self.api.provider().subscribe(&offer).await?;
         self.offers.push(OfferSubscription{subscription_id, offer});
         Ok(())
     }
