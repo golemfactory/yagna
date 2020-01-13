@@ -80,7 +80,7 @@ async fn create_activity_gsb(
         .get_future(&activity_id, None)
         .timeout(msg.timeout)
         .map_err(Error::from)
-        .await
+        .await?
         .map_err(Error::from)?;
 
     Ok(activity_id)
@@ -106,7 +106,8 @@ async fn destroy_activity_gsb(
         .get_future(&msg.activity_id, Some(State::Terminated))
         .timeout(msg.timeout)
         .map_err(Error::from)
-        .await?;
+        .await?
+        .map_err(Error::from)?;
 
     Ok(())
 }
@@ -213,7 +214,7 @@ async fn get_events_web(
         .get_events_fut(query.max_count)
         .timeout(query.timeout)
         .map_err(Error::from)
-        .await
+        .await?
         .map_err(Error::from)
         .map(|events| events.into_iter().map(ProviderEvent::from).collect())
 }
