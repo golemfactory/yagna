@@ -7,6 +7,9 @@ use ya_client::{
 
 use crate::market::ProviderMarket;
 
+use std::{thread, time};
+use log::{error};
+
 
 
 pub struct ProviderAgent {
@@ -25,7 +28,14 @@ impl ProviderAgent {
 
     pub async fn run(&self) {
 
-
+        //TODO: We should replace this loop with scheduler in future.
+        loop {
+            match self.market.run_step() {
+                Err(error) => error!("Market error: {}", error),
+                _ => {}
+            }
+            thread::sleep(time::Duration::from_secs(1));
+        }
     }
 
 }

@@ -2,7 +2,8 @@ use super::negotiator::{Negotiator,};
 use super::mock_negotiator::{AcceptAllNegotiator};
 use log::{warn};
 
-use ya_client::{market::{ApiClient, ProviderApi},};
+use ya_client::{market::{ApiClient, ProviderApi}, Result, Error};
+use ya_model::market::{ProviderEvent};
 
 
 
@@ -19,8 +20,19 @@ impl ProviderMarket {
         return ProviderMarket{api, negotiator};
     }
 
-    pub fn run() {
+    pub fn run_step(&self) -> Result<()> {
+        let events = self.query_events()?;
+        self.dispatch_events(&events);
 
+        Ok(())
+    }
+
+    fn query_events(&self) -> Result<Vec<ProviderEvent>> {
+        unimplemented!()
+    }
+
+    fn dispatch_events(&self, events: &Vec<ProviderEvent>) {
+        unimplemented!()
     }
 }
 
