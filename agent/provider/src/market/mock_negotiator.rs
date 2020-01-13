@@ -4,9 +4,7 @@ use crate::market::negotiator::{ProposalResponse, AgreementResponse};
 use ya_client::Error;
 
 
-pub struct AcceptAllNegotiator {
-
-}
+pub struct AcceptAllNegotiator;
 
 
 impl Negotiator for AcceptAllNegotiator {
