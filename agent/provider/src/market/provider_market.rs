@@ -38,29 +38,33 @@ impl ProviderMarket {
 
         info!("Subscribing to events.");
 
-        println!("{:?}", offer);
-
         let subscription_id = self.api.provider().subscribe(&offer).await?;
         self.offers.push(OfferSubscription{subscription_id, offer});
         Ok(())
     }
 
-    pub fn run_step(&self) -> Result<()> {
-        let events = self.query_events()?;
+    pub async fn run_step(&self) -> Result<()> {
+        let events = self.query_events().await?;
         self.dispatch_events(&events);
 
         Ok(())
     }
 
-    fn query_events(&self) -> Result<Vec<ProviderEvent>> {
-        unimplemented!()
+    async fn query_events(&self) -> Result<Vec<ProviderEvent>> {
+        if self.offers.len() > 0 {
+
+            let provider_subscription_id = &self.offers[0].subscription_id;
+            self.api.provider()
+                .collect(provider_subscription_id, Some(1), Some(2))
+                .await?;
+        };
+        Ok(vec![])
     }
 
     fn dispatch_events(&self, events: &Vec<ProviderEvent>) {
         for event in events.iter() {
-            match self.dispatch_event(event) {
-                Err(error) => error!("Error processing event: {}", error),
-                _ => {}
+            if let Err(error) =  self.dispatch_event(event) {
+                error!("Error processing event: {}", error);
             }
         }
     }

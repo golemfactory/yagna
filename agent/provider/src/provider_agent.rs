@@ -35,10 +35,10 @@ impl ProviderAgent {
 
         //TODO: We should replace this loop with scheduler in future.
         loop {
-            match self.market.run_step() {
-                Err(error) => error!("Market error: {}", error),
-                _ => {}
+            if let Err(error) = self.market.run_step().await {
+                error!("Market error: {}", error)
             }
+
             thread::sleep(time::Duration::from_secs(1));
         }
     }
