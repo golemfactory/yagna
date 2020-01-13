@@ -5,3 +5,8 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-client = {version = "0.1", path = "../../interfaces/client"}
+ya-model = "0.1"
+
+futures = "0.3"
+log = "0.4.8"
