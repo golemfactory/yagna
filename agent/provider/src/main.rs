@@ -7,6 +7,6 @@ use crate::provider_agent::ProviderAgent;
 
 fn main() {
     println!("Mock Provider Agent!");
-    let agent = ProviderAgent::new().unwrap();
+    let mut agent = ProviderAgent::new().unwrap();
     block_on(agent.run());
 }

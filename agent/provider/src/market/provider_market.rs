@@ -1,15 +1,21 @@
 use super::negotiator::{Negotiator,};
 use super::mock_negotiator::{AcceptAllNegotiator};
-use log::{warn};
+use log::{info, warn, error};
 
 use ya_client::{market::{ApiClient, ProviderApi}, Result, Error};
-use ya_model::market::{ProviderEvent};
+use ya_model::market::{ProviderEvent, Offer};
+use futures::executor::block_on;
 
 
+struct OfferSubscription {
+    subscription_id: String,
+    offer: Offer,
+}
 
 pub struct ProviderMarket {
-    pub negotiator: Box<dyn Negotiator>,
+    negotiator: Box<dyn Negotiator>,
     api: ApiClient,
+    offers: Vec<OfferSubscription>,
 }
 
 
@@ -17,7 +23,18 @@ impl ProviderMarket {
 
     pub fn new(api: ApiClient, negotiator_type: &str) -> ProviderMarket {
         let negotiator = create_negotiator(negotiator_type);
-        return ProviderMarket{api, negotiator};
+        return ProviderMarket{api, negotiator, offers: vec![]};
+    }
+
+    pub fn start(&mut self) -> Result<()> {
+        info!("Creating initial offer.");
+
+        let offer = self.negotiator.create_offer()?;
+
+        info!("Subscribing to events.");
+        let subscription_id = block_on(self.api.provider().subscribe(&offer))?;
+        self.offers.push(OfferSubscription{subscription_id, offer});
+        Ok(())
     }
 
     pub fn run_step(&self) -> Result<()> {
@@ -32,7 +49,24 @@ impl ProviderMarket {
     }
 
     fn dispatch_events(&self, events: &Vec<ProviderEvent>) {
+        for event in events.iter() {
+            match self.dispatch_event(event) {
+                Err(error) => error!("Error processing event: {}", error),
+                _ => {}
+            }
+        }
+    }
+
+    fn dispatch_event(&self, event: &ProviderEvent) -> Result<()> {
         unimplemented!()
+    }
+
+    fn process_proposal(&self) {
+        unimplemented!()
+    }
+
+    fn process_agreement(&self) {
+
     }
 }
 

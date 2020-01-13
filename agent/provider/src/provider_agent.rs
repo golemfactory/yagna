@@ -26,7 +26,12 @@ impl ProviderAgent {
         Ok(ProviderAgent{market})
     }
 
-    pub async fn run(&self) {
+    pub async fn run(&mut self) {
+
+        match self.market.start() {
+            Err(error) => error!("Market error: {}", error),
+            _ => {}
+        }
 
         //TODO: We should replace this loop with scheduler in future.
         loop {
