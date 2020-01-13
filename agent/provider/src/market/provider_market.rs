@@ -38,6 +38,8 @@ impl ProviderMarket {
 
         info!("Subscribing to events.");
 
+        println!("{:?}", offer);
+
         let subscription_id = self.api.provider().subscribe(&offer).await?;
         self.offers.push(OfferSubscription{subscription_id, offer});
         Ok(())
