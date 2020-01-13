@@ -1,6 +1,7 @@
 use ya_model::market::{Offer, Demand, AgreementProposal, Proposal};
 use ya_client::{Result,};
 
+use crate::node_info::{NodeInfo};
 
 
 /// Response for requestor proposals.
@@ -23,7 +24,7 @@ pub enum AgreementResponse {
 pub trait Negotiator {
 
     //TODO: We should add some parameters for offer creation.
-    fn create_offer(&self) -> Result< Offer >;
+    fn create_offer(&self, node_info: &NodeInfo) -> Result< Offer >;
 
     fn react_to_proposal(&self, demand: &Demand) -> Result<ProposalResponse>;
     fn react_to_agreement(&self, proposal: &AgreementProposal) -> Result<AgreementResponse>;

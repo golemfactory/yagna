@@ -1,4 +1,5 @@
 pub mod provider_agent;
+mod node_info;
 mod market;
 
 use futures::executor::block_on;

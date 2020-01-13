@@ -1,10 +1,12 @@
 use super::negotiator::{Negotiator,};
 use super::mock_negotiator::{AcceptAllNegotiator};
-use log::{info, warn, error};
+use crate::node_info::{NodeInfo, CpuInfo};
 
 use ya_client::{market::{ApiClient, ProviderApi}, Result, Error};
 use ya_model::market::{ProviderEvent, Offer};
+
 use futures::executor::block_on;
+use log::{info, warn, error};
 
 
 struct OfferSubscription {
@@ -29,7 +31,10 @@ impl ProviderMarket {
     pub fn start(&mut self) -> Result<()> {
         info!("Creating initial offer.");
 
-        let offer = self.negotiator.create_offer()?;
+        let cpu = CpuInfo{ architecture: "wasm32".to_string(), cores: 1, threads: 1 };
+        let node_info = NodeInfo{ cpu: cpu, id: "Provider Node".to_string() };
+
+        let offer = self.negotiator.create_offer(&node_info)?;
 
         info!("Subscribing to events.");
         let subscription_id = block_on(self.api.provider().subscribe(&offer))?;
