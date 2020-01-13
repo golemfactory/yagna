@@ -37,6 +37,7 @@ impl ProviderMarket {
         let offer = self.negotiator.create_offer(&node_info)?;
 
         info!("Subscribing to events.");
+
         let subscription_id = block_on(self.api.provider().subscribe(&offer))?;
         self.offers.push(OfferSubscription{subscription_id, offer});
         Ok(())
@@ -71,7 +72,7 @@ impl ProviderMarket {
     }
 
     fn process_agreement(&self) {
-
+        unimplemented!()
     }
 }
 
