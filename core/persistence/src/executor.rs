@@ -5,6 +5,7 @@ use dotenv::dotenv;
 use std::env;
 use std::marker::PhantomData;
 
+pub type PoolType = Pool<ConnectionManager<InnerConnType>>;
 pub type ConnType = PooledConnection<ConnectionManager<InnerConnType>>;
 pub type InnerConnType = SqliteConnection;
 
@@ -43,4 +44,12 @@ where
         )?;
         Ok(conn)
     }
+
+    pub fn as_dao<'a, T : AsDao<'a>>(&'a self) -> T {
+        AsDao::as_dao(&self.pool)
+    }
+}
+
+pub trait AsDao<'a> {
+    fn as_dao(pool : &'a PoolType) -> Self;
 }

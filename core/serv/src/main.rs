@@ -153,7 +153,7 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
                 // FIXME: gsb is not binding services remotely; just random one
-                ya_identity::service::activate();
+                ya_identity::service::activate(&ctx.data_dir).await?;
                 ya_appkey::service::bind_gsb(DB_EXECUTOR.clone());
 
                 HttpServer::new(|| {
