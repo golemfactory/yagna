@@ -43,7 +43,7 @@ impl ProviderAgent {
                 error!("Market error: {}", error)
             }
 
-            thread::sleep(time::Duration::from_secs(1));
+            thread::sleep(time::Duration::from_secs(3));
         }
 
         // We never get here, but we should cleanup market in final version.

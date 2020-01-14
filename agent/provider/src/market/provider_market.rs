@@ -25,6 +25,10 @@ pub struct ProviderMarket {
 
 impl ProviderMarket {
 
+    // =========================================== //
+    // Initialization
+    // =========================================== //
+
     pub fn new(api: ApiClient, negotiator_type: &str) -> ProviderMarket {
         let negotiator = create_negotiator(negotiator_type);
         return ProviderMarket{api, negotiator, offers: vec![]};
@@ -51,15 +55,23 @@ impl ProviderMarket {
         Ok(())
     }
 
+    // =========================================== //
+    // Public api for running single market step
+    // =========================================== //
+
     pub async fn run_step(&self) -> Result<()> {
 
         for offer in self.offers.iter() {
             let events = self.query_events(&offer.subscription_id).await?;
-            self.dispatch_events(&offer.subscription_id, &events);
+            self.dispatch_events(&offer.subscription_id, &events).await;
         }
 
         Ok(())
     }
+
+    // =========================================== //
+    // Market internals
+    // =========================================== //
 
     async fn query_events(&self, subscription_id: &str) -> Result<Vec<ProviderEvent>> {
         self.api.provider()
@@ -80,11 +92,14 @@ impl ProviderMarket {
         match event {
             ProviderEvent::DemandEvent { demand, .. } => {
                 let proposal_id = &demand.as_ref().unwrap().id;
+
+                info!("Got demand [id={}].", proposal_id);
+
                 let agreement_proposal = self.api.provider()
                     .get_proposal(subscription_id, proposal_id)
                     .await?;
 
-                self.process_proposal(subscription_id, agreement_proposal);
+                self.process_proposal(subscription_id, agreement_proposal).await?;
             },
             ProviderEvent::NewAgreementEvent { agreement_id, .. } => {
                 unimplemented!()
@@ -126,6 +141,8 @@ impl ProviderMarket {
     }
 
     async fn reject_proposal(&self, subscription_id: &str, proposal: &AgreementProposal) -> Result<()> {
+        info!("Rejecting proposal [{}]", proposal.id);
+
         self.api.provider().reject_proposal(subscription_id, &proposal.id).await?;
         Ok(())
     }
@@ -139,6 +156,10 @@ impl ProviderMarket {
     }
 }
 
+
+// =========================================== //
+// Negotiators factory
+// =========================================== //
 
 fn create_negotiator(name: &str) -> Box<dyn Negotiator> {
     match name {
