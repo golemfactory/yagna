@@ -45,9 +45,9 @@ impl Trigger {
     pub fn new(name: String, start_from: DateTime<Local>, interval: Interval) -> Trigger {
         Trigger {
             name: name,
-            next_run: interval.next(start_from),
-            last_run: None,
             interval: interval,
+            next_run: start_from,
+            last_run: None,
         }
     }
 
@@ -74,8 +74,69 @@ impl fmt::Debug for Trigger {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use chrono::Duration;
+    use chrono::Local;
+    use std::thread;
+    use std::time;
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_interval_next_time() {
+        let now = Local::now();
+        let days = 1;
+        let hours = 2;
+        let minutes = 3;
+        let seconds = 4;
+        let interval = Interval::new(days, hours, minutes, seconds);
+        let time_with_offset = now
+            + Duration::days(i64::from(days))
+            + Duration::hours(i64::from(hours))
+            + Duration::minutes(i64::from(minutes))
+            + Duration::seconds(i64::from(seconds));
+        assert_eq!(interval.next(now), time_with_offset);
+    }
+
+    #[test]
+    fn test_interval_next_time_strange_value() {
+        let now = Local::now();
+        let strange_seconds = 121;
+        let seconds = strange_seconds % 60;
+        let minutes = (strange_seconds / 60) as u32;
+        let strange_interval = Interval::new(0, 0, 0, strange_seconds);
+        let time_with_offset =
+            now + Duration::minutes(i64::from(minutes)) + Duration::seconds(i64::from(seconds));
+        assert_eq!(strange_interval.next(now), time_with_offset);
+    }
+
+    #[test]
+    fn test_trigger_is_ready() {
+        let seconds = 1;
+        let interval = Interval::new(0, 0, 0, seconds);
+        let trigger = Trigger::new(String::from("trigger1"), Local::now(), interval);
+        thread::sleep(time::Duration::from_secs(u64::from(seconds + 1)));
+        assert!(trigger.is_ready())
+    }
+
+    #[test]
+    fn test_trigger_not_ready() {
+        let days = 1;
+        let interval = Interval::new(days, 0, 0, 0);
+        let trigger = Trigger::new(
+            String::from("trigger1"),
+            Local::now() + Duration::days(1),
+            interval,
+        );
+        assert!(!trigger.is_ready());
+    }
+
+    #[test]
+    fn test_trigger_tick() {
+        let days = 1;
+        let now = Local::now();
+        let interval = Interval::new(days, 0, 0, 0);
+        let mut trigger = Trigger::new(String::from("trigger1"), now.clone(), interval);
+        trigger.tick();
+        assert_ne!(trigger.last_run, None);
+        assert_eq!(trigger.next_run, now + Duration::days(i64::from(days)));
     }
 }

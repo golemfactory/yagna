@@ -6,7 +6,7 @@ fn do_void(number: i64) {
 }
 
 fn main() {
-    let mut scheduler = Scheduler::get_scheduler(String::from("Scheduler"));
+    let mut scheduler = Scheduler::new(String::from("Scheduler"), 50 as u64);
     let task1 = Task::new(String::from("do_void_1"), || do_void(69));
     let interval1 = Interval::new(0, 0, 1, 1);
     let trigger1 = Trigger::new(String::from("trigger_1"), Local::now(), interval1);

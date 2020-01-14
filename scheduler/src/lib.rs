@@ -15,20 +15,18 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn get(task: Task, trigger: Trigger) -> Job {
+    fn new(task: Task, trigger: Trigger) -> Job {
         Job {
             task: task,
             trigger: trigger,
         }
     }
 
-    /// Check if a task is scheduled to run again
-    pub fn is_pending(&self) -> bool {
+    fn is_pending(&self) -> bool {
         self.trigger.is_ready()
     }
 
-    /// Run a task and re-schedule it
-    pub fn execute(&mut self) {
+    fn execute(&mut self) {
         self.task.execute();
         self.trigger.tick();
     }
@@ -36,20 +34,22 @@ impl Job {
 
 pub struct Scheduler {
     name: String,
+    tick_time: u64,
     jobs: Vec<Job>,
 }
 
 impl<'a> Scheduler {
-    pub fn get_scheduler(name: String) -> Scheduler {
+    pub fn new(name: String, tick_time: u64) -> Scheduler {
         Scheduler {
             name: name,
+            tick_time: tick_time,
             jobs: vec![],
         }
     }
 
     pub fn schedule_task(&mut self, task: Task, trigger: Trigger) {
         println!("Scheduled task: {:?} with trigger: {:?}", task, trigger);
-        let job = Job::get(task, trigger);
+        let job = Job::new(task, trigger);
         self.jobs.push(job);
     }
 
@@ -57,7 +57,7 @@ impl<'a> Scheduler {
         println!("Scheduler started");
         loop {
             self.run_pending();
-            thread::sleep(Duration::from_secs(1));
+            thread::sleep(Duration::from_millis(self.tick_time));
         }
     }
 
@@ -80,8 +80,54 @@ impl<'a> Scheduler {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use chrono::{Duration, Local};
+    use std::thread;
+    use std::time;
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_job_is_ready() {
+        let task = Task::new(String::from("task1"), || println!("1"));
+        let days = 1;
+        let interval = Interval::new(days, 0, 0, 0);
+        let trigger = Trigger::new(String::from("trigger1"), Local::now(), interval);
+        thread::sleep(time::Duration::from_secs(1));
+        let job = Job::new(task, trigger);
+        assert!(job.is_pending());
+    }
+
+    #[test]
+    fn test_job_is_not_ready() {
+        let task = Task::new(String::from("task1"), || println!("1"));
+        let days = 1;
+        let interval = Interval::new(days, 0, 0, 0);
+        let trigger = Trigger::new(
+            String::from("trigger1"),
+            Local::now() + Duration::days(2 as i64),
+            interval,
+        );
+        let job = Job::new(task, trigger);
+        assert!(!job.is_pending());
+    }
+
+    #[test]
+    fn test_job_execute() {
+        let task = Task::new(String::from("task1"), || println!("1"));
+        let days = 1;
+        let interval = Interval::new(days, 0, 0, 0);
+        let trigger = Trigger::new(String::from("trigger1"), Local::now(), interval);
+        let mut job = Job::new(task, trigger);
+        job.execute();
+        assert!(!job.is_pending());
+    }
+
+    #[test]
+    fn test_scheduler_schedule_task() {
+        let mut scheduler = Scheduler::new(String::from("Scheduler"), 1 as u64);
+        let task = Task::new(String::from("task1"), || println!("1"));
+        let interval = Interval::new(1, 0, 0, 0);
+        let trigger = Trigger::new(String::from("trigger1"), Local::now(), interval);
+        assert_eq!(scheduler.jobs.len(), 0);
+        scheduler.schedule_task(task, trigger);
+        assert_eq!(scheduler.jobs.len(), 1);
     }
 }
