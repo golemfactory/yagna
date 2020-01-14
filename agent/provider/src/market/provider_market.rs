@@ -137,7 +137,10 @@ impl ProviderMarket {
     }
 
     async fn counter_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
-        unimplemented!()
+        info!("Sending counter offer to proposal [{}]", proposal.id);
+
+        self.api.provider().create_proposal(&proposal, subscription_id, &proposal.id).await?;
+        Ok(())
     }
 
     async fn reject_proposal(&self, subscription_id: &str, proposal: &AgreementProposal) -> Result<()> {
