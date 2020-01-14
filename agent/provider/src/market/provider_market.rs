@@ -70,7 +70,7 @@ impl ProviderMarket {
     }
 
     // =========================================== //
-    // Market internals
+    // Market internals - events processing
     // =========================================== //
 
     async fn query_events(&self, subscription_id: &str) -> Result<Vec<ProviderEvent>> {
@@ -135,6 +135,10 @@ impl ProviderMarket {
             Err(error) => error!("Negotiator error while processing agreement {}.", agreement.proposal_id)
         }
     }
+
+    // =========================================== //
+    // Market internals - proposals and agreements reactions
+    // =========================================== //
 
     async fn counter_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
         info!("Sending counter offer to proposal [{}]", proposal.id);
