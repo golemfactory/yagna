@@ -14,6 +14,8 @@ struct OfferSubscription {
     offer: Offer,
 }
 
+// Manages market api communication and forwards proposal
+// to implementation of market strategy.
 pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
     api: ApiClient,
@@ -82,31 +84,31 @@ impl ProviderMarket {
                     .get_proposal(subscription_id, proposal_id)
                     .await?;
 
-                self.process_proposal(agreement_proposal);
+                self.process_proposal(subscription_id, agreement_proposal);
             },
             ProviderEvent::NewAgreementEvent { agreement_id, .. } => {
-
+                unimplemented!()
             }
         }
-
-        unimplemented!()
+        Ok(())
     }
 
-    fn process_proposal(&self, proposal: AgreementProposal) {
+    async fn process_proposal(&self, subscription_id: &str, proposal: AgreementProposal) -> Result<()>  {
         let response = self.negotiator.react_to_proposal(&proposal);
         match response {
             Ok(action) => {
                 match action {
-                    ProposalResponse::CounterProposal{proposal} => self.counter_proposal(proposal),
+                    ProposalResponse::CounterProposal{proposal} => self.counter_proposal(subscription_id, proposal).await?,
                     ProposalResponse::IgnoreProposal => info!("Ignoring proposal {}.", proposal.id),
-                    ProposalResponse::RejectProposal => self.reject_proposal(&proposal)
+                    ProposalResponse::RejectProposal => self.reject_proposal(subscription_id, &proposal).await?
                 }
             },
             Err(error) => error!("Negotiator error while processing proposal {}.", proposal.id)
         }
+        Ok(())
     }
 
-    fn process_agreement(&self, agreement: Agreement) {
+    fn process_agreement(&self, subscription_id: &str, agreement: Agreement) {
         let response = self.negotiator.react_to_agreement(&agreement);
         match response {
             Ok(action) => {
@@ -119,12 +121,13 @@ impl ProviderMarket {
         }
     }
 
-    fn counter_proposal(&self, proposal: Proposal) {
+    async fn counter_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
         unimplemented!()
     }
 
-    fn reject_proposal(&self, proposal: &AgreementProposal) {
-        unimplemented!()
+    async fn reject_proposal(&self, subscription_id: &str, proposal: &AgreementProposal) -> Result<()> {
+        self.api.provider().reject_proposal(subscription_id, &proposal.id).await?;
+        Ok(())
     }
 
     fn accept_agreement(&self) {
