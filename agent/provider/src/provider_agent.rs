@@ -6,6 +6,7 @@ use ya_client::{
 };
 
 use crate::market::ProviderMarket;
+use crate::node_info::{NodeInfo, CpuInfo};
 
 use std::{thread, time};
 use log::{error};
@@ -14,6 +15,7 @@ use log::{error};
 
 pub struct ProviderAgent {
     market: ProviderMarket,
+    node_info: NodeInfo,
 }
 
 
@@ -23,12 +25,14 @@ impl ProviderAgent {
         let client = ApiClient::new(WebClient::builder())?;
         let market = ProviderMarket::new(client, "AcceptAll");
 
-        Ok(ProviderAgent{market})
+        let node_info = ProviderAgent::create_node_info();
+
+        Ok(ProviderAgent{market, node_info})
     }
 
     pub async fn run(&mut self) {
 
-        if let Err(error) = self.market.start().await {
+        if let Err(error) = self.market.create_offers(&self.node_info).await {
             error!("Error while starting market: {}", error);
             return ();
         }
@@ -41,6 +45,11 @@ impl ProviderAgent {
 
             thread::sleep(time::Duration::from_secs(1));
         }
+    }
+
+    fn create_node_info() -> NodeInfo {
+        let cpu = CpuInfo{ architecture: "wasm32".to_string(), cores: 1, threads: 1 };
+         NodeInfo{ cpu, id: "Provider Node".to_string() }
     }
 
 }
