@@ -40,6 +40,15 @@ impl ProviderMarket {
         Ok(())
     }
 
+    pub async fn onshutdown(&mut self) -> Result<()>{
+        info!("Unsubscribing events.");
+
+        for offer in self.offers.iter() {
+            self.api.provider().unsubscribe(&offer.subscription_id).await?;
+        }
+        Ok(())
+    }
+
     pub async fn run_step(&self) -> Result<()> {
         let events = self.query_events().await?;
         self.dispatch_events(&events);
@@ -50,6 +59,7 @@ impl ProviderMarket {
     async fn query_events(&self) -> Result<Vec<ProviderEvent>> {
         if self.offers.len() > 0 {
 
+            /// Ignore all other offer. This example assumes, that there's only one.
             let provider_subscription_id = &self.offers[0].subscription_id;
             self.api.provider()
                 .collect(provider_subscription_id, Some(1), Some(2))

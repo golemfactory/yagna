@@ -45,6 +45,11 @@ impl ProviderAgent {
 
             thread::sleep(time::Duration::from_secs(1));
         }
+
+        // We never get here, but we should cleanup market in final version.
+        if let Err(error) = self.market.onshutdown().await {
+            error!("Error while market shutdown: {}", error);
+        }
     }
 
     fn create_node_info() -> NodeInfo {
