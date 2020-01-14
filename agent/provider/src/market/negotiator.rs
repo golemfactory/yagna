@@ -1,4 +1,4 @@
-use ya_model::market::{Offer, Demand, AgreementProposal, Proposal};
+use ya_model::market::{Offer, Demand, AgreementProposal, Proposal, Agreement};
 use ya_client::{Result,};
 
 use crate::node_info::{NodeInfo};
@@ -26,6 +26,6 @@ pub trait Negotiator {
     //TODO: We should add some parameters for offer creation.
     fn create_offer(&self, node_info: &NodeInfo) -> Result< Offer >;
 
-    fn react_to_proposal(&self, demand: &Demand) -> Result<ProposalResponse>;
-    fn react_to_agreement(&self, proposal: &AgreementProposal) -> Result<AgreementResponse>;
+    fn react_to_proposal(&self, proposal: &AgreementProposal) -> Result<ProposalResponse>;
+    fn react_to_agreement(&self, agreement: &Agreement) -> Result<AgreementResponse>;
 }

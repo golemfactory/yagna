@@ -1,4 +1,4 @@
-use ya_model::market::{Demand, Offer, AgreementProposal};
+use ya_model::market::{Demand, Offer, AgreementProposal, Agreement};
 use ya_client::Error;
 
 use super::negotiator::{Negotiator};
@@ -19,11 +19,11 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(Offer::new(serde_json::json!(node_info), "()".into()))
     }
 
-    fn react_to_proposal(&self, _demand: &Demand) -> Result<ProposalResponse, Error> {
+    fn react_to_proposal(&self, _proposal: &AgreementProposal) -> Result<ProposalResponse, Error> {
         Ok(ProposalResponse::RejectProposal)
     }
 
-    fn react_to_agreement(&self, _proposal: &AgreementProposal) -> Result<AgreementResponse, Error> {
+    fn react_to_agreement(&self, _agreement: &Agreement) -> Result<AgreementResponse, Error> {
         Ok(AgreementResponse::AcceptAgreement)
     }
 }
