@@ -24,9 +24,8 @@ pub struct Auth {
 
 impl Default for Auth {
     fn default() -> Self {
-        Auth {
-            cache: Rc::new(RefCell::new(Cache::default())),
-        }
+        let cache = Rc::new(RefCell::new(Cache::default()));
+        Auth { cache }
     }
 }
 

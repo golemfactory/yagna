@@ -29,7 +29,6 @@ impl ValueResolver for AppKeyResolver {
                 .send(Get { key })
                 .map_err(|e| ErrorInternalServerError(format!("{}", e)))
                 .await?;
-
             Ok(resp.ok())
         })
     }

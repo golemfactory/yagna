@@ -11,11 +11,14 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth;
 use ya_service_bus::RpcEndpoint;
 
+const ROUTER_ADDR: &str = "127.0.0.1:8245";
+const HTTP_ADDR: &str = "127.0.0.1:8080";
+
 async fn server() -> anyhow::Result<()> {
     let db = Arc::new(Mutex::new(DbExecutor::new(":memory:")?));
-    ya_appkey::migrations::run_with_output(&db.lock().await.conn()?, &mut std::io::stdout())?;
+    ya_appkey::migrations::run(&db.lock().await.conn()?)?;
 
-    ya_sb_router::bind_router("127.0.0.1:8245".parse()?).await?;
+    ya_sb_router::bind_router(ROUTER_ADDR.parse()?).await?;
     ya_appkey::service::bind_gsb(db.clone());
 
     HttpServer::new(move || {
@@ -27,7 +30,7 @@ async fn server() -> anyhow::Result<()> {
                 HttpResponse::Ok().body(body)
             })))
     })
-    .bind("127.0.0.1:8080")?
+    .bind(HTTP_ADDR)?
     .run()
     .await?;
 
@@ -52,7 +55,6 @@ fn map_err<E: std::fmt::Debug>(e: E) -> anyhow::Error {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var("RUST_LOG", "debug");
     env_logger::init();
 
     match Command::from_args() {
@@ -79,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ClientCommand::Request { key } => {
                     let mut resp = Client::default()
-                        .get("http://127.0.0.1:8080")
+                        .get(HTTP_ADDR)
                         .header(header::AUTHORIZATION, key)
                         .send()
                         .map_err(map_err)

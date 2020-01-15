@@ -18,7 +18,7 @@ pub trait ValueResolver {
 pub struct AutoResolveLruCache<R>
 where
     R: ValueResolver,
-    <R as ValueResolver>::Key: Clone + std::cmp::Ord,
+    <R as ValueResolver>::Key: Clone + std::cmp::Ord + std::fmt::Debug,
 {
     inner: LruCache<<R as ValueResolver>::Key, Option<<R as ValueResolver>::Value>>,
     resolver: Mutex<R>,
@@ -27,7 +27,7 @@ where
 impl<R> AutoResolveLruCache<R>
 where
     R: ValueResolver,
-    <R as ValueResolver>::Key: Clone + std::cmp::Ord,
+    <R as ValueResolver>::Key: Clone + std::cmp::Ord + std::fmt::Debug,
     <R as ValueResolver>::Error: std::fmt::Debug,
 {
     pub fn new(ttl: Duration, capacity: usize, resolver: R) -> Self {
@@ -51,17 +51,14 @@ where
                     Ok(v) => {
                         inner.insert(key.clone(), v);
                     }
-                    Err(e) => {
-                        log::error!("Error resolving key: {:?}", e);
-                    }
+                    Err(e) => log::error!("Error resolving key '{:?}': {:?}", key, e),
                 }
             }
         }
 
-        if let Some(value) = inner.get(key) {
-            value.as_ref()
-        } else {
-            None
+        match inner.get(key) {
+            Some(value) => value.as_ref(),
+            _ => None,
         }
     }
 
@@ -86,7 +83,7 @@ where
 impl<R> Default for AutoResolveLruCache<R>
 where
     R: ValueResolver + Default,
-    <R as ValueResolver>::Key: Clone + std::cmp::Ord,
+    <R as ValueResolver>::Key: Clone + std::cmp::Ord + std::fmt::Debug,
     <R as ValueResolver>::Error: std::fmt::Debug,
 {
     fn default() -> Self {

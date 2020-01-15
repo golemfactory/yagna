@@ -50,6 +50,6 @@ macro_rules! impl_try_from {
 }
 
 impl_try_from!(ServiceRequest);
+impl_try_from!(&ServiceRequest);
 impl_try_from!(HttpRequest);
 impl_try_from!(&HttpRequest);
-impl_try_from!(&ServiceRequest);
