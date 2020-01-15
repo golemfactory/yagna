@@ -3,7 +3,6 @@ name = "ya-appkey"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
-build = "build.rs"
 
 [dependencies]
 ya-core-model = { version = "0.1", features = ["appkey"] }
@@ -18,6 +17,7 @@ diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
 env_logger = "0.7"
 futures = "0.3"
+libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 log = "0.4"
 r2d2 = "0.8"
 serde_json = "1.0"
