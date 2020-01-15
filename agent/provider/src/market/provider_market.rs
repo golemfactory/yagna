@@ -121,7 +121,7 @@ impl ProviderMarket {
                     ProposalResponse::RejectProposal => self.reject_proposal(subscription_id, &proposal).await?
                 }
             },
-            Err(error) => error!("Negotiator error while processing proposal {}.", proposal.id)
+            Err(error) => error!("Negotiator error while processing proposal {}. Error: {}", proposal.id, error)
         }
         Ok(())
     }
@@ -135,7 +135,7 @@ impl ProviderMarket {
                     AgreementResponse::RejectAgreement => self.reject_agreement(),
                 }
             },
-            Err(error) => error!("Negotiator error while processing agreement {}.", agreement.proposal_id)
+            Err(error) => error!("Negotiator error while processing agreement {}. Error: {}", agreement.proposal_id, error)
         }
     }
 
@@ -144,7 +144,7 @@ impl ProviderMarket {
     // =========================================== //
 
     async fn accept_proposal(&self, subscription_id: &str, proposal: &AgreementProposal) -> Result<()> {
-        info!("Accepting proposal [{}] without changes.", proposal.id);
+        info!("Accepting proposal [{}] without changes, subscription_id: {}.", proposal.id, subscription_id);
 
         // Note: Provider can't create agreement - only requestor can. We can accept
         // proposal, by resending the same offer as we got from requestor.
@@ -153,14 +153,14 @@ impl ProviderMarket {
     }
 
     async fn counter_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
-        info!("Sending counter offer to proposal [{}]", proposal.id);
+        info!("Sending counter offer to proposal [{}], subscription_id: {}.", proposal.id, subscription_id);
 
         self.api.provider().create_proposal(&proposal, subscription_id, &proposal.id).await?;
         Ok(())
     }
 
     async fn reject_proposal(&self, subscription_id: &str, proposal: &AgreementProposal) -> Result<()> {
-        info!("Rejecting proposal [{}]", proposal.id);
+        info!("Rejecting proposal [{}], subscription_id: {}.", proposal.id, subscription_id);
 
         self.api.provider().reject_proposal(subscription_id, &proposal.id).await?;
         Ok(())

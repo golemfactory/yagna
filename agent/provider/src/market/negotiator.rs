@@ -5,6 +5,7 @@ use crate::node_info::{NodeInfo};
 
 
 /// Response for requestor proposals.
+#[allow(dead_code)]
 pub enum ProposalResponse {
     CounterProposal {
         proposal: Proposal
@@ -16,6 +17,7 @@ pub enum ProposalResponse {
 }
 
 /// Response for requestor agreements.
+#[allow(dead_code)]
 pub enum AgreementResponse {
     AcceptAgreement,
     RejectAgreement,

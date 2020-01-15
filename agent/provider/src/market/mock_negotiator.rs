@@ -20,7 +20,7 @@ impl Negotiator for AcceptAllNegotiator {
     }
 
     fn react_to_proposal(&self, _proposal: &AgreementProposal) -> Result<ProposalResponse, Error> {
-        Ok(ProposalResponse::RejectProposal)
+        Ok(ProposalResponse::AcceptProposal)
     }
 
     fn react_to_agreement(&self, _agreement: &Agreement) -> Result<AgreementResponse, Error> {
