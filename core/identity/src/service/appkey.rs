@@ -17,9 +17,10 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         async move {
             Ok(db
                 .as_dao::<AppKeyDao>()
-                .create(key, create.name, create.role, create.identity)
+                .create(key.clone(), create.name, create.role, create.identity)
                 .await
-                .map_err(|e| model::Error::internal(e))?)
+                .map_err(|e| model::Error::internal(e))
+                .map(|_| key)?)
         }
     });
 

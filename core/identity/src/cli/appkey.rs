@@ -51,12 +51,12 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity,
                 };
-                let _ = bus::service(model::APP_KEY_SERVICE_ID)
+                let key = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(create)
                     .await
                     .map_err(|e| anyhow::Error::msg(e))?
                     .unwrap();
-                Ok(CommandOutput::NoOutput)
+                Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
                 let remove = model::Remove {
