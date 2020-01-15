@@ -12,7 +12,7 @@ use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatc
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
 
-pub fn web_scope(db: Arc<Mutex<DbExecutor<Error>>>) -> actix_web::Scope {
+pub fn web_scope(db: Arc<Mutex<DbExecutor>>) -> actix_web::Scope {
     let create = web::post().to(impl_restful_handler!(create_activity, path, query));
     let delete = web::delete().to(impl_restful_handler!(destroy_activity, path, query));
     let exec = web::post().to(impl_restful_handler!(exec, path, query, body));
@@ -28,7 +28,7 @@ pub fn web_scope(db: Arc<Mutex<DbExecutor<Error>>>) -> actix_web::Scope {
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     query: web::Query<QueryTimeout>,
     body: web::Json<CreateActivity>,
 ) -> Result<String, Error> {
@@ -47,7 +47,7 @@ async fn create_activity(
 
 /// Destroys given Activity.
 async fn destroy_activity(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<(), Error> {
@@ -72,7 +72,7 @@ async fn destroy_activity(
 
 /// Executes an ExeScript batch within a given Activity.
 async fn exec(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
     body: web::Json<ExeScriptRequest>,
@@ -98,7 +98,7 @@ async fn exec(
 
 /// Queries for ExeScript batch results.
 async fn get_batch_results(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivityBatch>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {

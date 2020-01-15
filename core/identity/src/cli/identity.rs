@@ -1,6 +1,6 @@
 /// Identity management CLI parser and runner
 use anyhow::{Context, Result};
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 use structopt::*;
 
 use ya_core_model::identity::{self, DEFAULT_IDENTITY};
@@ -79,7 +79,6 @@ impl IdentityCommand {
     pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             IdentityCommand::List { .. } => {
-                use ya_service_bus::RpcEndpoint;
                 let identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
                     .send(identity::List::default())
                     .await
@@ -97,7 +96,7 @@ impl IdentityCommand {
                         })
                         .collect(),
                 }
-                    .into())
+                .into())
             }
             IdentityCommand::Show { alias, password } => CommandOutput::object(
                 bus::service(identity::BUS_ID)

@@ -3,7 +3,6 @@ members = [
     "agent/provider",
     "agent/requestor",
     "core/activity",
-    "core/appkey",
     "core/identity",
     "core/market",
     "core/model",
@@ -26,7 +25,6 @@ members = [
 ]
 
 [patch.crates-io]
-ya-appkey = { path = "core/appkey" }
 ya-core-model = { path = "core/model" }
 ya-exe-api = { path = "exe-unit/api" }
 ya-identity = { path = "core/identity" }

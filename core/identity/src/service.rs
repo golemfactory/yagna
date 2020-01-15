@@ -3,7 +3,6 @@ use futures::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::fs;
 /// Identity service
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::identity as model;
@@ -11,71 +10,51 @@ use ya_core_model::identity::IdentityInfo;
 use ya_service_bus::actix_rpc::bind;
 use ya_service_bus::typed as bus;
 
+use crate::dao::identity::IdentityDao;
+use crate::db::models::Identity;
+use chrono::Utc;
 use ethsign::KeyFile;
 use std::convert::TryInto;
+use ya_persistence::executor::DbExecutor;
 
 const KEYS_SUBDIR: &str = "keys";
 
-struct Identity {
-    node_id : NodeId,
-    alias : Option<String>,
-    key: KeyFile
-}
+mod appkey;
+mod id_key;
 
 struct IdentityService {
-    keys_dir: Arc<Path>,
-    ids: HashMap<NodeId, Identity>,
+    ids: HashMap<NodeId, id_key::IdentityKey>,
     alias_to_id: HashMap<String, NodeId>,
+    db: DbExecutor,
 }
 
-impl Into<model::IdentityInfo> for &Identity {
+impl Into<model::IdentityInfo> for &id_key::IdentityKey {
     fn into(self) -> IdentityInfo {
         model::IdentityInfo {
-            alias: self.alias.clone().unwrap_or_default(),
-            node_id: NodeId::from(self.key.address.as_ref().unwrap().0.as_ref()),
-            is_locked: false,
+            alias: self.alias().map(ToOwned::to_owned),
+            node_id: self.id(),
+            is_locked: self.is_locked(),
         }
     }
 }
 
 impl IdentityService {
-    pub async fn from_appdir(keys_dir: Arc<Path>) -> anyhow::Result<Self> {
-        let mut de = fs::read_dir(&keys_dir).await?;
+    pub async fn from_db(db: DbExecutor) -> anyhow::Result<Self> {
+        crate::dao::init(&db);
+
         let mut ids: HashMap<NodeId, _> = Default::default();
         let mut alias_to_id: HashMap<String, _> = Default::default();
 
-        while let Some(entry) = de.next_entry().await? {
-            let path: PathBuf = entry.path();
-            if path.extension() != Some("json".as_ref()) {
-                continue;
+        for identity in db.as_dao::<IdentityDao>().list_identities().await? {
+            let key: id_key::IdentityKey = identity.try_into()?;
+            if let Some(alias) = key.alias() {
+                let _ = alias_to_id.insert(alias.to_owned(), key.id());
             }
-            let name = match path.file_name() {
-                None => continue,
-                Some(v) => match v.to_str() {
-                    Some(v) => v,
-                    None => continue,
-                },
-            };
-            let name = if name.ends_with(".json") {
-                &name[..name.len() - 5]
-            } else {
-                name
-            };
-            let json : KeyFile = serde_json::from_slice(fs::read(&path).await?.as_ref())?;
-
-            /*let node_id : NodeId = json.address.unwrap().into();
-
-            let _ = alias_to_id.insert(name.into(), node_id);
-            let _ = ids.insert(node_id, Identity {
-                    key: json,
-                    alias: Some(name.to_string()),
-                },
-            );*/
-            todo!()
+            let _ = ids.insert(key.id(), key);
         }
 
         Ok(IdentityService {
-            keys_dir,
+            db,
             ids,
             alias_to_id,
         })
@@ -101,14 +80,34 @@ impl IdentityService {
         &mut self,
         alias: Option<String>,
     ) -> Result<model::IdentityInfo, model::Error> {
-        let name = alias.unwrap_or_else(|| "todo".to_string());
-        let dest_path = key_path(&self.keys_dir, &name);
+        let key = id_key::generate_new(alias.clone(), "".into());
 
-        if dest_path.exists() || self.alias_to_id.contains_key(&name) {
-            return Err(model::Error::AlreadyExists);
+        let new_identity = Identity {
+            identity_id: key.id(),
+            key_file_json: key
+                .to_key_file()
+                .map_err(|e| model::Error::InternalErr(e.to_string()))?,
+            is_default: false,
+            is_deleted: false,
+            alias: key.alias().map(ToOwned::to_owned),
+            note: None,
+            created_date: Utc::now().naive_utc(),
+        };
+
+        self.db
+            .as_dao::<IdentityDao>()
+            .create_identity(new_identity)
+            .await
+            .map_err(|e| model::Error::InternalErr(e.to_string()))?;
+
+        let output = (&key).into();
+
+        if let Some(alias) = alias {
+            let _ = self.alias_to_id.insert(alias, key.id());
         }
+        let _ = self.ids.insert(key.id(), key);
 
-        unimplemented!()
+        Ok(output)
     }
 
     fn bind_service(me: Arc<Mutex<Self>>) {
@@ -128,20 +127,20 @@ impl IdentityService {
             }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| async move {
-            todo!()
+        let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| {
+            let this = this.clone();
+            async move { this.lock().await.create_identity(create.alias).await }
         });
     }
 }
 
-pub async fn activate(data_dir: &Path) -> anyhow::Result<()> {
+pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     log::info!("activating identity service");
-    let key_dir: Arc<Path> = data_dir.join(KEYS_SUBDIR).into();
-    let service = Arc::new(Mutex::new(
-        IdentityService::from_appdir(key_dir.clone()).await?,
-    ));
+    let service = Arc::new(Mutex::new(IdentityService::from_db(db.clone()).await?));
     IdentityService::bind_service(service);
     log::info!("identity service activated");
+
+    appkey::activate(db).await?;
     Ok(())
 }
 

@@ -13,7 +13,7 @@ use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, State};
 use ya_persistence::executor::DbExecutor;
 
-pub fn bind_gsb(db: Arc<Mutex<DbExecutor<Error>>>) {
+pub fn bind_gsb(db: Arc<Mutex<DbExecutor>>) {
     bind_gsb_method!(ACTIVITY_SERVICE_ID, db, create_activity_gsb);
     bind_gsb_method!(ACTIVITY_SERVICE_ID, db, destroy_activity_gsb);
     bind_gsb_method!(ACTIVITY_SERVICE_ID, db, get_activity_state_gsb);
@@ -22,7 +22,7 @@ pub fn bind_gsb(db: Arc<Mutex<DbExecutor<Error>>>) {
     bind_gsb_method!(ACTIVITY_SERVICE_ID, db, set_activity_usage_gsb);
 }
 
-pub fn web_scope(db: Arc<Mutex<DbExecutor<Error>>>) -> actix_web::Scope {
+pub fn web_scope(db: Arc<Mutex<DbExecutor>>) -> actix_web::Scope {
     let events = web::get().to(impl_restful_handler!(get_events_web, query));
     let state = web::get().to(impl_restful_handler!(get_activity_state_web, path));
     let usage = web::get().to(impl_restful_handler!(get_activity_usage_web, path));
@@ -52,7 +52,7 @@ impl From<Event> for ProviderEvent {
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity_gsb(
-    db: Arc<Mutex<DbExecutor<Error>>>,
+    db: Arc<Mutex<DbExecutor>>,
     msg: CreateActivity,
 ) -> RpcMessageResult<CreateActivity> {
     let conn = db_conn!(db)?;
@@ -88,7 +88,7 @@ async fn create_activity_gsb(
 
 /// Destroys given Activity.
 async fn destroy_activity_gsb(
-    db: Arc<Mutex<DbExecutor<Error>>>,
+    db: Arc<Mutex<DbExecutor>>,
     msg: DestroyActivity,
 ) -> RpcMessageResult<DestroyActivity> {
     let conn = db_conn!(db)?;
@@ -113,7 +113,7 @@ async fn destroy_activity_gsb(
 
 /// Get state of specified Activity.
 async fn get_activity_state(
-    db: &Arc<Mutex<DbExecutor<Error>>>,
+    db: &Arc<Mutex<DbExecutor>>,
     activity_id: &str,
 ) -> Result<ActivityState, Error> {
     ActivityStateDao::new(&db_conn!(db)?)
@@ -129,7 +129,7 @@ async fn get_activity_state(
 }
 
 async fn get_activity_state_gsb(
-    db: Arc<Mutex<DbExecutor<Error>>>,
+    db: Arc<Mutex<DbExecutor>>,
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
     get_activity_state(&db, &msg.activity_id)
@@ -138,7 +138,7 @@ async fn get_activity_state_gsb(
 }
 
 async fn get_activity_state_web(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityState, Error> {
     get_activity_state(&db, &path.activity_id).await
@@ -146,7 +146,7 @@ async fn get_activity_state_web(
 
 /// Pass activity state (which may include error details).
 async fn set_activity_state_gsb(
-    db: Arc<Mutex<DbExecutor<Error>>>,
+    db: Arc<Mutex<DbExecutor>>,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
     // TODO: caller authorization
@@ -162,7 +162,7 @@ async fn set_activity_state_gsb(
 
 /// Get usage of specified Activity.
 async fn get_activity_usage(
-    db: &Arc<Mutex<DbExecutor<Error>>>,
+    db: &Arc<Mutex<DbExecutor>>,
     activity_id: &str,
 ) -> Result<ActivityUsage, Error> {
     ActivityUsageDao::new(&db_conn!(db)?)
@@ -178,7 +178,7 @@ async fn get_activity_usage(
 }
 
 async fn get_activity_usage_gsb(
-    db: Arc<Mutex<DbExecutor<Error>>>,
+    db: Arc<Mutex<DbExecutor>>,
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
     get_activity_usage(&db, &msg.activity_id)
@@ -187,7 +187,7 @@ async fn get_activity_usage_gsb(
 }
 
 async fn get_activity_usage_web(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityUsage, Error> {
     get_activity_usage(&db, &path.activity_id).await
@@ -195,7 +195,7 @@ async fn get_activity_usage_web(
 
 /// Pass current activity usage (which may include error details).
 async fn set_activity_usage_gsb(
-    db: Arc<Mutex<DbExecutor<Error>>>,
+    db: Arc<Mutex<DbExecutor>>,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
     // TODO: caller authorization
@@ -206,7 +206,7 @@ async fn set_activity_usage_gsb(
 
 /// Fetch Requestor command events.
 async fn get_events_web(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ProviderEvent>, Error> {
     EventDao::new(&db_conn!(db)?)

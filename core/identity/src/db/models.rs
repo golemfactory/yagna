@@ -1,21 +1,21 @@
 #![allow(unused)]
 #![allow(clippy::all)]
 
-use crate::db::schema::{identity, app_key, role};
+use crate::db::schema::{app_key, identity, role};
 use chrono::NaiveDateTime;
+use diesel::{Associations, Identifiable, Insertable, Queryable};
 use ya_core_model::ethaddr::NodeId;
-use diesel::{Queryable, Identifiable, Associations, Insertable};
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "identity"]
 #[primary_key(identity_id)]
 pub struct Identity {
-    pub identity_id : NodeId,
-    pub key_file_json : String,
-    pub is_default : bool,
-    pub is_deleted : bool,
-    pub alias : Option<String>,
-    pub note : Option<String>,
+    pub identity_id: NodeId,
+    pub key_file_json: String,
+    pub is_default: bool,
+    pub is_deleted: bool,
+    pub alias: Option<String>,
+    pub note: Option<String>,
     pub created_date: NaiveDateTime,
 }
 
@@ -27,7 +27,7 @@ pub struct AppKey {
     pub role_id: i32,
     pub name: String,
     pub key: String,
-    pub identity_id : NodeId,
+    pub identity_id: NodeId,
     pub created_date: NaiveDateTime,
 }
 

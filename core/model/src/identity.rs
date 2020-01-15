@@ -1,14 +1,18 @@
-use serde::{Deserialize, Serialize};
-use ya_service_bus::RpcMessage;
 use crate::ethaddr::NodeId;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use ya_service_bus::RpcMessage;
 
 pub const BUS_ID: &str = "/local/identity";
 pub const DEFAULT_IDENTITY: &str = "primary";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
+    #[error("initialization failed {0}")]
     Init(String),
+    #[error("given alias or key already exists")]
     AlreadyExists,
+    #[error("{0}")]
     InternalErr(String),
 }
 
@@ -29,7 +33,8 @@ pub struct List {}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IdentityInfo {
-    pub alias: String,
+    #[serde(default)]
+    pub alias: Option<String>,
     pub node_id: NodeId,
     pub is_locked: bool,
 }

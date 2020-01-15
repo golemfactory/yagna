@@ -2,6 +2,7 @@ use anyhow::Result;
 use structopt::*;
 
 use ya_core_model::appkey as model;
+use ya_core_model::identity as idm;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -34,10 +35,21 @@ impl AppKeyCommand {
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match &self {
             AppKeyCommand::Create { name, role, id } => {
+                let identity = if id.starts_with("0x") {
+                    id.parse()?
+                } else {
+                    let key = bus::service(idm::BUS_ID)
+                        .send(idm::Get::ByAlias(id.into()))
+                        .await
+                        .map_err(|e| anyhow::Error::msg(e))?
+                        .map_err(|e| anyhow::Error::msg(e))?;
+                    key.unwrap().node_id
+                };
+
                 let create = model::Create {
                     name: name.clone(),
                     role: role.clone(),
-                    identity: id.clone(),
+                    identity,
                 };
                 let _ = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(create)

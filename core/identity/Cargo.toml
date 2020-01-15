@@ -23,8 +23,14 @@ diesel_migrations = "1.4"
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
 ya-persistence = "0.1"
+rand="0.7.3"
+
+[dependencies.uuid]
+version = "0.7"
+features = ["v4"]
 
 [dev-dependencies]
 actix-rt = "1.0"
 futures = "0.3"
 env_logger="0.7.1"
+ya-sb-router="0.1"

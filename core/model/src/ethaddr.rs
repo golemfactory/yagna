@@ -1,10 +1,9 @@
-use thiserror::Error;
-use std::{fmt, str};
-use serde::{Serialize, Deserialize, Serializer, Deserializer, de};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
-use std::str::FromStr;
 use std::mem::MaybeUninit;
-
+use std::str::FromStr;
+use std::{fmt, str};
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 #[error("{0}")]
@@ -18,8 +17,8 @@ pub struct NodeId {
 impl NodeId {
     #[inline(always)]
     fn with_hex<F, R>(&self, f: F) -> R
-        where
-            F: FnOnce(&str) -> R,
+    where
+        F: FnOnce(&str) -> R,
     {
         let mut hex_str: [u8; 42] = unsafe { MaybeUninit::uninit().assume_init() };
 
@@ -125,8 +124,8 @@ static HEX_CHARS: [u8; 16] = [
 impl Serialize for NodeId {
     #[inline]
     fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         self.with_hex(|hex_str| serializer.serialize_str(hex_str))
     }
@@ -148,8 +147,8 @@ impl<'de> de::Visitor<'de> for NodeIdVisit {
     }
 
     fn visit_str<E>(self, v: &str) -> Result<<Self as de::Visitor<'de>>::Value, E>
-        where
-            E: de::Error,
+    where
+        E: de::Error,
     {
         match NodeId::from_str(v) {
             Ok(node_id) => Ok(node_id),
@@ -158,8 +157,8 @@ impl<'de> de::Visitor<'de> for NodeIdVisit {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<<Self as de::Visitor<'de>>::Value, E>
-        where
-            E: de::Error,
+    where
+        E: de::Error,
     {
         if v.len() == 20 {
             let mut inner: [u8; 20] = unsafe { MaybeUninit::uninit().assume_init() };
@@ -173,26 +172,24 @@ impl<'de> de::Visitor<'de> for NodeIdVisit {
 
 impl<'de> Deserialize<'de> for NodeId {
     fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
-        where
-            D: Deserializer<'de>,
+    where
+        D: Deserializer<'de>,
     {
         deserializer.deserialize_str(NodeIdVisit)
     }
 }
 
-
-#[cfg(feature="with-diesel")]
+#[cfg(feature = "with-diesel")]
+#[allow(dead_code)]
 mod sql {
-    use diesel::sql_types::{Text};
-    use diesel::*;
     use crate::ethaddr::NodeId;
-    use diesel::expression::AsExpression;
-    use diesel::expression::bound::Bound;
-    use diesel::deserialize::{FromSqlRow, FromSql};
-    use std::error::Error;
-    use diesel::row::Row;
     use diesel::backend::Backend;
-    use diesel::serialize::{ToSql, Output, IsNull};
+    use diesel::deserialize::FromSql;
+    use diesel::expression::bound::Bound;
+    use diesel::expression::AsExpression;
+    use diesel::serialize::{IsNull, Output, ToSql};
+    use diesel::sql_types::Text;
+    use diesel::*;
 
     impl AsExpression<Text> for NodeId {
         type Expression = Bound<Text, String>;
@@ -211,21 +208,26 @@ mod sql {
     }
 
     impl<DB> FromSql<Text, DB> for NodeId
-        where
-            DB: Backend,
-            String: FromSql<Text, DB>,
+    where
+        DB: Backend,
+        String: FromSql<Text, DB>,
     {
         fn from_sql(bytes: Option<&<DB as Backend>::RawValue>) -> deserialize::Result<Self> {
-            let s :String= FromSql::from_sql(bytes)?;
+            let s: String = FromSql::from_sql(bytes)?;
             Ok(s.parse()?)
         }
     }
 
     impl<DB> ToSql<Text, DB> for NodeId
-        where DB:Backend, for<'b> &'b str : ToSql<Text, DB>,
+    where
+        DB: Backend,
+        for<'b> &'b str: ToSql<Text, DB>,
     {
-        fn to_sql<W: std::io::Write>(&self, out: &mut Output<'_, W, DB>) -> deserialize::Result<IsNull> {
-            self.with_hex(move |s : &str| ToSql::<Text, DB>::to_sql(s, out))
+        fn to_sql<W: std::io::Write>(
+            &self,
+            out: &mut Output<'_, W, DB>,
+        ) -> deserialize::Result<IsNull> {
+            self.with_hex(move |s: &str| ToSql::<Text, DB>::to_sql(s, out))
         }
     }
 
@@ -233,4 +235,3 @@ mod sql {
     #[diesel(foreign_derive)]
     struct NodeIdProxy(NodeId);
 }
-

@@ -41,9 +41,4 @@ joinable!(app_key -> identity (identity_id));
 joinable!(app_key -> role (role_id));
 joinable!(identity_data -> identity (identity_id));
 
-allow_tables_to_appear_in_same_query!(
-    app_key,
-    identity,
-    identity_data,
-    role,
-);
+allow_tables_to_appear_in_same_query!(app_key, identity, identity_data, role,);

@@ -1,7 +1,7 @@
-use ya_persistence::executor::{DbExecutor};
-use ya_identity::dao::identity::*;
 use actix_rt;
-use chrono::{NaiveDateTime, DateTime, Utc};
+use chrono::Utc;
+use ya_identity::dao::{identity::*, init};
+use ya_persistence::executor::DbExecutor;
 
 /**
 
@@ -11,7 +11,9 @@ use chrono::{NaiveDateTime, DateTime, Utc};
 async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", "debug");
     env_logger::init();
-    let db = DbExecutor::<ya_identity::dao::Error>::from_env()?;
+    let db = DbExecutor::from_env()?;
+
+    init(&db)?;
 
     let identity = Identity {
         identity_id: "0x1308f7345c455ED528bC80C37C7EC175Abe502B5".parse()?,
@@ -20,12 +22,15 @@ async fn main() -> anyhow::Result<()> {
         is_deleted: false,
         alias: None,
         note: None,
-        created_date: Utc::now().naive_utc()
+        created_date: Utc::now().naive_utc(),
     };
 
     db.as_dao::<IdentityDao>().create_identity(identity).await?;
 
-    eprintln!("v={:?}", db.as_dao::<IdentityDao>().list_identitys().await?);
+    eprintln!(
+        "v={:?}",
+        db.as_dao::<IdentityDao>().list_identities().await?
+    );
 
     Ok(())
 }

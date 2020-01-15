@@ -1,11 +1,9 @@
 pub use crate::db::models::Identity;
 use crate::db::schema as s;
-use ya_persistence::executor::{PoolType, AsDao};
-use diesel::r2d2::ConnectionManager;
-use diesel::{SqliteConnection, Connection, RunQueryDsl, QueryDsl};
-use ya_core_model::ethaddr::NodeId;
+use diesel::prelude::*;
 use tokio::task;
-use std::convert::identity;
+use ya_core_model::ethaddr::NodeId;
+use ya_persistence::executor::{AsDao, ConnType, PoolType};
 
 type Result<T> = std::result::Result<T, super::Error>;
 
@@ -20,32 +18,56 @@ impl<'c> AsDao<'c> for IdentityDao<'c> {
 }
 
 impl<'c> IdentityDao<'c> {
+    #[inline]
+    async fn with_transaction<
+        R: Send + 'static,
+        F: FnOnce(&ConnType) -> Result<R> + Send + 'static,
+    >(
+        &self,
+        f: F,
+    ) -> Result<R> {
+        self.with_connection(move |conn| conn.transaction(|| f(conn)))
+            .await
+    }
 
-    pub async fn create_identity(&self, new_identity : Identity) -> Result<()> {
+    #[inline]
+    async fn with_connection<
+        R: Send + 'static,
+        F: FnOnce(&ConnType) -> Result<R> + Send + 'static,
+    >(
+        &self,
+        f: F,
+    ) -> Result<R> {
         let pool = self.pool.clone();
-        let _ = task::spawn_blocking(move || {
+        match task::spawn_blocking(move || {
             let conn = pool.get()?;
+            f(&conn)
+        })
+        .await
+        {
+            Ok(v) => v,
+            Err(join_err) => Err(super::Error::internal(join_err)),
+        }
+    }
 
-            conn.transaction(|| {
-                eprintln!("in transaction");
+    pub async fn create_identity(&self, new_identity: Identity) -> Result<()> {
+        let _rows = self
+            .with_transaction(|conn| {
                 Ok(diesel::insert_into(s::identity::table)
                     .values(new_identity)
-                    .execute(&conn)?)
-            }) as Result<_>
-        }).await.unwrap();
-        eprintln!("done");
+                    .execute(conn)?)
+            })
+            .await?;
         Ok(())
     }
 
-    pub async fn list_identitys(&self) -> Result<Vec<Identity>> {
-        let pool = self.pool.clone();
-        task::spawn_blocking(move || {
-            use crate::db::schema::identity::dsl::*;
-            use diesel::prelude::*;
-            let conn = pool.get()?;
-            let results = identity.filter(is_default.eq(false)).load::<Identity>(&conn)?;
-            Ok(results)
-        }).await.unwrap()
+    pub async fn list_identities(&self) -> Result<Vec<Identity>> {
+        use crate::db::schema::identity::dsl::*;
+        self.with_connection(|conn| {
+            Ok(identity
+                .filter(is_default.eq(false))
+                .load::<Identity>(conn)?)
+        })
+        .await
     }
-
 }

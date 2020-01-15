@@ -1,0 +1,86 @@
+use crate::dao::identity::Identity;
+use crate::dao::Error;
+use ethsign::keyfile::Bytes;
+use ethsign::{KeyFile, Protected, SecretKey};
+use rand::Rng;
+use std::convert::TryFrom;
+use ya_core_model::ethaddr::NodeId;
+
+pub struct IdentityKey {
+    id: NodeId,
+    alias: Option<String>,
+    key_file: KeyFile,
+    secret: Option<SecretKey>,
+}
+
+impl IdentityKey {
+    #[inline]
+    pub fn id(&self) -> NodeId {
+        self.id
+    }
+
+    #[inline]
+    pub fn alias(&self) -> Option<&str> {
+        self.alias.as_ref().map(|s| s.as_ref())
+    }
+
+    pub fn to_key_file(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.key_file)
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.secret.is_none()
+    }
+
+    pub fn unlock(&mut self, password: Protected) -> Result<bool, Error> {
+        let secret = match self.key_file.to_secret_key(&password) {
+            Ok(secret) => secret,
+            Err(ethsign::Error::InvalidPassword) => return Ok(false),
+            Err(e) => return Err(Error::internal(e)),
+        };
+        self.secret = Some(secret);
+        Ok(true)
+    }
+
+    pub fn lock(&mut self) {
+        self.secret = None;
+    }
+}
+
+impl TryFrom<Identity> for IdentityKey {
+    type Error = serde_json::Error;
+
+    fn try_from(value: Identity) -> Result<Self, Self::Error> {
+        let key_file: KeyFile = serde_json::from_str(&value.key_file_json)?;
+        let id = value.identity_id;
+        let alias = value.alias;
+        let secret = key_file.to_secret_key(&Protected::new("")).ok();
+        Ok(IdentityKey {
+            id,
+            alias,
+            key_file,
+            secret,
+        })
+    }
+}
+
+const KEY_ITERATIONS: u32 = 10240;
+const KEYSTORE_VERSION: u64 = 3;
+
+pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
+    let random_bytes: [u8; 32] = rand::thread_rng().gen();
+    let secret = SecretKey::from_raw(random_bytes.as_ref()).unwrap();
+    let key_file = KeyFile {
+        id: format!("{}", uuid::Uuid::new_v4()),
+        version: KEYSTORE_VERSION,
+        crypto: secret.to_crypto(&password, KEY_ITERATIONS).unwrap(),
+        address: Some(Bytes(secret.public().address().to_vec())),
+    };
+    let id = NodeId::from(secret.public().address().as_ref());
+    IdentityKey {
+        id,
+        alias,
+        key_file,
+        secret: Some(secret),
+    }
+}

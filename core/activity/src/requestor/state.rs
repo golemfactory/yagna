@@ -11,7 +11,7 @@ use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningComm
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState, State};
 use ya_persistence::executor::DbExecutor;
 
-pub fn web_scope(db: Arc<Mutex<DbExecutor<Error>>>) -> actix_web::Scope {
+pub fn web_scope(db: Arc<Mutex<DbExecutor>>) -> actix_web::Scope {
     let state = web::get().to(impl_restful_handler!(get_activity_state, path, query));
     let usage = web::get().to(impl_restful_handler!(get_activity_usage, path, query));
     let command = web::get().to(impl_restful_handler!(get_running_command, path, query));
@@ -25,7 +25,7 @@ pub fn web_scope(db: Arc<Mutex<DbExecutor<Error>>>) -> actix_web::Scope {
 
 /// Get state of specified Activity.
 async fn get_activity_state(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<ActivityState, Error> {
@@ -60,7 +60,7 @@ async fn get_activity_state(
 
 /// Get usage of specified Activity.
 async fn get_activity_usage(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<ActivityUsage, Error> {
@@ -95,7 +95,7 @@ async fn get_activity_usage(
 
 /// Get running command for a specified Activity.
 async fn get_running_command(
-    db: web::Data<Arc<Mutex<DbExecutor<Error>>>>,
+    db: web::Data<Arc<Mutex<DbExecutor>>>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<ExeScriptCommandState, Error> {
