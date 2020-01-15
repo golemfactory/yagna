@@ -80,6 +80,8 @@ impl ProviderMarket {
     }
 
     async fn dispatch_events(&self, subscription_id: &str, events: &Vec<ProviderEvent>) {
+        info!("Collected {} events. Processing...", events.len());
+
         for event in events.iter() {
             if let Err(error) = self.dispatch_event(subscription_id, event).await {
                 error!("Error processing event: {}, subscription_id: {}.", error, subscription_id);
@@ -113,6 +115,7 @@ impl ProviderMarket {
         match response {
             Ok(action) => {
                 match action {
+                    ProposalResponse::AcceptProposal => self.accept_proposal(subscription_id, &proposal).await?,
                     ProposalResponse::CounterProposal{proposal} => self.counter_proposal(subscription_id, proposal).await?,
                     ProposalResponse::IgnoreProposal => info!("Ignoring proposal {}.", proposal.id),
                     ProposalResponse::RejectProposal => self.reject_proposal(subscription_id, &proposal).await?
@@ -139,6 +142,15 @@ impl ProviderMarket {
     // =========================================== //
     // Market internals - proposals and agreements reactions
     // =========================================== //
+
+    async fn accept_proposal(&self, subscription_id: &str, proposal: &AgreementProposal) -> Result<()> {
+        info!("Accepting proposal [{}] without changes.", proposal.id);
+
+        // Note: Provider can't create agreement - only requestor can. We can accept
+        // proposal, by resending the same offer as we got from requestor.
+        self.api.provider().create_proposal(&proposal.offer, subscription_id, &proposal.id).await?;
+        Ok(())
+    }
 
     async fn counter_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
         info!("Sending counter offer to proposal [{}]", proposal.id);
