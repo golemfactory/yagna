@@ -1,7 +1,6 @@
 use futures::lock::Mutex;
 use futures::prelude::*;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 /// Identity service
 use ya_core_model::ethaddr::NodeId;
@@ -14,33 +13,53 @@ use crate::dao::identity::IdentityDao;
 use crate::db::models::Identity;
 use chrono::Utc;
 use ethsign::KeyFile;
-use std::convert::TryInto;
+use std::convert::{TryInto, identity};
 use ya_persistence::executor::DbExecutor;
-
-const KEYS_SUBDIR: &str = "keys";
+use crate::dao::appkey::DaoError;
+use crate::service::id_key::IdentityKey;
 
 mod appkey;
 mod id_key;
 
 struct IdentityService {
+    default_key : NodeId,
     ids: HashMap<NodeId, id_key::IdentityKey>,
     alias_to_id: HashMap<String, NodeId>,
     db: DbExecutor,
 }
 
-impl Into<model::IdentityInfo> for &id_key::IdentityKey {
-    fn into(self) -> IdentityInfo {
+impl IdentityService {
+
+    fn to_info(&self, key : &id_key::IdentityKey) -> model::IdentityInfo {
+        let node_id = key.id();
+        let is_default = self.default_key == node_id;
         model::IdentityInfo {
-            alias: self.alias().map(ToOwned::to_owned),
-            node_id: self.id(),
-            is_locked: self.is_locked(),
+            alias: key.alias().map(ToOwned::to_owned),
+            node_id,
+            is_locked: key.is_locked(),
+            is_default
         }
     }
-}
 
-impl IdentityService {
     pub async fn from_db(db: DbExecutor) -> anyhow::Result<Self> {
-        crate::dao::init(&db);
+        crate::dao::init(&db)?;
+
+        let default_key = db.as_dao::<IdentityDao>().init_default_key(|| {
+            let key : IdentityKey = id_key::generate_new(None, "".into()).into();
+            let new_identity = Identity {
+                identity_id: key.id(),
+                key_file_json: key
+                    .to_key_file()
+                    .map_err(|e| DaoError::internal(e))?,
+                is_default: true,
+                is_deleted: false,
+                alias:None,
+                note: None,
+                created_date: Utc::now().naive_utc(),
+            };
+
+            Ok(new_identity)
+        }).await?.identity_id;
 
         let mut ids: HashMap<NodeId, _> = Default::default();
         let mut alias_to_id: HashMap<String, _> = Default::default();
@@ -54,6 +73,7 @@ impl IdentityService {
         }
 
         Ok(IdentityService {
+            default_key,
             db,
             ids,
             alias_to_id,
@@ -69,11 +89,15 @@ impl IdentityService {
             None => return Ok(None),
             Some(id) => id,
         };
-        Ok(Some(id.into()))
+        Ok(Some(self.to_info(id)))
     }
 
     pub fn list_ids(&self) -> Result<Vec<model::IdentityInfo>, model::Error> {
-        Ok(self.ids.values().map(Into::into).collect())
+        Ok(self.ids.values()
+            .map(|id_key| {
+                self.to_info(id_key)
+            })
+            .collect())
     }
 
     pub async fn create_identity(
@@ -100,7 +124,7 @@ impl IdentityService {
             .await
             .map_err(|e| model::Error::InternalErr(e.to_string()))?;
 
-        let output = (&key).into();
+        let output = self.to_info(&key);
 
         if let Some(alias) = alias {
             let _ = self.alias_to_id.insert(alias, key.id());
@@ -110,9 +134,59 @@ impl IdentityService {
         Ok(output)
     }
 
+    pub async fn update_identity(&mut self, update : model::Update) -> Result<model::IdentityInfo, model::Error> {
+        let node_id = update.node_id;
+        let key = match self.ids.get_mut(&node_id) {
+            Some(v) => v,
+            None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone())))
+        };
+        let update_alias = update.alias.clone();
+        if let Some(new_alias) = update.alias {
+            if self.alias_to_id.contains_key(&new_alias) {
+                return Err(model::Error::AlreadyExists)
+            }
+            if let Some(old_alias) = key.replace_alias(Some(new_alias.clone())) {
+                let _ = self.alias_to_id.remove(&old_alias);
+            }
+            self.alias_to_id.insert(new_alias, key.id());
+        }
+        let prev_default = self.default_key;
+        let set_default = update.set_default;
+        if update.set_default {
+            self.default_key = key.id();
+        }
+
+        self.db.with_transaction(move |conn| {
+            use diesel::prelude::*;
+            use crate::db::schema::identity::dsl::*;
+
+            if update_alias.is_some() {
+                let _ = diesel::update(identity.filter(identity_id.eq(&node_id)))
+                    .set(alias.eq(&update_alias.unwrap()))
+                    .execute(conn)?;
+            }
+            if set_default && prev_default != node_id {
+                diesel::update(identity.filter(identity_id.eq(&prev_default)))
+                    .set(is_default.eq(false))
+                    .execute(conn)?;
+                diesel::update(identity.filter(identity_id.eq(&node_id)))
+                    .set(is_default.eq(true))
+                    .execute(conn)?;
+            }
+            Ok::<_, DaoError>(())
+        }).await.map_err(model::Error::new_err_msg)?;
+
+        Ok(model::IdentityInfo {
+            alias: key.alias().map(ToOwned::to_owned),
+            node_id,
+            is_locked: key.is_locked(),
+            is_default: self.default_key == node_id
+        })
+    }
+
     fn bind_service(me: Arc<Mutex<Self>>) {
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |list: model::List| {
+        let _ = bus::bind(model::BUS_ID, move |_list: model::List| {
             let this = this.clone();
             async move { this.lock().await.list_ids() }
         });
@@ -131,19 +205,25 @@ impl IdentityService {
             let this = this.clone();
             async move { this.lock().await.create_identity(create.alias).await }
         });
+
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |update : model::Update| {
+            let this = this.clone();
+            async move {
+                this.lock().await.update_identity(update).await
+            }
+        });
     }
 }
 
 pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     log::info!("activating identity service");
+    log::debug!("loading default identity");
+
     let service = Arc::new(Mutex::new(IdentityService::from_db(db.clone()).await?));
     IdentityService::bind_service(service);
     log::info!("identity service activated");
 
     appkey::activate(db).await?;
     Ok(())
-}
-
-fn key_path(keys_path: &Path, alias: &str) -> PathBuf {
-    keys_path.join(alias).with_extension("json")
 }

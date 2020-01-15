@@ -1,6 +1,5 @@
 use structopt::StructOpt;
 use ya_identity::cli::AppKeyCommand;
-use ya_persistence::executor::DbExecutor;
 use ya_service_api::CliCtx;
 
 #[derive(StructOpt)]

@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use tokio::task;
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{AsDao, ConnType, PoolType};
+use std::process::id;
 
 type Result<T> = std::result::Result<T, super::Error>;
 
@@ -65,9 +66,28 @@ impl<'c> IdentityDao<'c> {
         use crate::db::schema::identity::dsl::*;
         self.with_connection(|conn| {
             Ok(identity
-                .filter(is_default.eq(false))
+                .filter(is_deleted.eq(false))
                 .load::<Identity>(conn)?)
         })
         .await
     }
+
+    pub async fn init_default_key<KeyGenerator : Send + 'static + FnOnce() -> Result<Identity>>(&self, generator : KeyGenerator) -> Result<Identity> {
+        use crate::db::schema::identity::dsl::*;
+
+        self.with_transaction(move |conn| {
+            if let Some(id) = identity.filter(is_default.eq(true))
+                .get_result::<Identity>(conn)
+                .optional()? {
+                return Ok(id)
+            }
+            let new_identity = generator()?;
+            diesel::insert_into(s::identity::table)
+                .values(&new_identity)
+                .execute(conn)?;
+
+            Ok(new_identity)
+        }).await
+    }
+
 }

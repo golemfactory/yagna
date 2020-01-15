@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::dao::identity::Identity;
 use crate::dao::Error;
 use ethsign::keyfile::Bytes;
@@ -22,6 +24,10 @@ impl IdentityKey {
     #[inline]
     pub fn alias(&self) -> Option<&str> {
         self.alias.as_ref().map(|s| s.as_ref())
+    }
+
+    pub fn replace_alias(&mut self, new_alias : Option<String>) -> Option<String> {
+        std::mem::replace(&mut self.alias, new_alias)
     }
 
     pub fn to_key_file(&self) -> Result<String, serde_json::Error> {

@@ -12,6 +12,8 @@ pub enum Error {
     Init(String),
     #[error("given alias or key already exists")]
     AlreadyExists,
+    #[error("node {0:?} not found")]
+    NodeNotFound(Box<NodeId>),
     #[error("{0}")]
     InternalErr(String),
 }
@@ -37,6 +39,7 @@ pub struct IdentityInfo {
     pub alias: Option<String>,
     pub node_id: NodeId,
     pub is_locked: bool,
+    pub is_default : bool
 }
 
 impl RpcMessage for List {
@@ -68,5 +71,42 @@ pub enum Get {
 impl RpcMessage for Get {
     const ID: &'static str = "Get";
     type Item = Option<IdentityInfo>;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct Update {
+    pub node_id: NodeId,
+    pub alias : Option<String>,
+    pub set_default : bool,
+}
+
+impl Update {
+
+    pub fn with_id(node_id : NodeId) -> Self {
+        Self {
+            node_id,
+            alias: Default::default(),
+            set_default: Default::default()
+        }
+    }
+
+    pub fn with_alias(mut self, alias : impl Into<Option<String>>) -> Self {
+        self.alias = alias.into();
+        self
+    }
+
+    pub fn with_default(mut self, set_default : bool) -> Self {
+        self.set_default = set_default;
+        self
+    }
+
+}
+
+impl RpcMessage for Update {
+    const ID: &'static str = "Update";
+    type Item = IdentityInfo;
     type Error = Error;
 }
