@@ -2,10 +2,10 @@ use super::negotiator::{Negotiator, ProposalResponse, AgreementResponse};
 use super::mock_negotiator::{AcceptAllNegotiator};
 use crate::node_info::{NodeInfo};
 
-use ya_client::{market::{ApiClient, ProviderApi}, Result, Error};
-use ya_model::market::{ProviderEvent, Offer, AgreementProposal, Agreement, Proposal};
+use ya_client::{market::{ApiClient,}, Result};
+use ya_model::market::{ProviderEvent, Offer, AgreementProposal, Proposal};
 
-use futures::executor::block_on;
+use futures::future::join_all;
 use log::{info, warn, error};
 
 
@@ -103,8 +103,18 @@ impl ProviderMarket {
 
                 self.process_proposal(subscription_id, agreement_proposal).await?;
             },
-            ProviderEvent::NewAgreementEvent { agreement_id, .. } => {
-                unimplemented!()
+            ProviderEvent::NewAgreementEvent { agreement_id, demand, .. } => {
+
+                let agreement_id = &agreement_id.as_ref().unwrap();
+                let demand = demand.as_ref().unwrap();
+
+                info!("Got agreement [id={}].", agreement_id);
+
+                let agreement_proposal = self.api.provider()
+                    .get_proposal(subscription_id, demand.id)
+                    .await?;
+
+                self.process_agreement(subscription_id, agreement_proposal, &agreement_id).await?;
             }
         }
         Ok(())
@@ -126,13 +136,13 @@ impl ProviderMarket {
         Ok(())
     }
 
-    fn process_agreement(&self, subscription_id: &str, agreement: Agreement) {
+    async fn process_agreement(&self, subscription_id: &str, agreement: AgreementProposal, agreement_id: &str) {
         let response = self.negotiator.react_to_agreement(&agreement);
         match response {
             Ok(action) => {
                 match action {
-                    AgreementResponse::AcceptAgreement => self.accept_agreement(),
-                    AgreementResponse::RejectAgreement => self.reject_agreement(),
+                    AgreementResponse::ApproveAgreement => self.approve_agreement(subscription_id, agreement_id).await?,
+                    AgreementResponse::RejectAgreement => self.reject_agreement(subscription_id, agreement_id).await?,
                 }
             },
             Err(error) => error!("Negotiator error while processing agreement {}. Error: {}", agreement.proposal_id, error)
@@ -166,12 +176,18 @@ impl ProviderMarket {
         Ok(())
     }
 
-    fn accept_agreement(&self) {
-        unimplemented!()
+    async fn approve_agreement(&self, subscription_id: &str, agreement_id: &str) -> Result<()> {
+        info!("Accepting agreement [{}], subscription_id: {}.", agreement_id, subscription_id);
+
+        self.api.provider().approve_agreement(agreement_id).await?;
+        Ok(())
     }
 
-    fn reject_agreement(&self) {
-        unimplemented!()
+    async fn reject_agreement(&self, subscription_id: &str, agreement_id: &str) -> Result<()> {
+        info!("Rejecting agreement [{}], subscription_id: {}.", agreement_id, subscription_id);
+
+        self.api.provider().reject_agreement(agreement_id).await?;
+        Ok(())
     }
 }
 

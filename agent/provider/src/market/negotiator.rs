@@ -19,7 +19,7 @@ pub enum ProposalResponse {
 /// Response for requestor agreements.
 #[allow(dead_code)]
 pub enum AgreementResponse {
-    AcceptAgreement,
+    ApproveAgreement,
     RejectAgreement,
 }
 
@@ -30,5 +30,5 @@ pub trait Negotiator {
     fn create_offer(&self, node_info: &NodeInfo) -> Result< Offer >;
 
     fn react_to_proposal(&self, proposal: &AgreementProposal) -> Result<ProposalResponse>;
-    fn react_to_agreement(&self, agreement: &Agreement) -> Result<AgreementResponse>;
+    fn react_to_agreement(&self, agreement: &AgreementProposal) -> Result<AgreementResponse>;
 }
