@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 ya-core-model = { path = "../model/" }
-ya-service-bus = "0.1"
+ya-service-bus = "0.2"
 
 [dependencies.futures]
 package = "futures"

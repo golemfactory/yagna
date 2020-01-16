@@ -5,7 +5,6 @@ use ya_core_model::activity::ACTIVITY_SERVICE_ID;
 use ya_persistence::{executor::ConnType, models::Agreement};
 use ya_service_api::constants::NET_SERVICE_ID;
 
-
 pub mod control;
 pub mod state;
 

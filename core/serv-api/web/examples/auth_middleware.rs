@@ -6,7 +6,7 @@ use futures::TryFutureExt;
 use structopt::StructOpt;
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR_STR, YAGNA_HTTP_ADDR};
+use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR, YAGNA_HTTP_ADDR_STR};
 use ya_service_api_web::middleware::auth;
 use ya_service_bus::RpcEndpoint;
 
@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
             match cmd {
                 ClientCommand::CreateKey { name } => {
-                    let identity = bus::service(idm::IDENTITY_SERVICE_ID)
+                    let identity = bus::private_service(idm::IDENTITY_SERVICE_ID)
                         .send(idm::Get::ByDefault)
                         .await
                         .map_err(map_err)?
@@ -73,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
                         identity,
                     };
 
-                    let app_key = bus::service(model::APP_KEY_SERVICE_ID)
+                    let app_key = bus::private_service(model::APP_KEY_SERVICE_ID)
                         .send(create)
                         .await
                         .map_err(map_err)?

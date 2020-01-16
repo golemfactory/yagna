@@ -6,11 +6,11 @@ macro_rules! db_conn {
 }
 
 macro_rules! bind_gsb_method {
-    ($id:expr, $db_executor:expr, $method:ident) => {{
+    ($bind:ident, $id:expr, $db_executor:expr, $method:ident) => {{
         use ya_service_bus::typed as bus;
 
         let db_ = $db_executor.clone();
-        let _ = bus::bind(&$id, move |m| $method(db_.clone(), m));
+        let _ = bus::$bind(&$id, move |m| $method(db_.clone(), m));
     }};
 }
 
@@ -19,7 +19,7 @@ macro_rules! gsb_send {
         use ya_service_bus::actix_rpc;
         use $crate::timeout::IntoTimeoutFuture;
 
-        actix_rpc::service($uri)
+        actix_rpc::private_service($uri)
             .send($msg)
             .timeout($timeout)
             .map_err(Error::from)

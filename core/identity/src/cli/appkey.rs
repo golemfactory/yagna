@@ -38,7 +38,7 @@ impl AppKeyCommand {
                 let identity = if id.starts_with("0x") {
                     id.parse()?
                 } else {
-                    bus::service(idm::IDENTITY_SERVICE_ID)
+                    bus::private_service(idm::IDENTITY_SERVICE_ID)
                         .send(idm::Get::ByAlias(id.into()))
                         .await
                         .map_err(anyhow::Error::msg)?
@@ -52,7 +52,7 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity,
                 };
-                let key = bus::service(&model::APP_KEY_SERVICE_ID)
+                let key = bus::private_service(&model::APP_KEY_SERVICE_ID)
                     .send(create)
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -64,7 +64,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::service(&model::APP_KEY_SERVICE_ID)
+                let _ = bus::private_service(&model::APP_KEY_SERVICE_ID)
                     .send(remove)
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -77,11 +77,12 @@ impl AppKeyCommand {
                     page: page.clone(),
                     per_page: per_page.clone(),
                 };
-                let result: (Vec<model::AppKey>, u32) = bus::service(&model::APP_KEY_SERVICE_ID)
-                    .send(list)
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                    .unwrap();
+                let result: (Vec<model::AppKey>, u32) =
+                    bus::private_service(&model::APP_KEY_SERVICE_ID)
+                        .send(list)
+                        .await
+                        .map_err(anyhow::Error::msg)?
+                        .unwrap();
 
                 Ok(ResponseTable {
                     columns: vec![

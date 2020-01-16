@@ -11,7 +11,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let dbx = db.clone();
 
     // Create a new application key entry
-    let _ = bus::bind(&model::APP_KEY_SERVICE_ID, move |create: model::Create| {
+    let _ = bus::bind_private(&model::APP_KEY_SERVICE_ID, move |create: model::Create| {
         let key = Uuid::new_v4().to_simple().to_string();
         let db = dbx.clone();
         async move {
@@ -26,7 +26,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
 
     let dbx = db.clone();
     // Retrieve an application key entry based on the key itself
-    let _ = bus::bind(&model::APP_KEY_SERVICE_ID, move |get: model::Get| {
+    let _ = bus::bind_private(&model::APP_KEY_SERVICE_ID, move |get: model::Get| {
         let db = dbx.clone();
         async move {
             let (appkey, role) = db
@@ -45,7 +45,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     });
 
     let dbx = db.clone();
-    let _ = bus::bind(&model::APP_KEY_SERVICE_ID, move |list: model::List| {
+    let _ = bus::bind_private(&model::APP_KEY_SERVICE_ID, move |list: model::List| {
         let db = dbx.clone();
 
         async move {
@@ -72,7 +72,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     });
 
     let dbx = db.clone();
-    let _ = bus::bind(&model::APP_KEY_SERVICE_ID, move |rm: model::Remove| {
+    let _ = bus::bind_private(&model::APP_KEY_SERVICE_ID, move |rm: model::Remove| {
         let db = dbx.clone();
         async move {
             db.as_dao::<AppKeyDao>()

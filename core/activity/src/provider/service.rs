@@ -15,12 +15,25 @@ use ya_persistence::executor::DbExecutor;
 pub fn bind_gsb(db: Arc<Mutex<DbExecutor>>) {
     log::info!("activating activity provider service");
 
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, create_activity_gsb);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, destroy_activity_gsb);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, get_activity_state_gsb);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, set_activity_state_gsb);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, get_activity_usage_gsb);
-    bind_gsb_method!(ACTIVITY_SERVICE_ID, db, set_activity_usage_gsb);
+    // public for remote requestors interactions
+    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, create_activity_gsb);
+    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, destroy_activity_gsb);
+    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, get_activity_state_gsb);
+    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, get_activity_usage_gsb);
+
+    // local for ExeUnit interactions
+    bind_gsb_method!(
+        bind_private,
+        ACTIVITY_SERVICE_ID,
+        db,
+        set_activity_state_gsb
+    );
+    bind_gsb_method!(
+        bind_private,
+        ACTIVITY_SERVICE_ID,
+        db,
+        set_activity_usage_gsb
+    );
 
     log::info!("activity provider service activated");
 }

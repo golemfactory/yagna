@@ -25,7 +25,7 @@ impl ValueResolver for AppKeyResolver {
     ) -> Pin<Box<dyn Future<Output = Result<Option<Self::Value>, Self::Error>> + 'a>> {
         let key = key.clone();
         Box::pin(async move {
-            let resp = actix_rpc::service(APP_KEY_SERVICE_ID)
+            let resp = actix_rpc::private_service(APP_KEY_SERVICE_ID)
                 .send(Get { key })
                 .map_err(|e| ErrorInternalServerError(format!("{}", e)))
                 .await?;

@@ -14,7 +14,7 @@ with-diesel=['diesel']
 
 [dependencies]
 ya-model = "0.1"
-ya-service-bus = "0.1"
+ya-service-bus = "0.2"
 ya-service-api = "0.1"
 
 chrono = { version = "0.4", features = ["serde"] }
