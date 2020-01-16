@@ -87,7 +87,7 @@ fn main() -> Result<()> {
         }
         Opt::Gsb { service_id } => {
             let sys = System::new("dummy");
-            let worker = Worker::default().start();
+            let worker = Worker::new(&service_id).start();
             let dispatcher = Dispatcher::new(worker).start();
             let _bus = BusEntrypoint::<Command, _, _>::new(&service_id, dispatcher).start();
             sys.run()?;
