@@ -1,9 +1,7 @@
 use crate::dao::AppKeyDao;
-use crate::dao::Error;
-use futures::lock::Mutex;
-use std::sync::Arc;
+
 use uuid::Uuid;
-use ya_core_model::appkey as model;
+
 use ya_persistence::executor::DbExecutor;
 
 pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {

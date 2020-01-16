@@ -35,7 +35,7 @@ impl std::str::FromStr for NodeOrAlias {
         Ok(if s.starts_with("0x") {
             match NodeId::from_str(s) {
                 Ok(node_id) => NodeOrAlias::Node(node_id),
-                Err(e) => NodeOrAlias::Alias(s.to_owned()),
+                Err(_e) => NodeOrAlias::Alias(s.to_owned()),
             }
         } else {
             NodeOrAlias::Alias(s.to_owned())
@@ -135,7 +135,7 @@ pub enum IdentityCommand {
 }
 
 impl IdentityCommand {
-    pub async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             IdentityCommand::List { .. } => {
                 let mut identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)

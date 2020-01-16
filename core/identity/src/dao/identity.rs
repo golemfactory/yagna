@@ -1,9 +1,9 @@
 pub use crate::db::models::Identity;
 use crate::db::schema as s;
 use diesel::prelude::*;
-use std::process::id;
+
 use tokio::task;
-use ya_core_model::ethaddr::NodeId;
+
 use ya_persistence::executor::{AsDao, ConnType, PoolType};
 
 type Result<T> = std::result::Result<T, super::Error>;

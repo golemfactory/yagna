@@ -19,8 +19,7 @@ pub struct IdentityService {
     db: DbExecutor,
 }
 
-
-fn to_info(default_key : &NodeId, key: &IdentityKey) -> model::IdentityInfo {
+fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
     let node_id = key.id();
     let is_default = *default_key == node_id;
     model::IdentityInfo {
@@ -32,7 +31,6 @@ fn to_info(default_key : &NodeId, key: &IdentityKey) -> model::IdentityInfo {
 }
 
 impl IdentityService {
-
     pub async fn from_db(db: DbExecutor) -> anyhow::Result<Self> {
         crate::dao::init(&db)?;
 
@@ -169,7 +167,7 @@ impl IdentityService {
             .map_err(|e| model::Error::InternalErr(e.to_string()))?;
 
         let key = IdentityKey::try_from(new_identity).map_err(model::Error::new_err_msg)?;
-        let output = to_info(&self.default_key, &key);;
+        let output = to_info(&self.default_key, &key);
 
         if let Some(alias) = alias {
             let _ = self.alias_to_id.insert(alias, key.id());
@@ -178,14 +176,14 @@ impl IdentityService {
         Ok(output)
     }
 
-    fn get_key_by_id(&mut self, node_id : &NodeId) -> Result<&mut IdentityKey, model::Error> {
+    fn get_key_by_id(&mut self, node_id: &NodeId) -> Result<&mut IdentityKey, model::Error> {
         Ok(match self.ids.get_mut(node_id) {
             Some(v) => v,
             None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone()))),
         })
     }
 
-    pub async fn lock(&mut self, node_id : NodeId) -> Result<model::IdentityInfo, model::Error> {
+    pub async fn lock(&mut self, node_id: NodeId) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
         key.lock();
@@ -193,14 +191,17 @@ impl IdentityService {
         Ok(output)
     }
 
-    pub async fn unlock(&mut self, node_id : NodeId, password : Protected) -> Result<model::IdentityInfo, model::Error> {
+    pub async fn unlock(
+        &mut self,
+        node_id: NodeId,
+        password: Protected,
+    ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
         key.unlock(password).map_err(model::Error::new_err_msg)?;
         let output = to_info(&default_key, key);
         Ok(output)
     }
-
 
     pub async fn update_identity(
         &mut self,
@@ -316,9 +317,12 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |unlock: model::Unlock| {
             let this = this.clone();
-            async move { this.lock().await.unlock(unlock.node_id, unlock.password.into()).await }
+            async move {
+                this.lock()
+                    .await
+                    .unlock(unlock.node_id, unlock.password.into())
+                    .await
+            }
         });
-
-
     }
 }

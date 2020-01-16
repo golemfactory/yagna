@@ -8,7 +8,7 @@ use r2d2;
 use std::fmt::Display;
 use thiserror::Error;
 use ya_core_model::appkey as model;
-use ya_persistence::executor::{ConnType, DbExecutor};
+use ya_persistence::executor::DbExecutor;
 
 #[derive(Error, Debug)]
 pub enum Error {

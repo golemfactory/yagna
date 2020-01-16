@@ -1,18 +1,7 @@
 use futures::lock::Mutex;
-use futures::prelude::*;
-use std::collections::HashMap;
+
 use std::sync::Arc;
 /// Identity service
-use ya_core_model::ethaddr::NodeId;
-use ya_core_model::identity::IdentityInfo;
-use ya_service_bus::actix_rpc::bind;
-
-use crate::dao::appkey::DaoError;
-use crate::dao::identity::IdentityDao;
-use crate::db::models::Identity;
-use chrono::Utc;
-use ethsign::KeyFile;
-use std::convert::{identity, TryInto};
 use ya_persistence::executor::DbExecutor;
 
 mod appkey;

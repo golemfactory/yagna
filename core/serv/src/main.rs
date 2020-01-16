@@ -71,12 +71,8 @@ impl CliArgs {
 
     pub fn log_level(&self) -> String {
         match self.command {
-            CliCommand::Service(ServiceCommand::Run) => {
-                self.log_level.clone()
-            }
-            _  => {
-                "error".to_string()
-            }
+            CliCommand::Service(ServiceCommand::Run) => self.log_level.clone(),
+            _ => "error".to_string(),
         }
     }
 

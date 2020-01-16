@@ -2,7 +2,7 @@ pub use crate::dao::Error as DaoError;
 pub use crate::db::models::{AppKey, Role};
 use chrono::Local;
 use diesel::prelude::*;
-use diesel::r2d2::ConnectionManager;
+
 use diesel::{Connection, ExpressionMethods, RunQueryDsl};
 use std::cmp::max;
 use ya_core_model::ethaddr::NodeId;
