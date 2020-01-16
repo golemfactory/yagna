@@ -3,34 +3,28 @@ use chrono::Duration;
 use std::fmt;
 
 pub struct Interval {
-    seconds: u32,
-    minutes: u32,
-    hours: u32,
     days: u32,
+    hours: u32,
+    minutes: u32,
+    seconds: u32,
 }
 
-pub trait NextTime {
-    fn next<Tz: TimeZone>(&self, from: DateTime<Tz>) -> DateTime<Tz>;
-}
+impl Interval {
+    pub fn new(days: u32, hours: u32, minutes: u32, seconds: u32) -> Interval {
+        Interval {
+            days: days,
+            hours: hours,
+            minutes: minutes,
+            seconds: seconds,
+        }
+    }
 
-impl NextTime for Interval {
     fn next<Tz: TimeZone>(&self, from: DateTime<Tz>) -> DateTime<Tz> {
         from.clone()
             + Duration::days(i64::from(self.days))
             + Duration::hours(i64::from(self.hours))
             + Duration::minutes(i64::from(self.minutes))
             + Duration::seconds(i64::from(self.seconds))
-    }
-}
-
-impl Interval {
-    pub fn new(days: u32, hours: u32, minutes: u32, seconds: u32) -> Interval {
-        Interval {
-            seconds: seconds,
-            minutes: minutes,
-            hours: hours,
-            days: days,
-        }
     }
 }
 
@@ -42,9 +36,12 @@ pub struct Trigger {
 }
 
 impl Trigger {
-    pub fn new(name: String, start_from: DateTime<Local>, interval: Interval) -> Trigger {
+    pub fn new<T>(name: T, start_from: DateTime<Local>, interval: Interval) -> Trigger
+    where
+        T: Into<String>,
+    {
         Trigger {
-            name: name,
+            name: name.into(),
             interval: interval,
             next_run: start_from,
             last_run: None,
@@ -77,8 +74,6 @@ mod tests {
     use super::*;
     use chrono::Duration;
     use chrono::Local;
-    use std::thread;
-    use std::time;
 
     #[test]
     fn test_interval_next_time() {
@@ -112,8 +107,7 @@ mod tests {
     fn test_trigger_is_ready() {
         let seconds = 1;
         let interval = Interval::new(0, 0, 0, seconds);
-        let trigger = Trigger::new(String::from("trigger1"), Local::now(), interval);
-        thread::sleep(time::Duration::from_secs(u64::from(seconds + 1)));
+        let trigger = Trigger::new("trigger1", Local::now(), interval);
         assert!(trigger.is_ready())
     }
 
@@ -121,11 +115,7 @@ mod tests {
     fn test_trigger_not_ready() {
         let days = 1;
         let interval = Interval::new(days, 0, 0, 0);
-        let trigger = Trigger::new(
-            String::from("trigger1"),
-            Local::now() + Duration::days(1),
-            interval,
-        );
+        let trigger = Trigger::new("trigger1", Local::now() + Duration::days(1), interval);
         assert!(!trigger.is_ready());
     }
 
@@ -134,7 +124,7 @@ mod tests {
         let days = 1;
         let now = Local::now();
         let interval = Interval::new(days, 0, 0, 0);
-        let mut trigger = Trigger::new(String::from("trigger1"), now.clone(), interval);
+        let mut trigger = Trigger::new("trigger1", now.clone(), interval);
         trigger.tick();
         assert_ne!(trigger.last_run, None);
         assert_eq!(trigger.next_run, now + Duration::days(i64::from(days)));

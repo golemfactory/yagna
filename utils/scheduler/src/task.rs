@@ -6,12 +6,13 @@ pub struct Task {
 }
 
 impl Task {
-    pub fn new<F>(name: String, task: F) -> Task
+    pub fn new<T, F>(name: T, task: F) -> Task
     where
+        T: Into<String>,
         F: 'static + FnMut() + Sync + Send,
     {
         Task {
-            name: name,
+            name: name.into(),
             task: Box::new(task),
         }
     }

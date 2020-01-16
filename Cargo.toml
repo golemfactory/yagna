@@ -24,7 +24,7 @@ members = [
     "service-bus/proto",
     "service-bus/router",
     "service-bus/util",
-    "scheduler"
+    "utils/scheduler"
 ]
 
 [patch.crates-io]
