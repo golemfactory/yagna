@@ -6,7 +6,6 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-appkey = "0.1"
 ya-identity = "0.1"
 ya-persistence = "0.1"
 ya-sb-router = "0.1"

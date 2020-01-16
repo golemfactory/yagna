@@ -12,6 +12,9 @@ diesel_migrations = "1.4"
 dotenv = "0.14"
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 r2d2 = "0.8"
+thiserror = "1.0.9"
+tokio={version="0.2", features=["blocking"]}
+log="0.4.8"
 
 
 [target.'cfg(target_env = "msvc")'.build-dependencies]

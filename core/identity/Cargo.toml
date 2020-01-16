@@ -6,14 +6,33 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-core-model = { version = "0.1", features = ["identity"] }
+ya-core-model = { version = "0.1", features = ["identity", "appkey"] }
 ya-service-api = "0.1"
 ya-service-bus = "0.1"
-
 anyhow = "1.0"
-ethkey = "0.3"
+ethsign = "0.7.3"
 futures = "0.3"
 log = "0.4"
 serde_json = "1.0"
 structopt = "0.3"
+appdirs = "0.2"
+tokio={version="0.2", features=["fs", "blocking"]}
+diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
+r2d2 = "0.8.8"
+diesel_migrations = "1.4"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+ya-persistence = "0.1"
+rand="0.7.3"
+promptly = "0.1.5"
+rpassword = "3.0.2"
 
+[dependencies.uuid]
+version = "0.7"
+features = ["v4"]
+
+[dev-dependencies]
+actix-rt = "1.0"
+futures = "0.3"
+env_logger="0.7.1"
+ya-sb-router="0.1"

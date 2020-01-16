@@ -1,16 +1,13 @@
 use actix_web::{get, middleware, App, HttpServer};
 use anyhow::{Context, Result};
-use futures::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
     path::PathBuf,
-    sync::Arc,
 };
 use structopt::{clap, StructOpt};
 
-use ya_appkey::error::Error;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 
@@ -73,7 +70,10 @@ impl CliArgs {
     }
 
     pub fn log_level(&self) -> String {
-        self.log_level.clone()
+        match self.command {
+            CliCommand::Service(ServiceCommand::Run) => self.log_level.clone(),
+            _ => "error".to_string(),
+        }
     }
 
     pub async fn run_command(self) -> Result<()> {
@@ -104,7 +104,7 @@ impl TryFrom<&CliArgs> for CliCtx {
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     /// AppKey management
-    AppKey(ya_appkey::cli::AppKeyCommand),
+    AppKey(ya_identity::cli::AppKeyCommand),
 
     /// Identity management
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
@@ -152,9 +152,11 @@ impl ServiceCommand {
                 ya_sb_router::bind_router(ctx.router_address()?)
                     .await
                     .context("binding service bus router")?;
+
+                let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
+
                 // FIXME: gsb is not binding services remotely; just random one
-                ya_identity::service::activate();
-                ya_appkey::service::bind_gsb(DB_EXECUTOR.clone());
+                ya_identity::service::activate(&db).await?;
 
                 HttpServer::new(|| {
                     App::new()
@@ -180,15 +182,6 @@ impl ServiceCommand {
     }
 }
 
-// TODO: move this to app-key crate (?)
-lazy_static::lazy_static! {
-    pub static ref DB_EXECUTOR: Arc<Mutex<DbExecutor<Error>>> = {
-        let db_file_path = "core/appkey/appkey.sqlite3";
-        let db_executor = DbExecutor::new(db_file_path).unwrap();
-        Arc::new(Mutex::new(db_executor))
-    };
-}
-
 #[get("/")]
 async fn index() -> String {
     format!("Hello {}!", clap::crate_description!())
@@ -197,6 +190,7 @@ async fn index() -> String {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     let args: CliArgs = CliArgs::from_args();
+
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
     args.run_command().await

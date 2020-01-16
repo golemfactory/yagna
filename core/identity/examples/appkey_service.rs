@@ -1,9 +1,5 @@
-use futures::lock::Mutex;
-use std::sync::Arc;
 use structopt::StructOpt;
-
-use ya_appkey::{cli::AppKeyCommand, service};
-use ya_persistence::executor::DbExecutor;
+use ya_identity::cli::AppKeyCommand;
 use ya_service_api::CliCtx;
 
 #[derive(StructOpt)]
@@ -21,7 +17,7 @@ async fn main() -> anyhow::Result<()> {
     match args {
         Args::Server => {
             ya_sb_router::bind_router("127.0.0.1:8245".parse()?).await?;
-            service::bind_gsb(Arc::new(Mutex::new(DbExecutor::from_env()?)));
+            //service::bind_gsb(Arc::new(Mutex::new(DbExecutor::from_env()?)));
             actix_rt::signal::ctrl_c().await?;
             log::info!("SIGINT received, exiting");
         }

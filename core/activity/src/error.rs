@@ -23,6 +23,8 @@ pub enum Error {
     Forbidden,
     #[error("Timeout")]
     Timeout,
+    #[error("task: {0}")]
+    RuntimeError(#[from] tokio::task::JoinError),
 }
 
 macro_rules! service_error {
@@ -37,6 +39,16 @@ macro_rules! internal_error_http_response {
             message: Some(format!("{:?}", $err)),
         })
     };
+}
+
+impl From<ya_persistence::executor::Error> for Error {
+    fn from(e: ya_persistence::executor::Error) -> Self {
+        match e {
+            ya_persistence::executor::Error::Diesel(e) => Error::from(e),
+            ya_persistence::executor::Error::Pool(e) => Error::from(e),
+            ya_persistence::executor::Error::RuntimeError(e) => Error::from(e),
+        }
+    }
 }
 
 impl Into<actix_web::HttpResponse> for Error {
@@ -76,6 +88,7 @@ impl From<Error> for RpcMessageError {
             Error::Db(err) => service_error!(err),
             Error::Dao(err) => service_error!(err),
             Error::Gsb(err) => service_error!(err),
+            Error::RuntimeError(err) => service_error!(err),
             Error::Serialization(err) => service_error!(err),
             Error::Service(err) => RpcMessageError::Activity(err),
             Error::BadRequest(err) => RpcMessageError::BadRequest(err),
@@ -92,6 +105,7 @@ impl actix_web::error::ResponseError for Error {
             Error::Db(err) => internal_error_http_response!(err),
             Error::Dao(err) => internal_error_http_response!(err),
             Error::Gsb(err) => internal_error_http_response!(err),
+            Error::RuntimeError(err) => internal_error_http_response!(err),
             Error::Serialization(err) => internal_error_http_response!(err),
             Error::Service(err) => internal_error_http_response!(err),
             Error::BadRequest(err) => actix_web::HttpResponse::BadRequest()
