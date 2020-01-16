@@ -1,7 +1,9 @@
-use actix_rt::Runtime;
-use std::sync::Arc;
+use std::{env, sync::Arc};
+
 use ya_client::{
-    activity::{ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, API_ROOT},
+    activity::{
+        ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, ACTIVITY_API,
+    },
     web::WebClient,
     Result,
 };
@@ -9,7 +11,7 @@ use ya_model::activity::{activity_state::State, ActivityState, ActivityUsage, Ex
 
 fn new_client() -> Result<Arc<WebClient>> {
     WebClient::builder()
-        .api_root(API_ROOT)
+        .api_root(ACTIVITY_API)
         .build()
         .map(Arc::new)
 }
@@ -50,7 +52,7 @@ async fn requestor_start(agreement_id: &str) -> Result<String> {
     let client = RequestorControlApiClient::new(new_client()?);
 
     println!("[+] Activity, agreement {}", agreement_id);
-    let activity_id = client.create_activity(agreement_id).await.unwrap();
+    let activity_id = client.create_activity(agreement_id).await?;
     println!("[<] Activity: {}", activity_id);
 
     Ok(activity_id)
@@ -60,7 +62,7 @@ async fn requestor_stop(activity_id: &str) -> Result<()> {
     let client = RequestorControlApiClient::new(new_client()?);
 
     println!("[-] Activity {}", activity_id);
-    client.destroy_activity(&activity_id).await.unwrap();
+    client.destroy_activity(&activity_id).await?;
     println!("[<] Destroyed");
     Ok(())
 }
@@ -70,14 +72,13 @@ async fn requestor_exec(activity_id: &str) -> Result<()> {
 
     let exe_request = ExeScriptRequest::new("STOP".to_string());
     println!("[+] Batch exe script:{:?}", exe_request);
-    let batch_id = client.exec(exe_request, &activity_id).await.unwrap();
+    let batch_id = client.exec(exe_request, &activity_id).await?;
     println!("[<] Batch id: {}", batch_id);
 
     println!("[?] Batch results for activity {}", activity_id);
     let results = client
         .get_exec_batch_results(&activity_id, &batch_id, Some(3), Some(10i32))
-        .await
-        .unwrap();
+        .await?;
     println!("[<] Batch results: {:?}", results);
     Ok(())
 }
@@ -86,15 +87,15 @@ async fn requestor_state(activity_id: &str) -> Result<()> {
     let client = RequestorStateApiClient::new(new_client()?);
 
     println!("[?] State for activity {}", activity_id);
-    let state = client.get_state(activity_id).await.unwrap();
+    let state = client.get_state(activity_id).await?;
     println!("[<] State: {:?}", state);
 
     println!("[?] Usage vector for activity {}", activity_id);
-    let usage = client.get_usage(activity_id).await.unwrap();
+    let usage = client.get_usage(activity_id).await?;
     println!("[<] Usage vector: {:?}", usage);
 
     println!("[?] Command state for activity {}", activity_id);
-    let command_state = client.get_running_command(activity_id).await.unwrap();
+    let command_state = client.get_running_command(activity_id).await?;
     println!("[<] Command state: {:?}", command_state);
     Ok(())
 }
@@ -104,9 +105,11 @@ async fn interact() -> Result<()> {
     provider("activity_id").await
 }
 
-fn main() {
-    Runtime::new()
-        .expect("Cannot create runtime")
-        .block_on(interact())
-        .expect("Runtime error");
+#[actix_rt::main]
+async fn main() -> Result<()> {
+    println!("\nrun this example with RUST_LOG=info to see REST calls\n");
+    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("warn".into()));
+    env_logger::init();
+
+    interact().await
 }

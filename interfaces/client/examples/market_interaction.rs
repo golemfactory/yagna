@@ -150,6 +150,7 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
     let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
     let offer = offer.as_ref().unwrap();
 
+    // this is not needed in regular flow; just to illustrate possibility
     let proposal = client
         .get_proposal(&requestor_subscription_id, &offer.id)
         .await?;
@@ -211,11 +212,11 @@ async fn interact() -> Result<()> {
     .map(|_| ())
 }
 
-fn main() {
+#[actix_rt::main]
+async fn main() -> Result<()> {
     println!("\nrun this example with RUST_LOG=info to see REST calls\n");
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("warn".into()));
+    env_logger::init();
 
-    actix_rt::System::new("test")
-        .block_on(interact())
-        .unwrap_or_else(|e| println!("{:#?}", e));
+    interact().await
 }

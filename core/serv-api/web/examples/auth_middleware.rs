@@ -6,15 +6,13 @@ use futures::TryFutureExt;
 use structopt::StructOpt;
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
+use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR_STR, YAGNA_HTTP_ADDR};
 use ya_service_api_web::middleware::auth;
 use ya_service_bus::RpcEndpoint;
 
-const ROUTER_ADDR: &str = "127.0.0.1:8245";
-const HTTP_ADDR: &str = "127.0.0.1:8080";
-
 async fn server() -> anyhow::Result<()> {
     let db = DbExecutor::new(":memory:")?;
-    ya_sb_router::bind_router(ROUTER_ADDR.parse()?).await?;
+    ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
     ya_identity::service::activate(&db).await?;
 
     HttpServer::new(move || {
@@ -26,7 +24,7 @@ async fn server() -> anyhow::Result<()> {
                 HttpResponse::Ok().body(body)
             })))
     })
-    .bind(HTTP_ADDR)?
+    .bind(*YAGNA_HTTP_ADDR)?
     .run()
     .await?;
 
@@ -61,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
             match cmd {
                 ClientCommand::CreateKey { name } => {
-                    let identity = bus::service(idm::BUS_ID)
+                    let identity = bus::service(idm::IDENTITY_SERVICE_ID)
                         .send(idm::Get::ByDefault)
                         .await
                         .map_err(map_err)?
@@ -85,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ClientCommand::Request { key } => {
                     let mut resp = Client::default()
-                        .get(format!("http://{}", HTTP_ADDR))
+                        .get(format!("http://{}", *YAGNA_HTTP_ADDR_STR))
                         .header(header::AUTHORIZATION, key)
                         .send()
                         .map_err(map_err)

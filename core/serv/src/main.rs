@@ -9,7 +9,10 @@ use std::{
 use structopt::{clap, StructOpt};
 
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api::{
+    constants::{YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
+    CliCtx, CommandOutput,
+};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -24,15 +27,16 @@ struct CliArgs {
     data_dir: Option<PathBuf>,
 
     /// Daemon address
-    #[structopt(short, long, default_value = "127.0.0.1")]
+    #[structopt(short, long, default_value = &*YAGNA_HOST, env = "YAGNA_HOST")]
     address: String,
 
     /// Daemon HTTP port
-    #[structopt(short = "p", long, default_value = "7465")]
+    #[structopt(short = "p", long, default_value = &*YAGNA_HTTP_PORT, env = "YAGNA_HTTP_PORT")]
     http_port: u16,
 
     /// Service bus router port
-    #[structopt(long, set = clap::ArgSettings::Global, default_value = "8245")]
+    #[structopt(long, default_value = &*YAGNA_BUS_PORT, env = "YAGNA_BUS_PORT")]
+    #[structopt(set = clap::ArgSettings::Global)]
     router_port: u16,
 
     /// Return results in JSON format
@@ -193,5 +197,6 @@ async fn main() -> Result<()> {
 
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
+
     args.run_command().await
 }

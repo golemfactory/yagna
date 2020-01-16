@@ -1,6 +1,8 @@
 //! Market API part of the Yagna API
-use crate::{web::WebClientBuilder, Result};
 use std::sync::Arc;
+
+use crate::{web::WebClientBuilder, Result};
+pub use ya_service_api::constants::MARKET_API;
 
 mod provider;
 pub use provider::ProviderApi;
@@ -13,12 +15,10 @@ pub struct ApiClient {
     requestor: RequestorApi,
 }
 
-pub const API_ROOT: &str = "/market-api/v1/";
-
 impl ApiClient {
     /// Constructs new `ApiClient`.
     pub fn new(client: WebClientBuilder) -> Result<Self> {
-        let client = Arc::new(client.api_root(API_ROOT).build()?);
+        let client = Arc::new(client.api_root(MARKET_API).build()?);
 
         Ok(ApiClient {
             provider: ProviderApi::new(&client),

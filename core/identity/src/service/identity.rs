@@ -261,12 +261,12 @@ impl IdentityService {
 
     pub fn bind_service(me: Arc<Mutex<Self>>) {
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |_list: model::List| {
+        let _ = bus::bind(model::IDENTITY_SERVICE_ID, move |_list: model::List| {
             let this = this.clone();
             async move { this.lock().await.list_ids() }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
+        let _ = bus::bind(model::IDENTITY_SERVICE_ID, move |get: model::Get| {
             let this = this.clone();
             async move {
                 match get {
@@ -278,7 +278,7 @@ impl IdentityService {
             }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| {
+        let _ = bus::bind(model::IDENTITY_SERVICE_ID, move |create: model::CreateGenerated| {
             let this = this.clone();
             async move {
                 if let Some(key_store) = create.from_keystore {
@@ -305,17 +305,17 @@ impl IdentityService {
         });
 
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |update: model::Update| {
+        let _ = bus::bind(model::IDENTITY_SERVICE_ID, move |update: model::Update| {
             let this = this.clone();
             async move { this.lock().await.update_identity(update).await }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |lock: model::Lock| {
+        let _ = bus::bind(model::IDENTITY_SERVICE_ID, move |lock: model::Lock| {
             let this = this.clone();
             async move { this.lock().await.lock(lock.node_id).await }
         });
         let this = me.clone();
-        let _ = bus::bind(model::BUS_ID, move |unlock: model::Unlock| {
+        let _ = bus::bind(model::IDENTITY_SERVICE_ID, move |unlock: model::Unlock| {
             let this = this.clone();
             async move {
                 this.lock()

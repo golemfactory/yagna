@@ -2,7 +2,7 @@ use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCoun
 use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao};
 use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
-use crate::ACTIVITY_SERVICE_URI;
+use crate::ACTIVITY_API;
 use actix_web::web;
 use futures::lock::Mutex;
 use futures::prelude::*;
@@ -18,7 +18,7 @@ pub fn web_scope(db: Arc<Mutex<DbExecutor>>) -> actix_web::Scope {
     let exec = web::post().to(impl_restful_handler!(exec, path, query, body));
     let batch = web::get().to(impl_restful_handler!(get_batch_results, path, query));
 
-    web::scope(&ACTIVITY_SERVICE_URI)
+    web::scope(&ACTIVITY_API)
         .data(db)
         .service(web::resource("/activity").route(create))
         .service(web::resource("/activity/{activity_id}").route(delete))

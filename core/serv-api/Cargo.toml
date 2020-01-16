@@ -1,6 +1,6 @@
 [package]
 name = "ya-service-api"
-version = "0.1.0"
+version = "0.1.1"
 description = "Interface for modules of Yagna service and CLI"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"

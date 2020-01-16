@@ -6,4 +6,4 @@ pub use provider::ProviderApiClient;
 pub use requestor::control::RequestorControlApiClient;
 pub use requestor::state::RequestorStateApiClient;
 
-pub const API_ROOT: &str = "/activity-api/v1/";
+pub use ya_service_api::constants::ACTIVITY_API;
