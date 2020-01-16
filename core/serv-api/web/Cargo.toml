@@ -16,7 +16,7 @@ futures = "0.3"
 log = "0.4"
 
 [dev-dependencies]
-ya-appkey = "0.1"
+ya-identity = "0.1"
 ya-persistence = "0.1"
 ya-sb-router = "0.1"
 

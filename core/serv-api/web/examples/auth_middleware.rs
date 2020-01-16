@@ -1,12 +1,10 @@
-use futures::lock::Mutex;
-use std::sync::Arc;
-
 use actix_web::http::header;
 use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer};
 
 use awc::Client;
 use futures::TryFutureExt;
 use structopt::StructOpt;
+use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth;
 use ya_service_bus::RpcEndpoint;
@@ -15,11 +13,9 @@ const ROUTER_ADDR: &str = "127.0.0.1:8245";
 const HTTP_ADDR: &str = "127.0.0.1:8080";
 
 async fn server() -> anyhow::Result<()> {
-    let db = Arc::new(Mutex::new(DbExecutor::new(":memory:")?));
-    ya_appkey::migrations::run(&db.lock().await.conn()?)?;
-
+    let db = DbExecutor::new(":memory:")?;
     ya_sb_router::bind_router(ROUTER_ADDR.parse()?).await?;
-    ya_appkey::service::bind_gsb(db.clone());
+    ya_identity::service::activate(&db).await?;
 
     HttpServer::new(move || {
         App::new()
@@ -65,10 +61,18 @@ async fn main() -> anyhow::Result<()> {
 
             match cmd {
                 ClientCommand::CreateKey { name } => {
+                    let identity = bus::service(idm::BUS_ID)
+                        .send(idm::Get::ByDefault)
+                        .await
+                        .map_err(map_err)?
+                        .map_err(map_err)?
+                        .ok_or(anyhow::Error::msg("Identity not found"))?
+                        .node_id;
+
                     let create = model::Create {
                         name,
                         role: model::DEFAULT_ROLE.to_string(),
-                        identity: model::DEFAULT_IDENTITY.to_string(),
+                        identity,
                     };
 
                     let app_key = bus::service(model::APP_KEY_SERVICE_ID)
@@ -81,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ClientCommand::Request { key } => {
                     let mut resp = Client::default()
-                        .get(HTTP_ADDR)
+                        .get(format!("http://{}", HTTP_ADDR))
                         .header(header::AUTHORIZATION, key)
                         .send()
                         .map_err(map_err)
