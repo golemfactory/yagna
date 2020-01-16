@@ -63,7 +63,7 @@ pub struct AppKey {
 
 impl RpcMessage for Create {
     const ID: &'static str = "Create";
-    type Item = ();
+    type Item = String;
     type Error = Error;
 }
 

@@ -5,7 +5,6 @@ use structopt::*;
 
 use ethsign::Protected;
 use std::cmp::Reverse;
-use std::str::FromStr;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::identity::{self, DEFAULT_IDENTITY};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};

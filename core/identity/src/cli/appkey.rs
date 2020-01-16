@@ -11,7 +11,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 pub enum AppKeyCommand {
     Create {
         name: String,
-        #[structopt(default_value = model::DEFAULT_ROLE, short, long)]
+        #[structopt(default_value = model::DEFAULT_ROLE, long)]
         role: String,
         #[structopt(default_value = model::DEFAULT_IDENTITY, long)]
         id: String,
@@ -38,12 +38,13 @@ impl AppKeyCommand {
                 let identity = if id.starts_with("0x") {
                     id.parse()?
                 } else {
-                    let key = bus::service(idm::BUS_ID)
+                    bus::service(idm::BUS_ID)
                         .send(idm::Get::ByAlias(id.into()))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?
-                        .map_err(|e| anyhow::Error::msg(e))?;
-                    key.unwrap().node_id
+                        .map_err(anyhow::Error::msg)?
+                        .map_err(anyhow::Error::msg)?
+                        .ok_or(anyhow::Error::msg("Identity not found"))?
+                        .node_id
                 };
 
                 let create = model::Create {
@@ -51,12 +52,12 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity,
                 };
-                let _ = bus::service(model::APP_KEY_SERVICE_ID)
+                let key = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(create)
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?
+                    .map_err(anyhow::Error::msg)?
                     .unwrap();
-                Ok(CommandOutput::NoOutput)
+                Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
                 let remove = model::Remove {
@@ -66,7 +67,7 @@ impl AppKeyCommand {
                 let _ = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(remove)
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?
+                    .map_err(anyhow::Error::msg)?
                     .unwrap();
                 Ok(CommandOutput::NoOutput)
             }
@@ -79,7 +80,7 @@ impl AppKeyCommand {
                 let result: (Vec<model::AppKey>, u32) = bus::service(model::APP_KEY_SERVICE_ID)
                     .send(list)
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?
+                    .map_err(anyhow::Error::msg)?
                     .unwrap();
 
                 Ok(ResponseTable {

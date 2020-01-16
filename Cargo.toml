@@ -11,6 +11,8 @@ members = [
     "core/persistence",
     "core/serv",
     "core/serv-api",
+    "core/serv-api/cache",
+    "core/serv-api/web",
     "exe-unit/api",
     "exe-unit/dummy",
     "exe-unit/wasm-mozjs",
@@ -34,5 +36,6 @@ ya-sb-proto = { path = "service-bus/proto" }
 ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 ya-service-api = { path = "core/serv-api" }
+ya-service-api-cache = { path = "core/serv-api/cache" }
+ya-service-api-web = { path = "core/serv-api/web" }
 ya-service-bus = { path = "service-bus/bus/" }
-
