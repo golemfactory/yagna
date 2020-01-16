@@ -1,10 +1,10 @@
 pub use crate::db::models::Identity;
 use crate::db::schema as s;
 use diesel::prelude::*;
+use std::process::id;
 use tokio::task;
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{AsDao, ConnType, PoolType};
-use std::process::id;
 
 type Result<T> = std::result::Result<T, super::Error>;
 
@@ -53,7 +53,7 @@ impl<'c> IdentityDao<'c> {
 
     pub async fn create_identity(&self, new_identity: Identity) -> Result<()> {
         let _rows = self
-            .with_transaction(|conn| {
+            .with_transaction(move |conn| {
                 Ok(diesel::insert_into(s::identity::table)
                     .values(new_identity)
                     .execute(conn)?)
@@ -72,14 +72,19 @@ impl<'c> IdentityDao<'c> {
         .await
     }
 
-    pub async fn init_default_key<KeyGenerator : Send + 'static + FnOnce() -> Result<Identity>>(&self, generator : KeyGenerator) -> Result<Identity> {
+    pub async fn init_default_key<KeyGenerator: Send + 'static + FnOnce() -> Result<Identity>>(
+        &self,
+        generator: KeyGenerator,
+    ) -> Result<Identity> {
         use crate::db::schema::identity::dsl::*;
 
         self.with_transaction(move |conn| {
-            if let Some(id) = identity.filter(is_default.eq(true))
+            if let Some(id) = identity
+                .filter(is_default.eq(true))
                 .get_result::<Identity>(conn)
-                .optional()? {
-                return Ok(id)
+                .optional()?
+            {
+                return Ok(id);
             }
             let new_identity = generator()?;
             diesel::insert_into(s::identity::table)
@@ -87,7 +92,7 @@ impl<'c> IdentityDao<'c> {
                 .execute(conn)?;
 
             Ok(new_identity)
-        }).await
+        })
+        .await
     }
-
 }

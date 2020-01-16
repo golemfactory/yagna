@@ -70,7 +70,14 @@ impl CliArgs {
     }
 
     pub fn log_level(&self) -> String {
-        self.log_level.clone()
+        match self.command {
+            CliCommand::Service(ServiceCommand::Run) => {
+                self.log_level.clone()
+            }
+            _  => {
+                "error".to_string()
+            }
+        }
     }
 
     pub async fn run_command(self) -> Result<()> {
@@ -187,6 +194,7 @@ async fn index() -> String {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     let args: CliArgs = CliArgs::from_args();
+
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
     args.run_command().await

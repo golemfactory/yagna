@@ -24,6 +24,8 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
 ya-persistence = "0.1"
 rand="0.7.3"
+promptly = "0.1.5"
+rpassword = "3.0.2"
 
 [dependencies.uuid]
 version = "0.7"

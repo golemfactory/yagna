@@ -7,3 +7,4 @@ pub mod service;
 
 pub mod dao;
 mod db;
+mod id_key;

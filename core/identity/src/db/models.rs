@@ -6,7 +6,7 @@ use chrono::NaiveDateTime;
 use diesel::{Associations, Identifiable, Insertable, Queryable};
 use ya_core_model::ethaddr::NodeId;
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, Debug, Identifiable, Insertable, Clone)]
 #[table_name = "identity"]
 #[primary_key(identity_id)]
 pub struct Identity {

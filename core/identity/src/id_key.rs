@@ -2,6 +2,7 @@
 
 use crate::dao::identity::Identity;
 use crate::dao::Error;
+use anyhow::Context;
 use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use rand::Rng;
@@ -26,7 +27,7 @@ impl IdentityKey {
         self.alias.as_ref().map(|s| s.as_ref())
     }
 
-    pub fn replace_alias(&mut self, new_alias : Option<String>) -> Option<String> {
+    pub fn replace_alias(&mut self, new_alias: Option<String>) -> Option<String> {
         std::mem::replace(&mut self.alias, new_alias)
     }
 
@@ -74,6 +75,17 @@ const KEY_ITERATIONS: u32 = 10240;
 const KEYSTORE_VERSION: u64 = 3;
 
 pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
+    let (key_file, secret) = generate_new_secret(password);
+    let id = NodeId::from(secret.public().address().as_ref());
+    IdentityKey {
+        id,
+        alias,
+        key_file,
+        secret: Some(secret),
+    }
+}
+
+fn generate_new_secret(password: Protected) -> (KeyFile, SecretKey) {
     let random_bytes: [u8; 32] = rand::thread_rng().gen();
     let secret = SecretKey::from_raw(random_bytes.as_ref()).unwrap();
     let key_file = KeyFile {
@@ -82,11 +94,11 @@ pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
         crypto: secret.to_crypto(&password, KEY_ITERATIONS).unwrap(),
         address: Some(Bytes(secret.public().address().to_vec())),
     };
-    let id = NodeId::from(secret.public().address().as_ref());
-    IdentityKey {
-        id,
-        alias,
-        key_file,
-        secret: Some(secret),
-    }
+    (key_file, secret)
+}
+
+pub fn generate_new_keyfile(password: Protected) -> anyhow::Result<String> {
+    let (key_file, _) = generate_new_secret(password);
+
+    Ok(serde_json::to_string(&key_file).context("serialize keyfile")?)
 }
