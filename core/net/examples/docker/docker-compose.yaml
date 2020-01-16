@@ -5,17 +5,17 @@ services:
                         context: ../../../..
                         dockerfile: core/net/examples/docker/hub.Dockerfile
                 image: hub
-        provider-1:
+        listener_1:
                 build:
                         context: ../../../..
-                        dockerfile: core/net/examples/docker/provider-1.Dockerfile
-                image: provider-1
+                        dockerfile: core/net/examples/docker/listener.Dockerfile
+                image: listener
                 depends_on:
                         - hub
-        provider-2:
+        sender_1:
                 build:
                         context: ../../../..
-                        dockerfile: core/net/examples/docker/provider-2.Dockerfile
-                image: provider-2
+                        dockerfile: core/net/examples/docker/sender.Dockerfile
+                image: sender
                 depends_on:
-                        - provider-1
+                        - listener_1

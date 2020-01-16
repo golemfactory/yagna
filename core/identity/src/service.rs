@@ -7,7 +7,7 @@ use ya_persistence::executor::DbExecutor;
 mod appkey;
 mod identity;
 
-pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
+pub async fn activate(db: Arc<Mutex<DbExecutor>>) -> anyhow::Result<()> {
     log::info!("activating identity service");
     log::debug!("loading default identity");
 

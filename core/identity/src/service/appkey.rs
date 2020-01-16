@@ -1,10 +1,12 @@
-use crate::dao::AppKeyDao;
-
+use futures::lock::Mutex;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use ya_persistence::executor::DbExecutor;
 
-pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
+use crate::dao::AppKeyDao;
+
+pub async fn activate(db: Arc<Mutex<DbExecutor>>) -> anyhow::Result<()> {
     use ya_core_model::appkey as model;
     use ya_service_bus::typed as bus;
 
@@ -16,6 +18,8 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         let db = dbx.clone();
         async move {
             Ok(db
+                .lock()
+                .await
                 .as_dao::<AppKeyDao>()
                 .create(key.clone(), create.name, create.role, create.identity)
                 .await
@@ -30,6 +34,8 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         let db = dbx.clone();
         async move {
             let (appkey, role) = db
+                .lock()
+                .await
                 .as_dao::<AppKeyDao>()
                 .get(get.key)
                 .await
@@ -50,6 +56,8 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
 
         async move {
             let result = db
+                .lock()
+                .await
                 .as_dao::<AppKeyDao>()
                 .list(list.identity, list.page, list.per_page)
                 .await
@@ -75,7 +83,9 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let _ = bus::bind_private(&model::APP_KEY_SERVICE_ID, move |rm: model::Remove| {
         let db = dbx.clone();
         async move {
-            db.as_dao::<AppKeyDao>()
+            db.lock()
+                .await
+                .as_dao::<AppKeyDao>()
                 .remove(rm.name, rm.identity)
                 .await
                 .map_err(Into::into)?;

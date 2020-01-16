@@ -1,22 +1,24 @@
-use crate::dao::identity::Identity;
-use crate::dao::{Error as DaoError, IdentityDao};
-use crate::id_key::{generate_new, IdentityKey};
 use chrono::Utc;
 use ethsign::{KeyFile, Protected};
 use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
+
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::identity as model;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 
+use crate::dao::identity::Identity;
+use crate::dao::{Error as DaoError, IdentityDao};
+use crate::id_key::{generate_new, IdentityKey};
+
 pub struct IdentityService {
     default_key: NodeId,
     ids: HashMap<NodeId, IdentityKey>,
     alias_to_id: HashMap<String, NodeId>,
-    db: DbExecutor,
+    db: Arc<Mutex<DbExecutor>>,
 }
 
 fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
@@ -31,10 +33,12 @@ fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
 }
 
 impl IdentityService {
-    pub async fn from_db(db: DbExecutor) -> anyhow::Result<Self> {
-        crate::dao::init(&db)?;
+    pub async fn from_db(db: Arc<Mutex<DbExecutor>>) -> anyhow::Result<Self> {
+        crate::dao::init(db.clone()).await?;
 
         let default_key = db
+            .lock()
+            .await
             .as_dao::<IdentityDao>()
             .init_default_key(|| {
                 let key: IdentityKey = generate_new(None, "".into()).into();
@@ -56,7 +60,13 @@ impl IdentityService {
         let mut ids: HashMap<NodeId, _> = Default::default();
         let mut alias_to_id: HashMap<String, _> = Default::default();
 
-        for identity in db.as_dao::<IdentityDao>().list_identities().await? {
+        for identity in db
+            .lock()
+            .await
+            .as_dao::<IdentityDao>()
+            .list_identities()
+            .await?
+        {
             let key: IdentityKey = identity.try_into()?;
             if let Some(alias) = key.alias() {
                 let _ = alias_to_id.insert(alias.to_owned(), key.id());
@@ -127,6 +137,8 @@ impl IdentityService {
         };
 
         self.db
+            .lock()
+            .await
             .as_dao::<IdentityDao>()
             .create_identity(new_identity)
             .await
@@ -161,6 +173,8 @@ impl IdentityService {
         };
 
         self.db
+            .lock()
+            .await
             .as_dao::<IdentityDao>()
             .create_identity(new_identity.clone())
             .await
@@ -229,6 +243,8 @@ impl IdentityService {
         }
 
         self.db
+            .lock()
+            .await
             .with_transaction(move |conn| {
                 use crate::db::schema::identity::dsl::*;
                 use diesel::prelude::*;

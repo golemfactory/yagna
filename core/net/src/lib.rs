@@ -1,69 +1,86 @@
-use futures::prelude::*;
 use std::net::ToSocketAddrs;
-use ya_service_bus::connection;
-use ya_service_bus::{untyped as bus, Error};
 
-pub const SERVICE_ID: &str = "/net";
+use ya_service_api::constants::{NET_SERVICE_ID, PUBLIC_SERVICE};
+use ya_service_bus::{connection, RpcMessage};
+use ya_service_bus::{untyped as local_bus, Error};
 
 #[derive(Default)]
 struct SubscribeHelper {}
 
-/// Initialize net module.
-pub fn init_service_future(
-    hub_addr: &str,
+/// Initialize net module on a hub.
+pub async fn bind_remote(
+    hub_addr: &impl ToSocketAddrs,
     source_node_id: &str,
-) -> impl Future<Output = Result<(), std::io::Error>> {
-    let source_node_id_clone = format!("{}/{}", SERVICE_ID, source_node_id);
-    connection::tcp(hub_addr.to_socket_addrs().unwrap().next().unwrap()).and_then(move |c| {
-        let connection_ref = connection::connect_with_handler(
-            c,
-            |_request_id: String, caller: String, addr: String, data: Vec<u8>| {
-                let new_addr: String =
-                    format!("/{}", addr.split('/').skip(3).collect::<Vec<_>>().join("/"));
-                /* TODO: request_id? */
-                eprintln!(
-                    "[Net Mk1] Incoming message from hub. Called by: {}, addr: {}, new_addr: {}.",
-                    caller, addr, new_addr
-                );
-                bus::send(&new_addr, &caller, &data)
-            },
-        );
-        connection_ref
-            .bind(source_node_id_clone)
-            .and_then(|_| {
-                async move {
-                    let _ =
-                        bus::subscribe(SERVICE_ID, move |caller: &str, addr: &str, msg: &[u8]| {
-                            eprintln!(
-                                "[Net Mk1] Sending message to hub. Called by: {}, addr: {}.",
-                                caller, addr
-                            );
-                            connection_ref.call(
-                                caller.to_string(),
-                                addr.to_string(),
-                                Vec::from(msg),
-                            )
-                        });
-                    Ok(())
-                }
-            })
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))
-    })
+) -> Result<(), std::io::Error> {
+    let hub_addr = hub_addr.to_socket_addrs()?.next().expect("hub addr needed");
+    let conn = connection::tcp(hub_addr).await?;
+
+    // connect with hub with forwarding handler
+    let central_bus = connection::connect_with_handler(
+        conn,
+        |request_id: String, caller: String, addr: String, data: Vec<u8>| {
+            let local_addr: String =
+                // replaces  /net/0x789/test/1 --> /public/test/1
+                format!("{}/{}",
+                        &*PUBLIC_SERVICE,
+                        addr.split('/').skip(3).collect::<Vec<_>>().join("/"));
+            log::debug!(
+                "Incoming message via hub from = {}, to = {}, fwd to local addr = {}",
+                caller,
+                addr,
+                local_addr
+            );
+            log::debug!("Incoming request_id: {}", request_id);
+            // actual forwarding to my local bus
+            local_bus::send(&local_addr, &caller, &data)
+        },
+    );
+
+    // bind my local net service on remote centralised bus under /net/<my_addr>
+    let source_node_id = format!("{}/{}", NET_SERVICE_ID, source_node_id);
+    central_bus
+        .bind(source_node_id)
+        .await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
+
+    // bind /net on my local bus
+    local_bus::subscribe(
+        NET_SERVICE_ID,
+        move |caller: &str, addr: &str, msg: &[u8]| {
+            log::info!(
+                "Sending message to hub. Called by: {}, addr: {}.",
+                caller,
+                addr
+            );
+            central_bus.call(caller.to_string(), addr.to_string(), Vec::from(msg))
+        },
+    );
+    Ok(())
 }
 
-/// Send message to another node through a hub. Returns a future with the result.
-pub fn send_message_future(
+/// Send message to another node through a hub.
+pub async fn send<T: RpcMessage + Unpin>(
     source_node_id: &str,
-    destination: &str,
-    data: Vec<u8>,
-) -> impl Future<Output = Result<Vec<u8>, Error>> {
-    eprintln!(
-        "[Net Mk1] Sending message from {} to {}.",
-        source_node_id, destination
+    destination_service: &str,
+    data: &T,
+) -> Result<Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>, Error> {
+    log::info!(
+        "Sending message from {} to {}.",
+        source_node_id,
+        destination_service
     );
-    bus::send(
-        &format!("{}/{}", SERVICE_ID, destination),
-        &format!("{}/{}", SERVICE_ID, source_node_id),
-        &data,
+    // send to local bus under /net/0x<destination> eg. 0x789/test
+
+    let raw = local_bus::send(
+        &format!(
+            "{}/{}/{}",
+            NET_SERVICE_ID,
+            destination_service,
+            <T as RpcMessage>::ID
+        ),
+        &format!("{}/{}", NET_SERVICE_ID, source_node_id), // caller
+        &rmp_serde::encode::to_vec(data)?,
     )
+    .await?;
+    rmp_serde::from_read_ref(&raw).map_err(From::from)
 }

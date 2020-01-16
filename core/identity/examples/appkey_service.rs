@@ -1,4 +1,7 @@
+use futures::lock::Mutex;
+use std::sync::Arc;
 use structopt::StructOpt;
+
 use ya_identity::cli::{AppKeyCommand, IdentityCommand};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{constants::YAGNA_BUS_ADDR, CliCtx};
@@ -18,9 +21,9 @@ async fn main() -> anyhow::Result<()> {
 
     match args {
         Args::Server => {
-            let db = DbExecutor::new(":memory:")?;
+            let db = Arc::new(Mutex::new(DbExecutor::new(":memory:")?));
             ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
-            ya_identity::service::activate(&db).await?;
+            ya_identity::service::activate(db).await?;
 
             actix_rt::signal::ctrl_c().await?;
             println!();
