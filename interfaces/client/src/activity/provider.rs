@@ -16,26 +16,24 @@ rest_interface! {
             response
         }
 
-        /// Pass activity state (which may include error details)
-        pub async fn set_activity_state(
+        /// Fetch activity state (which may include error details)
+        pub async fn get_activity_state(
             &self,
-            state: ActivityState,
             #[path] activity_id: &str
-        ) -> Result<()> {
-            let response = put("activity/{activity_id}/state/").send_json( &state ).body();
+        ) -> Result<ActivityState> {
+            let response = get("activity/{activity_id}/state/").send().json();
 
-            { response.map(|_| ()) }
+            response
         }
 
-        /// Pass current activity usage (which may include error details)
-        pub async fn set_activity_usage(
+        /// Fetch current activity usage (which may include error details)
+        pub async fn get_activity_usage(
             &self,
-            usage: ActivityUsage,
             #[path] activity_id: &str
-        ) -> Result<()> {
-            let response = put("activity/{activity_id}/usage/").send_json( &usage ).body();
+        ) -> Result<ActivityUsage> {
+            let response = get("activity/{activity_id}/usage/").send().json();
 
-            { response.map(|_| ()) }
+            response
         }
     }
 }
