@@ -10,6 +10,8 @@ pub struct ProviderApi {
 }
 
 impl ProviderApi {
+
+
     pub fn new(client: &Arc<WebClient>) -> Self {
         Self {
             client: client.clone(),
@@ -99,34 +101,6 @@ impl ProviderApi {
             proposal_id
         );
         self.client.post(&url).send_json(&proposal).json().await
-    }
-
-    /// Fetches `AgreementProposal` from proposal id.
-    pub async fn get_proposal(
-        &self,
-        subscription_id: &str,
-        proposal_id: &str,
-    ) -> Result<AgreementProposal> {
-        let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}/",
-            subscription_id,
-            proposal_id
-        );
-        self.client.get(&url).send().json().await
-    }
-
-    /// Rejects a bespoke Offer.
-    pub async fn reject_proposal(
-        &self,
-        subscription_id: &str,
-        proposal_id: &str,
-    ) -> Result<String> {
-        let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}/",
-            subscription_id,
-            proposal_id
-        );
-        self.client.delete(&url).send().json().await
     }
 
     /// Approves Agreement proposed by the Reqestor.
