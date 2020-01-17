@@ -6,19 +6,14 @@ use actix::prelude::*;
 use futures::prelude::*;
 use std::time::{Duration, Instant};
 
-pub use crate::model::Command;
-use crate::model::{InnerEq, UpdateBatchResult, UpdateRunningCommand, UpdateState};
+pub use crate::model::*;
 use futures::{FutureExt, TryFutureExt};
 use std::collections::HashMap;
 use std::pin::Pin;
 use ya_core_model::activity::*;
-use ya_model::activity::{
-    ActivityState, ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
-    ExeScriptCommandState, State,
-};
+use ya_model::activity::*;
+use ya_service_api::constants::ACTIVITY_SERVICE_ID;
 use ya_service_bus::{RpcEndpoint, RpcEnvelope, RpcMessage};
-
-const ACTIVITY_SERVICE_GSB: &str = "/activity";
 
 #[inline(always)]
 fn invalid_service_id<R>(service_id: &String) -> std::result::Result<R, RpcMessageError> {
@@ -38,7 +33,7 @@ pub struct Worker {
 }
 
 impl Worker {
-    fn new_inner(service_id: Option<String>) -> Self {
+    fn inner_new(service_id: Option<String>) -> Self {
         Self {
             states: StateMachine::default(),
             service_id,
@@ -50,13 +45,13 @@ impl Worker {
     }
 
     pub fn new(service_id: &String) -> Self {
-        Self::new_inner(Some(service_id.clone()))
+        Self::inner_new(Some(service_id.clone()))
     }
 }
 
 impl Default for Worker {
     fn default() -> Self {
-        Self::new_inner(None)
+        Self::inner_new(None)
     }
 }
 
@@ -80,8 +75,7 @@ impl Worker {
             timeout: Some(Duration::from_secs(1).as_millis() as u32),
         };
 
-        Self::rpc(ACTIVITY_SERVICE_GSB, set_state).await?;
-        Ok(())
+        Self::rpc(ACTIVITY_SERVICE_ID, set_state).await.map(|_| ())
     }
 
     async fn report_usage(service_id: String, usage: ActivityUsage) {
@@ -91,15 +85,15 @@ impl Worker {
             timeout: Some(Duration::from_secs(1).as_millis() as u32),
         };
 
-        if let Err(e) = Self::rpc(ACTIVITY_SERVICE_GSB, set_usage).await {
+        if let Err(e) = Self::rpc(ACTIVITY_SERVICE_ID, set_usage).await {
             eprintln!("Error reporting usage: {:?}", e);
         }
     }
 
     fn start_reporting(ctx: &mut <Self as Actor>::Context, service_id: String) -> SpawnHandle {
-        let handle = ctx.run_interval(Duration::from_secs(1), move |act, ctx| {
-            let service_id = service_id.clone();
+        ctx.run_interval(Duration::from_secs(1), move |act, ctx| {
             let address = ctx.address().clone();
+            let service_id = service_id.clone();
             let get_usage = RpcEnvelope::local(GetActivityUsage {
                 activity_id: service_id.clone(),
                 timeout: None,
@@ -115,9 +109,7 @@ impl Worker {
                 }
             };
             ctx.spawn(fut.into_actor(act));
-        });
-
-        handle
+        })
     }
 }
 
@@ -143,15 +135,15 @@ impl Handler<RpcEnvelope<GetActivityState>> for Worker {
         msg: RpcEnvelope<GetActivityState>,
         _ctx: &mut Self::Context,
     ) -> Self::Result {
-        if self.service_id.inner_eq(&msg.activity_id) {
-            return Ok(ActivityState {
-                state: self.states.current_state,
-                reason: None,
-                error_message: None,
-            });
+        if !self.service_id.inner_eq(&msg.activity_id) {
+            return invalid_service_id(&msg.activity_id);
         }
 
-        invalid_service_id(&msg.activity_id)
+        Ok(ActivityState {
+            state: self.states.current_state,
+            reason: None,
+            error_message: None,
+        })
     }
 }
 
@@ -166,13 +158,13 @@ impl Handler<RpcEnvelope<GetActivityUsage>> for Worker {
         msg: RpcEnvelope<GetActivityUsage>,
         _ctx: &mut Self::Context,
     ) -> Self::Result {
-        if self.service_id.inner_eq(&msg.activity_id) {
-            return Ok(ActivityUsage {
-                current_usage: None,
-            });
+        if !self.service_id.inner_eq(&msg.activity_id) {
+            return invalid_service_id(&msg.activity_id);
         }
 
-        invalid_service_id(&msg.activity_id)
+        Ok(ActivityUsage {
+            current_usage: None,
+        })
     }
 }
 
@@ -184,11 +176,11 @@ impl Handler<RpcEnvelope<Exec>> for Worker {
             return invalid_service_id(&msg.activity_id);
         }
 
+        self.batches.remove(&msg.batch_id);
+
         let actor = self.actor.clone().unwrap();
         let batch_id = msg.batch_id.clone();
         let batch_idx = msg.batch_id.clone();
-
-        self.batches.remove(&msg.batch_id);
 
         let fut: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async move {
             for (index, cmd) in msg.exe_script.iter().enumerate() {
@@ -197,7 +189,6 @@ impl Handler<RpcEnvelope<Exec>> for Worker {
                     Ok((_, message)) => (CommandResult::Ok, message),
                     Err(error) => (CommandResult::Error, format!("{:?}", error)),
                 };
-
                 let update = UpdateBatchResult {
                     batch_id: batch_idx.clone(),
                     result: ExeScriptCommandResult {
@@ -206,8 +197,8 @@ impl Handler<RpcEnvelope<Exec>> for Worker {
                         message: Some(message),
                     },
                 };
-                actor.send(update).await?;
 
+                actor.send(update).await?;
                 if result == CommandResult::Error {
                     break;
                 }
@@ -399,7 +390,7 @@ impl Handler<Command> for Worker {
                 }
             }
             ExeScriptCommand::Stop {} => {
-                let transition = Transition::Transfer;
+                let transition = Transition::Stop;
                 let state = self.states.current_state;
 
                 if let Some(state) = self.states.next_state(transition) {
