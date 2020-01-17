@@ -6,3 +6,5 @@ pub mod appkey;
 
 #[cfg(feature = "identity")]
 pub mod identity;
+
+pub mod ethaddr;

@@ -1,6 +1,6 @@
 use futures::future::{Either, Future, Map};
 use futures::FutureExt;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::time::{timeout, Elapsed, Timeout};
 
 pub trait IntoDuration {
@@ -46,31 +46,6 @@ impl_into_duration!(i128);
 impl_into_duration!(u128);
 impl_into_duration!(f32);
 impl_into_duration!(f64);
-
-#[derive(Debug)]
-pub struct Interval {
-    duration: Duration,
-    deadline: Instant,
-}
-
-impl Interval {
-    pub fn new<D: IntoDuration>(duration: D) -> Self {
-        Self {
-            duration: duration.into_duration(),
-            deadline: Instant::now(),
-        }
-    }
-
-    #[inline]
-    pub fn check(&mut self) -> bool {
-        let now = Instant::now();
-        let elapsed = now >= self.deadline;
-        if elapsed {
-            self.deadline = now + self.duration;
-        }
-        elapsed
-    }
-}
 
 type MapType<F> = Map<F, fn(<F as Future>::Output) -> Result<<F as Future>::Output, Elapsed>>;
 

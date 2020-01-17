@@ -1,16 +1,16 @@
 macro_rules! db_conn {
     ($db_executor:expr) => {{
         use crate::error::Error;
-        $db_executor.lock().await.conn().map_err(Error::from)
+        $db_executor.conn().map_err(Error::from)
     }};
 }
 
 macro_rules! bind_gsb_method {
-    ($id:expr, $db_executor:expr, $method:ident) => {{
+    ($bind:ident, $id:expr, $db_executor:expr, $method:ident) => {{
         use ya_service_bus::typed as bus;
 
         let db_ = $db_executor.clone();
-        let _ = bus::bind(&$id, move |m| $method(db_.clone(), m));
+        let _ = bus::$bind(&$id, move |m| $method(db_.clone(), m));
     }};
 }
 
@@ -19,7 +19,8 @@ macro_rules! gsb_send {
         use ya_service_bus::actix_rpc;
         use $crate::timeout::IntoTimeoutFuture;
 
-        actix_rpc::service($uri)
+        // TODO: this is not enough for the net service, bc it does not contain caller addr
+        actix_rpc::private_service($uri)
             .send($msg)
             .timeout($timeout)
             .map_err(Error::from)

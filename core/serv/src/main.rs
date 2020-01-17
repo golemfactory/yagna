@@ -1,18 +1,21 @@
 use actix_web::{get, middleware, App, HttpServer};
 use anyhow::{Context, Result};
-use futures::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
     path::PathBuf,
-    sync::Arc,
 };
 use structopt::{clap, StructOpt};
 
-use ya_appkey::error::Error;
+use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api::{
+    constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
+    CliCtx, CommandOutput,
+};
+use ya_service_api_web::middleware::auth;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -27,15 +30,16 @@ struct CliArgs {
     data_dir: Option<PathBuf>,
 
     /// Daemon address
-    #[structopt(short, long, default_value = "127.0.0.1")]
+    #[structopt(short, long, default_value = &*YAGNA_HOST, env = "YAGNA_HOST")]
     address: String,
 
     /// Daemon HTTP port
-    #[structopt(short = "p", long, default_value = "7465")]
+    #[structopt(short = "p", long, default_value = &*YAGNA_HTTP_PORT, env = "YAGNA_HTTP_PORT")]
     http_port: u16,
 
     /// Service bus router port
-    #[structopt(long, set = clap::ArgSettings::Global, default_value = "8245")]
+    #[structopt(long, default_value = &*YAGNA_BUS_PORT, env = "YAGNA_BUS_PORT")]
+    #[structopt(set = clap::ArgSettings::Global)]
     router_port: u16,
 
     /// Return results in JSON format
@@ -55,13 +59,11 @@ struct CliArgs {
 }
 
 impl CliArgs {
-    pub fn get_data_dir(&self) -> PathBuf {
-        match &self.data_dir {
+    pub fn get_data_dir(&self) -> Result<PathBuf> {
+        Ok(match &self.data_dir {
             Some(data_dir) => data_dir.to_owned(),
-            None => appdirs::user_data_dir(Some("yagna"), Some("golem"), false)
-                .unwrap()
-                .join("default"),
-        }
+            None => ya_service_api::default_data_dir()?,
+        })
     }
 
     pub fn get_http_address(&self) -> Result<(String, u16)> {
@@ -73,7 +75,10 @@ impl CliArgs {
     }
 
     pub fn log_level(&self) -> String {
-        self.log_level.clone()
+        match self.command {
+            CliCommand::Service(ServiceCommand::Run) => self.log_level.clone(),
+            _ => "error".to_string(),
+        }
     }
 
     pub async fn run_command(self) -> Result<()> {
@@ -88,7 +93,7 @@ impl TryFrom<&CliArgs> for CliCtx {
     type Error = anyhow::Error;
 
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
-        let data_dir = args.get_data_dir();
+        let data_dir = args.get_data_dir()?;
         log::info!("Using data dir: {:?} ", data_dir);
 
         Ok(CliCtx {
@@ -104,7 +109,7 @@ impl TryFrom<&CliArgs> for CliCtx {
 #[derive(StructOpt, Debug)]
 enum CliCommand {
     /// AppKey management
-    AppKey(ya_appkey::cli::AppKeyCommand),
+    AppKey(ya_identity::cli::AppKeyCommand),
 
     /// Identity management
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
@@ -152,14 +157,37 @@ impl ServiceCommand {
                 ya_sb_router::bind_router(ctx.router_address()?)
                     .await
                     .context("binding service bus router")?;
-                // FIXME: gsb is not binding services remotely; just random one
-                ya_identity::service::activate();
-                ya_appkey::service::bind_gsb(DB_EXECUTOR.clone());
 
-                HttpServer::new(|| {
+                let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
+
+                db.apply_migration(ya_persistence::migrations::run_with_output)
+                    .unwrap()?;
+                ya_identity::service::activate(&db).await?;
+                ya_activity::provider::service::bind_gsb(&db);
+
+                let default_id = bus::private_service(identity::IDENTITY_SERVICE_ID)
+                    .send(identity::Get::ByDefault)
+                    .await
+                    .map_err(anyhow::Error::msg)??
+                    .ok_or(anyhow::Error::msg("no default identity"))?
+                    .node_id
+                    .to_string();
+                log::info!("using default identity as network id: {:?}", default_id);
+                ya_net::bind_remote(&*CENTRAL_NET_HOST, &default_id)
+                    .await
+                    .context(format!(
+                        "Error binding network service at {} for {}",
+                        *CENTRAL_NET_HOST, default_id
+                    ))?;
+
+                HttpServer::new(move || {
                     App::new()
                         .wrap(middleware::Logger::default())
+                        .wrap(auth::Auth::default())
                         .service(index)
+                        .service(ya_activity::provider::web_scope(&db))
+                        .service(ya_activity::requestor::control::web_scope(&db))
+                        .service(ya_activity::requestor::state::web_scope(&db))
                 })
                 .bind(ctx.http_address())
                 .context(format!(
@@ -180,15 +208,6 @@ impl ServiceCommand {
     }
 }
 
-// TODO: move this to app-key crate (?)
-lazy_static::lazy_static! {
-    pub static ref DB_EXECUTOR: Arc<Mutex<DbExecutor<Error>>> = {
-        let db_file_path = "core/appkey/appkey.sqlite3";
-        let db_executor = DbExecutor::new(db_file_path).unwrap();
-        Arc::new(Mutex::new(db_executor))
-    };
-}
-
 #[get("/")]
 async fn index() -> String {
     format!("Hello {}!", clap::crate_description!())
@@ -197,7 +216,9 @@ async fn index() -> String {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     let args: CliArgs = CliArgs::from_args();
+
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
+
     args.run_command().await
 }

@@ -1,11 +1,11 @@
 use crate::dao::{last_insert_rowid, Result};
-use chrono::Local;
+use chrono::Utc;
+use diesel::expression::exists::exists;
 use diesel::prelude::*;
 use diesel::sql_types::{Integer, VarChar};
 use serde_json;
 use ya_model::activity::State;
 use ya_persistence::executor::ConnType;
-use ya_persistence::models::Activity;
 use ya_persistence::schema;
 
 pub struct ActivityDao<'c> {
@@ -19,14 +19,14 @@ impl<'c> ActivityDao<'c> {
 }
 
 impl<'c> ActivityDao<'c> {
-    #[allow(dead_code)]
-    pub fn get(&self, activity_id: &str) -> Result<Activity> {
+    pub fn exists(&self, activity_id: &str) -> Result<bool> {
         use schema::activity::dsl;
 
         self.conn.transaction(|| {
-            dsl::activity
-                .filter(dsl::natural_id.eq(activity_id))
-                .first(self.conn)
+            diesel::select(exists(
+                dsl::activity.filter(dsl::natural_id.eq(activity_id)),
+            ))
+            .get_result(self.conn)
         })
     }
 
@@ -55,7 +55,7 @@ impl<'c> ActivityDao<'c> {
         let error_message: Option<String> = None;
         let vector_json: Option<String> = None;
         let state = serde_json::to_string(&State::New).unwrap();
-        let now = Local::now().naive_local();
+        let now = Utc::now().naive_utc();
 
         self.conn.transaction(|| {
             diesel::insert_into(dsl_state::activity_state)

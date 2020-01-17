@@ -1,28 +1,30 @@
 use crate::dao::{ActivityDao, AgreementDao, NotFoundAsOption};
 use crate::error::Error;
-use crate::{ACTIVITY_SERVICE_ID, NET_SERVICE_ID};
-use futures::lock::Mutex;
-use std::sync::Arc;
-use ya_persistence::executor::DbExecutor;
-use ya_persistence::models::Agreement;
+
+use ya_core_model::activity::ACTIVITY_SERVICE_ID;
+use ya_persistence::{executor::ConnType, models::Agreement};
+use ya_service_api::constants::NET_SERVICE_ID;
 
 pub mod control;
 pub mod state;
 
 #[inline(always)]
 fn provider_activity_uri(provider_id: &str) -> String {
-    format!(
-        "/{}/{}/{}",
-        NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID
-    )
+    format!("{}/{}/{}", NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID)
 }
 
-async fn get_agreement(
-    db: &Arc<Mutex<DbExecutor<Error>>>,
-    activity_id: &str,
-) -> Result<Agreement, Error> {
-    let conn = db_conn!(db)?;
-    let agreement_id = ActivityDao::new(&conn)
+fn missing_activity_err(conn: &ConnType, activity_id: &str) -> Result<(), Error> {
+    let exists = ActivityDao::new(conn)
+        .exists(activity_id)
+        .map_err(Error::from)?;
+    match exists {
+        true => Ok(()),
+        false => Err(Error::NotFound),
+    }
+}
+
+fn get_agreement(conn: &ConnType, activity_id: &str) -> Result<Agreement, Error> {
+    let agreement_id = ActivityDao::new(conn)
         .get_agreement_id(activity_id)
         .not_found_as_option()
         .map_err(Error::from)?

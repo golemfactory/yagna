@@ -1,17 +1,16 @@
-use crate::connection::{self, ConnectionRef, LocalRouterHandler, TcpTransport};
-use crate::error::Error;
-use crate::RpcRawCall;
-use actix::prelude::*;
-use futures::channel::oneshot;
-use futures::prelude::*;
+use actix::{prelude::*, WrapFuture};
+use futures::{channel::oneshot, prelude::*};
+use std::{collections::HashSet, net::SocketAddr};
 
-use actix::WrapFuture;
-use std::collections::HashSet;
+use ya_service_api::constants::YAGNA_BUS_ADDR;
 
-static DEFAULT_URL: &str = "127.0.0.1:8245";
+use crate::{
+    connection::{self, ConnectionRef, LocalRouterHandler, TcpTransport},
+    {error::Error, RpcRawCall},
+};
 
-fn gsb_addr() -> std::net::SocketAddr {
-    DEFAULT_URL.parse().unwrap()
+fn gsb_addr() -> SocketAddr {
+    *YAGNA_BUS_ADDR
 }
 
 pub struct RemoteRouter {
@@ -32,7 +31,7 @@ impl RemoteRouter {
     fn try_connect(&mut self, ctx: &mut <Self as Actor>::Context) {
         let addr = gsb_addr();
         let connect_fut = connection::tcp(addr)
-            .map_err(Error::BusConnectionFail)
+            .map_err(move |e| Error::BusConnectionFail(addr, e))
             .into_actor(self)
             .then(|tcp_transport, act, ctx| {
                 let tcp_transport = match tcp_transport {
@@ -126,11 +125,6 @@ impl Handler<UpdateService> for RemoteRouter {
                         c.bind(service_id.clone()).then(|v| {
                             async { v.unwrap_or_else(|e| log::error!("bind error: {}", e)) }
                         }),
-                    )
-                } else {
-                    log::warn!(
-                        "Not adding remote service '{}'; not connected to router",
-                        service_id
                     )
                 }
                 log::info!("Binding local service '{}'", service_id);

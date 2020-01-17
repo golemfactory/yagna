@@ -1,10 +1,9 @@
 //! Configuration tools
-use std::env;
-
-use crate::Result;
 use url::Url;
 
-const API_HOST_PORT: &str = "localhost:5001";
+use ya_service_api::constants::YAGNA_HTTP_ADDR_STR;
+
+use crate::Result;
 
 /// API configuration.
 #[derive(Clone, Debug)]
@@ -22,9 +21,7 @@ impl ApiConfiguration {
     pub fn from(host_port: Option<String>, path: Option<String>) -> Result<ApiConfiguration> {
         Url::parse(&format!(
             "http://{host_port}{path}",
-            host_port = host_port
-                .or_else(|| env::var("API_ADDR").ok())
-                .unwrap_or(API_HOST_PORT.into()),
+            host_port = host_port.unwrap_or(YAGNA_HTTP_ADDR_STR.to_string()),
             path = path.unwrap_or("".into())
         ))
         .map(|api_url| ApiConfiguration { api_url })

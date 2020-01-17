@@ -1,8 +1,9 @@
+use crate::ethaddr::NodeId;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 
-pub const APP_KEY_SERVICE_ID: &str = "/local/appkey";
+pub use ya_service_api::constants::APP_KEY_SERVICE_ID;
 pub const DEFAULT_IDENTITY: &str = "primary";
 pub const DEFAULT_ROLE: &str = "manager";
 
@@ -12,12 +13,21 @@ pub struct Error {
     pub message: String,
 }
 
+impl Error {
+    pub fn internal(e: impl std::fmt::Display) -> Self {
+        Self {
+            code: 500,
+            message: e.to_string(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     pub name: String,
     pub role: String,
-    pub identity: String,
+    pub identity: NodeId,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -47,13 +57,13 @@ pub struct AppKey {
     pub name: String,
     pub key: String,
     pub role: String,
-    pub identity: String,
+    pub identity: NodeId,
     pub created_date: NaiveDateTime,
 }
 
 impl RpcMessage for Create {
     const ID: &'static str = "Create";
-    type Item = ();
+    type Item = String;
     type Error = Error;
 }
 

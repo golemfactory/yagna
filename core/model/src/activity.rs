@@ -4,6 +4,8 @@ use ya_model::activity::{
 };
 use ya_service_bus::RpcMessage;
 
+pub use ya_service_api::constants::ACTIVITY_SERVICE_ID;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateActivity {
