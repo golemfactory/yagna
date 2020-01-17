@@ -15,6 +15,7 @@ use ya_service_api::{
     constants::{YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
     CliCtx, CommandOutput,
 };
+use ya_service_api_web::middleware::auth;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -171,6 +172,7 @@ impl ServiceCommand {
                 HttpServer::new(move || {
                     App::new()
                         .wrap(middleware::Logger::default())
+                        .wrap(auth::Auth::default())
                         .service(index)
                         .service(ya_activity::provider::web_scope(db.clone()))
                         .service(ya_activity::requestor::control::web_scope(db.clone()))
