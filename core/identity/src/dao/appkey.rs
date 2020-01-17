@@ -1,6 +1,6 @@
 pub use crate::dao::Error as DaoError;
 pub use crate::db::models::{AppKey, Role};
-use chrono::Local;
+use chrono::Utc;
 use diesel::prelude::*;
 
 use diesel::{Connection, ExpressionMethods, RunQueryDsl};
@@ -62,7 +62,7 @@ impl<'c> AppKeyDao<'c> {
                         app_key_dsl::name.eq(name),
                         app_key_dsl::key.eq(key),
                         app_key_dsl::identity_id.eq(identity),
-                        app_key_dsl::created_date.eq(Local::now().naive_local()),
+                        app_key_dsl::created_date.eq(Utc::now().naive_utc()),
                     ))
                     .execute(conn)?;
 
