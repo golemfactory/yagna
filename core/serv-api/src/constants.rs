@@ -26,7 +26,7 @@ pub const APP_KEY_SERVICE_ID: &str = "/appkey";
 pub const IDENTITY_SERVICE_ID: &str = "/identity";
 
 // APIs
-pub const MARKET_API: &str = "/market-api/v1";
+pub const MARKET_API: &str = "/market-api/v1/";
 pub const ACTIVITY_API: &str = "/activity-api/v1";
 #[allow(dead_code)]
 pub const PAYMENT_API: &str = "/payment-api/v1";

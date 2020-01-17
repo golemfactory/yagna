@@ -45,7 +45,7 @@ impl ProviderApi {
         maxEvents: Option<i32>, // TODO: max_events
     ) -> Result<Vec<Event>> {
         let url = url_format!(
-            "offers/{subscription_id}/events",
+            "offers/{subscription_id}/events/",
             subscription_id,
             #[query] timeout,
             #[query] maxEvents
@@ -60,7 +60,7 @@ impl ProviderApi {
         proposal_id: &str,
     ) -> Result<Proposal> {
         let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}",
+            "offers/{subscription_id}/proposals/{proposal_id}/",
             subscription_id,
             proposal_id
         );
@@ -76,7 +76,7 @@ impl ProviderApi {
         proposal_id: &str,
     ) -> Result<String> {
         let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}",
+            "offers/{subscription_id}/proposals/{proposal_id}/",
             subscription_id,
             proposal_id
         );
