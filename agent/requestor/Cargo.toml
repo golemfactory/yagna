@@ -5,3 +5,8 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-client="0.1"
+ya-model = "0.1"
+actix-rt = "1.0"
+env_logger = "0.7"
+anyhow = "1.0.26"

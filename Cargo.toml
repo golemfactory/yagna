@@ -39,3 +39,4 @@ ya-service-api = { path = "core/serv-api" }
 ya-service-api-cache = { path = "core/serv-api/cache" }
 ya-service-api-web = { path = "core/serv-api/web" }
 ya-service-bus = { path = "service-bus/bus/" }
+ya-client = { path = "interfaces/client" }
