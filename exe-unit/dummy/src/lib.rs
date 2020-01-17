@@ -1,3 +1,4 @@
+pub(crate) mod model;
 pub mod state;
 pub mod worker;
 

@@ -8,7 +8,9 @@ use std::{
     path::PathBuf,
 };
 use structopt::StructOpt;
+use ya_core_model::activity::{Exec, GetActivityState, GetActivityUsage};
 use ya_exe_dummy::worker::{Command, Worker};
+use ya_service_bus::actix_rpc;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "dummy")]
@@ -88,8 +90,13 @@ fn main() -> Result<()> {
         Opt::Gsb { service_id } => {
             let sys = System::new("dummy");
             let worker = Worker::new(&service_id).start();
-            let dispatcher = Dispatcher::new(worker).start();
-            let _bus = BusEntrypoint::<Command, _, _>::new(&service_id, dispatcher).start();
+            let dispatcher = Dispatcher::new(worker.clone()).start();
+
+            BusEntrypoint::<Command, _, _>::new(&service_id, dispatcher.clone()).start();
+            actix_rpc::bind::<Exec>(&service_id, worker.clone().recipient());
+            actix_rpc::bind::<GetActivityState>(&service_id, worker.clone().recipient());
+            actix_rpc::bind::<GetActivityUsage>(&service_id, worker.clone().recipient());
+
             sys.run()?;
         }
     }
