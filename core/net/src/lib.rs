@@ -13,6 +13,7 @@ pub async fn bind_remote(
     source_node_id: &str,
 ) -> Result<(), std::io::Error> {
     let hub_addr = hub_addr.to_socket_addrs()?.next().expect("hub addr needed");
+    log::debug!("connecting Mk1 net server at: {}", hub_addr);
     let conn = connection::tcp(hub_addr).await?;
 
     // connect with hub with forwarding handler
@@ -39,9 +40,14 @@ pub async fn bind_remote(
     // bind my local net service on remote centralised bus under /net/<my_addr>
     let source_node_id = format!("{}/{}", NET_SERVICE_ID, source_node_id);
     central_bus
-        .bind(source_node_id)
+        .bind(source_node_id.clone())
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
+    log::info!(
+        "network service bound at: {} as {}",
+        hub_addr,
+        source_node_id
+    );
 
     // bind /net on my local bus
     local_bus::subscribe(

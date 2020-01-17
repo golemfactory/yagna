@@ -10,12 +10,14 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 
+use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{
-    constants::{YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
+    constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
     CliCtx, CommandOutput,
 };
 use ya_service_api_web::middleware::auth;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -168,6 +170,21 @@ impl ServiceCommand {
                     .unwrap()?;
                 ya_identity::service::activate(db.clone()).await?;
                 ya_activity::provider::service::bind_gsb(db.clone());
+
+                let default_id = bus::private_service(identity::IDENTITY_SERVICE_ID)
+                    .send(identity::Get::ByDefault)
+                    .await
+                    .map_err(anyhow::Error::msg)??
+                    .ok_or(anyhow::Error::msg("no default identity"))?
+                    .node_id
+                    .to_string();
+                log::info!("using default identity as network id: {:?}", default_id);
+                ya_net::bind_remote(&*CENTRAL_NET_HOST, &default_id)
+                    .await
+                    .context(format!(
+                        "Error binding network service at {} for {}",
+                        *CENTRAL_NET_HOST, default_id
+                    ))?;
 
                 HttpServer::new(move || {
                     App::new()
