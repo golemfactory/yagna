@@ -8,7 +8,9 @@ use std::{
     path::PathBuf,
 };
 use structopt::StructOpt;
-use ya_core_model::activity::{Exec, GetActivityState, GetActivityUsage};
+use ya_core_model::activity::{
+    Exec, GetActivityState, GetActivityUsage, GetExecBatchResults, GetRunningCommand,
+};
 use ya_exe_dummy::worker::{Command, Worker};
 use ya_service_bus::actix_rpc;
 
@@ -96,6 +98,8 @@ fn main() -> Result<()> {
             actix_rpc::bind::<Exec>(&service_id, worker.clone().recipient());
             actix_rpc::bind::<GetActivityState>(&service_id, worker.clone().recipient());
             actix_rpc::bind::<GetActivityUsage>(&service_id, worker.clone().recipient());
+            actix_rpc::bind::<GetRunningCommand>(&service_id, worker.clone().recipient());
+            actix_rpc::bind::<GetExecBatchResults>(&service_id, worker.clone().recipient());
 
             sys.run()?;
         }

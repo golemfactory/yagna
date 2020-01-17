@@ -7,34 +7,60 @@ use futures::prelude::*;
 use std::time::{Duration, Instant};
 
 pub use crate::model::Command;
-use crate::model::{InnerEq, UpdateState};
+use crate::model::{InnerEq, UpdateBatchResult, UpdateRunningCommand, UpdateState};
 use futures::{FutureExt, TryFutureExt};
+use std::collections::HashMap;
 use std::pin::Pin;
-use ya_core_model::activity::{
-    Exec, GetActivityState, GetActivityUsage, RpcMessageError, SetActivityState, SetActivityUsage,
+use ya_core_model::activity::*;
+use ya_model::activity::{
+    ActivityState, ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
+    ExeScriptCommandState, State,
 };
-use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommand, State};
 use ya_service_bus::{RpcEndpoint, RpcEnvelope, RpcMessage};
 
 const ACTIVITY_SERVICE_GSB: &str = "/activity";
+
+#[inline(always)]
+fn invalid_service_id<R>(service_id: &String) -> std::result::Result<R, RpcMessageError> {
+    Err(RpcMessageError::BadRequest(format!(
+        "Invalid service id {}",
+        service_id
+    )))
+}
 
 pub struct Worker {
     states: StateMachine,
     service_id: Option<String>,
     actor: Option<Addr<Self>>,
     report_handle: Option<SpawnHandle>,
+    batches: HashMap<String, Vec<ExeScriptCommandResult>>,
+    running_command: Option<Command>,
 }
 
 impl Worker {
-    pub fn new(service_id: &String) -> Self {
+    fn new_inner(service_id: Option<String>) -> Self {
         Self {
             states: StateMachine::default(),
-            service_id: Some(service_id.clone()),
+            service_id,
             actor: None,
             report_handle: None,
+            batches: HashMap::new(),
+            running_command: None,
         }
     }
 
+    pub fn new(service_id: &String) -> Self {
+        Self::new_inner(Some(service_id.clone()))
+    }
+}
+
+impl Default for Worker {
+    fn default() -> Self {
+        Self::new_inner(None)
+    }
+}
+
+impl Worker {
     async fn rpc<M: RpcMessage + Unpin>(uri: &str, msg: M) -> Result<<M as RpcMessage>::Item> {
         ya_service_bus::typed::private_service(uri)
             .send(msg)
@@ -95,17 +121,6 @@ impl Worker {
     }
 }
 
-impl Default for Worker {
-    fn default() -> Self {
-        Self {
-            states: StateMachine::default(),
-            service_id: None,
-            actor: None,
-            report_handle: None,
-        }
-    }
-}
-
 impl Actor for Worker {
     type Context = Context<Self>;
 
@@ -136,10 +151,7 @@ impl Handler<RpcEnvelope<GetActivityState>> for Worker {
             });
         }
 
-        Err(RpcMessageError::BadRequest(format!(
-            "Invalid service id {}",
-            msg.activity_id
-        )))
+        invalid_service_id(&msg.activity_id)
     }
 }
 
@@ -160,10 +172,7 @@ impl Handler<RpcEnvelope<GetActivityUsage>> for Worker {
             });
         }
 
-        Err(RpcMessageError::BadRequest(format!(
-            "Invalid service id {}",
-            msg.activity_id
-        )))
+        invalid_service_id(&msg.activity_id)
     }
 }
 
@@ -171,12 +180,37 @@ impl Handler<RpcEnvelope<Exec>> for Worker {
     type Result = std::result::Result<<Exec as RpcMessage>::Item, <Exec as RpcMessage>::Error>;
 
     fn handle(&mut self, msg: RpcEnvelope<Exec>, _ctx: &mut Self::Context) -> Self::Result {
+        if !self.service_id.inner_eq(&msg.activity_id) {
+            return invalid_service_id(&msg.activity_id);
+        }
+
         let actor = self.actor.clone().unwrap();
         let batch_id = msg.batch_id.clone();
+        let batch_idx = msg.batch_id.clone();
+
+        self.batches.remove(&msg.batch_id);
 
         let fut: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async move {
-            for cmd in msg.exe_script.iter() {
-                actor.send(Command(cmd.clone())).await??;
+            for (index, cmd) in msg.exe_script.iter().enumerate() {
+                let cmd_result = actor.send(Command(cmd.clone())).await?;
+                let (result, message) = match cmd_result {
+                    Ok((_, message)) => (CommandResult::Ok, message),
+                    Err(error) => (CommandResult::Error, format!("{:?}", error)),
+                };
+
+                let update = UpdateBatchResult {
+                    batch_id: batch_idx.clone(),
+                    result: ExeScriptCommandResult {
+                        index: index as u32,
+                        result: Some(result),
+                        message: Some(message),
+                    },
+                };
+                actor.send(update).await?;
+
+                if result == CommandResult::Error {
+                    break;
+                }
             }
             Ok(())
         }
@@ -184,6 +218,82 @@ impl Handler<RpcEnvelope<Exec>> for Worker {
 
         ActorResponse::r#async(fut.into_actor(self));
         Ok(batch_id)
+    }
+}
+
+impl Handler<RpcEnvelope<GetRunningCommand>> for Worker {
+    type Result = std::result::Result<
+        <GetRunningCommand as RpcMessage>::Item,
+        <GetRunningCommand as RpcMessage>::Error,
+    >;
+
+    fn handle(
+        &mut self,
+        msg: RpcEnvelope<GetRunningCommand>,
+        _ctx: &mut Self::Context,
+    ) -> Self::Result {
+        if !self.service_id.inner_eq(&msg.activity_id) {
+            return invalid_service_id(&msg.activity_id);
+        }
+
+        let state = match &self.running_command {
+            Some(cmd) => ExeScriptCommandState {
+                command: serde_json::to_string(&cmd.0).unwrap(),
+                progress: None,
+                params: None,
+            },
+            None => ExeScriptCommandState {
+                command: "".to_string(),
+                progress: None,
+                params: None,
+            },
+        };
+
+        Ok(state)
+    }
+}
+
+impl Handler<RpcEnvelope<GetExecBatchResults>> for Worker {
+    type Result = std::result::Result<
+        <GetExecBatchResults as RpcMessage>::Item,
+        <GetExecBatchResults as RpcMessage>::Error,
+    >;
+
+    fn handle(
+        &mut self,
+        msg: RpcEnvelope<GetExecBatchResults>,
+        _ctx: &mut Self::Context,
+    ) -> Self::Result {
+        if !self.service_id.inner_eq(&msg.activity_id) {
+            return invalid_service_id(&msg.activity_id);
+        }
+
+        let results = match self.batches.get(&msg.batch_id) {
+            Some(results) => results.clone(),
+            None => Vec::new(),
+        };
+        Ok(results)
+    }
+}
+
+impl Handler<UpdateBatchResult> for Worker {
+    type Result = ();
+
+    fn handle(&mut self, msg: UpdateBatchResult, _ctx: &mut Self::Context) -> Self::Result {
+        match self.batches.get_mut(&msg.batch_id) {
+            Some(vec) => vec.push(msg.result),
+            None => {
+                self.batches.insert(msg.batch_id, vec![msg.result]);
+            }
+        }
+    }
+}
+
+impl Handler<UpdateRunningCommand> for Worker {
+    type Result = ();
+
+    fn handle(&mut self, msg: UpdateRunningCommand, _ctx: &mut Self::Context) -> Self::Result {
+        self.running_command = msg.0;
     }
 }
 
@@ -212,11 +322,14 @@ impl Handler<Command> for Worker {
     type Result = ActorResponse<Self, (State, String), Error>;
 
     fn handle(&mut self, msg: Command, ctx: &mut Self::Context) -> Self::Result {
-        match msg.0 {
+        let address = ctx.address().clone();
+        let command = msg.clone();
+        let fut = match msg.0 {
             ExeScriptCommand::Deploy {} => {
                 let transition = Transition::Deploy;
                 let state = self.states.current_state;
-                let fut = if let Some(state) = self.states.next_state(transition) {
+
+                if let Some(state) = self.states.next_state(transition) {
                     let addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(5);
                     async move {
@@ -224,52 +337,54 @@ impl Handler<Command> for Worker {
                         addr.send(UpdateState { state }).await??;
                         Ok((state, "".to_owned()))
                     }
+                    .boxed()
                     .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
-                };
-                ActorResponse::r#async(fut.into_actor(self))
+                }
             }
             ExeScriptCommand::Start { args } => {
                 let transition = Transition::Start;
                 let state = self.states.current_state;
-                let fut = if let Some(state) = self.states.next_state(Transition::Start) {
+
+                if let Some(state) = self.states.next_state(Transition::Start) {
                     let addr = ctx.address().clone();
                     async move {
                         tokio::time::delay_for(Duration::from_secs(2)).await;
                         let _r = addr.send(UpdateState { state }).await?;
                         Ok((state, format!("args={{{}}}", args.join(","))))
                     }
+                    .boxed()
                     .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
-                };
-                ActorResponse::r#async(fut.into_actor(self))
+                }
             }
             ExeScriptCommand::Run { entry_point, args } => {
                 let transition = Transition::Run;
                 let state = self.states.current_state;
+
                 if let Some(state) = self.states.next_state(transition) {
                     let _addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(3);
-                    ActorResponse::r#async(
-                        async move {
-                            tokio::time::delay_until(when.into()).await;
-                            Ok((
-                                state,
-                                format!("entry_point={},args={{{}}}", entry_point, args.join(",")),
-                            ))
-                        }
-                        .into_actor(self),
-                    )
+                    async move {
+                        tokio::time::delay_until(when.into()).await;
+                        Ok((
+                            state,
+                            format!("entry_point={},args={{{}}}", entry_point, args.join(",")),
+                        ))
+                    }
+                    .boxed()
+                    .left_future()
                 } else {
-                    ActorResponse::reply(Err(Error::InvalidTransition { transition, state }))
+                    future::err(Error::InvalidTransition { transition, state }).right_future()
                 }
             }
             ExeScriptCommand::Transfer { from, to } => {
                 let transition = Transition::Transfer;
                 let state = self.states.current_state;
-                let fut = if let Some(state) = self.states.next_state(transition) {
+
+                if let Some(state) = self.states.next_state(transition) {
                     let addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(3);
                     async move {
@@ -277,16 +392,17 @@ impl Handler<Command> for Worker {
                         let _ = addr.send(UpdateState { state }).await?;
                         Ok((state, format!("from={},to={}", from, to)))
                     }
+                    .boxed()
                     .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
-                };
-                ActorResponse::r#async(fut.into_actor(self))
+                }
             }
             ExeScriptCommand::Stop {} => {
                 let transition = Transition::Transfer;
                 let state = self.states.current_state;
-                let fut = if let Some(state) = self.states.next_state(transition) {
+
+                if let Some(state) = self.states.next_state(transition) {
                     let addr = ctx.address().clone();
                     let when = Instant::now() + Duration::from_secs(2);
                     async move {
@@ -294,12 +410,18 @@ impl Handler<Command> for Worker {
                         let _r = addr.send(UpdateState { state }).await?;
                         Ok((state, "".to_owned()))
                     }
+                    .boxed()
                     .left_future()
                 } else {
                     future::err(Error::InvalidTransition { transition, state }).right_future()
-                };
-                ActorResponse::r#async(fut.into_actor(self))
+                }
             }
-        }
+        };
+
+        let fut = async move {
+            address.send(UpdateRunningCommand(Some(command))).await?;
+            fut.await
+        };
+        ActorResponse::r#async(fut.into_actor(self))
     }
 }
