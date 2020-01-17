@@ -5,6 +5,11 @@ use std::{net::SocketAddr, path::PathBuf};
 
 pub mod constants;
 
+pub fn default_data_dir() -> Result<PathBuf> {
+    Ok(appdirs::user_data_dir(Some("yagna"), Some("golem"), false)
+        .map_err(|_| anyhow::Error::msg("user data dir creation failure"))?)
+}
+
 #[derive(Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,

@@ -59,11 +59,11 @@ struct CliArgs {
 }
 
 impl CliArgs {
-    pub fn get_data_dir(&self) -> anyhow::Result<PathBuf> {
-        match &self.data_dir {
+    pub fn get_data_dir(&self) -> Result<PathBuf> {
+        Ok(match &self.data_dir {
             Some(data_dir) => data_dir.to_owned(),
-            None => appdirs::user_data_dir(Some("yagna"), Some("golem"), false)?,
-        }
+            None => ya_service_api::default_data_dir()?,
+        })
     }
 
     pub fn get_http_address(&self) -> Result<(String, u16)> {
