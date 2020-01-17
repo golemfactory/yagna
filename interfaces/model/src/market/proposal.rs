@@ -21,7 +21,11 @@ pub struct Proposal {
     pub proposal_id: Option<String>,
     #[serde(rename = "issuerId", skip_serializing_if = "Option::is_none")]
     pub issuer_id: Option<String>,
-    /// * `Initial` - proposal arrived from the market as response to subscription * `Draft` - bespoke counter-proposal issued by one party directly to other party (negotiation phase) * `Rejected` by other party * `Accepted` - promoted into the Agreement draft * `Expired` - not accepted nor rejected before validity period 
+    /// * `Initial` - proposal arrived from the market as response to subscription
+    /// * `Draft` - bespoke counter-proposal issued by one party directly to other party (negotiation phase)
+    /// * `Rejected` by other party
+    /// * `Accepted` - promoted into the Agreement draft
+    /// * `Expired` - not accepted nor rejected before validity period
     #[serde(rename = "state", skip_serializing_if = "Option::is_none")]
     pub state: Option<State>,
     /// id of the proposal from other side which this proposal responds to 
@@ -42,7 +46,11 @@ impl Proposal {
     }
 }
 
-/// * `Initial` - proposal arrived from the market as response to subscription * `Draft` - bespoke counter-proposal issued by one party directly to other party (negotiation phase) * `Rejected` by other party * `Accepted` - promoted into the Agreement draft * `Expired` - not accepted nor rejected before validity period 
+/// * `Initial` - proposal arrived from the market as response to subscription
+/// * `Draft` - bespoke counter-proposal issued by one party directly to other party (negotiation phase)
+/// * `Rejected` by other party
+/// * `Accepted` - promoted into the Agreement draft
+/// * `Expired` - not accepted nor rejected before validity period
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum State {
     #[serde(rename = "Initial")]
