@@ -64,7 +64,7 @@ async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
             Ok("".into())
         }
         Ok(r) => {
-            println!("REQUESTOR=>  | OK! Agreement approved by Provider!: {}", r);
+            println!("OK! Agreement {} approved by Provider.", &agreement.proposal_id);
             Ok(r)
         }
         e => e,
