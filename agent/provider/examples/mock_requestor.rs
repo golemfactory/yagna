@@ -1,12 +1,9 @@
 use serde_json;
 use std::{ thread, time::{Duration, SystemTime}, };
 
-use ya_client::{
-    market::{ApiClient, RequestorApi},
-    web::WebClient,
-    Result,
-};
+use ya_client::{market::{ApiClient, RequestorApi}, web::WebClient, Result, Error};
 use ya_model::market::{Agreement, Demand, Offer, Proposal, ProviderEvent, RequestorEvent};
+use awc::error::SendRequestError;
 
 
 async fn query_events(client: &RequestorApi, subscription_id: &str) -> Result<Vec<RequestorEvent>> {
@@ -38,12 +35,6 @@ async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
     let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
     let offer = offer.as_ref().unwrap();
 
-    println!("Received offer {}. Sending agreeement {}.", &offer.id, &offer.id);
-
-    let now = format!("{}", humantime::format_rfc3339_seconds(SystemTime::now()));
-    let agreement = Agreement::new(offer.id.clone(), now);
-    let res = client.create_agreement(&agreement).await?;
-
 //    println!("Received offer {}. Sending new proposal {}.", &offer.id, &offer.id);
 //
 //    let proposal = client.get_proposal(&subscription_id, &offer.id).await?;
@@ -52,7 +43,32 @@ async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
 //    let requestor_events = query_events(client, &subscription_id).await?;
 //    let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
 
+    println!("Received offer {}. Sending agreeement.", &offer.id);
 
+    let now = format!("{}", humantime::format_rfc3339_seconds(SystemTime::now()));
+    let agreement = Agreement::new(offer.id.clone(), now);
+    let res = client.create_agreement(&agreement).await?;
+
+
+    println!("Confirm agreement {}.", &agreement.proposal_id);
+    let res = client.confirm_agreement(&agreement.proposal_id).await?;
+
+    println!("Waiting for approval of agreement {}.", &agreement.proposal_id);
+
+    match client.wait_for_approval(&agreement.proposal_id).await {
+        Err(Error::SendRequestError {
+                e: SendRequestError::Timeout,
+                ..
+            }) => {
+            println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
+            Ok("".into())
+        }
+        Ok(r) => {
+            println!("REQUESTOR=>  | OK! Agreement approved by Provider!: {}", r);
+            Ok(r)
+        }
+        e => e,
+    }?;
 
     Ok(())
 }
