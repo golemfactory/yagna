@@ -8,6 +8,9 @@ use ya_model::market::{ProviderEvent, Offer, AgreementProposal, Proposal};
 use futures::future::join_all;
 use log::{info, warn, error};
 
+// Temporrary
+use serde_json;
+
 
 struct OfferSubscription {
     subscription_id: String,
@@ -82,11 +85,18 @@ impl ProviderMarket {
     async fn dispatch_events(&self, subscription_id: &str, events: &Vec<ProviderEvent>) {
         info!("Collected {} events. Processing...", events.len());
 
-        for event in events.iter() {
-            if let Err(error) = self.dispatch_event(subscription_id, event).await {
-                error!("Error processing event: {}, subscription_id: {}.", error, subscription_id);
-            }
-        }
+        let dispatch_futures = events.iter()
+            .map(|event|{
+                self.dispatch_event(subscription_id, event)
+            }).collect::<Vec<_>>();
+
+        let _ = join_all(dispatch_futures).await
+            .iter()
+            .map(|result|{
+                if let Err(error) = result {
+                    error!("Error processing event: {}, subscription_id: {}.", error, subscription_id);
+                }
+            }).collect::<Vec<_>>();
     }
 
     async fn dispatch_event(&self, subscription_id: &str, event: &ProviderEvent) -> Result<()> {
@@ -110,9 +120,14 @@ impl ProviderMarket {
 
                 info!("Got agreement [id={}].", agreement_id);
 
-                let agreement_proposal = self.api.provider()
-                    .get_proposal(subscription_id, demand.id)
-                    .await?;
+                // Temporary workaround. Update after new market api will aprear.
+//                let agreement_proposal = self.api.provider()
+//                    .get_proposal(subscription_id, demand.id)
+//                    .await?;
+
+                let offer = Proposal::new("".to_string(), serde_json::json!({}), "".to_string());
+                let demand = Proposal::new("".to_string(), serde_json::json!({}), "".to_string());
+                let agreement_proposal = AgreementProposal::new("".to_string(), demand, offer);
 
                 self.process_agreement(subscription_id, agreement_proposal, &agreement_id).await?;
             }
@@ -136,7 +151,7 @@ impl ProviderMarket {
         Ok(())
     }
 
-    async fn process_agreement(&self, subscription_id: &str, agreement: AgreementProposal, agreement_id: &str) {
+    async fn process_agreement(&self, subscription_id: &str, agreement: AgreementProposal, agreement_id: &str) -> Result<()> {
         let response = self.negotiator.react_to_agreement(&agreement);
         match response {
             Ok(action) => {
@@ -145,8 +160,9 @@ impl ProviderMarket {
                     AgreementResponse::RejectAgreement => self.reject_agreement(subscription_id, agreement_id).await?,
                 }
             },
-            Err(error) => error!("Negotiator error while processing agreement {}. Error: {}", agreement.proposal_id, error)
+            Err(error) => error!("Negotiator error while processing agreement {}. Error: {}", agreement_id, error)
         }
+        Ok(())
     }
 
     // =========================================== //

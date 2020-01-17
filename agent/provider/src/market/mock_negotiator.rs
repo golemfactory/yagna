@@ -5,7 +5,6 @@ use super::negotiator::{Negotiator};
 use crate::market::negotiator::{ProposalResponse, AgreementResponse};
 use crate::node_info::{NodeInfo, CpuInfo};
 
-use serde::{Serialize};
 use serde_json;
 
 
@@ -24,7 +23,7 @@ impl Negotiator for AcceptAllNegotiator {
     }
 
     fn react_to_agreement(&self, _agreement: &AgreementProposal) -> Result<AgreementResponse, Error> {
-        Ok(AgreementResponse::AcceptAgreement)
+        Ok(AgreementResponse::ApproveAgreement)
     }
 }
 

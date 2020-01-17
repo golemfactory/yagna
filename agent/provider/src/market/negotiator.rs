@@ -1,4 +1,4 @@
-use ya_model::market::{Offer, Demand, AgreementProposal, Proposal, Agreement};
+use ya_model::market::{Offer, AgreementProposal, Proposal};
 use ya_client::{Result,};
 
 use crate::node_info::{NodeInfo};
