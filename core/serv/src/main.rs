@@ -61,12 +61,10 @@ struct CliArgs {
 }
 
 impl CliArgs {
-    pub fn get_data_dir(&self) -> PathBuf {
+    pub fn get_data_dir(&self) -> anyhow::Result<PathBuf> {
         match &self.data_dir {
             Some(data_dir) => data_dir.to_owned(),
-            None => appdirs::user_data_dir(Some("yagna"), Some("golem"), false)
-                .unwrap()
-                .join("default"),
+            None => appdirs::user_data_dir(Some("yagna"), Some("golem"), false)?,
         }
     }
 
@@ -97,7 +95,7 @@ impl TryFrom<&CliArgs> for CliCtx {
     type Error = anyhow::Error;
 
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
-        let data_dir = args.get_data_dir();
+        let data_dir = args.get_data_dir()?;
         log::info!("Using data dir: {:?} ", data_dir);
 
         Ok(CliCtx {
