@@ -1,4 +1,4 @@
-use crate::{Result};
+use crate::Result;
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, State};
