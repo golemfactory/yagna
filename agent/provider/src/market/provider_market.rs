@@ -12,6 +12,7 @@ use log::{info, warn, error};
 use serde_json;
 
 
+#[allow(dead_code)]
 struct OfferSubscription {
     subscription_id: String,
     offer: Offer,
@@ -113,10 +114,10 @@ impl ProviderMarket {
 
                 self.process_proposal(subscription_id, agreement_proposal).await?;
             },
-            ProviderEvent::NewAgreementEvent { agreement_id, demand, .. } => {
+            ProviderEvent::NewAgreementEvent { agreement_id, /**demand,**/ .. } => {
 
                 let agreement_id = &agreement_id.as_ref().unwrap();
-                let demand = demand.as_ref().unwrap();
+//                let demand = demand.as_ref().unwrap();
 
                 info!("Got agreement [id={}].", agreement_id);
 

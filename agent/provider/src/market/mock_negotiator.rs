@@ -1,9 +1,9 @@
-use ya_model::market::{Demand, Offer, AgreementProposal, Agreement};
+use ya_model::market::{Offer, AgreementProposal};
 use ya_client::Error;
 
 use super::negotiator::{Negotiator};
 use crate::market::negotiator::{ProposalResponse, AgreementResponse};
-use crate::node_info::{NodeInfo, CpuInfo};
+use crate::node_info::{NodeInfo};
 
 use serde_json;
 

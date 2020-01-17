@@ -18,7 +18,7 @@ pub struct ApiClient {
 impl ApiClient {
     /// Constructs new `ApiClient`.
     pub fn new(client: WebClientBuilder) -> Result<Self> {
-        let client = Arc::new(client.api_root(MARKET_API).build()?);
+        let client = Arc::new(client.api_root(MARKET_API).host_port("127.0.0.1:5001".to_string()).build()?);
 
         Ok(ApiClient {
             provider: ProviderApi::new(&client),
