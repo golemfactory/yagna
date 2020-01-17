@@ -4,10 +4,8 @@ use crate::error::Error;
 use crate::timeout::IntoTimeoutFuture;
 use crate::ACTIVITY_API;
 use actix_web::web;
-use futures::lock::Mutex;
 use futures::prelude::*;
 use std::convert::From;
-use std::sync::Arc;
 
 use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
@@ -15,13 +13,13 @@ use ya_persistence::executor::DbExecutor;
 
 pub mod service;
 
-pub fn web_scope(db: Arc<Mutex<DbExecutor>>) -> actix_web::Scope {
+pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
     let events = web::get().to(impl_restful_handler!(get_events_web, query));
     let state = web::get().to(impl_restful_handler!(get_activity_state_web, path));
     let usage = web::get().to(impl_restful_handler!(get_activity_usage_web, path));
 
     web::scope(ACTIVITY_API)
-        .data(db)
+        .data(db.clone())
         .service(web::resource("/events").route(events))
         .service(web::resource("/activity/{activity_id}/state").route(state))
         .service(web::resource("/activity/{activity_id}/usage").route(usage))
@@ -44,10 +42,7 @@ impl From<Event> for ProviderEvent {
 }
 
 /// Get state of specified Activity.
-async fn get_activity_state(
-    db: &Arc<Mutex<DbExecutor>>,
-    activity_id: &str,
-) -> Result<ActivityState, Error> {
+async fn get_activity_state(db: &DbExecutor, activity_id: &str) -> Result<ActivityState, Error> {
     ActivityStateDao::new(&db_conn!(db)?)
         .get(activity_id)
         .not_found_as_option()
@@ -61,17 +56,14 @@ async fn get_activity_state(
 }
 
 async fn get_activity_state_web(
-    db: web::Data<Arc<Mutex<DbExecutor>>>,
+    db: web::Data<&DbExecutor>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityState, Error> {
     get_activity_state(&db, &path.activity_id).await
 }
 
 /// Get usage of specified Activity.
-async fn get_activity_usage(
-    db: &Arc<Mutex<DbExecutor>>,
-    activity_id: &str,
-) -> Result<ActivityUsage, Error> {
+async fn get_activity_usage(db: &DbExecutor, activity_id: &str) -> Result<ActivityUsage, Error> {
     ActivityUsageDao::new(&db_conn!(db)?)
         .get(activity_id)
         .not_found_as_option()
@@ -85,7 +77,7 @@ async fn get_activity_usage(
 }
 
 async fn get_activity_usage_web(
-    db: web::Data<Arc<Mutex<DbExecutor>>>,
+    db: web::Data<&DbExecutor>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityUsage, Error> {
     get_activity_usage(&db, &path.activity_id).await
@@ -93,7 +85,7 @@ async fn get_activity_usage_web(
 
 /// Fetch Requestor command events.
 async fn get_events_web(
-    db: web::Data<Arc<Mutex<DbExecutor>>>,
+    db: web::Data<&DbExecutor>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ProviderEvent>, Error> {
     EventDao::new(&db_conn!(db)?)

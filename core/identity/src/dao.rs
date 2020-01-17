@@ -4,9 +4,8 @@ pub mod identity;
 pub use appkey::AppKeyDao;
 pub use identity::IdentityDao;
 
-use futures::lock::Mutex;
 use r2d2;
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 use thiserror::Error;
 
 use ya_core_model::appkey as model;
@@ -68,10 +67,8 @@ impl Into<model::Error> for Error {
     }
 }
 
-pub async fn init(db: Arc<Mutex<DbExecutor>>) -> anyhow::Result<()> {
+pub async fn init(db: &DbExecutor) -> anyhow::Result<()> {
     Ok(db
-        .lock()
-        .await
         .apply_migration(crate::db::migrations::run_with_output)
         .unwrap()?)
 }

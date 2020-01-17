@@ -4,22 +4,20 @@ use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
 use crate::ACTIVITY_API;
 use actix_web::web;
-use futures::lock::Mutex;
 use futures::prelude::*;
 use serde::Deserialize;
-use std::sync::Arc;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
 
-pub fn web_scope(db: Arc<Mutex<DbExecutor>>) -> actix_web::Scope {
+pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
     let create = web::post().to(impl_restful_handler!(create_activity, path, query));
     let delete = web::delete().to(impl_restful_handler!(destroy_activity, path, query));
     let exec = web::post().to(impl_restful_handler!(exec, path, query, body));
     let batch = web::get().to(impl_restful_handler!(get_batch_results, path, query));
 
     web::scope(&ACTIVITY_API)
-        .data(db)
+        .data(db.clone())
         .service(web::resource("/activity").route(create))
         .service(web::resource("/activity/{activity_id}").route(delete))
         .service(web::resource("/activity/{activity_id}/exec").route(exec))
@@ -28,7 +26,7 @@ pub fn web_scope(db: Arc<Mutex<DbExecutor>>) -> actix_web::Scope {
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity(
-    db: web::Data<Arc<Mutex<DbExecutor>>>,
+    db: web::Data<&DbExecutor>,
     query: web::Query<QueryTimeout>,
     body: web::Json<CreateActivity>,
 ) -> Result<String, Error> {
@@ -47,7 +45,7 @@ async fn create_activity(
 
 /// Destroys given Activity.
 async fn destroy_activity(
-    db: web::Data<Arc<Mutex<DbExecutor>>>,
+    db: web::Data<&DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<(), Error> {
@@ -72,7 +70,7 @@ async fn destroy_activity(
 
 /// Executes an ExeScript batch within a given Activity.
 async fn exec(
-    db: web::Data<Arc<Mutex<DbExecutor>>>,
+    db: web::Data<&DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
     body: web::Json<ExeScriptRequest>,
@@ -98,7 +96,7 @@ async fn exec(
 
 /// Queries for ExeScript batch results.
 async fn get_batch_results(
-    db: web::Data<Arc<Mutex<DbExecutor>>>,
+    db: web::Data<&DbExecutor>,
     path: web::Path<PathActivityBatch>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {

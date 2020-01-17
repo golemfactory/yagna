@@ -1,12 +1,10 @@
 use actix_web::{get, middleware, App, HttpServer};
 use anyhow::{Context, Result};
-use futures::lock::Mutex;
 use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
     path::PathBuf,
-    sync::Arc,
 };
 use structopt::{clap, StructOpt};
 
@@ -160,14 +158,12 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
 
-                let db = Arc::new(Mutex::new(DbExecutor::from_data_dir(&ctx.data_dir)?));
+                let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
 
-                db.lock()
-                    .await
-                    .apply_migration(ya_persistence::migrations::run_with_output)
+                db.apply_migration(ya_persistence::migrations::run_with_output)
                     .unwrap()?;
-                ya_identity::service::activate(db.clone()).await?;
-                ya_activity::provider::service::bind_gsb(db.clone());
+                ya_identity::service::activate(&db).await?;
+                ya_activity::provider::service::bind_gsb(&db);
 
                 let default_id = bus::private_service(identity::IDENTITY_SERVICE_ID)
                     .send(identity::Get::ByDefault)
@@ -189,9 +185,9 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .service(index)
-                        .service(ya_activity::provider::web_scope(db.clone()))
-                        .service(ya_activity::requestor::control::web_scope(db.clone()))
-                        .service(ya_activity::requestor::state::web_scope(db.clone()))
+                        .service(ya_activity::provider::web_scope(&db))
+                        .service(ya_activity::requestor::control::web_scope(&db))
+                        .service(ya_activity::requestor::state::web_scope(&db))
                 })
                 .bind(ctx.http_address())
                 .context(format!(

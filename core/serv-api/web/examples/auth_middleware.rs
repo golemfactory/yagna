@@ -2,8 +2,7 @@ use actix_web::http::header;
 use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer};
 
 use awc::Client;
-use futures::{lock::Mutex, TryFutureExt};
-use std::sync::Arc;
+use futures::TryFutureExt;
 use structopt::StructOpt;
 
 use ya_core_model::identity as idm;
@@ -13,9 +12,9 @@ use ya_service_api_web::middleware::auth;
 use ya_service_bus::RpcEndpoint;
 
 async fn server() -> anyhow::Result<()> {
-    let db = Arc::new(Mutex::new(DbExecutor::new(":memory:")?));
+    let db = DbExecutor::new(":memory:")?;
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
-    ya_identity::service::activate(db).await?;
+    ya_identity::service::activate(&db).await?;
 
     HttpServer::new(move || {
         App::new()

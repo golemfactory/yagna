@@ -3,16 +3,14 @@ use crate::dao::*;
 use crate::error::Error;
 use crate::timeout::IntoTimeoutFuture;
 
-use futures::lock::Mutex;
 use futures::prelude::*;
 use std::convert::From;
-use std::sync::Arc;
 use ya_core_model::activity::*;
 use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::State;
 use ya_persistence::executor::DbExecutor;
 
-pub fn bind_gsb(db: Arc<Mutex<DbExecutor>>) {
+pub fn bind_gsb(db: &DbExecutor) {
     log::info!("activating activity provider service");
 
     // public for remote requestors interactions
@@ -40,7 +38,7 @@ pub fn bind_gsb(db: Arc<Mutex<DbExecutor>>) {
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity_gsb(
-    db: Arc<Mutex<DbExecutor>>,
+    db: DbExecutor,
     msg: CreateActivity,
 ) -> RpcMessageResult<CreateActivity> {
     let conn = db_conn!(db)?;
@@ -76,7 +74,7 @@ async fn create_activity_gsb(
 
 /// Destroys given Activity.
 async fn destroy_activity_gsb(
-    db: Arc<Mutex<DbExecutor>>,
+    db: DbExecutor,
     msg: DestroyActivity,
 ) -> RpcMessageResult<DestroyActivity> {
     let conn = db_conn!(db)?;
@@ -101,7 +99,7 @@ async fn destroy_activity_gsb(
 }
 
 async fn get_activity_state_gsb(
-    db: Arc<Mutex<DbExecutor>>,
+    db: DbExecutor,
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
     super::get_activity_state(&db, &msg.activity_id)
@@ -111,7 +109,7 @@ async fn get_activity_state_gsb(
 
 /// Pass activity state (which may include error details).
 async fn set_activity_state_gsb(
-    db: Arc<Mutex<DbExecutor>>,
+    db: DbExecutor,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
     // TODO: caller authorization
@@ -126,7 +124,7 @@ async fn set_activity_state_gsb(
 }
 
 async fn get_activity_usage_gsb(
-    db: Arc<Mutex<DbExecutor>>,
+    db: DbExecutor,
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
     super::get_activity_usage(&db, &msg.activity_id)
@@ -136,7 +134,7 @@ async fn get_activity_usage_gsb(
 
 /// Pass current activity usage (which may include error details).
 async fn set_activity_usage_gsb(
-    db: Arc<Mutex<DbExecutor>>,
+    db: DbExecutor,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
     // TODO: caller authorization
