@@ -11,23 +11,31 @@
 use serde::{Deserialize, Serialize};
 
 
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AgreementProposal {
-    /// id of the proposal to be promoted to the Agreement
-    #[serde(rename = "proposalId")]
-    pub proposal_id: String,
-    /// End of validity period. Agreement needs to be accepted, rejected or cancellled before this date; otherwise will expire 
-    #[serde(rename = "validTo")]
-    pub valid_to: String,
+#[serde(tag = "eventtype")]
+pub enum Event {
+    #[serde(rename="ProposalEvent")]
+    ProposalEvent {
+        #[serde(rename = "eventDate")]
+        event_date: String,
+        #[serde(rename = "proposal", skip_serializing_if = "Option::is_none")]
+        proposal: Option<crate::market::Proposal>,
+    },
+    #[serde(rename="AgreementEvent")]
+    AgreementEvent {
+        #[serde(rename = "eventDate")]
+        event_date: String,
+        #[serde(rename = "agreement", skip_serializing_if = "Option::is_none")]
+        agreement: Option<crate::market::Agreement>,
+    },
+    #[serde(rename="PropertyQueryEvent")]
+    PropertyQueryEvent {
+        #[serde(rename = "eventDate")]
+        event_date: String,
+    },
 }
 
-impl AgreementProposal {
-    pub fn new(proposal_id: String, valid_to: String) -> AgreementProposal {
-        AgreementProposal {
-            proposal_id,
-            valid_to,
-        }
-    }
-}
+
 
 

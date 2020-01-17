@@ -12,20 +12,18 @@ use serde::{Deserialize, Serialize};
 
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AgreementProposal {
-    /// id of the proposal to be promoted to the Agreement
-    #[serde(rename = "proposalId")]
-    pub proposal_id: String,
-    /// End of validity period. Agreement needs to be accepted, rejected or cancellled before this date; otherwise will expire 
-    #[serde(rename = "validTo")]
-    pub valid_to: String,
+pub struct Error {
+    #[serde(rename = "code")]
+    pub code: String,
+    #[serde(rename = "message")]
+    pub message: String,
 }
 
-impl AgreementProposal {
-    pub fn new(proposal_id: String, valid_to: String) -> AgreementProposal {
-        AgreementProposal {
-            proposal_id,
-            valid_to,
+impl Error {
+    pub fn new(code: String, message: String) -> Error {
+        Error {
+            code,
+            message,
         }
     }
 }

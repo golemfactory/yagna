@@ -12,20 +12,21 @@ use serde::{Deserialize, Serialize};
 
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AgreementProposal {
-    /// id of the proposal to be promoted to the Agreement
-    #[serde(rename = "proposalId")]
-    pub proposal_id: String,
-    /// End of validity period. Agreement needs to be accepted, rejected or cancellled before this date; otherwise will expire 
-    #[serde(rename = "validTo")]
-    pub valid_to: String,
+pub struct PropertyQuery {
+    #[serde(rename = "issuerProperties", skip_serializing_if = "Option::is_none")]
+    pub issuer_properties: Option<serde_json::Value>,
+    #[serde(rename = "queryId", skip_serializing_if = "Option::is_none")]
+    pub query_id: Option<String>,
+    #[serde(rename = "queriedProperties", skip_serializing_if = "Option::is_none")]
+    pub queried_properties: Option<Vec<String>>,
 }
 
-impl AgreementProposal {
-    pub fn new(proposal_id: String, valid_to: String) -> AgreementProposal {
-        AgreementProposal {
-            proposal_id,
-            valid_to,
+impl PropertyQuery {
+    pub fn new() -> PropertyQuery {
+        PropertyQuery {
+            issuer_properties: None,
+            query_id: None,
+            queried_properties: None,
         }
     }
 }
