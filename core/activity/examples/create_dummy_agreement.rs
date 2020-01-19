@@ -1,42 +1,85 @@
 use diesel::prelude::*;
+use serde_json::json;
+use structopt::StructOpt;
 
 use ya_persistence::executor::DbExecutor;
-use ya_persistence::schema::agreement::dsl as agreement_dsl;
+
+use actix_web::web::get;
+use std::hint::unreachable_unchecked;
+use ya_core_model::ethaddr::NodeId;
+use ya_persistence::models::{AgreementState, NewAgreement};
 use ya_persistence::schema::agreement_state::dsl as agreement_state_dsl;
 
-fn main() -> anyhow::Result<()> {
+fn gen_id() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+#[derive(StructOpt)]
+struct Args {
+    requestor: NodeId,
+    provider: NodeId,
+}
+
+#[actix_rt::main]
+async fn main() -> anyhow::Result<()> {
+    let args = Args::from_args();
+
+    let demand_props = json! {{
+        "golem": {
+            "node": {
+                "id": {
+                    "name": "dummy reqestor",
+                },
+                "geo": {
+                    "country_code": "PL",
+                }
+            },
+            "inf": {
+                "activity": {
+                    "timeout_secs": 30
+                }
+            }
+
+        }
+    }};
+
+    let demand_constraints = r#"
+        (&
+            (golem.inf.mem.gib>=0.5)
+            (golem.inf.storage.gib>=2)
+            (golem.srv.comp.wasm.task_package=golemfactory/test01:v0)
+        )
+    "#;
+
     let data_dir = ya_service_api::default_data_dir()?;
     let db = DbExecutor::from_data_dir(&data_dir)?;
-    let conn = db.conn()?;
 
-    let _: anyhow::Result<()> = conn.transaction(|| {
-        db.apply_migration(ya_persistence::migrations::run_with_output)
-            .unwrap()?;
+    db.apply_migration(ya_persistence::migrations::run_with_output)?;
 
-        diesel::insert_into(agreement_state_dsl::agreement_state)
-            .values((
-                agreement_state_dsl::id.eq(1),
-                agreement_state_dsl::name.eq("dummy"),
-            ))
-            .execute(&conn)?;
-        Ok(())
-    });
+    let natural_id = gen_id();
 
-    //    diesel::insert_into(agreement_dsl::agreement)
-    //        .values((
-    //            agreement_dsl::id.eq(1),
-    //            agreement_dsl::natural_id.eq("0xAABB"),
-    //            agreement_dsl::agreement_id.eq(Integer),
-    //            agreement_dsl::state_id.eq(Integer),
-    //            agreement_dsl::previous_note_id.eq(Nullable<Integer>),
-    //            agreement_dsl::created_date.eq(Timestamp),
-    //            agreement_dsl::activity_id.eq(Nullable<Int,eger>),
-    //            agreement_dsl::total_amount_due.eq(Text),
-    //            agreement_dsl::usage_counter_json.eq(Nullable<Text>),
-    //            agreement_dsl::credit_account.eq(Text),
-    //            agreement_dsl::payment_due_date.eq(Nullable<Timestamp>),
-    //    ))
-    //    .execute(&conn)?;
+    let new_agreement = NewAgreement {
+        natural_id,
+        state_id: AgreementState::New,
+        demand_node_id: "".to_string(),
+        demand_properties_json: serde_json::to_string_pretty(&demand_props)?,
+        demand_constraints_json: demand_constraints.to_string(),
+        offer_node_id: "".to_string(),
+        offer_properties_json: "".to_string(),
+        offer_constraints_json: "".to_string(),
+        proposed_signature: "fake".to_string(),
+        approved_signature: "fake".to_string(),
+        committed_signature: None,
+    };
+
+    db.with_transaction(|conn| {
+        use ya_persistence::schema::agreement::dsl::agreement;
+        diesel::insert_into(agreement)
+            .values((&new_agreement,))
+            .execute(conn)?;
+        Ok::<_, anyhow::Error>(())
+    })
+    .await?;
 
     Ok(())
 }

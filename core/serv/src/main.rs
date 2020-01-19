@@ -160,8 +160,7 @@ impl ServiceCommand {
 
                 let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
 
-                db.apply_migration(ya_persistence::migrations::run_with_output)
-                    .unwrap()?;
+                db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 ya_identity::service::activate(&db).await?;
                 ya_activity::provider::service::bind_gsb(&db);
 
