@@ -1,10 +1,9 @@
-pub mod provider_agent;
-mod node_info;
 mod market;
+mod node_info;
+pub mod provider_agent;
 
 use crate::provider_agent::ProviderAgent;
-use log::{info};
-
+use log::info;
 
 async fn run_main() {
     let mut agent = ProviderAgent::new().unwrap();
@@ -15,6 +14,5 @@ fn main() {
     env_logger::init();
     info!("Running Provider Agent.");
 
-    actix_rt::System::new("test")
-        .block_on(run_main());
+    actix_rt::System::new("test").block_on(run_main());
 }
