@@ -3,7 +3,10 @@
 
 use crate::schema::*;
 use chrono::NaiveDateTime;
+use diesel::backend::Backend;
+use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::sql_types::Integer;
+use std::error::Error;
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "activity"]
@@ -93,6 +96,23 @@ pub enum AgreementState {
     Canceled = 40,
     Rejected = 41,
     Terminated = 50,
+}
+
+impl<DB: Backend> ToSql<Integer, DB> for AgreementState {
+    fn to_sql<'a, W: std::io::Write>(
+        &self,
+        out: &mut Output<'a, W, DB>,
+    ) -> diesel::deserialize::Result<IsNull> {
+        let v = match self {
+            AgreementState::New => 0,
+            AgreementState::PendingApproval => 1,
+            AgreementState::Approved => 10,
+            AgreementState::Canceled => 40,
+            AgreementState::Rejected => 41,
+            AgreementState::Terminated => 50,
+        };
+        ToSql::<Integer, DB>::to_sql(&v, out)
+    }
 }
 
 #[derive(Queryable, Debug, Identifiable)]

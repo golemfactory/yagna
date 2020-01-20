@@ -49,7 +49,7 @@ CREATE TABLE "agreement"(
 	"offer_constraints_json" TEXT NOT NULL,
 	"proposed_signature" TEXT NOT NULL,
 	"approved_signature" TEXT NOT NULL,
-	"committed_signature" TEXT NOT NULL,
+	"committed_signature" TEXT,
     FOREIGN KEY("state_id") REFERENCES "agreement_state" ("id")
 );
 

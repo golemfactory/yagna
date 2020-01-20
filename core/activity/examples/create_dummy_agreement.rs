@@ -4,11 +4,8 @@ use structopt::StructOpt;
 
 use ya_persistence::executor::DbExecutor;
 
-use actix_web::web::get;
-use std::hint::unreachable_unchecked;
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::models::{AgreementState, NewAgreement};
-use ya_persistence::schema::agreement_state::dsl as agreement_state_dsl;
 
 fn gen_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -61,10 +58,10 @@ async fn main() -> anyhow::Result<()> {
     let new_agreement = NewAgreement {
         natural_id,
         state_id: AgreementState::New,
-        demand_node_id: "".to_string(),
+        demand_node_id: args.requestor.to_string(),
         demand_properties_json: serde_json::to_string_pretty(&demand_props)?,
         demand_constraints_json: demand_constraints.to_string(),
-        offer_node_id: "".to_string(),
+        offer_node_id: args.provider.to_string(),
         offer_properties_json: "".to_string(),
         offer_constraints_json: "".to_string(),
         proposed_signature: "fake".to_string(),
@@ -72,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
         committed_signature: None,
     };
 
-    db.with_transaction(|conn| {
+    db.with_transaction(move |conn| {
         use ya_persistence::schema::agreement::dsl::agreement;
         diesel::insert_into(agreement)
             .values((&new_agreement,))
