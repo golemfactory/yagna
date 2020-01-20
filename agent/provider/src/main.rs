@@ -1,6 +1,7 @@
 mod market;
 mod node_info;
 pub mod provider_agent;
+mod utils;
 
 use crate::provider_agent::ProviderAgent;
 use log::info;

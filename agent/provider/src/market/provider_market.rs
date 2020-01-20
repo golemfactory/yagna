@@ -1,12 +1,14 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::node_info::NodeInfo;
+use crate::utils::actix_signal::SignalSlot;
 
 use ya_client::{market::ApiClient, Result};
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 use futures::future::join_all;
 use log::{error, info, warn};
+use actix::prelude::*;
 
 // Temporrary
 use serde_json;
@@ -17,12 +19,20 @@ struct OfferSubscription {
     offer: Offer,
 }
 
-// Manages market api communication and forwards proposal
-// to implementation of market strategy.
+#[derive(Message, Clone)]
+#[rtype(result="()")]
+struct AgreementSigned {
+
+}
+
+/// Manages market api communication and forwards proposal to implementation of market strategy.
+///
 pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
     api: ApiClient,
     offers: Vec<OfferSubscription>,
+
+    agreement_signed_signal: SignalSlot<AgreementSigned>,
 }
 
 impl ProviderMarket {
@@ -36,6 +46,7 @@ impl ProviderMarket {
             api,
             negotiator,
             offers: vec![],
+            agreement_signed_signal: SignalSlot::<AgreementSigned>::new()
         };
     }
 
@@ -191,8 +202,7 @@ impl ProviderMarket {
         match response {
             Ok(action) => match action {
                 AgreementResponse::ApproveAgreement => {
-                    self.approve_agreement(subscription_id, agreement_id)
-                        .await?
+                    self.approve_agreement(subscription_id, agreement_id).await?
                 }
                 AgreementResponse::RejectAgreement => {
                     self.reject_agreement(subscription_id, agreement_id).await?
@@ -222,8 +232,7 @@ impl ProviderMarket {
 
         // Note: Provider can't create agreement - only requestor can. We can accept
         // proposal, by resending the same offer as we got from requestor.
-        self.api
-            .provider()
+        self.api.provider()
             .create_proposal(&proposal.offer, subscription_id, &proposal.id)
             .await?;
         Ok(())
@@ -235,8 +244,7 @@ impl ProviderMarket {
             proposal.id, subscription_id
         );
 
-        self.api
-            .provider()
+        self.api.provider()
             .create_proposal(&proposal, subscription_id, &proposal.id)
             .await?;
         Ok(())
@@ -252,8 +260,7 @@ impl ProviderMarket {
             proposal.id, subscription_id
         );
 
-        self.api
-            .provider()
+        self.api.provider()
             .reject_proposal(subscription_id, &proposal.id)
             .await?;
         Ok(())
@@ -278,6 +285,14 @@ impl ProviderMarket {
         self.api.provider().reject_agreement(agreement_id).await?;
         Ok(())
     }
+}
+
+// =========================================== //
+// Actix stuff
+// =========================================== //
+
+impl Actor for ProviderMarket {
+    type Context = Context<Self>;
 }
 
 // =========================================== //

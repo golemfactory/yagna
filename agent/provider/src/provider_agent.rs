@@ -5,11 +5,17 @@ use crate::node_info::{CpuInfo, NodeInfo};
 
 use log::error;
 use std::{thread, time};
+use actix::prelude::*;
 
 pub struct ProviderAgent {
     market: ProviderMarket,
     node_info: NodeInfo,
 }
+
+impl Actor for ProviderAgent {
+    type Context = Context<Self>;
+}
+
 
 impl ProviderAgent {
     pub fn new() -> Result<ProviderAgent> {
