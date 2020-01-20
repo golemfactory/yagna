@@ -13,7 +13,6 @@ async fn main() -> anyhow::Result<()> {
 
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
     ya_activity::provider::service::bind_gsb(&db);
-    ya_activity::provider::service::bind_gsb(&db);
 
     HttpServer::new(move || {
         App::new()

@@ -34,18 +34,17 @@ impl ActivityState {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum State {
-    #[serde(rename = "New")]
     New,
-    #[serde(rename = "Deploying")]
     Deploying,
-    #[serde(rename = "Ready")]
     Ready,
-    #[serde(rename = "Starting")]
     Starting,
-    #[serde(rename = "Active")]
     Active,
-    #[serde(rename = "Unresponsive")]
     Unresponsive,
-    #[serde(rename = "Terminated")]
     Terminated,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State::New
+    }
 }
