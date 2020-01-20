@@ -50,6 +50,7 @@ impl ProviderMarket {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn onshutdown(&mut self) -> Result<()>{
         info!("Unsubscribing events.");
 
