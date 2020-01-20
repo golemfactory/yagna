@@ -26,7 +26,7 @@ impl<MessageType> SignalSlot<MessageType>
     }
 
     /// Send signal to all subscribers
-    pub fn send_signal(&mut self, message: MessageType) -> Result<()> {
+    pub fn send_signal(&self, message: MessageType) -> Result<()> {
         for subscriber in &self.subscribers {
             subscriber.do_send(message.clone());
         }

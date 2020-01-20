@@ -13,16 +13,22 @@ use actix::prelude::*;
 // Temporrary
 use serde_json;
 
+// =========================================== //
+// Public exposed messages
+// =========================================== //
+
+#[derive(Message, Clone)]
+#[rtype(result="()")]
+struct AgreementSigned;
+
+// =========================================== //
+// ProviderMarket declaration
+// =========================================== //
+
 #[allow(dead_code)]
 struct OfferSubscription {
     subscription_id: String,
     offer: Offer,
-}
-
-#[derive(Message, Clone)]
-#[rtype(result="()")]
-struct AgreementSigned {
-
 }
 
 /// Manages market api communication and forwards proposal to implementation of market strategy.
@@ -267,12 +273,13 @@ impl ProviderMarket {
     }
 
     async fn approve_agreement(&self, subscription_id: &str, agreement_id: &str) -> Result<()> {
-        info!(
-            "Accepting agreement [{}], subscription_id: {}.",
-            agreement_id, subscription_id
-        );
+        info!("Accepting agreement [{}], subscription_id: {}.", agreement_id, subscription_id);
 
         self.api.provider().approve_agreement(agreement_id).await?;
+
+        // We negotiated agreement and here responsibility of ProviderMarket ends.
+        // Notify outside world about agreement for further processing.
+        self.agreement_signed_signal.send_signal(AgreementSigned{});
         Ok(())
     }
 
