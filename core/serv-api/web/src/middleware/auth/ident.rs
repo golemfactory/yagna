@@ -11,14 +11,14 @@ use ya_core_model::appkey::AppKey;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Identity {
-    key: String,
+    name: String,
     role: String,
 }
 
 impl From<AppKey> for Identity {
     fn from(app_key: AppKey) -> Self {
         Identity {
-            key: app_key.key,
+            name: app_key.identity.to_string(),
             role: app_key.role,
         }
     }
@@ -27,7 +27,7 @@ impl From<AppKey> for Identity {
 impl From<&AppKey> for Identity {
     fn from(app_key: &AppKey) -> Self {
         Identity {
-            key: app_key.key.clone(),
+            name: app_key.identity.to_string(),
             role: app_key.role.clone(),
         }
     }
