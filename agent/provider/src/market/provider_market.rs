@@ -2,9 +2,10 @@ use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::node_info::NodeInfo;
 
-use ya_client::{market::ApiClient, Result};
+use ya_client::market::ApiClient;
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
+use anyhow::{Error, Result};
 use futures::future::join_all;
 use log::{error, info, warn};
 
@@ -85,10 +86,11 @@ impl ProviderMarket {
     // =========================================== //
 
     async fn query_events(&self, subscription_id: &str) -> Result<Vec<ProviderEvent>> {
-        self.api
+        Ok(self
+            .api
             .provider()
             .collect(subscription_id, Some(1), Some(2))
-            .await
+            .await?)
     }
 
     async fn dispatch_events(&self, subscription_id: &str, events: &Vec<ProviderEvent>) {
@@ -116,7 +118,7 @@ impl ProviderMarket {
     async fn dispatch_event(&self, subscription_id: &str, event: &ProviderEvent) -> Result<()> {
         match event {
             ProviderEvent::DemandEvent { demand, .. } => {
-                let proposal_id = &demand.as_ref().unwrap().id;
+                let proposal_id = &demand.as_ref().ok_or(Error::msg("no proposal id"))?.id;
 
                 info!("Got demand [id={}].", proposal_id);
 
@@ -133,9 +135,7 @@ impl ProviderMarket {
                 agreement_id, /**demand,**/
                 ..
             } => {
-                let agreement_id = &agreement_id.as_ref().unwrap();
-                //                let demand = demand.as_ref().unwrap();
-
+                let agreement_id = &agreement_id.as_ref().ok_or(Error::msg("no agreement id"))?;
                 info!("Got agreement [id={}].", agreement_id);
 
                 // Temporary workaround. Update after new market api will aprear.

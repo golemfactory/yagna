@@ -5,11 +5,9 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("AWC error requesting {url}: {e}")]
-    SendRequestError {
-        e: awc::error::SendRequestError,
-        url: String,
-        bt: Trace,
-    },
+    SendRequestError { e: String, url: String, bt: Trace },
+    #[error("AWC timeout requesting {url}: {e}")]
+    TimeoutError { e: String, url: String, bt: Trace },
     #[error("AWC payload error: {e}")]
     PayloadError {
         e: awc::error::PayloadError,
@@ -40,20 +38,34 @@ pub enum Error {
 
 impl From<awc::error::SendRequestError> for Error {
     fn from(e: awc::error::SendRequestError) -> Self {
-        Error::SendRequestError {
-            e,
-            url: "".into(),
-            bt: Trace::new(),
+        match e {
+            awc::error::SendRequestError::Timeout => Error::TimeoutError {
+                e: format!("{}", e),
+                url: "".into(),
+                bt: Trace::new(),
+            },
+            e => Error::SendRequestError {
+                e: format!("{}", e),
+                url: "".into(),
+                bt: Trace::new(),
+            },
         }
     }
 }
 
 impl From<(awc::error::SendRequestError, String)> for Error {
     fn from(pair: (awc::error::SendRequestError, String)) -> Self {
-        Error::SendRequestError {
-            e: pair.0,
-            url: pair.1,
-            bt: Trace::new(),
+        match pair.0 {
+            awc::error::SendRequestError::Timeout => Error::TimeoutError {
+                e: format!("{}", pair.0),
+                url: "".into(),
+                bt: Trace::new(),
+            },
+            e => Error::SendRequestError {
+                e: format!("{}", e),
+                url: pair.1,
+                bt: Trace::new(),
+            },
         }
     }
 }

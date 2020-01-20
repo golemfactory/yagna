@@ -4,7 +4,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use awc::error::SendRequestError;
 use ya_client::{
     market::{ApiClient, RequestorApi},
     web::WebClient,
@@ -60,10 +59,7 @@ async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
     );
 
     match client.wait_for_approval(&agreement.proposal_id).await {
-        Err(Error::SendRequestError {
-            e: SendRequestError::Timeout,
-            ..
-        }) => {
+        Err(Error::TimeoutError { .. }) => {
             println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
             Ok("".into())
         }
