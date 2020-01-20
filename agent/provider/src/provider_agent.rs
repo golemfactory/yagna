@@ -1,6 +1,7 @@
 use ya_client::{market::ApiClient, web::WebClient, Result};
 
 use crate::market::ProviderMarket;
+use crate::execution::TaskRunner;
 use crate::node_info::{CpuInfo, NodeInfo};
 
 use log::error;
@@ -9,6 +10,7 @@ use actix::prelude::*;
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
+    runner: TaskRunner,     ///TODO: Should be actix actor.
     node_info: NodeInfo,
 }
 
@@ -21,10 +23,11 @@ impl ProviderAgent {
     pub fn new() -> Result<ProviderAgent> {
         let client = ApiClient::new(WebClient::builder())?;
         let market = ProviderMarket::new(client, "AcceptAll").start();
+        let runner = TaskRunner::new();
 
         let node_info = ProviderAgent::create_node_info();
 
-        Ok(ProviderAgent{ market, node_info })
+        Ok(ProviderAgent{ market, runner, node_info })
     }
 
     pub async fn run(&mut self) {

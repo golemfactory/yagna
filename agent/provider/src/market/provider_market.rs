@@ -20,11 +20,11 @@ use serde_json;
 
 #[derive(Message, Clone)]
 #[rtype(result="()")]
-struct AgreementSigned;
+pub struct AgreementSigned;
 
 #[derive(Message)]
 #[rtype(result="Result<()>")]
-struct CreateOffer {
+pub struct CreateOffer {
     node_info: NodeInfo
 }
 
@@ -45,7 +45,7 @@ pub struct ProviderMarket {
     api: ApiClient,
     offers: Vec<OfferSubscription>,
 
-    agreement_signed_signal: SignalSlot<AgreementSigned>,
+    pub agreement_signed_signal: SignalSlot<AgreementSigned>,
 }
 
 impl ProviderMarket {

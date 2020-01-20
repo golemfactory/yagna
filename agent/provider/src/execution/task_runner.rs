@@ -1,5 +1,5 @@
-use exeunits_registry::ExeUnitsRegistry;
-use task::Task;
+use super::exeunits_registry::ExeUnitsRegistry;
+use super::task::Task;
 
 
 pub struct TaskRunner {
@@ -11,10 +11,11 @@ pub struct TaskRunner {
 impl TaskRunner {
 
     pub fn new() -> TaskRunner {
-        TaskRunner{ registry: ExeUnitsRegistry, tasks: vec![] }
+        TaskRunner{ registry: ExeUnitsRegistry::new(), tasks: vec![] }
     }
 
     pub fn wait_activity_for_events() {
+        // or maybe provider agent should do this.
         unimplemented!();
     }
 

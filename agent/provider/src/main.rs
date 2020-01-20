@@ -1,4 +1,5 @@
 mod market;
+mod execution;
 mod node_info;
 pub mod provider_agent;
 mod utils;
