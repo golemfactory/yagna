@@ -13,6 +13,7 @@ members = [
     "core/serv-api",
     "core/serv-api/cache",
     "core/serv-api/web",
+    "core/sci",
     "exe-unit/api",
     "exe-unit/dummy",
     "exe-unit/wasm-mozjs",
