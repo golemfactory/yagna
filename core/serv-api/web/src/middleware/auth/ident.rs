@@ -18,7 +18,7 @@ pub struct Identity {
 impl From<AppKey> for Identity {
     fn from(app_key: AppKey) -> Self {
         Identity {
-            name: app_key.name.to_string(),
+            name: app_key.identity.to_string(),
             role: app_key.role,
         }
     }
@@ -27,7 +27,7 @@ impl From<AppKey> for Identity {
 impl From<&AppKey> for Identity {
     fn from(app_key: &AppKey) -> Self {
         Identity {
-            name: app_key.name.to_string(),
+            name: app_key.identity.to_string(),
             role: app_key.role.clone(),
         }
     }
