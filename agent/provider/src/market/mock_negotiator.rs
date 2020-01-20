@@ -1,4 +1,4 @@
-use ya_client::Error;
+use ya_client::Result;
 use ya_model::market::{AgreementProposal, Offer};
 
 use super::negotiator::Negotiator;
@@ -10,18 +10,15 @@ use serde_json;
 pub struct AcceptAllNegotiator;
 
 impl Negotiator for AcceptAllNegotiator {
-    fn create_offer(&self, node_info: &NodeInfo) -> Result<Offer, Error> {
+    fn create_offer(&self, node_info: &NodeInfo) -> Result<Offer> {
         Ok(Offer::new(serde_json::json!(node_info), "()".into()))
     }
 
-    fn react_to_proposal(&self, _proposal: &AgreementProposal) -> Result<ProposalResponse, Error> {
+    fn react_to_proposal(&self, _proposal: &AgreementProposal) -> Result<ProposalResponse> {
         Ok(ProposalResponse::AcceptProposal)
     }
 
-    fn react_to_agreement(
-        &self,
-        _agreement: &AgreementProposal,
-    ) -> Result<AgreementResponse, Error> {
+    fn react_to_agreement(&self, _agreement: &AgreementProposal) -> Result<AgreementResponse> {
         Ok(AgreementResponse::ApproveAgreement)
     }
 }

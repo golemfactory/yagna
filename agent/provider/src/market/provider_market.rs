@@ -3,9 +3,10 @@ use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::node_info::NodeInfo;
 use crate::utils::actix_signal::SignalSlot;
 
-use ya_client::{market::ApiClient, Result};
+use ya_client::{market::ApiClient};
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
+use anyhow::{Error, Result};
 use futures::future::join_all;
 use log::{error, info, warn};
 use actix::prelude::*;
@@ -102,10 +103,11 @@ impl ProviderMarket {
     // =========================================== //
 
     async fn query_events(&self, subscription_id: &str) -> Result<Vec<ProviderEvent>> {
-        self.api
+        Ok(self
+            .api
             .provider()
             .collect(subscription_id, Some(1), Some(2))
-            .await
+            .await?)
     }
 
     async fn dispatch_events(&self, subscription_id: &str, events: &Vec<ProviderEvent>) {
@@ -133,7 +135,7 @@ impl ProviderMarket {
     async fn dispatch_event(&self, subscription_id: &str, event: &ProviderEvent) -> Result<()> {
         match event {
             ProviderEvent::DemandEvent { demand, .. } => {
-                let proposal_id = &demand.as_ref().unwrap().id;
+                let proposal_id = &demand.as_ref().ok_or(Error::msg("no proposal id"))?.id;
 
                 info!("Got demand [id={}].", proposal_id);
 
@@ -150,9 +152,7 @@ impl ProviderMarket {
                 agreement_id, /**demand,**/
                 ..
             } => {
-                let agreement_id = &agreement_id.as_ref().unwrap();
-                //                let demand = demand.as_ref().unwrap();
-
+                let agreement_id = &agreement_id.as_ref().ok_or(Error::msg("no agreement id"))?;
                 info!("Got agreement [id={}].", agreement_id);
 
                 // Temporary workaround. Update after new market api will aprear.
@@ -235,16 +235,21 @@ impl ProviderMarket {
 
         // Note: Provider can't create agreement - only requestor can. We can accept
         // proposal, by resending the same offer as we got from requestor.
-        self.api.provider()
+        self.api
+            .provider()
             .create_proposal(&proposal.offer, subscription_id, &proposal.id)
             .await?;
         Ok(())
     }
 
     async fn counter_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
-        info!("Sending counter offer to proposal [{}], subscription_id: {}.", proposal.id, subscription_id);
+        info!(
+            "Sending counter offer to proposal [{}], subscription_id: {}.",
+            proposal.id, subscription_id
+        );
 
-        self.api.provider()
+        self.api
+            .provider()
             .create_proposal(&proposal, subscription_id, &proposal.id)
             .await?;
         Ok(())
@@ -255,16 +260,23 @@ impl ProviderMarket {
         subscription_id: &str,
         proposal: &AgreementProposal,
     ) -> Result<()> {
-        info!("Rejecting proposal [{}], subscription_id: {}.", proposal.id, subscription_id);
+        info!(
+            "Rejecting proposal [{}], subscription_id: {}.",
+            proposal.id, subscription_id
+        );
 
-        self.api.provider()
+        self.api
+            .provider()
             .reject_proposal(subscription_id, &proposal.id)
             .await?;
         Ok(())
     }
 
     async fn approve_agreement(&self, subscription_id: &str, agreement_id: &str) -> Result<()> {
-        info!("Accepting agreement [{}], subscription_id: {}.", agreement_id, subscription_id);
+        info!(
+            "Accepting agreement [{}], subscription_id: {}.",
+            agreement_id, subscription_id
+        );
 
         self.api.provider().approve_agreement(agreement_id).await?;
 
@@ -275,7 +287,10 @@ impl ProviderMarket {
     }
 
     async fn reject_agreement(&self, subscription_id: &str, agreement_id: &str) -> Result<()> {
-        info!("Rejecting agreement [{}], subscription_id: {}.", agreement_id, subscription_id);
+        info!(
+            "Rejecting agreement [{}], subscription_id: {}.",
+            agreement_id, subscription_id
+        );
 
         self.api.provider().reject_agreement(agreement_id).await?;
         Ok(())
