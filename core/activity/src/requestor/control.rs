@@ -3,12 +3,17 @@ use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao};
 use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
 use crate::ACTIVITY_API;
-use actix_web::web;
+use actix_web::{web, get};
 use futures::prelude::*;
 use serde::Deserialize;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
+
+#[get("/z")]
+async fn index() -> String {
+    format!("Hello Activity requestor controll!")
+}
 
 pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
     let create = web::post().to(impl_restful_handler!(create_activity, path, body));
@@ -18,6 +23,7 @@ pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
 
     web::scope(&ACTIVITY_API)
         .data(db.clone())
+        .service(index)
         .service(web::resource("/activity").route(create))
         .service(web::resource("/activity/{activity_id}").route(delete))
         .service(web::resource("/activity/{activity_id}/exec").route(exec))
@@ -30,6 +36,7 @@ async fn create_activity(
     query: web::Query<QueryTimeout>,
     body: web::Json<CreateActivity>,
 ) -> Result<String, Error> {
+    log::info!("creating activity for {}", body.agreement_id);
     let conn = db_conn!(db)?;
     let agreement_id = body.agreement_id.clone();
     let agreement = AgreementDao::new(&conn).get(&agreement_id)?;

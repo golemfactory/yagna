@@ -1,4 +1,4 @@
-use actix_web::{middleware, web, App, HttpServer, Responder};
+use actix_web::{get, middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use std::{
     convert::{TryFrom, TryInto},
@@ -183,11 +183,12 @@ impl ServiceCommand {
                 HttpServer::new(move || {
                     App::new()
                         .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::default())
+//                        .wrap(auth::Auth::default())
                         .service(ya_activity::provider::web_scope(&db))
                         .service(ya_activity::requestor::control::web_scope(&db))
                         .service(ya_activity::requestor::state::web_scope(&db))
                         .route("/me", web::get().to(me))
+                        .service(web::scope("/mama").service(index))
                 })
                 .bind(ctx.http_address())
                 .context(format!(
@@ -211,6 +212,12 @@ impl ServiceCommand {
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
 }
+
+#[get("/z")]
+async fn index() -> String {
+    format!("Hello Activity requestor controll!")
+}
+
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
