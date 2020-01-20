@@ -22,6 +22,12 @@ use serde_json;
 #[rtype(result="()")]
 struct AgreementSigned;
 
+#[derive(Message)]
+#[rtype(result="Result<()>")]
+struct CreateOffer {
+    node_info: NodeInfo
+}
+
 // =========================================== //
 // ProviderMarket declaration
 // =========================================== //
@@ -57,7 +63,13 @@ impl ProviderMarket {
         };
     }
 
-    pub async fn create_offers(&mut self, node_info: &NodeInfo) -> Result<()> {
+    pub async fn create_offer_wrapper(&mut self, node_info: &NodeInfo) {
+        if let Err(error) = self.create_offer(node_info).await {
+            error!("Failed to create offer. Error: {}", error);
+        }
+    }
+
+    pub async fn create_offer(&mut self, node_info: &NodeInfo) -> Result<()> {
         info!("Creating initial offer.");
 
         let offer = self.negotiator.create_offer(node_info)?;
@@ -303,6 +315,15 @@ impl ProviderMarket {
 
 impl Actor for ProviderMarket {
     type Context = Context<Self>;
+}
+
+impl Handler<CreateOffer> for ProviderMarket {
+    type Result = Result<()>;
+
+    fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
+        //Ok(Arbiter::spawn(self.create_offer_wrapper(&msg.node_info)))
+        Ok(())
+    }
 }
 
 // =========================================== //

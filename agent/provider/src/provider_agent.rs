@@ -8,7 +8,7 @@ use std::{thread, time};
 use actix::prelude::*;
 
 pub struct ProviderAgent {
-    market: ProviderMarket,
+    market: Addr<ProviderMarket>,
     node_info: NodeInfo,
 }
 
@@ -20,27 +20,27 @@ impl Actor for ProviderAgent {
 impl ProviderAgent {
     pub fn new() -> Result<ProviderAgent> {
         let client = ApiClient::new(WebClient::builder())?;
-        let market = ProviderMarket::new(client, "AcceptAll");
+        let market = ProviderMarket::new(client, "AcceptAll").start();
 
         let node_info = ProviderAgent::create_node_info();
 
-        Ok(ProviderAgent { market, node_info })
+        Ok(ProviderAgent{ market, node_info })
     }
 
     pub async fn run(&mut self) {
-        if let Err(error) = self.market.create_offers(&self.node_info).await {
-            error!("Error while starting market: {}", error);
-            return ();
-        }
-
-        //TODO: We should replace this loop with scheduler in future.
-        loop {
-            if let Err(error) = self.market.run_step().await {
-                error!("Market error: {}", error)
-            }
-
-            thread::sleep(time::Duration::from_secs(3));
-        }
+//        if let Err(error) = self.market.create_offer(&self.node_info).await {
+//            error!("Error while starting market: {}", error);
+//            return ();
+//        }
+//
+//        //TODO: We should replace this loop with scheduler in future.
+//        loop {
+//            if let Err(error) = self.market.run_step().await {
+//                error!("Market error: {}", error)
+//            }
+//
+//            thread::sleep(time::Duration::from_secs(3));
+//        }
 
         // We never get here, but we should cleanup market in final version.
         //        if let Err(error) = self.market.onshutdown().await {
