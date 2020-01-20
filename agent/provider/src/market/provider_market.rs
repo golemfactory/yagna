@@ -231,10 +231,7 @@ impl ProviderMarket {
         subscription_id: &str,
         proposal: &AgreementProposal,
     ) -> Result<()> {
-        info!(
-            "Accepting proposal [{}] without changes, subscription_id: {}.",
-            proposal.id, subscription_id
-        );
+        info!("Accepting proposal [{}] without changes, subscription_id: {}.", proposal.id, subscription_id);
 
         // Note: Provider can't create agreement - only requestor can. We can accept
         // proposal, by resending the same offer as we got from requestor.
@@ -245,10 +242,7 @@ impl ProviderMarket {
     }
 
     async fn counter_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
-        info!(
-            "Sending counter offer to proposal [{}], subscription_id: {}.",
-            proposal.id, subscription_id
-        );
+        info!("Sending counter offer to proposal [{}], subscription_id: {}.", proposal.id, subscription_id);
 
         self.api.provider()
             .create_proposal(&proposal, subscription_id, &proposal.id)
@@ -261,10 +255,7 @@ impl ProviderMarket {
         subscription_id: &str,
         proposal: &AgreementProposal,
     ) -> Result<()> {
-        info!(
-            "Rejecting proposal [{}], subscription_id: {}.",
-            proposal.id, subscription_id
-        );
+        info!("Rejecting proposal [{}], subscription_id: {}.", proposal.id, subscription_id);
 
         self.api.provider()
             .reject_proposal(subscription_id, &proposal.id)
@@ -284,10 +275,7 @@ impl ProviderMarket {
     }
 
     async fn reject_agreement(&self, subscription_id: &str, agreement_id: &str) -> Result<()> {
-        info!(
-            "Rejecting agreement [{}], subscription_id: {}.",
-            agreement_id, subscription_id
-        );
+        info!("Rejecting agreement [{}], subscription_id: {}.", agreement_id, subscription_id);
 
         self.api.provider().reject_agreement(agreement_id).await?;
         Ok(())
