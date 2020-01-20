@@ -52,7 +52,7 @@ pub struct ActivityUsage {
     pub updated_date: NaiveDateTime,
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, Debug)]
 #[table_name = "agreement"]
 pub struct NewAgreement {
     pub natural_id: String,
@@ -103,15 +103,7 @@ impl<DB: Backend> ToSql<Integer, DB> for AgreementState {
         &self,
         out: &mut Output<'a, W, DB>,
     ) -> diesel::deserialize::Result<IsNull> {
-        let v = match self {
-            AgreementState::New => 0,
-            AgreementState::PendingApproval => 1,
-            AgreementState::Approved => 10,
-            AgreementState::Canceled => 40,
-            AgreementState::Rejected => 41,
-            AgreementState::Terminated => 50,
-        };
-        ToSql::<Integer, DB>::to_sql(&v, out)
+        ToSql::<Integer, DB>::to_sql(&(self.clone() as i32), out)
     }
 }
 

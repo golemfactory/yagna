@@ -19,6 +19,8 @@ struct Args {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    std::env::set_var("RUST_LOG", "debug");
+    env_logger::init();
     let args = Args::from_args();
 
     let demand_props = json! {{
@@ -69,6 +71,8 @@ async fn main() -> anyhow::Result<()> {
         committed_signature: None,
     };
 
+    log::info!("inserting agreement: {:#?}", new_agreement);
+
     db.with_transaction(move |conn| {
         use ya_persistence::schema::agreement::dsl::agreement;
         diesel::insert_into(agreement)
@@ -78,5 +82,6 @@ async fn main() -> anyhow::Result<()> {
     })
     .await?;
 
+    log::info!("done");
     Ok(())
 }
