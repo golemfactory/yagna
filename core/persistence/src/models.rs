@@ -87,7 +87,7 @@ pub struct Agreement {
     pub committed_signature: String,
 }
 
-#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone)]
+#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
 #[sql_type = "Integer"]
 pub enum AgreementState {
     New = 0,
@@ -98,12 +98,12 @@ pub enum AgreementState {
     Terminated = 50,
 }
 
-impl<DB: Backend> ToSql<Integer, DB> for AgreementState {
-    fn to_sql<'a, W: std::io::Write>(
-        &self,
-        out: &mut Output<'a, W, DB>,
-    ) -> diesel::deserialize::Result<IsNull> {
-        ToSql::<Integer, DB>::to_sql(&(self.clone() as i32), out)
+impl<DB: Backend> ToSql<Integer, DB> for AgreementState
+where
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
+        (*self as i32).to_sql(out)
     }
 }
 
