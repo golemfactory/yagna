@@ -1,6 +1,6 @@
 use std::net::ToSocketAddrs;
 
-use ya_service_api::constants::{NET_SERVICE_ID, PUBLIC_SERVICE};
+use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE, PUBLIC_SERVICE};
 use ya_service_bus::{connection, RpcMessage};
 use ya_service_bus::{untyped as local_bus, Error};
 
@@ -49,9 +49,9 @@ pub async fn bind_remote(
         source_node_id
     );
 
-    // bind /net on my local bus
+    // bind /private/net on my local bus
     local_bus::subscribe(
-        NET_SERVICE_ID,
+        &format!("{}{}", &*PRIVATE_SERVICE, NET_SERVICE_ID),
         move |caller: &str, addr: &str, msg: &[u8]| {
             log::info!(
                 "Sending message to hub. Called by: {}, addr: {}.",
