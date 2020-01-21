@@ -9,10 +9,8 @@ use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 use anyhow::{Error, Result};
 use actix::prelude::*;
-use actix::utils::IntervalFunc;
 use futures::future::join_all;
-use log::{error, info, warn, trace};
-use std::time::Duration;
+use log::{error, info, warn};
 use std::rc::Rc;
 use std::cell::RefCell;
 

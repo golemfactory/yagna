@@ -8,9 +8,7 @@ use crate::node_info::{CpuInfo, NodeInfo};
 use actix::prelude::*;
 use actix::*;
 use actix::utils::IntervalFunc;
-use futures::{future, Future};
-use log::{info, error};
-use std::{thread, time};
+use log::{error};
 use std::time::Duration;
 use crate::market::provider_market::UpdateMarket;
 
