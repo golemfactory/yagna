@@ -40,7 +40,7 @@ impl ExeUnitsRegistry {
             .spawn()
             .map_err(|error| { Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error)) } )?;
 
-        unimplemented!();
+        Ok(ExeUnitInstance{ process: child })
     }
 
     pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {
