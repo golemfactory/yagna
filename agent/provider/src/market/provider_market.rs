@@ -13,6 +13,8 @@ use actix::prelude::*;
 
 // Temporrary
 use serde_json;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 // =========================================== //
 // Public exposed messages
@@ -313,19 +315,34 @@ impl ProviderMarket {
 // Actix stuff
 // =========================================== //
 
-impl Actor for ProviderMarket {
+/// Wrapper for ProviderMarket. It is neccesary to use self in async futures.
+pub struct ProviderMarketActor {
+    market: Rc<RefCell<ProviderMarket>>
+}
+
+impl ProviderMarketActor {
+    pub fn new(api: ApiClient, negotiator_type: &str) -> ProviderMarketActor {
+        let rc = Rc::new(RefCell::new(ProviderMarket::new(api, negotiator_type)));
+        ProviderMarketActor{market: rc}
+    }
+}
+
+
+impl Actor for ProviderMarketActor {
     type Context = Context<Self>;
 }
 
-impl Handler<CreateOffer> for ProviderMarket {
-    type Result = Result<()>;
+impl Handler<CreateOffer> for ProviderMarketActor {
+    type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
-        //Ok(Arbiter::spawn(self.create_offer_wrapper(&msg.node_info)))
-        //ctx.(self.create_offer(&msg.node_info))
-        Ok(())
+        let mut market_provider = self.market.clone();
+        ActorResponse::r#async(async move {
+            (*market_provider).borrow_mut().create_offer(&msg.node_info).await
+        }.into_actor(self))
     }
 }
+
 
 // =========================================== //
 // Negotiators factory
