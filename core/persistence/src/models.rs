@@ -82,7 +82,7 @@ pub struct Agreement {
     pub offer_constraints_json: String,
     pub proposed_signature: String,
     pub approved_signature: String,
-    pub committed_signature: String,
+    pub committed_signature: Option<String>,
 }
 
 #[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]

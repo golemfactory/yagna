@@ -55,7 +55,7 @@ table! {
         offer_constraints_json -> Text,
         proposed_signature -> Text,
         approved_signature -> Text,
-        committed_signature -> Text,
+        committed_signature -> Nullable<Text>,
     }
 }
 
