@@ -10,7 +10,7 @@ pub mod state;
 
 #[inline(always)]
 fn provider_activity_uri(provider_id: &str) -> String {
-    format!("{}/{}/{}", NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID)
+    format!("{}/{}{}", NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID)
 }
 
 fn missing_activity_err(conn: &ConnType, activity_id: &str) -> Result<(), Error> {

@@ -32,10 +32,12 @@ async fn create_activity(
 ) -> Result<String, Error> {
     let conn = db_conn!(db)?;
     let agreement_id = body.agreement_id.clone();
+    log::debug!("getting agrement from DB");
     let agreement = AgreementDao::new(&conn)
         .get(&agreement_id)
         .not_found_as_option()?
         .ok_or(Error::NotFound)?;
+    log::debug!("agreement: {:?}", agreement);
 
     let uri = provider_activity_uri(&agreement.offer_node_id);
     let activity_id = gsb_send!(body.into_inner(), &uri, query.timeout)?;
