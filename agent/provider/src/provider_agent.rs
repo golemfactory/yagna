@@ -4,11 +4,14 @@ use crate::market::{ProviderMarketActor, CreateOffer};
 use crate::execution::TaskRunner;
 use crate::node_info::{CpuInfo, NodeInfo};
 
+use actix::prelude::*;
+use actix::*;
+use actix::utils::IntervalFunc;
+use futures::{future, Future};
 use log::{info, error};
 use std::{thread, time};
-use actix::prelude::*;
-use futures::{future, Future};
-use actix::*;
+use std::time::Duration;
+use crate::market::provider_market::UpdateMarket;
 
 
 pub struct ProviderAgent {
@@ -19,6 +22,12 @@ pub struct ProviderAgent {
 
 impl Actor for ProviderAgent {
     type Context = Context<Self>;
+
+    fn started(&mut self, context: &mut Context<Self>) {
+        IntervalFunc::new(Duration::from_secs(4), Self::schedule_jobs)
+            .finish()
+            .spawn(context);
+    }
 }
 
 
@@ -42,31 +51,21 @@ impl ProviderAgent {
 
         let future = async move {
             if let Err(error) = market.send(create_offer_message).await {
-                error!("Error creating initial offer.");
+                error!("Error creating initial offer: {}.", error);
             };
         };
         Arbiter::spawn(future);
     }
 
-    pub async fn run(&mut self) {
-//        if let Err(error) = self.market.create_offer(&self.node_info).await {
-//            error!("Error while starting market: {}", error);
-//            return ();
-//        }
-//
-//        //TODO: We should replace this loop with scheduler in future.
-//        loop {
-//            if let Err(error) = self.market.run_step().await {
-//                error!("Market error: {}", error)
-//            }
-//
-//            thread::sleep(time::Duration::from_secs(3));
-//        }
+    fn schedule_jobs(&mut self, context: &mut Context<Self>) {
+        let market = self.market.clone();
 
-        // We never get here, but we should cleanup market in final version.
-        //        if let Err(error) = self.market.onshutdown().await {
-        //            error!("Error while market shutdown: {}", error);
-        //        }
+        let future = async move {
+            if let Err(error) = market.send(UpdateMarket).await {
+                error!("Error while sending UpdateMarket message: {}.", error);
+            };
+        };
+        Arbiter::spawn(future);
     }
 
     fn create_node_info() -> NodeInfo {

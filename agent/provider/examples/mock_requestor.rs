@@ -4,7 +4,6 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use awc::error::SendRequestError;
 use ya_client::{
     market::{ApiClient, RequestorApi},
     web::WebClient,
