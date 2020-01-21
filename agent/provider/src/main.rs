@@ -17,5 +17,5 @@ fn main() {
     let system = System::new("ProviderAgent");
 
     ProviderAgent::new().unwrap().start();
-    system.run();
+    system.run().unwrap();
 }
