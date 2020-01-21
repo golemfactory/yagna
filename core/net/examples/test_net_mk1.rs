@@ -1,8 +1,10 @@
 use anyhow::{Context, Error, Result};
+use futures::future::TryFutureExt;
 use serde::{Deserialize, Serialize};
 use std::env;
 use structopt::StructOpt;
-use ya_service_bus::{typed as bus, RpcMessage};
+
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 #[derive(Serialize, Deserialize)]
 struct Test(String);
@@ -83,11 +85,10 @@ async fn main() -> Result<()> {
         }
         Side::Sender => {
             let listener_id = Options::id(&Side::Listener);
-            //            let r = bus::service(&format!("/net/{}", listener_id)).send(Test("Test".into())).await?;
-            let r = ya_net::send(&options.my_id(), &listener_id, &Test("Test".into()))
-                .await
-                .map_err(Error::msg)?;
-
+            let r = bus::private_service(&format!("/net/{}", listener_id))
+                .send(Test("Test".into()))
+                .map_err(Error::msg)
+                .await?;
             log::info!("Sending Result: {:?}", r);
         }
     }

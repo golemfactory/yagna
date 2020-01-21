@@ -1,8 +1,7 @@
 use std::net::ToSocketAddrs;
 
 use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE, PUBLIC_SERVICE};
-use ya_service_bus::{connection, RpcMessage};
-use ya_service_bus::{untyped as local_bus, Error};
+use ya_service_bus::{connection, untyped as local_bus};
 
 #[derive(Default)]
 struct SubscribeHelper {}
@@ -49,44 +48,20 @@ pub async fn bind_remote(
         source_node_id
     );
 
-    // bind /private/net on my local bus
+    // bind /private/net on my local bus and forward all calls to remote bus under /net
     local_bus::subscribe(
         &format!("{}{}", &*PRIVATE_SERVICE, NET_SERVICE_ID),
-        move |caller: &str, addr: &str, msg: &[u8]| {
+        move |_caller: &str, addr: &str, msg: &[u8]| {
+            // remove /private prefix and post to the hub
+            let addr = addr.replacen(&*PRIVATE_SERVICE, "", 1);
             log::info!(
                 "Sending message to hub. Called by: {}, addr: {}.",
-                caller,
+                source_node_id,
                 addr
             );
-            central_bus.call(caller.to_string(), addr.to_string(), Vec::from(msg))
+            // caller here is always depicted as `local`, so we replace it with our subscriber addr
+            central_bus.call(source_node_id.clone(), addr.to_string(), Vec::from(msg))
         },
     );
     Ok(())
-}
-
-/// Send message to another node through a hub.
-pub async fn send<T: RpcMessage + Unpin>(
-    source_node_id: &str,
-    destination_service: &str,
-    data: &T,
-) -> Result<Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>, Error> {
-    log::info!(
-        "Sending message from {} to {}.",
-        source_node_id,
-        destination_service
-    );
-    // send to local bus under /net/0x<destination> eg. 0x789/test
-
-    let raw = local_bus::send(
-        &format!(
-            "{}/{}/{}",
-            NET_SERVICE_ID,
-            destination_service,
-            <T as RpcMessage>::ID
-        ),
-        &format!("{}/{}", NET_SERVICE_ID, source_node_id), // caller
-        &rmp_serde::encode::to_vec(data)?,
-    )
-    .await?;
-    rmp_serde::from_read_ref(&raw).map_err(From::from)
 }
