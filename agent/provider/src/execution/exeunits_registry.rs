@@ -32,9 +32,14 @@ impl ExeUnitsRegistry {
     }
 
     pub fn spawn_exeunit(&self, name: &str) -> Result<ExeUnitInstance> {
-        //descriptors.entry(name).or
+        let exeunit_desc = self.descriptors
+            .get(name)
+            .ok_or(Error::msg(format!("ExeUnit [{}] doesn't exist in registry.", name )))?;
 
-        //let mut child = Command::new
+        let mut child = Command::new(&exeunit_desc.name)
+            .spawn()
+            .map_err(|error| { Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error)) } )?;
+
         unimplemented!();
     }
 

@@ -322,6 +322,7 @@ impl Handler<CreateOffer> for ProviderMarket {
 
     fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
         //Ok(Arbiter::spawn(self.create_offer_wrapper(&msg.node_info)))
+        //ctx.(self.create_offer(&msg.node_info))
         Ok(())
     }
 }
