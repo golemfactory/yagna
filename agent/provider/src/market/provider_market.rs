@@ -13,11 +13,11 @@ use actix::utils::IntervalFunc;
 use futures::future::join_all;
 use log::{error, info, warn, trace};
 use std::time::Duration;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 // Temporrary
 use serde_json;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 // =========================================== //
 // Public exposed messages
@@ -104,7 +104,7 @@ impl ProviderMarket {
     // Public api for running single market step
     // =========================================== //
 
-    pub async fn run_step(&self) -> Result<()> {
+    pub async fn run_step(&self, _msg: UpdateMarket) -> Result<()> {
         for offer in self.offers.iter() {
             let events = self.query_events(&offer.subscription_id).await?;
             self.dispatch_events(&offer.subscription_id, &events).await;
@@ -344,20 +344,8 @@ impl Actor for ProviderMarketActor {
 }
 
 gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer, market);
+gen_actix_handler_async!(ProviderMarketActor, UpdateMarket, run_step, market);
 
-
-impl Handler<UpdateMarket> for ProviderMarketActor {
-    type Result = ActorResponse<Self, (), Error>;
-
-    fn handle(&mut self, msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
-        trace!("ProviderMarket UpdateMarket message.");
-
-        let mut market_provider = self.market.clone();
-        ActorResponse::r#async(async move {
-            (*market_provider).borrow_mut().run_step().await
-        }.into_actor(self))
-    }
-}
 
 // =========================================== //
 // Negotiators factory
