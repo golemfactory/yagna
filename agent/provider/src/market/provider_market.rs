@@ -73,13 +73,9 @@ impl ProviderMarket {
     }
 
     pub async fn create_offer(&mut self, msg: CreateOffer) -> Result<()> {
-        Ok(self.create_offer_impl(&msg.node_info).await?)
-    }
-
-    pub async fn create_offer_impl(&mut self, node_info: &NodeInfo) -> Result<()> {
         info!("Creating initial offer.");
 
-        let offer = self.negotiator.create_offer(node_info)?;
+        let offer = self.negotiator.create_offer(&msg.node_info)?;
 
         info!("Subscribing to events.");
 
