@@ -343,7 +343,7 @@ impl Actor for ProviderMarketActor {
     type Context = Context<Self>;
 }
 
-gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer);
+gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer, market);
 
 
 impl Handler<UpdateMarket> for ProviderMarketActor {
