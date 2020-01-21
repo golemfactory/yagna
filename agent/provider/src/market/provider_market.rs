@@ -2,14 +2,17 @@ use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::node_info::NodeInfo;
 use crate::utils::actix_signal::SignalSlot;
+use crate::gen_actix_handler_async;
 
 use ya_client::{market::ApiClient};
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 use anyhow::{Error, Result};
-use futures::future::join_all;
-use log::{error, info, warn};
 use actix::prelude::*;
+use actix::utils::IntervalFunc;
+use futures::future::join_all;
+use log::{error, info, warn, trace};
+use std::time::Duration;
 
 // Temporrary
 use serde_json;
@@ -29,6 +32,10 @@ pub struct AgreementSigned;
 pub struct CreateOffer {
     node_info: NodeInfo
 }
+
+#[derive(Message)]
+#[rtype(result="Result<()>")]
+pub struct UpdateMarket;
 
 // =========================================== //
 // ProviderMarket declaration
@@ -65,7 +72,11 @@ impl ProviderMarket {
         };
     }
 
-    pub async fn create_offer(&mut self, node_info: &NodeInfo) -> Result<()> {
+    pub async fn create_offer(&mut self, msg: CreateOffer) -> Result<()> {
+        Ok(self.create_offer_impl(&msg.node_info).await?)
+    }
+
+    pub async fn create_offer_impl(&mut self, node_info: &NodeInfo) -> Result<()> {
         info!("Creating initial offer.");
 
         let offer = self.negotiator.create_offer(node_info)?;
@@ -336,18 +347,21 @@ impl Actor for ProviderMarketActor {
     type Context = Context<Self>;
 }
 
-impl Handler<CreateOffer> for ProviderMarketActor {
+gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer);
+
+
+impl Handler<UpdateMarket> for ProviderMarketActor {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
-        info!("Provider Market handler");
+    fn handle(&mut self, msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
+        trace!("ProviderMarket UpdateMarket message.");
+
         let mut market_provider = self.market.clone();
         ActorResponse::r#async(async move {
-            (*market_provider).borrow_mut().create_offer(&msg.node_info).await
+            (*market_provider).borrow_mut().run_step().await
         }.into_actor(self))
     }
 }
-
 
 // =========================================== //
 // Negotiators factory
