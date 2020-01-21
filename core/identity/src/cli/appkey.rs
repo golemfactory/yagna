@@ -3,6 +3,7 @@ use structopt::*;
 
 use ya_core_model::appkey as model;
 use ya_core_model::identity as idm;
+use ya_core_model::identity::IdentityInfo;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -13,8 +14,8 @@ pub enum AppKeyCommand {
         name: String,
         #[structopt(default_value = model::DEFAULT_ROLE, long)]
         role: String,
-        #[structopt(default_value = model::DEFAULT_IDENTITY, long)]
-        id: String,
+        #[structopt(long)]
+        id: Option<String>,
     },
     Drop {
         name: String,
@@ -32,21 +33,30 @@ pub enum AppKeyCommand {
 }
 
 impl AppKeyCommand {
+    async fn get_identity(get_by: idm::Get) -> anyhow::Result<IdentityInfo> {
+        bus::private_service(idm::IDENTITY_SERVICE_ID)
+            .send(get_by)
+            .await
+            .map_err(anyhow::Error::msg)?
+            .map_err(anyhow::Error::msg)?
+            .ok_or(anyhow::Error::msg("Identity not found"))
+    }
+
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match &self {
             AppKeyCommand::Create { name, role, id } => {
-                let identity = if id.starts_with("0x") {
-                    id.parse()?
-                } else {
-                    bus::private_service(idm::IDENTITY_SERVICE_ID)
-                        .send(idm::Get::ByAlias(id.into()))
-                        .await
-                        .map_err(anyhow::Error::msg)?
-                        .map_err(anyhow::Error::msg)?
-                        .ok_or(anyhow::Error::msg("Identity not found"))?
-                        .node_id
+                let identity = match id {
+                    Some(id) => {
+                        if id.starts_with("0x") {
+                            id.parse()?
+                        } else {
+                            Self::get_identity(idm::Get::ByAlias(id.into()))
+                                .await?
+                                .node_id
+                        }
+                    }
+                    None => Self::get_identity(idm::Get::ByDefault).await?.node_id,
                 };
-
                 let create = model::Create {
                     name: name.clone(),
                     role: role.clone(),
