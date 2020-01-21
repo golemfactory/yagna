@@ -3,6 +3,7 @@ use ya_client::{market::ApiClient, web::WebClient, Result};
 use crate::market::{ProviderMarketActor, CreateOffer};
 use crate::execution::TaskRunner;
 use crate::node_info::{CpuInfo, NodeInfo};
+//use crate::utils::actix_handler::send_message;
 
 use actix::prelude::*;
 use actix::*;
@@ -55,6 +56,9 @@ impl ProviderAgent {
             };
         };
         Arbiter::spawn(future);
+
+        //TODO: Use
+        //send_message(self.market.clone(), create_offer_message);
     }
 
     fn schedule_jobs(&mut self, context: &mut Context<Self>) {
@@ -66,6 +70,9 @@ impl ProviderAgent {
             };
         };
         Arbiter::spawn(future);
+
+        //TODO: Use
+        //send_message(self.market.clone(), UpdateMarket);
     }
 
     fn create_node_info() -> NodeInfo {
