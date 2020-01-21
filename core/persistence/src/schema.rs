@@ -47,17 +47,15 @@ table! {
         id -> Integer,
         natural_id -> Text,
         state_id -> Integer,
-        demand_natural_id -> Text,
         demand_node_id -> Text,
         demand_properties_json -> Text,
         demand_constraints_json -> Text,
-        offer_natural_id -> Text,
         offer_node_id -> Text,
         offer_properties_json -> Text,
         offer_constraints_json -> Text,
         proposed_signature -> Text,
         approved_signature -> Text,
-        committed_signature -> Text,
+        committed_signature -> Nullable<Text>,
     }
 }
 
