@@ -1,12 +1,15 @@
 use ya_client::{market::ApiClient, web::WebClient, Result};
 
-use crate::market::{ProviderMarketActor, ProviderMarket};
+use crate::market::{ProviderMarketActor, CreateOffer};
 use crate::execution::TaskRunner;
 use crate::node_info::{CpuInfo, NodeInfo};
 
-use log::error;
+use log::{info, error};
 use std::{thread, time};
 use actix::prelude::*;
+use futures::{future, Future};
+use actix::*;
+
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarketActor>,
@@ -27,7 +30,22 @@ impl ProviderAgent {
 
         let node_info = ProviderAgent::create_node_info();
 
-        Ok(ProviderAgent{ market, runner, node_info })
+        let mut provider = ProviderAgent{ market, runner, node_info };
+        provider.initialize();
+
+        Ok(provider)
+    }
+
+    pub fn initialize(&mut self) {
+        let create_offer_message = CreateOffer::new(ProviderAgent::create_node_info());
+        let market = self.market.clone();
+
+        let future = async move {
+            if let Err(error) = market.send(create_offer_message).await {
+                error!("Error creating initial offer.");
+            };
+        };
+        Arbiter::spawn(future);
     }
 
     pub async fn run(&mut self) {

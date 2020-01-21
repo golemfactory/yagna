@@ -65,12 +65,6 @@ impl ProviderMarket {
         };
     }
 
-    pub async fn create_offer_wrapper(&mut self, node_info: &NodeInfo) {
-        if let Err(error) = self.create_offer(node_info).await {
-            error!("Failed to create offer. Error: {}", error);
-        }
-    }
-
     pub async fn create_offer(&mut self, node_info: &NodeInfo) -> Result<()> {
         info!("Creating initial offer.");
 
@@ -312,6 +306,16 @@ impl ProviderMarket {
 }
 
 // =========================================== //
+// Helper functions
+// =========================================== //
+
+impl CreateOffer {
+    pub fn new(node_info: NodeInfo) -> CreateOffer {
+        CreateOffer{node_info}
+    }
+}
+
+// =========================================== //
 // Actix stuff
 // =========================================== //
 
@@ -336,6 +340,7 @@ impl Handler<CreateOffer> for ProviderMarketActor {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
+        info!("Provider Market handler");
         let mut market_provider = self.market.clone();
         ActorResponse::r#async(async move {
             (*market_provider).borrow_mut().create_offer(&msg.node_info).await
