@@ -26,7 +26,7 @@ pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeout>,
     body: web::Json<CreateActivity>,
 ) -> Result<String, Error> {
@@ -45,7 +45,7 @@ async fn create_activity(
 
 /// Destroys given Activity.
 async fn destroy_activity(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<(), Error> {
@@ -70,7 +70,7 @@ async fn destroy_activity(
 
 /// Executes an ExeScript batch within a given Activity.
 async fn exec(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
     body: web::Json<ExeScriptRequest>,
@@ -96,7 +96,7 @@ async fn exec(
 
 /// Queries for ExeScript batch results.
 async fn get_batch_results(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {

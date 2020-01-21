@@ -56,7 +56,7 @@ async fn get_activity_state(db: &DbExecutor, activity_id: &str) -> Result<Activi
 }
 
 async fn get_activity_state_web(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityState, Error> {
     get_activity_state(&db, &path.activity_id).await
@@ -77,7 +77,7 @@ async fn get_activity_usage(db: &DbExecutor, activity_id: &str) -> Result<Activi
 }
 
 async fn get_activity_usage_web(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityUsage, Error> {
     get_activity_usage(&db, &path.activity_id).await
@@ -85,7 +85,7 @@ async fn get_activity_usage_web(
 
 /// Fetch Requestor command events.
 async fn get_events_web(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ProviderEvent>, Error> {
     EventDao::new(&db_conn!(db)?)

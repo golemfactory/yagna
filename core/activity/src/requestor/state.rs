@@ -23,7 +23,7 @@ pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
 
 /// Get state of specified Activity.
 async fn get_activity_state(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<ActivityState, Error> {
@@ -58,7 +58,7 @@ async fn get_activity_state(
 
 /// Get usage of specified Activity.
 async fn get_activity_usage(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<ActivityUsage, Error> {
@@ -93,7 +93,7 @@ async fn get_activity_usage(
 
 /// Get running command for a specified Activity.
 async fn get_running_command(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<ExeScriptCommandState, Error> {
