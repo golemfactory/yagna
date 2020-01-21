@@ -2,7 +2,6 @@ use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCoun
 use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao, NotFoundAsOption};
 use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
-use crate::ACTIVITY_API;
 use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
@@ -10,18 +9,24 @@ use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatc
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
 
-pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
-    let create = web::post().to(impl_restful_handler!(create_activity, path, body));
-    let delete = web::delete().to(impl_restful_handler!(destroy_activity, path, query));
-    let exec = web::post().to(impl_restful_handler!(exec, path, query, body));
-    let batch = web::get().to(impl_restful_handler!(get_batch_results, path, query));
-
-    web::scope(&ACTIVITY_API)
-        .data(db.clone())
-        .service(web::resource("/activity").route(create))
-        .service(web::resource("/activity/{activity_id}").route(delete))
-        .service(web::resource("/activity/{activity_id}/exec").route(exec))
-        .service(web::resource("/activity/{activity_id}/exec/{batch_id}").route(batch))
+pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
+    scope
+        .route(
+            "/activity",
+            web::post().to(impl_restful_handler!(create_activity, path, body)),
+        )
+        .route(
+            "/activity/{activity_id}",
+            web::delete().to(impl_restful_handler!(destroy_activity, path, query)),
+        )
+        .route(
+            "/activity/{activity_id}/exec",
+            web::post().to(impl_restful_handler!(exec, path, query, body)),
+        )
+        .route(
+            "/activity/{activity_id}/exec/{batch_id}",
+            web::get().to(impl_restful_handler!(get_batch_results, path, query)),
+        )
 }
 
 /// Creates new Activity based on given Agreement.
