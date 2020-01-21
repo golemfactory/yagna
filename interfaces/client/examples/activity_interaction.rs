@@ -7,7 +7,7 @@ use ya_client::{
     web::WebClient,
     Result,
 };
-use ya_model::activity::{activity_state::State, ActivityState, ActivityUsage, ExeScriptRequest};
+use ya_model::activity::ExeScriptRequest;
 
 fn new_client() -> Result<Arc<WebClient>> {
     WebClient::builder()
@@ -23,21 +23,13 @@ async fn provider(activity_id: &str) -> Result<()> {
     let activity_events = client.get_activity_events(Some(60i32)).await.unwrap();
     println!("[<] Events: {:?}", activity_events);
 
-    let activity_state = ActivityState::new(State::Ready);
-    println!("[+] Setting activity state to: {:?}", activity_state);
-    client
-        .set_activity_state(activity_state, activity_id)
-        .await
-        .unwrap();
-    println!("[<] Done");
+    println!("[+] Activity state");
+    let activity_state = client.get_activity_state(activity_id).await.unwrap();
+    println!("[<] {:?}", activity_state);
 
-    let activity_usage = ActivityUsage::new(Some(vec![10f64, 0.5f64]));
-    println!("[+] Setting activity usage to: {:?}", activity_usage);
-    client
-        .set_activity_usage(activity_usage, activity_id)
-        .await
-        .unwrap();
-    println!("[<] Done");
+    println!("[+] Activity usage");
+    let activity_usage = client.get_activity_usage(activity_id).await.unwrap();
+    println!("[<] {:?}", activity_usage);
     Ok(())
 }
 

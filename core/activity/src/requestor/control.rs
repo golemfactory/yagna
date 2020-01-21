@@ -11,7 +11,7 @@ use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequ
 use ya_persistence::executor::DbExecutor;
 
 pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
-    let create = web::post().to(impl_restful_handler!(create_activity, path, query));
+    let create = web::post().to(impl_restful_handler!(create_activity, path, body));
     let delete = web::delete().to(impl_restful_handler!(destroy_activity, path, query));
     let exec = web::post().to(impl_restful_handler!(exec, path, query, body));
     let batch = web::get().to(impl_restful_handler!(get_batch_results, path, query));

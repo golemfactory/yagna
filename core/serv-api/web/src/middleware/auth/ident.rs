@@ -1,19 +1,24 @@
-use actix_web::dev::{Extensions, ServiceRequest};
-use actix_web::{HttpMessage, HttpRequest};
+use actix_web::dev::{Extensions, Payload, ServiceRequest};
+use actix_web::error::PayloadError;
+use actix_web::web::Bytes;
+use actix_web::{FromRequest, HttpMessage, HttpRequest};
+use futures::prelude::*;
+use serde::Serialize;
 use std::cell::Ref;
 use std::convert::TryFrom;
+use std::pin::Pin;
 use ya_core_model::appkey::AppKey;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Identity {
-    key: String,
+    name: String,
     role: String,
 }
 
 impl From<AppKey> for Identity {
     fn from(app_key: AppKey) -> Self {
         Identity {
-            key: app_key.key,
+            name: app_key.identity.to_string(),
             role: app_key.role,
         }
     }
@@ -22,7 +27,7 @@ impl From<AppKey> for Identity {
 impl From<&AppKey> for Identity {
     fn from(app_key: &AppKey) -> Self {
         Identity {
-            key: app_key.key.clone(),
+            name: app_key.identity.to_string(),
             role: app_key.role.clone(),
         }
     }
@@ -47,6 +52,23 @@ macro_rules! impl_try_from {
             }
         }
     };
+}
+
+impl FromRequest for Identity {
+    type Error = ();
+    type Future = future::Ready<Result<Self, Self::Error>>;
+    type Config = ();
+
+    fn from_request(
+        req: &HttpRequest,
+        _payload: &mut Payload<Pin<Box<dyn Stream<Item = Result<Bytes, PayloadError>>>>>,
+    ) -> Self::Future {
+        if let Some(v) = req.extensions().get::<Identity>() {
+            future::ok(v.clone())
+        } else {
+            future::err(())
+        }
+    }
 }
 
 impl_try_from!(ServiceRequest);
