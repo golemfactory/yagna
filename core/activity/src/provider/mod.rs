@@ -2,7 +2,6 @@ use crate::common::{PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
 use crate::error::Error;
 use crate::timeout::IntoTimeoutFuture;
-use crate::ACTIVITY_API;
 use actix_web::web;
 use futures::prelude::*;
 use std::convert::From;
@@ -13,16 +12,20 @@ use ya_persistence::executor::DbExecutor;
 
 pub mod service;
 
-pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
-    let events = web::get().to(impl_restful_handler!(get_events_web, query));
-    let state = web::get().to(impl_restful_handler!(get_activity_state_web, path));
-    let usage = web::get().to(impl_restful_handler!(get_activity_usage_web, path));
-
-    web::scope(ACTIVITY_API)
-        .data(db.clone())
-        .service(web::resource("/events").route(events))
-        .service(web::resource("/activity/{activity_id}/state").route(state))
-        .service(web::resource("/activity/{activity_id}/usage").route(usage))
+pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
+    scope
+        .route(
+            "/events",
+            web::get().to(impl_restful_handler!(get_events_web, query)),
+        )
+        .route(
+            "/activity/{activity_id}/state",
+            web::get().to(impl_restful_handler!(get_activity_state_web, path)),
+        )
+        .route(
+            "/activity/{activity_id}/usage",
+            web::get().to(impl_restful_handler!(get_activity_usage_web, path)),
+        )
 }
 
 impl From<Event> for ProviderEvent {

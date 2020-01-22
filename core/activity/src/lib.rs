@@ -6,6 +6,7 @@ pub(crate) mod macros;
 pub(crate) mod common;
 pub(crate) mod dao;
 
+pub mod api;
 pub mod error;
 pub mod provider;
 pub mod requestor;

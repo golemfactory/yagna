@@ -2,23 +2,26 @@ use crate::common::{PathActivity, QueryTimeout};
 use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
 use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
-use crate::ACTIVITY_API;
 use actix_web::web;
 use futures::prelude::*;
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState, State};
 use ya_persistence::executor::DbExecutor;
 
-pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
-    let state = web::get().to(impl_restful_handler!(get_activity_state, path, query));
-    let usage = web::get().to(impl_restful_handler!(get_activity_usage, path, query));
-    let command = web::get().to(impl_restful_handler!(get_running_command, path, query));
-
-    web::scope(&ACTIVITY_API)
-        .data(db.clone())
-        .service(web::resource("/activity/{activity_id}/state").route(state))
-        .service(web::resource("/activity/{activity_id}/usage").route(usage))
-        .service(web::resource("/activity/{activity_id}/command").route(command))
+pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
+    scope
+        .route(
+            "/activity/{activity_id}/state",
+            web::get().to(impl_restful_handler!(get_activity_state, path, query)),
+        )
+        .route(
+            "/activity/{activity_id}/usage",
+            web::get().to(impl_restful_handler!(get_activity_usage, path, query)),
+        )
+        .route(
+            "/activity/{activity_id}/command",
+            web::get().to(impl_restful_handler!(get_running_command, path, query)),
+        )
 }
 
 /// Get state of specified Activity.
