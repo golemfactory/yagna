@@ -1,4 +1,5 @@
 use ya_client::{market::ApiClient, web::WebClient, Result};
+use ya_client::activity::{provider::ProviderApiClient, ACTIVITY_API};
 
 use crate::execution::TaskRunnerActor;
 use crate::market::{CreateOffer, ProviderMarketActor};
@@ -10,6 +11,7 @@ use crate::market::provider_market::{UpdateMarket, AgreementSigned};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::time::Duration;
+use std::sync::Arc;
 
 
 #[allow(dead_code)]
@@ -34,7 +36,9 @@ impl ProviderAgent {
     pub fn new() -> Result<ProviderAgent> {
         let client = ApiClient::new(WebClient::builder())?;
         let market = ProviderMarketActor::new(client, "AcceptAll").start();
-        let runner = TaskRunnerActor::new().start();
+
+        let client = ProviderApiClient::new(WebClient::builder().api_root(ACTIVITY_API).build().map(Arc::new)?);
+        let runner = TaskRunnerActor::new(client).start();
 
         let node_info = ProviderAgent::create_node_info();
 

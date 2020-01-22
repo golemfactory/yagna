@@ -129,7 +129,7 @@ impl ProviderMarket {
     }
 
     async fn dispatch_events(&self, subscription_id: &str, events: &Vec<ProviderEvent>) {
-        info!("Collected {} events. Processing...", events.len());
+        info!("Collected {} market events. Processing...", events.len());
 
         let dispatch_futures = events
             .iter()
