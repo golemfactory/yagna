@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::BufReader;
 
 /// Descriptor of ExeUnit
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct ExeUnitDesc {
     name: String,
@@ -39,10 +39,7 @@ impl ExeUnitsRegistry {
     }
 
     pub fn spawn_exeunit(&self, name: &str) -> Result<ExeUnitInstance> {
-        let exeunit_desc = self.descriptors.get(name).ok_or(Error::msg(format!(
-            "ExeUnit [{}] doesn't exist in registry.",
-            name
-        )))?;
+        let exeunit_desc = self.find_exeunit(name)?;
 
         let child = Command::new(&exeunit_desc.name).spawn().map_err(|error| {
             Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error))
@@ -78,17 +75,35 @@ impl ExeUnitsRegistry {
         }
         Ok(())
     }
+
+    pub fn find_exeunit(&self, name: &str) -> Result<ExeUnitDesc> {
+        Ok(self.descriptors
+            .get(name)
+            .ok_or(Error::msg(format!("ExeUnit [{}] doesn't exist in registry.", name)))?
+            .clone())
+    }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//
-//    #[test]
-//    fn test_fill_registry_from_file() {
-//        let dict = {
-//
-//        };
-//    }
-//
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_resources_directory() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-resources/")
+    }
+
+    #[test]
+    fn test_fill_registry_from_file() {
+        let mut registry = ExeUnitsRegistry::new();
+        registry.register_exeunits_from_file(&test_resources_directory().join("example-exeunits.json")).unwrap();
+
+        let dummy_desc = registry.find_exeunit("dummy").unwrap();
+        assert_eq!(dummy_desc.name.as_str(), "dummy");
+        assert_eq!(dummy_desc.path.to_str().unwrap(), "dummy.exe");
+
+        let dummy_desc = registry.find_exeunit("wasm").unwrap();
+        assert_eq!(dummy_desc.name.as_str(), "wasm");
+        assert_eq!(dummy_desc.path.to_str().unwrap(), "wasm.exe");
+    }
+
+}

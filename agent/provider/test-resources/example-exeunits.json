@@ -1,0 +1,10 @@
+[
+  {
+    "name": "dummy",
+    "path": "dummy.exe"
+  },
+  {
+    "name": "wasm",
+    "path": "wasm.exe"
+  }
+]

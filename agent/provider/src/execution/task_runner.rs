@@ -1,6 +1,13 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 
+use actix::prelude::*;
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+
+
 #[allow(dead_code)]
 pub struct TaskRunner {
     registry: ExeUnitsRegistry,
@@ -16,7 +23,7 @@ impl TaskRunner {
         }
     }
 
-    pub fn wait_activity_for_events() {
+    pub fn wait_for_activity_events() {
         // or maybe provider agent should do this.
         unimplemented!();
     }
@@ -29,3 +36,12 @@ impl TaskRunner {
         unimplemented!();
     }
 }
+
+struct TaskRunnerActor {
+    runner: Rc<RefCell<TaskRunner>>,
+}
+
+impl Actor for TaskRunnerActor {
+    type Context = Context<Self>;
+}
+
