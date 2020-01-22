@@ -3,6 +3,8 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 
+pub const BUS_ID: &'static str = "/local/appkey";
+
 pub use ya_service_api::constants::APP_KEY_SERVICE_ID;
 pub const DEFAULT_IDENTITY: &str = "primary";
 pub const DEFAULT_ROLE: &str = "manager";
@@ -34,6 +36,12 @@ pub struct Create {
 #[serde(rename_all = "camelCase")]
 pub struct Get {
     pub key: String,
+}
+
+impl Get {
+    pub fn with_key(key: String) -> Self {
+        Get { key }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

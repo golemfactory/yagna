@@ -6,7 +6,7 @@ use structopt::*;
 use ethsign::Protected;
 use std::cmp::Reverse;
 use ya_core_model::ethaddr::NodeId;
-use ya_core_model::identity::{self, DEFAULT_IDENTITY};
+use ya_core_model::identity::{self};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -118,7 +118,7 @@ pub enum IdentityCommand {
     /// Update given identity
     Update {
         /// Identity to update
-        #[structopt(default_value = DEFAULT_IDENTITY)]
+        #[structopt(default_value = "")]
         alias_or_id: NodeOrAlias,
         #[structopt(long)]
         alias: Option<String>,

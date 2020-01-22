@@ -4,7 +4,8 @@ use thiserror::Error;
 use ya_service_bus::RpcMessage;
 
 pub use ya_service_api::constants::IDENTITY_SERVICE_ID;
-pub const DEFAULT_IDENTITY: &str = "primary";
+
+pub const BUS_ID: &'static str = "/local/identity";
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
