@@ -1,18 +1,16 @@
 use crate::dao::{ActivityDao, AgreementDao, NotFoundAsOption};
 use crate::error::Error;
-use crate::{ACTIVITY_SERVICE_ID, NET_SERVICE_ID};
-use ya_persistence::executor::ConnType;
-use ya_persistence::models::Agreement;
+
+use ya_core_model::activity::ACTIVITY_SERVICE_ID;
+use ya_persistence::{executor::ConnType, models::Agreement};
+use ya_service_api::constants::NET_SERVICE_ID;
 
 pub mod control;
 pub mod state;
 
 #[inline(always)]
 fn provider_activity_uri(provider_id: &str) -> String {
-    format!(
-        "/{}/{}/{}",
-        NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID
-    )
+    format!("{}/{}{}", NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID)
 }
 
 fn missing_activity_err(conn: &ConnType, activity_id: &str) -> Result<(), Error> {

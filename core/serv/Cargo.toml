@@ -1,20 +1,24 @@
 [package]
 name = "yagna"
-version = "0.2.1"
+version = "0.2.4"
 description = "Yagna server daemon and CLI"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-activity = "0.1"
+ya-core-model = "0.1"
 ya-identity = "0.1"
+ya-net = "0.1"
 ya-persistence = "0.1"
 ya-sb-router = "0.1"
 ya-service-api = "0.1"
+ya-service-api-web = "0.1"
+ya-service-bus = "0.2"
 
 actix-rt = "1.0"
 actix-web = "2.0"
 anyhow = "1.0"
-appdirs = "0.2"
 env_logger = "0.7"
 futures = "0.3"
 log = "0.4"

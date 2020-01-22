@@ -1,4 +1,5 @@
 use diesel::connection::SimpleConnection;
+use diesel::migration::RunMigrationsError;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::{Connection, SqliteConnection};
 use dotenv::dotenv;
@@ -72,12 +73,14 @@ impl DbExecutor {
         AsDao::as_dao(&self.pool)
     }
 
-    pub fn apply_migration<R, T: FnOnce(&ConnType, &mut dyn std::io::Write) -> R>(
+    pub fn apply_migration<
+        T: FnOnce(&ConnType, &mut dyn std::io::Write) -> Result<(), RunMigrationsError>,
+    >(
         &self,
         migration: T,
-    ) -> Result<R, Error> {
+    ) -> anyhow::Result<()> {
         let c = self.conn()?;
-        Ok(migration(&c, &mut std::io::stderr()))
+        Ok(migration(&c, &mut std::io::stderr())?)
     }
 
     pub async fn with_connection<R: Send + 'static, Error, F>(&self, f: F) -> Result<R, Error>

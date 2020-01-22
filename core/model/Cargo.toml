@@ -8,13 +8,15 @@ edition = "2018"
 default = ['with-diesel']
 full = ['activity', 'appkey', 'identity']
 activity = []
-identity = []
+identity = ['ethaddr']
 appkey = []
 with-diesel=['diesel']
+ethaddr=[]
 
 [dependencies]
 ya-model = "0.1"
-ya-service-bus = "0.1"
+ya-service-bus = "0.2"
+ya-service-api = "0.1"
 
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }

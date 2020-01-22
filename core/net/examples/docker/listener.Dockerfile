@@ -6,4 +6,4 @@ COPY . .
 RUN cargo build --examples --bins
 EXPOSE 9000
 
-CMD ./core/net/examples/docker/send_message.sh
+CMD ./core/net/examples/docker/listener.sh

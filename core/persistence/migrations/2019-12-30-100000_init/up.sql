@@ -41,17 +41,15 @@ CREATE TABLE "agreement"(
 	"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	"natural_id" VARCHAR(255) NOT NULL,
 	"state_id" INTEGER NOT NULL,
-	"demand_natural_id" VARCHAR(255) NOT NULL,
 	"demand_node_id" VARCHAR(255) NOT NULL,
 	"demand_properties_json" TEXT NOT NULL,
 	"demand_constraints_json" TEXT NOT NULL,
-	"offer_natural_id" VARCHAR(255) NOT NULL,
 	"offer_node_id" VARCHAR(255) NOT NULL,
 	"offer_properties_json" TEXT NOT NULL,
 	"offer_constraints_json" TEXT NOT NULL,
 	"proposed_signature" TEXT NOT NULL,
 	"approved_signature" TEXT NOT NULL,
-	"committed_signature" TEXT NOT NULL,
+	"committed_signature" TEXT,
     FOREIGN KEY("state_id") REFERENCES "agreement_state" ("id")
 );
 
@@ -70,7 +68,7 @@ CREATE TABLE "agreement_event_type"(
 );
 
 CREATE TABLE "agreement_state"(
-	"id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+	"id" INTEGER NOT NULL PRIMARY KEY,
 	"name" VARCHAR(50) NOT NULL
 );
 
@@ -155,3 +153,13 @@ CREATE TABLE "payment_x_invoice"(
 INSERT INTO "activity_event_type"("name") VALUES
     ("CreateActivity"),
     ("DestroyActivity");
+
+INSERT INTO agreement_state(id, name)
+values
+       (0, 'New'),
+       (1, 'Pending Approval'),
+       (10, 'Approved'),
+       (40, 'Canceled'),
+       (41, 'Rejected'),
+       (50, 'Terminated');
+

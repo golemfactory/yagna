@@ -86,9 +86,20 @@ where
                         req.extensions_mut().insert(Identity::from(app_key));
                         Ok(service.borrow_mut().call(req).await?)
                     }
-                    None => Err(ErrorUnauthorized("Invalid application key")),
+                    None => {
+                        log::info!(
+                            "{} {} Invalid application key: {}",
+                            req.method(),
+                            req.path(),
+                            key
+                        );
+                        Err(ErrorUnauthorized("Invalid application key"))
+                    }
                 },
-                None => Err(ErrorUnauthorized("Missing application key")),
+                None => {
+                    log::info!("Missing application key");
+                    Err(ErrorUnauthorized("Missing application key"))
+                }
             }
         })
     }

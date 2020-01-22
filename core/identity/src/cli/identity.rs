@@ -47,7 +47,7 @@ impl NodeOrAlias {
         match self {
             NodeOrAlias::Node(node_id) => Ok(node_id.clone()),
             NodeOrAlias::Alias(alias) => {
-                let id = bus::service(identity::BUS_ID)
+                let id = bus::private_service(identity::IDENTITY_SERVICE_ID)
                     .send(identity::Get::ByAlias(alias.to_owned()))
                     .await
                     .map_err(|e| anyhow::anyhow!(e))?;
@@ -57,7 +57,7 @@ impl NodeOrAlias {
                 }
             }
             NodeOrAlias::DefaultNode => {
-                let id = bus::service(identity::BUS_ID)
+                let id = bus::private_service(identity::IDENTITY_SERVICE_ID)
                     .send(identity::Get::ByDefault)
                     .await
                     .map_err(|e| anyhow::anyhow!(e))?;
@@ -137,12 +137,13 @@ impl IdentityCommand {
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             IdentityCommand::List { .. } => {
-                let mut identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
-                    .send(identity::List::default())
-                    .await
-                    .map_err(|e| anyhow::Error::msg(e))
-                    .context("sending id List to BUS")?
-                    .unwrap();
+                let mut identities: Vec<identity::IdentityInfo> =
+                    bus::private_service(identity::IDENTITY_SERVICE_ID)
+                        .send(identity::List::default())
+                        .await
+                        .map_err(|e| anyhow::Error::msg(e))
+                        .context("sending id List to BUS")?
+                        .unwrap();
                 identities.sort_by_key(|id| Reverse((id.is_default, id.alias.clone())));
                 Ok(ResponseTable {
                     columns: vec![
@@ -168,7 +169,7 @@ impl IdentityCommand {
             IdentityCommand::Show { node_or_alias } => {
                 let command: identity::Get = node_or_alias.clone().unwrap_or_default().into();
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    bus::private_service(identity::IDENTITY_SERVICE_ID)
                         .send(command)
                         .await
                         .map_err(|e| anyhow::Error::msg(e))?,
@@ -180,7 +181,7 @@ impl IdentityCommand {
                 set_default,
             } => {
                 let node_id = alias_or_id.resolve().await?;
-                let id = bus::service(identity::BUS_ID)
+                let id = bus::private_service(identity::IDENTITY_SERVICE_ID)
                     .send(
                         identity::Update::with_id(node_id)
                             .with_alias(alias.clone())
@@ -213,7 +214,7 @@ impl IdentityCommand {
                     crate::id_key::generate_new_keyfile(password)?
                 };
 
-                let id = bus::service(identity::BUS_ID)
+                let id = bus::private_service(identity::IDENTITY_SERVICE_ID)
                     .send(identity::CreateGenerated {
                         alias: alias.clone(),
                         from_keystore: Some(key_file),
@@ -225,7 +226,7 @@ impl IdentityCommand {
             IdentityCommand::Lock { node_or_alias } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    bus::private_service(identity::IDENTITY_SERVICE_ID)
                         .send(identity::Lock::with_id(node_id))
                         .await
                         .map_err(|e| anyhow::Error::msg(e))?,
@@ -235,7 +236,7 @@ impl IdentityCommand {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let password = rpassword::read_password_from_tty(Some("Password: "))?;
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    bus::private_service(identity::IDENTITY_SERVICE_ID)
                         .send(identity::Unlock::with_id(node_id, password))
                         .await
                         .map_err(|e| anyhow::Error::msg(e))?,
@@ -243,7 +244,7 @@ impl IdentityCommand {
             }
             IdentityCommand::Drop { node_or_alias } => {
                 let command: identity::Get = node_or_alias.clone().into();
-                let id = bus::service(identity::BUS_ID)
+                let id = bus::private_service(identity::IDENTITY_SERVICE_ID)
                     .send(command)
                     .await
                     .map_err(|e| anyhow::Error::msg(e))?;
@@ -257,7 +258,7 @@ impl IdentityCommand {
                     anyhow::bail!("default identity")
                 }
                 CommandOutput::object(
-                    bus::service(identity::BUS_ID)
+                    bus::private_service(identity::IDENTITY_SERVICE_ID)
                         .send(identity::DropId::with_id(id.node_id))
                         .await
                         .map_err(|e| anyhow::Error::msg(e))?,

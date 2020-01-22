@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &str = "/local/identity";
+pub use ya_service_api::constants::IDENTITY_SERVICE_ID;
 pub const DEFAULT_IDENTITY: &str = "primary";
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]

@@ -7,6 +7,7 @@ pub use identity::IdentityDao;
 use r2d2;
 use std::fmt::Display;
 use thiserror::Error;
+
 use ya_core_model::appkey as model;
 use ya_persistence::executor::DbExecutor;
 
@@ -66,8 +67,6 @@ impl Into<model::Error> for Error {
     }
 }
 
-pub fn init(db: &DbExecutor) -> anyhow::Result<()> {
-    Ok(db
-        .apply_migration(crate::db::migrations::run_with_output)
-        .unwrap()?)
+pub async fn init(db: &DbExecutor) -> anyhow::Result<()> {
+    db.apply_migration(crate::db::migrations::run_with_output)
 }
