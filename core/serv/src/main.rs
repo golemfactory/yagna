@@ -19,6 +19,8 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
+use ya_service_api::constants::ACTIVITY_API;
+use ya_service_api_web::scope::ExtendableScope;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
