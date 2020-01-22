@@ -1,8 +1,7 @@
 use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount};
-use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao};
+use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao, NotFoundAsOption};
 use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
-use crate::ACTIVITY_API;
 use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
@@ -10,29 +9,43 @@ use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatc
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
 
-pub fn web_scope(db: &DbExecutor) -> actix_web::Scope {
-    let create = web::post().to(impl_restful_handler!(create_activity, path, query));
-    let delete = web::delete().to(impl_restful_handler!(destroy_activity, path, query));
-    let exec = web::post().to(impl_restful_handler!(exec, path, query, body));
-    let batch = web::get().to(impl_restful_handler!(get_batch_results, path, query));
-
-    web::scope(&ACTIVITY_API)
-        .data(db.clone())
-        .service(web::resource("/activity").route(create))
-        .service(web::resource("/activity/{activity_id}").route(delete))
-        .service(web::resource("/activity/{activity_id}/exec").route(exec))
-        .service(web::resource("/activity/{activity_id}/exec/{batch_id}").route(batch))
+pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
+    scope
+        .route(
+            "/activity",
+            web::post().to(impl_restful_handler!(create_activity, path, body)),
+        )
+        .route(
+            "/activity/{activity_id}",
+            web::delete().to(impl_restful_handler!(destroy_activity, path, query)),
+        )
+        .route(
+            "/activity/{activity_id}/exec",
+            web::post().to(impl_restful_handler!(exec, path, query, body)),
+        )
+        .route(
+            "/activity/{activity_id}/exec/{batch_id}",
+            web::get().to(impl_restful_handler!(get_batch_results, path, query)),
+        )
 }
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeout>,
     body: web::Json<CreateActivity>,
 ) -> Result<String, Error> {
     let conn = db_conn!(db)?;
     let agreement_id = body.agreement_id.clone();
-    let agreement = AgreementDao::new(&conn).get(&agreement_id)?;
+    log::debug!("getting agrement from DB");
+    let agreement = AgreementDao::new(&conn)
+        .get(&agreement_id)
+        .not_found_as_option()?
+        .ok_or(Error::BadRequest(format!(
+            "Unknown agreement id: {}",
+            body.agreement_id
+        )))?;
+    log::debug!("agreement: {:#?}", agreement);
 
     let uri = provider_activity_uri(&agreement.offer_node_id);
     let activity_id = gsb_send!(body.into_inner(), &uri, query.timeout)?;
@@ -45,7 +58,7 @@ async fn create_activity(
 
 /// Destroys given Activity.
 async fn destroy_activity(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
 ) -> Result<(), Error> {
@@ -70,7 +83,7 @@ async fn destroy_activity(
 
 /// Executes an ExeScript batch within a given Activity.
 async fn exec(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
     body: web::Json<ExeScriptRequest>,
@@ -96,7 +109,7 @@ async fn exec(
 
 /// Queries for ExeScript batch results.
 async fn get_batch_results(
-    db: web::Data<&DbExecutor>,
+    db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {

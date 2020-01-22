@@ -1,6 +1,6 @@
 [package]
 name = "ya-activity"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -8,6 +8,7 @@ edition = "2018"
 ya-core-model = { version = "0.1", features = ["activity"] }
 ya-model = "0.1"
 ya-service-api = "0.1"
+ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 ya-persistence = "0.1"
 
@@ -30,6 +31,5 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 
 [dev-dependencies]
 ya-sb-router = "0.1"
-
 actix-rt = "1.0"
-diesel_migrations = "1.4"
+structopt = "0.3.7"

@@ -160,8 +160,7 @@ impl ServiceCommand {
 
                 let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
 
-                db.apply_migration(ya_persistence::migrations::run_with_output)
-                    .unwrap()?;
+                db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 ya_identity::service::activate(&db).await?;
                 ya_activity::provider::service::bind_gsb(&db);
 
@@ -184,9 +183,7 @@ impl ServiceCommand {
                     App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .service(ya_activity::provider::web_scope(&db))
-                        .service(ya_activity::requestor::control::web_scope(&db))
-                        .service(ya_activity::requestor::state::web_scope(&db))
+                        .service(ya_activity::api::web_scope(&db))
                         .route("/me", web::get().to(me))
                 })
                 .bind(ctx.http_address())
