@@ -84,6 +84,5 @@ async fn async_main(api: ApiClient) {
 
 fn main() {
     let client = ApiClient::new(WebClient::builder()).unwrap();
-
     actix_rt::System::new("test").block_on(async_main(client));
 }

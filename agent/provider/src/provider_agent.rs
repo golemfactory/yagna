@@ -14,8 +14,8 @@ use std::time::Duration;
 #[allow(dead_code)]
 pub struct ProviderAgent {
     market: Addr<ProviderMarketActor>,
-    runner: TaskRunner,
     ///TODO: Should be actix actor.
+    runner: TaskRunner,
     node_info: NodeInfo,
 }
 
