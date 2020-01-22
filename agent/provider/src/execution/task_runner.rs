@@ -26,7 +26,7 @@ impl TaskRunner {
         }
     }
 
-    pub fn wait_for_activity_events() {
+    pub fn wait_for_events() {
         // or maybe provider agent should do this.
         unimplemented!();
     }

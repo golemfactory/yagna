@@ -4,8 +4,7 @@ use log::error;
 
 /// Subscribe to process signals.
 #[derive(Message)]
-#[rtype(result = "()")]
-#[allow(dead_code)]
+#[rtype(result = "Result<()>")]
 pub struct Subscribe<MessageType>(pub Recipient<MessageType>)
 where
     MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
@@ -48,5 +47,9 @@ where
 
     pub fn subscribe(&mut self, subscriber: Recipient<MessageType>) {
         self.subscribers.push(subscriber);
+    }
+
+    pub fn on_subscribe(&mut self, msg: Subscribe<MessageType>) {
+        self.subscribe(msg.0);
     }
 }

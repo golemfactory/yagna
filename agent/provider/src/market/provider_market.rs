@@ -1,8 +1,8 @@
+use crate::{gen_actix_handler_async, gen_actix_handler_sync};
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
-use crate::gen_actix_handler_async;
 use crate::node_info::NodeInfo;
-use crate::utils::actix_signal::SignalSlot;
+use crate::utils::actix_signal::{SignalSlot, Subscribe};
 
 use ya_client::market::ApiClient;
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
@@ -21,16 +21,21 @@ use serde_json;
 // Public exposed messages
 // =========================================== //
 
+/// This event is emmited, when agreement is already signed
+/// and provider can go to activity stage and task creation.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct AgreementSigned;
 
+/// Sends offer to market.
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct CreateOffer {
     node_info: NodeInfo,
 }
 
+/// Collects events from market and runs negotiations.
+/// This event should be sent periodically.
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateMarket;
@@ -46,12 +51,12 @@ struct OfferSubscription {
 }
 
 /// Manages market api communication and forwards proposal to implementation of market strategy.
-///
 pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
     api: ApiClient,
     offers: Vec<OfferSubscription>,
 
+    /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<AgreementSigned>,
 }
 
@@ -313,6 +318,15 @@ impl ProviderMarket {
         self.api.provider().reject_agreement(agreement_id).await?;
         Ok(())
     }
+
+    // =========================================== //
+    // Market internals - event subscription
+    // =========================================== //
+
+    pub fn on_subscribe(&mut self, msg: Subscribe<AgreementSigned>) -> Result<()> {
+        self.agreement_signed_signal.on_subscribe(msg);
+        Ok(())
+    }
 }
 
 // =========================================== //
@@ -347,6 +361,7 @@ impl Actor for ProviderMarketActor {
 
 gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer, market);
 gen_actix_handler_async!(ProviderMarketActor, UpdateMarket, run_step, market);
+gen_actix_handler_sync!(ProviderMarketActor, Subscribe<AgreementSigned>, on_subscribe, market);
 
 // =========================================== //
 // Negotiators factory
