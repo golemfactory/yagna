@@ -22,7 +22,7 @@ use serde_json;
 // =========================================== //
 
 #[derive(Message, Clone)]
-#[rtype(result = "()")]
+#[rtype(result = "Result<()>")]
 pub struct AgreementSigned;
 
 #[derive(Message)]

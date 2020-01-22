@@ -1,8 +1,11 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
+use crate::market::provider_market::AgreementSigned;
+use crate::gen_actix_handler_sync;
 
 use actix::prelude::*;
 
+use anyhow::{Error, Result};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -35,9 +38,17 @@ impl TaskRunner {
     pub fn on_destroy_activity() {
         unimplemented!();
     }
+
+    pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
+        unimplemented!();
+    }
 }
 
-struct TaskRunnerActor {
+// =========================================== //
+// Actix stuff
+// =========================================== //
+
+pub struct TaskRunnerActor {
     runner: Rc<RefCell<TaskRunner>>,
 }
 
@@ -45,3 +56,10 @@ impl Actor for TaskRunnerActor {
     type Context = Context<Self>;
 }
 
+impl TaskRunnerActor {
+    pub fn new() -> TaskRunnerActor {
+        TaskRunnerActor{runner: Rc::new(RefCell::new(TaskRunner::new()))}
+    }
+}
+
+gen_actix_handler_sync!(TaskRunnerActor, AgreementSigned, on_signed_agreement, runner);

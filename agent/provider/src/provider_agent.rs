@@ -1,6 +1,6 @@
 use ya_client::{market::ApiClient, web::WebClient, Result};
 
-use crate::execution::TaskRunner;
+use crate::execution::TaskRunnerActor;
 use crate::market::{CreateOffer, ProviderMarketActor};
 use crate::node_info::{CpuInfo, NodeInfo};
 //use crate::utils::actix_handler::send_message;
@@ -15,7 +15,7 @@ use std::time::Duration;
 pub struct ProviderAgent {
     market: Addr<ProviderMarketActor>,
     ///TODO: Should be actix actor.
-    runner: TaskRunner,
+    runner: Addr<TaskRunnerActor>,
     node_info: NodeInfo,
 }
 
@@ -33,7 +33,7 @@ impl ProviderAgent {
     pub fn new() -> Result<ProviderAgent> {
         let client = ApiClient::new(WebClient::builder())?;
         let market = ProviderMarketActor::new(client, "AcceptAll").start();
-        let runner = TaskRunner::new();
+        let runner = TaskRunnerActor::new().start();
 
         let node_info = ProviderAgent::create_node_info();
 

@@ -9,7 +9,6 @@ use std::io::BufReader;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone)]
-#[allow(dead_code)]
 pub struct ExeUnitDesc {
     name: String,
     path: PathBuf,
@@ -18,7 +17,6 @@ pub struct ExeUnitDesc {
 
 /// Responsible for creating ExeUnits.
 /// Stores registry of ExeUnits that can be created.
-#[allow(dead_code)]
 pub struct ExeUnitsRegistry {
     descriptors: HashMap<String, ExeUnitDesc>,
 }
