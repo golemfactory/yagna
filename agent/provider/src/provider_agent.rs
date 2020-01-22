@@ -6,13 +6,13 @@ use crate::node_info::{CpuInfo, NodeInfo};
 //use crate::utils::actix_handler::send_message;
 
 use actix::prelude::*;
-use actix::*;
 use actix::utils::IntervalFunc;
 use log::{error};
 use std::time::Duration;
 use crate::market::provider_market::UpdateMarket;
 
 
+#[allow(dead_code)]
 pub struct ProviderAgent {
     market: Addr<ProviderMarketActor>,
     runner: TaskRunner,     ///TODO: Should be actix actor.
@@ -59,7 +59,7 @@ impl ProviderAgent {
         //send_message(self.market.clone(), create_offer_message);
     }
 
-    fn schedule_jobs(&mut self, context: &mut Context<Self>) {
+    fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
         let market = self.market.clone();
 
         let future = async move {

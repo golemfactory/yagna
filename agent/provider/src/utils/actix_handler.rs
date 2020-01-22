@@ -15,8 +15,8 @@ macro_rules! gen_actix_handler_async {
         impl Handler<$MessageType> for $ActorType {
             type Result = ActorResponse<Self, (), Error>;
 
-            fn handle(&mut self, msg: $MessageType, ctx: &mut Context<Self>) -> Self::Result {
-                let mut actor_impl = self.$ActorImpl.clone();
+            fn handle(&mut self, msg: $MessageType, _ctx: &mut Context<Self>) -> Self::Result {
+                let actor_impl = self.$ActorImpl.clone();
                 ActorResponse::r#async(async move {
                     (*actor_impl).borrow_mut().$ForwardFun(msg).await
                 }.into_actor(self))

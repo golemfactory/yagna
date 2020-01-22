@@ -295,7 +295,7 @@ impl ProviderMarket {
 
         // We negotiated agreement and here responsibility of ProviderMarket ends.
         // Notify outside world about agreement for further processing.
-        self.agreement_signed_signal.send_signal(AgreementSigned{});
+        self.agreement_signed_signal.send_signal(AgreementSigned{})?;
         Ok(())
     }
 

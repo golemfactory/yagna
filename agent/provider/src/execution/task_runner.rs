@@ -2,12 +2,14 @@ use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 
 
+#[allow(dead_code)]
 pub struct TaskRunner {
     registry: ExeUnitsRegistry,
     tasks: Vec<Task>,
 }
 
 
+#[allow(dead_code)]
 impl TaskRunner {
 
     pub fn new() -> TaskRunner {

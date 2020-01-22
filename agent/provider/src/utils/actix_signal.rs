@@ -1,10 +1,12 @@
 use actix::prelude::*;
 use anyhow::Result;
+use log::{error};
 
 
 /// Subscribe to process signals.
 #[derive(Message)]
 #[rtype(result = "()")]
+#[allow(dead_code)]
 pub struct Subscribe<MessageType>(pub Recipient<MessageType>)
     where MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
           MessageType::Result: std::marker::Send + std::marker::Sync;
@@ -17,6 +19,7 @@ pub struct SignalSlot<MessageType>
     subscribers: Vec<Recipient<MessageType>>,
 }
 
+#[allow(dead_code)]
 impl<MessageType> SignalSlot<MessageType>
     where MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
           MessageType::Result: std::marker::Send + std::marker::Sync
@@ -28,7 +31,10 @@ impl<MessageType> SignalSlot<MessageType>
     /// Send signal to all subscribers
     pub fn send_signal(&self, message: MessageType) -> Result<()> {
         for subscriber in &self.subscribers {
-            subscriber.do_send(message.clone());
+            if let Err(error) = subscriber.do_send(message.clone()) {
+                //TODO: It would be useful to have better error message, that suggest which signal failed.
+                error!("Sending signal to subscriber failed in SignalSlot::send_signal. {}", error);
+            }
         }
         Ok(())
     }

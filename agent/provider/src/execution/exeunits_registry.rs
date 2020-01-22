@@ -10,6 +10,7 @@ use std::io::BufReader;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ExeUnitDesc {
     name: String,
     path: PathBuf,
@@ -18,17 +19,20 @@ pub struct ExeUnitDesc {
 
 /// Responsible for creating ExeUnits.
 /// Stores registry of ExeUnits that can be created.
+#[allow(dead_code)]
 pub struct ExeUnitsRegistry {
     descriptors: HashMap<String, ExeUnitDesc>
 }
 
 /// TODO: Working ExeUnit instance
 /// TODO: Move to separate file, when this class will be more functional.
+#[allow(dead_code)]
 pub struct ExeUnitInstance {
     process: Child
 }
 
 
+#[allow(dead_code)]
 impl ExeUnitsRegistry {
 
     pub fn new() -> ExeUnitsRegistry {
@@ -40,7 +44,7 @@ impl ExeUnitsRegistry {
             .get(name)
             .ok_or(Error::msg(format!("ExeUnit [{}] doesn't exist in registry.", name )))?;
 
-        let mut child = Command::new(&exeunit_desc.name)
+        let child = Command::new(&exeunit_desc.name)
             .spawn()
             .map_err(|error| { Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error)) } )?;
 
