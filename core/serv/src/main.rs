@@ -19,7 +19,6 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
-use ya_service_api::constants::ACTIVITY_API;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -181,15 +180,10 @@ impl ServiceCommand {
                     ))?;
 
                 HttpServer::new(move || {
-                    let mut activity = actix_web::web::scope(ACTIVITY_API).data(db.clone());
-                    activity = ya_activity::provider::extend_web_scope(activity);
-                    activity = ya_activity::requestor::control::extend_web_scope(activity);
-                    activity = ya_activity::requestor::state::extend_web_scope(activity);
-
                     App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .service(activity)
+                        .service(ya_activity::api::web_scope(&db))
                         .route("/me", web::get().to(me))
                 })
                 .bind(ctx.http_address())

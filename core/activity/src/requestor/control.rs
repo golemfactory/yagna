@@ -45,7 +45,7 @@ async fn create_activity(
             "Unknown agreement id: {}",
             body.agreement_id
         )))?;
-    log::debug!("agreement: {:?}", agreement);
+    log::debug!("agreement: {:#?}", agreement);
 
     let uri = provider_activity_uri(&agreement.offer_node_id);
     let activity_id = gsb_send!(body.into_inner(), &uri, query.timeout)?;
