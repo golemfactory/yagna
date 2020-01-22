@@ -3,13 +3,14 @@ use ya_client::{market::ApiClient, web::WebClient, Result};
 use crate::execution::TaskRunnerActor;
 use crate::market::{CreateOffer, ProviderMarketActor};
 use crate::node_info::{CpuInfo, NodeInfo};
-//use crate::utils::actix_handler::send_message;
+use crate::utils::actix_handler::send_message;
+use crate::utils::actix_signal::Subscribe;
 
-use crate::market::provider_market::UpdateMarket;
+use crate::market::provider_market::{UpdateMarket, AgreementSigned};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use log::error;
 use std::time::Duration;
+
 
 #[allow(dead_code)]
 pub struct ProviderAgent {
@@ -48,32 +49,17 @@ impl ProviderAgent {
     }
 
     pub fn initialize(&mut self) {
+        // Forward AgreementSigned event to TaskRunner actor.
+        let msg = Subscribe::<AgreementSigned>(self.runner.clone().recipient());
+        send_message(self.market.clone(), msg);
+
+        // Create simple offer on market.
         let create_offer_message = CreateOffer::new(ProviderAgent::create_node_info());
-        let market = self.market.clone();
-
-        let future = async move {
-            if let Err(error) = market.send(create_offer_message).await {
-                error!("Error creating initial offer: {}.", error);
-            };
-        };
-        Arbiter::spawn(future);
-
-        //TODO: Use
-        //send_message(self.market.clone(), create_offer_message);
+        send_message(self.market.clone(), create_offer_message);
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
-        let market = self.market.clone();
-
-        let future = async move {
-            if let Err(error) = market.send(UpdateMarket).await {
-                error!("Error while sending UpdateMarket message: {}.", error);
-            };
-        };
-        Arbiter::spawn(future);
-
-        //TODO: Use
-        //send_message(self.market.clone(), UpdateMarket);
+        send_message(self.market.clone(), UpdateMarket);
     }
 
     fn create_node_info() -> NodeInfo {

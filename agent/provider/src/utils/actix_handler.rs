@@ -1,7 +1,6 @@
-//use actix::prelude::*;
-//use actix::*;
-//use log::{error};
-//use actix::prelude::dev::ToEnvelope;
+use actix::prelude::*;
+use log::{error};
+use actix::prelude::dev::ToEnvelope;
 
 /// Generates actix handler function, that forwards function call
 /// to class member function ($ForwardFun). $ForwardFun should be async
@@ -37,21 +36,21 @@ macro_rules! gen_actix_handler_sync {
             }
         }
     };
-} // gen_actix_handler_async
+} // gen_actix_handler_sync
 
 // Sends message to other actor.
 // TODO: Make lifetimes work.
-//pub fn send_message<ActorType, MessageType>(actor: Addr<ActorType>, msg: MessageType)
-//    where   MessageType: Message + Send,
-//            MessageType::Result: Send,
-//            ActorType: Handler<MessageType>,
-//            ActorType::Context: ToEnvelope<ActorType, MessageType>,
-//{
-//    let future = async move {
-//        if let Err(error) = actor.send(msg).await {
-//            //TODO: We could print more information about error.
-//            error!("Error sending message: {}.", error);
-//        };
-//    };
-//    Arbiter::spawn(future);
-//}
+pub fn send_message<ActorType, MessageType>(actor: Addr<ActorType>, msg: MessageType)
+    where   MessageType: Message + Send + 'static,
+            MessageType::Result: Send,
+            ActorType: Handler<MessageType>,
+            ActorType::Context: ToEnvelope<ActorType, MessageType>,
+{
+    let future = async move {
+        if let Err(error) = actor.send(msg).await {
+            //TODO: We could print more information about error.
+            error!("Error sending message: {}.", error);
+        };
+    };
+    Arbiter::spawn(future);
+}
