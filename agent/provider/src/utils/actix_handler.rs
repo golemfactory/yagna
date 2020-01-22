@@ -3,7 +3,6 @@
 //use log::{error};
 //use actix::prelude::dev::ToEnvelope;
 
-
 /// Generates actix handler function, that forwards function call
 /// to class member function ($ForwardFun). $ForwardFun should be async
 /// function. $ActorType should be structure that wraps implementation
@@ -17,13 +16,14 @@ macro_rules! gen_actix_handler_async {
 
             fn handle(&mut self, msg: $MessageType, _ctx: &mut Context<Self>) -> Self::Result {
                 let actor_impl = self.$ActorImpl.clone();
-                ActorResponse::r#async(async move {
-                    (*actor_impl).borrow_mut().$ForwardFun(msg).await
-                }.into_actor(self))
+                ActorResponse::r#async(
+                    async move { (*actor_impl).borrow_mut().$ForwardFun(msg).await }
+                        .into_actor(self),
+                )
             }
         }
     };
-}   // gen_actix_handler_async
+} // gen_actix_handler_async
 
 // Sends message to other actor.
 // TODO: Make lifetimes work.

@@ -1,19 +1,19 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 
-
 #[allow(dead_code)]
 pub struct TaskRunner {
     registry: ExeUnitsRegistry,
     tasks: Vec<Task>,
 }
 
-
 #[allow(dead_code)]
 impl TaskRunner {
-
     pub fn new() -> TaskRunner {
-        TaskRunner{ registry: ExeUnitsRegistry::new(), tasks: vec![] }
+        TaskRunner {
+            registry: ExeUnitsRegistry::new(),
+            tasks: vec![],
+        }
     }
 
     pub fn wait_activity_for_events() {
@@ -29,4 +29,3 @@ impl TaskRunner {
         unimplemented!();
     }
 }
-

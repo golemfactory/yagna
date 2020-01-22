@@ -1,18 +1,18 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
+use crate::gen_actix_handler_async;
 use crate::node_info::NodeInfo;
 use crate::utils::actix_signal::SignalSlot;
-use crate::gen_actix_handler_async;
 
-use ya_client::{market::ApiClient};
+use ya_client::market::ApiClient;
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
-use anyhow::{Error, Result};
 use actix::prelude::*;
+use anyhow::{Error, Result};
 use futures::future::join_all;
 use log::{error, info, warn};
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 // Temporrary
 use serde_json;
@@ -22,17 +22,17 @@ use serde_json;
 // =========================================== //
 
 #[derive(Message, Clone)]
-#[rtype(result="()")]
+#[rtype(result = "()")]
 pub struct AgreementSigned;
 
 #[derive(Message)]
-#[rtype(result="Result<()>")]
+#[rtype(result = "Result<()>")]
 pub struct CreateOffer {
-    node_info: NodeInfo
+    node_info: NodeInfo,
 }
 
 #[derive(Message)]
-#[rtype(result="Result<()>")]
+#[rtype(result = "Result<()>")]
 pub struct UpdateMarket;
 
 // =========================================== //
@@ -66,7 +66,7 @@ impl ProviderMarket {
             api,
             negotiator,
             offers: vec![],
-            agreement_signed_signal: SignalSlot::<AgreementSigned>::new()
+            agreement_signed_signal: SignalSlot::<AgreementSigned>::new(),
         };
     }
 
@@ -221,7 +221,8 @@ impl ProviderMarket {
         match response {
             Ok(action) => match action {
                 AgreementResponse::ApproveAgreement => {
-                    self.approve_agreement(subscription_id, agreement_id).await?
+                    self.approve_agreement(subscription_id, agreement_id)
+                        .await?
                 }
                 AgreementResponse::RejectAgreement => {
                     self.reject_agreement(subscription_id, agreement_id).await?
@@ -244,7 +245,10 @@ impl ProviderMarket {
         subscription_id: &str,
         proposal: &AgreementProposal,
     ) -> Result<()> {
-        info!("Accepting proposal [{}] without changes, subscription_id: {}.", proposal.id, subscription_id);
+        info!(
+            "Accepting proposal [{}] without changes, subscription_id: {}.",
+            proposal.id, subscription_id
+        );
 
         // Note: Provider can't create agreement - only requestor can. We can accept
         // proposal, by resending the same offer as we got from requestor.
@@ -295,7 +299,8 @@ impl ProviderMarket {
 
         // We negotiated agreement and here responsibility of ProviderMarket ends.
         // Notify outside world about agreement for further processing.
-        self.agreement_signed_signal.send_signal(AgreementSigned{})?;
+        self.agreement_signed_signal
+            .send_signal(AgreementSigned {})?;
         Ok(())
     }
 
@@ -316,7 +321,7 @@ impl ProviderMarket {
 
 impl CreateOffer {
     pub fn new(node_info: NodeInfo) -> CreateOffer {
-        CreateOffer{node_info}
+        CreateOffer { node_info }
     }
 }
 
@@ -326,16 +331,15 @@ impl CreateOffer {
 
 /// Wrapper for ProviderMarket. It is neccesary to use self in async futures.
 pub struct ProviderMarketActor {
-    market: Rc<RefCell<ProviderMarket>>
+    market: Rc<RefCell<ProviderMarket>>,
 }
 
 impl ProviderMarketActor {
     pub fn new(api: ApiClient, negotiator_type: &str) -> ProviderMarketActor {
         let rc = Rc::new(RefCell::new(ProviderMarket::new(api, negotiator_type)));
-        ProviderMarketActor{market: rc}
+        ProviderMarketActor { market: rc }
     }
 }
-
 
 impl Actor for ProviderMarketActor {
     type Context = Context<Self>;
@@ -343,7 +347,6 @@ impl Actor for ProviderMarketActor {
 
 gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer, market);
 gen_actix_handler_async!(ProviderMarketActor, UpdateMarket, run_step, market);
-
 
 // =========================================== //
 // Negotiators factory
