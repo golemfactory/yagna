@@ -25,6 +25,20 @@ macro_rules! gen_actix_handler_async {
     };
 } // gen_actix_handler_async
 
+/// Check docs for gen_actix_handler_async.
+#[macro_export]
+macro_rules! gen_actix_handler_sync {
+    ($ActorType:ty, $MessageType:ty, $ForwardFun:tt, $ActorImpl:tt) => {
+        impl Handler<$MessageType> for $ActorType {
+            type Result = ActorResponse<Self, (), Error>;
+
+            fn handle(&mut self, msg: $MessageType, _ctx: &mut Context<Self>) -> Self::Result {
+                ActorResponse::reply((*self.$ActorImpl).borrow_mut().$ForwardFun(msg))
+            }
+        }
+    };
+} // gen_actix_handler_async
+
 // Sends message to other actor.
 // TODO: Make lifetimes work.
 //pub fn send_message<ActorType, MessageType>(actor: Addr<ActorType>, msg: MessageType)
