@@ -41,6 +41,7 @@ paths:
       tags:
         - provider
       summary: Issue a Debit Note.
+      operationId: issueDebitNote
       requestBody:
         $ref: '#/components/requestBodies/DebitNote'
       responses:
@@ -57,6 +58,7 @@ paths:
       tags:
         - provider
       summary: Get Debit Notes issued by this Provider.
+      operationId: getIssuedDebitNotes
       responses:
         200:
           $ref: '#/components/responses/DebitNoteList'
@@ -70,6 +72,7 @@ paths:
       tags:
         - provider
       summary: Get Debit Note.
+      operationId: getIssuedDebitNote
       parameters:
         - $ref: '#/components/parameters/debitNodeId'
       responses:
@@ -87,6 +90,7 @@ paths:
       tags:
         - provider
       summary: Get Payments for Debit Note.
+      operationId: getPaymentsForIssuedDebitNote
       parameters:
         - $ref: '#/components/parameters/debitNodeId'
       responses:
@@ -102,6 +106,7 @@ paths:
       tags:
         - provider
       summary: Send Debit Note to Requestor.
+      operationId: sendDebitNote
       description: >
         This is a blocking operation. It will not return until the Requestor
         has acknowledged receiving the Debit Note or timeout has passed.
@@ -125,6 +130,7 @@ paths:
       tags:
         - provider
       summary: Cancel Debit Note.
+      operationId: cancelDebitNote
       description: >
         This is a blocking operation. It will not return until the Requestor
         has acknowledged cancelling the Debit Note or timeout has passed.
@@ -152,6 +158,7 @@ paths:
       tags:
         - provider
       summary: Get Debit Note events.
+      operationId: getProviderDebitNoteEvents
       description: >
         Listen for Debit Note-related events using long-polling. If there are
         any events the method will return them immediately. If there are none
@@ -176,6 +183,7 @@ paths:
       tags:
         - provider
       summary: Issue an Invoice.
+      operationId: issueInvoice
       requestBody:
         $ref: '#/components/requestBodies/Invoice'
       responses:
@@ -192,6 +200,7 @@ paths:
       tags:
         - provider
       summary: Get Invoices issued by this Provider.
+      operationId: getIssuedInvoices
       responses:
         200:
           $ref: '#/components/responses/InvoiceList'
@@ -205,6 +214,7 @@ paths:
       tags:
         - provider
       summary: Get Invoice.
+      operationId: getIssuedInvoice
       parameters:
         - $ref: '#/components/parameters/invoiceId'
       responses:
@@ -221,7 +231,8 @@ paths:
     get:
       tags:
         - provider
-      summary: Get Payments for Invoice.
+      summary: Get Payments for issued Invoice.
+      operationId: getPaymentsForIssuedInvoice
       parameters:
         - $ref: '#/components/parameters/invoiceId'
       responses:
@@ -238,6 +249,7 @@ paths:
       tags:
         - provider
       summary: Send Invoice to Requestor.
+      operationId: sendInvoice
       description: >
         This is a blocking operation. It will not return until the Requestor
         has acknowledged receiving the Invoice or timeout has passed.
@@ -261,6 +273,7 @@ paths:
       tags:
         - provider
       summary: Cancel Invoice.
+      operationId: cancelInvoice
       description: >
         This is a blocking operation. It will not return until the Requestor
         has acknowledged cancelling the Invoice or timeout has passed.
@@ -288,6 +301,7 @@ paths:
       tags:
         - provider
       summary: Get Invoice events.
+      operationId: getProviderInvoiceEvents
       description: >
         Listen for Invoice-related events using long-polling. If there are
         any events the method will return them immediately. If there are none
@@ -312,6 +326,7 @@ paths:
       tags:
         - provider
       summary: Get incoming Payments.
+      operationId: getIncomingPayments
       description: >
         Payments can be treated as events and this method can be used to listen
         for new payments by long-polling.  If there are any payments the method
@@ -336,6 +351,7 @@ paths:
       tags:
         - provider
       summary: Get incoming Payment.
+      operationId: getIncomingPayment
       parameters:
         - $ref: '#/components/parameters/paymentId'
       responses:
@@ -353,6 +369,7 @@ paths:
       tags:
         - requestor
       summary: Get Debit Notes received by this Requestor.
+      operationId: getReceivedDebitNotes
       responses:
         200:
           $ref: '#/components/responses/DebitNoteList'
@@ -366,6 +383,7 @@ paths:
       tags:
         - requestor
       summary: Get Debit Note.
+      operationId: getReceivedDebitNote
       parameters:
         - $ref: '#/components/parameters/debitNodeId'
       responses:
@@ -383,6 +401,7 @@ paths:
       tags:
         - requestor
       summary: Get Payments for Debit Note.
+      operationId: getPaymentsForReceivedDebitNote
       parameters:
         - $ref: '#/components/parameters/debitNodeId'
       responses:
@@ -398,6 +417,7 @@ paths:
       tags:
         - requestor
       summary: Accept received Debit Note.
+      operationId: acceptDebitNote
       description: >
         Send Debit Note Accepted message to Debit Note Issuer. Trigger payment
         orchestration for this Debit Note (using allocated lot identified by
@@ -433,6 +453,7 @@ paths:
       tags:
         - requestor
       summary: Reject received Debit Note.
+      operationId: rejectDebitNote
       description: >
         Send Debit Note Rejected message to Invoice Issuer. Notification of
         rejection is signalling that Requestor does not accept the Debit Note
@@ -470,6 +491,7 @@ paths:
       tags:
         - requestor
       summary: Get Debit Note events.
+      operationId: getRequestorDebitNoteEvents
       description: >
         Listen for Debit Note-related events using long-polling. If there are
         any events the method will return them immediately. If there are none
@@ -494,6 +516,7 @@ paths:
       tags:
         - requestor
       summary: Get Invoices received by this Requestor.
+      operationId: getReceivedInvoices
       responses:
         200:
           $ref: '#/components/responses/InvoiceList'
@@ -507,6 +530,7 @@ paths:
       tags:
         - requestor
       summary: Get Invoice.
+      operationId: getReceivedInvoice
       parameters:
         - $ref: '#/components/parameters/invoiceId'
       responses:
@@ -523,7 +547,8 @@ paths:
     get:
       tags:
         - requestor
-      summary: Get Payments for Invoice.
+      summary: Get Payments for received Invoice.
+      operationId: getPaymentsForReceivedInvoice
       parameters:
         - $ref: '#/components/parameters/invoiceId'
       responses:
@@ -539,15 +564,21 @@ paths:
       tags:
         - requestor
       summary: Accept received Invoice.
+      operationId: acceptInvoice
       description: >
         Send Invoice Accepted message to Invoice Issuer. Trigger payment
         orchestration for this Invoice (using allocated lot identified by
         AllocationId if any).
 
 
+        This is a blocking operation. It will not return until the Requestor
+        has acknowledged rejecting the Invoice or timeout has passed.
+
+
         NOTE: An Accepted Invoice cannot be Rejected later.
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/ackTimeout'
       requestBody:
         $ref: '#/components/requestBodies/Acceptance'
       responses:
@@ -561,16 +592,23 @@ paths:
           $ref: '#/components/responses/NotFound'
         500:
           $ref: '#/components/responses/ServerError'
+        504:
+          $ref: '#/components/responses/AckTimeout'
 
   /requestor/invoices/{invoiceId}/reject:
     post:
       tags:
         - requestor
       summary: Reject received Invoice.
+      operationId: rejectInvoice
       description: >
         Send Invoice Rejected message to Invoice Issuer. Notification of
         rejection is signalling that Requestor does not accept Invoice
         (for some reason).
+
+
+        This is a blocking operation. It will not return until the Requestor
+        has acknowledged rejecting the Invoice or timeout has passed.
 
 
         NOTE: A Rejected Invoice can be Accepted subsequently (e.g. as a result
@@ -578,6 +616,7 @@ paths:
 
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/ackTimeout'
       requestBody:
         $ref: '#/components/requestBodies/Rejection'
       responses:
@@ -591,12 +630,15 @@ paths:
           $ref: '#/components/responses/NotFound'
         500:
           $ref: '#/components/responses/ServerError'
+        504:
+          $ref: '#/components/responses/AckTimeout'
 
   /requestor/invoiceEvents:
     get:
       tags:
         - requestor
       summary: Get Invoice events.
+      operationId: getRequestorInvoiceEvents
       description: >
         Listen for Invoice-related events using long-polling. If there are
         any events the method will return them immediately. If there are none
@@ -621,6 +663,7 @@ paths:
       tags:
         - requestor
       summary: Create Allocation.
+      operationId: createAllocation
       description: Allocate funds to make sure they are not spent elsewhere.
       requestBody:
         $ref: '#/components/requestBodies/Allocation'
@@ -638,6 +681,7 @@ paths:
       tags:
         - requestor
       summary: Get Allocations.
+      operationId: getAllocations
       responses:
         200:
           $ref: '#/components/responses/AllocationList'
@@ -651,6 +695,7 @@ paths:
       tags:
         - requestor
       summary: Get Allocation.
+      operationId: getAllocation
       parameters:
         - $ref: '#/components/parameters/allocationId'
       responses:
@@ -667,6 +712,7 @@ paths:
       tags:
         - requestor
       summary: Ammend Allocation.
+      operationId: ammendAllocation
       parameters:
         - $ref: '#/components/parameters/allocationId'
       requestBody:
@@ -685,6 +731,7 @@ paths:
       tags:
         - requestor
       summary: Release Allocation.
+      operationId: releaseAllocation
       description: >
         The Allocation of amount is released. Note that this operation releases
         currently allocated amount (which may have been reduced by subsequent
@@ -715,6 +762,7 @@ paths:
       tags:
         - requestor
       summary: Get outgoing Payments.
+      operationId: getOutgoingPayments
       description: >
         Payments can be treated as events and this method can be used to listen
         for new payments by long-polling.  If there are any payments the method
@@ -739,6 +787,7 @@ paths:
       tags:
         - requestor
       summary: Get outgoing Payment.
+      operationId: getOutgoingPayment
       parameters:
         - $ref: '#/components/parameters/paymentId'
       responses:
@@ -844,31 +893,14 @@ components:
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              totalAmountAccepted:
-                type: integer
-              allocationId:
-                type: string
-            required:
-              - totalAmountAccepted
+            $ref: '#/components/schemas/Acceptance'
 
     Rejection:
       required: true
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              rejectionReason:
-                $ref: '#/components/schemas/RejectionReason'
-              totalAmountAccepted:
-                type: integer
-              message:
-                type: string
-            required:
-             - rejectionReason
-             - totalAmountAccepted
+            $ref: '#/components/schemas/Rejection'
 
   responses:
 
@@ -1143,6 +1175,31 @@ components:
         - SETTLED
         - CANCELLED
       readOnly: true
+
+    Acceptance:
+      description: Message sent when Requestor accepts a Debit Note or Invoice.
+      type: object
+      properties:
+        totalAmountAccepted:
+          type: integer
+        allocationId:
+          type: string
+      required:
+        - totalAmountAccepted
+
+    Rejection:
+      description: Message sent when Requestor rejects a Debit Note or Invoice.
+      type: object
+      properties:
+        rejectionReason:
+          $ref: '#/components/schemas/RejectionReason'
+        totalAmountAccepted:
+          type: integer
+        message:
+          type: string
+      required:
+        - rejectionReason
+        - totalAmountAccepted
 
     RejectionReason:
       description: Possible reasons to reject a Debit Note or Invoice.
