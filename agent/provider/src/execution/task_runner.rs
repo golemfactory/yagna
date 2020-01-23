@@ -87,8 +87,11 @@ impl TaskRunner {
 
         for event in events.iter(){
             match event {
-                ProviderEvent::CreateActivity {activity_id, agreement_id} =>
-                    self.on_create_activity(activity_id, agreement_id),
+                ProviderEvent::CreateActivity {activity_id, agreement_id} => {
+                    if let Err(error) = self.on_create_activity(activity_id, agreement_id) {
+                        warn!("{}", error);
+                    }
+                },
                 ProviderEvent::DestroyActivity {activity_id, agreement_id} =>
                     self.on_destroy_activity(activity_id, agreement_id)
             }
@@ -103,15 +106,15 @@ impl TaskRunner {
     // TaskRunner internals - activity reactions
     // =========================================== //
 
-    pub fn on_create_activity(&mut self, activity_id: &str, agreement_id: &str) {
+    pub fn on_create_activity(&mut self, activity_id: &str, agreement_id: &str) -> Result<()> {
         if !self.waiting_agreements.contains(agreement_id) {
-            warn!("Trying to create activity {} for not my agreement {}.", activity_id, agreement_id);
-            return
+            let msg = format!("Trying to create activity {} for not my agreement {}.", activity_id, agreement_id);
+            return Err(Error::msg(msg));
         }
 
         if self.find_activity(activity_id, agreement_id).is_some() {
-            warn!("Trying to create activity {} for the same agreeement {}.", activity_id, agreement_id);
-            return
+            let msg = format!("Trying to create activity {} for the same agreeement {}.", activity_id, agreement_id);
+            return Err(Error::msg(msg));
         }
 
         // TODO: Get ExeUnit name from agreement.
@@ -125,8 +128,9 @@ impl TaskRunner {
                     activity_id,
                     agreement_id,
                     exeunit_name);
+                Ok(())
             },
-            Err(error) => error!("Can't create activity. {}", error)
+            Err(error) => return Err(Error::msg(format!("Can't create activity. {}", error)))
         }
     }
 
@@ -234,7 +238,7 @@ mod tests {
         // Task should wait for create activity
         assert_eq!(runner.waiting_agreements.len(), 1);
 
-        runner.on_create_activity(&activity_id, &agreement_id);
+        runner.on_create_activity(&activity_id, &agreement_id).unwrap();
 
         // Task should be removed from waiting and inserted into spawned tasks.
         assert_eq!(runner.tasks.len(), 1);
