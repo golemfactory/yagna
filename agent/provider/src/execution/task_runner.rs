@@ -12,6 +12,7 @@ use anyhow::{Error, Result};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
+use std::path::{PathBuf};
 use log::{info, error, warn};
 
 
@@ -24,6 +25,13 @@ use log::{info, error, warn};
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateActivity;
+
+/// Loads ExeUnits descriptors from file.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct InitializeExeUnits {
+    pub file: PathBuf
+}
 
 // =========================================== //
 // TaskRunner declaration
@@ -48,6 +56,15 @@ impl TaskRunner {
             tasks: vec![],
             waiting_agreements: HashSet::new()
         }
+    }
+
+    pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits) -> Result<()> {
+        if let Err(error) = self.registry.register_exeunits_from_file(&msg.file) {
+            error!("Can't initialize ExeUnits. {}", error);
+            return Err(error);
+        }
+        info!("ExeUnits initialized from file {}.", msg.file.display());
+        Ok(())
     }
 
     pub async fn collect_events(&mut self, _msg: UpdateActivity) -> Result<()> {
@@ -153,3 +170,4 @@ impl TaskRunnerActor {
 
 gen_actix_handler_sync!(TaskRunnerActor, AgreementSigned, on_signed_agreement, runner);
 gen_actix_handler_async!(TaskRunnerActor, UpdateActivity, collect_events, runner);
+gen_actix_handler_sync!(TaskRunnerActor, InitializeExeUnits, initialize_exeunits, runner);

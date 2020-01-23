@@ -6,6 +6,8 @@ use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
+use log::info;
+
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone)]
@@ -47,6 +49,7 @@ impl ExeUnitsRegistry {
     }
 
     pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {
+        info!("Added [{}] ExeUnit to registry. Binary path: [{}].", desc.name, desc.path.display());
         self.descriptors.insert(desc.name.clone(), desc);
     }
 

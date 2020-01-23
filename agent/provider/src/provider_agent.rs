@@ -1,7 +1,7 @@
 use ya_client::{market::ApiClient, web::WebClient, Result};
 use ya_client::activity::{provider::ProviderApiClient, ACTIVITY_API};
 
-use crate::execution::{TaskRunnerActor, UpdateActivity};
+use crate::execution::{TaskRunnerActor, UpdateActivity, InitializeExeUnits};
 use crate::market::{CreateOffer, ProviderMarketActor};
 use crate::node_info::{CpuInfo, NodeInfo};
 use crate::utils::actix_handler::send_message;
@@ -12,6 +12,7 @@ use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::time::Duration;
 use std::sync::Arc;
+use std::path::PathBuf;
 
 
 pub struct ProviderAgent {
@@ -45,6 +46,12 @@ impl ProviderAgent {
         // Forward AgreementSigned event to TaskRunner actor.
         let msg = Subscribe::<AgreementSigned>(self.runner.clone().recipient());
         send_message(self.market.clone(), msg);
+
+        // Load ExeUnits descriptors from file.
+        // TODO: Hardcoded exeunits file. How should we handle this in future?
+        let exeunits_file = PathBuf::from("exe-unit/example-exeunits.json");
+        let msg = InitializeExeUnits{file: exeunits_file};
+        send_message(self.runner.clone(), msg);
 
         // Create simple offer on market.
         let create_offer_message = CreateOffer::new(self.node_info.clone());
