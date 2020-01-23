@@ -1,0 +1,6 @@
+[
+    {
+        "name": "dummy",
+        "path": "../../target/debug/ya-exe-dummy"
+    }
+]

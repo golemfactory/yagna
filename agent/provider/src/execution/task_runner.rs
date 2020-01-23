@@ -202,3 +202,44 @@ impl TaskRunnerActor {
 gen_actix_handler_sync!(TaskRunnerActor, AgreementSigned, on_signed_agreement, runner);
 gen_actix_handler_async!(TaskRunnerActor, UpdateActivity, collect_events, runner);
 gen_actix_handler_sync!(TaskRunnerActor, InitializeExeUnits, initialize_exeunits, runner);
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ya_client::activity::{provider::ProviderApiClient, ACTIVITY_API};
+    use ya_client::web::WebClient;
+    use std::sync::Arc;
+
+
+    fn test_resources_directory() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-resources/")
+    }
+
+    fn create_runner() -> TaskRunner {
+        let client = ProviderApiClient::new(WebClient::builder().api_root(ACTIVITY_API).build().map(Arc::new).unwrap());
+        TaskRunner::new(client)
+    }
+
+    #[test]
+    fn test_spawn_exeunit() {
+        let mut runner = create_runner();
+        let exeunits_descs_file = test_resources_directory().join("test-taskrunner-exeunits.json");
+        let agreement_id = "blaaaa-agreement".to_string();
+        let activity_id = "blaaaa-activity".to_string();
+
+        runner.initialize_exeunits(InitializeExeUnits{file: exeunits_descs_file}).unwrap();
+        runner.on_signed_agreement(AgreementSigned{agreement_id: agreement_id.clone()}).unwrap();
+
+        // Task should wait for create activity
+        assert_eq!(runner.waiting_agreements.len(), 1);
+
+        runner.on_create_activity(&activity_id, &agreement_id);
+
+        // Task should be removed from waiting and inserted into spawned tasks.
+        assert_eq!(runner.tasks.len(), 1);
+        assert_eq!(runner.waiting_agreements.len(), 0);
+    }
+
+}
+
