@@ -38,7 +38,6 @@ pub struct InitializeExeUnits {
 // TaskRunner declaration
 // =========================================== //
 
-#[allow(dead_code)]
 pub struct TaskRunner {
     api: ProviderApiClient,
     registry: ExeUnitsRegistry,
@@ -48,7 +47,6 @@ pub struct TaskRunner {
     waiting_agreements: HashSet<String>,
 }
 
-#[allow(dead_code)]
 impl TaskRunner {
     pub fn new(client: ProviderApiClient) -> TaskRunner {
         TaskRunner {
@@ -107,7 +105,12 @@ impl TaskRunner {
 
     pub fn on_create_activity(&mut self, activity_id: &str, agreement_id: &str) {
         if !self.waiting_agreements.contains(agreement_id) {
-            warn!("Trying to create activity for not my agreement {}.", agreement_id);
+            warn!("Trying to create activity {} for not my agreement {}.", activity_id, agreement_id);
+            return
+        }
+
+        if self.find_activity(activity_id, agreement_id).is_some() {
+            warn!("Trying to create activity {} for the same agreeement {}.", activity_id, agreement_id);
             return
         }
 
@@ -127,8 +130,20 @@ impl TaskRunner {
         }
     }
 
-    pub fn on_destroy_activity(&mut self, _activity_id: &str, _agreement_id: &str) {
-        unimplemented!();
+    pub fn on_destroy_activity(&mut self, activity_id: &str, agreement_id: &str) {
+        match self.tasks.iter().position(|task|{
+            task.agreement_id == agreement_id && task.activity_id == activity_id
+        }) {
+            None => {
+                warn!("Trying to destroy not existing activity {}. Agreement {}.", activity_id, agreement_id);
+                return
+            },
+            Some(task_position) => {
+                // Remove task from list and destroy everything related with it.
+                let task = self.tasks.swap_remove(task_position);
+                TaskRunner::destroy_task(task);
+            }
+        }
     }
 
     pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
@@ -145,11 +160,23 @@ impl TaskRunner {
         let exeunit_instance = self.registry.spawn_exeunit(exeunit_name, &exeunit_working_dir)
             .map_err(|error|{
                 Error::msg(format!("Spawning ExeUnit failed for agreement {} with error: {}",
-                                   agreement_id,
-                                   error))
+                    agreement_id,
+                    error))
             })?;
 
         Ok(Task::new(exeunit_instance, agreement_id, activity_id))
+    }
+
+    fn find_activity(&self, activity_id: &str, agreement_id: &str) -> Option<&Task> {
+        self.tasks.iter().find(|task|{
+            task.agreement_id == agreement_id && task.activity_id == activity_id
+        })
+    }
+
+    fn destroy_task(mut task: Task) {
+        task.exeunit.kill();
+
+        // Here we could cleanup resources, directories and everything.
     }
 }
 

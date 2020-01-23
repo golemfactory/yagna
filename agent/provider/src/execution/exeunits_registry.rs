@@ -1,6 +1,7 @@
+use super::exeunit_instance::ExeUnitInstance;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
 
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
@@ -23,14 +24,6 @@ pub struct ExeUnitsRegistry {
     descriptors: HashMap<String, ExeUnitDesc>,
 }
 
-/// TODO: Working ExeUnit instance
-/// TODO: Move to separate file, when this class will be more functional.
-#[allow(dead_code)]
-pub struct ExeUnitInstance {
-    process: Child,
-    working_dir: PathBuf,
-}
-
 #[allow(dead_code)]
 impl ExeUnitsRegistry {
     pub fn new() -> ExeUnitsRegistry {
@@ -41,16 +34,7 @@ impl ExeUnitsRegistry {
 
     pub fn spawn_exeunit(&self, name: &str, working_dir: &Path) -> Result<ExeUnitInstance> {
         let exeunit_desc = self.find_exeunit(name)?;
-
-        let child = Command::new(&exeunit_desc.name)
-            .current_dir(working_dir)
-            .spawn()
-            .map_err(|error| {
-                    Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error))
-                }
-            )?;
-
-        Ok(ExeUnitInstance { process: child, working_dir: working_dir.to_path_buf() })
+        ExeUnitInstance::new(name, &exeunit_desc.path, working_dir)
     }
 
     pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {

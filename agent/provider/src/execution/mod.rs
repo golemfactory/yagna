@@ -1,4 +1,5 @@
 mod exeunits_registry;
+mod exeunit_instance;
 mod task;
 mod task_runner;
 

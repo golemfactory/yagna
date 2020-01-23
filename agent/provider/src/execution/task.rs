@@ -1,11 +1,11 @@
-use super::exeunits_registry::ExeUnitInstance;
+use super::exeunit_instance::ExeUnitInstance;
 
 
-#[allow(dead_code)]
+
 pub struct Task {
-    exeunit: ExeUnitInstance,
-    agreement_id: String,
-    activity_id: String,
+    pub exeunit: ExeUnitInstance,
+    pub agreement_id: String,
+    pub activity_id: String,
 }
 
 impl Task {
