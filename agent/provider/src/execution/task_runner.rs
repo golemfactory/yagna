@@ -10,8 +10,10 @@ use actix::prelude::*;
 
 use anyhow::{Error, Result};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
-use log::{info, error};
+use log::{info, error, warn};
+
 
 // =========================================== //
 // Public exposed messages
@@ -31,7 +33,10 @@ pub struct UpdateActivity;
 pub struct TaskRunner {
     api: ProviderApiClient,
     registry: ExeUnitsRegistry,
+    /// Spawned tasks.
     tasks: Vec<Task>,
+    /// Agreements, that wait for CreateActivity event.
+    waiting_agreements: HashSet<String>,
 }
 
 #[allow(dead_code)]
@@ -41,6 +46,7 @@ impl TaskRunner {
             api: client,
             registry: ExeUnitsRegistry::new(),
             tasks: vec![],
+            waiting_agreements: HashSet::new()
         }
     }
 
@@ -55,6 +61,10 @@ impl TaskRunner {
 
         Ok(())
     }
+
+    // =========================================== //
+    // TaskRunner internals - events dispatching
+    // =========================================== //
 
     async fn dispatch_events(&mut self, events: &Vec<ProviderEvent>) {
         info!("Collected {} activity events. Processing...", events.len());
@@ -78,18 +88,48 @@ impl TaskRunner {
     // =========================================== //
 
     pub fn on_create_activity(&mut self, activity_id: &str, agreement_id: &str) {
-        unimplemented!();
+        if !self.waiting_agreements.contains(agreement_id) {
+            warn!("Trying to create activity for not my agreement {}.", agreement_id);
+            return
+        }
+
+        // TODO: Get ExeUnit name from agreement.
+        let exeunit_name = "dummy";
+        match self.create_task(exeunit_name, activity_id, agreement_id) {
+            Ok(task) => {
+                self.waiting_agreements.remove(agreement_id);
+                self.tasks.push(task);
+
+                info!("Created activity {} for agreement {}. Spawned {} exeunit.",
+                    activity_id,
+                    agreement_id,
+                    exeunit_name);
+            },
+            Err(error) => error!("Can't create activity. {}", error)
+        }
     }
 
-    pub fn on_destroy_activity(&mut self, activity_id: &str, agreement_id: &str) {
+    pub fn on_destroy_activity(&mut self, _activity_id: &str, _agreement_id: &str) {
         unimplemented!();
     }
 
     pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
-        info!("TaskRunner got signed agreement for processing.");
+        info!("TaskRunner got signed agreement {} for processing.", &msg.agreement_id);
 
-        //unimplemented!();
+        // Agreement waits for create activity.
+        self.waiting_agreements.insert(msg.agreement_id);
         Ok(())
+    }
+
+    fn create_task(&self, exeunit_name: &str, activity_id: &str, agreement_id: &str) -> Result<Task> {
+        let exeunit_instance = self.registry.spawn_exeunit(exeunit_name)
+            .map_err(|error|{
+                Error::msg(format!("Spawning ExeUnit failed for agreement {} with error: {}",
+                                   agreement_id,
+                                   error))
+            })?;
+
+        Ok(Task::new(exeunit_instance, agreement_id, activity_id))
     }
 }
 
