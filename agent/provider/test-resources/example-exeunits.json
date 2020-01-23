@@ -1,10 +1,12 @@
 [
   {
     "name": "dummy",
-    "path": "dummy.exe"
+    "path": "dummy.exe",
+    "args": ["help"]
   },
   {
     "name": "wasm",
-    "path": "wasm.exe"
+    "path": "wasm.exe",
+    "args": []
   }
 ]

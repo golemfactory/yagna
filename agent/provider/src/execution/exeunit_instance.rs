@@ -15,8 +15,9 @@ pub struct ExeUnitInstance {
 
 impl ExeUnitInstance {
 
-    pub fn new(name: &str, path: &Path, working_dir: &Path) -> Result<ExeUnitInstance> {
+    pub fn new(name: &str, path: &Path, working_dir: &Path, args: &Vec<String>) -> Result<ExeUnitInstance> {
         let child = Command::new(path)
+            .args(args)
             .current_dir(working_dir)
             .spawn()
             .map_err(|error| {

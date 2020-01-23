@@ -15,6 +15,7 @@ use log::info;
 pub struct ExeUnitDesc {
     name: String,
     path: PathBuf,
+    args: Vec<String>,
     // Here other capabilities and exe units metadata.
 }
 
@@ -34,7 +35,7 @@ impl ExeUnitsRegistry {
 
     pub fn spawn_exeunit(&self, name: &str, working_dir: &Path) -> Result<ExeUnitInstance> {
         let exeunit_desc = self.find_exeunit(name)?;
-        ExeUnitInstance::new(name, &exeunit_desc.path, working_dir)
+        ExeUnitInstance::new(name, &exeunit_desc.path, working_dir, &exeunit_desc.args)
     }
 
     pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {
