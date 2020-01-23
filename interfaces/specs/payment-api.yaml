@@ -571,9 +571,14 @@ paths:
         AllocationId if any).
 
 
+        This is a blocking operation. It will not return until the Requestor
+        has acknowledged rejecting the Invoice or timeout has passed.
+
+
         NOTE: An Accepted Invoice cannot be Rejected later.
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/ackTimeout'
       requestBody:
         $ref: '#/components/requestBodies/Acceptance'
       responses:
@@ -587,6 +592,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         500:
           $ref: '#/components/responses/ServerError'
+        504:
+          $ref: '#/components/responses/AckTimeout'
 
   /requestor/invoices/{invoiceId}/reject:
     post:
@@ -600,11 +607,16 @@ paths:
         (for some reason).
 
 
+        This is a blocking operation. It will not return until the Requestor
+        has acknowledged rejecting the Invoice or timeout has passed.
+
+
         NOTE: A Rejected Invoice can be Accepted subsequently (e.g. as a result
         of some arbitrage).
 
       parameters:
         - $ref: '#/components/parameters/invoiceId'
+        - $ref: '#/components/parameters/ackTimeout'
       requestBody:
         $ref: '#/components/requestBodies/Rejection'
       responses:
@@ -618,6 +630,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         500:
           $ref: '#/components/responses/ServerError'
+        504:
+          $ref: '#/components/responses/AckTimeout'
 
   /requestor/invoiceEvents:
     get:
@@ -879,31 +893,14 @@ components:
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              totalAmountAccepted:
-                type: integer
-              allocationId:
-                type: string
-            required:
-              - totalAmountAccepted
+            $ref: '#/components/schemas/Acceptance'
 
     Rejection:
       required: true
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              rejectionReason:
-                $ref: '#/components/schemas/RejectionReason'
-              totalAmountAccepted:
-                type: integer
-              message:
-                type: string
-            required:
-             - rejectionReason
-             - totalAmountAccepted
+            $ref: '#/components/schemas/Rejection'
 
   responses:
 
@@ -1178,6 +1175,31 @@ components:
         - SETTLED
         - CANCELLED
       readOnly: true
+
+    Acceptance:
+      description: Message sent when Requestor accepts a Debit Note or Invoice.
+      type: object
+      properties:
+        totalAmountAccepted:
+          type: integer
+        allocationId:
+          type: string
+      required:
+        - totalAmountAccepted
+
+    Rejection:
+      description: Message sent when Requestor rejects a Debit Note or Invoice.
+      type: object
+      properties:
+        rejectionReason:
+          $ref: '#/components/schemas/RejectionReason'
+        totalAmountAccepted:
+          type: integer
+        message:
+          type: string
+      required:
+        - rejectionReason
+        - totalAmountAccepted
 
     RejectionReason:
       description: Possible reasons to reject a Debit Note or Invoice.

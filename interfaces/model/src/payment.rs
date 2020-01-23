@@ -1,3 +1,5 @@
+pub mod acceptance;
+pub use self::acceptance::Acceptance;
 pub mod allocation;
 pub use self::allocation::Allocation;
 pub mod debit_note;
@@ -16,5 +18,7 @@ pub mod invoice_status;
 pub use self::invoice_status::InvoiceStatus;
 pub mod payment;
 pub use self::payment::Payment;
+pub mod rejection;
+pub use self::rejection::Rejection;
 pub mod rejection_reason;
 pub use self::rejection_reason::RejectionReason;
