@@ -4,7 +4,6 @@ use std::process::{Child, Command};
 use anyhow::{Error, Result};
 use log::info;
 
-
 /// Working ExeUnit instance representation.
 pub struct ExeUnitInstance {
     name: String,
@@ -14,8 +13,12 @@ pub struct ExeUnitInstance {
 }
 
 impl ExeUnitInstance {
-
-    pub fn new(name: &str, path: &Path, working_dir: &Path, args: &Vec<String>) -> Result<ExeUnitInstance> {
+    pub fn new(
+        name: &str,
+        path: &Path,
+        working_dir: &Path,
+        args: &Vec<String>,
+    ) -> Result<ExeUnitInstance> {
         let child = Command::new(path)
             .args(args)
             .current_dir(working_dir)
@@ -24,7 +27,11 @@ impl ExeUnitInstance {
                 Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error))
             })?;
 
-        Ok(ExeUnitInstance { name: name.to_string(), process: child, working_dir: working_dir.to_path_buf() })
+        Ok(ExeUnitInstance {
+            name: name.to_string(),
+            process: child,
+            working_dir: working_dir.to_path_buf(),
+        })
     }
 
     pub fn kill(&mut self) {
@@ -34,5 +41,3 @@ impl ExeUnitInstance {
         }
     }
 }
-
-

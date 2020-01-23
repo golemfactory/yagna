@@ -1,7 +1,5 @@
 use super::exeunit_instance::ExeUnitInstance;
 
-
-
 pub struct Task {
     pub exeunit: ExeUnitInstance,
     pub agreement_id: String,
@@ -10,6 +8,10 @@ pub struct Task {
 
 impl Task {
     pub fn new(exeunit: ExeUnitInstance, agreement_id: &str, activity_id: &str) -> Task {
-        Task{ exeunit, agreement_id: agreement_id.to_string(), activity_id: activity_id.to_string() }
+        Task {
+            exeunit,
+            agreement_id: agreement_id.to_string(),
+            activity_id: activity_id.to_string(),
+        }
     }
 }

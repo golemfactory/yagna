@@ -1,8 +1,8 @@
-use crate::{gen_actix_handler_async, gen_actix_handler_sync};
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::node_info::NodeInfo;
 use crate::utils::actix_signal::{SignalSlot, Subscribe};
+use crate::{gen_actix_handler_async, gen_actix_handler_sync};
 
 use ya_client::market::ApiClient;
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
@@ -27,7 +27,7 @@ use serde_json;
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct AgreementSigned {
-    pub agreement_id: String
+    pub agreement_id: String,
 }
 
 /// Sends offer to market.
@@ -229,7 +229,8 @@ impl ProviderMarket {
         match response {
             Ok(action) => match action {
                 AgreementResponse::ApproveAgreement => {
-                    self.approve_agreement(subscription_id, agreement_id).await?
+                    self.approve_agreement(subscription_id, agreement_id)
+                        .await?
                 }
                 AgreementResponse::RejectAgreement => {
                     self.reject_agreement(subscription_id, agreement_id).await?
@@ -306,7 +307,9 @@ impl ProviderMarket {
 
         // We negotiated agreement and here responsibility of ProviderMarket ends.
         // Notify outside world about agreement for further processing.
-        let message = AgreementSigned{agreement_id: agreement_id.to_string()};
+        let message = AgreementSigned {
+            agreement_id: agreement_id.to_string(),
+        };
         self.agreement_signed_signal.send_signal(message)?;
         Ok(())
     }
@@ -363,7 +366,12 @@ impl Actor for ProviderMarketActor {
 
 gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer, market);
 gen_actix_handler_async!(ProviderMarketActor, UpdateMarket, run_step, market);
-gen_actix_handler_sync!(ProviderMarketActor, Subscribe<AgreementSigned>, on_subscribe, market);
+gen_actix_handler_sync!(
+    ProviderMarketActor,
+    Subscribe<AgreementSigned>,
+    on_subscribe,
+    market
+);
 
 // =========================================== //
 // Negotiators factory

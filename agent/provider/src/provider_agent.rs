@@ -1,19 +1,18 @@
-use ya_client::{market::ApiClient, web::WebClient, Result};
 use ya_client::activity::{provider::ProviderApiClient, ACTIVITY_API};
+use ya_client::{market::ApiClient, web::WebClient, Result};
 
-use crate::execution::{TaskRunnerActor, UpdateActivity, InitializeExeUnits};
+use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarketActor};
 use crate::node_info::{CpuInfo, NodeInfo};
 use crate::utils::actix_handler::send_message;
 use crate::utils::actix_signal::Subscribe;
 
-use crate::market::provider_market::{UpdateMarket, AgreementSigned};
+use crate::market::provider_market::{AgreementSigned, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use std::time::Duration;
-use std::sync::Arc;
 use std::path::PathBuf;
-
+use std::sync::Arc;
+use std::time::Duration;
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarketActor>,
@@ -21,13 +20,17 @@ pub struct ProviderAgent {
     node_info: NodeInfo,
 }
 
-
 impl ProviderAgent {
     pub fn new() -> Result<ProviderAgent> {
         let client = ApiClient::new(WebClient::builder())?;
         let market = ProviderMarketActor::new(client, "AcceptAll").start();
 
-        let client = ProviderApiClient::new(WebClient::builder().api_root(ACTIVITY_API).build().map(Arc::new)?);
+        let client = ProviderApiClient::new(
+            WebClient::builder()
+                .api_root(ACTIVITY_API)
+                .build()
+                .map(Arc::new)?,
+        );
         let runner = TaskRunnerActor::new(client).start();
 
         let node_info = ProviderAgent::create_node_info();
@@ -50,7 +53,9 @@ impl ProviderAgent {
         // Load ExeUnits descriptors from file.
         // TODO: Hardcoded exeunits file. How should we handle this in future?
         let exeunits_file = PathBuf::from("exe-unit/example-exeunits.json");
-        let msg = InitializeExeUnits{file: exeunits_file};
+        let msg = InitializeExeUnits {
+            file: exeunits_file,
+        };
         send_message(self.runner.clone(), msg);
 
         // Create simple offer on market.

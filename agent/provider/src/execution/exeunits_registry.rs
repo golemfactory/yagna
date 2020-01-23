@@ -4,11 +4,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Error, Result};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
-use log::info;
-
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone)]
@@ -39,7 +38,11 @@ impl ExeUnitsRegistry {
     }
 
     pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {
-        info!("Added [{}] ExeUnit to registry. Binary path: [{}].", desc.name, desc.path.display());
+        info!(
+            "Added [{}] ExeUnit to registry. Binary path: [{}].",
+            desc.name,
+            desc.path.display()
+        );
         self.descriptors.insert(desc.name.clone(), desc);
     }
 
@@ -68,9 +71,13 @@ impl ExeUnitsRegistry {
     }
 
     pub fn find_exeunit(&self, name: &str) -> Result<ExeUnitDesc> {
-        Ok(self.descriptors
+        Ok(self
+            .descriptors
             .get(name)
-            .ok_or(Error::msg(format!("ExeUnit [{}] doesn't exist in registry.", name)))?
+            .ok_or(Error::msg(format!(
+                "ExeUnit [{}] doesn't exist in registry.",
+                name
+            )))?
             .clone())
     }
 }
@@ -86,7 +93,9 @@ mod tests {
     #[test]
     fn test_fill_registry_from_file() {
         let mut registry = ExeUnitsRegistry::new();
-        registry.register_exeunits_from_file(&test_resources_directory().join("example-exeunits.json")).unwrap();
+        registry
+            .register_exeunits_from_file(&test_resources_directory().join("example-exeunits.json"))
+            .unwrap();
 
         let dummy_desc = registry.find_exeunit("dummy").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "dummy");
@@ -96,5 +105,4 @@ mod tests {
         assert_eq!(dummy_desc.name.as_str(), "wasm");
         assert_eq!(dummy_desc.path.to_str().unwrap(), "wasm.exe");
     }
-
 }
