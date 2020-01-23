@@ -174,9 +174,10 @@ impl TaskRunner {
     }
 
     fn destroy_task(mut task: Task) {
-        task.exeunit.kill();
+        info!("Destroying task related to agreement {} and activity {}.", &task.agreement_id, &task.activity_id);
 
         // Here we could cleanup resources, directories and everything.
+        task.exeunit.kill();
     }
 }
 
