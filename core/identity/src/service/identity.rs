@@ -205,6 +205,16 @@ impl IdentityService {
         Ok(output)
     }
 
+    pub async fn sign(&mut self, node_id: NodeId, data: Vec<u8>) -> Result<Vec<u8>, model::Error> {
+        let key = self.get_key_by_id(&node_id)?;
+        if let Some(signature)  = key.sign(data.as_slice()) {
+            Ok(signature)
+        }
+        else {
+            Err(model::Error::new_err_msg("sign error"))
+        }
+    }
+
     pub async fn update_identity(
         &mut self,
         update: model::Update,
@@ -329,5 +339,16 @@ impl IdentityService {
                     .await
             }
         });
+        let this = me.clone();
+        let _ = bus::bind_private(model::IDENTITY_SERVICE_ID, move |sign: model::Sign| {
+            let this = this.clone();
+            async move {
+                this.lock()
+                    .await
+                    .sign(sign.node_id, sign.payload)
+                    .await
+            }
+        });
+
     }
 }

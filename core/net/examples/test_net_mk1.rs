@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
         }
         Side::Sender => {
             let listener_id = Options::id(&Side::Listener);
-            let r = bus::private_service(&format!("/net/{}", listener_id))
+            let r = bus::service(&format!("/net/{}", listener_id))
                 .send(Test("Test".into()))
                 .map_err(Error::msg)
                 .await?;

@@ -3,6 +3,9 @@ use ya_core_model::ethaddr::NodeId;
 use ya_core_model::{appkey, identity};
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
+use serde_json::json;
+use sha2::digest::Input;
+use sha2::Digest;
 
 // Tool for generating JWT tokens signed with identity key.
 #[derive(StructOpt)]
@@ -11,16 +14,60 @@ enum Args {
     Gen { from_key: String },
 }
 
+fn jwt_encoded(v : serde_json::Value) -> anyhow::Result<String> {
+    let mut wrapped_writer = Vec::new();
+    {
+        let mut enc = base64::write::EncoderWriter::new(
+            &mut wrapped_writer, base64::URL_SAFE_NO_PAD);
+        serde_json::to_writer(&mut enc, &v)?;
+        enc.finish()?
+    }
+    Ok(String::from_utf8(wrapped_writer)?)
+}
+
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::init();
+
     let args = Args::from_args();
     match args {
         Args::Gen { from_key } => {
             let key = bus::service(appkey::BUS_ID)
                 .send(appkey::Get::with_key(from_key))
-                .await?;
+                .await??;
+
+            let now = std::time::SystemTime::now();
+            let iat = now.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+            let node_id = key.identity;
+
+            let header = json!{{
+                "alg": "ES256",
+                "typ": "JWT"
+            }};
+            let body = json!{{
+                "sub": key.identity,
+                "aud": key.key,
+                "name": key.name,
+                "role": key.role,
+                "iat": iat
+            }};
+            let jwt_body = format!("{}.{}", jwt_encoded(header)?, jwt_encoded(body)?);
+            let msg_hash = sha2::Sha256::digest(jwt_body.as_bytes()).to_vec();
+
+            let signature = bus::service(identity::BUS_ID).send(identity::Sign {
+                node_id,
+                payload: msg_hash
+            }).await??;
+            eprintln!("token= {}.{}", jwt_body, base64::encode_config(&signature, base64::URL_SAFE_NO_PAD))
         }
-        Args::List => todo!(),
+        Args::List => {
+            let ids = bus::service(appkey::BUS_ID).send(appkey::List{
+                identity: None,
+                page: 1,
+                per_page: 10
+            } ).await?;
+            eprintln!("{:?}", ids);
+        }
     }
     eprintln!("ok");
     Ok(())
