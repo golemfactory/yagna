@@ -113,7 +113,7 @@ impl TaskRunner {
     pub fn on_create_activity(&mut self, activity_id: &str, agreement_id: &str) -> Result<()> {
         if !self.waiting_agreements.contains(agreement_id) {
             let msg = format!(
-                "Trying to create activity {} for not my agreement {}.",
+                "Trying to create activity [{}] for not my agreement [{}].",
                 activity_id, agreement_id
             );
             return Err(Error::msg(msg));
@@ -121,7 +121,7 @@ impl TaskRunner {
 
         if self.find_activity(activity_id, agreement_id).is_some() {
             let msg = format!(
-                "Trying to create activity {} for the same agreeement {}.",
+                "Trying to create activity [{}] for the same agreeement [{}].",
                 activity_id, agreement_id
             );
             return Err(Error::msg(msg));
@@ -135,7 +135,7 @@ impl TaskRunner {
                 self.tasks.push(task);
 
                 info!(
-                    "Created activity {} for agreement {}. Spawned {} exeunit.",
+                    "Created activity [{}] for agreement [{}]. Spawned [{}] exeunit.",
                     activity_id, agreement_id, exeunit_name
                 );
                 Ok(())
@@ -152,7 +152,7 @@ impl TaskRunner {
         {
             None => {
                 warn!(
-                    "Trying to destroy not existing activity {}. Agreement {}.",
+                    "Trying to destroy not existing activity [{}]. Agreement [{}].",
                     activity_id, agreement_id
                 );
                 return;
@@ -167,7 +167,7 @@ impl TaskRunner {
 
     pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
         info!(
-            "TaskRunner got signed agreement {} for processing.",
+            "TaskRunner got signed agreement [{}] for processing.",
             &msg.agreement_id
         );
 
@@ -188,7 +188,7 @@ impl TaskRunner {
             .spawn_exeunit(exeunit_name, &exeunit_working_dir)
             .map_err(|error| {
                 Error::msg(format!(
-                    "Spawning ExeUnit failed for agreement {} with error: {}",
+                    "Spawning ExeUnit failed for agreement [{}] with error: {}",
                     agreement_id, error
                 ))
             })?;
@@ -204,7 +204,7 @@ impl TaskRunner {
 
     fn destroy_task(mut task: Task) {
         info!(
-            "Destroying task related to agreement {} and activity {}.",
+            "Destroying task related to agreement [{}] and activity {}.",
             &task.agreement_id, &task.activity_id
         );
 
