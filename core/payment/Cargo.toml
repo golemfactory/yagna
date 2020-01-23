@@ -5,3 +5,8 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+chrono = "0.4"
+diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "1.4"
+libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
+

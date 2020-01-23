@@ -6,46 +6,6 @@ It is based on SQLite3 and Diesel libraries.
 
 ## Prerequisites
 
-### Ubuntu
-
-```sh
-apt update
-apt install curl git build-essential libsql3-dev
-curl https://sh.rustup.rs -sSf | sh
-source ~/.cargo/env
-```
-
-### Windows
-
-Firstly, you will need to install [vcpkg](https://github.com/microsoft/vcpkg):
-```
-> git clone https://github.com/Microsoft/vcpkg.git
-> cd vcpkg
-> .\bootstrap-vcpkg.bat
-```
-
-Then, set the following environment variable for your account:
-
-```
-setx VCPKG_ROOT <path_to_where_you_cloned_vcpkg>
-```
-
-After you've done all that, you'll need to install `libsqlite3` using `vcpkg`.
-From the dir where you cloned the `vcpkg` into, run:
-
-```
-> .\vcpkg install sqlite3 --triplet x64-windows-static
-```
-
-Once `sqlib3.lib` is built, set the environment path to point to folder where the .lib file is located:
-
-```
-> setx SQLITE3_LIB_DIR <path_to_where_you_cloned_vcpkg>\installed\x64-windows-static\lib
-
-```
-
-### Common
-
 Install Diesel CLI with SQLite:
 ```
 cargo install diesel_cli --no-default-features --features sqlite
