@@ -11,6 +11,7 @@ use actix::prelude::*;
 use anyhow::{Error, Result};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::env;
 use std::rc::Rc;
 use std::path::{PathBuf};
 use log::{info, error, warn};
@@ -139,7 +140,9 @@ impl TaskRunner {
     }
 
     fn create_task(&self, exeunit_name: &str, activity_id: &str, agreement_id: &str) -> Result<Task> {
-        let exeunit_instance = self.registry.spawn_exeunit(exeunit_name)
+
+        let exeunit_working_dir = env::current_dir()?;
+        let exeunit_instance = self.registry.spawn_exeunit(exeunit_name, &exeunit_working_dir)
             .map_err(|error|{
                 Error::msg(format!("Spawning ExeUnit failed for agreement {} with error: {}",
                                    agreement_id,

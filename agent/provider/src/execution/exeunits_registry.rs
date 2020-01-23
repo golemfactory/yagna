@@ -28,6 +28,7 @@ pub struct ExeUnitsRegistry {
 #[allow(dead_code)]
 pub struct ExeUnitInstance {
     process: Child,
+    working_dir: PathBuf,
 }
 
 #[allow(dead_code)]
@@ -38,14 +39,18 @@ impl ExeUnitsRegistry {
         }
     }
 
-    pub fn spawn_exeunit(&self, name: &str) -> Result<ExeUnitInstance> {
+    pub fn spawn_exeunit(&self, name: &str, working_dir: &Path) -> Result<ExeUnitInstance> {
         let exeunit_desc = self.find_exeunit(name)?;
 
-        let child = Command::new(&exeunit_desc.name).spawn().map_err(|error| {
-            Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error))
-        })?;
+        let child = Command::new(&exeunit_desc.name)
+            .current_dir(working_dir)
+            .spawn()
+            .map_err(|error| {
+                    Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error))
+                }
+            )?;
 
-        Ok(ExeUnitInstance { process: child })
+        Ok(ExeUnitInstance { process: child, working_dir: working_dir.to_path_buf() })
     }
 
     pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {
