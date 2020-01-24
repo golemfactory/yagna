@@ -269,32 +269,32 @@ mod tests {
         TaskRunner::new(client)
     }
 
-//    #[test]
-//    fn test_spawn_exeunit() {
-//        let mut runner = create_runner();
-//        let exeunits_descs_file = resources_directory().join("test-taskrunner-exeunits.json");
-//        let agreement_id = "blaaaa-agreement".to_string();
-//        let activity_id = "blaaaa-activity".to_string();
-//
-//        let msg = InitializeExeUnits {
-//            file: exeunits_descs_file,
-//        };
-//        runner.initialize_exeunits(msg).unwrap();
-//
-//        let msg = AgreementSigned {
-//            agreement_id: agreement_id.clone(),
-//        };
-//        runner.on_signed_agreement(msg).unwrap();
-//
-//        // Task should wait for create activity
-//        assert_eq!(runner.waiting_agreements.len(), 1);
-//
-//        runner
-//            .on_create_activity(&activity_id, &agreement_id)
-//            .unwrap();
-//
-//        // Task should be removed from waiting and inserted into spawned tasks.
-//        assert_eq!(runner.tasks.len(), 1);
-//        assert_eq!(runner.waiting_agreements.len(), 0);
-//    }
+    //    #[test]
+    //    fn test_spawn_exeunit() {
+    //        let mut runner = create_runner();
+    //        let exeunits_descs_file = resources_directory().join("test-taskrunner-exeunits.json");
+    //        let agreement_id = "blaaaa-agreement".to_string();
+    //        let activity_id = "blaaaa-activity".to_string();
+    //
+    //        let msg = InitializeExeUnits {
+    //            file: exeunits_descs_file,
+    //        };
+    //        runner.initialize_exeunits(msg).unwrap();
+    //
+    //        let msg = AgreementSigned {
+    //            agreement_id: agreement_id.clone(),
+    //        };
+    //        runner.on_signed_agreement(msg).unwrap();
+    //
+    //        // Task should wait for create activity
+    //        assert_eq!(runner.waiting_agreements.len(), 1);
+    //
+    //        runner
+    //            .on_create_activity(&activity_id, &agreement_id)
+    //            .unwrap();
+    //
+    //        // Task should be removed from waiting and inserted into spawned tasks.
+    //        assert_eq!(runner.tasks.len(), 1);
+    //        assert_eq!(runner.waiting_agreements.len(), 0);
+    //    }
 }

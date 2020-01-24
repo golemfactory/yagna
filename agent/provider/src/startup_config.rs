@@ -1,6 +1,5 @@
 use structopt::StructOpt;
 
-
 #[derive(StructOpt)]
 pub struct StartupConfig {
     pub auth: String,
@@ -9,5 +8,3 @@ pub struct StartupConfig {
     #[structopt(long = "activity-host", default_value = "127.0.0.1:7465")]
     pub activity_address: String,
 }
-
-
