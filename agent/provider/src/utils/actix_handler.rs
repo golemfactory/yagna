@@ -39,7 +39,6 @@ macro_rules! gen_actix_handler_sync {
 } // gen_actix_handler_sync
 
 // Sends message to other actor.
-// TODO: Make lifetimes work.
 pub fn send_message<ActorType, MessageType>(actor: Addr<ActorType>, msg: MessageType)
 where
     MessageType: Message + Send + 'static,

@@ -43,6 +43,10 @@ pub struct CreateOffer {
 #[rtype(result = "Result<()>")]
 pub struct UpdateMarket;
 
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct OnShutdown;
+
 // =========================================== //
 // ProviderMarket declaration
 // =========================================== //
@@ -94,7 +98,7 @@ impl ProviderMarket {
     }
 
     #[allow(dead_code)]
-    pub async fn onshutdown(&mut self) -> Result<()> {
+    pub async fn onshutdown(&mut self, _msg: OnShutdown) -> Result<()> {
         info!("Unsubscribing events.");
 
         for offer in self.offers.iter() {
@@ -366,6 +370,7 @@ impl Actor for ProviderMarketActor {
 
 gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer, market);
 gen_actix_handler_async!(ProviderMarketActor, UpdateMarket, run_step, market);
+gen_actix_handler_async!(ProviderMarketActor, OnShutdown, onshutdown, market);
 gen_actix_handler_sync!(
     ProviderMarketActor,
     Subscribe<AgreementSigned>,

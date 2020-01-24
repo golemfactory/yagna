@@ -7,7 +7,7 @@ use crate::node_info::{CpuInfo, NodeInfo};
 use crate::utils::actix_handler::send_message;
 use crate::utils::actix_signal::Subscribe;
 
-use crate::market::provider_market::{AgreementSigned, UpdateMarket};
+use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::path::PathBuf;
@@ -79,6 +79,20 @@ impl ProviderAgent {
             id: "Provider Node".to_string(),
         }
     }
+
+    pub fn spawn_shutdown_handler(&mut self, context: &mut Context<ProviderAgent>) {
+        let market = self.market.clone();
+        let _ = context.spawn(
+            async move {
+                let _ = tokio::signal::ctrl_c().await;
+                log::info!("Shutting down system.");
+
+                let _ = market.send(OnShutdown {}).await;
+                System::current().stop();
+            }
+            .into_actor(self),
+        );
+    }
 }
 
 impl Actor for ProviderAgent {
@@ -88,5 +102,7 @@ impl Actor for ProviderAgent {
         IntervalFunc::new(Duration::from_secs(4), Self::schedule_jobs)
             .finish()
             .spawn(context);
+
+        self.spawn_shutdown_handler(context);
     }
 }
