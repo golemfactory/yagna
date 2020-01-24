@@ -24,7 +24,10 @@ impl ExeUnitInstance {
             .current_dir(working_dir)
             .spawn()
             .map_err(|error| {
-                Error::msg(format!("Can't spawn ExeUnit [{}]. Error: {}", name, error))
+                Error::msg(format!(
+                    "Can't spawn ExeUnit [{}] in working directory [{}]. Error: {}",
+                    name, working_dir, error
+                ))
             })?;
 
         Ok(ExeUnitInstance {
