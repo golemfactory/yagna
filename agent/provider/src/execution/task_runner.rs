@@ -276,16 +276,15 @@ mod tests {
         let agreement_id = "blaaaa-agreement".to_string();
         let activity_id = "blaaaa-activity".to_string();
 
-        runner
-            .initialize_exeunits(InitializeExeUnits {
-                file: exeunits_descs_file,
-            })
-            .unwrap();
-        runner
-            .on_signed_agreement(AgreementSigned {
-                agreement_id: agreement_id.clone(),
-            })
-            .unwrap();
+        let msg = InitializeExeUnits {
+            file: exeunits_descs_file,
+        };
+        runner.initialize_exeunits(msg).unwrap();
+
+        let msg = AgreementSigned {
+            agreement_id: agreement_id.clone(),
+        };
+        runner.on_signed_agreement(msg).unwrap();
 
         // Task should wait for create activity
         assert_eq!(runner.waiting_agreements.len(), 1);
