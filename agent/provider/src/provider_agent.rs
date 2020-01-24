@@ -25,7 +25,7 @@ impl ProviderAgent {
     pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
 
         let webclient = WebClient::builder()
-            .auth(WebAuth::Bearer(config.auth))
+            .auth(WebAuth::Bearer(config.auth.clone()))
             .host_port(config.market_address);
 
         let client = ApiClient::new(webclient)?;
@@ -35,6 +35,7 @@ impl ProviderAgent {
             WebClient::builder()
                 .api_root(ACTIVITY_API)
                 .host_port(config.activity_address)
+                .auth(WebAuth::Bearer(config.auth.clone()))
                 .build()
                 .map(Arc::new)?,
         );
