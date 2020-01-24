@@ -24,7 +24,6 @@ pub struct ExeUnitsRegistry {
     descriptors: HashMap<String, ExeUnitDesc>,
 }
 
-#[allow(dead_code)]
 impl ExeUnitsRegistry {
     pub fn new() -> ExeUnitsRegistry {
         ExeUnitsRegistry {
@@ -86,7 +85,7 @@ impl ExeUnitsRegistry {
 mod tests {
     use super::*;
 
-    fn test_resources_directory() -> PathBuf {
+    fn resources_directory() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-resources/")
     }
 
@@ -94,7 +93,7 @@ mod tests {
     fn test_fill_registry_from_file() {
         let mut registry = ExeUnitsRegistry::new();
         registry
-            .register_exeunits_from_file(&test_resources_directory().join("example-exeunits.json"))
+            .register_exeunits_from_file(&resources_directory().join("example-exeunits.json"))
             .unwrap();
 
         let dummy_desc = registry.find_exeunit("dummy").unwrap();

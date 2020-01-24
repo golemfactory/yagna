@@ -254,7 +254,7 @@ mod tests {
     use ya_client::activity::{provider::ProviderApiClient, ACTIVITY_API};
     use ya_client::web::WebClient;
 
-    fn test_resources_directory() -> PathBuf {
+    fn resources_directory() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test-resources/")
     }
 
@@ -272,7 +272,7 @@ mod tests {
     #[test]
     fn test_spawn_exeunit() {
         let mut runner = create_runner();
-        let exeunits_descs_file = test_resources_directory().join("test-taskrunner-exeunits.json");
+        let exeunits_descs_file = resources_directory().join("test-taskrunner-exeunits.json");
         let agreement_id = "blaaaa-agreement".to_string();
         let activity_id = "blaaaa-activity".to_string();
 

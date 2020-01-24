@@ -1,5 +1,5 @@
 use ya_client::activity::{provider::ProviderApiClient, ACTIVITY_API};
-use ya_client::{market::ApiClient, web::WebClient, Result};
+use ya_client::{market::ApiClient, web::WebClient, web::WebAuth, Result};
 
 use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarketActor};
@@ -21,8 +21,8 @@ pub struct ProviderAgent {
 }
 
 impl ProviderAgent {
-    pub fn new() -> Result<ProviderAgent> {
-        let client = ApiClient::new(WebClient::builder())?;
+    pub fn new(auth: WebAuth) -> Result<ProviderAgent> {
+        let client = ApiClient::new(WebClient::builder().host_port("10.30.8.179:5001").auth(auth))?;
         let market = ProviderMarketActor::new(client, "AcceptAll").start();
 
         let client = ProviderApiClient::new(
@@ -106,3 +106,4 @@ impl Actor for ProviderAgent {
         self.spawn_shutdown_handler(context);
     }
 }
+

@@ -25,6 +25,24 @@ async fn query_events(client: &RequestorApi, subscription_id: &str) -> Result<Ve
     return Ok(requestor_events);
 }
 
+async fn wait_for_approval(client: &RequestorApi, proposal_id: &str) {
+    loop {
+        println!("Waiting for Agreement approval...");
+
+        let _ = match client.wait_for_approval(proposal_id).await {
+            Err(Error::TimeoutError { .. }) => {
+                println!("Timeout waiting for Agreement approval...");
+                Ok("".into())
+            }
+            Ok(_) => {
+                println!("OK! Agreement {} approved by Provider.", proposal_id);
+                return;
+            }
+            e => e,
+        };
+    }
+}
+
 async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
     let demand = Demand::new(serde_json::json!({}), "(&(cpu.architecture=wasm32))".into());
     let subscription_id = client.subscribe(&demand).await?;
@@ -35,14 +53,6 @@ async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
 
     let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
     let offer = offer.as_ref().unwrap();
-
-    //    println!("Received offer {}. Sending new proposal {}.", &offer.id, &offer.id);
-    //
-    //    let proposal = client.get_proposal(&subscription_id, &offer.id).await?;
-    //    client.create_proposal(&proposal.demand, &subscription_id, &offer.id).await?;
-    //
-    //    let requestor_events = query_events(client, &subscription_id).await?;
-    //    let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
 
     println!("Received offer {}. Sending agreeement.", &offer.id);
 
@@ -58,20 +68,8 @@ async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
         &agreement.proposal_id
     );
 
-    match client.wait_for_approval(&agreement.proposal_id).await {
-        Err(Error::TimeoutError { .. }) => {
-            println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
-            Ok("".into())
-        }
-        Ok(r) => {
-            println!(
-                "OK! Agreement {} approved by Provider.",
-                &agreement.proposal_id
-            );
-            Ok(r)
-        }
-        e => e,
-    }?;
+    wait_for_approval(client, &agreement.proposal_id).await;
+    client.unsubscribe(&subscription_id).await?;
 
     Ok(())
 }
