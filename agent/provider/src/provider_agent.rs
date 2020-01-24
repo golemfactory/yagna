@@ -4,6 +4,7 @@ use ya_client::{market::ApiClient, web::WebClient, web::WebAuth, Result};
 use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarketActor};
 use crate::node_info::{CpuInfo, NodeInfo};
+use crate::startup_config::StartupConfig;
 use crate::utils::actix_handler::send_message;
 use crate::utils::actix_signal::Subscribe;
 
@@ -21,13 +22,19 @@ pub struct ProviderAgent {
 }
 
 impl ProviderAgent {
-    pub fn new(auth: WebAuth) -> Result<ProviderAgent> {
-        let client = ApiClient::new(WebClient::builder().host_port("10.30.8.179:5001").auth(auth))?;
+    pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
+
+        let webclient = WebClient::builder()
+            .auth(WebAuth::Bearer(config.auth))
+            .host_port(config.market_address);
+
+        let client = ApiClient::new(webclient)?;
         let market = ProviderMarketActor::new(client, "AcceptAll").start();
 
         let client = ProviderApiClient::new(
             WebClient::builder()
                 .api_root(ACTIVITY_API)
+                .host_port(config.activity_address)
                 .build()
                 .map(Arc::new)?,
         );
