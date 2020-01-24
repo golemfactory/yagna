@@ -23,4 +23,3 @@ tokio = { version = "0.2.10", features=["signal"] }
 [dev-dependencies]
 awc = "1.0"
 humantime = "1.3"
-ya-exe-dummy = {version = "0.1", path = "../../exe-unit/dummy"}

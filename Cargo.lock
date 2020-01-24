@@ -2779,7 +2779,6 @@ dependencies = [
  "structopt 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-client 0.1.0",
- "ya-exe-dummy 0.1.0",
  "ya-model 0.1.0",
 ]
 
