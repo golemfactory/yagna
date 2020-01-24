@@ -15,18 +15,18 @@ pub struct ExeUnitInstance {
 impl ExeUnitInstance {
     pub fn new(
         name: &str,
-        path: &Path,
+        binary_path: &Path,
         working_dir: &Path,
         args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
-        let child = Command::new(path)
+        let child = Command::new(binary_path)
             .args(args)
             .current_dir(working_dir)
             .spawn()
             .map_err(|error| {
                 Error::msg(format!(
-                    "Can't spawn ExeUnit [{}] in working directory [{}]. Error: {}",
-                    name, working_dir, error
+                    "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
+                    name, binary_path.display(), working_dir.display(), error
                 ))
             })?;
 
