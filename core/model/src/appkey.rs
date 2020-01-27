@@ -1,8 +1,8 @@
 use crate::ethaddr::NodeId;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use ya_service_bus::RpcMessage;
 use thiserror::Error;
+use ya_service_bus::RpcMessage;
 
 pub const BUS_ID: &'static str = "/private/appkey";
 
@@ -53,7 +53,6 @@ pub struct List {
     pub page: u32,
     pub per_page: u32,
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

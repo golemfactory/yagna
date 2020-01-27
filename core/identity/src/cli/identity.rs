@@ -137,13 +137,12 @@ impl IdentityCommand {
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             IdentityCommand::List { .. } => {
-                let mut identities: Vec<identity::IdentityInfo> =
-                    bus::service(identity::BUS_ID)
-                        .send(identity::List::default())
-                        .await
-                        .map_err(|e| anyhow::Error::msg(e))
-                        .context("sending id List to BUS")?
-                        .unwrap();
+                let mut identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
+                    .send(identity::List::default())
+                    .await
+                    .map_err(|e| anyhow::Error::msg(e))
+                    .context("sending id List to BUS")?
+                    .unwrap();
                 identities.sort_by_key(|id| Reverse((id.is_default, id.alias.clone())));
                 Ok(ResponseTable {
                     columns: vec![

@@ -2,7 +2,7 @@ use actix_web::error::ErrorInternalServerError;
 use actix_web::Error;
 use futures::{Future, TryFutureExt};
 use std::pin::Pin;
-use ya_core_model::appkey::{AppKey, Get, self};
+use ya_core_model::appkey::{self, AppKey, Get};
 use ya_service_api_cache::ValueResolver;
 use ya_service_bus::actix_rpc;
 

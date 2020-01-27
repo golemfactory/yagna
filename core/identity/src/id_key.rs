@@ -49,10 +49,10 @@ impl IdentityKey {
         Ok(true)
     }
 
-    pub fn sign(&self, data : &[u8]) -> Option<Vec<u8>> {
+    pub fn sign(&self, data: &[u8]) -> Option<Vec<u8>> {
         let s = match &self.secret {
             Some(secret) => secret,
-            None => return None
+            None => return None,
         };
         s.sign(data).ok().map(|s| {
             let mut v = Vec::with_capacity(33);

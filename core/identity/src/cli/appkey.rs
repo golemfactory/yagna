@@ -87,12 +87,11 @@ impl AppKeyCommand {
                     page: page.clone(),
                     per_page: per_page.clone(),
                 };
-                let result: (Vec<model::AppKey>, u32) =
-                    bus::service(model::BUS_ID)
-                        .send(list)
-                        .await
-                        .map_err(anyhow::Error::msg)?
-                        .unwrap();
+                let result: (Vec<model::AppKey>, u32) = bus::service(model::BUS_ID)
+                    .send(list)
+                    .await
+                    .map_err(anyhow::Error::msg)?
+                    .unwrap();
 
                 Ok(ResponseTable {
                     columns: vec![
