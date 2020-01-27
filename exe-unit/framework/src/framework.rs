@@ -12,7 +12,6 @@ use structopt::StructOpt;
 pub struct ExeUnitFramework {
     cmd_input: Box< dyn Dispatcher>,
     supervisor: Addr<ExeUnitSupervisorActor>,
-
     sys: SystemRunner,
 }
 
@@ -28,23 +27,26 @@ impl ExeUnitFramework {
 
     /// Creates ExeUnitFramework using command line args.
     pub fn from_cmd_args(exeunit: Box<dyn ExeUnit>) -> Result<ExeUnitFramework> {
+
+        let dispatcher: Box< dyn Dispatcher>;
         let args = Config::from_args();
-//        match args {
-//            Config::CLI => {
-//
-//            },
-//            Config::FromFile => {
-//
-//            },
-//            Config::Gsb => {
-//
-//            }
-//        }
-        Ok(ExeUnitFramework::new(FileDispatcher::new(), exeunit)?)
+        match args {
+            Config::CLI => {
+                dispatcher = InteractiveCli::new();
+            },
+            Config::FromFile{ input} => {
+                dispatcher = FileDispatcher::new(input);
+            },
+            Config::Gsb{ service_id } => {
+                dispatcher = GsbDispatcher::new(service_id);
+            }
+        }
+        Ok(ExeUnitFramework::new(dispatcher, exeunit)?)
     }
 
     pub fn run(&mut self) -> Result<()> {
-        unimplemented!();
+        self.cmd_input.run(self.supervisor.clone(), &mut self.sys);
+        Ok(())
     }
 
 }
