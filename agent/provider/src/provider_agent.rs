@@ -3,7 +3,6 @@ use ya_client::{market::ApiClient, web::WebAuth, web::WebClient, Result};
 
 use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarketActor};
-use crate::node_info::{CpuInfo, NodeInfo};
 use crate::startup_config::StartupConfig;
 use crate::utils::actix_handler::send_message;
 use crate::utils::actix_signal::Subscribe;
@@ -15,37 +14,33 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
+
 pub struct ProviderAgent {
     market: Addr<ProviderMarketActor>,
     runner: Addr<TaskRunnerActor>,
     node_info: NodeInfo,
+    service_info: ServiceInfo,
 }
 
 impl ProviderAgent {
     pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
-        let webclient = WebClient::builder()
-            .auth(WebAuth::Bearer(config.auth.clone()))
-            .host_port(config.market_address);
+        let webclient = config.market_client();
 
         let client = ApiClient::new(webclient)?;
         let market = ProviderMarketActor::new(client, "AcceptAll").start();
 
-        let client = ProviderApiClient::new(
-            WebClient::builder()
-                .api_root(ACTIVITY_API)
-                .host_port(config.activity_address)
-                .auth(WebAuth::Bearer(config.auth.clone()))
-                .build()
-                .map(Arc::new)?,
-        );
+        let client = ProviderApiClient::new(Arc::new(config.activity_client().build()?));
         let runner = TaskRunnerActor::new(client).start();
 
         let node_info = ProviderAgent::create_node_info();
+        let service_info = ProviderAgent::create_service_info();
 
         let mut provider = ProviderAgent {
             market,
             runner,
             node_info,
+            service_info,
         };
         provider.initialize();
 
@@ -66,7 +61,11 @@ impl ProviderAgent {
         send_message(self.runner.clone(), msg);
 
         // Create simple offer on market.
-        let create_offer_message = CreateOffer::new(self.node_info.clone());
+        let create_offer_message = CreateOffer::new(OfferDefinition {
+            node_info: self.node_info.clone(),
+            service: self.service_info.clone(),
+            com_info: Default::default(),
+        });
         send_message(self.market.clone(), create_offer_message);
     }
 
@@ -76,15 +75,14 @@ impl ProviderAgent {
     }
 
     fn create_node_info() -> NodeInfo {
-        let cpu = CpuInfo {
-            architecture: "wasm32".to_string(),
-            cores: 1,
-            threads: 1,
-        };
-        NodeInfo {
-            cpu,
-            id: "Provider Node".to_string(),
-        }
+        // TODO: Get node name from intentity API.
+        NodeInfo::with_name("")
+    }
+
+    fn create_service_info() -> ServiceInfo {
+        let inf = InfNodeInfo::new().with_mem(1.0).with_storage(10.0);
+        let wasi_version = "0.0.0".into();
+        ServiceInfo::Wasm { inf, wasi_version }
     }
 
     pub fn spawn_shutdown_handler(&mut self, context: &mut Context<ProviderAgent>) {

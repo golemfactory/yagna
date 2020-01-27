@@ -1,6 +1,5 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
-use crate::node_info::NodeInfo;
 use crate::utils::actix_signal::{SignalSlot, Subscribe};
 use crate::{gen_actix_handler_async, gen_actix_handler_sync};
 
@@ -16,6 +15,7 @@ use std::rc::Rc;
 
 // Temporrary
 use serde_json;
+use ya_agent_offer_model::OfferDefinition;
 
 // =========================================== //
 // Public exposed messages
@@ -34,7 +34,7 @@ pub struct AgreementSigned {
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct CreateOffer {
-    node_info: NodeInfo,
+    offer: OfferDefinition,
 }
 
 /// Collects events from market and runs negotiations.
@@ -85,7 +85,7 @@ impl ProviderMarket {
     pub async fn create_offer(&mut self, msg: CreateOffer) -> Result<()> {
         info!("Creating initial offer.");
 
-        let offer = self.negotiator.create_offer(&msg.node_info)?;
+        let offer = self.negotiator.create_offer(&msg.offer)?;
 
         info!("Subscribing to events.");
 
@@ -343,8 +343,8 @@ impl ProviderMarket {
 // =========================================== //
 
 impl CreateOffer {
-    pub fn new(node_info: NodeInfo) -> CreateOffer {
-        CreateOffer { node_info }
+    pub fn new(offer: OfferDefinition) -> CreateOffer {
+        CreateOffer { offer }
     }
 }
 

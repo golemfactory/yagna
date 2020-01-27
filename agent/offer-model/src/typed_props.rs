@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct OfferDefinition {
     pub node_info: NodeInfo,
     pub service: ServiceInfo,
@@ -14,6 +15,7 @@ impl OfferDefinition {
     }
 }
 
+#[derive(Clone)]
 pub struct NodeInfo {
     name: Option<String>,
     geo_country_code: Option<String>,
@@ -39,6 +41,7 @@ impl NodeInfo {
     }
 }
 
+#[derive(Clone)]
 pub enum ServiceInfo {
     Wasm {
         inf: InfNodeInfo,

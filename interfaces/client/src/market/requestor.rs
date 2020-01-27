@@ -5,6 +5,7 @@ use crate::{web::WebClient, Result};
 use ya_model::market::{Agreement, AgreementProposal, Demand, Proposal, RequestorEvent};
 
 /// Bindings for Requestor part of the Market API.
+#[derive(Clone)]
 pub struct RequestorApi {
     client: Arc<WebClient>,
 }
