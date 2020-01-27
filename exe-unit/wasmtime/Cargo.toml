@@ -5,3 +5,4 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-exe-framework = { version="0.1.0", path="../framework"}

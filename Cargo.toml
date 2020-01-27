@@ -14,6 +14,7 @@ members = [
     "core/serv-api/cache",
     "core/serv-api/web",
     "exe-unit/api",
+    "exe-unit/framework",
     "exe-unit/dummy",
     "exe-unit/wasm-mozjs",
     "exe-unit/wasmtime",
