@@ -16,8 +16,17 @@ use std::rc::Rc;
 // ExeUnitSupervisor implementation
 // =========================================== //
 
+/// Performs ExeUnit commands. Spawns real implementation of ExeUnit.
 pub struct ExeUnitSupervisor {
-    exeunit: Box< dyn ExeUnit>
+    exeunit: Box<dyn ExeUnit>
+}
+
+
+impl ExeUnitSupervisor {
+
+    pub fn new(exeunit: Box<dyn ExeUnit>) -> ExeUnitSupervisor {
+        ExeUnitSupervisor{exeunit}
+    }
 }
 
 
@@ -27,9 +36,17 @@ pub struct ExeUnitSupervisor {
 
 /// Wrapper for ExeUnitSupervisor. It is neccesary to use self in async futures.
 pub struct ExeUnitSupervisorActor {
-    market: Rc<RefCell<ExeUnitSupervisor>>,
+    supervisor: Rc<RefCell<ExeUnitSupervisor>>,
 }
 
 impl Actor for ExeUnitSupervisorActor {
     type Context = Context<Self>;
+}
+
+impl ExeUnitSupervisorActor {
+
+    pub fn new(exeunit: Box<dyn ExeUnit>) -> ExeUnitSupervisorActor {
+        let rc = Rc::new(RefCell::new(ExeUnitSupervisor::new(exeunit)));
+        ExeUnitSupervisorActor { supervisor: rc }
+    }
 }

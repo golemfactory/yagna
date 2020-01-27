@@ -22,7 +22,10 @@ impl ExeUnitFramework {
         cmd_dispatcher: Box< dyn Dispatcher>,
         exeunit: Box<dyn ExeUnit>
     ) -> Result<ExeUnitFramework> {
-        unimplemented!();
+        let supervisor = ExeUnitSupervisorActor::new(exeunit).start();
+        let mut sys = System::new("ExeUnit");
+
+        Ok(ExeUnitFramework{sys, supervisor, cmd_input: cmd_dispatcher})
     }
 
     /// Creates ExeUnitFramework using command line args.
