@@ -47,6 +47,16 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     Ok(path.canonicalize()?)
 }
 
+fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
+    if let Err(error) = std::fs::create_dir_all(path) {
+        match &error.kind() {
+            std::io::ErrorKind::AlreadyExists => (),
+            _ => return Err(error.into()),
+        }
+    }
+    Ok(path.canonicalize()?)
+}
+
 fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
