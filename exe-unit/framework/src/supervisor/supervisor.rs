@@ -16,7 +16,7 @@ use std::rc::Rc;
 // ExeUnitSupervisor implementation
 // =========================================== //
 
-struct ExeUnitSupervisor {
+pub struct ExeUnitSupervisor {
     exeunit: Box< dyn ExeUnit>
 }
 
@@ -28,4 +28,8 @@ struct ExeUnitSupervisor {
 /// Wrapper for ExeUnitSupervisor. It is neccesary to use self in async futures.
 pub struct ExeUnitSupervisorActor {
     market: Rc<RefCell<ExeUnitSupervisor>>,
+}
+
+impl Actor for ExeUnitSupervisorActor {
+    type Context = Context<Self>;
 }
