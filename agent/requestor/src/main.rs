@@ -8,6 +8,10 @@ use ya_client::{
     web::WebClient,
 };
 use ya_model::market::{Agreement, Demand, Offer, Proposal, ProviderEvent, RequestorEvent};
+use std::collections::HashMap;
+use futures::prelude::*;
+use futures::channel::mpsc;
+use ya_model::activity::ExeScriptRequest;
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -38,19 +42,57 @@ impl AppSettings {
 
         Ok(ApiClient::new(connection)?)
     }
+
+    fn activity_api(&self)  -> Result<ya_client::activity::RequestorControlApiClient, Box<dyn std::error::Error>> {
+        let host_port = format!(
+            "{}:{}",
+            self.activity_url.host_str().unwrap_or_default(),
+            self.activity_url.port_or_known_default().unwrap_or_default()
+        );
+
+        let connection = WebClient::builder()
+            .auth(WebAuth::Bearer(self.app_key.clone()))
+            .host_port(host_port)
+            .api_root(self.activity_url.path())
+            .build()?;
+        let client = std::sync::Arc::new(connection);
+
+        Ok(ya_client::activity::RequestorControlApiClient::new(client))
+    }
 }
 
 async fn spawn_workers(
     requestor_api: RequestorApi,
     subscription_id: &str,
+    mut tx : futures::channel::mpsc::Sender<String>
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let events = requestor_api
-        .collect(&subscription_id, Some(10), Some(5))
-        .await;
+    loop {
+        let events = requestor_api
+            .collect(&subscription_id, Some(120), Some(5))
+            .await?;
 
-    eprintln!("events={:?}", events);
-
-    Ok(())
+        if !events.is_empty() {
+            log::debug!("events={:?}", events);
+        }
+        for event in events {
+            match event {
+                RequestorEvent::OfferEvent { provider_id, offer: Some(offer) } => {
+                        let agreement_id = offer.id.clone();
+                        let agreement = Agreement::new( agreement_id.clone(), "2021-01-01".to_string());
+                        let ack = requestor_api.create_agreement(&agreement).await?;
+                        log::info!("comfirm agreement = {}", agreement_id);
+                        requestor_api.confirm_agreement(&agreement_id).await?;
+                        log::info!("wait for agreement = {}", agreement_id);
+                        requestor_api.wait_for_approval(&agreement_id).await?;
+                        tx.send(agreement_id.clone()).await;
+                    //}
+                }
+                _ => {
+                    log::warn!("invalid response");
+                }
+            }
+        }
+    }
 }
 
 #[actix_rt::main]
@@ -95,8 +137,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     }
     let requestor_api = client.requestor().clone();
+    let activity_api = settings.activity_api()?;
 
-    spawn_workers(requestor_api.clone(), &subscription_id).await?;
+    let (tx, mut rx) : (mpsc::Sender<String>, mpsc::Receiver<String>) = futures::channel::mpsc::channel(1);
+    Arbiter::spawn(async move {
+        while let Some(id) = rx.next().await {
+            log::info!("new agreement = {}", id);
+            let act_id = activity_api.create_activity(&id).await.unwrap();
+            activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
+        }
+    });
+    spawn_workers(requestor_api.clone(), &subscription_id, tx).await?;
 
     client.requestor().unsubscribe(&subscription_id).await;
     Ok(())
