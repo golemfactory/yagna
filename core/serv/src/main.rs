@@ -14,6 +14,7 @@ use ya_service_api::{
     constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
     CliCtx, CommandOutput,
 };
+use ya_service_api_derive::services;
 use ya_service_api_web::middleware::{auth, Identity};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -106,14 +107,19 @@ impl TryFrom<&CliArgs> for CliCtx {
     }
 }
 
+#[services]
+enum Services {
+    #[enable(gsb, cli(flatten))]
+    Identity(ya_identity::service::Identity),
+    #[enable(gsb, rest)]
+    Activity(ya_activity::service::Activity),
+}
+
 #[derive(StructOpt, Debug)]
 enum CliCommand {
-    /// AppKey management
-    AppKey(ya_identity::cli::AppKeyCommand),
-
-    /// Identity management
+    #[structopt(flatten)]
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Id(ya_identity::cli::IdentityCommand),
+    Commands(services::CliCommands),
 
     #[structopt(name = "complete")]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
@@ -127,9 +133,8 @@ enum CliCommand {
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::AppKey(appkey) => appkey.run_command(ctx).await,
+            CliCommand::Commands(command) => command.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
-            CliCommand::Id(id) => id.run_command(ctx).await,
             CliCommand::Service(service) => service.run_command(ctx).await,
         }
     }
@@ -159,10 +164,10 @@ impl ServiceCommand {
                     .context("binding service bus router")?;
 
                 let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
-
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
-                ya_identity::service::activate(&db).await?;
-                ya_activity::provider::service::bind_gsb(&db);
+
+                services::db(&db).await?;
+                services::gsb(&db).await?;
 
                 let default_id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByDefault)
@@ -180,11 +185,11 @@ impl ServiceCommand {
                     ))?;
 
                 HttpServer::new(move || {
-                    App::new()
+                    let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .service(ya_activity::api::web_scope(&db))
-                        .route("/me", web::get().to(me))
+                        .route("/me", web::get().to(me));
+                    services::rest(app, &db)
                 })
                 .bind(ctx.http_address())
                 .context(format!(
