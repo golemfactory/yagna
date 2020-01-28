@@ -144,7 +144,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(id) = rx.next().await {
             log::info!("new agreement = {}", id);
             let act_id = activity_api.create_activity(&id).await.unwrap();
-            activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
+            log::info!("new activity = (({}))", act_id);
+            //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
         }
     });
     spawn_workers(requestor_api.clone(), &subscription_id, tx).await?;
