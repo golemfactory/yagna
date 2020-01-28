@@ -2726,6 +2726,8 @@ name = "ya-identity"
 version = "0.1.0"
 dependencies = [
  "actix-rt 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "actix-service 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "actix-web 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
  "appdirs 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "awc 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2751,6 +2753,7 @@ dependencies = [
  "ya-persistence 0.1.0",
  "ya-sb-router 0.1.0",
  "ya-service-api 0.1.1",
+ "ya-service-api-derive 0.1.0",
  "ya-service-api-interfaces 0.1.0",
  "ya-service-bus 0.2.0",
 ]
