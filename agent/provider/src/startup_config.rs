@@ -12,6 +12,10 @@ pub struct StartupConfig {
     ///
     #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
     activity_url: Url,
+    ///
+    #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]
+    pub exe_unit_path: String,
+
 }
 
 impl StartupConfig {

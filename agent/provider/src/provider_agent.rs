@@ -21,6 +21,7 @@ pub struct ProviderAgent {
     runner: Addr<TaskRunnerActor>,
     node_info: NodeInfo,
     service_info: ServiceInfo,
+    exe_unit_path: String,
 }
 
 impl ProviderAgent {
@@ -36,11 +37,14 @@ impl ProviderAgent {
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();
 
+        let exe_unit_path = format!("{}/example-exeunits.json", match config.exe_unit_path.is_empty() { true => "exe-unit".into() , false => config.exe_unit_path });
+
         let mut provider = ProviderAgent {
             market,
             runner,
             node_info,
             service_info,
+            exe_unit_path,
         };
         provider.initialize();
 
@@ -54,7 +58,7 @@ impl ProviderAgent {
 
         // Load ExeUnits descriptors from file.
         // TODO: Hardcoded exeunits file. How should we handle this in future?
-        let exeunits_file = PathBuf::from("exe-unit/example-exeunits.json");
+        let exeunits_file = PathBuf::from(self.exe_unit_path.clone()/*"exe-unit/example-exeunits.json"*/);
         let msg = InitializeExeUnits {
             file: exeunits_file,
         };
