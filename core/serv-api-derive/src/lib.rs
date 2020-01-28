@@ -66,11 +66,8 @@ fn define_services(services: Vec<Service>) -> proc_macro2::TokenStream {
             use super::*;
 
             #cli
-
             #db
-
             #gsb
-
             #rest
         }
     }
@@ -196,7 +193,7 @@ fn define_rest_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
     }
 
     quote! {
-        pub fn rest<T, B>(mut app: App<T, B>, db: &DbExecutor) -> App<T, B>
+        pub fn rest<T, B>(mut app: actix_web::App<T, B>, db: &DbExecutor) -> actix_web::App<T, B>
         where
             B : actix_web::body::MessageBody,
             T : actix_service::ServiceFactory<

@@ -1,5 +1,3 @@
-use actix_web::App;
-
 pub struct DbExecutor;
 pub struct CommandOutput;
 pub struct CliCtx;
@@ -27,7 +25,6 @@ pub mod identity {
     }
 
     #[derive(StructOpt, Debug)]
-    #[structopt(flatten)]
     pub enum Commands {
         AppKey(AppKeyCommand),
         Identity(IdentityCommand),
