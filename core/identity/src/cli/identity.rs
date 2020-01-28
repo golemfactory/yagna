@@ -82,6 +82,7 @@ impl Into<identity::Get> for NodeOrAlias {
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+/// Identity management
 pub enum IdentityCommand {
     /// Show list of all identities
     List {},
