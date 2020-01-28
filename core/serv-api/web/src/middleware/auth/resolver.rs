@@ -2,7 +2,7 @@ use actix_web::error::ErrorInternalServerError;
 use actix_web::Error;
 use futures::{Future, TryFutureExt};
 use std::pin::Pin;
-use ya_core_model::appkey::{AppKey, Get, APP_KEY_SERVICE_ID};
+use ya_core_model::appkey::{self, AppKey, Get};
 use ya_service_api_cache::ValueResolver;
 use ya_service_bus::actix_rpc;
 
@@ -25,7 +25,7 @@ impl ValueResolver for AppKeyResolver {
     ) -> Pin<Box<dyn Future<Output = Result<Option<Self::Value>, Self::Error>> + 'a>> {
         let key = key.clone();
         Box::pin(async move {
-            let resp = actix_rpc::private_service(APP_KEY_SERVICE_ID)
+            let resp = actix_rpc::service(appkey::BUS_ID)
                 .send(Get { key })
                 .map_err(|e| ErrorInternalServerError(format!("{}", e)))
                 .await?;

@@ -1,13 +1,17 @@
 use crate::ethaddr::NodeId;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use ya_service_bus::RpcMessage;
+
+pub const BUS_ID: &'static str = "/private/appkey";
 
 pub use ya_service_api::constants::APP_KEY_SERVICE_ID;
 pub const DEFAULT_IDENTITY: &str = "primary";
 pub const DEFAULT_ROLE: &str = "manager";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Error, Debug, Serialize, Deserialize)]
+#[error("appkey error [{code}]: {message}")]
 pub struct Error {
     pub code: u32,
     pub message: String,
@@ -34,6 +38,12 @@ pub struct Create {
 #[serde(rename_all = "camelCase")]
 pub struct Get {
     pub key: String,
+}
+
+impl Get {
+    pub fn with_key(key: String) -> Self {
+        Get { key }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

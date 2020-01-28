@@ -8,6 +8,8 @@ use serde::Deserialize;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::typed::service;
+use ya_service_bus::RpcEndpoint;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -33,22 +35,30 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
 async fn create_activity(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeout>,
-    body: web::Json<CreateActivity>,
+    body: web::Json<String>,
 ) -> Result<String, Error> {
     let conn = db_conn!(db)?;
-    let agreement_id = body.agreement_id.clone();
+    let agreement_id = body.into_inner();
     log::debug!("getting agrement from DB");
     let agreement = AgreementDao::new(&conn)
         .get(&agreement_id)
         .not_found_as_option()?
         .ok_or(Error::BadRequest(format!(
             "Unknown agreement id: {}",
-            body.agreement_id
+            agreement_id
         )))?;
     log::debug!("agreement: {:#?}", agreement);
 
     let uri = provider_activity_uri(&agreement.offer_node_id);
-    let activity_id = gsb_send!(body.into_inner(), &uri, query.timeout)?;
+
+    // TODO: remove /private from /net calls !!
+    let activity_id = service(&format!("/private{}", uri))
+        .send(CreateActivity {
+            agreement_id: agreement_id.clone(),
+            // TODO: Add timeout from parameter
+            timeout: Some(600),
+        })
+        .await??;
     ActivityDao::new(&conn)
         .create(&activity_id, &agreement_id)
         .map_err(Error::from)?;

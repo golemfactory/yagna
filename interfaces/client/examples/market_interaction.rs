@@ -1,4 +1,4 @@
-use awc::{error::SendRequestError, Client};
+use awc::Client;
 use futures::TryFutureExt;
 use serde_json;
 use std::{
@@ -175,10 +175,7 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
 
     println!("REQUESTOR=>  | Waiting for Agreement approval...");
     match client.wait_for_approval(&agreement.proposal_id).await {
-        Err(Error::SendRequestError {
-            e: SendRequestError::Timeout,
-            ..
-        }) => {
+        Err(Error::TimeoutError { .. }) => {
             println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
             Ok("".into())
         }

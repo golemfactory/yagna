@@ -20,7 +20,7 @@ macro_rules! gsb_send {
         use $crate::timeout::IntoTimeoutFuture;
 
         // TODO: this is not enough for the net service, bc it does not contain caller addr
-        actix_rpc::private_service($uri)
+        actix_rpc::service($uri)
             .send($msg)
             .timeout($timeout)
             .map_err(Error::from)

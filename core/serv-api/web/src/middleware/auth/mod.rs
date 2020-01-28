@@ -7,10 +7,10 @@ use crate::middleware::auth::resolver::AppKeyResolver;
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::error::{Error, ErrorUnauthorized};
-use actix_web::HttpMessage;
+use actix_web::{http::header::Header, HttpMessage};
+use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
 use futures::future::{ok, Future, Ready};
 use std::cell::RefCell;
-use std::convert;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll};
@@ -70,11 +70,9 @@ where
     }
 
     fn call(&mut self, req: ServiceRequest) -> Self::Future {
-        let header = req
-            .headers()
-            .get(actix_web::http::header::AUTHORIZATION)
-            .map(|k| k.to_str().map(str::to_string).ok())
-            .and_then(convert::identity);
+        let header = Authorization::<Bearer>::parse(&req)
+            .ok()
+            .map(|a| a.into_scheme().token().to_string());
 
         let cache = self.cache.clone();
         let service = self.service.clone();

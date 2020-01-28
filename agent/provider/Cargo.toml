@@ -5,3 +5,24 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-client = {version = "0.1", path = "../../interfaces/client"}
+ya-model = "0.1"
+ya-agent-offer-model="0.1.0"
+
+actix = "0.9"
+actix_derive = "0.2.0"
+actix-rt = "1.0"
+anyhow = "1.0"
+futures = "0.3"
+log = "0.4.8"
+env_logger = "0.7"
+serde = { version = "^1.0", features = ["derive"] }
+serde_json = "1.0"
+structopt = "0.3.8"
+tokio = { version = "0.2.10", features=["signal"] }
+dotenv = "0.15.0"
+url = "2.1.1"
+
+[dev-dependencies]
+awc = "1.0"
+humantime = "1.3"

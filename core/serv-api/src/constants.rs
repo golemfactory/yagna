@@ -27,5 +27,5 @@ pub const NET_SERVICE_ID: &str = "/net";
 
 // APIs
 pub const ACTIVITY_API: &str = "/activity-api/v1";
-pub const MARKET_API: &str = "/market-api/v1";
+pub const MARKET_API: &str = "/market-api/v1/";
 pub const PAYMENT_API: &str = "/payment-api/v1";
