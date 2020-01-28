@@ -1,7 +1,7 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 use crate::market::provider_market::AgreementSigned;
-use crate::{gen_actix_handler_async, gen_actix_handler_sync};
+use crate::{gen_actix_handler_sync};
 
 use ya_client::activity::ProviderApiClient;
 use ya_model::activity::ProviderEvent;
@@ -15,6 +15,8 @@ use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
+
 
 // =========================================== //
 // Public exposed messages
@@ -34,11 +36,31 @@ pub struct InitializeExeUnits {
 }
 
 // =========================================== //
+// Internal messages
+// =========================================== //
+
+/// Called when we got createActivity event.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+struct CreateActivity {
+    pub activity_id: String,
+    pub agreement_id: String,
+}
+
+/// Called when we got destroyActivity event.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+struct DestroyActivity {
+    pub activity_id: String,
+    pub agreement_id: String,
+}
+
+// =========================================== //
 // TaskRunner declaration
 // =========================================== //
 
 pub struct TaskRunner {
-    api: ProviderApiClient,
+    api: Arc<ProviderApiClient>,
     registry: ExeUnitsRegistry,
     /// Spawned tasks.
     tasks: Vec<Task>,
@@ -49,7 +71,7 @@ pub struct TaskRunner {
 impl TaskRunner {
     pub fn new(client: ProviderApiClient) -> TaskRunner {
         TaskRunner {
-            api: client,
+            api: Arc::new(client),
             registry: ExeUnitsRegistry::new(),
             tasks: vec![],
             waiting_agreements: HashSet::new(),
@@ -65,12 +87,12 @@ impl TaskRunner {
         Ok(())
     }
 
-    pub async fn collect_events(&mut self, _msg: UpdateActivity) -> Result<()> {
-        let result = self.query_events().await;
+    pub async fn collect_events(client: Arc<ProviderApiClient>, notify: Addr<TaskRunnerActor>) -> Result<()> {
+        let result = TaskRunner::query_events(client).await;
         match result {
             Err(error) => error!("Can't query activity events. Error: {}", error),
             Ok(activity_events) => {
-                self.dispatch_events(&activity_events).await;
+                TaskRunner::dispatch_events(&activity_events, notify).await;
             }
         }
 
@@ -81,7 +103,7 @@ impl TaskRunner {
     // TaskRunner internals - events dispatching
     // =========================================== //
 
-    async fn dispatch_events(&mut self, events: &Vec<ProviderEvent>) {
+    async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunnerActor>) {
         info!("Collected {} activity events. Processing...", events.len());
 
         for event in events.iter() {
@@ -90,27 +112,34 @@ impl TaskRunner {
                     activity_id,
                     agreement_id,
                 } => {
-                    if let Err(error) = self.on_create_activity(activity_id, agreement_id) {
+                    if let Err(error) = notify.send(CreateActivity::new(&activity_id, &agreement_id)).await {
                         warn!("{}", error);
                     }
                 }
                 ProviderEvent::DestroyActivity {
                     activity_id,
                     agreement_id,
-                } => self.on_destroy_activity(activity_id, agreement_id),
+                } => {
+                    if let Err(error) = notify.send(DestroyActivity::new(activity_id, agreement_id)).await {
+                        warn!("{}", error);
+                    }
+                }
             }
         }
     }
 
-    async fn query_events(&self) -> Result<Vec<ProviderEvent>> {
-        Ok(self.api.get_activity_events(Some(3)).await?)
+    async fn query_events(client: Arc<ProviderApiClient>) -> Result<Vec<ProviderEvent>> {
+        Ok(client.get_activity_events(Some(3)).await?)
     }
 
     // =========================================== //
     // TaskRunner internals - activity reactions
     // =========================================== //
 
-    pub fn on_create_activity(&mut self, activity_id: &str, agreement_id: &str) -> Result<()> {
+    fn on_create_activity(&mut self, msg: CreateActivity) -> Result<()> {
+        let activity_id = &msg.activity_id;
+        let agreement_id = &msg.agreement_id;
+
         if !self.waiting_agreements.contains(agreement_id) {
             let msg = format!(
                 "Trying to create activity [{}] for not my agreement [{}].",
@@ -144,7 +173,10 @@ impl TaskRunner {
         }
     }
 
-    pub fn on_destroy_activity(&mut self, activity_id: &str, agreement_id: &str) {
+    fn on_destroy_activity(&mut self, msg: DestroyActivity) -> Result<()> {
+        let activity_id: &str = &msg.activity_id;
+        let agreement_id: &str = &msg.agreement_id;
+
         match self
             .tasks
             .iter()
@@ -155,7 +187,7 @@ impl TaskRunner {
                     "Trying to destroy not existing activity [{}]. Agreement [{}].",
                     activity_id, agreement_id
                 );
-                return;
+                return Ok(());
             }
             Some(task_position) => {
                 // Remove task from list and destroy everything related with it.
@@ -163,6 +195,7 @@ impl TaskRunner {
                 TaskRunner::destroy_task(task);
             }
         }
+        Ok(())
     }
 
     pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
@@ -239,10 +272,52 @@ gen_actix_handler_sync!(
     on_signed_agreement,
     runner
 );
-gen_actix_handler_async!(TaskRunnerActor, UpdateActivity, collect_events, runner);
 gen_actix_handler_sync!(
     TaskRunnerActor,
     InitializeExeUnits,
     initialize_exeunits,
     runner
 );
+gen_actix_handler_sync!(
+    TaskRunnerActor,
+    CreateActivity,
+    on_create_activity,
+    runner
+);
+gen_actix_handler_sync!(
+    TaskRunnerActor,
+    DestroyActivity,
+    on_destroy_activity,
+    runner
+);
+
+
+impl Handler<UpdateActivity> for TaskRunnerActor {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, _msg: UpdateActivity, ctx: &mut Context<Self>) -> Self::Result {
+        let client = self.runner.borrow().api.clone();
+        let addr = ctx.address();
+
+        ActorResponse::r#async(
+            async move { TaskRunner::collect_events(client, addr).await }
+            .into_actor(self),
+        )
+    }
+}
+
+// =========================================== //
+// Messages creation
+// =========================================== //
+
+impl CreateActivity {
+    pub fn new(activity_id: &str, agreement_id: &str) -> CreateActivity {
+        CreateActivity{activity_id: activity_id.to_string(), agreement_id: agreement_id.to_string()}
+    }
+}
+
+impl DestroyActivity {
+    pub fn new(activity_id: &str, agreement_id: &str) -> DestroyActivity {
+        DestroyActivity{activity_id: activity_id.to_string(), agreement_id: agreement_id.to_string()}
+    }
+}

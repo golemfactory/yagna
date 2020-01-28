@@ -1,5 +1,5 @@
-use ya_client::activity::{provider::ProviderApiClient, ACTIVITY_API};
-use ya_client::{market::ApiClient, web::WebAuth, web::WebClient, Result};
+use ya_client::activity::{provider::ProviderApiClient};
+use ya_client::{market::ApiClient, Result};
 
 use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarketActor};
