@@ -15,7 +15,6 @@ pub struct StartupConfig {
     ///
     #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]
     pub exe_unit_path: String,
-
 }
 
 impl StartupConfig {

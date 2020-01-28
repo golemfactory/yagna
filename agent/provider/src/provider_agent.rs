@@ -37,7 +37,13 @@ impl ProviderAgent {
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();
 
-        let exe_unit_path = format!("{}/example-exeunits.json", match config.exe_unit_path.is_empty() { true => "exe-unit".into() , false => config.exe_unit_path });
+        let exe_unit_path = format!(
+            "{}/example-exeunits.json",
+            match config.exe_unit_path.is_empty() {
+                true => "exe-unit".into(),
+                false => config.exe_unit_path,
+            }
+        );
 
         let mut provider = ProviderAgent {
             market,
@@ -58,7 +64,9 @@ impl ProviderAgent {
 
         // Load ExeUnits descriptors from file.
         // TODO: Hardcoded exeunits file. How should we handle this in future?
-        let exeunits_file = PathBuf::from(self.exe_unit_path.clone()/*"exe-unit/example-exeunits.json"*/);
+        let exeunits_file = PathBuf::from(
+            self.exe_unit_path.clone(), /*"exe-unit/example-exeunits.json"*/
+        );
         let msg = InitializeExeUnits {
             file: exeunits_file,
         };
