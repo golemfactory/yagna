@@ -4,7 +4,6 @@ use ya_model::market::{AgreementProposal, Offer};
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, ProposalResponse};
 
-use serde_json;
 use ya_agent_offer_model::OfferDefinition;
 
 pub struct AcceptAllNegotiator;

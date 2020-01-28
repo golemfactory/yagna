@@ -52,11 +52,13 @@ async fn create_activity(
     let uri = provider_activity_uri(&agreement.offer_node_id);
 
     // TODO: remove /private from /net calls !!
-    let activity_id = service(&format!("/private{}", uri)).send(CreateActivity {
-        agreement_id: agreement_id.clone(),
-        // TODO: Add timeout from parameter
-        timeout: Some(600)
-    }).await??;
+    let activity_id = service(&format!("/private{}", uri))
+        .send(CreateActivity {
+            agreement_id: agreement_id.clone(),
+            // TODO: Add timeout from parameter
+            timeout: Some(600),
+        })
+        .await??;
     ActivityDao::new(&conn)
         .create(&activity_id, &agreement_id)
         .map_err(Error::from)?;
