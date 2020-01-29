@@ -17,7 +17,8 @@ fn new_client() -> Result<Arc<WebClient>> {
 }
 
 async fn provider(activity_id: &str) -> Result<()> {
-    let client = ProviderApiClient::new(new_client()?);
+    let web_client = new_client()?;
+    let client = ProviderApiClient::new(&web_client);
 
     println!("[?] Events for activity {}", activity_id);
     let activity_events = client.get_activity_events(Some(60i32)).await.unwrap();
@@ -41,7 +42,8 @@ async fn requestor(agreement_id: &str) -> Result<()> {
 }
 
 async fn requestor_start(agreement_id: &str) -> Result<String> {
-    let client = RequestorControlApiClient::new(new_client()?);
+    let web_client = new_client()?;
+    let client = RequestorControlApiClient::new(&web_client);
 
     println!("[+] Activity, agreement {}", agreement_id);
     let activity_id = client.create_activity(agreement_id).await?;
@@ -51,7 +53,8 @@ async fn requestor_start(agreement_id: &str) -> Result<String> {
 }
 
 async fn requestor_stop(activity_id: &str) -> Result<()> {
-    let client = RequestorControlApiClient::new(new_client()?);
+    let web_client = new_client()?;
+    let client = RequestorControlApiClient::new(&web_client);
 
     println!("[-] Activity {}", activity_id);
     client.destroy_activity(&activity_id).await?;
@@ -60,7 +63,8 @@ async fn requestor_stop(activity_id: &str) -> Result<()> {
 }
 
 async fn requestor_exec(activity_id: &str) -> Result<()> {
-    let client = RequestorControlApiClient::new(new_client()?);
+    let web_client = new_client()?;
+    let client = RequestorControlApiClient::new(&web_client);
 
     let exe_request = ExeScriptRequest::new("STOP".to_string());
     println!("[+] Batch exe script:{:?}", exe_request);
@@ -76,7 +80,8 @@ async fn requestor_exec(activity_id: &str) -> Result<()> {
 }
 
 async fn requestor_state(activity_id: &str) -> Result<()> {
-    let client = RequestorStateApiClient::new(new_client()?);
+    let web_client = new_client()?;
+    let client = RequestorStateApiClient::new(&web_client);
 
     println!("[?] State for activity {}", activity_id);
     let state = client.get_state(activity_id).await?;
