@@ -6,11 +6,11 @@ use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 
 /// Bindings for Provider part of the Market API.
 pub struct ProviderApi {
-    client: Arc<WebClient>,
+    client: WebClient,
 }
 
 impl ProviderApi {
-    pub fn new(client: &Arc<WebClient>) -> Self {
+    pub fn new(client: &WebClient) -> Self {
         Self {
             client: client.clone(),
         }
