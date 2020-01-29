@@ -5,11 +5,11 @@ use structopt::StructOpt;
 use url::Url;
 use ya_client::web::WebAuth;
 use ya_client::{
-    market::{ApiClient, ProviderApi, RequestorApi},
+    market::{ApiClient, RequestorApi},
     web::WebClient,
 };
-use ya_model::activity::ExeScriptRequest;
-use ya_model::market::{Agreement, Demand, Offer, Proposal, ProviderEvent, RequestorEvent};
+
+use ya_model::market::{Agreement, Demand, Proposal, RequestorEvent};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -59,13 +59,13 @@ impl AppSettings {
             .build()?;
         let client = std::sync::Arc::new(connection);
 
-        Ok(ya_client::activity::RequestorControlApiClient::new(client))
+        Ok(ya_client::activity::RequestorControlApiClient::new(&client))
     }
 }
 
 async fn process_offer(
     requestor_api: RequestorApi,
-    provider_id: String,
+    _provider_id: String,
     offer: Proposal,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let agreement_id = offer.id.clone();
