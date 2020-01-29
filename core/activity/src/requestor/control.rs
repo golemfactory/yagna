@@ -32,6 +32,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
 }
 
 /// Creates new Activity based on given Agreement.
+#[allow(unused_variables)]
 async fn create_activity(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeout>,
