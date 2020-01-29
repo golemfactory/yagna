@@ -1,5 +1,5 @@
 use ya_client::Result;
-use ya_model::market::{AgreementProposal, Offer};
+use ya_model::market::{AgreementProposal, Offer, Proposal};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, ProposalResponse};
@@ -13,7 +13,7 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(Offer::new(offer.clone().into_json(), "()".into()))
     }
 
-    fn react_to_proposal(&self, _proposal: &AgreementProposal) -> Result<ProposalResponse> {
+    fn react_to_proposal(&self, _proposal: &Proposal) -> Result<ProposalResponse> {
         Ok(ProposalResponse::AcceptProposal)
     }
 

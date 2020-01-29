@@ -3,6 +3,10 @@ use std::sync::Arc;
 
 use crate::{web::WebClient, Result};
 use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
+use crate::web::WebInterface;
+use std::rc::Rc;
+use url::Url;
+use std::str::FromStr;
 
 /// Bindings for Provider part of the Market API.
 pub struct ProviderApi {
@@ -154,5 +158,19 @@ impl ProviderApi {
     pub async fn get_agreement(&self, agreement_id: &str) -> Result<Agreement> {
         let url = url_format!("agreements/{agreement_id}/", agreement_id);
         self.client.get(&url).send().json().await
+    }
+}
+
+
+impl WebInterface for ProviderApi {
+    fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url> {
+        if let Some(url) = std::env::var("YAGNA_MARKET_URL").ok() {
+            return Rc::new(Url::from_str(&url).unwrap());
+        }
+        base_url.join("market-api/v1/").unwrap().into()
+    }
+
+    fn from_client(client: WebClient) -> Self {
+        unimplemented!()
     }
 }

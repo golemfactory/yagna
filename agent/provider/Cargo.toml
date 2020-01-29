@@ -22,6 +22,7 @@ structopt = "0.3.8"
 tokio = { version = "0.2.10", features=["signal"] }
 dotenv = "0.15.0"
 url = "2.1.1"
+chrono = "0.4.10"
 
 [dev-dependencies]
 awc = "1.0"

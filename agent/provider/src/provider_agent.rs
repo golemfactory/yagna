@@ -26,14 +26,9 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
-        let webclient = config.market_client();
+        let market = ProviderMarketActor::new(config.market_client(), "AcceptAll").start();
 
-        let client = ApiClient::new(webclient)?;
-        let market = ProviderMarketActor::new(client, "AcceptAll").start();
-
-        let activity_client = Arc::new(config.activity_client().build()?);
-        let client = ProviderApiClient::new(&activity_client);
-        let runner = TaskRunnerActor::new(client).start();
+        let runner = TaskRunnerActor::new(config.activity_client()).start();
 
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();

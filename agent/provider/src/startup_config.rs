@@ -1,6 +1,7 @@
 use structopt::StructOpt;
 use url::Url;
 use ya_client::web::{WebAuth, WebClient, WebClientBuilder};
+use ya_client::{market ,activity};
 
 #[derive(StructOpt)]
 pub struct StartupConfig {
@@ -18,30 +19,11 @@ pub struct StartupConfig {
 }
 
 impl StartupConfig {
-    pub fn market_client(&self) -> WebClientBuilder {
-        let host_port = format!(
-            "{}:{}",
-            self.market_url.host_str().unwrap_or_default(),
-            self.market_url.port_or_known_default().unwrap_or_default()
-        );
-
-        WebClient::builder()
-            .auth(WebAuth::Bearer(self.auth.clone()))
-            .host_port(host_port)
+    pub fn market_client(&self) -> market::ProviderApi {
+        WebClient::with_token(&self.auth).unwrap().interface_at(self.market_url.clone())
     }
 
-    pub fn activity_client(&self) -> WebClientBuilder {
-        let host_port = format!(
-            "{}:{}",
-            self.activity_url.host_str().unwrap_or_default(),
-            self.activity_url
-                .port_or_known_default()
-                .unwrap_or_default()
-        );
-        WebClient::builder()
-            //            .api_root(ACTIVITY_API)
-            .host_port(host_port)
-            .api_root(self.activity_url.path())
-            .auth(WebAuth::Bearer(self.auth.clone()))
+    pub fn activity_client(&self) -> activity::ProviderApiClient {
+        WebClient::with_token(&self.auth).unwrap().interface_at(self.activity_url.clone())
     }
 }

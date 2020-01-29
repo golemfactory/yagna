@@ -11,7 +11,7 @@ use ya_client::{
     web::WebClient,
     Error, Result,
 };
-use ya_model::market::{AgreementProposal, Demand, Offer, Proposal};
+use ya_model::market::{AgreementProposal, Demand, Offer, Proposal, ProviderEvent};
 
 async fn query_market_stats() -> Result<serde_json::Value> {
     let url = "http://localhost:5001/admin/marketStats";
@@ -61,7 +61,7 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
     match &provider_events[0] {
         // TODO: UNTESTED YET
         // provider - demand proposal received --> respond with an counter offer
-        Event::ProposalEvent { proposal, .. } => {
+        ProviderEvent::ProposalEvent { proposal, .. } => {
             println!(
                 "SHOULD NOT HAPPEND!   <=PROVIDER | Got demand event: {:#?}.",
                 proposal
@@ -86,7 +86,7 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
             println!("  <=PROVIDER | counter proposal created: {}", res)
         }
         // provider - agreement proposal received --> approve it
-        Event::AgreementEvent { agreement, .. } => {
+        ProviderEvent::AgreementEvent { agreement, .. } => {
             let agreement_id = &agreement.as_ref().unwrap().agreement_id;
             println!(
                 "  <=PROVIDER | Wooha! Got new Agreement event {}. Approving...",
@@ -98,7 +98,7 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
             // TODO: this should return _before_ requestor.wait_for_approval
             println!("  <=PROVIDER | Agreement approved: {}", res);
         }
-        Event::PropertyQueryEvent { .. } => {
+        ProviderEvent::PropertyQueryEvent { .. } => {
             println!("Unsupported PropertyQueryEvent.");
         }
     }

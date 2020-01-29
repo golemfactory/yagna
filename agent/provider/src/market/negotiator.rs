@@ -26,6 +26,6 @@ pub trait Negotiator {
     //TODO: We should add some parameters for offer creation.
     fn create_offer(&self, node_info: &OfferDefinition) -> Result<Offer>;
 
-    fn react_to_proposal(&self, proposal: &AgreementProposal) -> Result<ProposalResponse>;
+    fn react_to_proposal(&self, proposal: &Proposal) -> Result<ProposalResponse>;
     fn react_to_agreement(&self, agreement: &AgreementProposal) -> Result<AgreementResponse>;
 }
