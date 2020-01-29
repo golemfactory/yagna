@@ -59,7 +59,7 @@ impl AppSettings {
             .build()?;
         let client = std::sync::Arc::new(connection);
 
-        Ok(ya_client::activity::RequestorControlApiClient::new(client))
+        Ok(ya_client::activity::RequestorControlApiClient::new(&client))
     }
 }
 
