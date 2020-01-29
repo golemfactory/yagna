@@ -6,11 +6,11 @@ macro_rules! db_conn {
 }
 
 macro_rules! bind_gsb_method {
-    ($bind:ident, $id:expr, $db_executor:expr, $method:ident) => {{
+    ($bind:ident, $id:expr, $db:expr, $fn:ident) => {{
         use ya_service_bus::typed as bus;
 
-        let db_ = $db_executor.clone();
-        let _ = bus::$bind(&$id, move |m| $method(db_.clone(), m));
+        let db_ = $db.clone();
+        let _ = bus::$bind(&$id, move |c, m| $fn(db_.clone(), c, m));
     }};
 }
 
