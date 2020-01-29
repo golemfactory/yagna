@@ -1,7 +1,7 @@
 //! Requestor control part of Activity API
 use crate::web::WebClient;
 use crate::Result;
-use std::sync::Arc;
+
 use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
 
 /// Bindings for Requestor Control part of the Activity API.

@@ -2,7 +2,7 @@
 use crate::web::{WebClient, WebInterface};
 use crate::{Error, Result};
 use std::rc::Rc;
-use std::sync::Arc;
+
 use url::Url;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 

@@ -3,14 +3,11 @@ use futures::channel::mpsc;
 use futures::prelude::*;
 use structopt::StructOpt;
 use url::Url;
-use ya_client::web::WebAuth;
-use ya_client::{
-    market::{ApiClient, RequestorApi},
-    web::WebClient,
-};
+
+use ya_client::{market::RequestorApi, web::WebClient};
 
 use ya_model::market::event::RequestorEvent;
-use ya_model::market::{agreement::State, Agreement, AgreementProposal, Demand, Proposal};
+use ya_model::market::{AgreementProposal, Demand, Proposal};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -74,7 +71,7 @@ async fn spawn_workers(
         for event in events {
             match event {
                 RequestorEvent::ProposalEvent {
-                    event_date,
+                    event_date: _,
                     proposal,
                 } => {
                     let mut tx = tx.clone();

@@ -8,7 +8,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{str::FromStr, time::Duration};
 use url::{form_urlencoded, Url};
 
-use crate::{configuration::ApiConfiguration, Error, Result};
+use crate::{Error, Result};
 use std::rc::Rc;
 
 #[derive(Clone, Debug)]

@@ -3,7 +3,7 @@ use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::utils::actix_signal::{SignalSlot, Subscribe};
 use crate::{gen_actix_handler_async, gen_actix_handler_sync};
 
-use ya_client::market::{ApiClient, ProviderApi};
+use ya_client::market::ProviderApi;
 use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
 
 use actix::prelude::*;
@@ -15,9 +15,8 @@ use std::rc::Rc;
 
 // Temporrary
 use chrono::{Duration, Utc};
-use serde_json;
+
 use ya_agent_offer_model::OfferDefinition;
-use ya_client::web::WebClient;
 
 // =========================================== //
 // Public exposed messages

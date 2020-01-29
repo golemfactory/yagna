@@ -1,6 +1,6 @@
 use structopt::StructOpt;
 use url::Url;
-use ya_client::web::{WebAuth, WebClient, WebClientBuilder};
+use ya_client::web::WebClient;
 use ya_client::{activity, market};
 
 #[derive(StructOpt)]

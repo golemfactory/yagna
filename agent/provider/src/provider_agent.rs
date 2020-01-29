@@ -1,5 +1,4 @@
-use ya_client::activity::provider::ProviderApiClient;
-use ya_client::{market::ApiClient, Result};
+use ya_client::Result;
 
 use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarketActor};
@@ -11,7 +10,7 @@ use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::path::PathBuf;
-use std::sync::Arc;
+
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};

@@ -1,5 +1,4 @@
 //! Requestor part of Market API
-use std::sync::Arc;
 
 use crate::web::WebInterface;
 use crate::{web::WebClient, Result};
