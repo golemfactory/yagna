@@ -40,7 +40,7 @@ async fn create_activity_gsb(
     let activity_id = generate_id();
     let conn = db_conn!(db)?;
 
-    if !is_agreement_initiator(caller, &msg.agreement_id, &conn)? {
+    if !is_agreement_initiator(&conn, caller, &msg.agreement_id)? {
         return Err(Error::Forbidden.into());
     }
 
@@ -75,7 +75,7 @@ async fn destroy_activity_gsb(
 ) -> RpcMessageResult<DestroyActivity> {
     let conn = db_conn!(db)?;
 
-    if !is_activity_owner(caller, &msg.activity_id, &conn)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
         return Err(Error::Forbidden.into());
     }
 
@@ -104,7 +104,7 @@ async fn get_activity_state_gsb(
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(caller, &msg.activity_id, &conn)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
         return Err(Error::Forbidden.into());
     }
 
@@ -140,7 +140,7 @@ async fn get_activity_usage_gsb(
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(caller, &msg.activity_id, &conn)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
         return Err(Error::Forbidden.into());
     }
 
@@ -166,20 +166,20 @@ async fn set_activity_usage_gsb(
 }
 
 fn is_activity_owner(
+    conn: &ConnType,
     caller: String,
     activity_id: &str,
-    conn: &ConnType,
 ) -> std::result::Result<bool, Error> {
     let agreement_id = ActivityDao::new(&conn)
         .get_agreement_id(&activity_id)
         .map_err(Error::from)?;
-    is_agreement_initiator(caller, &agreement_id, conn)
+    is_agreement_initiator(conn, caller, &agreement_id)
 }
 
 fn is_agreement_initiator(
+    conn: &ConnType,
     caller: String,
     agreement_id: &str,
-    conn: &ConnType,
 ) -> std::result::Result<bool, Error> {
     let agreement = AgreementDao::new(&conn)
         .get(agreement_id)
