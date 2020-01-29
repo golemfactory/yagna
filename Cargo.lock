@@ -2745,6 +2745,7 @@ version = "0.1.0"
 name = "ya-model"
 version = "0.1.0"
 dependencies = [
+ "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.45 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

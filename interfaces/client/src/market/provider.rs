@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use crate::{web::WebClient, Result};
-use ya_model::market::{Agreement, Event, Offer, Proposal};
+use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 
 /// Bindings for Provider part of the Market API.
 pub struct ProviderApi {
@@ -19,7 +19,7 @@ impl ProviderApi {
     /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
     /// interest in Demands meeting specified criteria.
     pub async fn subscribe_offer(&self, offer: &Offer) -> Result<String> {
-        self.client.post("offers/").send_json(&offer).json().await
+        self.client.post("offers").send_json(&offer).json().await
     }
 
     /// Stop subscription by invalidating a previously published Offer.
@@ -29,7 +29,7 @@ impl ProviderApi {
     /// This implies, that client code should not `unsubscribeOffer` before it has received
     /// all expected/useful inputs from `collectDemands`.
     pub async fn unsubscribe_offer(&self, subscription_id: &str) -> Result<String> {
-        let url = url_format!("offers/{subscription_id}/", subscription_id);
+        let url = url_format!("offers/{subscription_id}", subscription_id);
         self.client.delete(&url).send().json().await
     }
 
@@ -43,7 +43,7 @@ impl ProviderApi {
         timeout: Option<i32>,
         #[allow(non_snake_case)]
         maxEvents: Option<i32>, // TODO: max_events
-    ) -> Result<Vec<Event>> {
+    ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
             "offers/{subscription_id}/events/",
             subscription_id,

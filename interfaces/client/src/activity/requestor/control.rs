@@ -6,14 +6,12 @@ use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
 
 /// Bindings for Requestor Control part of the Activity API.
 pub struct RequestorControlApiClient {
-    client: Arc<WebClient>,
+    client: WebClient,
 }
 
 impl RequestorControlApiClient {
-    pub fn new(client: &Arc<WebClient>) -> Self {
-        Self {
-            client: client.clone(),
-        }
+    pub fn new(client: WebClient) -> Self {
+        Self { client }
     }
 
     /// Creates new Activity based on given Agreement.

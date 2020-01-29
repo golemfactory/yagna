@@ -6,9 +6,10 @@ use awc::{
 use bytes::Bytes;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{str::FromStr, time::Duration};
-use url::form_urlencoded;
+use url::{form_urlencoded, Url};
 
 use crate::{configuration::ApiConfiguration, Error, Result};
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -17,9 +18,16 @@ pub enum WebAuth {
 
 /// Convenient wrapper for the [`awc::Client`](
 /// https://docs.rs/awc/0.2.8/awc/struct.Client.html) with builder.
+#[derive(Clone)]
 pub struct WebClient {
-    pub(crate) configuration: ApiConfiguration,
-    pub(crate) awc: awc::Client,
+    base_url: Rc<Url>,
+    awc: awc::Client,
+}
+
+pub trait WebInterface {
+    fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url>;
+
+    fn from_client(client: WebClient) -> Self;
 }
 
 pub struct WebRequest<T> {
@@ -32,12 +40,18 @@ impl WebClient {
         WebClientBuilder::default()
     }
 
-    fn url<T: Into<String>>(&self, suffix: T) -> url::Url {
-        self.configuration.endpoint_url(suffix)
+    pub fn with_token(token: &str) -> Result<WebClient> {
+        WebClientBuilder::default()
+            .auth(WebAuth::Bearer(token.to_string()))
+            .build()
+    }
+
+    fn url<T: AsRef<str>>(&self, suffix: T) -> Result<url::Url> {
+        Ok(self.base_url.join(suffix.as_ref())?)
     }
 
     pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
+        let url = self.url(url).unwrap().to_string();
         log::info!("doing {} on {}", method, url);
         WebRequest {
             inner_request: self.awc.request(method, &url),
@@ -59,6 +73,20 @@ impl WebClient {
 
     pub fn delete(&self, url: &str) -> WebRequest<ClientRequest> {
         self.request(Method::DELETE, url)
+    }
+
+    pub fn interface<T: WebInterface>(&self) -> T {
+        let base_url = T::rebase_service_url(self.base_url.clone());
+        let awc = self.awc.clone();
+        T::from_client(WebClient { base_url, awc })
+    }
+
+    pub fn interface_at<T: WebInterface>(&self, base_url: Url) -> T {
+        let awc = self.awc.clone();
+        T::from_client(WebClient {
+            base_url: base_url.into(),
+            awc,
+        })
     }
 }
 
@@ -179,7 +207,10 @@ impl WebClientBuilder {
         }
 
         Ok(WebClient {
-            configuration: ApiConfiguration::from(self.host_port, self.api_root)?,
+            base_url: Rc::new(Url::parse(&format!(
+                "http://{}",
+                self.host_port.unwrap_or_else(|| "127.0.0.1".into())
+            ))?),
             awc: builder.finish(),
         })
     }

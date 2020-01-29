@@ -5,15 +5,13 @@ use std::sync::Arc;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 
 pub struct ProviderApiClient {
-    client: Arc<WebClient>,
+    client: WebClient,
 }
 
 /// Bindings for Provider part of the Activity API.
 impl ProviderApiClient {
-    pub fn new(client: &Arc<WebClient>) -> Self {
-        Self {
-            client: client.clone(),
-        }
+    pub fn new(client: WebClient) -> Self {
+        Self { client }
     }
 
     /// Fetch activity state (which may include error details)

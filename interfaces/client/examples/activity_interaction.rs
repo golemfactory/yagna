@@ -9,16 +9,13 @@ use ya_client::{
 };
 use ya_model::activity::ExeScriptRequest;
 
-fn new_client() -> Result<Arc<WebClient>> {
-    WebClient::builder()
-        .api_root(ACTIVITY_API)
-        .build()
-        .map(Arc::new)
+fn new_client() -> Result<WebClient> {
+    WebClient::builder().api_root(ACTIVITY_API).build()
 }
 
 async fn provider(activity_id: &str) -> Result<()> {
     let web_client = new_client()?;
-    let client = ProviderApiClient::new(&web_client);
+    let client = ProviderApiClient::new(web_client);
 
     println!("[?] Events for activity {}", activity_id);
     let activity_events = client.get_activity_events(Some(60i32)).await.unwrap();
@@ -43,7 +40,7 @@ async fn requestor(agreement_id: &str) -> Result<()> {
 
 async fn requestor_start(agreement_id: &str) -> Result<String> {
     let web_client = new_client()?;
-    let client = RequestorControlApiClient::new(&web_client);
+    let client = RequestorControlApiClient::new(web_client);
 
     println!("[+] Activity, agreement {}", agreement_id);
     let activity_id = client.create_activity(agreement_id).await?;
@@ -54,7 +51,7 @@ async fn requestor_start(agreement_id: &str) -> Result<String> {
 
 async fn requestor_stop(activity_id: &str) -> Result<()> {
     let web_client = new_client()?;
-    let client = RequestorControlApiClient::new(&web_client);
+    let client = RequestorControlApiClient::new(web_client);
 
     println!("[-] Activity {}", activity_id);
     client.destroy_activity(&activity_id).await?;
@@ -64,7 +61,7 @@ async fn requestor_stop(activity_id: &str) -> Result<()> {
 
 async fn requestor_exec(activity_id: &str) -> Result<()> {
     let web_client = new_client()?;
-    let client = RequestorControlApiClient::new(&web_client);
+    let client = RequestorControlApiClient::new(web_client);
 
     let exe_request = ExeScriptRequest::new("STOP".to_string());
     println!("[+] Batch exe script:{:?}", exe_request);

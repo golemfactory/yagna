@@ -7,7 +7,7 @@ pub use self::demand::Demand;
 pub mod error;
 pub use self::error::Error;
 pub mod event;
-pub use self::event::Event;
+pub use self::event::{ProviderEvent, RequestorEvent};
 pub mod offer;
 pub use self::offer::Offer;
 pub mod property_query;

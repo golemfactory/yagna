@@ -19,7 +19,12 @@ impl ApiClient {
     /// Constructs new `ApiClient`.
     pub fn new(client: WebClientBuilder) -> Result<Self> {
         // TODO: Where should be specified market host port??
-        let client = Arc::new(client.api_root(MARKET_API).host_port("localhost:5001".to_string()).build()?);
+        let client = Arc::new(
+            client
+                .api_root(MARKET_API)
+                .host_port("localhost:5001".to_string())
+                .build()?,
+        );
 
         Ok(ApiClient {
             provider: ProviderApi::new(&client),

@@ -11,9 +11,7 @@ use ya_client::{
     web::WebClient,
     Error, Result,
 };
-use ya_model::market::{AgreementProposal, Demand, Event, Offer, Proposal,};
-
-
+use ya_model::market::{AgreementProposal, Demand, Offer, Proposal};
 
 async fn query_market_stats() -> Result<serde_json::Value> {
     let url = "http://localhost:5001/admin/marketStats";
@@ -99,10 +97,10 @@ async fn provider_interact(client: &ProviderApi) -> Result<()> {
             //let res = client.reject_agreement(agreement_id).await?;
             // TODO: this should return _before_ requestor.wait_for_approval
             println!("  <=PROVIDER | Agreement approved: {}", res);
-        },
-        Event::PropertyQueryEvent{ .. } => {
+        }
+        Event::PropertyQueryEvent { .. } => {
             println!("Unsupported PropertyQueryEvent.");
-        },
+        }
     }
 
     let market_stats = query_market_stats().await?;
@@ -182,9 +180,9 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
             println!("REQUESTOR=>  | Waiting for Agreement approval...");
             match client.wait_for_approval(&agreement.proposal_id).await {
                 Err(Error::SendRequestError {
-                        e: SendRequestError::Timeout,
-                        ..
-                    }) => {
+                    e: SendRequestError::Timeout,
+                    ..
+                }) => {
                     println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
                     Ok("".into())
                 }
@@ -194,16 +192,18 @@ async fn requestor_interact(client: &RequestorApi) -> Result<()> {
                 }
                 e => e,
             }?;
-        },
-        Event::AgreementEvent {..} => {},
-        Event::PropertyQueryEvent {..} => {},
+        }
+        Event::AgreementEvent { .. } => {}
+        Event::PropertyQueryEvent { .. } => {}
     }
 
     let market_stats = query_market_stats().await?;
     println!("REQUESTOR=>  | Market stats: {:#?}", market_stats);
 
     println!("REQUESTOR=>  | Unsunscribing...");
-    let res = client.unsubscribe_demand(&requestor_subscription_id).await?;
+    let res = client
+        .unsubscribe_demand(&requestor_subscription_id)
+        .await?;
     println!("REQUESTOR=>  | Unsubscribed: {}", res);
 
     let market_stats = query_market_stats().await?;

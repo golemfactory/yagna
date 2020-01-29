@@ -1,17 +1,21 @@
 //! Requestor part of Market API
 use std::sync::Arc;
 
+use crate::web::WebInterface;
 use crate::{web::WebClient, Result};
-use ya_model::market::{Agreement, AgreementProposal, Demand, Event, Proposal};
+use std::rc::Rc;
+use std::str::FromStr;
+use url::Url;
+use ya_model::market::{Agreement, AgreementProposal, Demand, Proposal, RequestorEvent};
 
 /// Bindings for Requestor part of the Market API.
 #[derive(Clone)]
 pub struct RequestorApi {
-    client: Arc<WebClient>,
+    client: WebClient,
 }
 
 impl RequestorApi {
-    pub fn new(client: &Arc<WebClient>) -> Self {
+    pub fn new(client: &WebClient) -> Self {
         Self {
             client: client.clone(),
         }
@@ -26,12 +30,12 @@ impl RequestorApi {
     /// **Note**: it is an "atomic" operation, ie. as soon as Subscription is placed,
     /// the Demand is published on the market.
     pub async fn subscribe_demand(&self, demand: &Demand) -> Result<String> {
-        self.client.post("demands/").send_json(&demand).json().await
+        self.client.post("demands").send_json(&demand).json().await
     }
 
     /// Stop subscription by invalidating a previously published Demand.
     pub async fn unsubscribe_demand(&self, subscription_id: &str) -> Result<String> {
-        let url = url_format!("demands/{subscription_id}/", subscription_id);
+        let url = url_format!("demands/{subscription_id}", subscription_id);
         self.client.delete(&url).send().json().await
     }
 
@@ -45,9 +49,9 @@ impl RequestorApi {
         timeout: Option<i32>,
         #[allow(non_snake_case)]
         maxEvents: Option<i32>, // TODO: max_events
-    ) -> Result<Vec<Event>> {
+    ) -> Result<Vec<RequestorEvent>> {
         let url = url_format!(
-            "demands/{subscription_id}/events/",
+            "demands/{subscription_id}/events",
             subscription_id,
             #[query] timeout,
             #[query] maxEvents
@@ -63,7 +67,7 @@ impl RequestorApi {
         proposal_id: &str,
     ) -> Result<String> {
         let url = url_format!(
-            "demands/{subscription_id}/proposals/{proposal_id}/demand/",
+            "demands/{subscription_id}/proposals/{proposal_id}/demand",
             subscription_id,
             proposal_id
         );
@@ -77,7 +81,7 @@ impl RequestorApi {
         proposal_id: &str,
     ) -> Result<Proposal> {
         let url = url_format!(
-            "demands/{subscription_id}/proposals/{proposal_id}/",
+            "demands/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );
@@ -91,7 +95,7 @@ impl RequestorApi {
         proposal_id: &str,
     ) -> Result<String> {
         let url = url_format!(
-            "demands/{subscription_id}/proposals/{proposal_id}/",
+            "demands/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );
@@ -115,7 +119,7 @@ impl RequestorApi {
     /// **Note**: Moves given Proposal to `Approved` state.
     pub async fn create_agreement(&self, agreement: &AgreementProposal) -> Result<String> {
         self.client
-            .post("agreements/")
+            .post("agreements")
             .send_json(&agreement)
             .json()
             .await
@@ -123,14 +127,14 @@ impl RequestorApi {
 
     /// Fetches agreement with given agreement id.
     pub async fn get_agreement(&self, agreement_id: &str) -> Result<Agreement> {
-        let url = url_format!("agreements/{agreement_id}/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}", agreement_id);
         self.client.get(&url).send().json().await
     }
 
     /// Sends Agreement draft to the Provider.
     /// Signs Agreement self-created via `createAgreement` and sends it to the Provider.
     pub async fn confirm_agreement(&self, agreement_id: &str) -> Result<String> {
-        let url = url_format!("agreements/{agreement_id}/confirm/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}/confirm", agreement_id);
         self.client.post(&url).send().json().await
     }
 
@@ -154,20 +158,34 @@ impl RequestorApi {
     /// * `Cancelled` - Indicates that the Requestor himself has called
     /// `cancelAgreement`, which effectively stops the Agreement handshake.
     pub async fn wait_for_approval(&self, agreement_id: &str) -> Result<String> {
-        let url = url_format!("agreements/{agreement_id}/wait/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}/wait", agreement_id);
         self.client.post(&url).send().json().await
     }
 
     /// Cancels agreement.
     /// Causes the awaiting `waitForApproval` call to return with `Cancelled` response.
     pub async fn cancel_agreement(&self, agreement_id: &str) -> Result<()> {
-        let url = url_format!("agreements/{agreement_id}/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}", agreement_id);
         self.client.delete(&url).send().json().await
     }
 
     /// Terminates approved Agreement.
     pub async fn terminate_agreement(&self, agreement_id: &str) -> Result<String> {
-        let url = url_format!("agreements/{agreement_id}/terminate/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}/terminate", agreement_id);
         self.client.post(&url).send().json().await
+    }
+}
+
+impl WebInterface for RequestorApi {
+    fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url> {
+        if let Some(url) = std::env::var("YAGNA_MARKET_URL").ok() {
+            return Rc::new(Url::from_str(&url).unwrap());
+        }
+        let new_base = base_url.join("market-api/v1/").unwrap();
+        Rc::new(new_base)
+    }
+
+    fn from_client(client: WebClient) -> Self {
+        RequestorApi { client }
     }
 }
