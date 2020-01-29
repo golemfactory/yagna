@@ -45,7 +45,7 @@ impl ProviderApi {
         maxEvents: Option<i32>, // TODO: max_events
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
-            "offers/{subscription_id}/events/",
+            "offers/{subscription_id}/events",
             subscription_id,
             #[query] timeout,
             #[query] maxEvents
@@ -60,7 +60,7 @@ impl ProviderApi {
         proposal_id: &str,
     ) -> Result<Proposal> {
         let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}/",
+            "offers/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );
@@ -76,7 +76,7 @@ impl ProviderApi {
         proposal_id: &str,
     ) -> Result<String> {
         let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}/",
+            "offers/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );
@@ -94,7 +94,7 @@ impl ProviderApi {
         proposal_id: &str,
     ) -> Result<String> {
         let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}/offer/",
+            "offers/{subscription_id}/proposals/{proposal_id}/offer",
             subscription_id,
             proposal_id
         );
@@ -129,7 +129,7 @@ impl ProviderApi {
     ///
     /// **Note**: Mutually exclusive with `rejectAgreement`.
     pub async fn approve_agreement(&self, agreement_id: &str) -> Result<String> {
-        let url = url_format!("agreements/{agreement_id}/approve/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}/approve", agreement_id);
         self.client.post(&url).send().json().await
     }
 
@@ -140,19 +140,19 @@ impl ProviderApi {
     ///
     /// **Note**: Mutually exclusive with `approveAgreement`.
     pub async fn reject_agreement(&self, agreement_id: &str) -> Result<String> {
-        let url = url_format!("agreements/{agreement_id}/reject/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}/reject", agreement_id);
         self.client.post(&url).send().json().await
     }
 
     /// Terminates approved Agreement.
     pub async fn terminate_agreement(&self, agreement_id: &str) -> Result<String> {
-        let url = url_format!("agreements/{agreement_id}/terminate/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}/terminate", agreement_id);
         self.client.post(&url).send().json().await
     }
 
     /// Fetches agreement with given agreement id.
     pub async fn get_agreement(&self, agreement_id: &str) -> Result<Agreement> {
-        let url = url_format!("agreements/{agreement_id}/", agreement_id);
+        let url = url_format!("agreements/{agreement_id}", agreement_id);
         self.client.get(&url).send().json().await
     }
 }
