@@ -711,8 +711,8 @@ paths:
     put:
       tags:
         - requestor
-      summary: Ammend Allocation.
-      operationId: ammendAllocation
+      summary: Amend Allocation.
+      operationId: amendAllocation
       parameters:
         - $ref: '#/components/parameters/allocationId'
       requestBody:
