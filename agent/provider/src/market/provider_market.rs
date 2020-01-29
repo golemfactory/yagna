@@ -14,9 +14,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 // Temporrary
+use chrono::{Duration, Utc};
 use serde_json;
 use ya_agent_offer_model::OfferDefinition;
-use chrono::{Utc, Duration};
 use ya_client::web::WebClient;
 
 // =========================================== //
@@ -186,20 +186,18 @@ impl ProviderMarket {
 
                 //let offer = Proposal::new("".to_string(), serde_json::json!({}), "".to_string());
                 //let demand = Proposal::new("".to_string(), serde_json::json!({}), "".to_string());
-                let agreement_proposal = AgreementProposal::new("".to_string(), Utc::now() + Duration::weeks(2));
+                let agreement_proposal =
+                    AgreementProposal::new("".to_string(), Utc::now() + Duration::weeks(2));
 
                 self.process_agreement(subscription_id, agreement_proposal, &agreement_id)
                     .await?;
             }
+            _ => unimplemented!(),
         }
         Ok(())
     }
 
-    async fn process_proposal(
-        &self,
-        subscription_id: &str,
-        proposal: Proposal,
-    ) -> Result<()> {
+    async fn process_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
         let response = self.negotiator.react_to_proposal(&proposal);
         match response {
             Ok(action) => match action {
@@ -251,11 +249,7 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    async fn accept_proposal(
-        &self,
-        subscription_id: &str,
-        proposal: &Proposal,
-    ) -> Result<()> {
+    async fn accept_proposal(&self, subscription_id: &str, proposal: &Proposal) -> Result<()> {
         info!(
             "Accepting proposal [{:?}] without changes, subscription_id: {}.",
             proposal.proposal_id, subscription_id
@@ -264,7 +258,11 @@ impl ProviderMarket {
         // Note: Provider can't create agreement - only requestor can. We can accept
         // proposal, by resending the same offer as we got from requestor.
         self.market_api
-            .create_proposal_offer(&proposal, subscription_id, proposal.proposal_id.as_ref().unwrap())
+            .create_proposal_offer(
+                &proposal,
+                subscription_id,
+                proposal.proposal_id.as_ref().unwrap(),
+            )
             .await?;
         Ok(())
     }
@@ -276,16 +274,16 @@ impl ProviderMarket {
         );
 
         self.market_api
-            .create_proposal_offer(&proposal, subscription_id, proposal.proposal_id.as_ref().unwrap())
+            .create_proposal_offer(
+                &proposal,
+                subscription_id,
+                proposal.proposal_id.as_ref().unwrap(),
+            )
             .await?;
         Ok(())
     }
 
-    async fn reject_proposal(
-        &self,
-        subscription_id: &str,
-        proposal: &Proposal,
-    ) -> Result<()> {
+    async fn reject_proposal(&self, subscription_id: &str, proposal: &Proposal) -> Result<()> {
         info!(
             "Rejecting proposal [{:?}], subscription_id: {}.",
             proposal.proposal_id, subscription_id

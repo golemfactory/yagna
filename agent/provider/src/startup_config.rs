@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 use url::Url;
 use ya_client::web::{WebAuth, WebClient, WebClientBuilder};
-use ya_client::{market ,activity};
+use ya_client::{activity, market};
 
 #[derive(StructOpt)]
 pub struct StartupConfig {
@@ -20,10 +20,14 @@ pub struct StartupConfig {
 
 impl StartupConfig {
     pub fn market_client(&self) -> market::ProviderApi {
-        WebClient::with_token(&self.auth).unwrap().interface_at(self.market_url.clone())
+        WebClient::with_token(&self.auth)
+            .unwrap()
+            .interface_at(self.market_url.clone())
     }
 
     pub fn activity_client(&self) -> activity::ProviderApiClient {
-        WebClient::with_token(&self.auth).unwrap().interface_at(self.activity_url.clone())
+        WebClient::with_token(&self.auth)
+            .unwrap()
+            .interface_at(self.activity_url.clone())
     }
 }

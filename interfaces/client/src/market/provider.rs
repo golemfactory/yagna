@@ -1,12 +1,12 @@
 //! Provider part of Market API
 use std::sync::Arc;
 
-use crate::{web::WebClient, Result};
-use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 use crate::web::WebInterface;
+use crate::{web::WebClient, Result};
 use std::rc::Rc;
-use url::Url;
 use std::str::FromStr;
+use url::Url;
+use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 
 /// Bindings for Provider part of the Market API.
 pub struct ProviderApi {
@@ -161,7 +161,6 @@ impl ProviderApi {
     }
 }
 
-
 impl WebInterface for ProviderApi {
     fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url> {
         if let Some(url) = std::env::var("YAGNA_MARKET_URL").ok() {
@@ -171,6 +170,6 @@ impl WebInterface for ProviderApi {
     }
 
     fn from_client(client: WebClient) -> Self {
-        unimplemented!()
+        ProviderApi { client }
     }
 }

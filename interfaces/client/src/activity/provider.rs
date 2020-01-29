@@ -1,7 +1,9 @@
 //! Provider part of Activity API
-use crate::web::WebClient;
+use crate::web::{WebClient, WebInterface};
 use crate::{Error, Result};
+use std::rc::Rc;
 use std::sync::Arc;
+use url::Url;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 
 pub struct ProviderApiClient {
@@ -41,5 +43,15 @@ impl ProviderApiClient {
                 _ => Err(e),
             },
         }
+    }
+}
+
+impl WebInterface for ProviderApiClient {
+    fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url> {
+        base_url.join("activity-api/v1/").unwrap().into()
+    }
+
+    fn from_client(client: WebClient) -> Self {
+        ProviderApiClient { client }
     }
 }
