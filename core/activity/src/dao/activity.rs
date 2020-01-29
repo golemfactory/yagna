@@ -1,5 +1,5 @@
 use crate::dao::{last_insert_rowid, Result};
-use chrono::Local;
+use chrono::Utc;
 use diesel::expression::exists::exists;
 use diesel::prelude::*;
 use diesel::sql_types::{Integer, VarChar};
@@ -55,7 +55,7 @@ impl<'c> ActivityDao<'c> {
         let error_message: Option<String> = None;
         let vector_json: Option<String> = None;
         let state = serde_json::to_string(&State::New).unwrap();
-        let now = Local::now().naive_local();
+        let now = Utc::now().naive_utc();
 
         self.conn.transaction(|| {
             diesel::insert_into(dsl_state::activity_state)

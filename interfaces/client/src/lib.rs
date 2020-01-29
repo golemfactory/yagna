@@ -8,6 +8,7 @@ pub mod rest;
 
 pub mod activity;
 pub mod market;
+pub mod payment;
 
 pub mod error;
 pub use error::Error;

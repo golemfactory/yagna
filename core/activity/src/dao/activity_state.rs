@@ -1,5 +1,5 @@
 use crate::dao::{NotFoundAsOption, Result};
-use chrono::Local;
+use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
 use serde_json;
@@ -71,7 +71,7 @@ impl<'c> ActivityStateDao<'c> {
         use schema::activity_state::dsl as dsl_state;
 
         let state = serde_json::to_string(&state).unwrap();
-        let now = Local::now().naive_local();
+        let now = Utc::now().naive_utc();
 
         self.conn.transaction(|| {
             let num_updates = diesel::update(

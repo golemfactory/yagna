@@ -18,15 +18,14 @@ pub static ref CENTRAL_NET_HOST: String = env::var("CENTRAL_NET_HOST").unwrap_or
 // Bus service prefixes
 pub const PRIVATE_SERVICE: &str = "/private";
 pub const PUBLIC_SERVICE: &str = "/public";
-pub const NET_SERVICE_ID: &str = "/net";
 
 // services
 pub const ACTIVITY_SERVICE_ID: &str = "/activity";
 pub const APP_KEY_SERVICE_ID: &str = "/appkey";
 pub const IDENTITY_SERVICE_ID: &str = "/identity";
+pub const NET_SERVICE_ID: &str = "/net";
 
 // APIs
-pub const MARKET_API: &str = "/market-api/v1/";
 pub const ACTIVITY_API: &str = "/activity-api/v1";
-#[allow(dead_code)]
+pub const MARKET_API: &str = "/market-api/v1/";
 pub const PAYMENT_API: &str = "/payment-api/v1";

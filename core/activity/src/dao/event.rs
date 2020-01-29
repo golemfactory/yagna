@@ -1,5 +1,5 @@
 use crate::dao::{NotFoundAsOption, Result};
-use chrono::Local;
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel::sql_types::Timestamp;
 use std::cmp::min;
@@ -34,7 +34,7 @@ impl<'c> EventDao<'c> {
         use schema::activity_event::dsl as dsl_event;
         use schema::activity_event_type::dsl as dsl_type;
 
-        let now = Local::now().naive_local();
+        let now = Utc::now().naive_utc();
 
         self.conn.transaction(|| {
             diesel::insert_into(dsl_event::activity_event)

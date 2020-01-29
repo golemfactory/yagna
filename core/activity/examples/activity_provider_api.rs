@@ -1,7 +1,8 @@
 use actix_web::{middleware, App, HttpServer};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::migrations;
-use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR};
+use ya_service_api::constants::{ACTIVITY_API, YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR};
+use ya_service_api_web::scope::ExtendableScope;
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -13,12 +14,15 @@ async fn main() -> anyhow::Result<()> {
 
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
     ya_activity::provider::service::bind_gsb(&db);
-    ya_activity::provider::service::bind_gsb(&db);
 
     HttpServer::new(move || {
+        let activity = actix_web::web::scope(ACTIVITY_API)
+            .data(db.clone())
+            .extend(ya_activity::provider::extend_web_scope);
+
         App::new()
             .wrap(middleware::Logger::default())
-            .service(ya_activity::provider::web_scope(&db))
+            .service(activity)
     })
     .bind(*YAGNA_HTTP_ADDR)?
     .run()

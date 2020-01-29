@@ -1,4 +1,4 @@
-use awc::{error::SendRequestError, Client};
+use awc::Client;
 use futures::TryFutureExt;
 use serde_json;
 use std::{

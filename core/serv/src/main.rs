@@ -1,4 +1,4 @@
-use actix_web::{get, middleware, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use std::{
     convert::{TryFrom, TryInto},
@@ -14,7 +14,7 @@ use ya_service_api::{
     constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
     CliCtx, CommandOutput,
 };
-use ya_service_api_web::middleware::auth;
+use ya_service_api_web::middleware::{auth, Identity};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
@@ -160,12 +160,11 @@ impl ServiceCommand {
 
                 let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
 
-                db.apply_migration(ya_persistence::migrations::run_with_output)
-                    .unwrap()?;
+                db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 ya_identity::service::activate(&db).await?;
                 ya_activity::provider::service::bind_gsb(&db);
 
-                let default_id = bus::private_service(identity::IDENTITY_SERVICE_ID)
+                let default_id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByDefault)
                     .await
                     .map_err(anyhow::Error::msg)??
@@ -184,10 +183,8 @@ impl ServiceCommand {
                     App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .service(index)
-                        .service(ya_activity::provider::web_scope(&db))
-                        .service(ya_activity::requestor::control::web_scope(&db))
-                        .service(ya_activity::requestor::state::web_scope(&db))
+                        .service(ya_activity::api::web_scope(&db))
+                        .route("/me", web::get().to(me))
                 })
                 .bind(ctx.http_address())
                 .context(format!(
@@ -208,9 +205,8 @@ impl ServiceCommand {
     }
 }
 
-#[get("/")]
-async fn index() -> String {
-    format!("Hello {}!", clap::crate_description!())
+async fn me(id: Identity) -> impl Responder {
+    web::Json(id)
 }
 
 #[actix_rt::main]

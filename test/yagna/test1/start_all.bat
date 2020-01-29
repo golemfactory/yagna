@@ -1,0 +1,3 @@
+start start_net_mk1_hub.bat
+start start_provider_daemon.bat
+start start_requestor_daemon.bat

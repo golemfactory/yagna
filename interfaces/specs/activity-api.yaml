@@ -210,7 +210,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
-  /activity/events:
+  /events:
     get:
       tags:
       - provider

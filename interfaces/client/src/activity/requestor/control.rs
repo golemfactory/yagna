@@ -10,9 +10,9 @@ rest_interface! {
             &self,
             agreement_id: &str
         ) -> Result<String> {
-            let response = post("activity/").send_json( &agreement_id ).body();
+            let response = post("activity").send_json( &agreement_id ).json();
 
-            { Ok( String::from_utf8( response?.to_vec() )? ) }
+            response
         }
 
         /// Destroys given Activity.
@@ -20,7 +20,7 @@ rest_interface! {
             &self,
             #[path] activity_id: &str
         ) -> Result<()> {
-            let response = delete("activity/{activity_id}/").send().body();
+            let response = delete("activity/{activity_id}").send().body();
 
             { response.map(|_| ()) }
         }
@@ -31,7 +31,7 @@ rest_interface! {
             script: ExeScriptRequest,
             #[path] activity_id: &str
         ) -> Result<String> {
-            let response = post("activity/{activity_id}/state/").send_json( &script ).json();
+            let response = post("activity/{activity_id}/state").send_json( &script ).json();
 
             response
         }
@@ -44,7 +44,7 @@ rest_interface! {
             #[query] timeout: Option<i32>,
             #[query] max_count: Option<i32>
         ) -> Result<Vec<ExeScriptCommandResult>> {
-            let response = get("activity/{activity_id}/exec/{batch_id}/").send().json();
+            let response = get("activity/{activity_id}/exec/{batch_id}").send().json();
 
             response
         }

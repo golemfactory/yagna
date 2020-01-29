@@ -2,6 +2,7 @@
 members = [
     "agent/provider",
     "agent/requestor",
+    "agent/offer-model",
     "core/activity",
     "core/identity",
     "core/market",
@@ -24,6 +25,7 @@ members = [
     "service-bus/proto",
     "service-bus/router",
     "service-bus/util",
+    "utils/scheduler"
 ]
 
 [patch.crates-io]
@@ -41,3 +43,5 @@ ya-service-api = { path = "core/serv-api" }
 ya-service-api-cache = { path = "core/serv-api/cache" }
 ya-service-api-web = { path = "core/serv-api/web" }
 ya-service-bus = { path = "service-bus/bus/" }
+ya-client = { path = "interfaces/client" }
+ya-agent-offer-model = { path = "agent/offer-model" }

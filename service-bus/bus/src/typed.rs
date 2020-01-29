@@ -5,20 +5,28 @@ use futures::prelude::*;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
-use ya_service_api::constants::{PRIVATE_SERVICE, PUBLIC_SERVICE};
-
 pub fn bind_private<T: RpcMessage>(addr: &str, endpoint: impl RpcHandler<T> + 'static) -> Handle {
-    router()
-        .lock()
-        .unwrap()
-        .bind(PRIVATE_SERVICE, addr, endpoint)
+    let addr = format!("/private{}", addr);
+    router().lock().unwrap().bind(&addr, endpoint)
 }
 
 pub fn bind_public<T: RpcMessage>(addr: &str, endpoint: impl RpcHandler<T> + 'static) -> Handle {
-    router()
-        .lock()
-        .unwrap()
-        .bind(PUBLIC_SERVICE, addr, endpoint)
+    let addr = format!("/public{}", addr);
+    router().lock().unwrap().bind(&addr, endpoint)
+}
+
+#[inline]
+pub fn bind<T: RpcMessage>(addr: &str, endpoint: impl RpcHandler<T> + 'static) -> Handle {
+    router().lock().unwrap().bind(addr, endpoint)
+}
+
+#[inline]
+pub fn bind_with_caller<T: RpcMessage, Output, F>(addr: &str, f: F) -> Handle
+where
+    Output: Future<Output = Result<T::Item, T::Error>> + 'static,
+    F: FnMut(&str, T) -> Output + 'static,
+{
+    router().lock().unwrap().bind(addr, WithCaller(f))
 }
 
 #[derive(Clone)]
@@ -42,10 +50,10 @@ where
     }
 }
 
-pub fn private_service<T: RpcMessage + Unpin>(addr: &str) -> impl RpcEndpoint<T> {
+pub fn service<T: RpcMessage + Unpin>(addr: impl Into<String>) -> impl RpcEndpoint<T> {
     Forward {
         router: router(),
-        addr: format!("{}{}", PRIVATE_SERVICE, addr),
+        addr: addr.into(),
     }
 }
 
@@ -59,5 +67,20 @@ impl<
 
     fn handle(&mut self, _caller: &str, msg: T) -> Self::Result {
         self(msg)
+    }
+}
+
+struct WithCaller<F>(F);
+
+impl<
+        T: RpcMessage,
+        Output: Future<Output = Result<T::Item, T::Error>> + 'static,
+        F: FnMut(&str, T) -> Output + 'static,
+    > RpcHandler<T> for WithCaller<F>
+{
+    type Result = Output;
+
+    fn handle(&mut self, caller: &str, msg: T) -> Self::Result {
+        (self.0)(caller, msg)
     }
 }
