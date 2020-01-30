@@ -115,19 +115,21 @@ impl ProviderMarket {
 
         let offer = self.negotiator.create_offer(&msg.offer)?;
 
-        info!("Subscribing to events.");
+        info!("Subscribing to events...");
 
         let subscription_id = self.api.provider().subscribe(&offer).await?;
         self.offers.push(OfferSubscription {
-            subscription_id,
+            subscription_id: subscription_id.clone(),
             offer,
         });
+
+        info!("Subscribed to events for offer [{}].", subscription_id);
         Ok(())
     }
 
     #[allow(dead_code)]
     pub async fn onshutdown(&mut self, _msg: OnShutdown) -> Result<()> {
-        info!("Unsubscribing events.");
+        info!("Unsubscribing events for...");
 
         for offer in self.offers.iter() {
             self.api
@@ -135,6 +137,7 @@ impl ProviderMarket {
                 .unsubscribe(&offer.subscription_id)
                 .await?;
         }
+        info!("Unsubscribing events finished.");
         Ok(())
     }
 
