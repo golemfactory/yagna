@@ -1,6 +1,21 @@
 use actix::prelude::dev::ToEnvelope;
 use actix::prelude::*;
 use log::error;
+use anyhow::Result;
+
+
+/// Trait that allows to extract error type ok type from Result.
+/// Could use std::ops::Try, but it is marked as unstable.
+pub trait ResultTypeGetter {
+    type ErrorType;
+    type OkType;
+}
+
+impl<T, E> ResultTypeGetter for anyhow::Result<T, E> {
+    type ErrorType = E;
+    type OkType = T;
+}
+
 
 /// Generates actix handler function, that forwards function call
 /// to class member function ($ForwardFun). $ForwardFun should be async
@@ -29,7 +44,10 @@ macro_rules! gen_actix_handler_async {
 macro_rules! gen_actix_handler_sync {
     ($ActorType:ty, $MessageType:ty, $ForwardFun:tt, $ActorImpl:tt) => {
         impl Handler<$MessageType> for $ActorType {
-            type Result = ActorResponse<Self, (), Error>;
+            type Result = ActorResponse<
+                Self,
+                <<$MessageType as Message>::Result as ResultTypeGetter>::OkType,
+                <<$MessageType as Message>::Result as ResultTypeGetter>::ErrorType>;
 
             fn handle(&mut self, msg: $MessageType, _ctx: &mut Context<Self>) -> Self::Result {
                 ActorResponse::reply((*self.$ActorImpl).borrow_mut().$ForwardFun(msg))
@@ -54,3 +72,5 @@ where
     };
     Arbiter::spawn(future);
 }
+
+

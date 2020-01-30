@@ -2,6 +2,7 @@ use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 use crate::market::provider_market::AgreementSigned;
 use crate::{gen_actix_handler_sync};
+use crate::utils::actix_handler::ResultTypeGetter;
 
 use ya_client::activity::ProviderApiClient;
 use ya_model::activity::ProviderEvent;
