@@ -2,37 +2,32 @@ use actix::prelude::dev::ToEnvelope;
 use actix::prelude::*;
 use log::error;
 
+/// Trait that allows to extract error type ok type from Result.
+/// Could use std::ops::Try, but it is marked as unstable.
+pub trait ResultTypeGetter {
+    type ErrorType;
+    type OkType;
+}
+
+impl<T, E> ResultTypeGetter for anyhow::Result<T, E> {
+    type ErrorType = E;
+    type OkType = T;
+}
+
 /// Generates actix handler function, that forwards function call
-/// to class member function ($ForwardFun). $ForwardFun should be async
-/// function. $ActorType should be structure that wraps implementation
-/// inside Rc<RefCell<>>. $ActorImpl is field inside $ActorType that should be used
-/// as self for $ForwardFun.
+/// to class member function ($ForwardFun).
 #[macro_export]
-macro_rules! gen_actix_handler_async {
-    ($ActorType:ty, $MessageType:ty, $ForwardFun:tt, $ActorImpl:tt) => {
+macro_rules! forward_actix_handler {
+    ($ActorType:ty, $MessageType:ty, $ForwardFun:tt) => {
         impl Handler<$MessageType> for $ActorType {
-            type Result = ActorResponse<Self, (), Error>;
+            type Result = ActorResponse<
+                Self,
+                <<$MessageType as Message>::Result as ResultTypeGetter>::OkType,
+                <<$MessageType as Message>::Result as ResultTypeGetter>::ErrorType,
+            >;
 
             fn handle(&mut self, msg: $MessageType, _ctx: &mut Context<Self>) -> Self::Result {
-                let actor_impl = self.$ActorImpl.clone();
-                ActorResponse::r#async(
-                    async move { (*actor_impl).borrow_mut().$ForwardFun(msg).await }
-                        .into_actor(self),
-                )
-            }
-        }
-    };
-} // gen_actix_handler_async
-
-/// Check docs for gen_actix_handler_async.
-#[macro_export]
-macro_rules! gen_actix_handler_sync {
-    ($ActorType:ty, $MessageType:ty, $ForwardFun:tt, $ActorImpl:tt) => {
-        impl Handler<$MessageType> for $ActorType {
-            type Result = ActorResponse<Self, (), Error>;
-
-            fn handle(&mut self, msg: $MessageType, _ctx: &mut Context<Self>) -> Self::Result {
-                ActorResponse::reply((*self.$ActorImpl).borrow_mut().$ForwardFun(msg))
+                ActorResponse::reply(self.$ForwardFun(msg))
             }
         }
     };

@@ -1,7 +1,8 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
-use crate::gen_actix_handler_sync;
+use crate::forward_actix_handler;
 use crate::market::provider_market::AgreementSigned;
+use crate::utils::actix_handler::ResultTypeGetter;
 
 use ya_client::activity::ActivityProviderApi;
 use ya_model::activity::ProviderEvent;
@@ -10,11 +11,9 @@ use actix::prelude::*;
 
 use anyhow::{Error, Result};
 use log::{error, info, warn};
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::Arc;
 
 // =========================================== //
@@ -88,13 +87,13 @@ impl TaskRunner {
 
     pub async fn collect_events(
         client: Arc<ActivityProviderApi>,
-        notify: Addr<TaskRunnerActor>,
+        addr: Addr<TaskRunner>,
     ) -> Result<()> {
         let result = TaskRunner::query_events(client).await;
         match result {
             Err(error) => error!("Can't query activity events. Error: {}", error),
             Ok(activity_events) => {
-                TaskRunner::dispatch_events(&activity_events, notify).await;
+                TaskRunner::dispatch_events(&activity_events, addr).await;
             }
         }
 
@@ -105,7 +104,7 @@ impl TaskRunner {
     // TaskRunner internals - events dispatching
     // =========================================== //
 
-    async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunnerActor>) {
+    async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunner>) {
         info!("Collected {} activity events. Processing...", events.len());
 
         for event in events.iter() {
@@ -115,7 +114,7 @@ impl TaskRunner {
                     agreement_id,
                 } => {
                     if let Err(error) = notify
-                        .send(CreateActivity::new(&activity_id, &agreement_id))
+                        .send(CreateActivity::new(activity_id, agreement_id))
                         .await
                     {
                         warn!("{}", error);
@@ -258,47 +257,20 @@ impl TaskRunner {
 // Actix stuff
 // =========================================== //
 
-pub struct TaskRunnerActor {
-    runner: Rc<RefCell<TaskRunner>>,
-}
-
-impl Actor for TaskRunnerActor {
+impl Actor for TaskRunner {
     type Context = Context<Self>;
 }
 
-impl TaskRunnerActor {
-    pub fn new(client: ActivityProviderApi) -> TaskRunnerActor {
-        TaskRunnerActor {
-            runner: Rc::new(RefCell::new(TaskRunner::new(client))),
-        }
-    }
-}
+forward_actix_handler!(TaskRunner, AgreementSigned, on_signed_agreement);
+forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
+forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
+forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 
-gen_actix_handler_sync!(
-    TaskRunnerActor,
-    AgreementSigned,
-    on_signed_agreement,
-    runner
-);
-gen_actix_handler_sync!(
-    TaskRunnerActor,
-    InitializeExeUnits,
-    initialize_exeunits,
-    runner
-);
-gen_actix_handler_sync!(TaskRunnerActor, CreateActivity, on_create_activity, runner);
-gen_actix_handler_sync!(
-    TaskRunnerActor,
-    DestroyActivity,
-    on_destroy_activity,
-    runner
-);
-
-impl Handler<UpdateActivity> for TaskRunnerActor {
+impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, _msg: UpdateActivity, ctx: &mut Context<Self>) -> Self::Result {
-        let client = self.runner.borrow().api.clone();
+        let client = self.api.clone();
         let addr = ctx.address();
 
         ActorResponse::r#async(

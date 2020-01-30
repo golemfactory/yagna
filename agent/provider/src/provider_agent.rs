@@ -1,7 +1,7 @@
 use ya_client::Result;
 
-use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
-use crate::market::{CreateOffer, ProviderMarketActor};
+use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
+use crate::market::{CreateOffer, ProviderMarket};
 use crate::startup_config::StartupConfig;
 use crate::utils::actix_handler::send_message;
 use crate::utils::actix_signal::Subscribe;
@@ -15,8 +15,8 @@ use std::time::Duration;
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
 
 pub struct ProviderAgent {
-    market: Addr<ProviderMarketActor>,
-    runner: Addr<TaskRunnerActor>,
+    market: Addr<ProviderMarket>,
+    runner: Addr<TaskRunner>,
     node_info: NodeInfo,
     service_info: ServiceInfo,
     exe_unit_path: String,
@@ -24,8 +24,8 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
-        let market = ProviderMarketActor::new(config.market_client()?, "AcceptAll").start();
-        let runner = TaskRunnerActor::new(config.activity_client()?).start();
+        let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
+        let runner = TaskRunner::new(config.activity_client()?).start();
 
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();
