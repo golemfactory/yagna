@@ -1,7 +1,7 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::utils::actix_signal::{SignalSlot, Subscribe};
-use crate::gen_actix_handler_sync;
+use crate::forward_actix_handler;
 use crate::utils::actix_handler::ResultTypeGetter;
 
 use ya_client::market::ApiClient;
@@ -457,15 +457,15 @@ impl Handler<OnShutdown> for ProviderMarket {
 }
 
 
-gen_actix_handler_sync!(ProviderMarket, GotProposal, on_proposal);
-gen_actix_handler_sync!(ProviderMarket, GotAgreement, on_agreement);
-gen_actix_handler_sync!(ProviderMarket, OnOfferSubscribed, offer_subscribed);
-gen_actix_handler_sync!(
+forward_actix_handler!(ProviderMarket, GotProposal, on_proposal);
+forward_actix_handler!(ProviderMarket, GotAgreement, on_agreement);
+forward_actix_handler!(ProviderMarket, OnOfferSubscribed, offer_subscribed);
+forward_actix_handler!(
     ProviderMarket,
     Subscribe<AgreementSigned>,
     on_subscribe
 );
-gen_actix_handler_sync!(ProviderMarket, OnAgreementSigned, on_agreement_signed);
+forward_actix_handler!(ProviderMarket, OnAgreementSigned, on_agreement_signed);
 
 
 // =========================================== //

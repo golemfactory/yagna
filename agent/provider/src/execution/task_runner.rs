@@ -1,7 +1,7 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 use crate::market::provider_market::AgreementSigned;
-use crate::{gen_actix_handler_sync};
+use crate::{forward_actix_handler};
 use crate::utils::actix_handler::ResultTypeGetter;
 
 use ya_client::activity::ProviderApiClient;
@@ -253,22 +253,22 @@ impl Actor for TaskRunner {
     type Context = Context<Self>;
 }
 
-gen_actix_handler_sync!(
+forward_actix_handler!(
     TaskRunner,
     AgreementSigned,
     on_signed_agreement
 );
-gen_actix_handler_sync!(
+forward_actix_handler!(
     TaskRunner,
     InitializeExeUnits,
     initialize_exeunits
 );
-gen_actix_handler_sync!(
+forward_actix_handler!(
     TaskRunner,
     CreateActivity,
     on_create_activity
 );
-gen_actix_handler_sync!(
+forward_actix_handler!(
     TaskRunner,
     DestroyActivity,
     on_destroy_activity

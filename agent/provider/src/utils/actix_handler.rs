@@ -19,7 +19,7 @@ impl<T, E> ResultTypeGetter for anyhow::Result<T, E> {
 /// Generates actix handler function, that forwards function call
 /// to class member function ($ForwardFun).
 #[macro_export]
-macro_rules! gen_actix_handler_sync {
+macro_rules! forward_actix_handler {
     ($ActorType:ty, $MessageType:ty, $ForwardFun:tt) => {
         impl Handler<$MessageType> for $ActorType {
             type Result = ActorResponse<
