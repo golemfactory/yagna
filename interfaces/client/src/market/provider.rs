@@ -1,7 +1,7 @@
 //! Provider part of Market API
 use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 
-use crate::{web::WebClient, web::WebInterface, Result};
+use crate::{web::WebClient, web::WebInterface, Error, Result};
 
 /// Bindings for Provider part of the Market API.
 pub struct MarketProviderApi {
@@ -52,7 +52,11 @@ impl MarketProviderApi {
             #[query] timeout,
             #[query] maxEvents
         );
-        self.client.get(&url).send().json().await
+
+        match self.client.get(&url).send().json().await {
+            Err(Error::TimeoutError{..}) => Ok(Vec::new()),
+            x => x
+        }
     }
 
     /// Fetches Proposal (Demand) with given id.
