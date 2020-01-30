@@ -1,3 +1,5 @@
+pub mod service;
+
 use std::net::ToSocketAddrs;
 
 use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE, PUBLIC_SERVICE};

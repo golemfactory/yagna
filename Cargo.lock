@@ -2785,6 +2785,7 @@ dependencies = [
  "ya-core-model 0.1.0",
  "ya-sb-router 0.1.0",
  "ya-service-api 0.1.1",
+ "ya-service-api-interfaces 0.1.0",
  "ya-service-bus 0.2.0",
 ]
 

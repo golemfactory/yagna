@@ -8,15 +8,13 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 
-use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{
-    constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
+    constants::{YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
     CliCtx, CommandOutput,
 };
 use ya_service_api_derive::services;
 use ya_service_api_web::middleware::{auth, Identity};
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -113,6 +111,8 @@ enum Services {
     Identity(ya_identity::service::Identity),
     #[enable(gsb, rest)]
     Activity(ya_activity::service::Activity),
+    #[enable(gsb)]
+    Net(ya_net::service::Net<DbExecutor>),
 }
 
 #[derive(StructOpt, Debug)]
@@ -168,21 +168,6 @@ impl ServiceCommand {
 
                 services::db(&db).await?;
                 services::gsb(&db).await?;
-
-                let default_id = bus::service(identity::BUS_ID)
-                    .send(identity::Get::ByDefault)
-                    .await
-                    .map_err(anyhow::Error::msg)??
-                    .ok_or(anyhow::Error::msg("no default identity"))?
-                    .node_id
-                    .to_string();
-                log::info!("using default identity as network id: {:?}", default_id);
-                ya_net::bind_remote(&*CENTRAL_NET_HOST, &default_id)
-                    .await
-                    .context(format!(
-                        "Error binding network service at {} for {}",
-                        *CENTRAL_NET_HOST, default_id
-                    ))?;
 
                 HttpServer::new(move || {
                     let app = App::new()
