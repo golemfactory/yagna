@@ -1,17 +1,17 @@
 use structopt::StructOpt;
 use url::Url;
-use ya_client::web::WebClient;
-use ya_client::{activity, market};
+use ya_client::{activity::ActivityProviderApi, market::MarketProviderApi, web::WebClient, Result};
+use ya_model::{activity::YAGNA_ACTIVITY_URL_ENV_VAR, market::YAGNA_MARKET_URL_ENV_VAR};
 
 #[derive(StructOpt)]
 pub struct StartupConfig {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
     pub auth: String,
     ///
-    #[structopt(long = "market-url", env = "YAGNA_MARKET_URL")]
+    #[structopt(long = "market-url", env = YAGNA_MARKET_URL_ENV_VAR)]
     market_url: Url,
     ///
-    #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
+    #[structopt(long = "activity-url", env = YAGNA_ACTIVITY_URL_ENV_VAR)]
     activity_url: Url,
     ///
     #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]
@@ -19,15 +19,11 @@ pub struct StartupConfig {
 }
 
 impl StartupConfig {
-    pub fn market_client(&self) -> market::ProviderApi {
-        WebClient::with_token(&self.auth)
-            .unwrap()
-            .interface_at(self.market_url.clone())
+    pub fn market_client(&self) -> Result<MarketProviderApi> {
+        Ok(WebClient::with_token(&self.auth)?.interface_at(self.market_url.clone()))
     }
 
-    pub fn activity_client(&self) -> activity::ProviderApiClient {
-        WebClient::with_token(&self.auth)
-            .unwrap()
-            .interface_at(self.activity_url.clone())
+    pub fn activity_client(&self) -> Result<ActivityProviderApi> {
+        Ok(WebClient::with_token(&self.auth)?.interface_at(self.activity_url.clone()))
     }
 }

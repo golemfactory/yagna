@@ -1,16 +1,20 @@
 pub mod agreement;
-pub use self::agreement::Agreement;
 pub mod agreement_proposal;
-pub use self::agreement_proposal::AgreementProposal;
 pub mod demand;
-pub use self::demand::Demand;
 pub mod error;
-pub use self::error::Error;
 pub mod event;
-pub use self::event::{ProviderEvent, RequestorEvent};
 pub mod offer;
-pub use self::offer::Offer;
 pub mod property_query;
-pub use self::property_query::PropertyQuery;
 pub mod proposal;
+
+pub use self::agreement::Agreement;
+pub use self::agreement_proposal::AgreementProposal;
+pub use self::demand::Demand;
+pub use self::error::Error;
+pub use self::event::{ProviderEvent, RequestorEvent};
+pub use self::offer::Offer;
+pub use self::property_query::PropertyQuery;
 pub use self::proposal::Proposal;
+
+pub const MARKET_API: &str = "/market-api/v1/";
+pub const YAGNA_MARKET_URL_ENV_VAR: &str = "YAGNA_MARKET_URL";

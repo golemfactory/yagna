@@ -1,27 +1,26 @@
 //! Provider part of Market API
-
-use crate::web::WebInterface;
-use crate::{web::WebClient, Result};
-use std::rc::Rc;
-use std::str::FromStr;
-use url::Url;
 use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 
+use crate::{web::WebClient, web::WebInterface, Result};
+
 /// Bindings for Provider part of the Market API.
-pub struct ProviderApi {
+pub struct MarketProviderApi {
     client: WebClient,
 }
 
-impl ProviderApi {
-    pub fn new(client: &WebClient) -> Self {
-        Self {
-            client: client.clone(),
-        }
-    }
+impl WebInterface for MarketProviderApi {
+    const API_URL_ENV_VAR: &'static str = super::YAGNA_MARKET_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = super::MARKET_API;
 
+    fn from(client: WebClient) -> Self {
+        MarketProviderApi { client }
+    }
+}
+
+impl MarketProviderApi {
     /// Publish Provider’s service capabilities (`Offer`) on the market to declare an
     /// interest in Demands meeting specified criteria.
-    pub async fn subscribe_offer(&self, offer: &Offer) -> Result<String> {
+    pub async fn subscribe(&self, offer: &Offer) -> Result<String> {
         self.client.post("offers").send_json(&offer).json().await
     }
 
@@ -31,7 +30,7 @@ impl ProviderApi {
     /// **Note**: this will terminate all pending `collectDemands` calls on this subscription.
     /// This implies, that client code should not `unsubscribeOffer` before it has received
     /// all expected/useful inputs from `collectDemands`.
-    pub async fn unsubscribe_offer(&self, subscription_id: &str) -> Result<String> {
+    pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
         let url = url_format!("offers/{subscription_id}", subscription_id);
         self.client.delete(&url).send().json().await
     }
@@ -40,7 +39,7 @@ impl ProviderApi {
     /// published by the Provider via  [`subscribe`](#method.subscribe).
     /// Returns collection of at most `max_events` `ProviderEvents` or times out.
     #[rustfmt::skip]
-    pub async fn collect_demands(
+    pub async fn collect(
         &self,
         subscription_id: &str,
         timeout: Option<i32>,
@@ -57,11 +56,7 @@ impl ProviderApi {
     }
 
     /// Fetches Proposal (Demand) with given id.
-    pub async fn get_proposal_demand(
-        &self,
-        subscription_id: &str,
-        proposal_id: &str,
-    ) -> Result<Proposal> {
+    pub async fn get_proposal(&self, subscription_id: &str, proposal_id: &str) -> Result<Proposal> {
         let url = url_format!(
             "offers/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
@@ -73,7 +68,7 @@ impl ProviderApi {
     /// Rejects Proposal (Demand).
     /// Effectively ends a Negotiation chain - it explicitly indicates that the sender
     /// will not create another counter-Proposal.
-    pub async fn reject_proposal_demand(
+    pub async fn reject_proposal(
         &self,
         subscription_id: &str,
         proposal_id: &str,
@@ -90,7 +85,7 @@ impl ProviderApi {
     /// Creates and sends a modified version of original Offer (a
     /// counter-proposal) adjusted to previously received Proposal (ie. Demand).
     /// Changes Proposal state to `Draft`. Returns created Proposal id.
-    pub async fn create_proposal_offer(
+    pub async fn counter_proposal(
         &self,
         proposal: &Proposal,
         subscription_id: &str,
@@ -157,18 +152,5 @@ impl ProviderApi {
     pub async fn get_agreement(&self, agreement_id: &str) -> Result<Agreement> {
         let url = url_format!("agreements/{agreement_id}", agreement_id);
         self.client.get(&url).send().json().await
-    }
-}
-
-impl WebInterface for ProviderApi {
-    fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url> {
-        if let Some(url) = std::env::var("YAGNA_MARKET_URL").ok() {
-            return Rc::new(Url::from_str(&url).unwrap());
-        }
-        base_url.join("market-api/v1/").unwrap().into()
-    }
-
-    fn from_client(client: WebClient) -> Self {
-        ProviderApi { client }
     }
 }

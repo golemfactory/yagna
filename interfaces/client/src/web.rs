@@ -5,11 +5,10 @@ use awc::{
 };
 use bytes::Bytes;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{str::FromStr, time::Duration};
+use std::{rc::Rc, str::FromStr, time::Duration};
 use url::{form_urlencoded, Url};
 
 use crate::{Error, Result};
-use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -25,9 +24,17 @@ pub struct WebClient {
 }
 
 pub trait WebInterface {
-    fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url>;
+    const API_URL_ENV_VAR: &'static str;
+    const API_SUFFIX: &'static str;
 
-    fn from_client(client: WebClient) -> Self;
+    fn rebase_service_url(base_url: Rc<Url>) -> Result<Rc<Url>> {
+        if let Some(url) = std::env::var(Self::API_URL_ENV_VAR).ok() {
+            return Ok(Url::from_str(&url)?.into());
+        }
+        Ok(base_url.join(Self::API_SUFFIX)?.into())
+    }
+
+    fn from(client: WebClient) -> Self;
 }
 
 pub struct WebRequest<T> {
@@ -75,15 +82,15 @@ impl WebClient {
         self.request(Method::DELETE, url)
     }
 
-    pub fn interface<T: WebInterface>(&self) -> T {
-        let base_url = T::rebase_service_url(self.base_url.clone());
+    pub fn interface<T: WebInterface>(&self) -> Result<T> {
+        let base_url = T::rebase_service_url(self.base_url.clone())?;
         let awc = self.awc.clone();
-        T::from_client(WebClient { base_url, awc })
+        Ok(T::from(WebClient { base_url, awc }))
     }
 
     pub fn interface_at<T: WebInterface>(&self, base_url: Url) -> T {
         let awc = self.awc.clone();
-        T::from_client(WebClient {
+        T::from(WebClient {
             base_url: base_url.into(),
             awc,
         })
@@ -209,7 +216,7 @@ impl WebClientBuilder {
         Ok(WebClient {
             base_url: Rc::new(Url::parse(&format!(
                 "http://{}",
-                self.host_port.unwrap_or_else(|| "127.0.0.1".into())
+                self.host_port.unwrap_or_else(|| "127.0.0.1:5001".into())
             ))?),
             awc: builder.finish(),
         })

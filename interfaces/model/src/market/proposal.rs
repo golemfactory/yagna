@@ -43,6 +43,10 @@ impl Proposal {
             prev_proposal_id: None,
         }
     }
+
+    pub fn id(&self) -> Result<&String, String> {
+        self.proposal_id.as_ref().ok_or("no proposal id".into())
+    }
 }
 
 /// * `Initial` - proposal arrived from the market as response to subscription

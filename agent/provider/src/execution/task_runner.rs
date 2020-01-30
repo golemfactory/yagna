@@ -3,7 +3,7 @@ use super::task::Task;
 use crate::gen_actix_handler_sync;
 use crate::market::provider_market::AgreementSigned;
 
-use ya_client::activity::ProviderApiClient;
+use ya_client::activity::ActivityProviderApi;
 use ya_model::activity::ProviderEvent;
 
 use actix::prelude::*;
@@ -59,7 +59,7 @@ struct DestroyActivity {
 // =========================================== //
 
 pub struct TaskRunner {
-    api: Arc<ProviderApiClient>,
+    api: Arc<ActivityProviderApi>,
     registry: ExeUnitsRegistry,
     /// Spawned tasks.
     tasks: Vec<Task>,
@@ -68,7 +68,7 @@ pub struct TaskRunner {
 }
 
 impl TaskRunner {
-    pub fn new(client: ProviderApiClient) -> TaskRunner {
+    pub fn new(client: ActivityProviderApi) -> TaskRunner {
         TaskRunner {
             api: Arc::new(client),
             registry: ExeUnitsRegistry::new(),
@@ -87,7 +87,7 @@ impl TaskRunner {
     }
 
     pub async fn collect_events(
-        client: Arc<ProviderApiClient>,
+        client: Arc<ActivityProviderApi>,
         notify: Addr<TaskRunnerActor>,
     ) -> Result<()> {
         let result = TaskRunner::query_events(client).await;
@@ -136,7 +136,7 @@ impl TaskRunner {
         }
     }
 
-    async fn query_events(client: Arc<ProviderApiClient>) -> Result<Vec<ProviderEvent>> {
+    async fn query_events(client: Arc<ActivityProviderApi>) -> Result<Vec<ProviderEvent>> {
         Ok(client.get_activity_events(Some(3)).await?)
     }
 
@@ -267,7 +267,7 @@ impl Actor for TaskRunnerActor {
 }
 
 impl TaskRunnerActor {
-    pub fn new(client: ProviderApiClient) -> TaskRunnerActor {
+    pub fn new(client: ActivityProviderApi) -> TaskRunnerActor {
         TaskRunnerActor {
             runner: Rc::new(RefCell::new(TaskRunner::new(client))),
         }

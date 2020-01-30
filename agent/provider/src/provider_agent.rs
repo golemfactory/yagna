@@ -10,7 +10,6 @@ use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::path::PathBuf;
-
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
@@ -25,9 +24,8 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
-        let market = ProviderMarketActor::new(config.market_client(), "AcceptAll").start();
-
-        let runner = TaskRunnerActor::new(config.activity_client()).start();
+        let market = ProviderMarketActor::new(config.market_client()?, "AcceptAll").start();
+        let runner = TaskRunnerActor::new(config.activity_client()?).start();
 
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();

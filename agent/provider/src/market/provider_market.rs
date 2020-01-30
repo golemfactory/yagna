@@ -3,8 +3,8 @@ use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::utils::actix_signal::{SignalSlot, Subscribe};
 use crate::{gen_actix_handler_async, gen_actix_handler_sync};
 
-use ya_client::market::ProviderApi;
-use ya_model::market::{AgreementProposal, Offer, Proposal, ProviderEvent};
+use ya_client::market::MarketProviderApi;
+use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -14,8 +14,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 // Temporrary
-use chrono::{Duration, Utc};
-
 use ya_agent_offer_model::OfferDefinition;
 
 // =========================================== //
@@ -61,7 +59,7 @@ struct OfferSubscription {
 /// Manages market api communication and forwards proposal to implementation of market strategy.
 pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
-    market_api: ProviderApi,
+    market_api: MarketProviderApi,
     offers: Vec<OfferSubscription>,
 
     /// External actors can listen on this signal.
@@ -73,7 +71,7 @@ impl ProviderMarket {
     // Initialization
     // =========================================== //
 
-    pub fn new(market_api: ProviderApi, negotiator_type: &str) -> ProviderMarket {
+    pub fn new(market_api: MarketProviderApi, negotiator_type: &str) -> ProviderMarket {
         let negotiator = create_negotiator(negotiator_type);
         return ProviderMarket {
             market_api,
@@ -90,7 +88,7 @@ impl ProviderMarket {
 
         info!("Subscribing to events.");
 
-        let subscription_id = self.market_api.subscribe_offer(&offer).await?;
+        let subscription_id = self.market_api.subscribe(&offer).await?;
         self.offers.push(OfferSubscription {
             subscription_id,
             offer,
@@ -103,9 +101,7 @@ impl ProviderMarket {
         info!("Unsubscribing events.");
 
         for offer in self.offers.iter() {
-            self.market_api
-                .unsubscribe_offer(&offer.subscription_id)
-                .await?;
+            self.market_api.unsubscribe(&offer.subscription_id).await?;
         }
         Ok(())
     }
@@ -130,7 +126,7 @@ impl ProviderMarket {
     async fn query_events(&self, subscription_id: &str) -> Result<Vec<ProviderEvent>> {
         Ok(self
             .market_api
-            .collect_demands(subscription_id, Some(1), Some(2))
+            .collect(subscription_id, Some(1), Some(2))
             .await?)
     }
 
@@ -158,46 +154,31 @@ impl ProviderMarket {
 
     async fn dispatch_event(&self, subscription_id: &str, event: &ProviderEvent) -> Result<()> {
         match event {
-            ProviderEvent::ProposalEvent { proposal, .. } => {
-                let proposal_id = proposal.proposal_id.as_ref().unwrap();
+            ProviderEvent::ProposalEvent {
+                event_date: _,
+                proposal,
+            } => {
+                let proposal_id = &proposal.id().map_err(Error::msg)?;
 
                 info!("Got demand [id={}].", proposal_id);
 
-                let agreement_proposal = self
-                    .market_api
-                    .get_proposal_demand(subscription_id, proposal_id)
-                    .await?;
-
-                self.process_proposal(subscription_id, agreement_proposal)
-                    .await?;
+                self.process_proposal(subscription_id, proposal).await?;
             }
             ProviderEvent::AgreementEvent {
-                agreement, /**demand,**/
-                ..
+                event_date: _,
+                agreement, /*demand,*/
             } => {
-                let agreement_id = &agreement.agreement_id;
-                info!("Got agreement [id={}].", agreement_id);
+                info!("Got agreement [id={}].", agreement.agreement_id);
 
-                // Temporary workaround. Update after new market api will aprear.
-                //                let agreement_proposal = self.api.provider()
-                //                    .get_proposal(subscription_id, demand.id)
-                //                    .await?;
-
-                //let offer = Proposal::new("".to_string(), serde_json::json!({}), "".to_string());
-                //let demand = Proposal::new("".to_string(), serde_json::json!({}), "".to_string());
-                let agreement_proposal =
-                    AgreementProposal::new("".to_string(), Utc::now() + Duration::weeks(2));
-
-                self.process_agreement(subscription_id, agreement_proposal, &agreement_id)
-                    .await?;
+                self.process_agreement(subscription_id, agreement).await?;
             }
             _ => unimplemented!(),
         }
         Ok(())
     }
 
-    async fn process_proposal(&self, subscription_id: &str, proposal: Proposal) -> Result<()> {
-        let response = self.negotiator.react_to_proposal(&proposal);
+    async fn process_proposal(&self, subscription_id: &str, proposal: &Proposal) -> Result<()> {
+        let response = self.negotiator.react_to_proposal(proposal);
         match response {
             Ok(action) => match action {
                 ProposalResponse::AcceptProposal => {
@@ -206,9 +187,11 @@ impl ProviderMarket {
                 ProposalResponse::CounterProposal { proposal } => {
                     self.counter_proposal(subscription_id, proposal).await?
                 }
-                ProposalResponse::IgnoreProposal => info!("Ignoring proposal {:?}.", proposal),
+                ProposalResponse::IgnoreProposal => {
+                    info!("Ignoring proposal {:?}.", proposal.proposal_id)
+                }
                 ProposalResponse::RejectProposal => {
-                    self.reject_proposal(subscription_id, &proposal).await?
+                    self.reject_proposal(subscription_id, proposal).await?
                 }
             },
             Err(error) => error!(
@@ -219,26 +202,22 @@ impl ProviderMarket {
         Ok(())
     }
 
-    async fn process_agreement(
-        &self,
-        subscription_id: &str,
-        agreement: AgreementProposal,
-        agreement_id: &str,
-    ) -> Result<()> {
-        let response = self.negotiator.react_to_agreement(&agreement);
+    async fn process_agreement(&self, subscription_id: &str, agreement: &Agreement) -> Result<()> {
+        let response = self.negotiator.react_to_agreement(agreement);
         match response {
             Ok(action) => match action {
                 AgreementResponse::ApproveAgreement => {
-                    self.approve_agreement(subscription_id, agreement_id)
+                    self.approve_agreement(subscription_id, &agreement.agreement_id)
                         .await?
                 }
                 AgreementResponse::RejectAgreement => {
-                    self.reject_agreement(subscription_id, agreement_id).await?
+                    self.reject_agreement(subscription_id, &agreement.agreement_id)
+                        .await?
                 }
             },
             Err(error) => error!(
                 "Negotiator error while processing agreement {}. Error: {}",
-                agreement_id, error
+                agreement.agreement_id, error
             ),
         }
         Ok(())
@@ -257,10 +236,10 @@ impl ProviderMarket {
         // Note: Provider can't create agreement - only requestor can. We can accept
         // proposal, by resending the same offer as we got from requestor.
         self.market_api
-            .create_proposal_offer(
-                &proposal,
+            .counter_proposal(
+                proposal,
                 subscription_id,
-                proposal.proposal_id.as_ref().unwrap(),
+                proposal.id().map_err(Error::msg)?,
             )
             .await?;
         Ok(())
@@ -273,10 +252,10 @@ impl ProviderMarket {
         );
 
         self.market_api
-            .create_proposal_offer(
+            .counter_proposal(
                 &proposal,
                 subscription_id,
-                proposal.proposal_id.as_ref().unwrap(),
+                &proposal.id().map_err(Error::msg)?,
             )
             .await?;
         Ok(())
@@ -289,7 +268,7 @@ impl ProviderMarket {
         );
 
         self.market_api
-            .reject_proposal_demand(subscription_id, proposal.proposal_id.as_ref().unwrap())
+            .reject_proposal(subscription_id, &proposal.id().map_err(Error::msg)?)
             .await?;
         Ok(())
     }
@@ -351,7 +330,7 @@ pub struct ProviderMarketActor {
 }
 
 impl ProviderMarketActor {
-    pub fn new(api: ProviderApi, negotiator_type: &str) -> ProviderMarketActor {
+    pub fn new(api: MarketProviderApi, negotiator_type: &str) -> ProviderMarketActor {
         let rc = Rc::new(RefCell::new(ProviderMarket::new(api, negotiator_type)));
         ProviderMarketActor { market: rc }
     }
