@@ -22,3 +22,5 @@ pub mod rejection;
 pub use self::rejection::Rejection;
 pub mod rejection_reason;
 pub use self::rejection_reason::RejectionReason;
+
+pub const BASE_PATH : &str= "payment-api/v1/";

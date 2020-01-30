@@ -17,3 +17,5 @@ pub use self::exe_script_command_state::ExeScriptCommandState;
 pub use self::exe_script_request::ExeScriptRequest;
 pub use self::problem_details::ProblemDetails;
 pub use self::provider_event::ProviderEvent;
+
+pub const BASE_PATH : &str= "activity-api/v1/";

@@ -12,3 +12,5 @@ pub mod provider_event;
 pub use self::provider_event::ProviderEvent;
 pub mod requestor_event;
 pub use self::requestor_event::RequestorEvent;
+
+pub const BASE_PATH : &str= "market-api/v1/";
