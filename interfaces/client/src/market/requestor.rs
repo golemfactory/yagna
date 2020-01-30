@@ -1,25 +1,24 @@
 //! Requestor part of Market API
-
-use crate::web::WebInterface;
-use crate::{web::WebClient, Result};
-use std::rc::Rc;
-use std::str::FromStr;
-use url::Url;
 use ya_model::market::{Agreement, AgreementProposal, Demand, Proposal, RequestorEvent};
+
+use crate::{web::WebClient, web::WebInterface, Error, Result};
 
 /// Bindings for Requestor part of the Market API.
 #[derive(Clone)]
-pub struct RequestorApi {
+pub struct MarketRequestorApi {
     client: WebClient,
 }
 
-impl RequestorApi {
-    pub fn new(client: &WebClient) -> Self {
-        Self {
-            client: client.clone(),
-        }
-    }
+impl WebInterface for MarketRequestorApi {
+    const API_URL_ENV_VAR: &'static str = super::YAGNA_MARKET_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = super::MARKET_API;
 
+    fn from(client: WebClient) -> Self {
+        MarketRequestorApi { client }
+    }
+}
+
+impl MarketRequestorApi {
     /// Publishes Requestor capabilities via Demand.
     ///
     /// Demand object can be considered an "open" or public Demand, as it is not directed
@@ -28,12 +27,12 @@ impl RequestorApi {
     ///
     /// **Note**: it is an "atomic" operation, ie. as soon as Subscription is placed,
     /// the Demand is published on the market.
-    pub async fn subscribe_demand(&self, demand: &Demand) -> Result<String> {
+    pub async fn subscribe(&self, demand: &Demand) -> Result<String> {
         self.client.post("demands").send_json(&demand).json().await
     }
 
     /// Stop subscription by invalidating a previously published Demand.
-    pub async fn unsubscribe_demand(&self, subscription_id: &str) -> Result<String> {
+    pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
         let url = url_format!("demands/{subscription_id}", subscription_id);
         self.client.delete(&url).send().json().await
     }
@@ -42,7 +41,7 @@ impl RequestorApi {
     /// published by the Requestor via  [`subscribe`](#method.subscribe).
     /// Returns collection of at most `max_events` `RequestorEvents` or times out.
     #[rustfmt::skip]
-    pub async fn collect_offers(
+    pub async fn collect(
         &self,
         subscription_id: &str,
         timeout: Option<i32>,
@@ -55,11 +54,14 @@ impl RequestorApi {
             #[query] timeout,
             #[query] maxEvents
         );
-        self.client.get(&url).send().json().await
+        match self.client.get(&url).send().json().await {
+            Err(Error::TimeoutError{..}) => Ok(Vec::new()),
+            x => x
+        }
     }
 
     /// Responds with a bespoke Demand to received Offer.
-    pub async fn create_proposal_demand(
+    pub async fn counter_proposal(
         &self,
         proposal: &Proposal,
         subscription_id: &str,
@@ -74,11 +76,7 @@ impl RequestorApi {
     }
 
     /// Fetches Proposal (Offer) with given id.
-    pub async fn get_proposal_offer(
-        &self,
-        subscription_id: &str,
-        proposal_id: &str,
-    ) -> Result<Proposal> {
+    pub async fn get_proposal(&self, subscription_id: &str, proposal_id: &str) -> Result<Proposal> {
         let url = url_format!(
             "demands/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
@@ -88,7 +86,7 @@ impl RequestorApi {
     }
 
     /// Rejects a bespoke Demand.
-    pub async fn reject_proposal_offer(
+    pub async fn reject_proposal(
         &self,
         subscription_id: &str,
         proposal_id: &str,
@@ -172,19 +170,5 @@ impl RequestorApi {
     pub async fn terminate_agreement(&self, agreement_id: &str) -> Result<String> {
         let url = url_format!("agreements/{agreement_id}/terminate", agreement_id);
         self.client.post(&url).send().json().await
-    }
-}
-
-impl WebInterface for RequestorApi {
-    fn rebase_service_url(base_url: Rc<Url>) -> Rc<Url> {
-        if let Some(url) = std::env::var("YAGNA_MARKET_URL").ok() {
-            return Rc::new(Url::from_str(&url).unwrap());
-        }
-        let new_base = base_url.join("market-api/v1/").unwrap();
-        Rc::new(new_base)
-    }
-
-    fn from_client(client: WebClient) -> Self {
-        RequestorApi { client }
     }
 }

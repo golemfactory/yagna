@@ -1,19 +1,23 @@
 //! Requestor control part of Activity API
-use crate::web::WebClient;
-use crate::Result;
-
 use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
 
+use crate::{web::WebClient, web::WebInterface, Result};
+
 /// Bindings for Requestor Control part of the Activity API.
-pub struct RequestorControlApiClient {
+pub struct ActivityRequestorControlApi {
     client: WebClient,
 }
 
-impl RequestorControlApiClient {
-    pub fn new(client: WebClient) -> Self {
-        Self { client }
-    }
+impl WebInterface for ActivityRequestorControlApi {
+    const API_URL_ENV_VAR: &'static str = super::super::YAGNA_ACTIVITY_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = super::super::ACTIVITY_API;
 
+    fn from(client: WebClient) -> Self {
+        ActivityRequestorControlApi { client }
+    }
+}
+
+impl ActivityRequestorControlApi {
     /// Creates new Activity based on given Agreement.
     pub async fn create_activity(&self, agreement_id: &str) -> Result<String> {
         self.client

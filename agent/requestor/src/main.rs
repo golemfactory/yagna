@@ -4,8 +4,7 @@ use futures::prelude::*;
 use structopt::StructOpt;
 use url::Url;
 use chrono::{Utc, TimeZone};
-
-use ya_client::{market::RequestorApi, web::WebClient};
+use ya_client::{market::MarketRequestorApi, web::WebClient};
 
 use ya_model::market::event::RequestorEvent;
 use ya_model::market::{AgreementProposal, Demand, Proposal};
@@ -30,19 +29,21 @@ struct AppSettings {
 }
 
 impl AppSettings {
-    fn market_api(&self) -> Result<ya_client::market::RequestorApi, Box<dyn std::error::Error>> {
+    fn market_api(
+        &self,
+    ) -> Result<ya_client::market::MarketRequestorApi, Box<dyn std::error::Error>> {
         Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
     }
 
     fn activity_api(
         &self,
-    ) -> Result<ya_client::activity::RequestorControlApiClient, Box<dyn std::error::Error>> {
+    ) -> Result<ya_client::activity::ActivityRequestorControlApi, Box<dyn std::error::Error>> {
         Ok(WebClient::with_token(&self.app_key)?.interface_at(self.activity_url.clone()))
     }
 }
 
 async fn process_offer(
-    requestor_api: RequestorApi,
+    requestor_api: MarketRequestorApi,
     offer: Proposal,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let agreement_id = offer.proposal_id.unwrap().clone();
@@ -58,13 +59,13 @@ async fn process_offer(
 }
 
 async fn spawn_workers(
-    requestor_api: RequestorApi,
+    requestor_api: MarketRequestorApi,
     subscription_id: &str,
     tx: futures::channel::mpsc::Sender<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let events = requestor_api
-            .collect_offers(&subscription_id, Some(120), Some(5))
+            .collect(&subscription_id, Some(120), Some(5))
             .await?;
 
         if !events.is_empty() {
@@ -133,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //(golem.runtime.wasm.wasi.version@v=*)
 
     let market_api = settings.market_api()?;
-    let subscription_id = market_api.subscribe_demand(&demand).await?;
+    let subscription_id = market_api.subscribe(&demand).await?;
 
     eprintln!("sub_id={}", subscription_id);
 
@@ -142,10 +143,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let subscription_id = subscription_id.clone();
         Arbiter::spawn(async move {
             tokio::signal::ctrl_c().await.unwrap();
-            requestor_api
-                .unsubscribe_demand(&subscription_id)
-                .await
-                .unwrap();
+            requestor_api.unsubscribe(&subscription_id).await.unwrap();
         })
     }
     let requestor_api = market_api.clone();
@@ -163,6 +161,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     spawn_workers(requestor_api.clone(), &subscription_id, tx).await?;
 
-    market_api.unsubscribe_demand(&subscription_id).await?;
+    market_api.unsubscribe(&subscription_id).await?;
     Ok(())
 }

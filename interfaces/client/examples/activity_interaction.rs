@@ -1,22 +1,13 @@
-use std::{env, sync::Arc};
+use std::env;
 
 use ya_client::{
-    activity::{
-        ProviderApiClient, RequestorControlApiClient, RequestorStateApiClient, ACTIVITY_API,
-    },
+    activity::{ActivityProviderApi, ActivityRequestorControlApi, ActivityRequestorStateApi},
     web::WebClient,
     Result,
 };
 use ya_model::activity::ExeScriptRequest;
 
-fn new_client() -> Result<WebClient> {
-    WebClient::builder().api_root(ACTIVITY_API).build()
-}
-
-async fn provider(activity_id: &str) -> Result<()> {
-    let web_client = new_client()?;
-    let client = ProviderApiClient::new(web_client);
-
+async fn provider(client: &ActivityProviderApi, activity_id: &str) -> Result<()> {
     println!("[?] Events for activity {}", activity_id);
     let activity_events = client.get_activity_events(Some(60i32)).await.unwrap();
     println!("[<] Events: {:?}", activity_events);
@@ -31,17 +22,17 @@ async fn provider(activity_id: &str) -> Result<()> {
     Ok(())
 }
 
-async fn requestor(agreement_id: &str) -> Result<()> {
-    let activity_id = requestor_start(agreement_id).await?;
-    requestor_exec(&activity_id).await?;
-    requestor_state(&activity_id).await?;
-    requestor_stop(&activity_id).await
+async fn requestor(client: &WebClient, agreement_id: &str) -> Result<()> {
+    let activity_id = requestor_start(&client.interface()?, agreement_id).await?;
+    requestor_exec(&client.interface()?, &activity_id).await?;
+    requestor_state(&client.interface()?, &activity_id).await?;
+    requestor_stop(&client.interface()?, &activity_id).await
 }
 
-async fn requestor_start(agreement_id: &str) -> Result<String> {
-    let web_client = new_client()?;
-    let client = RequestorControlApiClient::new(web_client);
-
+async fn requestor_start(
+    client: &ActivityRequestorControlApi,
+    agreement_id: &str,
+) -> Result<String> {
     println!("[+] Activity, agreement {}", agreement_id);
     let activity_id = client.create_activity(agreement_id).await?;
     println!("[<] Activity: {}", activity_id);
@@ -49,20 +40,14 @@ async fn requestor_start(agreement_id: &str) -> Result<String> {
     Ok(activity_id)
 }
 
-async fn requestor_stop(activity_id: &str) -> Result<()> {
-    let web_client = new_client()?;
-    let client = RequestorControlApiClient::new(web_client);
-
+async fn requestor_stop(client: &ActivityRequestorControlApi, activity_id: &str) -> Result<()> {
     println!("[-] Activity {}", activity_id);
     client.destroy_activity(&activity_id).await?;
     println!("[<] Destroyed");
     Ok(())
 }
 
-async fn requestor_exec(activity_id: &str) -> Result<()> {
-    let web_client = new_client()?;
-    let client = RequestorControlApiClient::new(web_client);
-
+async fn requestor_exec(client: &ActivityRequestorControlApi, activity_id: &str) -> Result<()> {
     let exe_request = ExeScriptRequest::new("STOP".to_string());
     println!("[+] Batch exe script:{:?}", exe_request);
     let batch_id = client.exec(exe_request, &activity_id).await?;
@@ -76,10 +61,7 @@ async fn requestor_exec(activity_id: &str) -> Result<()> {
     Ok(())
 }
 
-async fn requestor_state(activity_id: &str) -> Result<()> {
-    let web_client = new_client()?;
-    let client = RequestorStateApiClient::new(&web_client);
-
+async fn requestor_state(client: &ActivityRequestorStateApi, activity_id: &str) -> Result<()> {
     println!("[?] State for activity {}", activity_id);
     let state = client.get_state(activity_id).await?;
     println!("[<] State: {:?}", state);
@@ -95,8 +77,9 @@ async fn requestor_state(activity_id: &str) -> Result<()> {
 }
 
 async fn interact() -> Result<()> {
-    requestor("agreement_id").await?;
-    provider("activity_id").await
+    let client = WebClient::builder().build()?;
+    requestor(&client, "agreement_id").await?;
+    provider(&client.interface()?, "activity_id").await
 }
 
 #[actix_rt::main]
