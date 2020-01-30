@@ -1,21 +1,23 @@
 //! Provider part of Activity API
-use crate::web::WebClient;
-use crate::{Error, Result};
-use std::sync::Arc;
-use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
+use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, ACTIVITY_API_PATH};
 
-pub struct ProviderApiClient {
-    client: Arc<WebClient>,
+use crate::{web::WebClient, web::WebInterface, Error, Result};
+
+pub struct ActivityProviderApi {
+    client: WebClient,
+}
+
+impl WebInterface for ActivityProviderApi {
+    const API_URL_ENV_VAR: &'static str = crate::activity::ACTIVITY_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = ACTIVITY_API_PATH;
+
+    fn from(client: WebClient) -> Self {
+        ActivityProviderApi { client }
+    }
 }
 
 /// Bindings for Provider part of the Activity API.
-impl ProviderApiClient {
-    pub fn new(client: &Arc<WebClient>) -> Self {
-        Self {
-            client: client.clone(),
-        }
-    }
-
+impl ActivityProviderApi {
     /// Fetch activity state (which may include error details)
     pub async fn get_activity_state(&self, activity_id: &str) -> Result<ActivityState> {
         let uri = url_format!("activity/{activity_id}/state", activity_id);

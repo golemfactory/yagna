@@ -11,7 +11,7 @@ use structopt::{clap, StructOpt};
 use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{
-    constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
+    constants::{CENTRAL_NET_HOST, YAGNA_HOST, YAGNA_HTTP_PORT},
     CliCtx, CommandOutput,
 };
 use ya_service_api_web::middleware::{auth, Identity};
@@ -26,7 +26,7 @@ use autocomplete::CompleteCommand;
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
     /// Daemon data dir
-    #[structopt(short, long = "datadir", set = clap::ArgSettings::Global)]
+    #[structopt(short, long = "datadir", set = clap::ArgSettings::Global, env = "YAGNA_DATADIR")]
     data_dir: Option<PathBuf>,
 
     /// Daemon address
@@ -36,11 +36,6 @@ struct CliArgs {
     /// Daemon HTTP port
     #[structopt(short = "p", long, default_value = &*YAGNA_HTTP_PORT, env = "YAGNA_HTTP_PORT")]
     http_port: u16,
-
-    /// Service bus router port
-    #[structopt(long, default_value = &*YAGNA_BUS_PORT, env = "YAGNA_BUS_PORT")]
-    #[structopt(set = clap::ArgSettings::Global)]
-    router_port: u16,
 
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -70,10 +65,6 @@ impl CliArgs {
         Ok((self.address.clone(), self.http_port))
     }
 
-    pub fn get_router_address(&self) -> Result<(String, u16)> {
-        Ok((self.address.clone(), self.router_port))
-    }
-
     pub fn log_level(&self) -> String {
         match self.command {
             CliCommand::Service(ServiceCommand::Run) => self.log_level.clone(),
@@ -98,7 +89,6 @@ impl TryFrom<&CliArgs> for CliCtx {
 
         Ok(CliCtx {
             http_address: args.get_http_address()?,
-            router_address: args.get_router_address()?,
             data_dir,
             json_output: args.json,
             interactive: args.interactive,
@@ -154,7 +144,7 @@ impl ServiceCommand {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                ya_sb_router::bind_router(ctx.router_address()?)
+                ya_sb_router::bind_gsb_router()
                     .await
                     .context("binding service bus router")?;
 
@@ -211,6 +201,7 @@ async fn me(id: Identity) -> impl Responder {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
+    dotenv::dotenv().ok();
     let args: CliArgs = CliArgs::from_args();
 
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));

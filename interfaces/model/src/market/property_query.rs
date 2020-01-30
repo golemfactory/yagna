@@ -11,24 +11,21 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Demand {
-    #[serde(rename = "properties")]
-    pub properties: serde_json::Value,
-    #[serde(rename = "constraints")]
-    pub constraints: String,
-    #[serde(rename = "demandId", skip_serializing_if = "Option::is_none")]
-    pub demand_id: Option<String>,
-    #[serde(rename = "requestorId", skip_serializing_if = "Option::is_none")]
-    pub requestor_id: Option<String>,
+pub struct PropertyQuery {
+    #[serde(rename = "issuerProperties", skip_serializing_if = "Option::is_none")]
+    pub issuer_properties: Option<serde_json::Value>,
+    #[serde(rename = "queryId", skip_serializing_if = "Option::is_none")]
+    pub query_id: Option<String>,
+    #[serde(rename = "queriedProperties", skip_serializing_if = "Option::is_none")]
+    pub queried_properties: Option<Vec<String>>,
 }
 
-impl Demand {
-    pub fn new(properties: serde_json::Value, constraints: String) -> Demand {
-        Demand {
-            properties,
-            constraints,
-            demand_id: None,
-            requestor_id: None,
+impl PropertyQuery {
+    pub fn new() -> PropertyQuery {
+        PropertyQuery {
+            issuer_properties: None,
+            query_id: None,
+            queried_properties: None,
         }
     }
 }

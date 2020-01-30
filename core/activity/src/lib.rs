@@ -14,4 +14,4 @@ pub mod timeout;
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 
-pub use ya_service_api::constants::ACTIVITY_API;
+pub use ya_model::activity::ACTIVITY_API_PATH;

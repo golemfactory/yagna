@@ -1,8 +1,7 @@
-use ya_client::activity::provider::ProviderApiClient;
-use ya_client::{market::ApiClient, Result};
+use ya_client::Result;
 
-use crate::execution::{InitializeExeUnits, TaskRunnerActor, UpdateActivity};
-use crate::market::{CreateOffer, ProviderMarketActor};
+use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
+use crate::market::{CreateOffer, ProviderMarket};
 use crate::startup_config::StartupConfig;
 use crate::utils::actix_handler::send_message;
 use crate::utils::actix_signal::Subscribe;
@@ -11,14 +10,13 @@ use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
 
 pub struct ProviderAgent {
-    market: Addr<ProviderMarketActor>,
-    runner: Addr<TaskRunnerActor>,
+    market: Addr<ProviderMarket>,
+    runner: Addr<TaskRunner>,
     node_info: NodeInfo,
     service_info: ServiceInfo,
     exe_unit_path: String,
@@ -26,14 +24,8 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
-        let webclient = config.market_client();
-
-        let client = ApiClient::new(webclient)?;
-        let market = ProviderMarketActor::new(client, "AcceptAll").start();
-
-        let activity_client = Arc::new(config.activity_client().build()?);
-        let client = ProviderApiClient::new(&activity_client);
-        let runner = TaskRunnerActor::new(client).start();
+        let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
+        let runner = TaskRunner::new(config.activity_client()?).start();
 
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();
