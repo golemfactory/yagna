@@ -32,6 +32,7 @@ pub(crate) fn default_query_timeout() -> Option<u32> {
 
 #[inline(always)]
 pub(crate) fn generate_id() -> String {
+    // TODO: replace with a cryptographically secure generator
     Uuid::new_v4().to_simple().to_string()
 }
 

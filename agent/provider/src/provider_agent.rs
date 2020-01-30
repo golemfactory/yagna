@@ -31,7 +31,8 @@ impl ProviderAgent {
         let client = ApiClient::new(webclient)?;
         let market = ProviderMarketActor::new(client, "AcceptAll").start();
 
-        let client = ProviderApiClient::new(Arc::new(config.activity_client().build()?));
+        let activity_client = Arc::new(config.activity_client().build()?);
+        let client = ProviderApiClient::new(&activity_client);
         let runner = TaskRunnerActor::new(client).start();
 
         let node_info = ProviderAgent::create_node_info();

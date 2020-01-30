@@ -8,7 +8,7 @@ use std::convert::From;
 
 use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
-use ya_persistence::executor::DbExecutor;
+use ya_persistence::executor::{ConnType, DbExecutor};
 
 pub mod service;
 
@@ -45,8 +45,8 @@ impl From<Event> for ProviderEvent {
 }
 
 /// Get state of specified Activity.
-async fn get_activity_state(db: &DbExecutor, activity_id: &str) -> Result<ActivityState, Error> {
-    ActivityStateDao::new(&db_conn!(db)?)
+async fn get_activity_state(conn: &ConnType, activity_id: &str) -> Result<ActivityState, Error> {
+    ActivityStateDao::new(conn)
         .get(activity_id)
         .not_found_as_option()
         .map_err(Error::from)?
@@ -62,12 +62,13 @@ async fn get_activity_state_web(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityState, Error> {
-    get_activity_state(&db, &path.activity_id).await
+    let conn = &db_conn!(db)?;
+    get_activity_state(&conn, &path.activity_id).await
 }
 
 /// Get usage of specified Activity.
-async fn get_activity_usage(db: &DbExecutor, activity_id: &str) -> Result<ActivityUsage, Error> {
-    ActivityUsageDao::new(&db_conn!(db)?)
+async fn get_activity_usage(conn: &ConnType, activity_id: &str) -> Result<ActivityUsage, Error> {
+    ActivityUsageDao::new(conn)
         .get(activity_id)
         .not_found_as_option()
         .map_err(Error::from)?
@@ -83,7 +84,8 @@ async fn get_activity_usage_web(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
 ) -> Result<ActivityUsage, Error> {
-    get_activity_usage(&db, &path.activity_id).await
+    let conn = &db_conn!(db)?;
+    get_activity_usage(&conn, &path.activity_id).await
 }
 
 /// Fetch Requestor command events.
