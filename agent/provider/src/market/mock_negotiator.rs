@@ -6,7 +6,6 @@ use crate::market::negotiator::{AgreementResponse, ProposalResponse};
 
 use anyhow::Result;
 
-
 pub struct AcceptAllNegotiator;
 
 impl Negotiator for AcceptAllNegotiator {

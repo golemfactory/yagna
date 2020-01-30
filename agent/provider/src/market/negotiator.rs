@@ -1,7 +1,7 @@
-use ya_model::market::{AgreementProposal, Offer, Proposal};
 use ya_agent_offer_model::OfferDefinition;
+use ya_model::market::{AgreementProposal, Offer, Proposal};
 
-use anyhow::{Result};
+use anyhow::Result;
 
 /// Response for requestor proposals.
 #[allow(dead_code)]

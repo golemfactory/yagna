@@ -1,4 +1,4 @@
-use ya_client::activity::{provider::ProviderApiClient};
+use ya_client::activity::provider::ProviderApiClient;
 use ya_client::{market::ApiClient, Result};
 
 use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};

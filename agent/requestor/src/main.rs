@@ -1,4 +1,7 @@
 use actix_rt::Arbiter;
+use futures::channel::mpsc;
+use futures::prelude::*;
+use std::collections::HashMap;
 use std::future::Future;
 use structopt::StructOpt;
 use url::Url;
@@ -7,11 +10,8 @@ use ya_client::{
     market::{ApiClient, ProviderApi, RequestorApi},
     web::WebClient,
 };
-use ya_model::market::{Agreement, Demand, Offer, Proposal, ProviderEvent, RequestorEvent};
-use std::collections::HashMap;
-use futures::prelude::*;
-use futures::channel::mpsc;
 use ya_model::activity::ExeScriptRequest;
+use ya_model::market::{Agreement, Demand, Offer, Proposal, ProviderEvent, RequestorEvent};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -43,11 +43,15 @@ impl AppSettings {
         Ok(ApiClient::new(connection)?)
     }
 
-    fn activity_api(&self)  -> Result<ya_client::activity::RequestorControlApiClient, Box<dyn std::error::Error>> {
+    fn activity_api(
+        &self,
+    ) -> Result<ya_client::activity::RequestorControlApiClient, Box<dyn std::error::Error>> {
         let host_port = format!(
             "{}:{}",
             self.activity_url.host_str().unwrap_or_default(),
-            self.activity_url.port_or_known_default().unwrap_or_default()
+            self.activity_url
+                .port_or_known_default()
+                .unwrap_or_default()
         );
 
         let connection = WebClient::builder()
@@ -64,7 +68,7 @@ impl AppSettings {
 async fn spawn_workers(
     requestor_api: RequestorApi,
     subscription_id: &str,
-    mut tx : futures::channel::mpsc::Sender<String>
+    mut tx: futures::channel::mpsc::Sender<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let events = requestor_api
@@ -76,15 +80,18 @@ async fn spawn_workers(
         }
         for event in events {
             match event {
-                RequestorEvent::OfferEvent { provider_id, offer: Some(offer) } => {
-                        let agreement_id = offer.id.clone();
-                        let agreement = Agreement::new( agreement_id.clone(), "2021-01-01".to_string());
-                        let ack = requestor_api.create_agreement(&agreement).await?;
-                        log::info!("comfirm agreement = {}", agreement_id);
-                        requestor_api.confirm_agreement(&agreement_id).await?;
-                        log::info!("wait for agreement = {}", agreement_id);
-                        requestor_api.wait_for_approval(&agreement_id).await?;
-                        tx.send(agreement_id.clone()).await;
+                RequestorEvent::OfferEvent {
+                    provider_id,
+                    offer: Some(offer),
+                } => {
+                    let agreement_id = offer.id.clone();
+                    let agreement = Agreement::new(agreement_id.clone(), "2021-01-01".to_string());
+                    let ack = requestor_api.create_agreement(&agreement).await?;
+                    log::info!("comfirm agreement = {}", agreement_id);
+                    requestor_api.confirm_agreement(&agreement_id).await?;
+                    log::info!("wait for agreement = {}", agreement_id);
+                    requestor_api.wait_for_approval(&agreement_id).await?;
+                    tx.send(agreement_id.clone()).await;
                     //}
                 }
                 _ => {
@@ -139,7 +146,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let requestor_api = client.requestor().clone();
     let activity_api = settings.activity_api()?;
 
-    let (tx, mut rx) : (mpsc::Sender<String>, mpsc::Receiver<String>) = futures::channel::mpsc::channel(1);
+    let (tx, mut rx): (mpsc::Sender<String>, mpsc::Receiver<String>) =
+        futures::channel::mpsc::channel(1);
     Arbiter::spawn(async move {
         while let Some(id) = rx.next().await {
             log::info!("new agreement = {}", id);

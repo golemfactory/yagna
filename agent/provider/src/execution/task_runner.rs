@@ -1,7 +1,7 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
+use crate::forward_actix_handler;
 use crate::market::provider_market::AgreementSigned;
-use crate::{forward_actix_handler};
 use crate::utils::actix_handler::ResultTypeGetter;
 
 use ya_client::activity::ProviderApiClient;
@@ -15,7 +15,6 @@ use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
-
 
 // =========================================== //
 // Public exposed messages
@@ -86,7 +85,10 @@ impl TaskRunner {
         Ok(())
     }
 
-    pub async fn collect_events(client: Arc<ProviderApiClient>, notify: Addr<TaskRunner>) -> Result<()> {
+    pub async fn collect_events(
+        client: Arc<ProviderApiClient>,
+        notify: Addr<TaskRunner>,
+    ) -> Result<()> {
         let result = TaskRunner::query_events(client).await;
         match result {
             Err(error) => error!("Can't query activity events. Error: {}", error),
@@ -111,7 +113,10 @@ impl TaskRunner {
                     activity_id,
                     agreement_id,
                 } => {
-                    if let Err(error) = notify.send(CreateActivity::new(&activity_id, &agreement_id)).await {
+                    if let Err(error) = notify
+                        .send(CreateActivity::new(&activity_id, &agreement_id))
+                        .await
+                    {
                         warn!("{}", error);
                     }
                 }
@@ -119,7 +124,10 @@ impl TaskRunner {
                     activity_id,
                     agreement_id,
                 } => {
-                    if let Err(error) = notify.send(DestroyActivity::new(activity_id, agreement_id)).await {
+                    if let Err(error) = notify
+                        .send(DestroyActivity::new(activity_id, agreement_id))
+                        .await
+                    {
                         warn!("{}", error);
                     }
                 }
@@ -253,27 +261,10 @@ impl Actor for TaskRunner {
     type Context = Context<Self>;
 }
 
-forward_actix_handler!(
-    TaskRunner,
-    AgreementSigned,
-    on_signed_agreement
-);
-forward_actix_handler!(
-    TaskRunner,
-    InitializeExeUnits,
-    initialize_exeunits
-);
-forward_actix_handler!(
-    TaskRunner,
-    CreateActivity,
-    on_create_activity
-);
-forward_actix_handler!(
-    TaskRunner,
-    DestroyActivity,
-    on_destroy_activity
-);
-
+forward_actix_handler!(TaskRunner, AgreementSigned, on_signed_agreement);
+forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
+forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
+forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 
 impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;
@@ -283,8 +274,7 @@ impl Handler<UpdateActivity> for TaskRunner {
         let addr = ctx.address();
 
         ActorResponse::r#async(
-            async move { TaskRunner::collect_events(client, addr).await }
-            .into_actor(self),
+            async move { TaskRunner::collect_events(client, addr).await }.into_actor(self),
         )
     }
 }
@@ -295,12 +285,18 @@ impl Handler<UpdateActivity> for TaskRunner {
 
 impl CreateActivity {
     pub fn new(activity_id: &str, agreement_id: &str) -> CreateActivity {
-        CreateActivity{activity_id: activity_id.to_string(), agreement_id: agreement_id.to_string()}
+        CreateActivity {
+            activity_id: activity_id.to_string(),
+            agreement_id: agreement_id.to_string(),
+        }
     }
 }
 
 impl DestroyActivity {
     pub fn new(activity_id: &str, agreement_id: &str) -> DestroyActivity {
-        DestroyActivity{activity_id: activity_id.to_string(), agreement_id: agreement_id.to_string()}
+        DestroyActivity {
+            activity_id: activity_id.to_string(),
+            agreement_id: agreement_id.to_string(),
+        }
     }
 }
