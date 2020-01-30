@@ -1,7 +1,7 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use crate::utils::actix_signal::{SignalSlot, Subscribe};
-use crate::{gen_actix_handler_async, gen_actix_handler_sync};
+use crate::gen_actix_handler_sync;
 use crate::utils::actix_handler::ResultTypeGetter;
 
 use ya_client::market::ApiClient;
@@ -11,13 +11,13 @@ use actix::prelude::*;
 use anyhow::{Error, Result};
 use futures::future::join_all;
 use log::{error, info, warn};
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::Arc;
 
 // Temporrary
 use serde_json;
 use ya_agent_offer_model::OfferDefinition;
+
+
 
 // =========================================== //
 // Public exposed messages
@@ -36,7 +36,7 @@ pub struct AgreementSigned {
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct CreateOffer {
-    offer: OfferDefinition,
+    offer_definition: OfferDefinition,
 }
 
 /// Collects events from market and runs negotiations.
@@ -55,6 +55,7 @@ pub struct OnShutdown;
 
 #[derive(Message)]
 #[rtype(result = "Result<ProposalResponse>")]
+#[allow(dead_code)]
 pub struct GotProposal {
     subscription_id: String,
     proposal: AgreementProposal
@@ -62,6 +63,7 @@ pub struct GotProposal {
 
 #[derive(Message)]
 #[rtype(result = "Result<AgreementResponse>")]
+#[allow(dead_code)]
 pub struct GotAgreement {
     subscription_id: String,
     agreement: AgreementProposal,
@@ -73,6 +75,13 @@ pub struct GotAgreement {
 #[rtype(result = "Result<()>")]
 pub struct OnAgreementSigned {
     pub agreement_id: String,
+}
+
+/// Send when subscribing to market will be finished.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct OnOfferSubscribed {
+    offer: OfferSubscription
 }
 
 // =========================================== //
@@ -110,31 +119,28 @@ impl ProviderMarket {
         };
     }
 
-    pub async fn create_offer(&mut self, msg: CreateOffer) -> Result<()> {
-        info!("Creating initial offer.");
+    pub async fn create_offer(addr: Addr<ProviderMarket>, client: Arc<ApiClient>, offer: Offer) -> Result<()> {
+        let subscription_id = client.provider().subscribe(&offer).await?;
+        let sub = OfferSubscription{subscription_id, offer};
 
-        let offer = self.negotiator.create_offer(&msg.offer)?;
-
-        info!("Subscribing to events...");
-
-        let subscription_id = self.api.provider().subscribe(&offer).await?;
-        self.offers.push(OfferSubscription {
-            subscription_id: subscription_id.clone(),
-            offer,
-        });
-
-        info!("Subscribed to events for offer [{}].", subscription_id);
+        let _ = addr.send(OnOfferSubscribed{offer: sub}).await?;
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub async fn onshutdown(&mut self, _msg: OnShutdown) -> Result<()> {
-        info!("Unsubscribing events for...");
+    fn offer_subscribed(&mut self, msg: OnOfferSubscribed) -> Result<()> {
+        let subscription_id = &msg.offer.subscription_id;
+        info!("Subscribed to events for offer [{}].", subscription_id);
 
-        for offer in self.offers.iter() {
-            self.api
-                .provider()
-                .unsubscribe(&offer.subscription_id)
+        Ok(self.offers.push(msg.offer ))
+    }
+
+    #[allow(dead_code)]
+    pub async fn onshutdown(client: Arc<ApiClient>, subscriptions: Vec<String>) -> Result<()> {
+        info!("Unsubscribing events");
+
+        for subscription_id in subscriptions.iter() {
+            client.provider()
+                .unsubscribe(subscription_id)
                 .await?;
         }
         info!("Unsubscribing events finished.");
@@ -145,7 +151,7 @@ impl ProviderMarket {
     // Public api for running single market step
     // =========================================== //
 
-    pub async fn run_step(addr: Addr<ProviderMarketActor>, client: Arc<ApiClient>, subscriptions: Vec<String>) -> Result<()> {
+    pub async fn run_step(addr: Addr<ProviderMarket>, client: Arc<ApiClient>, subscriptions: Vec<String>) -> Result<()> {
         for subscription in subscriptions.iter() {
             let events = ProviderMarket::query_events(client.clone(), &subscription).await?;
             ProviderMarket::dispatch_events(addr.clone(), client.clone(), &subscription, &events).await;
@@ -164,7 +170,7 @@ impl ProviderMarket {
             .await?)
     }
 
-    async fn dispatch_events(addr: Addr<ProviderMarketActor>, client: Arc<ApiClient>, subscription_id: &str, events: &Vec<ProviderEvent>) {
+    async fn dispatch_events(addr: Addr<ProviderMarket>, client: Arc<ApiClient>, subscription_id: &str, events: &Vec<ProviderEvent>) {
         info!("Collected {} market events. Processing...", events.len());
 
         let dispatch_futures = events
@@ -186,7 +192,7 @@ impl ProviderMarket {
             .collect::<Vec<_>>();
     }
 
-    async fn dispatch_event(addr: Addr<ProviderMarketActor>, client: Arc<ApiClient>, subscription_id: &str, event: &ProviderEvent) -> Result<()> {
+    async fn dispatch_event(addr: Addr<ProviderMarket>, client: Arc<ApiClient>, subscription_id: &str, event: &ProviderEvent) -> Result<()> {
         match event {
             ProviderEvent::DemandEvent { demand, .. } => {
                 let proposal_id = &demand.as_ref().ok_or(Error::msg("no proposal id"))?.id;
@@ -224,7 +230,7 @@ impl ProviderMarket {
     }
 
     async fn process_proposal(
-        addr: Addr<ProviderMarketActor>,
+        addr: Addr<ProviderMarket>,
         client: Arc<ApiClient>,
         subscription_id: &str,
         proposal: AgreementProposal,
@@ -252,7 +258,7 @@ impl ProviderMarket {
     }
 
     async fn process_agreement(
-        addr: Addr<ProviderMarketActor>,
+        addr: Addr<ProviderMarket>,
         client: Arc<ApiClient>,
         subscription_id: &str,
         agreement: AgreementProposal,
@@ -339,7 +345,7 @@ impl ProviderMarket {
         Ok(())
     }
 
-    async fn approve_agreement(addr: Addr<ProviderMarketActor>, client: Arc<ApiClient>, subscription_id: &str, agreement_id: &str) -> Result<()> {
+    async fn approve_agreement(addr: Addr<ProviderMarket>, client: Arc<ApiClient>, subscription_id: &str, agreement_id: &str) -> Result<()> {
         info!(
             "Accepting agreement [{}], subscription_id: {}.",
             agreement_id, subscription_id
@@ -353,7 +359,7 @@ impl ProviderMarket {
             agreement_id: agreement_id.to_string(),
         };
 
-        addr.send(message).await?;
+        let _ = addr.send(message).await?;
         Ok(())
     }
 
@@ -389,29 +395,16 @@ impl ProviderMarket {
 // Actix stuff
 // =========================================== //
 
-/// Wrapper for ProviderMarket. It is neccesary to use self in async futures.
-pub struct ProviderMarketActor {
-    market: Rc<RefCell<ProviderMarket>>,
-}
-
-impl ProviderMarketActor {
-    pub fn new(api: ApiClient, negotiator_type: &str) -> ProviderMarketActor {
-        let rc = Rc::new(RefCell::new(ProviderMarket::new(api, negotiator_type)));
-        ProviderMarketActor { market: rc }
-    }
-}
-
-impl Actor for ProviderMarketActor {
+impl Actor for ProviderMarket {
     type Context = Context<Self>;
 }
 
-impl Handler<UpdateMarket> for ProviderMarketActor {
+impl Handler<UpdateMarket> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
-        let actor_impl = self.market.clone();
-        let subscriptions = actor_impl.borrow_mut().list_subscriptions();
-        let client = actor_impl.borrow_mut().api.clone();
+    fn handle(&mut self, _msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
+        let subscriptions = self.list_subscriptions();
+        let client = self.api.clone();
         let address = ctx.address();
 
         ActorResponse::r#async(
@@ -421,17 +414,58 @@ impl Handler<UpdateMarket> for ProviderMarketActor {
     }
 }
 
-gen_actix_handler_sync!(ProviderMarketActor, GotProposal, on_proposal, market);
-gen_actix_handler_sync!(ProviderMarketActor, GotAgreement, on_agreement, market);
-gen_actix_handler_async!(ProviderMarketActor, CreateOffer, create_offer, market);
-gen_actix_handler_async!(ProviderMarketActor, OnShutdown, onshutdown, market);
+impl Handler<CreateOffer> for ProviderMarket {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
+        info!("Creating initial offer.");
+
+        match self.negotiator.create_offer(&msg.offer_definition) {
+            Ok(offer) => {
+                let addr = ctx.address();
+                let client = self.api.clone();
+
+                info!("Subscribing to events...");
+
+                ActorResponse::r#async(
+                async move {
+                        let result = ProviderMarket::create_offer(addr, client, offer).await;
+                        if let Err(error) = result {
+                            error!("Can't subscribe new offer, error: {}", error);
+                        }
+                        Ok(())
+                    }
+                    .into_actor(self))
+            },
+            Err(error) => {
+                error!("Negotiator failed to create offer. Error: {}", error);
+                ActorResponse::reply(Err(error))
+            }
+        }
+    }
+}
+
+impl Handler<OnShutdown> for ProviderMarket {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, _msg: OnShutdown, _ctx: &mut Context<Self>) -> Self::Result {
+        let subscriptions = self.list_subscriptions();
+        let client = self.api.clone();
+
+        ActorResponse::r#async(ProviderMarket::onshutdown(client, subscriptions).into_actor(self))
+    }
+}
+
+
+gen_actix_handler_sync!(ProviderMarket, GotProposal, on_proposal);
+gen_actix_handler_sync!(ProviderMarket, GotAgreement, on_agreement);
+gen_actix_handler_sync!(ProviderMarket, OnOfferSubscribed, offer_subscribed);
 gen_actix_handler_sync!(
-    ProviderMarketActor,
+    ProviderMarket,
     Subscribe<AgreementSigned>,
-    on_subscribe,
-    market
+    on_subscribe
 );
-gen_actix_handler_sync!(ProviderMarketActor, OnAgreementSigned, on_agreement_signed, market);
+gen_actix_handler_sync!(ProviderMarket, OnAgreementSigned, on_agreement_signed);
 
 
 // =========================================== //
@@ -440,7 +474,7 @@ gen_actix_handler_sync!(ProviderMarketActor, OnAgreementSigned, on_agreement_sig
 
 impl CreateOffer {
     pub fn new(offer: OfferDefinition) -> CreateOffer {
-        CreateOffer { offer }
+        CreateOffer { offer_definition: offer }
     }
 }
 

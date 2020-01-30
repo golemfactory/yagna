@@ -4,7 +4,7 @@ use ya_model::market::{AgreementProposal, Offer};
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, ProposalResponse};
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 
 
 pub struct AcceptAllNegotiator;
