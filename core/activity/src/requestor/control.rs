@@ -1,7 +1,7 @@
 use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount, fetch_agreement};
 use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao};
 use crate::error::Error;
-use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
+use crate::requestor::{get_agreement, missing_activity_err, provider_activity_service_id};
 use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
@@ -44,7 +44,6 @@ async fn create_activity(
     log::info!("agreement: {:#?}", agreement);
 
     let new_agreement: NewAgreement = agreement.try_into()?;
-    let uri = provider_activity_uri(&new_agreement.offer_node_id);
 
     log::info!("inserting agreement: {:#?}", new_agreement);
     AgreementDao::new(&conn)
@@ -56,6 +55,8 @@ async fn create_activity(
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
+
+    let uri = provider_activity_service_id(&new_agreement.offer_node_id);
     log::info!("creating activity at: {}", uri);
     let activity_id = gsb_send!(msg, &uri, query.timeout)?;
     log::info!("creating activity: {}", activity_id);
@@ -77,13 +78,13 @@ async fn destroy_activity(
     missing_activity_err(&conn, &path.activity_id)?;
 
     let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = DestroyActivity {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.natural_id,
         timeout: query.timeout.clone(),
     };
 
+    let uri = provider_activity_service_id(&agreement.offer_node_id);
     let _ = gsb_send!(msg, &uri, query.timeout)?;
     ActivityStateDao::new(&db_conn!(db)?)
         .set(&path.activity_id, State::Terminated, None, None)
@@ -105,7 +106,6 @@ async fn exec(
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
     let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
     let batch_id = generate_id();
     let msg = Exec {
         activity_id: path.activity_id.clone(),
@@ -114,6 +114,7 @@ async fn exec(
         timeout: query.timeout.clone(),
     };
 
+    let uri = provider_activity_service_id(&agreement.offer_node_id);
     gsb_send!(msg, &uri, query.timeout)?;
     Ok(batch_id)
 }
@@ -128,13 +129,13 @@ async fn get_batch_results(
     missing_activity_err(&conn, &path.activity_id)?;
 
     let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
+    let uri = provider_activity_service_id(&agreement.offer_node_id);
     gsb_send!(msg, &uri, query.timeout)
 }
 

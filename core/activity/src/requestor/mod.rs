@@ -9,7 +9,7 @@ pub mod control;
 pub mod state;
 
 #[inline(always)]
-fn provider_activity_uri(provider_id: &str) -> String {
+fn provider_activity_service_id(provider_id: &str) -> String {
     format!(
         "{}{}/{}{}",
         PRIVATE_SERVICE, NET_SERVICE_ID, provider_id, SERVICE_ID

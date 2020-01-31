@@ -9,6 +9,7 @@ use ya_service_api::timeout::IntoTimeoutFuture;
 use crate::common::{fetch_agreement, generate_id, RpcMessageResult};
 use crate::dao::*;
 use crate::error::Error;
+use ya_service_api::constants::NET_SERVICE_ID;
 
 lazy_static::lazy_static! {
     static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
@@ -130,11 +131,12 @@ async fn set_activity_state_gsb(
     caller: String,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
-    if parse_caller(caller) != msg.activity_id {
+    let conn = db_conn!(db);
+    if !is_activity_owner(&conn, caller, &msg.activity_id) {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityStateDao::new(&db_conn!(db)?)
+    ActivityStateDao::new(&conn?)
         .set(
             &msg.activity_id,
             msg.state.state.clone(),
@@ -166,11 +168,12 @@ async fn set_activity_usage_gsb(
     caller: String,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
-    if parse_caller(caller) != msg.activity_id {
+    let conn = db_conn!(db);
+    if !is_activity_owner(&conn, caller, &msg.activity_id) {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityUsageDao::new(&db_conn!(db)?)
+    ActivityUsageDao::new(&conn?)
         .set(&msg.activity_id, &msg.usage.current_usage)
         .map_err(|e| Error::from(e).into())
 }
@@ -183,7 +186,7 @@ fn is_activity_owner(
     let agreement_id = ActivityDao::new(&conn)
         .get_agreement_id(&activity_id)
         .map_err(Error::from)?;
-    is_agreement_initiator(conn, parse_caller(caller), &agreement_id)
+    is_agreement_initiator(conn, caller, &agreement_id)
 }
 
 fn is_agreement_initiator(
@@ -194,11 +197,14 @@ fn is_agreement_initiator(
     let agreement = AgreementDao::new(&conn)
         .get(agreement_id)
         .map_err(Error::from)?;
-    Ok(parse_caller(caller) == agreement.demand_node_id)
+
+    Ok(validate_caller(caller, agreement.demand_node_id))
 }
 
 #[inline(always)]
-fn parse_caller(caller: String) -> String {
+fn validate_caller(caller: String, expected: String) -> bool {
     // FIXME: impl a proper caller struct / parser
-    caller.replace("/net/", "")
+    let net_expected = format!("{}/{}", NET_SERVICE_ID, agreement.demand_node_id);
+    log::info!("checking caller: {} vs expected: {}", caller, net_expected);
+    caller == net_expected
 }

@@ -1,7 +1,7 @@
 use crate::common::{PathActivity, QueryTimeout};
 use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
 use crate::error::Error;
-use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
+use crate::requestor::{get_agreement, missing_activity_err, provider_activity_service_id};
 use actix_web::web;
 use futures::prelude::*;
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
@@ -34,7 +34,6 @@ async fn get_activity_state(
     missing_activity_err(&conn, &path.activity_id)?;
 
     let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetActivityState {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -48,6 +47,7 @@ async fn get_activity_state(
     }
 
     // Retrieve and persist activity state
+    let uri = provider_activity_service_id(&agreement.offer_node_id);
     let activity_state = gsb_send!(msg, &uri, query.timeout)?;
     dao.set(
         &path.activity_id,
@@ -69,7 +69,6 @@ async fn get_activity_usage(
     missing_activity_err(&conn, &path.activity_id)?;
 
     let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetActivityUsage {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -88,6 +87,7 @@ async fn get_activity_usage(
     }
 
     // Retrieve and persist activity usage
+    let uri = provider_activity_service_id(&agreement.offer_node_id);
     let activity_usage = gsb_send!(msg, &uri, query.timeout)?;
     usage_dao.set(&path.activity_id, &activity_usage.current_usage)?;
 
@@ -104,12 +104,12 @@ async fn get_running_command(
     missing_activity_err(&conn, &path.activity_id)?;
 
     let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
     let msg = GetRunningCommand {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
+    let uri = provider_activity_service_id(&agreement.offer_node_id);
     gsb_send!(msg, &uri, query.timeout)
 }
 

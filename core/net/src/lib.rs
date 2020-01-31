@@ -33,6 +33,7 @@ pub async fn bind_remote(
         |request_id: String, caller: String, addr: String, data: Vec<u8>| {
             let local_addr: String =
                 // replaces  /net/0x789/test/1 --> /public/test/1
+                // TODO: use replacen
                 format!("{}/{}",
                         &*PUBLIC_SERVICE,
                         addr.split('/').skip(3).collect::<Vec<_>>().join("/"));
