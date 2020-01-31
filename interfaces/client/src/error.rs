@@ -1,6 +1,8 @@
 //! Error definitions and mappings
 use backtrace::Backtrace as Trace; // needed b/c of thiserror magic
 use thiserror::Error;
+use awc::http::StatusCode;
+use awc::error::{JsonPayloadError, PayloadError, SendRequestError};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -36,10 +38,10 @@ pub enum Error {
     UrlParseError(#[from] url::ParseError),
 }
 
-impl From<awc::error::SendRequestError> for Error {
-    fn from(e: awc::error::SendRequestError) -> Self {
+impl From<SendRequestError> for Error {
+    fn from(e: SendRequestError) -> Self {
         match e {
-            awc::error::SendRequestError::Timeout => Error::TimeoutError {
+            SendRequestError::Timeout => Error::TimeoutError {
                 e: format!("{}", e),
                 url: "".into(),
                 bt: Trace::new(),
@@ -53,10 +55,10 @@ impl From<awc::error::SendRequestError> for Error {
     }
 }
 
-impl From<(awc::error::SendRequestError, String)> for Error {
-    fn from(pair: (awc::error::SendRequestError, String)) -> Self {
+impl From<(SendRequestError, String)> for Error {
+    fn from(pair: (SendRequestError, String)) -> Self {
         match pair.0 {
-            awc::error::SendRequestError::Timeout => Error::TimeoutError {
+            SendRequestError::Timeout => Error::TimeoutError {
                 e: format!("{}", pair.0),
                 url: "".into(),
                 bt: Trace::new(),
@@ -70,8 +72,8 @@ impl From<(awc::error::SendRequestError, String)> for Error {
     }
 }
 
-impl From<awc::error::PayloadError> for Error {
-    fn from(e: awc::error::PayloadError) -> Self {
+impl From<PayloadError> for Error {
+    fn from(e: PayloadError) -> Self {
         Error::PayloadError {
             e,
             bt: Trace::new(),
@@ -79,11 +81,25 @@ impl From<awc::error::PayloadError> for Error {
     }
 }
 
-impl From<awc::error::JsonPayloadError> for Error {
-    fn from(e: awc::error::JsonPayloadError) -> Self {
+impl From<JsonPayloadError> for Error {
+    fn from(e: JsonPayloadError) -> Self {
         Error::JsonPayloadError {
             e,
             bt: Trace::new(),
+        }
+    }
+}
+
+impl From<StatusCode> for Error {
+    fn from(status_code: StatusCode) -> Self {
+        if status_code == StatusCode::REQUEST_TIMEOUT {
+            Error::TimeoutError {
+                e: format!("{:?}", status_code),
+                url: "".to_string(),
+                bt: Trace::new()
+            }
+        } else {
+            Error::HttpStatusCode(status_code)
         }
     }
 }

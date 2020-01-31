@@ -8,7 +8,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{rc::Rc, str::FromStr, time::Duration};
 use url::{form_urlencoded, Url};
 
-use crate::{Error, Result};
+use crate::Result;
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -117,7 +117,7 @@ fn filter_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err(Error::HttpStatusCode(response.status()))
+        Err(response.status().into())
     }
 }
 
