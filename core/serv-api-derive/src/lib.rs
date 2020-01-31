@@ -21,7 +21,7 @@ pub fn services(_: TokenStream, item: TokenStream) -> TokenStream {
         syn::Item::Enum(item) => {
             let (services, errors): (Vec<_>, Vec<Result<_>>) = item
                 .variants
-                .into_iter()
+                .iter()
                 .map(Service::try_from)
                 .partition(Result::is_ok);
 
@@ -29,7 +29,7 @@ pub fn services(_: TokenStream, item: TokenStream) -> TokenStream {
             let errors: Vec<Error> = errors.into_iter().map(Result::unwrap_err).collect();
 
             match errors.is_empty() {
-                true => define_services(services).into(),
+                true => define_enum(item, services).into(),
                 false => define_errors(errors).into(),
             }
         }
@@ -45,6 +45,25 @@ fn quote_as_trait(path: &Path) -> proc_macro2::TokenStream {
     quote! {<#path as ya_service_api_interfaces::Service>}
 }
 
+fn define_enum(item: syn::ItemEnum, services: Vec<Service>) -> proc_macro2::TokenStream {
+    let ident = item.ident;
+
+    let cli = define_cli_services(&item.vis, &ident, &services);
+    let db = define_db_services(&services);
+    let gsb = define_gsb_services(&services);
+    let rest = define_rest_services(&services);
+
+    quote! {
+        #cli
+
+        impl #ident {
+            #db
+            #gsb
+            #rest
+        }
+    }
+}
+
 fn define_errors(errors: Vec<Error>) -> proc_macro2::TokenStream {
     let mut error_stream = proc_macro2::TokenStream::new();
     errors
@@ -52,25 +71,6 @@ fn define_errors(errors: Vec<Error>) -> proc_macro2::TokenStream {
         .map(|e| e.to_compile_error())
         .for_each(|e| error_stream.extend(e.into_iter()));
     error_stream
-}
-
-fn define_services(services: Vec<Service>) -> proc_macro2::TokenStream {
-    let db = define_db_services(&services);
-    let cli = define_cli_services(&services);
-    let gsb = define_gsb_services(&services);
-    let rest = define_rest_services(&services);
-
-    quote! {
-        #[doc(hidden)]
-        mod services {
-            use super::*;
-
-            #cli
-            #db
-            #gsb
-            #rest
-        }
-    }
 }
 
 fn define_db_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
@@ -95,7 +95,11 @@ fn define_db_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
     }
 }
 
-fn define_cli_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
+fn define_cli_services(
+    vis: &syn::Visibility,
+    ident: &syn::Ident,
+    services: &Vec<Service>,
+) -> proc_macro2::TokenStream {
     let mut variants = proc_macro2::TokenStream::new();
     let mut variants_match = proc_macro2::TokenStream::new();
 
@@ -124,7 +128,7 @@ fn define_cli_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
             #name(#path::Cli),
         });
         variants_match.extend(quote! {
-            CliCommands::#name(c) => c.run_command(ctx).await,
+            Self::#name(c) => c.run_command(ctx).await,
         });
     }
 
@@ -143,11 +147,11 @@ fn define_cli_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
     quote! {
         #[doc(hidden)]
         #[derive(structopt::StructOpt, Debug)]
-        pub enum CliCommands {
+        #vis enum #ident {
             #variants
         }
 
-        impl CliCommands {
+        impl #ident {
             pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
                 #variants_match
             }

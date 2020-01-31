@@ -83,7 +83,7 @@ impl Service {
         Ok(components)
     }
 
-    fn parse_fields(fields: FieldsUnnamed) -> Result<Path> {
+    fn parse_fields(fields: &FieldsUnnamed) -> Result<Path> {
         let field = match fields.unnamed.first() {
             Some(f) => f,
             None => return Err(Error::new(fields.span(), "Expected argument")),
@@ -96,14 +96,14 @@ impl Service {
     }
 }
 
-impl TryFrom<Variant> for Service {
+impl TryFrom<&Variant> for Service {
     type Error = Error;
 
-    fn try_from(variant: Variant) -> Result<Self> {
+    fn try_from(variant: &Variant) -> Result<Self> {
         let span = variant.ident.span().into();
         let name = variant.ident.clone();
         let components = Self::parse_attrs(&variant.attrs)?;
-        let path = match variant.fields {
+        let path = match &variant.fields {
             Fields::Unnamed(fields) => Self::parse_fields(fields)?,
             _ => return Err(Error::new(span, "Invalid format")),
         };

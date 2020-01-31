@@ -119,7 +119,7 @@ enum Services {
 enum CliCommand {
     #[structopt(flatten)]
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Commands(services::CliCommands),
+    Commands(Services),
 
     #[structopt(name = "complete")]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
@@ -166,15 +166,15 @@ impl ServiceCommand {
                 let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
 
-                services::db(&db).await?;
-                services::gsb(&db).await?;
+                Services::db(&db).await?;
+                Services::gsb(&db).await?;
 
                 HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
-                    services::rest(app, &db)
+                    Services::rest(app, &db)
                 })
                 .bind(ctx.http_address())
                 .context(format!(
