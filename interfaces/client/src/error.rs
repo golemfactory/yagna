@@ -56,16 +56,16 @@ impl From<SendRequestError> for Error {
 }
 
 impl From<(SendRequestError, String)> for Error {
-    fn from(pair: (SendRequestError, String)) -> Self {
-        match pair.0 {
+    fn from((e, url): (SendRequestError, String)) -> Self {
+        match e {
             SendRequestError::Timeout => Error::TimeoutError {
-                e: format!("{}", pair.0),
-                url: "".into(),
+                e: format!("{}", e),
+                url,
                 bt: Trace::new(),
             },
             e => Error::SendRequestError {
                 e: format!("{}", e),
-                url: pair.1,
+                url,
                 bt: Trace::new(),
             },
         }
@@ -90,12 +90,12 @@ impl From<JsonPayloadError> for Error {
     }
 }
 
-impl From<StatusCode> for Error {
-    fn from(status_code: StatusCode) -> Self {
+impl From<(StatusCode, String)> for Error {
+    fn from((status_code, url): (StatusCode, String)) -> Self {
         if status_code == StatusCode::REQUEST_TIMEOUT {
             Error::TimeoutError {
                 e: format!("{:?}", status_code),
-                url: "".to_string(),
+                url,
                 bt: Trace::new()
             }
         } else {

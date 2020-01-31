@@ -113,11 +113,11 @@ impl WebRequest<ClientRequest> {
     }
 }
 
-fn filter_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
+fn filter_http_status<T>(response: ClientResponse<T>, url: String) -> Result<ClientResponse<T>> {
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err(response.status().into())
+        Err((response.status(), url).into())
     }
 }
 
@@ -127,8 +127,8 @@ impl WebRequest<SendClientRequest> {
         let mut response = self
             .inner_request
             .await
-            .map_err(|e| (e, url).into())
-            .and_then(filter_http_status)?;
+            .map_err(|e| (e, url.clone()).into())
+            .and_then(|r| filter_http_status(r, url))?;
 
         log::debug!("{:?}", response.headers());
         // allow empty body and no content (204) to pass smoothly
@@ -152,8 +152,8 @@ impl WebRequest<SendClientRequest> {
         let url = self.url.clone();
         self.inner_request
             .await
-            .map_err(|e| (e, url).into())
-            .and_then(filter_http_status)?
+            .map_err(|e| (e, url.clone()).into())
+            .and_then(|r| filter_http_status(r, url))?
             .body()
             .await
             .map_err(From::from)
