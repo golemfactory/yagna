@@ -1,7 +1,6 @@
 use crate::common::{PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
 use crate::error::Error;
-use crate::timeout::IntoTimeoutFuture;
 use actix_web::web;
 use futures::prelude::*;
 use std::convert::From;
@@ -9,6 +8,7 @@ use std::convert::From;
 use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 use ya_persistence::executor::{ConnType, DbExecutor};
+use ya_service_api::timeout::IntoTimeoutFuture;
 
 pub mod service;
 

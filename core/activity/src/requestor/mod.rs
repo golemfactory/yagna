@@ -3,14 +3,17 @@ use crate::error::Error;
 
 use ya_core_model::activity::SERVICE_ID;
 use ya_persistence::{executor::ConnType, models::Agreement};
-use ya_service_api::constants::NET_SERVICE_ID;
+use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE};
 
 pub mod control;
 pub mod state;
 
 #[inline(always)]
 fn provider_activity_uri(provider_id: &str) -> String {
-    format!("{}/{}{}", NET_SERVICE_ID, provider_id, SERVICE_ID)
+    format!(
+        "{}{}/{}{}",
+        PRIVATE_SERVICE, NET_SERVICE_ID, provider_id, SERVICE_ID
+    )
 }
 
 fn missing_activity_err(conn: &ConnType, activity_id: &str) -> Result<(), Error> {

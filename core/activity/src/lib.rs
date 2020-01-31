@@ -2,15 +2,15 @@
 extern crate diesel;
 
 #[macro_use]
-pub(crate) mod macros;
+extern crate ya_service_api;
+
 pub(crate) mod common;
-pub(crate) mod dao;
+pub mod dao; // FIXME: pub(crate)
 
 pub mod api;
 pub mod error;
 pub mod provider;
 pub mod requestor;
-pub mod timeout;
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 

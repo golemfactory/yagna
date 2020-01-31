@@ -1,3 +1,4 @@
+#[macro_export]
 macro_rules! db_conn {
     ($db_executor:expr) => {{
         use crate::error::Error;
@@ -5,6 +6,7 @@ macro_rules! db_conn {
     }};
 }
 
+#[macro_export]
 macro_rules! bind_gsb_method {
     ($bind:ident, $id:expr, $db:expr, $fn:ident) => {{
         use ya_service_bus::typed as bus;
@@ -14,6 +16,7 @@ macro_rules! bind_gsb_method {
     }};
 }
 
+#[macro_export]
 macro_rules! gsb_send {
     ($msg:expr, $uri:expr, $timeout:expr) => {{
         use ya_service_bus::actix_rpc;
@@ -30,12 +33,14 @@ macro_rules! gsb_send {
     }};
 }
 
+#[macro_export]
 macro_rules! json_response_future {
     ($future:expr) => {
         $future.map(crate::common::into_json_response)
     };
 }
 
+#[macro_export]
 macro_rules! impl_restful_handler {
     ($method:ident) => {
         move |d| json_response_future!($method(d))

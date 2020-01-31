@@ -1,9 +1,9 @@
-use diesel::prelude::*;
 use serde_json::json;
 use structopt::StructOpt;
 
 use ya_persistence::executor::DbExecutor;
 
+use ya_activity::dao::AgreementDao;
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::models::{AgreementState, NewAgreement};
 
@@ -59,13 +59,13 @@ async fn main() -> anyhow::Result<()> {
 
     let new_agreement = NewAgreement {
         natural_id,
-        state_id: AgreementState::New,
+        state_id: AgreementState::Pending,
         demand_node_id: args.requestor.to_string(),
         demand_properties_json: serde_json::to_string_pretty(&demand_props)?,
-        demand_constraints_json: demand_constraints.to_string(),
+        demand_constraints: demand_constraints.to_string(),
         offer_node_id: args.provider.to_string(),
         offer_properties_json: "".to_string(),
-        offer_constraints_json: "".to_string(),
+        offer_constraints: "".to_string(),
         proposed_signature: "fake".to_string(),
         approved_signature: "fake".to_string(),
         committed_signature: None,
@@ -73,14 +73,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("inserting agreement: {:#?}", new_agreement);
 
-    db.with_transaction(move |conn| {
-        use ya_persistence::schema::agreement::dsl::agreement;
-        diesel::insert_into(agreement)
-            .values((&new_agreement,))
-            .execute(conn)?;
-        Ok::<_, anyhow::Error>(())
-    })
-    .await?;
+    AgreementDao::new(&db.conn()?).create(new_agreement)?;
 
     log::info!("done");
     Ok(())

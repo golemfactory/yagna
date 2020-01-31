@@ -1,14 +1,14 @@
-use crate::common::{generate_id, RpcMessageResult};
+use futures::prelude::*;
+use std::convert::{From, TryInto};
+
+use ya_core_model::activity::*;
+use ya_model::activity::{provider_event::ProviderEventType, State};
+use ya_persistence::executor::{ConnType, DbExecutor};
+use ya_service_api::timeout::IntoTimeoutFuture;
+
+use crate::common::{fetch_agreement, generate_id, RpcMessageResult};
 use crate::dao::*;
 use crate::error::Error;
-use crate::timeout::IntoTimeoutFuture;
-
-use futures::prelude::*;
-use std::convert::From;
-use ya_core_model::activity::*;
-use ya_model::activity::provider_event::ProviderEventType;
-use ya_model::activity::State;
-use ya_persistence::executor::{ConnType, DbExecutor};
 
 lazy_static::lazy_static! {
     static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
@@ -43,6 +43,13 @@ async fn create_activity_gsb(
     if !is_agreement_initiator(&conn, caller, &msg.agreement_id)? {
         return Err(Error::Forbidden.into());
     }
+
+    let new_agreement = fetch_agreement(&msg.agreement_id).await.unwrap();
+    log::info!("inserting agreement: {:#?}", new_agreement);
+    AgreementDao::new(&conn)
+        .create(new_agreement.try_into().map_err(Error::from)?)
+        .map_err(Error::from)?;
+    log::info!("agreement inserted");
 
     ActivityDao::new(&conn)
         .create(&activity_id, &msg.agreement_id)

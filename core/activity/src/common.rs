@@ -1,7 +1,11 @@
-use crate::error;
 use serde::Deserialize;
 use uuid::Uuid;
+
+use ya_client::{market::MarketProviderApi, web::WebClient};
 use ya_service_bus::RpcMessage;
+
+use crate::error::Error;
+use ya_model::market::Agreement;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: u32 = 120 * 1000; // ms
@@ -37,13 +41,13 @@ pub(crate) fn generate_id() -> String {
 }
 
 pub(crate) fn into_json_response<T>(
-    result: std::result::Result<T, error::Error>,
+    result: std::result::Result<T, Error>,
 ) -> actix_web::HttpResponse
 where
     T: serde::Serialize,
 {
     let result = match result {
-        Ok(value) => serde_json::to_string(&value).map_err(error::Error::from),
+        Ok(value) => serde_json::to_string(&value).map_err(Error::from),
         Err(e) => Err(e),
     };
 
@@ -54,4 +58,9 @@ where
             .into(),
         Err(e) => e.into(),
     }
+}
+
+pub async fn fetch_agreement(agreement_id: &String) -> Result<Agreement, Error> {
+    let market_api: MarketProviderApi = WebClient::builder().build()?.interface()?;
+    Ok(market_api.get_agreement(agreement_id).await?)
 }

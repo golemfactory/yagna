@@ -6,7 +6,9 @@ use chrono::NaiveDateTime;
 use diesel::backend::Backend;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::sql_types::Integer;
+use std::convert::TryFrom;
 use std::error::Error;
+use ya_model::market::agreement::{Agreement as ApiAgreement, State as ApiAgreementState};
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "activity"]
@@ -68,6 +70,42 @@ pub struct NewAgreement {
     pub committed_signature: Option<String>,
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum AgreementConversionError {
+    #[error("no requestor id")]
+    NoRequestorId,
+    #[error("no provider id")]
+    NoProviderId,
+    #[error("serde JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+impl TryFrom<ApiAgreement> for NewAgreement {
+    type Error = AgreementConversionError;
+
+    fn try_from(agreement: ApiAgreement) -> Result<Self, Self::Error> {
+        Ok(NewAgreement {
+            natural_id: agreement.agreement_id,
+            state_id: agreement.state.into(),
+            demand_node_id: agreement
+                .demand
+                .requestor_id
+                .ok_or(AgreementConversionError::NoRequestorId)?,
+            demand_properties_json: serde_json::to_string_pretty(&agreement.demand.properties)?,
+            demand_constraints_json: agreement.demand.constraints,
+            offer_node_id: agreement
+                .offer
+                .provider_id
+                .ok_or(AgreementConversionError::NoProviderId)?,
+            offer_properties_json: serde_json::to_string_pretty(&agreement.offer.properties)?,
+            offer_constraints_json: agreement.offer.constraints,
+            proposed_signature: agreement.proposed_signature.unwrap_or_default(),
+            approved_signature: agreement.approved_signature.unwrap_or_default(),
+            committed_signature: agreement.committed_signature,
+        })
+    }
+}
+
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "agreement"]
 pub struct Agreement {
@@ -88,12 +126,28 @@ pub struct Agreement {
 #[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
 #[sql_type = "Integer"]
 pub enum AgreementState {
-    New = 0,
-    PendingApproval = 1,
+    /// new
+    Proposal = 0,
+    Pending = 1,
     Approved = 10,
-    Canceled = 40,
+    Cancelled = 40,
     Rejected = 41,
+    Expired = 42,
     Terminated = 50,
+}
+
+impl From<ApiAgreementState> for AgreementState {
+    fn from(model: ApiAgreementState) -> Self {
+        match model {
+            ApiAgreementState::Proposal => AgreementState::Proposal,
+            ApiAgreementState::Pending => AgreementState::Pending,
+            ApiAgreementState::Cancelled => AgreementState::Cancelled,
+            ApiAgreementState::Rejected => AgreementState::Rejected,
+            ApiAgreementState::Approved => AgreementState::Approved,
+            ApiAgreementState::Expired => AgreementState::Expired,
+            ApiAgreementState::Terminated => AgreementState::Terminated,
+        }
+    }
 }
 
 impl<DB: Backend> ToSql<Integer, DB> for AgreementState

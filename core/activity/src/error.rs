@@ -25,6 +25,10 @@ pub enum Error {
     Timeout,
     #[error("task: {0}")]
     RuntimeError(#[from] tokio::task::JoinError),
+    #[error("ya-client error: {0}")]
+    ClientError(#[from] ya_client::error::Error),
+    #[error("Agreement conversion error: {0}")]
+    AgreementConversionError(#[from] ya_persistence::models::AgreementConversionError),
 }
 
 macro_rules! service_error {
@@ -95,6 +99,8 @@ impl From<Error> for RpcMessageError {
             Error::Forbidden => RpcMessageError::Forbidden,
             Error::NotFound => RpcMessageError::NotFound,
             Error::Timeout => RpcMessageError::Timeout,
+            Error::ClientError(err) => service_error!(err),
+            Error::AgreementConversionError(err) => service_error!(err),
         }
     }
 }
@@ -116,6 +122,8 @@ impl actix_web::error::ResponseError for Error {
             )),
             Error::NotFound => actix_web::HttpResponse::NotFound().finish(),
             Error::Timeout => actix_web::HttpResponse::RequestTimeout().finish(),
+            Error::ClientError(err) => internal_error_http_response!(err),
+            Error::AgreementConversionError(err) => internal_error_http_response!(err),
         }
     }
 }
