@@ -10,6 +10,7 @@ use ya_client::{market::MarketRequestorApi, web::WebClient};
 
 use ya_model::market::event::RequestorEvent;
 use ya_model::market::{AgreementProposal, Demand, Proposal};
+use std::time::Duration;
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -74,6 +75,8 @@ async fn spawn_workers(
 
         if !events.is_empty() {
             log::debug!("events={:?}", events);
+        } else {
+            tokio::time::delay_for(Duration::from_millis(100)).await;
         }
         for event in events {
             match event {
