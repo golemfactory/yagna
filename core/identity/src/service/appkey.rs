@@ -6,7 +6,7 @@ use crate::dao::AppKeyDao;
 
 pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     use ya_core_model::appkey as model;
-    use ya_service_bus::typed as bus;
+    use ya_service_bus::{typed as bus, RpcEndpoint};
 
     let dbx = db.clone();
 
@@ -29,11 +29,27 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let _ = bus::bind(&model::BUS_ID, move |get: model::Get| {
         let db = dbx.clone();
         async move {
-            let (appkey, role) = db
-                .as_dao::<AppKeyDao>()
-                .get(get.key)
-                .await
-                .map_err(Into::into)?;
+            let (appkey, role) =
+                if let Some(key) = get.key {
+                    db
+                        .as_dao::<AppKeyDao>()
+                        .get(key)
+                        .await
+                        .map_err(Into::into)?
+                } else {
+                    use ya_core_model::identity as idm;
+                    let identity : idm::IdentityInfo = bus::service(idm::BUS_ID)
+                        .send(idm::Get::ByDefault)
+                        .await
+                        .unwrap() //FIXME
+                        .unwrap() //FIXME
+                        .unwrap(); //FIXME
+                    db
+                        .as_dao::<AppKeyDao>()
+                        .get_for_id(identity.node_id.to_string())
+                        .await
+                        .map_err(Into::into)?
+                };
             Ok(model::AppKey {
                 name: appkey.name,
                 key: appkey.key,

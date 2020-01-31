@@ -1,5 +1,5 @@
-use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount};
-use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao, NotFoundAsOption};
+use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount, fetch_agreement};
+use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao};
 use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
 use actix_web::web;
@@ -8,6 +8,8 @@ use serde::Deserialize;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
+use std::convert::TryInto;
+use ya_persistence::models::NewAgreement;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -37,23 +39,26 @@ async fn create_activity(
 ) -> Result<String, Error> {
     let conn = db_conn!(db)?;
     let agreement_id = body.into_inner();
-    log::debug!("getting agreement from DB");
-    let agreement = AgreementDao::new(&conn)
-        .get(&agreement_id)
-        .not_found_as_option()?
-        .ok_or(Error::BadRequest(format!(
-            "Unknown agreement id: {}",
-            agreement_id
-        )))?;
-    log::debug!("agreement: {:#?}", agreement);
 
-    let uri = provider_activity_uri(&agreement.offer_node_id);
+    let agreement = fetch_agreement(&agreement_id).await?;
+    log::info!("agreement: {:#?}", agreement);
+
+    let new_agreement: NewAgreement = agreement.try_into()?;
+    let uri = provider_activity_uri(&new_agreement.offer_node_id);
+
+    log::info!("inserting agreement: {:#?}", new_agreement);
+    AgreementDao::new(&conn)
+        .create(new_agreement)
+        .map_err(Error::from)?;
+    log::info!("agreement inserted");
 
     let msg = CreateActivity {
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
+    log::info!("creating activity at: {}", uri);
     let activity_id = gsb_send!(msg, &uri, query.timeout)?;
+    log::info!("creating activity: {}", activity_id);
 
     ActivityDao::new(&conn)
         .create(&activity_id, &agreement_id)

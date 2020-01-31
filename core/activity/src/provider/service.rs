@@ -40,20 +40,21 @@ async fn create_activity_gsb(
     let activity_id = generate_id();
     let conn = db_conn!(db)?;
 
+    let agreement = fetch_agreement(&msg.agreement_id).await?;
+    log::info!("inserting agreement: {:#?}", agreement);
+    AgreementDao::new(&conn)
+        .create(agreement.try_into().map_err(Error::from)?)
+        .map_err(Error::from)?;
+    log::info!("agreement inserted");
+
     if !is_agreement_initiator(&conn, caller, &msg.agreement_id)? {
         return Err(Error::Forbidden.into());
     }
 
-    let new_agreement = fetch_agreement(&msg.agreement_id).await.unwrap();
-    log::info!("inserting agreement: {:#?}", new_agreement);
-    AgreementDao::new(&conn)
-        .create(new_agreement.try_into().map_err(Error::from)?)
-        .map_err(Error::from)?;
-    log::info!("agreement inserted");
-
     ActivityDao::new(&conn)
         .create(&activity_id, &msg.agreement_id)
         .map_err(Error::from)?;
+    log::info!("activity inserted: {}", activity_id);
 
     EventDao::new(&conn)
         .create(
@@ -63,13 +64,15 @@ async fn create_activity_gsb(
                 .as_str(),
         )
         .map_err(Error::from)?;
+    log::info!("event inserted");
 
-    ActivityStateDao::new(&conn)
+    let state = ActivityStateDao::new(&conn)
         .get_future(&activity_id, None)
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?
         .map_err(Error::from)?;
+    log::info!("activity state: {:?}", state);
 
     Ok(activity_id)
 }

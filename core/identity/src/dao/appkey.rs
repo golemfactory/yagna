@@ -87,6 +87,21 @@ impl<'c> AppKeyDao<'c> {
         .await
     }
 
+    pub async fn get_for_id(&self, identity_id: String) -> Result<(AppKey, Role)> {
+        use crate::db::schema::app_key as app_key_dsl;
+        use crate::db::schema::role as role_dsl;
+
+        self.with_transaction(|conn| {
+            let result = app_key_dsl::table
+                .inner_join(role_dsl::table)
+                .filter(app_key_dsl::identity_id.eq(identity_id))
+                .first(conn)?;
+
+            Ok(result)
+        })
+            .await
+    }
+
     pub async fn list(
         &self,
         identity: Option<String>,

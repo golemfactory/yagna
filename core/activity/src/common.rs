@@ -2,10 +2,11 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use ya_client::{market::MarketProviderApi, web::WebClient};
-use ya_service_bus::RpcMessage;
+use ya_core_model::appkey;
+use ya_model::market::Agreement;
+use ya_service_bus::{RpcMessage, actix_rpc};
 
 use crate::error::Error;
-use ya_model::market::Agreement;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: u32 = 120 * 1000; // ms
@@ -60,7 +61,17 @@ where
     }
 }
 
-pub async fn fetch_agreement(agreement_id: &String) -> Result<Agreement, Error> {
-    let market_api: MarketProviderApi = WebClient::builder().build()?.interface()?;
+
+pub(crate) async fn fetch_agreement(agreement_id: &String) -> Result<Agreement, Error> {
+    log::info!("fetching appkey for default id");
+    let app_key : appkey::AppKey = actix_rpc::service(appkey::BUS_ID)
+        .send(appkey::Get::default())
+        .await
+        .unwrap() // FIXME
+        .unwrap(); // FIXME
+    log::info!("using appkey: {:?}", app_key);
+
+    let market_api: MarketProviderApi = WebClient::with_token(&app_key.key)?.interface()?;
+    log::info!("fetching agreement");
     Ok(market_api.get_agreement(agreement_id).await?)
 }

@@ -37,12 +37,18 @@ pub struct Create {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Get {
-    pub key: String,
+    pub key: Option<String>,
 }
 
 impl Get {
     pub fn with_key(key: String) -> Self {
-        Get { key }
+        Get { key: Some(key) }
+    }
+}
+
+impl Default for Get {
+    fn default() -> Self {
+        Get { key: None }
     }
 }
 
