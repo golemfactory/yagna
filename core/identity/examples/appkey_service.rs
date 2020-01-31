@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         Args::Server => {
             let db = DbExecutor::new(":memory:")?;
             ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
-            services::gsb(&db).await?;
+            Service::gsb(&db).await?;
 
             actix_rt::signal::ctrl_c().await?;
             println!();

@@ -22,7 +22,7 @@ enum Service {
 async fn server() -> anyhow::Result<()> {
     let db = DbExecutor::new(":memory:")?;
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
-    services::gsb(&db).await?;
+    Service::gsb(&db).await?;
 
     HttpServer::new(move || {
         App::new()
