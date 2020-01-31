@@ -1,14 +1,16 @@
-use crate::common::{generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount, fetch_agreement};
+use crate::common::{
+    fetch_agreement, generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
+};
 use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao};
 use crate::error::Error;
 use crate::requestor::{get_agreement, missing_activity_err, provider_activity_service_id};
 use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
+use std::convert::TryInto;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
-use std::convert::TryInto;
 use ya_persistence::models::NewAgreement;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {

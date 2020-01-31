@@ -8,9 +8,9 @@ use structopt::StructOpt;
 use url::Url;
 use ya_client::{market::MarketRequestorApi, web::WebClient};
 
+use std::time::Duration;
 use ya_model::market::event::RequestorEvent;
 use ya_model::market::{AgreementProposal, Demand, Proposal};
-use std::time::Duration;
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -50,9 +50,8 @@ async fn process_offer(
     offer: Proposal,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let agreement_id = offer.proposal_id.unwrap().clone();
-    let agreement = AgreementProposal::new(
-        agreement_id.clone(),
-        "2021-01-01T18:54:16.655397Z".parse()?);
+    let agreement =
+        AgreementProposal::new(agreement_id.clone(), "2021-01-01T18:54:16.655397Z".parse()?);
     let _ack = requestor_api.create_agreement(&agreement).await?;
     log::info!("confirm agreement = {}", agreement_id);
     requestor_api.confirm_agreement(&agreement_id).await?;

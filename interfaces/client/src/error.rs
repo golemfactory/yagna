@@ -1,8 +1,8 @@
 //! Error definitions and mappings
+use awc::error::{JsonPayloadError, PayloadError, SendRequestError};
+use awc::http::StatusCode;
 use backtrace::Backtrace as Trace; // needed b/c of thiserror magic
 use thiserror::Error;
-use awc::http::StatusCode;
-use awc::error::{JsonPayloadError, PayloadError, SendRequestError};
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -96,7 +96,7 @@ impl From<(StatusCode, String)> for Error {
             Error::TimeoutError {
                 e: format!("{:?}", status_code),
                 url,
-                bt: Trace::new()
+                bt: Trace::new(),
             }
         } else {
             Error::HttpStatusCode(status_code)

@@ -4,7 +4,7 @@ use uuid::Uuid;
 use ya_client::{market::MarketProviderApi, web::WebClient};
 use ya_core_model::appkey;
 use ya_model::market::Agreement;
-use ya_service_bus::{RpcMessage, actix_rpc};
+use ya_service_bus::{actix_rpc, RpcMessage};
 
 use crate::error::Error;
 
@@ -61,10 +61,9 @@ where
     }
 }
 
-
 pub(crate) async fn fetch_agreement(agreement_id: &String) -> Result<Agreement, Error> {
     log::info!("fetching appkey for default id");
-    let app_key : appkey::AppKey = actix_rpc::service(appkey::BUS_ID)
+    let app_key: appkey::AppKey = actix_rpc::service(appkey::BUS_ID)
         .send(appkey::Get::default())
         .await
         .unwrap() // FIXME

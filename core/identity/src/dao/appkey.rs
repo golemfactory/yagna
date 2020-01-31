@@ -99,7 +99,7 @@ impl<'c> AppKeyDao<'c> {
 
             Ok(result)
         })
-            .await
+        .await
     }
 
     pub async fn list(
