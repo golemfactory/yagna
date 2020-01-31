@@ -9,6 +9,7 @@ members = [
     "core/model",
     "core/net",
     "core/payment",
+    "core/payment-driver",
     "core/persistence",
     "core/serv",
     "core/serv-api",
