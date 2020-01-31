@@ -52,13 +52,13 @@ async fn process_offer(
     let agreement_id = offer.proposal_id.unwrap().clone();
     let agreement = AgreementProposal::new(
         agreement_id.clone(),
-        Utc.ymd(2021, 1, 15).and_hms(9, 10, 11),
-    );
+        "2021-01-01T18:54:16.655397Z".parse()?);
     let _ack = requestor_api.create_agreement(&agreement).await?;
     log::info!("confirm agreement = {}", agreement_id);
     requestor_api.confirm_agreement(&agreement_id).await?;
     log::info!("wait for agreement = {}", agreement_id);
     requestor_api.wait_for_approval(&agreement_id).await?;
+    log::info!("agreement = {} CONFIRMED!", agreement_id);
 
     Ok(agreement_id)
 }
@@ -76,7 +76,7 @@ async fn spawn_workers(
         if !events.is_empty() {
             log::debug!("events={:?}", events);
         } else {
-            tokio::time::delay_for(Duration::from_millis(100)).await;
+            tokio::time::delay_for(Duration::from_millis(3000)).await;
         }
         for event in events {
             match event {
@@ -163,6 +163,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             log::info!("new agreement = {}", id);
             let act_id = activity_api.create_activity(&id).await.unwrap();
             log::info!("new activity = (({}))", act_id);
+            log::info!("I'M DONE FOR NOW")
             //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
         }
     });
