@@ -11,4 +11,4 @@ pub mod identity;
 pub mod ethaddr;
 
 #[cfg(feature = "net")]
-pub mod identity;
+pub mod net;
