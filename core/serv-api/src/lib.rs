@@ -1,7 +1,7 @@
 use anyhow::Result;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
-use std::{path::PathBuf};
+use std::path::PathBuf;
 
 pub mod constants;
 

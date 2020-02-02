@@ -11,8 +11,8 @@ use ya_model::activity::State;
 use ya_persistence::executor::{ConnType, DbExecutor};
 
 lazy_static::lazy_static! {
-    static ref PRIVATE_ID: String = format!("/private{}", ACTIVITY_SERVICE_ID);
-    static ref PUBLIC_ID: String = format!("/public{}", ACTIVITY_SERVICE_ID);
+    static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
+    static ref PUBLIC_ID: String = format!("/public{}", SERVICE_ID);
 }
 
 pub fn bind_gsb(db: &DbExecutor) {

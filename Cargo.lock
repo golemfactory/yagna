@@ -2666,7 +2666,6 @@ dependencies = [
  "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-model 0.1.0",
- "ya-service-api 0.1.1",
  "ya-service-bus 0.2.0",
 ]
 
@@ -2967,6 +2966,7 @@ dependencies = [
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-activity 0.1.1",
  "ya-core-model 0.1.0",
  "ya-identity 0.1.0",

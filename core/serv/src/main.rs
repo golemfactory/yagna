@@ -10,15 +10,14 @@ use structopt::{clap, StructOpt};
 
 use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{
-    constants::{CENTRAL_NET_HOST, YAGNA_HOST, YAGNA_HTTP_PORT},
-    CliCtx, CommandOutput,
-};
+use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_web::middleware::{auth, Identity};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
+use std::net::SocketAddr;
+use url::Url;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -30,12 +29,16 @@ struct CliArgs {
     data_dir: Option<PathBuf>,
 
     /// Daemon address
-    #[structopt(short, long, default_value = &*YAGNA_HOST, env = "YAGNA_HOST")]
-    address: String,
+    #[structopt(
+        short,
+        long,
+        default_value = "http://127.0.0.1:7465",
+        env = "YAGNA_API_URL"
+    )]
+    api_url: Url,
 
-    /// Daemon HTTP port
-    #[structopt(short = "p", long, default_value = &*YAGNA_HTTP_PORT, env = "YAGNA_HTTP_PORT")]
-    http_port: u16,
+    #[structopt(long = "net-addr", env = "ya_net::NET_ENV_VAR")]
+    net_addr: Option<SocketAddr>,
 
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -62,7 +65,16 @@ impl CliArgs {
     }
 
     pub fn get_http_address(&self) -> Result<(String, u16)> {
-        Ok((self.address.clone(), self.http_port))
+        let host = self
+            .api_url
+            .host()
+            .ok_or_else(|| anyhow::anyhow!("invalid api url"))?
+            .to_owned();
+        let port = self
+            .api_url
+            .port_or_known_default()
+            .ok_or_else(|| anyhow::anyhow!("invalid api url, no port"))?;
+        Ok((host.to_string(), port))
     }
 
     pub fn log_level(&self) -> String {
@@ -156,17 +168,17 @@ impl ServiceCommand {
 
                 let default_id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByDefault)
-                    .await
-                    .map_err(anyhow::Error::msg)??
+                    .await??
                     .ok_or(anyhow::Error::msg("no default identity"))?
                     .node_id
                     .to_string();
                 log::info!("using default identity as network id: {:?}", default_id);
-                ya_net::bind_remote(&*CENTRAL_NET_HOST, &default_id)
+                let net_host = ya_net::resolve_default()?;
+                ya_net::bind_remote(&net_host, &default_id)
                     .await
                     .context(format!(
                         "Error binding network service at {} for {}",
-                        *CENTRAL_NET_HOST, default_id
+                        net_host, default_id
                     ))?;
 
                 HttpServer::new(move || {
@@ -206,6 +218,11 @@ async fn main() -> Result<()> {
 
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
+
+    // TODO: fix this hack
+    if let Some(net_addr) = args.net_addr {
+        std::env::set_var(ya_net::NET_ENV_VAR, net_addr.to_string());
+    }
 
     args.run_command().await
 }
