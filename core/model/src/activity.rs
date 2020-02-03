@@ -4,8 +4,7 @@ use ya_model::activity::{
 };
 use ya_service_bus::RpcMessage;
 
-pub use ya_service_api::constants::ACTIVITY_SERVICE_ID;
-
+pub const SERVICE_ID: &str = "/activity";
 pub const BUS_ID: &str = "/private/activity";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

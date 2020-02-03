@@ -11,8 +11,8 @@ use ya_model::activity::State;
 use ya_persistence::executor::{ConnType, DbExecutor};
 
 lazy_static::lazy_static! {
-    static ref PRIVATE_ID: String = format!("/private{}", ACTIVITY_SERVICE_ID);
-    static ref PUBLIC_ID: String = format!("/public{}", ACTIVITY_SERVICE_ID);
+    static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
+    static ref PUBLIC_ID: String = format!("/public{}", SERVICE_ID);
 }
 
 pub fn bind_gsb(db: &DbExecutor) {
@@ -120,7 +120,7 @@ async fn set_activity_state_gsb(
     caller: String,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
-    if caller != msg.activity_id {
+    if parse_caller(caller) != msg.activity_id {
         return Err(Error::Forbidden.into());
     }
 
@@ -156,7 +156,7 @@ async fn set_activity_usage_gsb(
     caller: String,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
-    if caller != msg.activity_id {
+    if parse_caller(caller) != msg.activity_id {
         return Err(Error::Forbidden.into());
     }
 
@@ -173,7 +173,7 @@ fn is_activity_owner(
     let agreement_id = ActivityDao::new(&conn)
         .get_agreement_id(&activity_id)
         .map_err(Error::from)?;
-    is_agreement_initiator(conn, caller, &agreement_id)
+    is_agreement_initiator(conn, parse_caller(caller), &agreement_id)
 }
 
 fn is_agreement_initiator(
@@ -184,5 +184,11 @@ fn is_agreement_initiator(
     let agreement = AgreementDao::new(&conn)
         .get(agreement_id)
         .map_err(Error::from)?;
-    Ok(caller == agreement.demand_node_id)
+    Ok(parse_caller(caller) == agreement.demand_node_id)
+}
+
+#[inline(always)]
+fn parse_caller(caller: String) -> String {
+    // FIXME: impl a proper caller struct / parser
+    caller.replace("/net/", "")
 }

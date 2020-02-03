@@ -1,5 +1,5 @@
 //! Requestor control part of Activity API
-use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
+use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest, ACTIVITY_API_PATH};
 
 use crate::{web::WebClient, web::WebInterface, Result};
 
@@ -9,8 +9,8 @@ pub struct ActivityRequestorControlApi {
 }
 
 impl WebInterface for ActivityRequestorControlApi {
-    const API_URL_ENV_VAR: &'static str = super::super::YAGNA_ACTIVITY_URL_ENV_VAR;
-    const API_SUFFIX: &'static str = super::super::ACTIVITY_API;
+    const API_URL_ENV_VAR: &'static str = "YAGNA_ACTIVITY_URL";
+    const API_SUFFIX: &'static str = ACTIVITY_API_PATH;
 
     fn from(client: WebClient) -> Self {
         ActivityRequestorControlApi { client }

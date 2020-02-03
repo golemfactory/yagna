@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
     ya_activity::provider::service::bind_gsb(&db);
 
     HttpServer::new(move || {
-        let activity = actix_web::web::scope(ya_activity::ACTIVITY_API)
+        let activity = actix_web::web::scope(ya_activity::ACTIVITY_API_PATH)
             .data(db.clone())
             .extend(ya_activity::provider::extend_web_scope);
 

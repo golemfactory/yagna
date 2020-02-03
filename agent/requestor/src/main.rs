@@ -1,4 +1,7 @@
-use actix_rt::Arbiter;
+#![allow(unused_imports)]
+
+use actix_rt::{Arbiter, System};
+use chrono::{TimeZone, Utc};
 use futures::channel::mpsc;
 use futures::prelude::*;
 use structopt::StructOpt;
@@ -46,7 +49,10 @@ async fn process_offer(
     offer: Proposal,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let agreement_id = offer.proposal_id.unwrap().clone();
-    let agreement = AgreementProposal::new(agreement_id.clone(), "2021-01-01".parse()?);
+    let agreement = AgreementProposal::new(
+        agreement_id.clone(),
+        Utc.ymd(2021, 1, 15).and_hms(9, 10, 11),
+    );
     let _ack = requestor_api.create_agreement(&agreement).await?;
     log::info!("confirm agreement = {}", agreement_id);
     requestor_api.confirm_agreement(&agreement_id).await?;
@@ -78,7 +84,13 @@ async fn spawn_workers(
                     let mut tx = tx.clone();
                     let requestor_api = requestor_api.clone();
                     Arbiter::spawn(async move {
-                        let agreement_id = process_offer(requestor_api, proposal).await.unwrap();
+                        let agreement_id = match process_offer(requestor_api, proposal).await {
+                            Ok(id) => id,
+                            Err(e) => {
+                                log::error!("unable to process offer: {}", e);
+                                return;
+                            }
+                        };
                         tx.send(agreement_id.clone()).await.unwrap();
                     });
                 }

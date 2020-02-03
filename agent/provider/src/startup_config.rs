@@ -1,17 +1,19 @@
 use structopt::StructOpt;
 use url::Url;
-use ya_client::{activity::ActivityProviderApi, market::MarketProviderApi, web::WebClient, Result};
-use ya_model::{activity::YAGNA_ACTIVITY_URL_ENV_VAR, market::YAGNA_MARKET_URL_ENV_VAR};
+use ya_client::{
+    activity::ActivityProviderApi, market::MarketProviderApi, web::WebClient, web::WebInterface,
+    Result,
+};
 
 #[derive(StructOpt)]
 pub struct StartupConfig {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
     pub auth: String,
     ///
-    #[structopt(long = "market-url", env = YAGNA_MARKET_URL_ENV_VAR)]
+    #[structopt(long = "market-url", env = MarketProviderApi::API_URL_ENV_VAR)]
     market_url: Url,
     ///
-    #[structopt(long = "activity-url", env = YAGNA_ACTIVITY_URL_ENV_VAR)]
+    #[structopt(long = "activity-url", env = ActivityProviderApi::API_URL_ENV_VAR)]
     activity_url: Url,
     ///
     #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]

@@ -1,5 +1,5 @@
 //! Provider part of Market API
-use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
+use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent, MARKET_API_PATH};
 
 use crate::{web::WebClient, web::WebInterface, Error, Result};
 
@@ -9,8 +9,8 @@ pub struct MarketProviderApi {
 }
 
 impl WebInterface for MarketProviderApi {
-    const API_URL_ENV_VAR: &'static str = super::YAGNA_MARKET_URL_ENV_VAR;
-    const API_SUFFIX: &'static str = super::MARKET_API;
+    const API_URL_ENV_VAR: &'static str = crate::market::MARKET_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = MARKET_API_PATH;
 
     fn from(client: WebClient) -> Self {
         MarketProviderApi { client }

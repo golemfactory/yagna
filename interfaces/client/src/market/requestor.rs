@@ -10,8 +10,8 @@ pub struct MarketRequestorApi {
 }
 
 impl WebInterface for MarketRequestorApi {
-    const API_URL_ENV_VAR: &'static str = super::YAGNA_MARKET_URL_ENV_VAR;
-    const API_SUFFIX: &'static str = super::MARKET_API;
+    const API_URL_ENV_VAR: &'static str = crate::market::MARKET_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = ya_model::market::MARKET_API_PATH;
 
     fn from(client: WebClient) -> Self {
         MarketRequestorApi { client }

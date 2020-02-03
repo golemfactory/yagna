@@ -9,3 +9,6 @@ pub mod identity;
 
 #[cfg(any(feature = "ethaddr", feature = "identity"))]
 pub mod ethaddr;
+
+#[cfg(feature = "net")]
+pub mod net;

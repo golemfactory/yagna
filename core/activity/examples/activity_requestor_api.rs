@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     migrations::run_with_output(&db.conn()?, &mut std::io::stdout())?;
 
     HttpServer::new(move || {
-        let activity = actix_web::web::scope(ya_activity::ACTIVITY_API)
+        let activity = actix_web::web::scope(ya_activity::ACTIVITY_API_PATH)
             .data(db.clone())
             .extend(requestor::control::extend_web_scope)
             .extend(requestor::state::extend_web_scope);

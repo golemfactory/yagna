@@ -16,5 +16,4 @@ pub use self::offer::Offer;
 pub use self::property_query::PropertyQuery;
 pub use self::proposal::Proposal;
 
-pub const MARKET_API: &str = "/market-api/v1/";
-pub const YAGNA_MARKET_URL_ENV_VAR: &str = "YAGNA_MARKET_URL";
+pub const MARKET_API_PATH: &str = "market-api/v1/";

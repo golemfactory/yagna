@@ -1,10 +1,22 @@
-use std::net::ToSocketAddrs;
+use std::net::{SocketAddr, ToSocketAddrs};
 
+use std::str::FromStr;
 use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE, PUBLIC_SERVICE};
 use ya_service_bus::{connection, untyped as local_bus};
 
 #[derive(Default)]
 struct SubscribeHelper {}
+
+pub const NET_ENV_VAR: &str = "CENTRAL_NET_HOST";
+pub const DEFAULT_NET_ADDR: &str = "10.30.10.202:7477";
+
+pub fn resolve_default() -> Result<SocketAddr, <SocketAddr as FromStr>::Err> {
+    if let Some(addr_str) = std::env::var(NET_ENV_VAR).ok() {
+        addr_str.parse()
+    } else {
+        DEFAULT_NET_ADDR.parse()
+    }
+}
 
 /// Initialize net module on a hub.
 pub async fn bind_remote(

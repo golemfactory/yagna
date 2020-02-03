@@ -24,5 +24,4 @@ pub use self::payment::Payment;
 pub use self::rejection::Rejection;
 pub use self::rejection_reason::RejectionReason;
 
-pub const PAYMENT_API: &str = "/payment-api/v1";
-pub const YAGNA_PAYMENT_URL_ENV_VAR: &str = "YAGNA_PAYMENT_URL";
+pub const PAYMENT_API_PATH: &str = "payment-api/v1/";

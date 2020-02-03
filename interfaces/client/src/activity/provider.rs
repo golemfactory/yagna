@@ -1,5 +1,5 @@
 //! Provider part of Activity API
-use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
+use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, ACTIVITY_API_PATH};
 
 use crate::{web::WebClient, web::WebInterface, Error, Result};
 
@@ -8,8 +8,8 @@ pub struct ActivityProviderApi {
 }
 
 impl WebInterface for ActivityProviderApi {
-    const API_URL_ENV_VAR: &'static str = super::YAGNA_ACTIVITY_URL_ENV_VAR;
-    const API_SUFFIX: &'static str = super::ACTIVITY_API;
+    const API_URL_ENV_VAR: &'static str = crate::activity::ACTIVITY_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = ACTIVITY_API_PATH;
 
     fn from(client: WebClient) -> Self {
         ActivityProviderApi { client }
