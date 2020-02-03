@@ -213,13 +213,21 @@ impl WebClientBuilder {
             builder = builder.header(key.clone(), value.clone());
         }
 
-        Ok(WebClient {
-            base_url: Rc::new(Url::parse(&format!(
-                "http://{}",
-                self.host_port.unwrap_or_else(|| "127.0.0.1:5001".into())
-            ))?),
-            awc: builder.finish(),
-        })
+        if let Some(env_url) = std::env::var("YAGNA_API_URL").ok() {
+            Ok(WebClient {
+                base_url: Rc::new(Url::parse(&env_url)?),
+                awc: builder.finish(),
+            })
+        }
+        else {
+            Ok(WebClient {
+                base_url: Rc::new(Url::parse(&format!(
+                    "http://{}",
+                    self.host_port.unwrap_or_else(|| "127.0.0.1:5001".into())
+                ))?),
+                awc: builder.finish(),
+            })
+        }
     }
 }
 
