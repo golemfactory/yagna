@@ -1,11 +1,14 @@
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate ya_service_api_web;
+#[macro_use]
+extern crate ya_service_bus;
 
 #[macro_use]
-extern crate ya_service_api;
-
+pub(crate) mod macros;
 pub(crate) mod common;
-pub mod dao; // FIXME: pub(crate)
+pub(crate) mod dao;
 
 pub mod api;
 pub mod error;

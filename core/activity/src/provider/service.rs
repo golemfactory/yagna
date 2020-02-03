@@ -4,7 +4,7 @@ use std::convert::{From, TryInto};
 use ya_core_model::activity::*;
 use ya_model::activity::{provider_event::ProviderEventType, State};
 use ya_persistence::executor::{ConnType, DbExecutor};
-use ya_service_api::timeout::IntoTimeoutFuture;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::common::{fetch_agreement, generate_id, RpcMessageResult};
 use crate::dao::*;
@@ -20,14 +20,14 @@ pub fn bind_gsb(db: &DbExecutor) {
     log::info!("activating activity provider service");
 
     // public for remote requestors interactions
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, create_activity_gsb);
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, destroy_activity_gsb);
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, get_activity_state_gsb);
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, get_activity_usage_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, create_activity_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, destroy_activity_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, get_activity_state_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, get_activity_usage_gsb);
 
     // local for ExeUnit interactions
-    bind_gsb_method!(bind_with_caller, &PRIVATE_ID, db, set_activity_state_gsb);
-    bind_gsb_method!(bind_with_caller, &PRIVATE_ID, db, set_activity_usage_gsb);
+    bind_gsb_method!(&PRIVATE_ID, db, set_activity_state_gsb);
+    bind_gsb_method!(&PRIVATE_ID, db, set_activity_usage_gsb);
 
     log::info!("activity provider service activated");
 }

@@ -8,7 +8,7 @@ use std::convert::From;
 use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 use ya_persistence::executor::{ConnType, DbExecutor};
-use ya_service_api::timeout::IntoTimeoutFuture;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 pub mod service;
 
