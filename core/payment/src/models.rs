@@ -11,7 +11,7 @@ use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::sql_types::Integer;
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "allocation"]
+#[table_name = "pay_allocation"]
 pub struct Allocation {
     pub id: String,
     pub total_amount: i32,
@@ -20,7 +20,7 @@ pub struct Allocation {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "debit_note"]
+#[table_name = "pay_debit_note"]
 pub struct DebitNote {
     pub id: String,
     pub previous_debit_note_id: Option<String>,
@@ -36,7 +36,7 @@ pub struct DebitNote {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "debit_note_event"]
+#[table_name = "pay_debit_note_event"]
 #[primary_key(debit_note_id, event_type)]
 pub struct DebitNoteEvent {
     pub debit_note_id: String,
@@ -46,7 +46,7 @@ pub struct DebitNoteEvent {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "invoice"]
+#[table_name = "pay_invoice"]
 pub struct Invoice {
     pub id: String,
     pub last_debit_note_id: String,
@@ -61,7 +61,7 @@ pub struct Invoice {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "invoice_event"]
+#[table_name = "pay_invoice_event"]
 #[primary_key(invoice_id, event_type)]
 pub struct InvoiceEvent {
     pub invoice_id: String,
@@ -71,21 +71,21 @@ pub struct InvoiceEvent {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "invoice_event_type"]
+#[table_name = "pay_invoice_event_type"]
 #[primary_key(event_type)]
 pub struct InvoiceEventType {
     pub event_type: String,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "invoice_status"]
+#[table_name = "pay_invoice_status"]
 #[primary_key(status)]
 pub struct InvoiceStatus {
     pub status: String,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "invoice_x_activity"]
+#[table_name = "pay_invoice_x_activity"]
 #[primary_key(invoice_id, activity_id)]
 pub struct InvoiceXActivity {
     pub invoice_id: String,
@@ -93,7 +93,7 @@ pub struct InvoiceXActivity {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "payment"]
+#[table_name = "pay_payment"]
 pub struct Payment {
     pub id: String,
     pub amount: i32,
@@ -103,7 +103,7 @@ pub struct Payment {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "payment_x_debit_note"]
+#[table_name = "pay_payment_x_debit_note"]
 #[primary_key(payment_id, debit_note_id)]
 pub struct PaymentXDebitNote {
     pub payment_id: String,
@@ -111,7 +111,7 @@ pub struct PaymentXDebitNote {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "payment_x_invoice"]
+#[table_name = "pay_payment_x_invoice"]
 #[primary_key(payment_id, invoice_id)]
 pub struct PaymentXInvoice {
     pub payment_id: String,
