@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ya_service_bus::RpcMessage;
 
-pub const SERVICE_ID: &str = "appkey";
+pub const SERVICE_ID: &str = "/appkey";
 pub const BUS_ID: &'static str = "/private/appkey";
 
 pub const DEFAULT_IDENTITY: &str = "primary";
