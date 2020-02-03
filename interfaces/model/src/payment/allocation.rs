@@ -1,18 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Allocation {
-    #[serde(rename = "allocationId")]
     pub allocation_id: String,
-    #[serde(rename = "totalAmount")]
     pub total_amount: i32,
-    #[serde(rename = "spentAmount")]
     pub spent_amount: i32,
-    #[serde(rename = "remainingAmount")]
     pub remaining_amount: i32,
-    #[serde(rename = "timeout", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<String>,
-    #[serde(rename = "makeDeposit")]
     pub make_deposit: bool,
 }
 

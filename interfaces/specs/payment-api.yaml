@@ -711,8 +711,8 @@ paths:
     put:
       tags:
         - requestor
-      summary: Ammend Allocation.
-      operationId: ammendAllocation
+      summary: Amend Allocation.
+      operationId: amendAllocation
       parameters:
         - $ref: '#/components/parameters/allocationId'
       requestBody:
@@ -1124,10 +1124,12 @@ components:
           items:
             type: string
         amount:
-          type: string
+          type: integer
         usageCounterVector:
           type: object
         creditAccountId:
+          type: string
+        paymentPlatform:
           type: string
         paymentDueDate:
           type: string
@@ -1275,8 +1277,14 @@ components:
         timestamp:
           type: string
           format: date-time
+        details:
+          type: object
         eventType:
           $ref: '#/components/schemas/EventType'
+      required:
+        - debitNoteId
+        - timestamp
+        - eventType
 
     InvoiceEvent:
       type: object
@@ -1287,8 +1295,14 @@ components:
         timestamp:
           type: string
           format: date-time
+        details:
+          type: object
         eventType:
           $ref: '#/components/schemas/EventType'
+      required:
+        - invoiceId
+        - timestamp
+        - eventType
 
     EventType:
       description: Types of Debit Note/Invoice events

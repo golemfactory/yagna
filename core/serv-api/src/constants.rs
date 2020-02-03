@@ -24,6 +24,7 @@ pub const ACTIVITY_SERVICE_ID: &str = "/activity";
 pub const APP_KEY_SERVICE_ID: &str = "/appkey";
 pub const IDENTITY_SERVICE_ID: &str = "/identity";
 pub const NET_SERVICE_ID: &str = "/net";
+pub const PAYMENT_SERVICE_ID: &str = "/payment";
 
 // APIs
 pub const ACTIVITY_API: &str = "/activity-api/v1";
