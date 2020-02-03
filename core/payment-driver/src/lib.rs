@@ -1,79 +1,50 @@
-use chrono::{DateTime, Local};
-use ethereum_types::{Address, H256, U256};
-use web3::Transport;
-use web3::Web3;
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use ethereum_types::{Address, H256};
+use web3::{Transport, Web3};
 use ya_persistence::executor::DbExecutor;
 
-pub enum Chain {
-    Mainnet,
-    Rinkeby,
-}
+mod account;
+mod payment;
+mod payment_driver_error;
+pub use account::{AccountBalance, Balance, Chain, Currency};
+pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
+pub use payment_driver_error::PaymentDriverError;
 
-pub enum PaymentStatus {
-    Ok,
-    NotYet,
-    NotFound,
-    NotEnoughFunds,
-    NotEnoughGas,
-}
-
-#[allow(unused)]
-pub struct PaymentDetails {
-    receiver: Address,
-    amount: U256,
-    date: Option<DateTime<Local>>,
-}
-
-#[allow(unused)]
-pub struct PaymentAmount {
-    base_currency_amount: U256,
-    gas_amount: Option<U256>,
-}
-
+#[async_trait]
 pub trait PaymentDriver {
-    /// Creates driver from private key
-    fn from_private_key<T: Transport>(
-        private_key: H256,
-        web3: Web3<T>,
-        chain: Chain,
-        db: DbExecutor,
-    ) -> Self;
-
-    /// Creates driver from keyfile
-    fn from_keyfile<T: Transport>(
-        keyfile: &str,
-        password: &str,
-        web3: Web3<T>,
-        chain: Chain,
-        db: DbExecutor,
-    ) -> Self;
-
     /// Returns account balance
-    fn get_account_balance(&self) -> U256;
+    async fn get_account_balance(&self) -> Result<AccountBalance, PaymentDriverError>;
 
     /// Schedules payment
-    fn schedule_payment(
+    async fn schedule_payment(
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
         receipent: Address,
-        due_date: DateTime<Local>,
-    ) -> Result<(), &'static str>;
+        due_date: DateTime<Utc>,
+    ) -> Result<(), PaymentDriverError>;
 
     /// Returns payment status
-    fn get_payment_status(&self, invoice_id: &str) -> PaymentStatus;
+    async fn get_payment_status(
+        &self,
+        invoice_id: &str,
+    ) -> Result<PaymentStatus, PaymentDriverError>;
 
     /// Verifies payment
-    fn verify_payment(&self, payment: PaymentDetails) -> Result<PaymentDetails, &'static str>;
+    async fn verify_payment(
+        &self,
+        confirmation: &PaymentConfirmation,
+    ) -> Result<PaymentDetails, PaymentDriverError>;
 
     /// Returns sum of transactions from given address
-    fn get_transcation_balance(&self, payee: Address) -> U256;
+    async fn get_transcation_balance(&self, payee: Address) -> Result<Balance, PaymentDriverError>;
 }
 
 pub struct GNTDriver {}
 
 #[allow(unused)]
-impl PaymentDriver for GNTDriver {
+impl GNTDriver {
     /// Creates driver from private key
     fn from_private_key<T>(
         private_key: H256,
@@ -100,34 +71,44 @@ impl PaymentDriver for GNTDriver {
     {
         unimplemented!();
     }
+}
 
+#[allow(unused)]
+#[async_trait]
+impl PaymentDriver for GNTDriver {
     /// Returns account balance
-    fn get_account_balance(&self) -> U256 {
+    async fn get_account_balance(&self) -> Result<AccountBalance, PaymentDriverError> {
         unimplemented!();
     }
 
     /// Schedules payment
-    fn schedule_payment(
+    async fn schedule_payment(
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
         receipent: Address,
-        due_date: DateTime<Local>,
-    ) -> Result<(), &'static str> {
+        due_date: DateTime<Utc>,
+    ) -> Result<(), PaymentDriverError> {
         unimplemented!();
     }
 
     /// Returns payment status
-    fn get_payment_status(&self, invoice_id: &str) -> PaymentStatus {
+    async fn get_payment_status(
+        &self,
+        invoice_id: &str,
+    ) -> Result<PaymentStatus, PaymentDriverError> {
         unimplemented!();
     }
     /// Verifies payment
-    fn verify_payment(&self, payment: PaymentDetails) -> Result<PaymentDetails, &'static str> {
+    async fn verify_payment(
+        &self,
+        confirmation: &PaymentConfirmation,
+    ) -> Result<PaymentDetails, PaymentDriverError> {
         unimplemented!();
     }
 
     /// Returns sum of transactions from given address
-    fn get_transcation_balance(&self, payee: Address) -> U256 {
+    async fn get_transcation_balance(&self, payee: Address) -> Result<Balance, PaymentDriverError> {
         unimplemented!();
     }
 }

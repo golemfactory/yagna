@@ -8,4 +8,5 @@ edition = "2018"
 web3 = {git = "https://github.com/bidzyyys/rust-web3"}
 ethereum-types = "0.8.0"
 chrono = "0.4.10"
+async-trait = "0.1.22"
 ya-persistence = "0.1"
