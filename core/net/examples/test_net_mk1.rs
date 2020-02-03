@@ -72,9 +72,11 @@ async fn main() -> Result<()> {
 
     match options.side {
         Side::Listener => {
-            let _ = bus::bind_public("", |p: Test| async move {
-                log::info!("test called!!");
-                Ok(format!("pong {}", p.0))
+            let _ = bus::bind_public("", |p: Test| {
+                async move {
+                    log::info!("test called!!");
+                    Ok(format!("pong {}", p.0))
+                }
             });
             log::info!("Started listening on the local bus");
             actix_rt::signal::ctrl_c().await?;

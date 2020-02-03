@@ -218,8 +218,7 @@ impl WebClientBuilder {
                 base_url: Rc::new(Url::parse(&env_url)?),
                 awc: builder.finish(),
             })
-        }
-        else {
+        } else {
             Ok(WebClient {
                 base_url: Rc::new(Url::parse(&format!(
                     "http://{}",
