@@ -48,6 +48,7 @@ async fn create_activity(
     let new_agreement: NewAgreement = agreement.try_into()?;
 
     log::info!("inserting agreement: {:#?}", new_agreement);
+    let uri = provider_activity_service_id(&new_agreement.offer_node_id);
     AgreementDao::new(&conn)
         .create(new_agreement)
         .map_err(Error::from)?;
@@ -58,7 +59,6 @@ async fn create_activity(
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&new_agreement.offer_node_id);
     log::info!("creating activity at: {}", uri);
     let activity_id = gsb_send!(msg, &uri, query.timeout)?;
     log::info!("creating activity: {}", activity_id);

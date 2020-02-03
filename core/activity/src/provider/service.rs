@@ -131,12 +131,12 @@ async fn set_activity_state_gsb(
     caller: String,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
-    let conn = db_conn!(db);
-    if !is_activity_owner(&conn, caller, &msg.activity_id) {
+    let conn = db_conn!(db)?;
+    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityStateDao::new(&conn?)
+    ActivityStateDao::new(&conn)
         .set(
             &msg.activity_id,
             msg.state.state.clone(),
@@ -168,12 +168,12 @@ async fn set_activity_usage_gsb(
     caller: String,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
-    let conn = db_conn!(db);
-    if !is_activity_owner(&conn, caller, &msg.activity_id) {
+    let conn = db_conn!(db)?;
+    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityUsageDao::new(&conn?)
+    ActivityUsageDao::new(&conn)
         .set(&msg.activity_id, &msg.usage.current_usage)
         .map_err(|e| Error::from(e).into())
 }
@@ -204,7 +204,7 @@ fn is_agreement_initiator(
 #[inline(always)]
 fn validate_caller(caller: String, expected: String) -> bool {
     // FIXME: impl a proper caller struct / parser
-    let net_expected = format!("{}/{}", NET_SERVICE_ID, agreement.demand_node_id);
+    let net_expected = format!("{}/{}", NET_SERVICE_ID, expected);
     log::info!("checking caller: {} vs expected: {}", caller, net_expected);
     caller == net_expected
 }
