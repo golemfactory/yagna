@@ -130,3 +130,18 @@ where
         Err(join_err) => Err(From::from(join_err)),
     }
 }
+
+pub async fn do_with_transaction<R: Send + 'static, Error, F>(
+    pool: &PoolType,
+    f: F,
+) -> Result<R, Error>
+where
+    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    Error: Send
+        + 'static
+        + From<tokio::task::JoinError>
+        + From<r2d2::Error>
+        + From<diesel::result::Error>,
+{
+    do_with_connection(pool, move |conn| conn.transaction(|| f(conn))).await
+}

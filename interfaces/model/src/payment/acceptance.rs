@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct Acceptance {
     pub total_amount_accepted: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub allocation_id: Option<String>,
 }
 

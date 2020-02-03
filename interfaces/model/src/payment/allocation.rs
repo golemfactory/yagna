@@ -7,7 +7,7 @@ pub struct Allocation {
     pub total_amount: i32,
     pub spent_amount: i32,
     pub remaining_amount: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub timeout: Option<String>,
     pub make_deposit: bool,
 }

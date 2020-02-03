@@ -10,6 +10,8 @@ table! {
 table! {
     pay_debit_note (id) {
         id -> Text,
+        issuer_id -> Text,
+        recipient_id -> Text,
         previous_debit_note_id -> Nullable<Text>,
         agreement_id -> Text,
         activity_id -> Nullable<Text>,
@@ -35,11 +37,13 @@ table! {
 table! {
     pay_invoice (id) {
         id -> Text,
-        last_debit_note_id -> Text,
+        issuer_id -> Text,
+        recipient_id -> Text,
+        last_debit_note_id -> Nullable<Text>,
         agreement_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
-        amount -> Text,
+        amount -> Integer,
         usage_counter_vector -> Nullable<Binary>,
         credit_account_id -> Text,
         payment_platform -> Nullable<Text>,
@@ -78,6 +82,8 @@ table! {
 table! {
     pay_payment (id) {
         id -> Text,
+        payer_id -> Text,
+        payee_id -> Text,
         amount -> Integer,
         timestamp -> Timestamp,
         allocation_id -> Nullable<Text>,

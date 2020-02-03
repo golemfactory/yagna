@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct Rejection {
     pub rejection_reason: crate::payment::RejectionReason,
     pub total_amount_accepted: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub message: Option<String>,
 }
 

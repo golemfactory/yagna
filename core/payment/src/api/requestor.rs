@@ -1,12 +1,14 @@
 use crate::api::*;
+use crate::dao::debit_note::DebitNoteDao;
+use crate::dao::invoice::InvoiceDao;
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use ya_model::payment::*;
 use ya_persistence::executor::DbExecutor;
+use ya_service_api_web::middleware::Identity;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
-        .route("/debitNotes", post().to(issue_debit_note))
         .route("/debitNotes", get().to(get_debit_notes))
         .route("/debitNotes/{debit_note_id}", get().to(get_debit_note))
         .route(
@@ -22,7 +24,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
             post().to(reject_debit_note),
         )
         .route("/debitNoteEvents", get().to(get_debit_note_events))
-        .route("/invoices", post().to(issue_invoice))
         .route("/invoices", get().to(get_invoices))
         .route("/invoices/{invoice_id}", get().to(get_invoice))
         .route(
@@ -46,20 +47,34 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 
 // ************************** DEBIT NOTE **************************
 
-async fn issue_debit_note(db: Data<DbExecutor>, body: Json<DebitNote>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+async fn get_debit_notes(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+    let recipient_id = id.identity.to_string();
+    let dao: DebitNoteDao = db.as_dao();
+    match dao.get_received(recipient_id).await {
+        Ok(debit_notes) => HttpResponse::Ok().json(
+            debit_notes
+                .into_iter()
+                .map(|d| d.into())
+                .collect::<Vec<DebitNote>>(),
+        ),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
-async fn get_debit_notes(db: Data<DbExecutor>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
-}
-
-async fn get_debit_note(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
-}
-
-async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+async fn get_debit_note(
+    db: Data<DbExecutor>,
+    path: Path<DebitNoteId>,
+    id: Identity,
+) -> HttpResponse {
+    let recipient_id = id.identity.to_string();
+    let dao: DebitNoteDao = db.as_dao();
+    match dao.get(path.debit_note_id.clone()).await {
+        Ok(Some(debit_note)) if debit_note.recipient_id == recipient_id => {
+            HttpResponse::Ok().json(Into::<DebitNote>::into(debit_note))
+        }
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        _ => HttpResponse::NotFound().finish(),
+    }
 }
 
 async fn accept_debit_note(
@@ -86,20 +101,30 @@ async fn get_debit_note_events(db: Data<DbExecutor>, query: Query<EventParams>) 
 
 // *************************** INVOICE ****************************
 
-async fn issue_invoice(db: Data<DbExecutor>, body: Json<Invoice>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+async fn get_invoices(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+    let recipient_id = id.identity.to_string();
+    let dao: InvoiceDao = db.as_dao();
+    match dao.get_received(recipient_id).await {
+        Ok(invoices) => HttpResponse::Ok().json(
+            invoices
+                .into_iter()
+                .map(|d| d.into())
+                .collect::<Vec<Invoice>>(),
+        ),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
-async fn get_invoices(db: Data<DbExecutor>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
-}
-
-async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
-}
-
-async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>, id: Identity) -> HttpResponse {
+    let recipient_id = id.identity.to_string();
+    let dao: InvoiceDao = db.as_dao();
+    match dao.get(path.invoice_id.clone()).await {
+        Ok(Some(invoice)) if invoice.invoice.recipient_id == recipient_id => {
+            HttpResponse::Ok().json(Into::<Invoice>::into(invoice))
+        }
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        _ => HttpResponse::NotFound().finish(),
+    }
 }
 
 async fn accept_invoice(
@@ -157,5 +182,13 @@ async fn get_payments(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpRe
 }
 
 async fn get_payment(db: Data<DbExecutor>, path: Path<PaymentId>) -> HttpResponse {
+    HttpResponse::NotImplemented().finish() // TODO
+}
+
+async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
+    HttpResponse::NotImplemented().finish() // TODO
+}
+
+async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
     HttpResponse::NotImplemented().finish() // TODO
 }

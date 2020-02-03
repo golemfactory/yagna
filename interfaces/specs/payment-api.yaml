@@ -1059,6 +1059,12 @@ components:
         debitNoteId:
           type: string
           readOnly: true
+        issuerId:
+          type: string
+          readOnly: true
+        recipientId:
+          type: string
+          readOnly: true
         previousDebitNoteId:
           type: string
           readOnly: true
@@ -1086,6 +1092,8 @@ components:
 
       required:
         - debitNoteId
+        - issuerId
+        - recipientId
         - timestamp
         - agreementId
         - totalAmountDue
@@ -1108,6 +1116,12 @@ components:
       type: object
       properties:
         invoiceId:
+          type: string
+          readOnly: true
+        issuerId:
+          type: string
+          readOnly: true
+        recipientId:
           type: string
           readOnly: true
         lastDebitNoteId:
@@ -1139,6 +1153,8 @@ components:
 
       required:
         - invoiceId
+        - issuerId
+        - recipientId
         - timestamp
         - agreementId
         - amount
@@ -1245,6 +1261,10 @@ components:
       properties:
         paymentId:
           type: string
+        payerId:
+          type: string
+        payeeId:
+          type: string
         amount:
           type: integer
         timestamp:
@@ -1264,6 +1284,8 @@ components:
           type: object
       required:
         - paymentId
+        - payerId
+        - payeeId
         - amount
         - timestamp
         - details

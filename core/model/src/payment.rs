@@ -8,32 +8,52 @@ pub const BUS_ID: &'static str = "/private/payment";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Ack {}
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
 pub enum SendError {
+    #[error("Service error: {0}")]
     ServiceError(String),
+    #[error("Bad request: {0}")]
     BadRequest(String),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
 pub enum AcceptRejectError {
+    #[error("Service error: {0}")]
     ServiceError(String),
+    #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Object not found")]
     ObjectNotFound,
+    #[error("Forbidden")]
     Forbidden,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
 pub enum CancelError {
+    #[error("Service error: {0}")]
     ServiceError(String),
+    #[error("Object not found")]
     ObjectNotFound,
+    #[error("Forbidden")]
     Forbidden,
+    #[error("Conflict")]
     Conflict,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+pub enum RpcMessageError {
+    #[error("Send error: {0}")]
+    Send(#[from] SendError),
+    #[error("Accept/reject error: {0}")]
+    AcceptReject(#[from] AcceptRejectError),
+    #[error("Cancel error: {0}")]
+    Cancel(#[from] CancelError),
 }
 
 // ************************** DEBIT NOTE **************************
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SendDebitNote(DebitNote);
+pub struct SendDebitNote(pub DebitNote);
 
 impl RpcMessage for SendDebitNote {
     const ID: &'static str = "SendDebitNote";
@@ -82,7 +102,7 @@ impl RpcMessage for CancelDebitNote {
 // *************************** INVOICE ****************************
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SendInvoice(Invoice);
+pub struct SendInvoice(pub Invoice);
 
 impl RpcMessage for SendInvoice {
     const ID: &'static str = "SendInvoice";
