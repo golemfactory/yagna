@@ -1,8 +1,9 @@
 use diesel::prelude::*;
 
 use ya_persistence::executor::ConnType;
-use ya_persistence::models::{Agreement, NewAgreement};
-use ya_persistence::schema::agreement::dsl;
+
+use crate::db::models::{Agreement, NewAgreement};
+use crate::db::schema::agreement::dsl;
 
 use crate::dao::Result;
 

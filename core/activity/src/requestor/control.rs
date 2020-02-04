@@ -1,23 +1,25 @@
-use crate::common::{
-    fetch_agreement, generate_id, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
-};
-use crate::dao::{ActivityDao, ActivityStateDao, AgreementDao};
-use crate::error::Error;
-use crate::requestor::{get_agreement, missing_activity_err, provider_activity_service_id};
 use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
-use std::convert::TryInto;
+
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
-use ya_persistence::models::NewAgreement;
+use ya_service_api_web::middleware::Identity;
+
+use crate::common::{
+    generate_id, get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
+    QueryTimeoutMaxCount,
+};
+use crate::dao::{ActivityDao, ActivityStateDao};
+use crate::error::Error;
+use crate::requestor::{missing_activity_err, provider_activity_service_id};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
         .route(
             "/activity",
-            web::post().to(impl_restful_handler!(create_activity, path, body)),
+            web::post().to(impl_restful_handler!(create_activity, query, body, id)),
         )
         .route(
             "/activity/{activity_id}",
@@ -38,29 +40,25 @@ async fn create_activity(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeout>,
     body: web::Json<String>,
+    id: Identity,
 ) -> Result<String, Error> {
     let conn = db_conn!(db)?;
     let agreement_id = body.into_inner();
 
-    let agreement = fetch_agreement(&agreement_id).await?;
+    let caller = Some(format!("/net/{}", id.name));
+    log::debug!("caller from context: {:?}", caller);
+    let agreement =
+        get_agreement(caller.clone(), agreement_id.clone(), query.timeout.clone()).await?;
     log::info!("agreement: {:#?}", agreement);
-
-    let new_agreement: NewAgreement = agreement.try_into()?;
-
-    log::info!("inserting agreement: {:#?}", new_agreement);
-    let uri = provider_activity_service_id(&new_agreement.offer_node_id);
-    AgreementDao::new(&conn)
-        .create(new_agreement)
-        .map_err(Error::from)?;
-    log::info!("agreement inserted");
 
     let msg = CreateActivity {
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
+    let uri = provider_activity_service_id(&agreement)?;
     log::info!("creating activity at: {}", uri);
-    let activity_id = gsb_send!(msg, &uri, query.timeout)?;
+    let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
     log::info!("creating activity: {}", activity_id);
 
     ActivityDao::new(&conn)
@@ -79,15 +77,15 @@ async fn destroy_activity(
     let conn = db_conn!(db)?;
     missing_activity_err(&conn, &path.activity_id)?;
 
-    let agreement = get_agreement(&conn, &path.activity_id)?;
+    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = DestroyActivity {
         activity_id: path.activity_id.to_string(),
-        agreement_id: agreement.natural_id,
+        agreement_id: agreement.agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement.offer_node_id);
-    let _ = gsb_send!(msg, &uri, query.timeout)?;
+    let uri = provider_activity_service_id(&agreement)?;
+    let _ = gsb_send!(None, msg, &uri, query.timeout)?;
     ActivityStateDao::new(&db_conn!(db)?)
         .set(&path.activity_id, State::Terminated, None, None)
         .map_err(Error::from)?;
@@ -107,7 +105,7 @@ async fn exec(
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
-    let agreement = get_agreement(&conn, &path.activity_id)?;
+    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let batch_id = generate_id();
     let msg = Exec {
         activity_id: path.activity_id.clone(),
@@ -116,8 +114,8 @@ async fn exec(
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement.offer_node_id);
-    gsb_send!(msg, &uri, query.timeout)?;
+    let uri = provider_activity_service_id(&agreement)?;
+    gsb_send!(None, msg, &uri, query.timeout)?;
     Ok(batch_id)
 }
 
@@ -130,15 +128,15 @@ async fn get_batch_results(
     let conn = db_conn!(db)?;
     missing_activity_err(&conn, &path.activity_id)?;
 
-    let agreement = get_agreement(&conn, &path.activity_id)?;
+    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement.offer_node_id);
-    gsb_send!(msg, &uri, query.timeout)
+    let uri = provider_activity_service_id(&agreement)?;
+    gsb_send!(None, msg, &uri, query.timeout)
 }
 
 #[derive(Deserialize)]

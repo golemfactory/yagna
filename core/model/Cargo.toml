@@ -6,13 +6,14 @@ edition = "2018"
 
 [features]
 default = ['with-diesel']
-full = ['activity', 'appkey', 'identity']
+full = ['activity', 'appkey', 'identity', 'market', 'net']
 activity = []
-identity = ['ethaddr']
 appkey = []
-with-diesel=['diesel']
 ethaddr=[]
+identity = ['ethaddr']
+market=[]
 net=[]
+with-diesel=['diesel']
 
 [dependencies]
 ya-model = "0.1"

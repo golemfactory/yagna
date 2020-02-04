@@ -93,6 +93,7 @@ async fn get_events_web(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ProviderEvent>, Error> {
+    log::debug!("getting events");
     EventDao::new(&db_conn!(db)?)
         .get_events_fut(query.max_count)
         .timeout(query.timeout)

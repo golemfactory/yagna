@@ -11,8 +11,8 @@ use ya_core_model::appkey::AppKey;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Identity {
-    name: String,
-    role: String,
+    pub name: String,
+    pub role: String,
 }
 
 impl From<AppKey> for Identity {

@@ -38,17 +38,30 @@ pub struct Create {
 #[serde(rename_all = "camelCase")]
 pub struct Get {
     pub key: Option<String>,
+    pub id: Option<String>,
 }
 
 impl Get {
     pub fn with_key(key: String) -> Self {
-        Get { key: Some(key) }
+        Get {
+            key: Some(key),
+            id: None,
+        }
+    }
+    pub fn with_identity(id: String) -> Self {
+        Get {
+            key: None,
+            id: Some(id),
+        }
     }
 }
 
 impl Default for Get {
     fn default() -> Self {
-        Get { key: None }
+        Get {
+            key: None,
+            id: None,
+        }
     }
 }
 

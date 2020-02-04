@@ -29,24 +29,33 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let _ = bus::bind(&model::BUS_ID, move |get: model::Get| {
         let db = dbx.clone();
         async move {
-            let (appkey, role) = if let Some(key) = get.key {
-                db.as_dao::<AppKeyDao>()
+            let (appkey, role) = match get.key {
+                Some(key) => db
+                    .as_dao::<AppKeyDao>()
                     .get(key)
                     .await
-                    .map_err(Into::into)?
-            } else {
-                use ya_core_model::identity as idm;
-                let identity: idm::IdentityInfo = bus::service(idm::BUS_ID)
-                    .send(idm::Get::ByDefault)
-                    .await
-                    .unwrap() //FIXME
-                    .unwrap() //FIXME
-                    .unwrap(); //FIXME
-                db.as_dao::<AppKeyDao>()
-                    .get_for_id(identity.node_id.to_string())
-                    .await
-                    .map_err(Into::into)?
+                    .map_err(Into::into)?,
+                None => {
+                    let id = match get.id {
+                        Some(id) => id,
+                        None => {
+                            use ya_core_model::identity as idm;
+                            let identity: idm::IdentityInfo = bus::service(idm::BUS_ID)
+                                .send(idm::Get::ByDefault)
+                                .await
+                                .map_err(|e| model::Error::internal(e))?
+                                .map_err(|e| model::Error::internal(e))?
+                                .ok_or(model::Error::internal("no default identity"))?;
+                            identity.node_id.to_string()
+                        }
+                    };
+                    db.as_dao::<AppKeyDao>()
+                        .get_for_id(id)
+                        .await
+                        .map_err(Into::into)?
+                }
             };
+
             Ok(model::AppKey {
                 name: appkey.name,
                 key: appkey.key,

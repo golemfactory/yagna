@@ -1,11 +1,13 @@
+use futures::future::TryFutureExt;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ya_client::{market::MarketProviderApi, web::WebClient};
-use ya_core_model::appkey;
-use ya_model::market::Agreement;
-use ya_service_bus::{actix_rpc, RpcMessage};
+use ya_core_model::market as market_core_model;
+use ya_model::market as market_model;
+use ya_persistence::executor::ConnType;
+use ya_service_bus::RpcMessage;
 
+use crate::dao::{ActivityDao, NotFoundAsOption};
 use crate::error::Error;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
@@ -61,16 +63,32 @@ where
     }
 }
 
-pub(crate) async fn fetch_agreement(agreement_id: &String) -> Result<Agreement, Error> {
-    log::info!("fetching appkey for default id");
-    let app_key: appkey::AppKey = actix_rpc::service(appkey::BUS_ID)
-        .send(appkey::Get::default())
-        .await
-        .unwrap() // FIXME
-        .unwrap(); // FIXME
-    log::info!("using appkey: {:?}", app_key);
+pub(crate) async fn get_agreement(
+    caller: Option<String>,
+    agreement_id: String,
+    timeout: Option<u32>,
+) -> Result<market_model::Agreement, Error> {
+    gsb_send!(
+        caller,
+        market_core_model::GetAgreement {
+            agreement_id,
+            timeout
+        },
+        market_core_model::BUS_ID,
+        timeout
+    )
+}
 
-    let market_api: MarketProviderApi = WebClient::with_token(&app_key.key)?.interface()?;
-    log::info!("fetching agreement");
-    Ok(market_api.get_agreement(agreement_id).await?)
+pub(crate) async fn get_activity_agreement(
+    conn: &ConnType,
+    activity_id: &str,
+    timeout: Option<u32>,
+) -> Result<market_model::Agreement, Error> {
+    let agreement_id = ActivityDao::new(conn)
+        .get_agreement_id(activity_id)
+        .not_found_as_option()
+        .map_err(Error::from)?
+        .ok_or(Error::NotFound)?;
+
+    get_agreement(None, agreement_id, timeout).await
 }

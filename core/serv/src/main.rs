@@ -165,6 +165,7 @@ impl ServiceCommand {
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 ya_identity::service::activate(&db).await?;
                 ya_activity::provider::service::bind_gsb(&db);
+                ya_market::service::activate(&db);
 
                 let default_id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByDefault)

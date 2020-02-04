@@ -1,12 +1,12 @@
 use futures::prelude::*;
-use std::convert::{From, TryInto};
+use std::convert::From;
 
 use ya_core_model::activity::*;
 use ya_model::activity::{provider_event::ProviderEventType, State};
 use ya_persistence::executor::{ConnType, DbExecutor};
 use ya_service_bus::timeout::IntoTimeoutFuture;
 
-use crate::common::{fetch_agreement, generate_id, RpcMessageResult};
+use crate::common::{generate_id, get_agreement, RpcMessageResult};
 use crate::dao::*;
 use crate::error::Error;
 use ya_service_api::constants::NET_SERVICE_ID;
@@ -41,14 +41,7 @@ async fn create_activity_gsb(
     let activity_id = generate_id();
     let conn = db_conn!(db)?;
 
-    let agreement = fetch_agreement(&msg.agreement_id).await?;
-    log::info!("inserting agreement: {:#?}", agreement);
-    AgreementDao::new(&conn)
-        .create(agreement.try_into().map_err(Error::from)?)
-        .map_err(Error::from)?;
-    log::info!("agreement inserted");
-
-    if !is_agreement_initiator(&conn, caller, &msg.agreement_id)? {
+    if !is_agreement_initiator(caller, msg.agreement_id.clone()).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -86,7 +79,7 @@ async fn destroy_activity_gsb(
 ) -> RpcMessageResult<DestroyActivity> {
     let conn = db_conn!(db)?;
 
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -115,7 +108,7 @@ async fn get_activity_state_gsb(
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -132,7 +125,7 @@ async fn set_activity_state_gsb(
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
     let conn = db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -152,7 +145,7 @@ async fn get_activity_usage_gsb(
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -169,7 +162,7 @@ async fn set_activity_usage_gsb(
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
     let conn = db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -178,7 +171,7 @@ async fn set_activity_usage_gsb(
         .map_err(|e| Error::from(e).into())
 }
 
-fn is_activity_owner(
+async fn is_activity_owner(
     conn: &ConnType,
     caller: String,
     activity_id: &str,
@@ -186,19 +179,20 @@ fn is_activity_owner(
     let agreement_id = ActivityDao::new(&conn)
         .get_agreement_id(&activity_id)
         .map_err(Error::from)?;
-    is_agreement_initiator(conn, caller, &agreement_id)
+    is_agreement_initiator(caller, agreement_id).await
 }
 
-fn is_agreement_initiator(
-    conn: &ConnType,
+async fn is_agreement_initiator(
     caller: String,
-    agreement_id: &str,
+    agreement_id: String,
 ) -> std::result::Result<bool, Error> {
-    let agreement = AgreementDao::new(&conn)
-        .get(agreement_id)
-        .map_err(Error::from)?;
+    let agreement = get_agreement(None, agreement_id, None).await?;
+    let initiator_id = agreement
+        .demand
+        .requestor_id
+        .ok_or(Error::BadRequest("no requestor id".into()))?;
 
-    Ok(validate_caller(caller, agreement.demand_node_id))
+    Ok(validate_caller(caller, initiator_id))
 }
 
 #[inline(always)]

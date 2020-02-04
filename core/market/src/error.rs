@@ -1,8 +1,10 @@
 use actix_web::error::ResponseError;
 use thiserror::Error;
-use ya_core_model::activity::RpcMessageError;
-use ya_core_model::market::RpcMessageError as MarketRpcMessageError;
-use ya_model::activity::{ErrorMessage, ProblemDetails};
+
+use ya_core_model::{appkey, market::RpcMessageError};
+use ya_model::market::Error as MarketApiError;
+
+use crate::db::models::ConversionError;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -26,6 +28,12 @@ pub enum Error {
     Timeout,
     #[error("task: {0}")]
     RuntimeError(#[from] tokio::task::JoinError),
+    #[error("ya-client error: {0}")]
+    ClientError(#[from] ya_client::error::Error),
+    #[error("Agreement conversion error: {0}")]
+    ConversionError(#[from] ConversionError),
+    #[error("App-key error: {0}")]
+    AppKeyError(#[from] appkey::Error),
 }
 
 macro_rules! service_error {
@@ -36,15 +44,13 @@ macro_rules! service_error {
 
 macro_rules! internal_error_http_response {
     ($err:expr) => {
-        actix_web::HttpResponse::InternalServerError().json(ErrorMessage {
-            message: Some(format!("{:?}", $err)),
-        })
+        actix_web::HttpResponse::InternalServerError()
+            .json(MarketApiError::new("".into(), format!("{:?}", $err)))
     };
 }
 
 impl From<ya_persistence::executor::Error> for Error {
     fn from(e: ya_persistence::executor::Error) -> Self {
-        log::error!("ya_persistence::executor::Error: {}", e);
         match e {
             ya_persistence::executor::Error::Diesel(e) => Error::from(e),
             ya_persistence::executor::Error::Pool(e) => Error::from(e),
@@ -61,23 +67,14 @@ impl Into<actix_web::HttpResponse> for Error {
 
 impl From<ya_service_bus::error::Error> for Error {
     fn from(e: ya_service_bus::error::Error) -> Self {
-        log::error!("ya_service_bus::error::Error: {}", e);
         Error::Gsb(e)
-    }
-}
-
-impl From<tokio::time::Elapsed> for Error {
-    fn from(_: tokio::time::Elapsed) -> Self {
-        log::debug!("tokio::time::Elapsed");
-        Error::Timeout
     }
 }
 
 impl From<RpcMessageError> for Error {
     fn from(e: RpcMessageError) -> Self {
-        log::error!("RpcMessageError: {:?}", e);
         match e {
-            RpcMessageError::Activity(err) => Error::Service(err),
+            RpcMessageError::Market(err) => Error::Service(err),
             RpcMessageError::Service(err) => Error::Service(err),
             RpcMessageError::BadRequest(err) => Error::BadRequest(err),
             RpcMessageError::Forbidden => Error::Forbidden,
@@ -87,56 +84,46 @@ impl From<RpcMessageError> for Error {
     }
 }
 
-impl From<MarketRpcMessageError> for Error {
-    fn from(e: MarketRpcMessageError) -> Self {
-        log::error!("MarketRpcMessageError: {:?}", e);
-        match e {
-            MarketRpcMessageError::Market(err) => Error::Service(err),
-            MarketRpcMessageError::Service(err) => Error::Service(err),
-            MarketRpcMessageError::BadRequest(err) => Error::BadRequest(err),
-            MarketRpcMessageError::Forbidden => Error::Forbidden,
-            MarketRpcMessageError::NotFound => Error::NotFound,
-            MarketRpcMessageError::Timeout => Error::Timeout,
-        }
-    }
-}
-
 impl From<Error> for RpcMessageError {
     fn from(e: Error) -> Self {
-        log::debug!("for RpcMessageError: {}", e);
         match e {
             Error::Db(err) => service_error!(err),
             Error::Dao(err) => service_error!(err),
             Error::Gsb(err) => service_error!(err),
-            Error::RuntimeError(err) => service_error!(err),
             Error::Serialization(err) => service_error!(err),
-            Error::Service(err) => RpcMessageError::Activity(err),
+            Error::Service(err) => RpcMessageError::Market(err),
             Error::BadRequest(err) => RpcMessageError::BadRequest(err),
-            Error::Forbidden => RpcMessageError::Forbidden,
             Error::NotFound => RpcMessageError::NotFound,
+            Error::Forbidden => RpcMessageError::Forbidden,
             Error::Timeout => RpcMessageError::Timeout,
+            Error::RuntimeError(err) => service_error!(err),
+            Error::ClientError(err) => service_error!(err),
+            Error::ConversionError(err) => service_error!(err),
+            Error::AppKeyError(err) => service_error!(err),
         }
     }
 }
 
 impl actix_web::error::ResponseError for Error {
     fn error_response(&self) -> actix_web::HttpResponse {
-        log::debug!("actix_web::error::ResponseError: {}", self);
         match self {
             Error::Db(err) => internal_error_http_response!(err),
             Error::Dao(err) => internal_error_http_response!(err),
             Error::Gsb(err) => internal_error_http_response!(err),
-            Error::RuntimeError(err) => internal_error_http_response!(err),
             Error::Serialization(err) => internal_error_http_response!(err),
             Error::Service(err) => internal_error_http_response!(err),
             Error::BadRequest(err) => actix_web::HttpResponse::BadRequest()
-                .json(ProblemDetails::new("Bad request".to_string(), err.clone())),
-            Error::Forbidden => actix_web::HttpResponse::Forbidden().json(ProblemDetails::new(
-                "Forbidden".to_string(),
-                "Invalid credentials".to_string(),
-            )),
+                .json(MarketApiError::new("Bad Request".into(), err.clone())),
             Error::NotFound => actix_web::HttpResponse::NotFound().finish(),
+            Error::Forbidden => actix_web::HttpResponse::Forbidden().json(MarketApiError::new(
+                "Forbidden".into(),
+                "Invalid credentials".into(),
+            )),
             Error::Timeout => actix_web::HttpResponse::RequestTimeout().finish(),
+            Error::RuntimeError(err) => internal_error_http_response!(err),
+            Error::ClientError(err) => internal_error_http_response!(err),
+            Error::ConversionError(err) => internal_error_http_response!(err),
+            Error::AppKeyError(err) => internal_error_http_response!(err),
         }
     }
 }
