@@ -15,3 +15,6 @@ pub mod market;
 
 #[cfg(feature = "net")]
 pub mod net;
+
+#[cfg(feature = "payment")]
+pub mod payment;

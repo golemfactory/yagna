@@ -1,26 +1,22 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Invoice {
-    #[serde(rename = "invoiceId")]
     pub invoice_id: String,
-    #[serde(rename = "lastDebitNoteId", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_debit_note_id: Option<String>,
-    #[serde(rename = "timestamp")]
     pub timestamp: String,
-    #[serde(rename = "agreementId")]
     pub agreement_id: String,
-    #[serde(rename = "activityIds", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_ids: Option<Vec<String>>,
-    #[serde(rename = "amount")]
-    pub amount: String,
-    #[serde(rename = "usageCounterVector", skip_serializing_if = "Option::is_none")]
+    pub amount: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub usage_counter_vector: Option<serde_json::Value>,
-    #[serde(rename = "creditAccountId")]
     pub credit_account_id: String,
-    #[serde(rename = "paymentDueDate")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_platform: Option<String>,
     pub payment_due_date: String,
-    #[serde(rename = "status")]
     pub status: crate::payment::InvoiceStatus,
 }
 
@@ -29,7 +25,7 @@ impl Invoice {
         invoice_id: String,
         timestamp: String,
         agreement_id: String,
-        amount: String,
+        amount: i32,
         credit_account_id: String,
         payment_due_date: String,
         status: crate::payment::InvoiceStatus,
@@ -43,6 +39,7 @@ impl Invoice {
             amount,
             usage_counter_vector: None,
             credit_account_id,
+            payment_platform: None,
             payment_due_date,
             status,
         }

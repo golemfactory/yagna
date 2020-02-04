@@ -21,6 +21,4 @@ pub const PUBLIC_SERVICE: &str = "/public";
 
 // services
 pub const ACTIVITY_SERVICE_ID: &str = "/activity";
-pub const APP_KEY_SERVICE_ID: &str = "/appkey";
-pub const IDENTITY_SERVICE_ID: &str = "/identity";
 pub const NET_SERVICE_ID: &str = "/net";
