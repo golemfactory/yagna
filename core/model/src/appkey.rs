@@ -7,8 +7,9 @@ use ya_service_bus::RpcMessage;
 pub const SERVICE_ID: &str = "/appkey";
 pub const BUS_ID: &'static str = "/private/appkey";
 
-pub const DEFAULT_IDENTITY: &str = "primary";
 pub const DEFAULT_ROLE: &str = "manager";
+
+const DEFAULT_PAGE_SIZE: u32 = 20;
 
 #[derive(Clone, Error, Debug, Serialize, Deserialize)]
 #[error("appkey error [{code}]: {message}")]
@@ -37,31 +38,12 @@ pub struct Create {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Get {
-    pub key: Option<String>,
-    pub id: Option<String>,
+    pub key: String,
 }
 
 impl Get {
     pub fn with_key(key: String) -> Self {
-        Get {
-            key: Some(key),
-            id: None,
-        }
-    }
-    pub fn with_identity(id: String) -> Self {
-        Get {
-            key: None,
-            id: Some(id),
-        }
-    }
-}
-
-impl Default for Get {
-    fn default() -> Self {
-        Get {
-            key: None,
-            id: None,
-        }
+        Get { key }
     }
 }
 
@@ -71,6 +53,16 @@ pub struct List {
     pub identity: Option<String>,
     pub page: u32,
     pub per_page: u32,
+}
+
+impl List {
+    pub fn with_identity(identity: impl ToString) -> Self {
+        List {
+            identity: Some(identity.to_string()),
+            page: 1,
+            per_page: DEFAULT_PAGE_SIZE,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

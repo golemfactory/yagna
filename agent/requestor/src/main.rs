@@ -28,7 +28,7 @@ struct AppSettings {
 
     ///
     #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
-    activity_url: Url,
+    activity_url: Option<Url>,
 }
 
 impl AppSettings {
@@ -41,7 +41,12 @@ impl AppSettings {
     fn activity_api(
         &self,
     ) -> Result<ya_client::activity::ActivityRequestorControlApi, Box<dyn std::error::Error>> {
-        Ok(WebClient::with_token(&self.app_key)?.interface_at(self.activity_url.clone()))
+        let client = WebClient::with_token(&self.app_key)?;
+        if let Some(url) = &self.activity_url {
+            Ok(client.interface_at(url.clone()))
+        } else {
+            Ok(client.interface()?)
+        }
     }
 }
 
@@ -130,7 +135,7 @@ fn build_demand(node_name: &str) -> Demand {
 #[actix_rt::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv::dotenv().ok();
-    env_logger::try_init()?;
+    env_logger::init();
 
     let settings = AppSettings::from_args();
 
@@ -142,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let market_api = settings.market_api()?;
     let subscription_id = market_api.subscribe(&demand).await?;
 
-    eprintln!("sub_id={}", subscription_id);
+    log::info!("sub_id={}", subscription_id);
 
     {
         let requestor_api = market_api.clone();

@@ -2,13 +2,17 @@ use futures::prelude::*;
 use std::convert::From;
 
 use ya_core_model::activity::*;
+use ya_core_model::market;
 use ya_model::activity::{provider_event::ProviderEventType, State};
 use ya_persistence::executor::{ConnType, DbExecutor};
 use ya_service_bus::timeout::IntoTimeoutFuture;
+use ya_service_bus::typed as bus;
+use ya_service_bus::RpcEndpoint;
 
-use crate::common::{generate_id, get_agreement, RpcMessageResult};
+use crate::common::{generate_id, RpcMessageResult};
 use crate::dao::*;
 use crate::error::Error;
+use ya_core_model::ethaddr::NodeId;
 use ya_service_api::constants::NET_SERVICE_ID;
 
 lazy_static::lazy_static! {
@@ -39,34 +43,43 @@ async fn create_activity_gsb(
     msg: CreateActivity,
 ) -> RpcMessageResult<CreateActivity> {
     let activity_id = generate_id();
-    let conn = db_conn!(db)?;
 
     if !is_agreement_initiator(caller, msg.agreement_id.clone()).await? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityDao::new(&conn)
-        .create(&activity_id, &msg.agreement_id)
-        .map_err(Error::from)?;
-    log::info!("activity inserted: {}", activity_id);
+    {
+        let activity_id = activity_id.clone();
+        let agreement_id = msg.agreement_id.clone();
+        db.with_transaction(move |conn| {
+            ActivityDao::new(&conn)
+                .create(&activity_id, &agreement_id)
+                .map_err(Error::from)?;
+            log::info!("activity inserted: {}", activity_id);
+            EventDao::new(&conn)
+                .create(
+                    &activity_id,
+                    serde_json::to_string(&ProviderEventType::CreateActivity)
+                        .unwrap()
+                        .as_str(),
+                )
+                .map_err(Error::from)?;
+            log::info!("event inserted");
+            Ok::<_, crate::error::Error>(())
+        })
+        .await?;
+    }
 
-    EventDao::new(&conn)
-        .create(
-            &activity_id,
-            serde_json::to_string(&ProviderEventType::CreateActivity)
-                .unwrap()
-                .as_str(),
-        )
-        .map_err(Error::from)?;
-    log::info!("event inserted");
-
-    let state = ActivityStateDao::new(&conn)
-        .get_future(&activity_id, None)
-        .timeout(msg.timeout)
-        .map_err(Error::from)
-        .await?
-        .map_err(Error::from)?;
-    log::info!("activity state: {:?}", state);
+    {
+        let conn = db.conn().map_err(crate::error::Error::from)?;
+        let state = ActivityStateDao::new(&conn)
+            .get_future(&activity_id, None)
+            .timeout(msg.timeout)
+            .map_err(Error::from)
+            .await?
+            .map_err(Error::from)?;
+        log::info!("activity state: {:?}", state);
+    }
 
     Ok(activity_id)
 }
@@ -180,14 +193,21 @@ async fn is_activity_owner(
     let agreement_id = ActivityDao::new(&conn)
         .get_agreement_id(&activity_id)
         .map_err(Error::from)?;
-    is_agreement_initiator(caller, agreement_id).await
+    let agreement = bus::service(market::BUS_ID).send(market::GetAgreement::with_id(agreement_id)).await??;
+
+    Ok(validate_caller(caller, agreement.demand.requestor_id.unwrap()))
 }
 
 async fn is_agreement_initiator(
     caller: String,
     agreement_id: String,
 ) -> std::result::Result<bool, Error> {
-    let agreement = get_agreement(None, agreement_id, None).await?;
+    let agreement = bus::service(market::BUS_ID)
+        .send(market::GetAgreement {
+            agreement_id: agreement_id,
+        })
+        .await??;
+
     let initiator_id = agreement
         .demand
         .requestor_id

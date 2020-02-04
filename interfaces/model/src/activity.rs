@@ -18,4 +18,4 @@ pub use self::exe_script_request::ExeScriptRequest;
 pub use self::problem_details::ProblemDetails;
 pub use self::provider_event::ProviderEvent;
 
-pub const ACTIVITY_API_PATH: &str = "/activity-api/v1";
+pub const ACTIVITY_API_PATH: &str = "/activity-api/v1/";

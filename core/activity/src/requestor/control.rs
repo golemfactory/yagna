@@ -1,19 +1,22 @@
 use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
-
-use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
+use ya_core_model::activity::{self, CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
+use ya_core_model::market;
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::typed as bus;
+use ya_service_bus::RpcEndpoint;
 
 use crate::common::{
-    generate_id, get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
-    QueryTimeoutMaxCount,
+    generate_id, get_activity_agreement, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
 use crate::requestor::{missing_activity_err, provider_activity_service_id};
+use std::str::FromStr;
+use ya_core_model::ethaddr::NodeId;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -47,11 +50,16 @@ async fn create_activity(
 
     let caller = Some(format!("/net/{}", id.name));
     log::debug!("caller from context: {:?}", caller);
-    let agreement =
-        get_agreement(caller.clone(), agreement_id.clone(), query.timeout.clone()).await?;
+    let agreement = bus::service(market::BUS_ID)
+        .send(market::GetAgreement {
+            agreement_id: agreement_id.clone(),
+        })
+        .await??;
     log::info!("agreement: {:#?}", agreement);
 
     let msg = CreateActivity {
+        // TODO: fix this
+        provider_id: NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap()).unwrap(),
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
