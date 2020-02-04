@@ -1,4 +1,3 @@
-use crate::ethaddr::NodeId;
 use serde::{Deserialize, Serialize};
 use thiserror::*;
 use ya_model::market::Agreement;
@@ -14,13 +13,9 @@ pub struct GetAgreement {
 }
 
 impl GetAgreement {
-
-    pub fn with_id(agreement_id : String) -> Self {
-        GetAgreement {
-            agreement_id
-        }
+    pub fn with_id(agreement_id: String) -> Self {
+        GetAgreement { agreement_id }
     }
-
 }
 
 impl RpcMessage for GetAgreement {

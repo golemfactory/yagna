@@ -1,7 +1,7 @@
 use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
-use ya_core_model::activity::{self, CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
+use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
 use ya_core_model::market;
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;

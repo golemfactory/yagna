@@ -1,17 +1,17 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ya_core_model::{market as market_core_model, market};
-use ya_model::market as market_model;
+use ya_core_model::market;
+
 use ya_persistence::executor::ConnType;
 use ya_service_bus::RpcEndpoint;
 use ya_service_bus::RpcMessage;
 
 use crate::dao::{ActivityDao, NotFoundAsOption};
 use crate::error::Error;
-use ya_core_model::market::GetAgreement;
+
 use ya_model::market::Agreement;
-use ya_service_bus::actix_rpc::service;
+
 use ya_service_bus::typed as bus;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
@@ -70,7 +70,7 @@ where
 pub(crate) async fn get_activity_agreement(
     conn: &ConnType,
     activity_id: &str,
-    timeout: Option<u32>,
+    _timeout: Option<u32>,
 ) -> Result<Agreement, Error> {
     let agreement_id = ActivityDao::new(conn)
         .get_agreement_id(activity_id)

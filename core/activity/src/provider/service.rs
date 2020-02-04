@@ -12,7 +12,7 @@ use ya_service_bus::RpcEndpoint;
 use crate::common::{generate_id, RpcMessageResult};
 use crate::dao::*;
 use crate::error::Error;
-use ya_core_model::ethaddr::NodeId;
+
 use ya_service_api::constants::NET_SERVICE_ID;
 
 lazy_static::lazy_static! {
@@ -193,9 +193,14 @@ async fn is_activity_owner(
     let agreement_id = ActivityDao::new(&conn)
         .get_agreement_id(&activity_id)
         .map_err(Error::from)?;
-    let agreement = bus::service(market::BUS_ID).send(market::GetAgreement::with_id(agreement_id)).await??;
+    let agreement = bus::service(market::BUS_ID)
+        .send(market::GetAgreement::with_id(agreement_id))
+        .await??;
 
-    Ok(validate_caller(caller, agreement.demand.requestor_id.unwrap()))
+    Ok(validate_caller(
+        caller,
+        agreement.demand.requestor_id.unwrap(),
+    ))
 }
 
 async fn is_agreement_initiator(
