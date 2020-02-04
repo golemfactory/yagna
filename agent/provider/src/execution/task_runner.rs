@@ -91,7 +91,7 @@ impl TaskRunner {
     ) -> Result<()> {
         let result = TaskRunner::query_events(client).await;
         match result {
-            Err(error) => error!("Can't query activity events. Error: {}", error),
+            Err(error) => error!("Can't query activity events. Error: {:?}", error),
             Ok(activity_events) => {
                 TaskRunner::dispatch_events(&activity_events, addr).await;
             }

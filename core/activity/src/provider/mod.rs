@@ -1,7 +1,6 @@
 use crate::common::{PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
 use crate::error::Error;
-use crate::timeout::IntoTimeoutFuture;
 use actix_web::web;
 use futures::prelude::*;
 use std::convert::From;
@@ -9,6 +8,7 @@ use std::convert::From;
 use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 use ya_persistence::executor::{ConnType, DbExecutor};
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 pub mod service;
 
@@ -93,6 +93,7 @@ async fn get_events_web(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeoutMaxCount>,
 ) -> Result<Vec<ProviderEvent>, Error> {
+    log::debug!("getting events");
     EventDao::new(&db_conn!(db)?)
         .get_events_fut(query.max_count)
         .timeout(query.timeout)

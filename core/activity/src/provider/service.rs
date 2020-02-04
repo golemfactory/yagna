@@ -1,14 +1,15 @@
-use crate::common::{generate_id, RpcMessageResult};
-use crate::dao::*;
-use crate::error::Error;
-use crate::timeout::IntoTimeoutFuture;
-
 use futures::prelude::*;
 use std::convert::From;
+
 use ya_core_model::activity::*;
-use ya_model::activity::provider_event::ProviderEventType;
-use ya_model::activity::State;
+use ya_model::activity::{provider_event::ProviderEventType, State};
 use ya_persistence::executor::{ConnType, DbExecutor};
+use ya_service_bus::timeout::IntoTimeoutFuture;
+
+use crate::common::{generate_id, get_agreement, RpcMessageResult};
+use crate::dao::*;
+use crate::error::Error;
+use ya_service_api::constants::NET_SERVICE_ID;
 
 lazy_static::lazy_static! {
     static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
@@ -19,14 +20,14 @@ pub fn bind_gsb(db: &DbExecutor) {
     log::info!("activating activity provider service");
 
     // public for remote requestors interactions
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, create_activity_gsb);
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, destroy_activity_gsb);
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, get_activity_state_gsb);
-    bind_gsb_method!(bind_with_caller, &PUBLIC_ID, db, get_activity_usage_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, create_activity_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, destroy_activity_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, get_activity_state_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, get_activity_usage_gsb);
 
     // local for ExeUnit interactions
-    bind_gsb_method!(bind_with_caller, &PRIVATE_ID, db, set_activity_state_gsb);
-    bind_gsb_method!(bind_with_caller, &PRIVATE_ID, db, set_activity_usage_gsb);
+    bind_gsb_method!(&PRIVATE_ID, db, set_activity_state_gsb);
+    bind_gsb_method!(&PRIVATE_ID, db, set_activity_usage_gsb);
 
     log::info!("activity provider service activated");
 }
@@ -40,13 +41,14 @@ async fn create_activity_gsb(
     let activity_id = generate_id();
     let conn = db_conn!(db)?;
 
-    if !is_agreement_initiator(&conn, caller, &msg.agreement_id)? {
+    if !is_agreement_initiator(caller, msg.agreement_id.clone()).await? {
         return Err(Error::Forbidden.into());
     }
 
     ActivityDao::new(&conn)
         .create(&activity_id, &msg.agreement_id)
         .map_err(Error::from)?;
+    log::info!("activity inserted: {}", activity_id);
 
     EventDao::new(&conn)
         .create(
@@ -56,13 +58,15 @@ async fn create_activity_gsb(
                 .as_str(),
         )
         .map_err(Error::from)?;
+    log::info!("event inserted");
 
-    ActivityStateDao::new(&conn)
+    let state = ActivityStateDao::new(&conn)
         .get_future(&activity_id, None)
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?
         .map_err(Error::from)?;
+    log::info!("activity state: {:?}", state);
 
     Ok(activity_id)
 }
@@ -75,10 +79,11 @@ async fn destroy_activity_gsb(
 ) -> RpcMessageResult<DestroyActivity> {
     let conn = db_conn!(db)?;
 
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
+    log::info!("creating event for destroying activity");
     EventDao::new(&conn)
         .create(
             &msg.activity_id,
@@ -104,7 +109,7 @@ async fn get_activity_state_gsb(
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -120,11 +125,12 @@ async fn set_activity_state_gsb(
     caller: String,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
-    if parse_caller(caller) != msg.activity_id {
+    let conn = db_conn!(db)?;
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityStateDao::new(&db_conn!(db)?)
+    ActivityStateDao::new(&conn)
         .set(
             &msg.activity_id,
             msg.state.state.clone(),
@@ -140,7 +146,7 @@ async fn get_activity_usage_gsb(
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id)? {
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -156,16 +162,17 @@ async fn set_activity_usage_gsb(
     caller: String,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
-    if parse_caller(caller) != msg.activity_id {
+    let conn = db_conn!(db)?;
+    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityUsageDao::new(&db_conn!(db)?)
+    ActivityUsageDao::new(&conn)
         .set(&msg.activity_id, &msg.usage.current_usage)
         .map_err(|e| Error::from(e).into())
 }
 
-fn is_activity_owner(
+async fn is_activity_owner(
     conn: &ConnType,
     caller: String,
     activity_id: &str,
@@ -173,22 +180,26 @@ fn is_activity_owner(
     let agreement_id = ActivityDao::new(&conn)
         .get_agreement_id(&activity_id)
         .map_err(Error::from)?;
-    is_agreement_initiator(conn, parse_caller(caller), &agreement_id)
+    is_agreement_initiator(caller, agreement_id).await
 }
 
-fn is_agreement_initiator(
-    conn: &ConnType,
+async fn is_agreement_initiator(
     caller: String,
-    agreement_id: &str,
+    agreement_id: String,
 ) -> std::result::Result<bool, Error> {
-    let agreement = AgreementDao::new(&conn)
-        .get(agreement_id)
-        .map_err(Error::from)?;
-    Ok(parse_caller(caller) == agreement.demand_node_id)
+    let agreement = get_agreement(None, agreement_id, None).await?;
+    let initiator_id = agreement
+        .demand
+        .requestor_id
+        .ok_or(Error::BadRequest("no requestor id".into()))?;
+
+    Ok(validate_caller(caller, initiator_id))
 }
 
 #[inline(always)]
-fn parse_caller(caller: String) -> String {
+fn validate_caller(caller: String, expected: String) -> bool {
     // FIXME: impl a proper caller struct / parser
-    caller.replace("/net/", "")
+    let net_expected = format!("{}/{}", NET_SERVICE_ID, expected);
+    log::info!("checking caller: {} vs expected: {}", caller, net_expected);
+    caller == net_expected
 }

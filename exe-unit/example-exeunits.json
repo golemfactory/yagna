@@ -2,6 +2,6 @@
     {
         "name": "dummy",
         "path": "target/debug/ya-exe-dummy",
-        "args": []
+        "args": ["gsb", "/local/dummy"]
     }
 ]

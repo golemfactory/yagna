@@ -8,6 +8,7 @@ use structopt::StructOpt;
 use url::Url;
 use ya_client::{market::MarketRequestorApi, web::WebClient};
 
+use std::time::Duration;
 use ya_model::market::event::RequestorEvent;
 use ya_model::market::{AgreementProposal, Demand, Proposal};
 
@@ -49,15 +50,14 @@ async fn process_offer(
     offer: Proposal,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let agreement_id = offer.proposal_id.unwrap().clone();
-    let agreement = AgreementProposal::new(
-        agreement_id.clone(),
-        Utc.ymd(2021, 1, 15).and_hms(9, 10, 11),
-    );
+    let agreement =
+        AgreementProposal::new(agreement_id.clone(), "2021-01-01T18:54:16.655397Z".parse()?);
     let _ack = requestor_api.create_agreement(&agreement).await?;
     log::info!("confirm agreement = {}", agreement_id);
     requestor_api.confirm_agreement(&agreement_id).await?;
     log::info!("wait for agreement = {}", agreement_id);
     requestor_api.wait_for_approval(&agreement_id).await?;
+    log::info!("agreement = {} CONFIRMED!", agreement_id);
 
     Ok(agreement_id)
 }
@@ -74,6 +74,8 @@ async fn spawn_workers(
 
         if !events.is_empty() {
             log::debug!("events={:?}", events);
+        } else {
+            tokio::time::delay_for(Duration::from_millis(3000)).await;
         }
         for event in events {
             match event {
@@ -159,7 +161,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(id) = rx.next().await {
             log::info!("new agreement = {}", id);
             let act_id = activity_api.create_activity(&id).await.unwrap();
-            log::info!("new activity = (({}))", act_id);
+            log::info!("new activity = (({})); destroying...", act_id);
+            let _ = activity_api.destroy_activity(&act_id).await.unwrap();
+            log::info!("I'M DONE FOR NOW");
             //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
         }
     });
