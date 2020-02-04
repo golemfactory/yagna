@@ -5,24 +5,25 @@ use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningComm
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState, State};
 use ya_persistence::executor::DbExecutor;
 
-use crate::common::{get_activity_agreement, PathActivity, QueryTimeout};
+use crate::common::{get_activity_agreement, is_activity_initiator, PathActivity, QueryTimeout};
 use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
 use crate::error::Error;
-use crate::requestor::{missing_activity_err, provider_activity_service_id};
+use crate::requestor::provider_activity_service_id;
+use ya_service_api_web::middleware::Identity;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
         .route(
             "/activity/{activity_id}/state",
-            web::get().to(impl_restful_handler!(get_activity_state, path, query)),
+            web::get().to(impl_restful_handler!(get_activity_state, path, query, id)),
         )
         .route(
             "/activity/{activity_id}/usage",
-            web::get().to(impl_restful_handler!(get_activity_usage, path, query)),
+            web::get().to(impl_restful_handler!(get_activity_usage, path, query, id)),
         )
         .route(
             "/activity/{activity_id}/command",
-            web::get().to(impl_restful_handler!(get_running_command, path, query)),
+            web::get().to(impl_restful_handler!(get_running_command, path, query, id)),
         )
 }
 
@@ -31,9 +32,12 @@ async fn get_activity_state(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
+    id: Identity,
 ) -> Result<ActivityState, Error> {
     let conn = db_conn!(db)?;
-    missing_activity_err(&conn, &path.activity_id)?;
+    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+        return Err(Error::Forbidden.into());
+    }
 
     let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityState {
@@ -66,9 +70,12 @@ async fn get_activity_usage(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
+    id: Identity,
 ) -> Result<ActivityUsage, Error> {
     let conn = db_conn!(db)?;
-    missing_activity_err(&conn, &path.activity_id)?;
+    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+        return Err(Error::Forbidden.into());
+    }
 
     let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityUsage {
@@ -101,9 +108,12 @@ async fn get_running_command(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
+    id: Identity,
 ) -> Result<ExeScriptCommandState, Error> {
     let conn = db_conn!(db)?;
-    missing_activity_err(&conn, &path.activity_id)?;
+    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+        return Err(Error::Forbidden.into());
+    }
 
     let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetRunningCommand {

@@ -1,14 +1,13 @@
 #[macro_use]
 extern crate diesel;
-#[macro_use]
 extern crate ya_service_api_web;
 #[macro_use]
 extern crate ya_service_bus;
 
-#[macro_use]
-pub(crate) mod macros;
 pub(crate) mod common;
 pub(crate) mod dao;
+#[macro_use]
+pub(crate) mod macros;
 
 pub mod api;
 pub mod error;
