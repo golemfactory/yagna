@@ -1,5 +1,9 @@
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate ya_service_api_web;
+#[macro_use]
+extern crate ya_service_bus;
 
 #[macro_use]
 pub(crate) mod macros;
@@ -10,8 +14,7 @@ pub mod api;
 pub mod error;
 pub mod provider;
 pub mod requestor;
-pub mod timeout;
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 
-pub use ya_service_api::constants::ACTIVITY_API;
+pub use ya_model::activity::ACTIVITY_API_PATH;

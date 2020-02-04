@@ -10,7 +10,7 @@ use ya_persistence::schema;
 
 pub const MAX_EVENTS: u32 = 100;
 
-#[derive(Queryable)]
+#[derive(Queryable, Debug)]
 pub struct Event {
     pub id: i32,
     pub name: String,
@@ -65,23 +65,22 @@ impl<'c> EventDao<'c> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
         use schema::activity_event_type::dsl as dsl_type;
-        use schema::agreement::dsl as dsl_agreement;
 
         let limit = match max_count {
             Some(val) => min(MAX_EVENTS, val),
             None => MAX_EVENTS,
         };
 
+        log::debug!("starting db query");
         self.conn.transaction(|| {
             let results: Vec<Event> = dsl_event::activity_event
                 .inner_join(schema::activity_event_type::table)
                 .inner_join(schema::activity::table)
-                .inner_join(dsl_agreement::agreement.on(dsl_agreement::id.eq(dsl::agreement_id)))
                 .select((
                     dsl_event::id,
                     dsl_type::name,
                     dsl::natural_id,
-                    dsl_agreement::natural_id,
+                    dsl::agreement_id,
                 ))
                 .order(dsl_event::event_date.asc())
                 .limit(limit as i64)

@@ -4,11 +4,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ya_service_bus::RpcMessage;
 
+pub const SERVICE_ID: &str = "/appkey";
 pub const BUS_ID: &'static str = "/private/appkey";
 
-pub use ya_service_api::constants::APP_KEY_SERVICE_ID;
-pub const DEFAULT_IDENTITY: &str = "primary";
 pub const DEFAULT_ROLE: &str = "manager";
+
+const DEFAULT_PAGE_SIZE: u32 = 20;
 
 #[derive(Clone, Error, Debug, Serialize, Deserialize)]
 #[error("appkey error [{code}]: {message}")]
@@ -52,6 +53,16 @@ pub struct List {
     pub identity: Option<String>,
     pub page: u32,
     pub per_page: u32,
+}
+
+impl List {
+    pub fn with_identity(identity: impl ToString) -> Self {
+        List {
+            identity: Some(identity.to_string()),
+            page: 1,
+            per_page: DEFAULT_PAGE_SIZE,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

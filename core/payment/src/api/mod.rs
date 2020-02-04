@@ -1,5 +1,6 @@
 use actix_web::Scope;
 use serde::Deserialize;
+use ya_model::payment::PAYMENT_API_PATH;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
@@ -7,7 +8,7 @@ mod provider;
 mod requestor;
 
 pub fn web_scope(db: &DbExecutor) -> Scope {
-    Scope::new(crate::PAYMENT_API)
+    Scope::new(PAYMENT_API_PATH)
         .data(db.clone())
         .service(Scope::new("/provider").extend(provider::register_endpoints))
         .service(Scope::new("/requestor").extend(requestor::register_endpoints))

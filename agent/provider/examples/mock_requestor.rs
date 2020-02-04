@@ -1,17 +1,13 @@
 use serde_json;
-use std::{
-    thread,
-    time::{Duration, SystemTime},
-};
+use std::{thread, time::Duration};
 
-use ya_client::{
-    market::{ApiClient, RequestorApi},
-    web::WebClient,
-    Error, Result,
-};
-use ya_model::market::{Agreement, Demand, RequestorEvent};
+use ya_client::{market::MarketRequestorApi, web::WebClient, Error, Result};
+use ya_model::market::{AgreementProposal, Demand, RequestorEvent};
 
-async fn query_events(client: &RequestorApi, subscription_id: &str) -> Result<Vec<RequestorEvent>> {
+async fn query_events(
+    client: &MarketRequestorApi,
+    subscription_id: &str,
+) -> Result<Vec<RequestorEvent>> {
     let mut requestor_events = vec![];
 
     while requestor_events.is_empty() {
@@ -25,7 +21,7 @@ async fn query_events(client: &RequestorApi, subscription_id: &str) -> Result<Ve
     return Ok(requestor_events);
 }
 
-async fn wait_for_approval(client: &RequestorApi, proposal_id: &str) {
+async fn wait_for_approval(client: &MarketRequestorApi, proposal_id: &str) {
     loop {
         println!("Waiting for Agreement approval...");
 
@@ -43,44 +39,49 @@ async fn wait_for_approval(client: &RequestorApi, proposal_id: &str) {
     }
 }
 
-async fn simulate_requestor(client: &RequestorApi) -> Result<()> {
+async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
     let demand = Demand::new(serde_json::json!({}), "(&(cpu.architecture=wasm32))".into());
     let subscription_id = client.subscribe(&demand).await?;
 
     println!("Demand created. Subscription_id {}.", &subscription_id);
 
-    let requestor_events = query_events(client, &subscription_id).await?;
+    let requestor_events = query_events(&client, &subscription_id).await?;
 
-    let RequestorEvent::OfferEvent { offer, .. } = &requestor_events[0];
-    let offer = offer.as_ref().unwrap();
+    match &requestor_events[0] {
+        RequestorEvent::ProposalEvent {
+            event_date: _,
+            proposal,
+        } => {
+            let proposal_id = proposal.id().unwrap();
 
-    println!("Received offer {}. Sending agreeement.", &offer.id);
+            println!("Received offer {}. Sending agreeement.", &proposal_id);
 
-    let now = format!("{}", humantime::format_rfc3339_seconds(SystemTime::now()));
-    let agreement = Agreement::new(offer.id.clone(), now);
-    let _res = client.create_agreement(&agreement).await?;
+            let agreement_proposal =
+                AgreementProposal::new(proposal_id.clone(), chrono::Utc::now());
+            let _res = client.create_agreement(&agreement_proposal).await?;
 
-    println!("Confirm agreement {}.", &agreement.proposal_id);
-    let _res = client.confirm_agreement(&agreement.proposal_id).await?;
+            println!("Confirm agreement {}.", &agreement_proposal.proposal_id);
+            let _res = client
+                .confirm_agreement(&agreement_proposal.proposal_id)
+                .await?;
 
-    println!(
-        "Waiting for approval of agreement {}.",
-        &agreement.proposal_id
-    );
+            println!(
+                "Waiting for approval of agreement {}.",
+                &agreement_proposal.proposal_id
+            );
 
-    wait_for_approval(client, &agreement.proposal_id).await;
-    client.unsubscribe(&subscription_id).await?;
+            wait_for_approval(&client, &agreement_proposal.proposal_id).await;
+            client.unsubscribe(&subscription_id).await?;
+        }
+        RequestorEvent::PropertyQueryEvent { event_date: _ } => {
+            println!("Unsupported PropertyQueryEvent.");
+        }
+    }
 
     Ok(())
 }
 
-async fn async_main(api: ApiClient) {
-    if let Err(error) = simulate_requestor(api.requestor()).await {
-        println!("Error: {}", error);
-    };
-}
-
-fn main() {
-    let client = ApiClient::new(WebClient::builder()).unwrap();
-    actix_rt::System::new("test").block_on(async_main(client));
+#[actix_rt::main]
+async fn main() -> Result<()> {
+    simulate_requestor(WebClient::builder().build()?.interface()?).await
 }

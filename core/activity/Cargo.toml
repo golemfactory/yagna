@@ -1,6 +1,6 @@
 [package]
 name = "ya-activity"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -10,7 +10,7 @@ ya-model = "0.1"
 ya-service-api = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
-ya-persistence = "0.1"
+ya-persistence = "0.2"
 
 actix-web = "2.0"
 anyhow = "1.0"

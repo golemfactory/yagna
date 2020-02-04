@@ -2,7 +2,6 @@ use crate::dao::{last_insert_rowid, Result};
 use chrono::Utc;
 use diesel::expression::exists::exists;
 use diesel::prelude::*;
-use diesel::sql_types::{Integer, VarChar};
 use serde_json;
 use ya_model::activity::State;
 use ya_persistence::executor::ConnType;
@@ -32,12 +31,10 @@ impl<'c> ActivityDao<'c> {
 
     pub fn get_agreement_id(&self, activity_id: &str) -> Result<String> {
         use schema::activity::dsl;
-        use schema::agreement::dsl as dsl_agreement;
 
         self.conn.transaction(|| {
             let agreement: String = dsl::activity
-                .inner_join(schema::agreement::table)
-                .select(dsl_agreement::natural_id)
+                .select(dsl::agreement_id)
                 .filter(dsl::natural_id.eq(activity_id))
                 .first(self.conn)?;
 
@@ -49,7 +46,6 @@ impl<'c> ActivityDao<'c> {
         use schema::activity::dsl;
         use schema::activity_state::dsl as dsl_state;
         use schema::activity_usage::dsl as dsl_usage;
-        use schema::agreement::dsl as dsl_agreement;
 
         let reason: Option<String> = None;
         let error_message: Option<String> = None;
@@ -67,7 +63,7 @@ impl<'c> ActivityDao<'c> {
                 ))
                 .execute(self.conn)?;
 
-            let state_id: i64 = diesel::select(last_insert_rowid).first(self.conn)?;
+            let state_id: i32 = diesel::select(last_insert_rowid).first(self.conn)?;
 
             diesel::insert_into(dsl_usage::activity_usage)
                 .values((
@@ -76,30 +72,17 @@ impl<'c> ActivityDao<'c> {
                 ))
                 .execute(self.conn)?;
 
-            let usage_id: i64 = diesel::select(last_insert_rowid).first(self.conn)?;
+            let usage_id: i32 = diesel::select(last_insert_rowid).first(self.conn)?;
 
             diesel::insert_into(dsl::activity)
-                .values(
-                    dsl_agreement::agreement
-                        .select((
-                            activity_id.into_sql::<VarChar>(),
-                            dsl_agreement::id,
-                            (state_id as i32).into_sql::<Integer>(),
-                            (usage_id as i32).into_sql::<Integer>(),
-                        ))
-                        .filter(dsl_agreement::natural_id.eq(agreement_id))
-                        .limit(1),
-                )
-                .into_columns((
-                    dsl::natural_id,
-                    dsl::agreement_id,
-                    dsl::state_id,
-                    dsl::usage_id,
+                .values((
+                    dsl::natural_id.eq(activity_id),
+                    dsl::agreement_id.eq(agreement_id),
+                    dsl::state_id.eq(state_id),
+                    dsl::usage_id.eq(usage_id),
                 ))
                 .execute(self.conn)
-                .map(|_| ())?;
-
-            Ok(())
+                .map(|_| ())
         })
     }
 }

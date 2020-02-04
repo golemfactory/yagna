@@ -1,7 +1,7 @@
-use ya_client::Result;
-use ya_model::market::{AgreementProposal, Offer, Proposal};
-
 use ya_agent_offer_model::OfferDefinition;
+use ya_model::market::{Agreement, Offer, Proposal};
+
+use anyhow::Result;
 
 /// Response for requestor proposals.
 #[allow(dead_code)]
@@ -24,8 +24,8 @@ pub enum AgreementResponse {
 
 pub trait Negotiator {
     //TODO: We should add some parameters for offer creation.
-    fn create_offer(&self, node_info: &OfferDefinition) -> Result<Offer>;
+    fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<Offer>;
 
-    fn react_to_proposal(&self, proposal: &AgreementProposal) -> Result<ProposalResponse>;
-    fn react_to_agreement(&self, agreement: &AgreementProposal) -> Result<AgreementResponse>;
+    fn react_to_proposal(&mut self, proposal: &Proposal) -> Result<ProposalResponse>;
+    fn react_to_agreement(&mut self, agreement: &Agreement) -> Result<AgreementResponse>;
 }

@@ -1,7 +1,18 @@
-use crate::error;
 use serde::Deserialize;
 use uuid::Uuid;
+
+use ya_core_model::market;
+
+use ya_persistence::executor::ConnType;
+use ya_service_bus::RpcEndpoint;
 use ya_service_bus::RpcMessage;
+
+use crate::dao::{ActivityDao, NotFoundAsOption};
+use crate::error::Error;
+
+use ya_model::market::Agreement;
+
+use ya_service_bus::typed as bus;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: u32 = 120 * 1000; // ms
@@ -37,13 +48,13 @@ pub(crate) fn generate_id() -> String {
 }
 
 pub(crate) fn into_json_response<T>(
-    result: std::result::Result<T, error::Error>,
+    result: std::result::Result<T, Error>,
 ) -> actix_web::HttpResponse
 where
     T: serde::Serialize,
 {
     let result = match result {
-        Ok(value) => serde_json::to_string(&value).map_err(error::Error::from),
+        Ok(value) => serde_json::to_string(&value).map_err(Error::from),
         Err(e) => Err(e),
     };
 
@@ -54,4 +65,22 @@ where
             .into(),
         Err(e) => e.into(),
     }
+}
+
+pub(crate) async fn get_activity_agreement(
+    conn: &ConnType,
+    activity_id: &str,
+    _timeout: Option<u32>,
+) -> Result<Agreement, Error> {
+    let agreement_id = ActivityDao::new(conn)
+        .get_agreement_id(activity_id)
+        .not_found_as_option()
+        .map_err(Error::from)?
+        .ok_or(Error::NotFound)?;
+
+    let agreement = bus::service(market::BUS_ID)
+        .send(market::GetAgreement { agreement_id })
+        .await??;
+
+    Ok(agreement)
 }

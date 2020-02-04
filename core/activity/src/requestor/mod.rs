@@ -1,16 +1,26 @@
-use crate::dao::{ActivityDao, AgreementDao, NotFoundAsOption};
-use crate::error::Error;
+use ya_core_model::activity::SERVICE_ID;
+use ya_model::market::Agreement;
+use ya_persistence::executor::ConnType;
+use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE};
 
-use ya_core_model::activity::ACTIVITY_SERVICE_ID;
-use ya_persistence::{executor::ConnType, models::Agreement};
-use ya_service_api::constants::NET_SERVICE_ID;
+use crate::dao::ActivityDao;
+use crate::error::Error;
 
 pub mod control;
 pub mod state;
 
 #[inline(always)]
-fn provider_activity_uri(provider_id: &str) -> String {
-    format!("{}/{}{}", NET_SERVICE_ID, provider_id, ACTIVITY_SERVICE_ID)
+fn provider_activity_service_id(agreement: &Agreement) -> Result<String, Error> {
+    let provider_id = agreement
+        .offer
+        .provider_id
+        .as_ref()
+        .ok_or(Error::BadRequest("no provider id".into()))?;
+
+    Ok(format!(
+        "{}{}/{}{}",
+        PRIVATE_SERVICE, NET_SERVICE_ID, provider_id, SERVICE_ID
+    ))
 }
 
 fn missing_activity_err(conn: &ConnType, activity_id: &str) -> Result<(), Error> {
@@ -21,18 +31,4 @@ fn missing_activity_err(conn: &ConnType, activity_id: &str) -> Result<(), Error>
         true => Ok(()),
         false => Err(Error::NotFound),
     }
-}
-
-fn get_agreement(conn: &ConnType, activity_id: &str) -> Result<Agreement, Error> {
-    let agreement_id = ActivityDao::new(conn)
-        .get_agreement_id(activity_id)
-        .not_found_as_option()
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
-
-    AgreementDao::new(&conn)
-        .get(&agreement_id)
-        .not_found_as_option()
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)
 }

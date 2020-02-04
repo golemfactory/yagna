@@ -12,6 +12,9 @@ mod remote_router;
 pub mod typed;
 pub mod untyped;
 
+pub mod macros;
+pub mod timeout;
+
 pub use error::Error;
 
 pub trait BusMessage {}
@@ -96,6 +99,8 @@ pub trait RpcEndpoint<T: RpcMessage>: Clone {
     type Result: Future<Output = Result<<RpcEnvelope<T> as Message>::Result, error::Error>>;
 
     fn send(&self, msg: T) -> Self::Result;
+
+    fn send_with_caller(&self, caller: String, msg: T) -> Self::Result;
 }
 
 pub trait RpcHandler<T: RpcMessage> {

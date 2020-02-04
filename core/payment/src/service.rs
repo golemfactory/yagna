@@ -5,7 +5,7 @@ use ya_service_bus::typed as bus;
 macro_rules! bind_gsb_method {
     ($db_executor:expr, $method:ident) => {{
         let db_ = $db_executor.clone();
-        let _ = bus::bind_with_caller(&PAYMENT_SERVICE_ID, move |addr, msg| {
+        let _ = bus::bind_with_caller(&SERVICE_ID, move |addr, msg| {
             $method(db_.clone(), addr.to_string(), msg)
         });
     }};

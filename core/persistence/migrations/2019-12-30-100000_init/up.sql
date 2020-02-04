@@ -78,10 +78,11 @@ INSERT INTO "activity_event_type"("name") VALUES
 
 INSERT INTO agreement_state(id, name)
 values
-       (0, 'New'),
-       (1, 'Pending Approval'),
+       (0, 'Proposal'),
+       (1, 'Pending'),
        (10, 'Approved'),
        (40, 'Canceled'),
        (41, 'Rejected'),
+       (42, 'Expired'),
        (50, 'Terminated');
 
