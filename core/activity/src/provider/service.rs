@@ -83,6 +83,7 @@ async fn destroy_activity_gsb(
         return Err(Error::Forbidden.into());
     }
 
+    log::info!("creating event for destroying activity");
     EventDao::new(&conn)
         .create(
             &msg.activity_id,

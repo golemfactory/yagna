@@ -161,8 +161,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(id) = rx.next().await {
             log::info!("new agreement = {}", id);
             let act_id = activity_api.create_activity(&id).await.unwrap();
-            log::info!("new activity = (({}))", act_id);
-            log::info!("I'M DONE FOR NOW")
+            log::info!("new activity = (({})); destroying...", act_id);
+            let _ = activity_api.destroy_activity(&act_id).await.unwrap();
+            log::info!("I'M DONE FOR NOW");
             //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
         }
     });
