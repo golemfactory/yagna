@@ -14,7 +14,7 @@ pub struct StartupConfig {
     market_url: Url,
     ///
     #[structopt(long = "activity-url", env = ActivityProviderApi::API_URL_ENV_VAR)]
-    activity_url: Url,
+    activity_url: Option<Url>,
     ///
     #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]
     pub exe_unit_path: String,
@@ -26,6 +26,11 @@ impl StartupConfig {
     }
 
     pub fn activity_client(&self) -> Result<ActivityProviderApi> {
-        Ok(WebClient::with_token(&self.auth)?.interface_at(self.activity_url.clone()))
+        let client = WebClient::with_token(&self.auth)?;
+        if let Some(url) = &self.activity_url {
+            Ok(client.interface_at(url.clone()))
+        } else {
+            Ok(client.interface()?)
+        }
     }
 }

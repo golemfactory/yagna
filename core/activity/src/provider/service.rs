@@ -2,10 +2,12 @@ use futures::prelude::*;
 use std::convert::From;
 
 use ya_core_model::activity::*;
+use ya_core_model::market;
 use ya_model::activity::{provider_event::ProviderEventType, State};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::timeout::IntoTimeoutFuture;
-
+use ya_service_bus::typed as bus;
+use ya_service_bus::RpcEndpoint;
 use crate::common::{generate_id, is_activity_initiator, is_agreement_initiator, RpcMessageResult};
 use crate::dao::*;
 use crate::db_conn;
@@ -39,34 +41,43 @@ async fn create_activity_gsb(
     msg: CreateActivity,
 ) -> RpcMessageResult<CreateActivity> {
     let activity_id = generate_id();
-    let conn = db_conn!(db)?;
 
     if !is_agreement_initiator(caller, msg.agreement_id.clone()).await? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityDao::new(&conn)
-        .create(&activity_id, &msg.agreement_id)
-        .map_err(Error::from)?;
-    log::info!("activity inserted: {}", activity_id);
+    {
+        let activity_id = activity_id.clone();
+        let agreement_id = msg.agreement_id.clone();
+        db.with_transaction(move |conn| {
+            ActivityDao::new(&conn)
+                .create(&activity_id, &agreement_id)
+                .map_err(Error::from)?;
+            log::info!("activity inserted: {}", activity_id);
+            EventDao::new(&conn)
+                .create(
+                    &activity_id,
+                    serde_json::to_string(&ProviderEventType::CreateActivity)
+                        .unwrap()
+                        .as_str(),
+                )
+                .map_err(Error::from)?;
+            log::info!("event inserted");
+            Ok::<_, crate::error::Error>(())
+        })
+        .await?;
+    }
 
-    EventDao::new(&conn)
-        .create(
-            &activity_id,
-            serde_json::to_string(&ProviderEventType::CreateActivity)
-                .unwrap()
-                .as_str(),
-        )
-        .map_err(Error::from)?;
-    log::info!("event inserted");
-
-    let state = ActivityStateDao::new(&conn)
-        .get_future(&activity_id, None)
-        .timeout(msg.timeout)
-        .map_err(Error::from)
-        .await?
-        .map_err(Error::from)?;
-    log::info!("activity state: {:?}", state);
+    {
+        let conn = db.conn().map_err(crate::error::Error::from)?;
+        let state = ActivityStateDao::new(&conn)
+            .get_future(&activity_id, None)
+            .timeout(msg.timeout)
+            .map_err(Error::from)
+            .await?
+            .map_err(Error::from)?;
+        log::info!("activity state: {:?}", state);
+    }
 
     Ok(activity_id)
 }

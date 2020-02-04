@@ -8,9 +8,11 @@ use std::cell::Ref;
 use std::convert::TryFrom;
 use std::pin::Pin;
 use ya_core_model::appkey::AppKey;
+use ya_core_model::ethaddr::NodeId;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Identity {
+    pub identity: NodeId,
     pub name: String,
     pub role: String,
 }
@@ -18,7 +20,8 @@ pub struct Identity {
 impl From<AppKey> for Identity {
     fn from(app_key: AppKey) -> Self {
         Identity {
-            name: app_key.identity.to_string(),
+            identity: app_key.identity,
+            name: app_key.name,
             role: app_key.role,
         }
     }
@@ -26,10 +29,7 @@ impl From<AppKey> for Identity {
 
 impl From<&AppKey> for Identity {
     fn from(app_key: &AppKey) -> Self {
-        Identity {
-            name: app_key.identity.to_string(),
-            role: app_key.role.clone(),
-        }
+        app_key.clone().into()
     }
 }
 

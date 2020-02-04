@@ -73,7 +73,15 @@ pub async fn bind_remote(
                 addr
             );
             // caller here is always depicted as `local`, so we replace it with our subscriber addr
-            central_bus.call(source_node_id.clone(), addr.to_string(), Vec::from(msg))
+            let body = Vec::from(msg);
+            let addr = addr.to_string();
+            let source_node = source_node_id.clone();
+            let central_bus = central_bus.clone();
+            async move {
+                let response = central_bus.call(source_node, addr, body).await;
+                log::info!("cl response = {:?}", response);
+                response
+            }
         },
     );
     Ok(())

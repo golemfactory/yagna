@@ -1,15 +1,18 @@
-use futures::future::TryFutureExt;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ya_core_model::market as market_core_model;
-use ya_model::market as market_model;
+use ya_core_model::market;
+
 use ya_persistence::executor::ConnType;
 use ya_service_api::constants::NET_SERVICE_ID;
-use ya_service_bus::RpcMessage;
+use ya_service_bus::{RpcEndpoint, RpcMessage};
 
 use crate::dao::{ActivityDao, NotFoundAsOption};
 use crate::error::Error;
+
+use ya_model::market::Agreement;
+
+use ya_service_bus::typed as bus;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: u32 = 120 * 1000; // ms
@@ -64,34 +67,22 @@ where
     }
 }
 
-pub(crate) async fn get_agreement(
-    caller: Option<String>,
-    agreement_id: String,
-    timeout: Option<u32>,
-) -> Result<market_model::Agreement, Error> {
-    gsb_send!(
-        caller,
-        market_core_model::GetAgreement {
-            agreement_id,
-            timeout
-        },
-        market_core_model::BUS_ID,
-        timeout
-    )
-}
-
 pub(crate) async fn get_activity_agreement(
     conn: &ConnType,
     activity_id: &str,
-    timeout: Option<u32>,
-) -> Result<market_model::Agreement, Error> {
+    _timeout: Option<u32>,
+) -> Result<Agreement, Error> {
     let agreement_id = ActivityDao::new(conn)
         .get_agreement_id(activity_id)
         .not_found_as_option()
         .map_err(Error::from)?
         .ok_or(Error::NotFound)?;
 
-    get_agreement(None, agreement_id, timeout).await
+    let agreement = bus::service(market::BUS_ID)
+        .send(market::GetAgreement { agreement_id })
+        .await??;
+
+    Ok(agreement)
 }
 
 pub(crate) async fn is_activity_initiator(

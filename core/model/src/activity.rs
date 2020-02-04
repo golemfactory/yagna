@@ -1,3 +1,4 @@
+use crate::ethaddr::NodeId;
 use serde::{Deserialize, Serialize};
 use ya_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
@@ -10,6 +11,7 @@ pub const BUS_ID: &str = "/private/activity";
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateActivity {
+    pub provider_id: NodeId,
     pub agreement_id: String,
     pub timeout: Option<u32>,
 }
