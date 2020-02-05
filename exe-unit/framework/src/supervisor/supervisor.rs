@@ -1,15 +1,62 @@
 use crate::exeunit::ExeUnit;
 
 use actix::prelude::*;
-
-use std::cell::RefCell;
-use std::rc::Rc;
+use anyhow::{Error, Result};
 
 
 // =========================================== //
 // Public exposed messages
 // =========================================== //
 
+// ====================== //
+// ExeUnit commands
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct DeployCommand;
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct StartCommand {
+    args: Vec<String>,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct RunCommand {
+    entrypoint: String,
+    args: Vec<String>,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct TransferCommand {
+    from: String,
+    to: String,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct StopCommand;
+
+// ====================== //
+// ExeUnit state
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct QueryActivityState;
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct QueryActivityUsage;
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct QueryRunningCommand;
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct QueryExecBatchResults;
 
 
 // =========================================== //
@@ -34,19 +81,7 @@ impl ExeUnitSupervisor {
 // Actix stuff
 // =========================================== //
 
-/// Wrapper for ExeUnitSupervisor. It is neccesary to use self in async futures.
-pub struct ExeUnitSupervisorActor {
-    supervisor: Rc<RefCell<ExeUnitSupervisor>>,
-}
-
-impl Actor for ExeUnitSupervisorActor {
+impl Actor for ExeUnitSupervisor {
     type Context = Context<Self>;
 }
 
-impl ExeUnitSupervisorActor {
-
-    pub fn new(exeunit: Box<dyn ExeUnit>) -> ExeUnitSupervisorActor {
-        let rc = Rc::new(RefCell::new(ExeUnitSupervisor::new(exeunit)));
-        ExeUnitSupervisorActor { supervisor: rc }
-    }
-}

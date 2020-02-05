@@ -1,5 +1,5 @@
 use super::dispatcher::Dispatcher;
-use crate::supervisor::ExeUnitSupervisorActor;
+use crate::supervisor::ExeUnitSupervisor;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -20,7 +20,7 @@ impl GsbDispatcher {
 
 impl Dispatcher for GsbDispatcher {
 
-    fn run(&mut self, supervisor: Addr<ExeUnitSupervisorActor>, sys: &mut SystemRunner) -> Result<()> {
+    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, sys: &mut SystemRunner) -> Result<()> {
         Ok(())
     }
 

@@ -1,5 +1,5 @@
 use crate::dispatchers::{Dispatcher, GsbDispatcher, InteractiveCli, FileDispatcher};
-use crate::supervisor::ExeUnitSupervisorActor;
+use crate::supervisor::ExeUnitSupervisor;
 use crate::exeunit::ExeUnit;
 
 use crate::cmd_args::Config;
@@ -11,7 +11,7 @@ use structopt::StructOpt;
 
 pub struct ExeUnitFramework {
     cmd_input: Box< dyn Dispatcher>,
-    supervisor: Addr<ExeUnitSupervisorActor>,
+    supervisor: Addr<ExeUnitSupervisor>,
     sys: SystemRunner,
 }
 
@@ -22,7 +22,7 @@ impl ExeUnitFramework {
         cmd_dispatcher: Box< dyn Dispatcher>,
         exeunit: Box<dyn ExeUnit>
     ) -> Result<ExeUnitFramework> {
-        let supervisor = ExeUnitSupervisorActor::new(exeunit).start();
+        let supervisor = ExeUnitSupervisor::new(exeunit).start();
         let mut sys = System::new("ExeUnit");
 
         Ok(ExeUnitFramework{sys, supervisor, cmd_input: cmd_dispatcher})

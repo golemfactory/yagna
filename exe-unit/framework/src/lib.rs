@@ -6,7 +6,7 @@ mod framework;
 mod cmd_args;
 
 use dispatchers::Dispatcher;
-use supervisor::{ExeUnitSupervisor, ExeUnitSupervisorActor};
+use supervisor::{ExeUnitSupervisor};
 
 use cmd_args::Config;
 

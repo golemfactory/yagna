@@ -1,4 +1,4 @@
-use crate::supervisor::ExeUnitSupervisorActor;
+use crate::supervisor::ExeUnitSupervisor;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -8,6 +8,6 @@ use anyhow::{Error, Result};
 /// It could be gsb, interactive command line or file
 /// with commands.
 pub trait Dispatcher {
-    fn run(&mut self, supervisor: Addr<ExeUnitSupervisorActor>, sys: &mut SystemRunner) -> Result<()>;
+    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, sys: &mut SystemRunner) -> Result<()>;
 }
 

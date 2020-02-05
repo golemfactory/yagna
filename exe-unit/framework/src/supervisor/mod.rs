@@ -1,3 +1,3 @@
 mod supervisor;
 
-pub use supervisor::{ExeUnitSupervisor, ExeUnitSupervisorActor};
+pub use supervisor::{ExeUnitSupervisor};
