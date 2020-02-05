@@ -1,6 +1,5 @@
 mod execution;
 mod market;
-mod node_info;
 pub mod provider_agent;
 mod startup_config;
 mod utils;
@@ -13,6 +12,7 @@ use log::info;
 use structopt::StructOpt;
 
 fn main() {
+    dotenv::dotenv().ok();
     env_logger::init();
     info!("Running Provider Agent.");
 

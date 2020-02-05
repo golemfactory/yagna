@@ -2,6 +2,7 @@
 members = [
     "agent/provider",
     "agent/requestor",
+    "agent/offer-model",
     "core/activity",
     "core/identity",
     "core/market",
@@ -30,9 +31,12 @@ members = [
 
 [patch.crates-io]
 ya-activity = { path = "core/activity" }
+ya-agent-offer-model = { path = "agent/offer-model" }
+ya-client = { path = "interfaces/client" }
 ya-core-model = { path = "core/model" }
 ya-exe-api = { path = "exe-unit/api" }
 ya-identity = { path = "core/identity" }
+ya-market = { path = "core/market" }
 ya-model = { path = "interfaces/model" }
 ya-net = { path = "core/net" }
 ya-persistence = { path = "core/persistence" }

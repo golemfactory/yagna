@@ -1,10 +1,10 @@
 use std::convert::TryFrom;
 use std::mem::size_of;
 
-use failure;
-use failure::Fail;
-
+use crate::codec::ProtocolError;
 pub use gsb_api::*;
+use std::borrow::Cow;
+use std::net::SocketAddr;
 
 mod gsb_api {
     include!(concat!(env!("OUT_DIR"), "/gsb_api.rs"));
@@ -42,11 +42,9 @@ impl MessageHeader {
         buf.extend_from_slice(&self.msg_length.to_be_bytes());
     }
 
-    pub fn decode(mut src: tokio_bytes::BytesMut) -> failure::Fallible<Self> {
+    pub fn decode(mut src: tokio_bytes::BytesMut) -> Result<Self, ProtocolError> {
         if src.len() < size_of::<MessageHeader>() {
-            return Err(failure::err_msg(
-                "Cannot decode message header: not enough bytes",
-            ));
+            return Err(ProtocolError::HeaderNotEnoughBytes);
         }
 
         let mut msg_type: [u8; 4] = [0; 4];
@@ -61,8 +59,8 @@ impl MessageHeader {
     }
 }
 
-#[derive(Fail, Debug)]
-#[fail(display = "invalid value: {}", _0)]
+#[derive(thiserror::Error, Debug)]
+#[error("invalid value: {0}")]
 pub struct EnumError(pub i32);
 
 impl TryFrom<i32> for CallReplyCode {
@@ -88,4 +86,27 @@ impl TryFrom<i32> for CallReplyType {
             _ => return Err(EnumError(value)),
         })
     }
+}
+
+pub const DEFAULT_GSB_URL: &str = "tcp://127.0.0.1:7464";
+
+pub fn gsb_url() -> Cow<'static, str> {
+    if let Some(gsb_url) = std::env::var("GSB_URL").ok() {
+        Cow::Owned(gsb_url)
+    } else {
+        Cow::Borrowed(DEFAULT_GSB_URL)
+    }
+}
+
+pub fn gsb_addr() -> SocketAddr {
+    let gsb_url = gsb_url();
+    let url = url::Url::parse(&gsb_url).unwrap();
+    if url.scheme() != "tcp" {
+        panic!("unimplemented protocol: {}", url.scheme());
+    }
+
+    SocketAddr::new(
+        url.host_str().unwrap().parse().unwrap(),
+        url.port().unwrap_or(7464),
+    )
 }

@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ya_service_bus::RpcMessage;
 
-pub use ya_service_api::constants::IDENTITY_SERVICE_ID;
-pub const DEFAULT_IDENTITY: &str = "primary";
+pub const BUS_ID: &'static str = "/private/identity";
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
@@ -181,5 +180,18 @@ impl DropId {
 impl RpcMessage for DropId {
     const ID: &'static str = "DropId";
     type Item = IdentityInfo;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sign {
+    pub node_id: NodeId,
+    pub payload: Vec<u8>,
+}
+
+impl RpcMessage for Sign {
+    const ID: &'static str = "Sign";
+    type Item = Vec<u8>;
     type Error = Error;
 }

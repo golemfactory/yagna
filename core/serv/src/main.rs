@@ -10,15 +10,14 @@ use structopt::{clap, StructOpt};
 
 use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{
-    constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
-    CliCtx, CommandOutput,
-};
+use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_web::middleware::{auth, Identity};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
+use std::net::SocketAddr;
+use url::Url;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -26,21 +25,20 @@ use autocomplete::CompleteCommand;
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
     /// Daemon data dir
-    #[structopt(short, long = "datadir", set = clap::ArgSettings::Global)]
+    #[structopt(short, long = "datadir", set = clap::ArgSettings::Global, env = "YAGNA_DATADIR")]
     data_dir: Option<PathBuf>,
 
     /// Daemon address
-    #[structopt(short, long, default_value = &*YAGNA_HOST, env = "YAGNA_HOST")]
-    address: String,
+    #[structopt(
+        short,
+        long,
+        default_value = "http://127.0.0.1:7465",
+        env = "YAGNA_API_URL"
+    )]
+    api_url: Url,
 
-    /// Daemon HTTP port
-    #[structopt(short = "p", long, default_value = &*YAGNA_HTTP_PORT, env = "YAGNA_HTTP_PORT")]
-    http_port: u16,
-
-    /// Service bus router port
-    #[structopt(long, default_value = &*YAGNA_BUS_PORT, env = "YAGNA_BUS_PORT")]
-    #[structopt(set = clap::ArgSettings::Global)]
-    router_port: u16,
+    #[structopt(long = "net-addr", env = "ya_net::NET_ENV_VAR")]
+    net_addr: Option<SocketAddr>,
 
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -67,11 +65,16 @@ impl CliArgs {
     }
 
     pub fn get_http_address(&self) -> Result<(String, u16)> {
-        Ok((self.address.clone(), self.http_port))
-    }
-
-    pub fn get_router_address(&self) -> Result<(String, u16)> {
-        Ok((self.address.clone(), self.router_port))
+        let host = self
+            .api_url
+            .host()
+            .ok_or_else(|| anyhow::anyhow!("invalid api url"))?
+            .to_owned();
+        let port = self
+            .api_url
+            .port_or_known_default()
+            .ok_or_else(|| anyhow::anyhow!("invalid api url, no port"))?;
+        Ok((host.to_string(), port))
     }
 
     pub fn log_level(&self) -> String {
@@ -98,7 +101,6 @@ impl TryFrom<&CliArgs> for CliCtx {
 
         Ok(CliCtx {
             http_address: args.get_http_address()?,
-            router_address: args.get_router_address()?,
             data_dir,
             json_output: args.json,
             interactive: args.interactive,
@@ -154,7 +156,7 @@ impl ServiceCommand {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                ya_sb_router::bind_router(ctx.router_address()?)
+                ya_sb_router::bind_gsb_router()
                     .await
                     .context("binding service bus router")?;
 
@@ -163,20 +165,21 @@ impl ServiceCommand {
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 ya_identity::service::activate(&db).await?;
                 ya_activity::provider::service::bind_gsb(&db);
+                ya_market::service::activate(&db).await;
 
-                let default_id = bus::private_service(identity::IDENTITY_SERVICE_ID)
+                let default_id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByDefault)
-                    .await
-                    .map_err(anyhow::Error::msg)??
+                    .await??
                     .ok_or(anyhow::Error::msg("no default identity"))?
                     .node_id
                     .to_string();
                 log::info!("using default identity as network id: {:?}", default_id);
-                ya_net::bind_remote(&*CENTRAL_NET_HOST, &default_id)
+                let net_host = ya_net::resolve_default()?;
+                ya_net::bind_remote(&net_host, &default_id)
                     .await
                     .context(format!(
                         "Error binding network service at {} for {}",
-                        *CENTRAL_NET_HOST, default_id
+                        net_host, default_id
                     ))?;
 
                 HttpServer::new(move || {
@@ -211,10 +214,16 @@ async fn me(id: Identity) -> impl Responder {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
+    dotenv::dotenv().ok();
     let args: CliArgs = CliArgs::from_args();
 
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
+
+    // TODO: fix this hack
+    if let Some(net_addr) = args.net_addr {
+        std::env::set_var(ya_net::NET_ENV_VAR, net_addr.to_string());
+    }
 
     args.run_command().await
 }

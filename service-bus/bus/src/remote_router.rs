@@ -1,17 +1,14 @@
 use actix::{prelude::*, WrapFuture};
 use futures::{channel::oneshot, prelude::*};
-use std::{collections::HashSet, net::SocketAddr};
+use std::collections::HashSet;
 
-use ya_service_api::constants::YAGNA_BUS_ADDR;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
 use crate::{
     connection::{self, ConnectionRef, LocalRouterHandler, TcpTransport},
     {error::Error, RpcRawCall},
 };
-
-fn gsb_addr() -> SocketAddr {
-    *YAGNA_BUS_ADDR
-}
+use std::time::Duration;
 
 pub struct RemoteRouter {
     local_bindings: HashSet<String>,
@@ -23,13 +20,18 @@ impl Actor for RemoteRouter {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        self.try_connect(ctx)
+        self.try_connect(ctx);
+        let _ = ctx.run_later(CONNECT_TIMEOUT, |act, _ctx| {
+            if act.connection.is_none() {
+                act.pending_calls.clear();
+            }
+        });
     }
 }
 
 impl RemoteRouter {
     fn try_connect(&mut self, ctx: &mut <Self as Actor>::Context) {
-        let addr = gsb_addr();
+        let addr = ya_sb_proto::gsb_addr();
         let connect_fut = connection::tcp(addr)
             .map_err(move |e| Error::BusConnectionFail(addr, e))
             .into_actor(self)
@@ -122,8 +124,8 @@ impl Handler<UpdateService> for RemoteRouter {
             UpdateService::Add(service_id) => {
                 if let Some(c) = &mut self.connection {
                     Arbiter::spawn(
-                        c.bind(service_id.clone()).then(|v| {
-                            async { v.unwrap_or_else(|e| log::error!("bind error: {}", e)) }
+                        c.bind(service_id.clone()).then(|v| async {
+                            v.unwrap_or_else(|e| log::error!("bind error: {}", e))
                         }),
                     )
                 }

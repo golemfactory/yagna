@@ -21,11 +21,4 @@ pub const PUBLIC_SERVICE: &str = "/public";
 
 // services
 pub const ACTIVITY_SERVICE_ID: &str = "/activity";
-pub const APP_KEY_SERVICE_ID: &str = "/appkey";
-pub const IDENTITY_SERVICE_ID: &str = "/identity";
 pub const NET_SERVICE_ID: &str = "/net";
-
-// APIs
-pub const ACTIVITY_API: &str = "/activity-api/v1";
-pub const MARKET_API: &str = "/market-api/v1/";
-pub const PAYMENT_API: &str = "/payment-api/v1";

@@ -57,7 +57,7 @@ impl Default for Worker {
 
 impl Worker {
     async fn rpc<M: RpcMessage + Unpin>(uri: &str, msg: M) -> Result<<M as RpcMessage>::Item> {
-        ya_service_bus::typed::private_service(uri)
+        ya_service_bus::typed::service(uri)
             .send(msg)
             .map_err(Error::from)
             .await?
