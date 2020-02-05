@@ -1,11 +1,17 @@
+use ethereum_types::{Address, Secret, H256, U256};
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
 use web3::transports::Http;
-use web3::types::{Address, BlockNumber, U256};
-use web3::Web3;
+use web3::types::BlockNumber;
 
+mod eth_client;
+pub mod sc_error;
+use eth_client::EthClient;
+
+#[allow(unused)]
 pub struct SCInterface {
-    web3: Web3<Http>,
+    eth_client: EthClient,
+    priv_key: Option<Secret>,
     eth_address: Address,
     gnt_contract: Option<Contract<Http>>,
     gntb_contract: Option<Contract<Http>>,
@@ -14,9 +20,10 @@ pub struct SCInterface {
 }
 
 impl SCInterface {
-    pub fn new(http: Http, ethereum_address: &str) -> SCInterface {
+    pub fn new(transport: Http, ethereum_address: &str) -> SCInterface {
         SCInterface {
-            web3: Web3::new(http),
+            eth_client: EthClient::new(transport),
+            priv_key: None,
             eth_address: ethereum_address.parse().unwrap(),
             gnt_contract: None,
             gntb_contract: None,
@@ -29,36 +36,39 @@ impl SCInterface {
     pub fn get_eth_address(&self) -> Address {
         self.eth_address
     }
+
     /// Get Ethereum balance
     pub fn get_eth_balance(&self, block_number: Option<BlockNumber>) -> U256 {
-        self.web3
-            .eth()
-            .balance(self.eth_address, block_number)
-            .wait()
-            .unwrap()
+        self.eth_client.get_balance(self.eth_address, block_number)
     }
 
     /// Get Ethereum block number
     pub fn get_block_number(&self) -> U256 {
-        self.web3.eth().block_number().wait().unwrap()
+        self.eth_client.get_block_number()
     }
 
     /// Get current Gas price
     pub fn get_gas_price(&self) -> U256 {
-        self.web3.eth().gas_price().wait().unwrap()
+        self.eth_client.get_gas_price()
     }
 
-    /// Transfer Ethereum
-    // pub fn transfer_eth(&self, amount: u128, receiver_address: &str, gas_price: Option<u128>) {}
+    #[allow(unused)]
+    pub fn request_gnt_from_faucet(&self) {
+        unimplemented!();
+    }
 
     /// Get GNT balance
-    pub fn get_gnt_balance(&mut self, address: &str) -> U256 {
+    pub fn get_gnt_balance(&mut self, address: &str) -> H256 {
         match &self.gnt_contract {
             Some(contract) => {
                 let account: Address = address.parse().unwrap();
-                let result =
-                    contract.query("balanceOf", (account,), None, Options::default(), None);
-                let balance_of: U256 = result.wait().unwrap();
+                let result = contract.call(
+                    "balanceOf",
+                    (account,),
+                    self.eth_address,
+                    Options::default(),
+                );
+                let balance_of: H256 = result.wait().unwrap();
                 balance_of
             }
             None => panic!("GNT contract is not bound!"),
@@ -66,16 +76,29 @@ impl SCInterface {
     }
 
     /// Transfer GNT
-    // pub fn transfer_gnt(&self, amount: u128, receiver_address: &str) {}
+    #[allow(unused)]
+    pub fn transfer_gnt(
+        &self,
+        amount: U256,
+        receiver_address: Address,
+        private_key: H256,
+        chain_id: u64,
+    ) -> H256 {
+        unimplemented!();
+    }
 
     /// Get GNTB balance
-    pub fn get_gntb_balance(&mut self, address: &str) -> U256 {
-        match &self.gnt_contract {
+    pub fn get_gntb_balance(&mut self, address: &str) -> H256 {
+        match &self.gntb_contract {
             Some(contract) => {
                 let account: Address = address.parse().unwrap();
-                let result =
-                    contract.query("balanceOf", (account,), None, Options::default(), None);
-                let balance_of: U256 = result.wait().unwrap();
+                let result = contract.call(
+                    "balanceOf",
+                    (account,),
+                    self.eth_address,
+                    Options::default(),
+                );
+                let balance_of: H256 = result.wait().unwrap();
                 balance_of
             }
             None => panic!("GNTB contract is not bound!"),
@@ -83,18 +106,17 @@ impl SCInterface {
     }
 
     /// Transfer GNTB
-    // pub fn transfer_gntb(&self, amount: u128, receiver_address: &str) {}
+    #[allow(unused)]
+    pub fn transfer_gntb(&self, amount: u128, receiver_address: &str) {
+        unimplemented!();
+    }
 
     /// Bind GNT contract
     pub fn bind_gnt_contract(&mut self, address: &str) -> &mut Self {
         let contract_address: Address = address.parse().unwrap();
         self.gnt_contract = Some(
-            Contract::from_json(
-                self.web3.eth(),
-                contract_address,
-                include_bytes!("./contracts/gnt.json"),
-            )
-            .unwrap(),
+            self.eth_client
+                .get_contract(contract_address, include_bytes!("./contracts/gnt.json")),
         );
         self
     }
@@ -103,12 +125,8 @@ impl SCInterface {
     pub fn bind_gntb_contract(&mut self, address: &str) -> &mut Self {
         let contract_address: Address = address.parse().unwrap();
         self.gntb_contract = Some(
-            Contract::from_json(
-                self.web3.eth(),
-                contract_address,
-                include_bytes!("./contracts/gntb.json"),
-            )
-            .unwrap(),
+            self.eth_client
+                .get_contract(contract_address, include_bytes!("./contracts/gntb.json")),
         );
         self
     }
@@ -116,27 +134,19 @@ impl SCInterface {
     /// Bind GNT deposit contract
     pub fn bind_gnt_deposit_contract(&mut self, address: &str) -> &mut Self {
         let contract_address: Address = address.parse().unwrap();
-        self.gnt_deposit_contract = Some(
-            Contract::from_json(
-                self.web3.eth(),
-                contract_address,
-                include_bytes!("./contracts/gnt_deposit.json"),
-            )
-            .unwrap(),
-        );
+        self.gnt_deposit_contract = Some(self.eth_client.get_contract(
+            contract_address,
+            include_bytes!("./contracts/gnt_deposit.json"),
+        ));
         self
     }
 
-    /// Bind GNT contract
+    /// Bind Faucet contract
     pub fn bind_faucet_contract(&mut self, address: &str) -> &mut Self {
         let contract_address: Address = address.parse().unwrap();
         self.faucet_contract = Some(
-            Contract::from_json(
-                self.web3.eth(),
-                contract_address,
-                include_bytes!("./contracts/faucet.json"),
-            )
-            .unwrap(),
+            self.eth_client
+                .get_contract(contract_address, include_bytes!("./contracts/faucet.json")),
         );
         self
     }
