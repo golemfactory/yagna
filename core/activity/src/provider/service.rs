@@ -1,19 +1,14 @@
 use futures::prelude::*;
 use std::convert::From;
 
-use ya_core_model::activity::*;
-use ya_core_model::market;
-use ya_model::activity::{provider_event::ProviderEventType, State};
-use ya_persistence::executor::{ConnType, DbExecutor};
-use ya_service_bus::timeout::IntoTimeoutFuture;
-use ya_service_bus::typed as bus;
-use ya_service_bus::RpcEndpoint;
-
-use crate::common::{generate_id, RpcMessageResult};
+use crate::common::{generate_id, is_activity_initiator, is_agreement_initiator, RpcMessageResult};
 use crate::dao::*;
+use crate::db_conn;
 use crate::error::Error;
-
-use ya_service_api::constants::NET_SERVICE_ID;
+use ya_core_model::activity::*;
+use ya_model::activity::{provider_event::ProviderEventType, State};
+use ya_persistence::executor::DbExecutor;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 lazy_static::lazy_static! {
     static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
@@ -92,7 +87,7 @@ async fn destroy_activity_gsb(
 ) -> RpcMessageResult<DestroyActivity> {
     let conn = db_conn!(db)?;
 
-    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -122,7 +117,7 @@ async fn get_activity_state_gsb(
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -139,18 +134,13 @@ async fn set_activity_state_gsb(
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
     let conn = db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityStateDao::new(&conn)
-        .set(
-            &msg.activity_id,
-            msg.state.state.clone(),
-            msg.state.reason.clone(),
-            msg.state.error_message.clone(),
-        )
-        .map_err(|e| Error::from(e).into())
+    super::set_activity_state(&conn, &msg.activity_id, msg.state)
+        .map_err(Into::into)
+        .await
 }
 
 async fn get_activity_usage_gsb(
@@ -159,7 +149,7 @@ async fn get_activity_usage_gsb(
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
     let conn = &db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -176,55 +166,11 @@ async fn set_activity_usage_gsb(
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
     let conn = db_conn!(db)?;
-    if !is_activity_owner(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
     ActivityUsageDao::new(&conn)
         .set(&msg.activity_id, &msg.usage.current_usage)
         .map_err(|e| Error::from(e).into())
-}
-
-async fn is_activity_owner(
-    conn: &ConnType,
-    caller: String,
-    activity_id: &str,
-) -> std::result::Result<bool, Error> {
-    let agreement_id = ActivityDao::new(&conn)
-        .get_agreement_id(&activity_id)
-        .map_err(Error::from)?;
-    let agreement = bus::service(market::BUS_ID)
-        .send(market::GetAgreement::with_id(agreement_id))
-        .await??;
-
-    Ok(validate_caller(
-        caller,
-        agreement.demand.requestor_id.unwrap(),
-    ))
-}
-
-async fn is_agreement_initiator(
-    caller: String,
-    agreement_id: String,
-) -> std::result::Result<bool, Error> {
-    let agreement = bus::service(market::BUS_ID)
-        .send(market::GetAgreement {
-            agreement_id: agreement_id,
-        })
-        .await??;
-
-    let initiator_id = agreement
-        .demand
-        .requestor_id
-        .ok_or(Error::BadRequest("no requestor id".into()))?;
-
-    Ok(validate_caller(caller, initiator_id))
-}
-
-#[inline(always)]
-fn validate_caller(caller: String, expected: String) -> bool {
-    // FIXME: impl a proper caller struct / parser
-    let net_expected = format!("{}/{}", NET_SERVICE_ID, expected);
-    log::info!("checking caller: {} vs expected: {}", caller, net_expected);
-    caller == net_expected
 }

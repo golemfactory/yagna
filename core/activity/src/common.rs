@@ -4,8 +4,8 @@ use uuid::Uuid;
 use ya_core_model::market;
 
 use ya_persistence::executor::ConnType;
-use ya_service_bus::RpcEndpoint;
-use ya_service_bus::RpcMessage;
+use ya_service_api::constants::NET_SERVICE_ID;
+use ya_service_bus::{RpcEndpoint, RpcMessage};
 
 use crate::dao::{ActivityDao, NotFoundAsOption};
 use crate::error::Error;
@@ -67,6 +67,14 @@ where
     }
 }
 
+pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreement, Error> {
+    Ok(bus::service(market::BUS_ID)
+        .send(market::GetAgreement {
+            agreement_id: agreement_id.to_string(),
+        })
+        .await??)
+}
+
 pub(crate) async fn get_activity_agreement(
     conn: &ConnType,
     activity_id: &str,
@@ -83,4 +91,61 @@ pub(crate) async fn get_activity_agreement(
         .await??;
 
     Ok(agreement)
+}
+
+pub(crate) async fn is_activity_initiator(
+    conn: &ConnType,
+    caller: String,
+    activity_id: &str,
+) -> std::result::Result<bool, Error> {
+    let agreement_id = ActivityDao::new(&conn)
+        .get_agreement_id(&activity_id)
+        .map_err(Error::from)?;
+    is_agreement_initiator(caller, agreement_id).await
+}
+
+pub(crate) async fn is_activity_executor(
+    conn: &ConnType,
+    caller: String,
+    activity_id: &str,
+) -> std::result::Result<bool, Error> {
+    let agreement_id = ActivityDao::new(&conn)
+        .get_agreement_id(&activity_id)
+        .map_err(Error::from)?;
+    is_agreement_executor(caller, agreement_id).await
+}
+
+pub(crate) async fn is_agreement_initiator(
+    caller: String,
+    agreement_id: String,
+) -> std::result::Result<bool, Error> {
+    let agreement = get_agreement(agreement_id).await?;
+    let initiator_id = agreement
+        .demand
+        .requestor_id
+        .ok_or(Error::BadRequest("no requestor id".into()))?;
+
+    Ok(validate_caller(caller, initiator_id))
+}
+
+pub(crate) async fn is_agreement_executor(
+    caller: String,
+    agreement_id: String,
+) -> std::result::Result<bool, Error> {
+    let agreement = get_agreement(agreement_id).await?;
+    let executor_id = agreement
+        .offer
+        .provider_id
+        .ok_or(Error::BadRequest("no provider id".into()))?;
+
+    Ok(validate_caller(caller, executor_id))
+}
+
+#[inline(always)]
+pub(crate) fn validate_caller(caller: String, expected: String) -> bool {
+    // FIXME: impl a proper caller struct / parser
+    let pat = format!("{}/", NET_SERVICE_ID);
+    let expected = expected.replacen(&pat, "", 1);
+    log::info!("checking caller: {} vs expected: {}", caller, expected);
+    caller == expected
 }
