@@ -49,9 +49,10 @@ async fn tmp_send_keys() -> anyhow::Result<()> {
         .collect();
     log::debug!("exporting all app-keys: {:#?}", &ids);
 
-    let url = MarketProviderApi::rebase_service_url(Rc::new(Url::parse("http://127.0.0.1:5001")?))?;
-    let url: &Url = &url;
-    let mut url = url.clone();
+    let mut url =
+        MarketProviderApi::rebase_service_url(Rc::new(Url::parse("http://127.0.0.1:5001")?))?
+            .as_ref()
+            .clone();
     url.set_path("admin/import-key");
     log::debug!("posting to: {:?}", url);
 
