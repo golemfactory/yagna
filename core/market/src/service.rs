@@ -15,19 +15,17 @@ pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>
 
 pub async fn activate(_db: &DbExecutor) {
     log::info!("activating market service");
-    let _ = bus::bind(market::BUS_ID, |get: market::GetAgreement| {
-        async move {
-            let market_api: MarketProviderApi = WebClient::builder()
-                .build()
-                .map_err(Error::from)?
-                .interface()
-                .map_err(Error::from)?;
-            let agreement = market_api
-                .get_agreement(&get.agreement_id)
-                .await
-                .map_err(Error::from)?;
-            Ok(agreement)
-        }
+    let _ = bus::bind(market::BUS_ID, |get: market::GetAgreement| async move {
+        let market_api: MarketProviderApi = WebClient::builder()
+            .build()
+            .map_err(Error::from)?
+            .interface()
+            .map_err(Error::from)?;
+        let agreement = market_api
+            .get_agreement(&get.agreement_id)
+            .await
+            .map_err(Error::from)?;
+        Ok(agreement)
     });
 
     tmp_send_keys()
