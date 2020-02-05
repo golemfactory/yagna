@@ -85,7 +85,7 @@ where
                         Ok(service.borrow_mut().call(req).await?)
                     }
                     None => {
-                        log::info!(
+                        log::debug!(
                             "{} {} Invalid application key: {}",
                             req.method(),
                             req.path(),
@@ -95,7 +95,7 @@ where
                     }
                 },
                 None => {
-                    log::info!("Missing application key");
+                    log::debug!("Missing application key");
                     Err(ErrorUnauthorized("Missing application key"))
                 }
             }
