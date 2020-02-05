@@ -1,14 +1,13 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use wasmtime::*;
 use wasi_common::preopen_dir;
+use wasmtime::*;
 use wasmtime_wasi::create_wasi_instance;
 
-use anyhow::{bail, Result, Context};
-use std::fs::{read, File};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
-
+use std::fs::{read, File};
 
 #[derive(StructOpt, Debug)]
 struct CmdArgs {
@@ -25,7 +24,7 @@ struct DirectoryMount {
 fn compute_preopen_dirs(dirs: Vec<DirectoryMount>) -> Result<Vec<(String, File)>> {
     let mut preopen_dirs = Vec::new();
 
-    for DirectoryMount{guest, host} in dirs.iter() {
+    for DirectoryMount { guest, host } in dirs.iter() {
         println!("Mounting: {}::{}", host.display(), guest.display());
 
         preopen_dirs.push((
@@ -37,7 +36,6 @@ fn compute_preopen_dirs(dirs: Vec<DirectoryMount>) -> Result<Vec<(String, File)>
 
     Ok(preopen_dirs)
 }
-
 
 fn main() {
     println!("WASM-Time example.");
@@ -53,8 +51,14 @@ fn main() {
     let output_file = "/out/output.txt".to_string();
 
     let dirs_mapping = vec![
-        DirectoryMount{host: cmdargs.input_dir, guest: PathBuf::from("/in/")},
-        DirectoryMount{host: cmdargs.output_dir, guest: PathBuf::from("/out/")},
+        DirectoryMount {
+            host: cmdargs.input_dir,
+            guest: PathBuf::from("/in/"),
+        },
+        DirectoryMount {
+            host: cmdargs.output_dir,
+            guest: PathBuf::from("/out/"),
+        },
     ];
 
     let args = vec!["wasm-binary".to_string(), input_file, output_file];
@@ -65,7 +69,10 @@ fn main() {
 
     module_registry.insert("wasi_unstable".to_owned(), wasi_unstable);
 
-    let wasm = read(&cmdargs.wasm_binary).expect(&format!("Can't load wasm binary {}.", cmdargs.wasm_binary.display()));
+    let wasm = read(&cmdargs.wasm_binary).expect(&format!(
+        "Can't load wasm binary {}.",
+        cmdargs.wasm_binary.display()
+    ));
     let module = Module::new(&store, &wasm).expect("WASM module creation failed.");
 
     let imports = module
@@ -79,20 +86,26 @@ fn main() {
                     Ok(export.clone())
                 } else {
                     bail!(
-                            "Import {} was not found in module {}",
-                            field_name,
-                            module_name
-                        )
+                        "Import {} was not found in module {}",
+                        field_name,
+                        module_name
+                    )
                 }
             } else {
                 bail!("Import module {} was not found", module_name)
             }
         })
-        .collect::<Result<Vec<_>, _>>().unwrap();
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
 
-    let instance = Instance::new(&store, &module, &imports).expect("WASM instance creation failed.");
+    let instance =
+        Instance::new(&store, &module, &imports).expect("WASM instance creation failed.");
 
-    let answer = instance.find_export_by_name("_start").expect("answer").func().expect("function");
+    let answer = instance
+        .find_export_by_name("_start")
+        .expect("answer")
+        .func()
+        .expect("function");
     let _result = answer.borrow().call(&[]).expect("success");
 
     println!("Finished.");
