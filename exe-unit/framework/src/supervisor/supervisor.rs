@@ -1,5 +1,7 @@
 use crate::exeunit::ExeUnit;
 
+use ya_model::activity::*;
+
 use actix::prelude::*;
 use anyhow::{Error, Result};
 
@@ -43,19 +45,19 @@ pub struct StopCommand;
 // ExeUnit state
 
 #[derive(Message)]
-#[rtype(result = "Result<()>")]
+#[rtype(result = "Result<ActivityState>")]
 pub struct QueryActivityState;
 
 #[derive(Message)]
-#[rtype(result = "Result<()>")]
+#[rtype(result = "Result<ActivityUsage>")]
 pub struct QueryActivityUsage;
 
 #[derive(Message)]
-#[rtype(result = "Result<()>")]
+#[rtype(result = "Result<ExeScriptCommandState>")]
 pub struct QueryRunningCommand;
 
 #[derive(Message)]
-#[rtype(result = "Result<()>")]
+#[rtype(result = "Result<Vec<ExeScriptCommandResult>>")]
 pub struct QueryExecBatchResults;
 
 
