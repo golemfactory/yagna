@@ -1,16 +1,15 @@
-#![allow(unused_imports)]
-
-use actix_rt::{Arbiter, System};
-use chrono::{TimeZone, Utc};
+use actix_rt::{Arbiter};
 use futures::channel::mpsc;
 use futures::prelude::*;
+use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
-use ya_client::{market::MarketRequestorApi, web::WebClient};
 
-use std::time::Duration;
-use ya_model::market::event::RequestorEvent;
-use ya_model::market::{AgreementProposal, Demand, Proposal};
+use ya_client::{
+    activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
+};
+//use ya_model::market::proposal::State;
+use ya_model::market::{AgreementProposal, Demand, Proposal, RequestorEvent};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -53,18 +52,24 @@ impl AppSettings {
 async fn process_offer(
     requestor_api: MarketRequestorApi,
     offer: Proposal,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let agreement_id = offer.proposal_id.unwrap().clone();
-    let agreement =
-        AgreementProposal::new(agreement_id.clone(), "2021-01-01T18:54:16.655397Z".parse()?);
-    let _ack = requestor_api.create_agreement(&agreement).await?;
-    log::info!("confirm agreement = {}", agreement_id);
-    requestor_api.confirm_agreement(&agreement_id).await?;
-    log::info!("wait for agreement = {}", agreement_id);
-    requestor_api.wait_for_approval(&agreement_id).await?;
-    log::info!("agreement = {} CONFIRMED!", agreement_id);
+) -> Result<String, anyhow::Error> {
+    //    if offer.state.is_none() {
+    //        requestor_api.counter_proposal(offer)
+    //    }
 
-    Ok(agreement_id)
+    let new_agreement_id = offer.proposal_id()?;
+    let new_agreement = AgreementProposal::new(
+        new_agreement_id.clone(),
+        "2021-01-01T18:54:16.655397Z".parse()?,
+    );
+    let _ack = requestor_api.create_agreement(&new_agreement).await?;
+    log::info!("confirm agreement = {}", new_agreement_id);
+    requestor_api.confirm_agreement(new_agreement_id).await?;
+    log::info!("wait for agreement = {}", new_agreement_id);
+    requestor_api.wait_for_approval(new_agreement_id).await?;
+    log::info!("agreement = {} CONFIRMED!", new_agreement_id);
+
+    Ok(new_agreement_id.clone())
 }
 
 async fn spawn_workers(

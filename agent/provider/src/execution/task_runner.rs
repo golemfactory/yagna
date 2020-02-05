@@ -3,14 +3,17 @@ use super::task::Task;
 use crate::market::provider_market::AgreementSigned;
 
 use ya_client::activity::ActivityProviderApi;
-use ya_model::activity::ProviderEvent;
+use ya_model::activity::{
+    activity_state::{State, StatePair},
+    ActivityState, ProviderEvent,
+};
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
 
 use actix::prelude::*;
 
 use anyhow::{Error, Result};
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
@@ -200,6 +203,23 @@ impl TaskRunner {
                 // Remove task from list and destroy everything related with it.
                 let task = self.tasks.swap_remove(task_position);
                 TaskRunner::destroy_task(task);
+                let client = self.api.clone();
+
+                Arbiter::spawn(async move {
+                    debug!("changing activity state to: Terminated");
+                    if let Err(err) = client
+                        .set_activity_state(
+                            &msg.activity_id,
+                            &ActivityState::new(State::Terminated),
+                        )
+                        .await
+                    {
+                        error!(
+                            "Failed to set state for activity [{}]. Error: {}",
+                            &msg.activity_id, err
+                        );
+                    }
+                })
             }
         }
         Ok(())

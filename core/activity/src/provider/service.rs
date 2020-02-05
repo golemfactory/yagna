@@ -80,6 +80,10 @@ async fn destroy_activity_gsb(
         .await
         .map_err(Error::from)?;
 
+    log::info!(
+        "waiting {:?}ms for activity status change to Terminate",
+        msg.timeout
+    );
     db.as_dao::<ActivityStateDao>()
         .get_future(&msg.activity_id, Some(State::Terminated))
         .timeout(msg.timeout)

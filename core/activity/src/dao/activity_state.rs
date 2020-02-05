@@ -48,6 +48,7 @@ impl<'c> ActivityStateDao<'c> {
         let state = state.map(|s| serde_json::to_string(&s).unwrap());
         let duration = Duration::from_millis(750);
 
+        log::debug!("waiting {:?}ms for activity state", duration);
         loop {
             let result = self.get(activity_id).await.not_found_as_option()?;
             if let Some(s) = result {
