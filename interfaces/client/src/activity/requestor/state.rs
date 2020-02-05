@@ -30,16 +30,6 @@ impl ActivityRequestorStateApi {
         self.client.get(&uri).send().json().await
     }
 
-    /// Get state of specified Activity.
-    pub async fn set_state(
-        &self,
-        activity_id: &str,
-        state: &ActivityState,
-    ) -> Result<ActivityState> {
-        let uri = url_format!("activity/{activity_id}/state", activity_id);
-        self.client.put(&uri).send_json(&state).json().await
-    }
-
     /// Get usage of specified Activity.
     pub async fn get_usage(&self, activity_id: &str) -> Result<Vec<f64>> {
         let uri = url_format!("activity/{activity_id}/usage", activity_id);
