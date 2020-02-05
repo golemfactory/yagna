@@ -67,6 +67,14 @@ where
     }
 }
 
+pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreement, Error> {
+    Ok(bus::service(market::BUS_ID)
+        .send(market::GetAgreement {
+            agreement_id: agreement_id.to_string(),
+        })
+        .await??)
+}
+
 pub(crate) async fn get_activity_agreement(
     conn: &ConnType,
     activity_id: &str,
@@ -111,7 +119,7 @@ pub(crate) async fn is_agreement_initiator(
     caller: String,
     agreement_id: String,
 ) -> std::result::Result<bool, Error> {
-    let agreement = get_agreement(None, agreement_id, None).await?;
+    let agreement = get_agreement(agreement_id).await?;
     let initiator_id = agreement
         .demand
         .requestor_id
@@ -124,7 +132,7 @@ pub(crate) async fn is_agreement_executor(
     caller: String,
     agreement_id: String,
 ) -> std::result::Result<bool, Error> {
-    let agreement = get_agreement(None, agreement_id, None).await?;
+    let agreement = get_agreement(agreement_id).await?;
     let executor_id = agreement
         .offer
         .provider_id

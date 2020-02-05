@@ -1,17 +1,14 @@
 use futures::prelude::*;
 use std::convert::From;
 
-use ya_core_model::activity::*;
-use ya_core_model::market;
-use ya_model::activity::{provider_event::ProviderEventType, State};
-use ya_persistence::executor::DbExecutor;
-use ya_service_bus::timeout::IntoTimeoutFuture;
-use ya_service_bus::typed as bus;
-use ya_service_bus::RpcEndpoint;
 use crate::common::{generate_id, is_activity_initiator, is_agreement_initiator, RpcMessageResult};
 use crate::dao::*;
 use crate::db_conn;
 use crate::error::Error;
+use ya_core_model::activity::*;
+use ya_model::activity::{provider_event::ProviderEventType, State};
+use ya_persistence::executor::DbExecutor;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 lazy_static::lazy_static! {
     static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);

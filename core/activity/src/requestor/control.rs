@@ -2,6 +2,7 @@ use actix_web::web;
 use futures::prelude::*;
 use serde::Deserialize;
 use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
+use ya_core_model::ethaddr::NodeId;
 use ya_core_model::market;
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
@@ -10,12 +11,13 @@ use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
 
 use crate::common::{
-    generate_id, get_activity_agreement, get_agreement, is_activity_initiator,
-    is_agreement_initiator, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
+    generate_id, get_activity_agreement, is_activity_initiator, is_agreement_initiator,
+    PathActivity, QueryTimeout, QueryTimeoutMaxCount,
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
 use crate::requestor::provider_activity_service_id;
+use std::str::FromStr;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
