@@ -60,7 +60,7 @@ async fn create_activity(
             agreement_id: agreement_id.clone(),
         })
         .await??;
-    log::info!("agreement: {:#?}", agreement);
+    log::debug!("agreement: {:#?}", agreement);
 
     let msg = CreateActivity {
         // TODO: fix this
@@ -70,9 +70,9 @@ async fn create_activity(
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    log::info!("creating activity at: {}", uri);
+    log::debug!("creating activity at: {}", uri);
     let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
-    log::info!("creating activity: {}", activity_id);
+    log::debug!("creating activity: {}", activity_id);
 
     ActivityDao::new(&conn)
         .create(&activity_id, &agreement_id)
