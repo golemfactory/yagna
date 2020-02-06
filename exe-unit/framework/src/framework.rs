@@ -6,6 +6,7 @@ use crate::cmd_args::Config;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
+use log::info;
 use structopt::StructOpt;
 
 
@@ -22,9 +23,9 @@ impl ExeUnitFramework {
         cmd_dispatcher: Box< dyn Dispatcher>,
         exeunit: Box<dyn ExeUnit>
     ) -> Result<ExeUnitFramework> {
-        println!("Creating system.");
-        let mut sys = System::new("ExeUnit");
+        info!("Starting ExeUnit.");
 
+        let mut sys = System::new("ExeUnit");
         let supervisor = ExeUnitSupervisor::new(exeunit).start();
 
         Ok(ExeUnitFramework{sys, supervisor, cmd_input: cmd_dispatcher})
@@ -38,22 +39,23 @@ impl ExeUnitFramework {
         match args {
             Config::CLI => {
                 dispatcher = InteractiveCli::new();
+                info!("Running in interactive CLI mode.");
             },
             Config::FromFile{ input} => {
                 dispatcher = FileDispatcher::new(input);
+                info!("Running in file commands mode.");
             },
             Config::Gsb{ service_id } => {
                 dispatcher = GsbDispatcher::new(service_id);
+                info!("Running in gsb dispatcher mode.");
             }
         }
         Ok(ExeUnitFramework::new(dispatcher, exeunit)?)
     }
 
     pub fn run(self) -> Result<()> {
-        println!("System created.");
         let mut cmd = self.cmd_input;
-        cmd.run(self.supervisor.clone(), self.sys);
-        Ok(())
+        cmd.run(self.supervisor.clone(), self.sys)
     }
 
 }

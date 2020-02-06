@@ -2,10 +2,6 @@ use super::dispatcher::Dispatcher;
 use super::json_command::*;
 pub use crate::supervisor::{
     ExeUnitSupervisor,
-    QueryActivityState,
-    QueryActivityUsage,
-    QueryExecBatchResults,
-    QueryRunningCommand,
     RunCommand,
     StartCommand,
     StopCommand,

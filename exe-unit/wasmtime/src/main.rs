@@ -17,6 +17,8 @@ impl ExeUnit for Wasmtime {
 
 
 fn main() -> Result<()>  {
+    env_logger::init();
+
     let framework = ExeUnitFramework::from_cmd_args(Wasmtime::new())?;
     Ok(framework.run()?)
 }

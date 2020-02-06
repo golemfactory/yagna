@@ -4,7 +4,7 @@ use serde::de::DeserializeOwned;
 use anyhow::{Result, Error};
 
 
-/// Deserialize strign with json into ExeScriptCommands.
+/// Deserialize string with json into ExeScriptCommands.
 pub fn commands_from_json(json: &str) -> Result<Vec<ExeScriptCommand>> {
     match serde_json::from_str(json) {
         // OK, we got a JSON array, now interpret Values as strongly typed Cmd
@@ -22,8 +22,8 @@ pub fn commands_from_json(json: &str) -> Result<Vec<ExeScriptCommand>> {
 
             result_vec.into_iter().collect::<Result<Vec<ExeScriptCommand>>>()
         },
-        Ok(value) => Err(Error::msg(format!("Wrong json"))),
-        Err(e) => Err(Error::msg(format!("Wrong json")))
+        Ok(value) => Err(Error::msg(format!("Json should be an array."))),
+        Err(e) => Err(Error::msg(format!("Error parsing json.")))
     }
 }
 

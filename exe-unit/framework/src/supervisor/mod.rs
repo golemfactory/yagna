@@ -1,4 +1,6 @@
 mod supervisor;
+mod state;
+mod transfers;
 
 pub use supervisor::{ExeUnitSupervisor,
                      QueryActivityState,
