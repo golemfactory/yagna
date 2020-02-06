@@ -53,13 +53,16 @@ impl WebClient {
             .build()
     }
 
+    /// constructs endpoint url in form of `<base_url>/<suffix>`.
+    ///
+    /// suffix should not have leading slash ie. `offer` not `/offer`
     fn url<T: AsRef<str>>(&self, suffix: T) -> Result<url::Url> {
         Ok(self.base_url.join(suffix.as_ref())?)
     }
 
     pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
         let url = self.url(url).unwrap().to_string();
-        log::info!("doing {} on {}", method, url);
+        log::debug!("doing {} on {}", method, url);
         WebRequest {
             inner_request: self.awc.request(method, &url),
             url,
