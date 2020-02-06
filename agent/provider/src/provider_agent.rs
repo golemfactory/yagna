@@ -1,10 +1,10 @@
 use ya_client::Result;
+use ya_utils_actix::actix_handler::send_message;
+use ya_utils_actix::actix_signal::Subscribe;
 
 use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarket};
 use crate::startup_config::StartupConfig;
-use crate::utils::actix_handler::send_message;
-use crate::utils::actix_signal::Subscribe;
 
 use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;

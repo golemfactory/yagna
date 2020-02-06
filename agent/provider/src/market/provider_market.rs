@@ -1,9 +1,9 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
-use crate::forward_actix_handler;
-use crate::utils::actix_handler::ResultTypeGetter;
-use crate::utils::actix_signal::{SignalSlot, Subscribe};
 
+use ya_utils_actix::forward_actix_handler;
+use ya_utils_actix::actix_handler::ResultTypeGetter;
+use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_client::market::MarketProviderApi;
 use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 

@@ -2,7 +2,6 @@ mod execution;
 mod market;
 pub mod provider_agent;
 mod startup_config;
-mod utils;
 
 use crate::provider_agent::ProviderAgent;
 use crate::startup_config::StartupConfig;
