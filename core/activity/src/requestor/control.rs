@@ -49,7 +49,7 @@ async fn create_activity(
     let conn = db_conn!(db)?;
     let agreement_id = body.into_inner();
 
-    if !is_agreement_initiator(id.name.clone(), agreement_id.clone()).await? {
+    if !is_agreement_initiator(id.identity.to_string(), agreement_id.clone()).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -89,7 +89,7 @@ async fn destroy_activity(
     id: Identity,
 ) -> Result<(), Error> {
     let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+    if !is_activity_initiator(&conn, id.identity.to_string(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -118,7 +118,7 @@ async fn exec(
     id: Identity,
 ) -> Result<String, Error> {
     let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+    if !is_activity_initiator(&conn, id.identity.to_string(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
@@ -146,7 +146,7 @@ async fn get_batch_results(
     id: Identity,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {
     let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+    if !is_activity_initiator(&conn, id.identity.to_string(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
