@@ -1,6 +1,8 @@
 use crate::exeunit::ExeUnit;
 
 use ya_model::activity::*;
+use ya_utils_actix::forward_actix_handler;
+use ya_utils_actix::actix_handler::ResultTypeGetter;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -20,21 +22,21 @@ pub struct DeployCommand;
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct StartCommand {
-    args: Vec<String>,
+    pub args: Vec<String>,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct RunCommand {
-    entrypoint: String,
-    args: Vec<String>,
+    pub entrypoint: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct TransferCommand {
-    from: String,
-    to: String,
+    pub from: String,
+    pub to: String,
 }
 
 #[derive(Message)]
@@ -76,6 +78,26 @@ impl ExeUnitSupervisor {
     pub fn new(exeunit: Box<dyn ExeUnit>) -> ExeUnitSupervisor {
         ExeUnitSupervisor{exeunit}
     }
+
+    fn start_command(&self, msg: StartCommand) -> Result<()> {
+        unimplemented!();
+    }
+
+    fn stop_command(&self, msg: StopCommand) -> Result<()> {
+        unimplemented!();
+    }
+
+    fn deploy_command(&self, msg: DeployCommand) -> Result<()> {
+        unimplemented!();
+    }
+
+    fn transfer_command(&self, msg: TransferCommand) -> Result<()> {
+        unimplemented!();
+    }
+
+    fn run_command(&self, msg: RunCommand) -> Result<()> {
+        unimplemented!();
+    }
 }
 
 
@@ -87,3 +109,8 @@ impl Actor for ExeUnitSupervisor {
     type Context = Context<Self>;
 }
 
+forward_actix_handler!(ExeUnitSupervisor, DeployCommand, deploy_command);
+forward_actix_handler!(ExeUnitSupervisor, StartCommand, start_command);
+forward_actix_handler!(ExeUnitSupervisor, StopCommand, stop_command);
+forward_actix_handler!(ExeUnitSupervisor, TransferCommand, transfer_command);
+forward_actix_handler!(ExeUnitSupervisor, RunCommand, run_command);

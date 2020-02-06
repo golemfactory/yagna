@@ -1,7 +1,7 @@
 use ya_exe_framework::ExeUnitFramework;
 use ya_exe_framework::ExeUnit;
 
-
+use anyhow::Result;
 
 pub struct Wasmtime;
 
@@ -16,6 +16,7 @@ impl ExeUnit for Wasmtime {
 
 
 
-fn main() {
-    ExeUnitFramework::from_cmd_args(Wasmtime::new()).unwrap();
+fn main() -> Result<()>  {
+    let framework = ExeUnitFramework::from_cmd_args(Wasmtime::new())?;
+    Ok(framework.run()?)
 }

@@ -1,4 +1,6 @@
-use crate::supervisor::ExeUnitSupervisor;
+use ya_model::activity::ExeScriptCommand;
+
+pub use crate::supervisor::ExeUnitSupervisor;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -8,6 +10,8 @@ use anyhow::{Error, Result};
 /// It could be gsb, interactive command line or file
 /// with commands.
 pub trait Dispatcher {
-    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, sys: &mut SystemRunner) -> Result<()>;
+    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, sys: SystemRunner) -> Result<()>;
 }
+
+
 

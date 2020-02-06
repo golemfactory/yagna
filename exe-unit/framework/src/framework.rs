@@ -22,8 +22,10 @@ impl ExeUnitFramework {
         cmd_dispatcher: Box< dyn Dispatcher>,
         exeunit: Box<dyn ExeUnit>
     ) -> Result<ExeUnitFramework> {
-        let supervisor = ExeUnitSupervisor::new(exeunit).start();
+        println!("Creating system.");
         let mut sys = System::new("ExeUnit");
+
+        let supervisor = ExeUnitSupervisor::new(exeunit).start();
 
         Ok(ExeUnitFramework{sys, supervisor, cmd_input: cmd_dispatcher})
     }
@@ -47,8 +49,10 @@ impl ExeUnitFramework {
         Ok(ExeUnitFramework::new(dispatcher, exeunit)?)
     }
 
-    pub fn run(&mut self) -> Result<()> {
-        self.cmd_input.run(self.supervisor.clone(), &mut self.sys);
+    pub fn run(self) -> Result<()> {
+        println!("System created.");
+        let mut cmd = self.cmd_input;
+        cmd.run(self.supervisor.clone(), self.sys);
         Ok(())
     }
 

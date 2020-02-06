@@ -20,7 +20,7 @@ impl GsbDispatcher {
 
 impl Dispatcher for GsbDispatcher {
 
-    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, sys: &mut SystemRunner) -> Result<()> {
+    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, mut sys: SystemRunner) -> Result<()> {
         Ok(())
     }
 

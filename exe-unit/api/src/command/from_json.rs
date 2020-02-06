@@ -73,7 +73,7 @@ where
                     let cmd: Result<M> = serde_json::from_value(cmd).map_err(Into::into);
                     match cmd {
                         Ok(cmd) => dispatcher
-                            .send(Command::new(cmd))
+                        .send(Command::new(cmd))
                             .then(|res| match res {
                                 Err(e) => future::ok(Err(Error::from(e))),
                                 Ok(res) => future::ok(res),
