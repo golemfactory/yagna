@@ -1,13 +1,15 @@
-use crate::dao::{DaoError, NotFoundAsOption, Result};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::sql_types::{Integer, Timestamp};
 use std::cmp::min;
 use std::time::Duration;
 use tokio::time::delay_for;
+
 use ya_persistence::executor::{do_with_connection, do_with_transaction, AsDao, PoolType};
 use ya_persistence::models::ActivityEventType;
 use ya_persistence::schema;
+
+use crate::dao::{DaoError, NotFoundAsOption, Result};
 
 pub const MAX_EVENTS: u32 = 100;
 

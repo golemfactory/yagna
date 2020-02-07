@@ -109,7 +109,9 @@ impl TaskRunner {
 
     async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunner>) {
         info!("Collected {} activity events. Processing...", events.len());
+        debug!("those events are: {:?}", events);
 
+        // FIXME: Create activity arrives together with destroy, and destroy is being processed first
         for event in events.iter() {
             match event {
                 ProviderEvent::CreateActivity {
@@ -166,6 +168,7 @@ impl TaskRunner {
             return Err(Error::msg(msg));
         }
 
+        info!("Creating activity: {}", activity_id);
         // TODO: Get ExeUnit name from agreement.
         let exeunit_name = "dummy";
         match self.create_task(exeunit_name, activity_id, agreement_id) {
