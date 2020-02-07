@@ -1,6 +1,5 @@
 //! Async bindings for the Yagna API (REST)
 
-pub mod configuration;
 pub mod web;
 
 #[macro_use]
@@ -8,6 +7,7 @@ pub mod rest;
 
 pub mod activity;
 pub mod market;
+pub mod payment;
 
 pub mod error;
 pub use error::Error;

@@ -3,7 +3,6 @@ use actix::{dev::ToEnvelope, prelude::*};
 use futures::{
     channel::oneshot,
     future::{self},
-    prelude::*,
     FutureExt,
 };
 use std::marker::PhantomData;

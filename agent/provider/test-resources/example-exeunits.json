@@ -1,0 +1,12 @@
+[
+  {
+    "name": "dummy",
+    "path": "dummy.exe",
+    "args": ["help"]
+  },
+  {
+    "name": "wasm",
+    "path": "wasm.exe",
+    "args": []
+  }
+]

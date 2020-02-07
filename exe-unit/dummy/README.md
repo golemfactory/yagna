@@ -72,7 +72,7 @@ cargo run --bin ya-exe-dummy -- gsb /local/dummy
 For testing, you can firstly launch the GSB Router like so:
 
 ```shell
-cargo run --bin ya-sb-router
+cargo run --example ya-sb-router
 ```
 
 Then, you can bind the DummyExeUnit to the GSB like so:

@@ -1,12 +1,17 @@
+use crate::ethaddr::NodeId;
 use serde::{Deserialize, Serialize};
 use ya_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 use ya_service_bus::RpcMessage;
 
+pub const SERVICE_ID: &str = "/activity";
+pub const BUS_ID: &str = "/private/activity";
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateActivity {
+    pub provider_id: NodeId,
     pub agreement_id: String,
     pub timeout: Option<u32>,
 }
@@ -52,8 +57,24 @@ pub struct GetActivityState {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SetActivityState {
+    pub activity_id: String,
+    pub state: ActivityState,
+    pub timeout: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetActivityUsage {
     pub activity_id: String,
+    pub timeout: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetActivityUsage {
+    pub activity_id: String,
+    pub usage: ActivityUsage,
     pub timeout: Option<u32>,
 }
 
@@ -104,8 +125,20 @@ impl RpcMessage for GetActivityState {
     type Error = RpcMessageError;
 }
 
+impl RpcMessage for SetActivityState {
+    const ID: &'static str = "SetState";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
 impl RpcMessage for GetActivityUsage {
     const ID: &'static str = "GetUsage";
     type Item = ActivityUsage;
+    type Error = RpcMessageError;
+}
+
+impl RpcMessage for SetActivityUsage {
+    const ID: &'static str = "SetUsage";
+    type Item = ();
     type Error = RpcMessageError;
 }

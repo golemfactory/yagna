@@ -1,52 +1,62 @@
 //! Requestor control part of Activity API
-use crate::Result;
-use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
+use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest, ACTIVITY_API_PATH};
 
-rest_interface! {
-    /// Bindings for Requestor Control part of the Activity API.
-    impl RequestorControlApiClient {
-        /// Creates new Activity based on given Agreement.
-        pub async fn create_activity(
-            &self,
-            agreement_id: &str
-        ) -> Result<String> {
-            let response = post("activity/").send_json( &agreement_id ).body();
+use crate::{web::WebClient, web::WebInterface, Result};
 
-            { Ok( String::from_utf8( response?.to_vec() )? ) }
-        }
+/// Bindings for Requestor Control part of the Activity API.
+pub struct ActivityRequestorControlApi {
+    client: WebClient,
+}
 
-        /// Destroys given Activity.
-        pub async fn destroy_activity(
-            &self,
-            #[path] activity_id: &str
-        ) -> Result<()> {
-            let response = delete("activity/{activity_id}/").send().body();
+impl WebInterface for ActivityRequestorControlApi {
+    const API_URL_ENV_VAR: &'static str = "YAGNA_ACTIVITY_URL";
+    const API_SUFFIX: &'static str = ACTIVITY_API_PATH;
 
-            { response.map(|_| ()) }
-        }
+    fn from(client: WebClient) -> Self {
+        ActivityRequestorControlApi { client }
+    }
+}
 
-        /// Executes an ExeScript batch within a given Activity.
-        pub async fn exec(
-            &self,
-            script: ExeScriptRequest,
-            #[path] activity_id: &str
-        ) -> Result<String> {
-            let response = post("activity/{activity_id}/state/").send_json( &script ).json();
+impl ActivityRequestorControlApi {
+    /// Creates new Activity based on given Agreement.
+    pub async fn create_activity(&self, agreement_id: &str) -> Result<String> {
+        self.client
+            .post("activity")
+            .send_json(&agreement_id)
+            .json()
+            .await
+    }
 
-            response
-        }
+    /// Destroys given Activity.
+    pub async fn destroy_activity(&self, activity_id: &str) -> Result<()> {
+        let uri = url_format!("activity/{activity_id}", activity_id);
+        self.client.delete(&uri).send().json().await?;
+        Ok(())
+    }
 
-        /// Queries for ExeScript batch results.
-        pub async fn get_exec_batch_results(
-            &self,
-            #[path] activity_id: &str,
-            #[path] batch_id: &str,
-            #[query] timeout: Option<i32>,
-            #[query] max_count: Option<i32>
-        ) -> Result<Vec<ExeScriptCommandResult>> {
-            let response = get("activity/{activity_id}/exec/{batch_id}/").send().json();
+    /// Executes an ExeScript batch within a given Activity.
+    pub async fn exec(&self, script: ExeScriptRequest, activity_id: &str) -> Result<String> {
+        let uri = url_format!("activity/{activity_id}/exec", activity_id);
+        self.client.post(&uri).send_json(&script).json().await
+    }
 
-            response
-        }
+    /// Queries for ExeScript batch results.
+    #[rustfmt::skip]
+    pub async fn get_exec_batch_results(
+        &self,
+        activity_id: &str,
+        batch_id: &str,
+        timeout: Option<i32>,
+        #[allow(non_snake_case)]
+        maxCount: Option<i32>,
+    ) -> Result<Vec<ExeScriptCommandResult>> {
+        let uri = url_format!(
+            "activity/{activity_id}/exec/{batch_id}",
+            activity_id,
+            batch_id,
+            #[query] timeout,
+            #[query] maxCount
+        );
+        self.client.get(&uri).send().json().await
     }
 }

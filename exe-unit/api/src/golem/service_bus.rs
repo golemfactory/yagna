@@ -7,7 +7,6 @@ use actix::{
     prelude::*,
 };
 use bus::{actix_rpc, Handle, RpcEnvelope, RpcMessage};
-use futures::prelude::*;
 use futures::TryStreamExt;
 use serde::{
     de::{self, DeserializeOwned, Deserializer, SeqAccess, Visitor},

@@ -1,26 +1,22 @@
-use crate::dao::{ActivityDao, AgreementDao, NotFoundAsOption};
+use ya_core_model::activity::SERVICE_ID;
+use ya_model::market::Agreement;
+use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE};
+
 use crate::error::Error;
-use futures::lock::Mutex;
-use ya_persistence::executor::DbExecutor;
-use ya_persistence::models::Agreement;
 
 pub mod control;
 pub mod state;
 
-async fn get_agreement(
-    db_executor: &Mutex<DbExecutor<Error>>,
-    activity_id: &str,
-) -> Result<Agreement, Error> {
-    let conn = db_executor.lock().await.conn()?;
-    let agreement_id = ActivityDao::new(&conn)
-        .get_agreement_id(activity_id)
-        .not_found_as_option()
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
+#[inline(always)]
+fn provider_activity_service_id(agreement: &Agreement) -> Result<String, Error> {
+    let provider_id = agreement
+        .offer
+        .provider_id
+        .as_ref()
+        .ok_or(Error::BadRequest("no provider id".into()))?;
 
-    AgreementDao::new(&conn)
-        .get(&agreement_id)
-        .not_found_as_option()
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)
+    Ok(format!(
+        "{}{}/{}{}",
+        PRIVATE_SERVICE, NET_SERVICE_ID, provider_id, SERVICE_ID
+    ))
 }

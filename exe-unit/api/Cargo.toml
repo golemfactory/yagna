@@ -16,5 +16,5 @@ version = "1.0"
 features = ["derive"]
 
 [dependencies.bus]
-version = "0.1"
+version = "0.2"
 package = "ya-service-bus"

@@ -1,18 +1,16 @@
-use crate::dao::Result;
-use crate::timeout::Interval;
-use chrono::Local;
+use crate::dao::{NotFoundAsOption, Result};
+use chrono::Utc;
 use diesel::prelude::*;
 use diesel::sql_types::Timestamp;
-use futures::future::Future;
-use futures::task::{Context, Poll};
 use std::cmp::min;
-use std::pin::Pin;
+use std::time::Duration;
+use tokio::time::delay_for;
 use ya_persistence::executor::ConnType;
 use ya_persistence::schema;
 
 pub const MAX_EVENTS: u32 = 100;
 
-#[derive(Queryable)]
+#[derive(Queryable, Debug)]
 pub struct Event {
     pub id: i32,
     pub name: String,
@@ -36,7 +34,7 @@ impl<'c> EventDao<'c> {
         use schema::activity_event::dsl as dsl_event;
         use schema::activity_event_type::dsl as dsl_type;
 
-        let now = Local::now().naive_local();
+        let now = Utc::now().naive_utc();
 
         self.conn.transaction(|| {
             diesel::insert_into(dsl_event::activity_event)
@@ -67,23 +65,22 @@ impl<'c> EventDao<'c> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
         use schema::activity_event_type::dsl as dsl_type;
-        use schema::agreement::dsl as dsl_agreement;
 
         let limit = match max_count {
             Some(val) => min(MAX_EVENTS, val),
             None => MAX_EVENTS,
         };
 
+        log::debug!("starting db query");
         self.conn.transaction(|| {
             let results: Vec<Event> = dsl_event::activity_event
                 .inner_join(schema::activity_event_type::table)
                 .inner_join(schema::activity::table)
-                .inner_join(dsl_agreement::agreement.on(dsl_agreement::id.eq(dsl::agreement_id)))
                 .select((
                     dsl_event::id,
                     dsl_type::name,
                     dsl::natural_id,
-                    dsl_agreement::natural_id,
+                    dsl::agreement_id,
                 ))
                 .order(dsl_event::event_date.asc())
                 .limit(limit as i64)
@@ -98,43 +95,18 @@ impl<'c> EventDao<'c> {
         })
     }
 
-    pub fn get_events_fut(&self, max_count: Option<u32>) -> EventsFuture<'_, '_> {
-        EventsFuture::new(self, max_count)
-    }
-}
+    pub async fn get_events_fut(&self, max_count: Option<u32>) -> Result<Vec<Event>> {
+        let duration = Duration::from_millis(750);
 
-pub struct EventsFuture<'d, 'c> {
-    dao: &'d EventDao<'c>,
-    max_count: Option<u32>,
-    interval: Interval,
-}
-
-impl<'d, 'c: 'd> EventsFuture<'d, 'c> {
-    fn new(dao: &'d EventDao<'c>, max_count: Option<u32>) -> Self {
-        let interval = Interval::new(1000);
-        Self {
-            max_count,
-            dao,
-            interval,
-        }
-    }
-}
-
-impl<'d, 'c: 'd> Future for EventsFuture<'d, 'c> {
-    type Output = Vec<Event>;
-
-    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.interval.check() {
-            if let Ok(events) = self.dao.get_events(self.max_count) {
+        loop {
+            let result = self.get_events(max_count).not_found_as_option()?;
+            if let Some(events) = result {
                 if events.len() > 0 {
-                    return Poll::Ready(events);
+                    return Ok(events);
                 }
             }
-        }
 
-        ctx.waker().wake_by_ref();
-        Poll::Pending
+            delay_for(duration).await;
+        }
     }
 }
-
-impl<'d, 'c: 'd> Unpin for EventsFuture<'d, 'c> {}

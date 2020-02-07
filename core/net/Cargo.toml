@@ -1,17 +1,23 @@
 [package]
 name = "ya-net"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-core-model = { path = "../model/" }
-ya-service-bus = "0.1"
+ya-core-model = "0.1"
+ya-sb-router = "0.1"
+ya-service-api = "0.1"
+ya-service-bus = "0.2"
+log = "0.4"
 
 [dependencies.futures]
-package="futures"
-version="0.3"
-
+package = "futures"
+version = "0.3"
 
 [dev-dependencies]
-actix = "0.9"
+anyhow = "1.0"
+actix-rt = "1.0"
+env_logger = "0.7"
+structopt = "0.3"
+serde = "1.0"
