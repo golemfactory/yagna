@@ -24,7 +24,7 @@ impl<'c> ActivityStateDao<'c> {
     pub fn get(&self, activity_id: &str) -> Result<ActivityState> {
         use schema::activity::dsl;
 
-        log::info!("getting activity state");
+        log::debug!("getting activity state");
         self.conn.transaction(|| {
             let state: ActivityState = dsl::activity
                 .inner_join(schema::activity_state::table)

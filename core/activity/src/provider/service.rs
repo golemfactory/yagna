@@ -50,7 +50,7 @@ async fn create_activity_gsb(
             ActivityDao::new(&conn)
                 .create(&activity_id, &agreement_id)
                 .map_err(Error::from)?;
-            log::info!("activity inserted: {}", activity_id);
+            log::debug!("activity inserted: {}", activity_id);
             EventDao::new(&conn)
                 .create(
                     &activity_id,
@@ -59,7 +59,7 @@ async fn create_activity_gsb(
                         .as_str(),
                 )
                 .map_err(Error::from)?;
-            log::info!("event inserted");
+            log::debug!("event inserted");
             Ok::<_, crate::error::Error>(())
         })
         .await?;
@@ -73,7 +73,7 @@ async fn create_activity_gsb(
             .map_err(Error::from)
             .await?
             .map_err(Error::from)?;
-        log::info!("activity state: {:?}", state);
+        log::debug!("activity state: {:?}", state);
     }
 
     Ok(activity_id)

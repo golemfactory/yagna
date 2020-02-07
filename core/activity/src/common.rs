@@ -145,7 +145,7 @@ pub(crate) async fn is_agreement_executor(
 pub(crate) fn validate_caller(caller: String, expected: String) -> bool {
     // FIXME: impl a proper caller struct / parser
     let pat = format!("{}/", NET_SERVICE_ID);
-    let expected = expected.replacen(&pat, "", 1);
+    let caller = caller.replacen(&pat, "", 1);
     log::info!("checking caller: {} vs expected: {}", caller, expected);
     caller == expected
 }

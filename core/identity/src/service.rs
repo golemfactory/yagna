@@ -9,7 +9,6 @@ mod identity;
 
 pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     log::info!("activating identity service");
-    log::debug!("loading default identity");
 
     let service = Arc::new(Mutex::new(
         identity::IdentityService::from_db(db.clone()).await?,

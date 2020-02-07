@@ -39,6 +39,7 @@ impl IdentityService {
         let default_key = db
             .as_dao::<IdentityDao>()
             .init_default_key(|| {
+                log::info!("generating new default identity");
                 let key: IdentityKey = generate_new(None, "".into()).into();
                 let new_identity = Identity {
                     identity_id: key.id(),
@@ -49,6 +50,7 @@ impl IdentityService {
                     note: None,
                     created_date: Utc::now().naive_utc(),
                 };
+                log::info!("default identity generated: {:?}", new_identity);
 
                 Ok(new_identity)
             })

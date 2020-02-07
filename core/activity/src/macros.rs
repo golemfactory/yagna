@@ -8,9 +8,6 @@ macro_rules! db_conn {
 
 #[macro_export]
 macro_rules! impl_restful_handler {
-    ($method:ident) => {
-        move |d| $method(d).map(crate::common::into_json_response)
-    };
     ($method:ident, $($a:ident),*) => {
         move |d, $($a),*| $method(d, $($a),*).map(crate::common::into_json_response)
     };

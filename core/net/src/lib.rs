@@ -70,21 +70,13 @@ pub async fn bind_remote(
         move |_caller: &str, addr: &str, msg: &[u8]| {
             // remove /private prefix and post to the hub
             let addr = addr.replacen(&*PRIVATE_SERVICE, "", 1);
-            log::info!(
+            log::debug!(
                 "Sending message to hub. Called by: {}, addr: {}.",
                 source_node_id,
                 addr
             );
             // caller here is always depicted as `local`, so we replace it with our subscriber addr
-            let body = Vec::from(msg);
-            let addr = addr.to_string();
-            let source_node = source_node_id.clone();
-            let central_bus = central_bus.clone();
-            async move {
-                let response = central_bus.call(source_node, addr, body).await;
-                log::info!("cl response = {:?}", response);
-                response
-            }
+            central_bus.call(source_node_id.clone(), addr.to_string(), Vec::from(msg))
         },
     );
     Ok(())
