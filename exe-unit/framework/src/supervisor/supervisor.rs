@@ -1,4 +1,4 @@
-use crate::exeunit::{ExeUnit, Worker};
+use crate::exeunit::{ExeUnitBuilder, Worker};
 use super::state::StateMachine;
 use super::transfers::Transfers;
 
@@ -83,7 +83,7 @@ pub struct Supervisor {
 
 impl Supervisor {
 
-    pub fn new(exeunit: Box<dyn ExeUnit>) -> Supervisor {
+    pub fn new(exeunit: Box<dyn ExeUnitBuilder>) -> Supervisor {
         let state_machine = StateMachine::default();
 
         let arbiter = Arbiter::new();

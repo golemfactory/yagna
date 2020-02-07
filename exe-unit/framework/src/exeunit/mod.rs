@@ -1,5 +1,5 @@
 mod exeunit;
 mod worker;
 
-pub use exeunit::ExeUnit;
+pub use exeunit::{ExeUnitBuilder, ExeUnit};
 pub use worker::Worker;

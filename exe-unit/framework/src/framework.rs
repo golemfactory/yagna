@@ -1,6 +1,6 @@
 use crate::dispatchers::{Dispatcher, GsbDispatcher, InteractiveCli, FileDispatcher};
 use crate::supervisor::Supervisor;
-use crate::exeunit::ExeUnit;
+use crate::exeunit::ExeUnitBuilder;
 
 use crate::cmd_args::Config;
 
@@ -21,7 +21,7 @@ pub struct ExeUnitFramework {
 impl ExeUnitFramework {
     pub fn new(
         cmd_dispatcher: Box< dyn Dispatcher>,
-        exeunit: Box<dyn ExeUnit>
+        exeunit: Box<dyn ExeUnitBuilder>
     ) -> Result<ExeUnitFramework> {
         info!("Starting ExeUnit.");
 
@@ -32,7 +32,7 @@ impl ExeUnitFramework {
     }
 
     /// Creates ExeUnitFramework using command line args.
-    pub fn from_cmd_args(exeunit: Box<dyn ExeUnit>) -> Result<ExeUnitFramework> {
+    pub fn from_cmd_args(exeunit: Box<dyn ExeUnitBuilder>) -> Result<ExeUnitFramework> {
 
         let dispatcher: Box< dyn Dispatcher>;
         let args = Config::from_args();

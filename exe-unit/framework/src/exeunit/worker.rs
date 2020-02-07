@@ -1,7 +1,7 @@
 use ya_utils_actix::forward_actix_handler;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 
-use crate::exeunit::ExeUnit;
+use crate::exeunit::{ExeUnitBuilder, ExeUnit};
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -28,13 +28,14 @@ use crate::supervisor::{
 /// Actor responsible for direct interaction with ExeUnit trait
 /// implementation. Runs in different thread to perform heavy computations.
 pub struct Worker {
-    exeunit: Box<dyn ExeUnit>,
+    exeunit_factory: Box<dyn ExeUnitBuilder>,
+    exeunit: Option<Box<dyn ExeUnit>>,
 }
 
 
 impl Worker {
-    pub fn new(exeunit: Box<dyn ExeUnit>) -> Worker {
-        Worker{exeunit}
+    pub fn new(exeunit_factory: Box<dyn ExeUnitBuilder>) -> Worker {
+        Worker{exeunit_factory, exeunit: None}
     }
 
     fn deploy_command(&self, msg: DeployCommand) -> Result<()> {
