@@ -25,7 +25,7 @@ impl ExeUnitFramework {
     ) -> Result<ExeUnitFramework> {
         info!("Starting ExeUnit.");
 
-        let mut sys = System::new("ExeUnit");
+        let sys = System::new("ExeUnit");
         let supervisor = Supervisor::new(exeunit).start();
 
         Ok(ExeUnitFramework{sys, supervisor, cmd_input: cmd_dispatcher})

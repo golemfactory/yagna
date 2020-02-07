@@ -1,6 +1,7 @@
 mod supervisor;
 mod state;
 mod transfers;
+mod protocols;
 
 pub use supervisor::{Supervisor,
                      QueryActivityState,

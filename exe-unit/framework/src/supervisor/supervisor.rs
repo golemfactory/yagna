@@ -1,5 +1,6 @@
-use crate::exeunit::ExeUnit;
+use crate::exeunit::{ExeUnit, Worker};
 use super::state::StateMachine;
+use super::transfers::Transfers;
 
 use ya_model::activity::*;
 use ya_utils_actix::forward_actix_handler;
@@ -73,7 +74,8 @@ pub struct QueryExecBatchResults;
 /// and answering questions about ExeUnit state.
 /// It spawns Worker with real implementation of ExeUnit to do the work.
 pub struct Supervisor {
-    exeunit: Box<dyn ExeUnit>,
+    worker: Addr<Worker>,
+    transfers: Addr<Transfers>,
     states: StateMachine,
 }
 
@@ -82,11 +84,24 @@ impl Supervisor {
 
     pub fn new(exeunit: Box<dyn ExeUnit>) -> Supervisor {
         let state_machine = StateMachine::default();
-        Supervisor{exeunit, states: state_machine}
+        let worker = Worker::new(exeunit).start();
+        let transfers = Transfers::new().start();
+
+        Supervisor{worker, transfers, states: state_machine}
+    }
+
+    fn deploy_command(&self, msg: DeployCommand) -> Result<()> {
+        error!("Running Deploy command. Not implemented.");
+        unimplemented!();
     }
 
     fn start_command(&self, msg: StartCommand) -> Result<()> {
         error!("Running Start command. Not implemented.");
+        unimplemented!();
+    }
+
+    fn run_command(&self, msg: RunCommand) -> Result<()> {
+        error!("Running Run command. Not implemented.");
         unimplemented!();
     }
 
@@ -95,18 +110,8 @@ impl Supervisor {
         unimplemented!();
     }
 
-    fn deploy_command(&self, msg: DeployCommand) -> Result<()> {
-        error!("Running Deploy command. Not implemented.");
-        unimplemented!();
-    }
-
     fn transfer_command(&self, msg: TransferCommand) -> Result<()> {
         error!("Running Transfer command. Not implemented.");
-        unimplemented!();
-    }
-
-    fn run_command(&self, msg: RunCommand) -> Result<()> {
-        error!("Running Run command. Not implemented.");
         unimplemented!();
     }
 }
