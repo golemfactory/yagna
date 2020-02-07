@@ -987,6 +987,19 @@ dependencies = [
 [[package]]
 name = "ethsign"
 version = "0.7.3"
+source = "git+https://github.com/bidzyyys/ethsign#1bd9e2a17d9cec685718fd9de9e79f75363ec8b4"
+dependencies = [
+ "parity-crypto 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-hex 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "secp256k1 0.17.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zeroize 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "ethsign"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "parity-crypto 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2519,6 +2532,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "secp256k1"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "secp256k1-sys 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "cc 1.0.41 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "security-framework"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3533,7 +3562,9 @@ version = "0.1.0"
 dependencies = [
  "ethereum-tx-sign 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethsign 0.7.3 (git+https://github.com/bidzyyys/ethsign)",
  "hex 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.44 (registry+https://github.com/rust-lang/crates.io-index)",
  "web3 0.8.0 (git+https://github.com/bidzyyys/rust-web3)",
 ]
 
@@ -3933,6 +3964,7 @@ dependencies = [
 "checksum ethbloom 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)" = "3932e82d64d347a045208924002930dc105a138995ccdc1479d0f05f0359f17c"
 "checksum ethereum-tx-sign 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3e0bcf29eae71e6ad1fd54d79933a8854f7e07b473ae763464000cf07fff3cd6"
 "checksum ethereum-types 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "62d1bc682337e2c5ec98930853674dd2b4bd5d0d246933a9e98e5280f7c76c5f"
+"checksum ethsign 0.7.3 (git+https://github.com/bidzyyys/ethsign)" = "<none>"
 "checksum ethsign 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "b656fefa0b59f41b39000532c69359e927c0f1850186808ccf1586734ac3365f"
 "checksum failure 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "f8273f13c977665c5db7eb2b99ae520952fe5ac831ae4cd09d80c4c7042b5ed9"
 "checksum failure_derive 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "0bc225b78e0391e4b8683440bf2e63c2deeeb2ce5189eab46e2b68c6d3725d08"
@@ -4103,6 +4135,8 @@ dependencies = [
 "checksum scrypt 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "656c79d0e90d0ab28ac86bf3c3d10bfbbac91450d3f190113b4e76d9fec3cfdd"
 "checksum secp256k1 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4070f3906e65249228094cf97b04a90799fba04468190bbbcfa812309cf86e32"
 "checksum secp256k1 0.15.5 (registry+https://github.com/rust-lang/crates.io-index)" = "4d311229f403d64002e9eed9964dfa5a0a0c1ac443344f7546bf48e916c6053a"
+"checksum secp256k1 0.17.2 (registry+https://github.com/rust-lang/crates.io-index)" = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
+"checksum secp256k1-sys 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7ab2c26f0d3552a0f12e639ae8a64afc2e3db9c52fe32f5fc6c289d38519f220"
 "checksum security-framework 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "8ef2429d7cefe5fd28bd1d2ed41c944547d4ff84776f5935b456da44593a16df"
 "checksum security-framework-sys 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "e31493fc37615debb8c5090a7aeb4a9730bc61e77ab10b9af59f1a202284f895"
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"

@@ -8,4 +8,6 @@ edition = "2018"
 web3 = {git = "https://github.com/bidzyyys/rust-web3"}
 ethereum-tx-sign = "3.0.0"
 ethereum-types = "0.6.0"
+serde_json = "1.0"
+ethsign = {git = "https://github.com/bidzyyys/ethsign"}
 hex = "0.4.0"
