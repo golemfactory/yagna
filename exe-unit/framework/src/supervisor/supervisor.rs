@@ -72,17 +72,17 @@ pub struct QueryExecBatchResults;
 /// This actor is responsible for performing ExeUnit commands
 /// and answering questions about ExeUnit state.
 /// It spawns Worker with real implementation of ExeUnit to do the work.
-pub struct ExeUnitSupervisor {
+pub struct Supervisor {
     exeunit: Box<dyn ExeUnit>,
     states: StateMachine,
 }
 
 
-impl ExeUnitSupervisor {
+impl Supervisor {
 
-    pub fn new(exeunit: Box<dyn ExeUnit>) -> ExeUnitSupervisor {
+    pub fn new(exeunit: Box<dyn ExeUnit>) -> Supervisor {
         let state_machine = StateMachine::default();
-        ExeUnitSupervisor{exeunit, states: state_machine}
+        Supervisor{exeunit, states: state_machine}
     }
 
     fn start_command(&self, msg: StartCommand) -> Result<()> {
@@ -116,12 +116,12 @@ impl ExeUnitSupervisor {
 // Actix stuff
 // =========================================== //
 
-impl Actor for ExeUnitSupervisor {
+impl Actor for Supervisor {
     type Context = Context<Self>;
 }
 
-forward_actix_handler!(ExeUnitSupervisor, DeployCommand, deploy_command);
-forward_actix_handler!(ExeUnitSupervisor, StartCommand, start_command);
-forward_actix_handler!(ExeUnitSupervisor, StopCommand, stop_command);
-forward_actix_handler!(ExeUnitSupervisor, TransferCommand, transfer_command);
-forward_actix_handler!(ExeUnitSupervisor, RunCommand, run_command);
+forward_actix_handler!(Supervisor, DeployCommand, deploy_command);
+forward_actix_handler!(Supervisor, StartCommand, start_command);
+forward_actix_handler!(Supervisor, StopCommand, stop_command);
+forward_actix_handler!(Supervisor, TransferCommand, transfer_command);
+forward_actix_handler!(Supervisor, RunCommand, run_command);

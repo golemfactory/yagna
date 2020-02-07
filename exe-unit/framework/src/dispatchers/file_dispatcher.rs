@@ -1,5 +1,5 @@
 use super::dispatcher::Dispatcher;
-use crate::supervisor::ExeUnitSupervisor;
+use crate::supervisor::Supervisor;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -21,7 +21,7 @@ impl FileDispatcher {
 
 impl Dispatcher for FileDispatcher {
 
-    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, mut sys: SystemRunner) -> Result<()> {
+    fn run(&mut self, supervisor: Addr<Supervisor>, mut sys: SystemRunner) -> Result<()> {
         Ok(())
     }
 }

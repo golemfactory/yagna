@@ -1,7 +1,7 @@
 use super::dispatcher::Dispatcher;
 use super::json_command::*;
 pub use crate::supervisor::{
-    ExeUnitSupervisor,
+    Supervisor,
     RunCommand,
     StartCommand,
     StopCommand,
@@ -57,7 +57,7 @@ impl InteractiveCli {
     }
 
 
-    fn redirect_to_supervisor(sys: &mut SystemRunner, supervisor: Addr<ExeUnitSupervisor>, command: ExeScriptCommand) -> Result<()> {
+    fn redirect_to_supervisor(sys: &mut SystemRunner, supervisor: Addr<Supervisor>, command: ExeScriptCommand) -> Result<()> {
         match command {
             ExeScriptCommand::Deploy {} => {
                 Ok(sys.block_on(supervisor.send(DeployCommand{}))??)
@@ -81,7 +81,7 @@ impl InteractiveCli {
 
 impl Dispatcher for InteractiveCli {
 
-    fn run(&mut self, supervisor: Addr<ExeUnitSupervisor>, mut sys: SystemRunner) -> Result<()> {
+    fn run(&mut self, supervisor: Addr<Supervisor>, mut sys: SystemRunner) -> Result<()> {
         loop {
             let cmd = InteractiveCli::wait_for_command()?;
 

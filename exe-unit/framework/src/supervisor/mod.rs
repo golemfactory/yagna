@@ -2,7 +2,7 @@ mod supervisor;
 mod state;
 mod transfers;
 
-pub use supervisor::{ExeUnitSupervisor,
+pub use supervisor::{Supervisor,
                      QueryActivityState,
                      QueryActivityUsage,
                      QueryExecBatchResults,
