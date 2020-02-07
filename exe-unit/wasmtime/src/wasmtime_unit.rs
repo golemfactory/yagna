@@ -7,6 +7,7 @@ use wasmtime_wasi::create_wasi_instance;
 use wasi_common::preopen_dir;
 
 use anyhow::{bail, Context, Result, Error};
+use log::info;
 use std::collections::HashMap;
 use std::fs::{read, File};
 
@@ -110,6 +111,8 @@ impl ExeUnit for Wasmtime {
 impl Wasmtime {
 
     fn create_wasi_module(&mut self, args: Vec<String>) -> Result<()> {
+        info!("Loading wasi.");
+
         let preopen_dirs = Wasmtime::compute_preopen_dirs(&self.mounts)?;
         let wasi_unstable = create_wasi_instance(&self.store, &preopen_dirs, &args, &vec![])
             .expect("Failed to create wasi module.");
@@ -119,6 +122,8 @@ impl Wasmtime {
     }
 
     fn load_binary(&mut self, binary_file: &Path) -> Result<()> {
+        info!("Loading wasm binary: {}", binary_file.display());
+
         let wasm_binary = read(binary_file)
             .map_err(|error| {
                     Error::msg(format!("Can't load wasm binary {}. Error: {}",

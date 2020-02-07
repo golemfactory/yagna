@@ -5,7 +5,7 @@ use crate::exeunit::{ExeUnitBuilder, ExeUnit};
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
-use log::{error};
+use log::{error, info};
 
 
 // =========================================== //
@@ -38,9 +38,14 @@ impl Worker {
         Worker{exeunit_factory, exeunit: None}
     }
 
-    fn deploy_command(&self, msg: DeployCommand) -> Result<()> {
-        error!("Worker - Running Deploy command. Not implemented.");
-        unimplemented!();
+    fn deploy_command(&mut self, msg: DeployCommand) -> Result<()> {
+        info!("Worker - Running Deploy command.");
+
+        let mut exeunit = self.exeunit_factory.create()?;
+
+        exeunit.on_deploy()?;
+        self.exeunit = Some(exeunit);
+        Ok(())
     }
 
     fn start_command(&self, msg: StartCommand) -> Result<()> {

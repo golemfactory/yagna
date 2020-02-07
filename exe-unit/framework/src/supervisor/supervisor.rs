@@ -4,11 +4,11 @@ use super::transfers::Transfers;
 
 use ya_model::activity::*;
 use ya_utils_actix::forward_actix_handler;
-use ya_utils_actix::actix_handler::ResultTypeGetter;
+use ya_utils_actix::actix_handler::{ResultTypeGetter, send_message};
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
-use log::{error};
+use log::{error, info};
 
 
 // =========================================== //
@@ -94,8 +94,9 @@ impl Supervisor {
     }
 
     fn deploy_command(&self, msg: DeployCommand) -> Result<()> {
-        error!("Running Deploy command. Not implemented.");
-        unimplemented!();
+        info!("Running Deploy command.");
+        send_message(self.worker.clone(), msg);
+        Ok(())
     }
 
     fn start_command(&self, msg: StartCommand) -> Result<()> {
