@@ -1,8 +1,8 @@
+use futures::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
-
 use std::str::FromStr;
 use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE, PUBLIC_SERVICE};
-use ya_service_bus::{connection, untyped as local_bus};
+use ya_service_bus::{connection, untyped as local_bus, Error, ResponseChunk};
 
 #[derive(Default)]
 struct SubscribeHelper {}
@@ -45,7 +45,10 @@ pub async fn bind_remote(
             );
             log::debug!("Incoming request_id: {}", request_id);
             // actual forwarding to my local bus
-            local_bus::send(&local_addr, &caller, &data)
+            stream::once(
+                local_bus::send(&local_addr, &caller, &data)
+                    .and_then(|r| future::ok(ResponseChunk::Full(r))),
+            )
         },
     );
 
