@@ -1,6 +1,5 @@
 use ya_model::activity::ExeScriptCommand;
 
-use serde::de::DeserializeOwned;
 use anyhow::{Result, Error};
 
 

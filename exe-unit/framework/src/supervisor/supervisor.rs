@@ -77,6 +77,7 @@ pub struct Supervisor {
     worker: Addr<Worker>,
     transfers: Addr<Transfers>,
     states: StateMachine,
+    arbiter: Arbiter,
 }
 
 
@@ -84,10 +85,12 @@ impl Supervisor {
 
     pub fn new(exeunit: Box<dyn ExeUnit>) -> Supervisor {
         let state_machine = StateMachine::default();
-        let worker = Worker::new(exeunit).start();
+
+        let arbiter = Arbiter::new();
+        let worker = Worker::start_in_arbiter(&arbiter, move |_| Worker::new(exeunit));
         let transfers = Transfers::new().start();
 
-        Supervisor{worker, transfers, states: state_machine}
+        Supervisor{arbiter, worker, transfers, states: state_machine}
     }
 
     fn deploy_command(&self, msg: DeployCommand) -> Result<()> {

@@ -26,12 +26,12 @@ macro_rules! forward_actix_handler {
                 <<$MessageType as Message>::Result as ResultTypeGetter>::ErrorType,
             >;
 
-            fn handle(&mut self, msg: $MessageType, _ctx: &mut Context<Self>) -> Self::Result {
+            fn handle(&mut self, msg: $MessageType, _ctx: &mut <Self as Actor>::Context) -> Self::Result {
                 ActorResponse::reply(self.$ForwardFun(msg))
             }
         }
     };
-} // gen_actix_handler_sync
+} // forward_actix_handler
 
 // Sends message to other actor.
 pub fn send_message<ActorType, MessageType>(actor: Addr<ActorType>, msg: MessageType)
