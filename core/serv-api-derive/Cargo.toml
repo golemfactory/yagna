@@ -8,8 +8,6 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-ya-service-api-interfaces = "0.1"
-
 proc-macro-hack = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
@@ -24,3 +22,5 @@ actix-service = "1.0"
 anyhow = "1.0"
 clap = "2.33"
 structopt = "0.3"
+ya-service-api-interfaces = "0.1"
+

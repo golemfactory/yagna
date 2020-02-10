@@ -12,7 +12,7 @@ use proc_macro2::Span;
 use quote::quote;
 use std::convert::TryFrom;
 use syn::export::ToTokens;
-use syn::{parse_macro_input, Attribute, AttributeArgs, Error, MetaList, Path, Result};
+use syn::{parse_macro_input, AttributeArgs, Error, Path, Result};
 
 #[proc_macro_attribute]
 pub fn services(attributes: TokenStream, item: TokenStream) -> TokenStream {
