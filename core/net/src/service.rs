@@ -1,7 +1,5 @@
 use anyhow::Context;
 
-
-
 use ya_core_model::identity;
 use ya_service_api::constants::CENTRAL_NET_HOST;
 

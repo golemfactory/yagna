@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use crate::cli::Command;
 
-
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 

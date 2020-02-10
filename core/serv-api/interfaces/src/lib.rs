@@ -1,6 +1,3 @@
-
-
-
 pub trait Service {
     type Cli;
 }
