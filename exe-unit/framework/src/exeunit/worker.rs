@@ -43,7 +43,7 @@ impl Worker {
 
         let mut exeunit = self.exeunit_factory.create()?;
 
-        exeunit.on_deploy()?;
+        exeunit.on_deploy(msg.args)?;
         self.exeunit = Some(exeunit);
         Ok(())
     }
@@ -54,8 +54,10 @@ impl Worker {
     }
 
     fn run_command(&self, msg: RunCommand) -> Result<()> {
-        error!("Worker - Running Run command. Not implemented.");
-        unimplemented!();
+        info!("Worker - Running Run command.");
+
+        //self.exeunit.unwrap().
+        Ok(())
     }
 
     fn stop_command(&self, msg: StopCommand) -> Result<()> {

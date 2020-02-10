@@ -59,8 +59,8 @@ impl InteractiveCli {
 
     fn redirect_to_supervisor(sys: &mut SystemRunner, supervisor: Addr<Supervisor>, command: ExeScriptCommand) -> Result<()> {
         match command {
-            ExeScriptCommand::Deploy {} => {
-                Ok(sys.block_on(supervisor.send(DeployCommand{}))??)
+            ExeScriptCommand::Deploy {args} => {
+                Ok(sys.block_on(supervisor.send(DeployCommand{args}))??)
             },
             ExeScriptCommand::Run {entry_point, args} => {
                 Ok(sys.block_on(supervisor.send(RunCommand{entrypoint:entry_point, args}))??)

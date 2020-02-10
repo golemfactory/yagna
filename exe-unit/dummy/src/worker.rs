@@ -316,7 +316,7 @@ impl Handler<Command> for Worker {
         let address = ctx.address().clone();
         let command = msg.clone();
         let fut = match msg.0 {
-            ExeScriptCommand::Deploy {} => {
+            ExeScriptCommand::Deploy {..} => {
                 let transition = Transition::Deploy;
                 let state = self.states.current_state;
 

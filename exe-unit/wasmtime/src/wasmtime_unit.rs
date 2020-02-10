@@ -1,7 +1,5 @@
 use ya_exe_framework::{ExeUnit, ExeUnitBuilder};
 
-use std::path::{Path, PathBuf};
-
 use wasmtime::*;
 use wasmtime_wasi::create_wasi_instance;
 use wasi_common::preopen_dir;
@@ -10,6 +8,7 @@ use anyhow::{bail, Context, Result, Error};
 use log::info;
 use std::collections::HashMap;
 use std::fs::{read, File};
+use std::path::{Path, PathBuf};
 
 
 struct DirectoryMount {
@@ -53,9 +52,16 @@ impl WasmtimeFactory {
 }
 
 impl ExeUnit for Wasmtime {
-    fn on_deploy(&mut self) -> Result<()> {
+    fn on_deploy(&mut self, args: Vec<String>) -> Result<()> {
+
+        if args.len() != 1 {
+            return Err(Error::msg(format!("Deploy: invalid number of args.")));
+        }
+
+        let wasm_binary = args[ 0 ].clone();
+
         //TODO: Get from external world
-        let args = vec!["wasm-binary".to_string()];
+        let args = vec![wasm_binary.clone()];
 
         //TODO: Get from external world
 //        let dirs_mapping = vec![
@@ -71,7 +77,7 @@ impl ExeUnit for Wasmtime {
 //        self.mounts = dirs_mapping;
 
         self.create_wasi_module(args)?;
-        self.load_binary(&PathBuf::from(""))?;
+        self.load_binary(&PathBuf::from(wasm_binary))?;
         Ok(())
     }
 
@@ -85,20 +91,20 @@ impl ExeUnit for Wasmtime {
         Ok(())
     }
 
-    fn on_run(&mut self) -> Result<()> {
+    fn on_run(&mut self, args: Vec<String>) -> Result<()> {
 
         match self.module_registry.get("main") {
             Some(instance) => {
                 let answer = instance
                     .find_export_by_name("_start")
-                    .unwrap()
+                    .with_context(|| format!("Can't find _start entrypoint."))?
                     .func()
-                    .unwrap();
+                    .with_context(|| format!("Can't find _start entrypoint."))?;
                 let _result = answer.borrow().call(&[])?;
                 Ok(())
             },
             None => {
-                Err(Error::msg(format!("Module not found")))
+                Err(Error::msg(format!("Module not loaded.")))
             }
         }
     }
@@ -115,7 +121,7 @@ impl Wasmtime {
 
         let preopen_dirs = Wasmtime::compute_preopen_dirs(&self.mounts)?;
         let wasi_unstable = create_wasi_instance(&self.store, &preopen_dirs, &args, &vec![])
-            .expect("Failed to create wasi module.");
+            .with_context(|| { format!("Failed to create wasi module.") })?;
 
         self.module_registry.insert("wasi_unstable".to_owned(), wasi_unstable);
         Ok(())
@@ -125,23 +131,15 @@ impl Wasmtime {
         info!("Loading wasm binary: {}", binary_file.display());
 
         let wasm_binary = read(binary_file)
-            .map_err(|error| {
-                    Error::msg(format!("Can't load wasm binary {}. Error: {}",
-                        binary_file.display(),
-                        error))
-                })?;
+            .with_context(|| format!("Can't load wasm binary {}.", binary_file.display()))?;
 
         let mut module = Module::new(&self.store, &wasm_binary)
-            .map_err(|error| {
-                Error::msg(format!("WASM module creation failed. Error: {}", error))
-            })?;
+            .with_context(|| format!("WASM module creation failed."))?;
 
         let imports = self.resolve_imports(&mut module)?;
 
         let instance = Instance::new(&self.store, &module, &imports)
-            .map_err(|error| {
-                Error::msg(format!("WASM instance creation failed. Error: {}", error))
-            })?;
+            .with_context(|| format!("WASM instance creation failed."))?;
 
         self.module_registry.insert("main".to_string(), instance);
         Ok(())
@@ -179,7 +177,7 @@ impl Wasmtime {
             preopen_dirs.push((
                 guest.as_os_str().to_str().unwrap().to_string(),
                 preopen_dir(host)
-                    .with_context(|| format!("failed to open directory '{}'", host.display()))?,
+                    .with_context(|| format!("Failed to open directory '{}'", host.display()))?,
             ));
         }
 

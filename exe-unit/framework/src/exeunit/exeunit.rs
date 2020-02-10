@@ -13,8 +13,8 @@ pub trait ExeUnitBuilder: std::marker::Send {
 pub trait ExeUnit {
 
     fn on_start(&mut self) -> Result<()>;
-    fn on_deploy(&mut self) -> Result<()>;
-    fn on_run(&mut self) -> Result<()>;
+    fn on_deploy(&mut self, args: Vec<String>) -> Result<()>;
+    fn on_run(&mut self, args: Vec<String>) -> Result<()>;
     fn on_transferred(&mut self) -> Result<()>;
     fn on_stop(&mut self) -> Result<()>;
 }

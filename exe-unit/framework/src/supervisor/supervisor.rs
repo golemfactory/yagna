@@ -20,7 +20,9 @@ use log::{error, info};
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
-pub struct DeployCommand;
+pub struct DeployCommand {
+    pub args: Vec<String>,
+}
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
@@ -105,8 +107,9 @@ impl Supervisor {
     }
 
     fn run_command(&self, msg: RunCommand) -> Result<()> {
-        error!("Running Run command. Not implemented.");
-        unimplemented!();
+        info!("Running Run command.");
+        send_message(self.worker.clone(), msg);
+        Ok(())
     }
 
     fn stop_command(&self, msg: StopCommand) -> Result<()> {

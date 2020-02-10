@@ -3130,9 +3130,11 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror 1.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasi-common 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-interface-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmtime-runtime 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-wasi 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-exe-framework 0.1.0",
 ]
