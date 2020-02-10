@@ -10,10 +10,8 @@ ya-sb-router = "0.1"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.2"
-
 anyhow = "1.0"
 log = "0.4"
-rmp-serde = "0.14"
 
 [dependencies.futures]
 package = "futures"

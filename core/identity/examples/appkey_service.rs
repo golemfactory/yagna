@@ -12,7 +12,7 @@ enum Args {
     ClientID(IdentityCommand),
 }
 
-#[services]
+#[services(DbExecutor)]
 enum Service {
     #[enable(gsb)]
     Identity(ya_identity::service::Identity),

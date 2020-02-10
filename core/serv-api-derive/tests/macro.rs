@@ -8,8 +8,17 @@ pub mod activity {
     pub struct ActivityService;
 
     impl ya_service_api_interfaces::Service for ActivityService {
-        type Db = DbExecutor;
         type Cli = ();
+    }
+
+    impl ActivityService {
+        pub async fn gsb(_db: &DbExecutor) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        pub fn rest(_db: &DbExecutor) -> actix_web::Scope {
+            todo!()
+        }
     }
 }
 
@@ -20,8 +29,13 @@ pub mod identity {
     pub struct IdentityService;
 
     impl ya_service_api_interfaces::Service for IdentityService {
-        type Db = DbExecutor;
         type Cli = Commands;
+    }
+
+    impl IdentityService {
+        pub async fn gsb(_db: &DbExecutor) -> anyhow::Result<()> {
+            Ok(())
+        }
     }
 
     #[derive(StructOpt, Debug)]
@@ -67,7 +81,7 @@ pub mod identity {
 
 use ya_service_api_derive::services;
 
-#[services]
+#[services(DbExecutor)]
 enum Services {
     #[enable(gsb, rest)]
     Activity(activity::ActivityService),

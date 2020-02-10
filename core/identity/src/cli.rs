@@ -8,10 +8,13 @@ use ya_service_api::{CliCtx, CommandOutput};
 
 #[derive(StructOpt, Debug)]
 pub enum Command {
+    /// Identity management
+    #[structopt(name="id", setting = structopt::clap::AppSettings::DeriveDisplayOrder)]
+    Identity(IdentityCommand),
+
+    /// Application keys management
     #[structopt(setting = structopt::clap::AppSettings::DeriveDisplayOrder)]
     AppKey(AppKeyCommand),
-    #[structopt(setting = structopt::clap::AppSettings::DeriveDisplayOrder)]
-    Identity(IdentityCommand),
 }
 
 impl Command {

@@ -1,12 +1,24 @@
 pub mod service;
 
-use std::net::ToSocketAddrs;
+use std::net::{SocketAddr, ToSocketAddrs};
 
+use std::str::FromStr;
 use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE, PUBLIC_SERVICE};
 use ya_service_bus::{connection, untyped as local_bus};
 
 #[derive(Default)]
 struct SubscribeHelper {}
+
+pub const NET_ENV_VAR: &str = "CENTRAL_NET_HOST";
+pub const DEFAULT_NET_ADDR: &str = "10.30.10.202:7477";
+
+pub fn resolve_default() -> Result<SocketAddr, <SocketAddr as FromStr>::Err> {
+    if let Some(addr_str) = std::env::var(NET_ENV_VAR).ok() {
+        addr_str.parse()
+    } else {
+        DEFAULT_NET_ADDR.parse()
+    }
+}
 
 /// Initialize net module on a hub.
 pub async fn bind_remote(
@@ -23,6 +35,7 @@ pub async fn bind_remote(
         |request_id: String, caller: String, addr: String, data: Vec<u8>| {
             let local_addr: String =
                 // replaces  /net/0x789/test/1 --> /public/test/1
+                // TODO: use replacen
                 format!("{}/{}",
                         &*PUBLIC_SERVICE,
                         addr.split('/').skip(3).collect::<Vec<_>>().join("/"));
@@ -56,7 +69,7 @@ pub async fn bind_remote(
         move |_caller: &str, addr: &str, msg: &[u8]| {
             // remove /private prefix and post to the hub
             let addr = addr.replacen(&*PRIVATE_SERVICE, "", 1);
-            log::info!(
+            log::debug!(
                 "Sending message to hub. Called by: {}, addr: {}.",
                 source_node_id,
                 addr

@@ -13,7 +13,7 @@ use ya_service_api_derive::services;
 use ya_service_api_web::middleware::auth;
 use ya_service_bus::RpcEndpoint;
 
-#[services]
+#[services(DbExecutor)]
 enum Service {
     #[enable(gsb)]
     Identity(ya_identity::service::Identity),

@@ -31,6 +31,7 @@ fn jwt_encoded(v: serde_json::Value) -> anyhow::Result<String> {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    dotenv::dotenv().ok();
     env_logger::init();
 
     let args = Args::from_args();

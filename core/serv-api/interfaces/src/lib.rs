@@ -1,19 +1,16 @@
-use futures::Future;
-use std::pin::Pin;
+
+
 
 pub trait Service {
-    type Db;
     type Cli;
+}
 
-    fn db<'f>(_: &'f Self::Db) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'f>> {
-        Box::pin(async move { Ok(()) })
-    }
+pub trait Provider<Service, Component> {
+    fn component(&self) -> Component;
+}
 
-    fn gsb<'f>(_: &'f Self::Db) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + 'f>> {
-        Box::pin(async move { Ok(()) })
-    }
-
-    fn rest(_: &Self::Db) -> Option<actix_web::Scope> {
-        None
+impl<Service, Component: Clone> Provider<Service, Component> for Component {
+    fn component(&self) -> Component {
+        self.clone()
     }
 }

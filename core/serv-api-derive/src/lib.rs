@@ -12,10 +12,21 @@ use proc_macro2::Span;
 use quote::quote;
 use std::convert::TryFrom;
 use syn::export::ToTokens;
-use syn::{parse_macro_input, Error, Path, Result};
+use syn::{parse_macro_input, Attribute, AttributeArgs, Error, MetaList, Path, Result};
 
 #[proc_macro_attribute]
-pub fn services(_: TokenStream, item: TokenStream) -> TokenStream {
+pub fn services(attributes: TokenStream, item: TokenStream) -> TokenStream {
+    let context_ref: AttributeArgs = parse_macro_input!(attributes);
+
+    let ctx = match context_ref.get(0) {
+        Some(syn::NestedMeta::Meta(context)) => context,
+        _ => {
+            return Error::new(Span::call_site(), "Wrong context type spec")
+                .to_compile_error()
+                .into()
+        }
+    };
+
     let parsed = parse_macro_input!(item as syn::Item);
     match parsed {
         syn::Item::Enum(item) => {
@@ -29,7 +40,7 @@ pub fn services(_: TokenStream, item: TokenStream) -> TokenStream {
             let errors: Vec<Error> = errors.into_iter().map(Result::unwrap_err).collect();
 
             match errors.is_empty() {
-                true => define_enum(item, services).into(),
+                true => define_enum(item, services, ctx).into(),
                 false => define_errors(errors).into(),
             }
         }
@@ -45,19 +56,21 @@ fn quote_as_trait(path: &Path) -> proc_macro2::TokenStream {
     quote! {<#path as ya_service_api_interfaces::Service>}
 }
 
-fn define_enum(item: syn::ItemEnum, services: Vec<Service>) -> proc_macro2::TokenStream {
+fn define_enum(
+    item: syn::ItemEnum,
+    services: Vec<Service>,
+    context: &syn::Meta,
+) -> proc_macro2::TokenStream {
     let ident = item.ident;
 
     let cli = define_cli_services(&item.vis, &ident, &services);
-    let db = define_db_services(&services);
-    let gsb = define_gsb_services(&services);
+    let gsb = define_gsb_services(&services, context);
     let rest = define_rest_services(&services);
 
     quote! {
         #cli
 
         impl #ident {
-            #db
             #gsb
             #rest
         }
@@ -71,28 +84,6 @@ fn define_errors(errors: Vec<Error>) -> proc_macro2::TokenStream {
         .map(|e| e.to_compile_error())
         .for_each(|e| error_stream.extend(e.into_iter()));
     error_stream
-}
-
-fn define_db_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
-    let mut inner = proc_macro2::TokenStream::new();
-    for service in services.iter() {
-        if !service.supports(component::Component::Db) {
-            continue;
-        }
-
-        let path = quote_as_trait(&service.path);
-        inner.extend(quote! {
-            #path::db(&db).await?;
-        });
-    }
-
-    quote! {
-        #[doc(hidden)]
-        pub async fn db(db: &DbExecutor) -> anyhow::Result<()> {
-            #inner;
-            Ok(())
-        }
-    }
 }
 
 fn define_cli_services(
@@ -159,21 +150,23 @@ fn define_cli_services(
     }
 }
 
-fn define_gsb_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
+fn define_gsb_services(
+    services: &Vec<Service>,
+    context_path: &syn::Meta,
+) -> proc_macro2::TokenStream {
     let mut inner = proc_macro2::TokenStream::new();
     for service in services.iter() {
         if !service.supports(Component::Gsb) {
             continue;
         }
-
-        let path = quote_as_trait(&service.path);
+        let path = &service.path;
         inner.extend(quote! {
-            #path::gsb(&db).await?;
+            #path::gsb(context).await?;
         });
     }
 
     quote! {
-        pub async fn gsb(db: &DbExecutor) -> anyhow::Result<()>  {
+        pub async fn gsb(context: &#context_path) -> anyhow::Result<()>  {
             #inner
             Ok(())
         }
@@ -182,17 +175,13 @@ fn define_gsb_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
 
 fn define_rest_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
     let mut inner = proc_macro2::TokenStream::new();
-    for service in services.iter() {
-        if !service.supports(Component::Rest) {
-            continue;
-        }
-
-        let path = quote_as_trait(&service.path);
+    for service in services
+        .iter()
+        .filter(|service| service.supports(Component::Rest))
+    {
+        let path = &service.path;
         inner.extend(quote! {
-            app = match #path::rest(&db) {
-                Some(scope) => app.service(scope),
-                None => app,
-            };
+            let app = app.service(#path::rest(&db));
         });
     }
 

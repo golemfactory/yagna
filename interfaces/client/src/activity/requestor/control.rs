@@ -1,21 +1,23 @@
 //! Requestor control part of Activity API
-use crate::web::WebClient;
-use crate::Result;
-use std::sync::Arc;
-use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest};
+use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest, ACTIVITY_API_PATH};
+
+use crate::{web::WebClient, web::WebInterface, Result};
 
 /// Bindings for Requestor Control part of the Activity API.
-pub struct RequestorControlApiClient {
-    client: Arc<WebClient>,
+pub struct ActivityRequestorControlApi {
+    client: WebClient,
 }
 
-impl RequestorControlApiClient {
-    pub fn new(client: &Arc<WebClient>) -> Self {
-        Self {
-            client: client.clone(),
-        }
-    }
+impl WebInterface for ActivityRequestorControlApi {
+    const API_URL_ENV_VAR: &'static str = "YAGNA_ACTIVITY_URL";
+    const API_SUFFIX: &'static str = ACTIVITY_API_PATH;
 
+    fn from(client: WebClient) -> Self {
+        ActivityRequestorControlApi { client }
+    }
+}
+
+impl ActivityRequestorControlApi {
     /// Creates new Activity based on given Agreement.
     pub async fn create_activity(&self, agreement_id: &str) -> Result<String> {
         self.client
