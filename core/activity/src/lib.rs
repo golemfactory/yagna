@@ -13,6 +13,7 @@ pub mod api;
 pub mod error;
 pub mod provider;
 pub mod requestor;
+pub mod service;
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 

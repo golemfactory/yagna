@@ -1,3 +1,5 @@
+pub mod service;
+
 use std::net::{SocketAddr, ToSocketAddrs};
 
 use std::str::FromStr;
