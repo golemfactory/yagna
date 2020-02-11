@@ -1,24 +1,27 @@
 pub mod acceptance;
-pub use self::acceptance::Acceptance;
 pub mod allocation;
-pub use self::allocation::Allocation;
 pub mod debit_note;
-pub use self::debit_note::DebitNote;
 pub mod debit_note_event;
-pub use self::debit_note_event::DebitNoteEvent;
 pub mod error_message;
-pub use self::error_message::ErrorMessage;
 pub mod event_type;
-pub use self::event_type::EventType;
 pub mod invoice;
-pub use self::invoice::Invoice;
 pub mod invoice_event;
-pub use self::invoice_event::InvoiceEvent;
 pub mod invoice_status;
-pub use self::invoice_status::InvoiceStatus;
 pub mod payment;
-pub use self::payment::Payment;
 pub mod rejection;
-pub use self::rejection::Rejection;
 pub mod rejection_reason;
+
+pub use self::acceptance::Acceptance;
+pub use self::allocation::Allocation;
+pub use self::debit_note::DebitNote;
+pub use self::debit_note_event::DebitNoteEvent;
+pub use self::error_message::ErrorMessage;
+pub use self::event_type::EventType;
+pub use self::invoice::Invoice;
+pub use self::invoice_event::InvoiceEvent;
+pub use self::invoice_status::InvoiceStatus;
+pub use self::payment::Payment;
+pub use self::rejection::Rejection;
 pub use self::rejection_reason::RejectionReason;
+
+pub const PAYMENT_API_PATH: &str = "payment-api/v1/";

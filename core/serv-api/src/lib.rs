@@ -1,7 +1,7 @@
 use anyhow::Result;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
-use std::{net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
 pub mod constants;
 
@@ -14,7 +14,6 @@ pub fn default_data_dir() -> Result<PathBuf> {
 pub struct CliCtx {
     pub data_dir: PathBuf,
     pub http_address: (String, u16),
-    pub router_address: (String, u16),
     pub json_output: bool,
     pub interactive: bool,
 }
@@ -22,13 +21,6 @@ pub struct CliCtx {
 impl CliCtx {
     pub fn http_address(&self) -> (&str, u16) {
         (&self.http_address.0, self.http_address.1)
-    }
-
-    pub fn router_address(&self) -> Result<SocketAddr> {
-        Ok(SocketAddr::new(
-            self.router_address.0.parse()?,
-            self.router_address.1,
-        ))
     }
 
     pub fn output(&self, output: CommandOutput) {
@@ -172,6 +164,12 @@ fn print_table(
         }
     }
     let _ = table.printstd();
+}
+
+impl From<()> for CommandOutput {
+    fn from(_: ()) -> Self {
+        CommandOutput::NoOutput
+    }
 }
 
 impl From<ResponseTable> for CommandOutput {

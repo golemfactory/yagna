@@ -46,6 +46,8 @@ impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for ConnectionIn
 
 impl DbExecutor {
     pub fn new<S: Into<String>>(database_url: S) -> Result<Self, Error> {
+        let database_url = database_url.into();
+        log::info!("using database at: {}", database_url);
         let manager = ConnectionManager::new(database_url);
         let pool = Pool::builder()
             .connection_customizer(Box::new(ConnectionInit))

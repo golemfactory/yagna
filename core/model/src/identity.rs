@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ya_service_bus::RpcMessage;
 
-pub use ya_service_api::constants::IDENTITY_SERVICE_ID;
-
 pub const BUS_ID: &'static str = "/private/identity";
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]

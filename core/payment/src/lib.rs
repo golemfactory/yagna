@@ -16,5 +16,3 @@ pub mod migrations {
     #[derive(EmbedMigrations)]
     struct _Dummy;
 }
-
-pub use ya_service_api::constants::PAYMENT_API;

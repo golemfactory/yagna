@@ -1,26 +1,29 @@
-use crate::common::{PathActivity, QueryTimeout};
-use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
-use crate::error::Error;
-use crate::requestor::{get_agreement, missing_activity_err, provider_activity_uri};
 use actix_web::web;
 use futures::prelude::*;
+
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState, State};
 use ya_persistence::executor::DbExecutor;
+
+use crate::common::{get_activity_agreement, is_activity_initiator, PathActivity, QueryTimeout};
+use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
+use crate::error::Error;
+use crate::requestor::provider_activity_service_id;
+use ya_service_api_web::middleware::Identity;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
         .route(
             "/activity/{activity_id}/state",
-            web::get().to(impl_restful_handler!(get_activity_state, path, query)),
+            web::get().to(impl_restful_handler!(get_activity_state, path, query, id)),
         )
         .route(
             "/activity/{activity_id}/usage",
-            web::get().to(impl_restful_handler!(get_activity_usage, path, query)),
+            web::get().to(impl_restful_handler!(get_activity_usage, path, query, id)),
         )
         .route(
             "/activity/{activity_id}/command",
-            web::get().to(impl_restful_handler!(get_running_command, path, query)),
+            web::get().to(impl_restful_handler!(get_running_command, path, query, id)),
         )
 }
 
@@ -29,12 +32,14 @@ async fn get_activity_state(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
+    id: Identity,
 ) -> Result<ActivityState, Error> {
     let conn = db_conn!(db)?;
-    missing_activity_err(&conn, &path.activity_id)?;
+    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+        return Err(Error::Forbidden.into());
+    }
 
-    let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
+    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityState {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -48,7 +53,8 @@ async fn get_activity_state(
     }
 
     // Retrieve and persist activity state
-    let activity_state = gsb_send!(msg, &uri, query.timeout)?;
+    let uri = provider_activity_service_id(&agreement)?;
+    let activity_state = gsb_send!(None, msg, &uri, query.timeout)?;
     dao.set(
         &path.activity_id,
         activity_state.state.clone(),
@@ -64,12 +70,14 @@ async fn get_activity_usage(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
+    id: Identity,
 ) -> Result<ActivityUsage, Error> {
     let conn = db_conn!(db)?;
-    missing_activity_err(&conn, &path.activity_id)?;
+    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+        return Err(Error::Forbidden.into());
+    }
 
-    let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
+    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityUsage {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -88,7 +96,8 @@ async fn get_activity_usage(
     }
 
     // Retrieve and persist activity usage
-    let activity_usage = gsb_send!(msg, &uri, query.timeout)?;
+    let uri = provider_activity_service_id(&agreement)?;
+    let activity_usage = gsb_send!(None, msg, &uri, query.timeout)?;
     usage_dao.set(&path.activity_id, &activity_usage.current_usage)?;
 
     Ok(activity_usage)
@@ -99,18 +108,21 @@ async fn get_running_command(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     query: web::Query<QueryTimeout>,
+    id: Identity,
 ) -> Result<ExeScriptCommandState, Error> {
     let conn = db_conn!(db)?;
-    missing_activity_err(&conn, &path.activity_id)?;
+    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+        return Err(Error::Forbidden.into());
+    }
 
-    let agreement = get_agreement(&conn, &path.activity_id)?;
-    let uri = provider_activity_uri(&agreement.offer_node_id);
+    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetRunningCommand {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
-    gsb_send!(msg, &uri, query.timeout)
+    let uri = provider_activity_service_id(&agreement)?;
+    gsb_send!(None, msg, &uri, query.timeout)
 }
 
 fn get_persisted_state(

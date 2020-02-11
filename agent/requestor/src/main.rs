@@ -1,15 +1,16 @@
-use actix_rt::Arbiter;
+#![allow(unused_imports)]
+
+use actix_rt::{Arbiter, System};
+use chrono::{TimeZone, Utc};
 use futures::channel::mpsc;
 use futures::prelude::*;
 use structopt::StructOpt;
 use url::Url;
-use ya_client::web::WebAuth;
-use ya_client::{
-    market::{ApiClient, RequestorApi},
-    web::WebClient,
-};
+use ya_client::{market::MarketRequestorApi, web::WebClient};
 
-use ya_model::market::{Agreement, Demand, Proposal, RequestorEvent};
+use std::time::Duration;
+use ya_model::market::event::RequestorEvent;
+use ya_model::market::{AgreementProposal, Demand, Proposal};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -18,69 +19,56 @@ struct AppSettings {
     app_key: String,
 
     ///
-    #[structopt(long = "market-url", env = "YAGNA_MARKET_URL")]
+    #[structopt(
+        long = "market-url",
+        env = "YAGNA_MARKET_URL",
+        default_value = "http://10.30.10.202:5001/market-api/v1/"
+    )]
     market_url: Url,
 
     ///
     #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
-    activity_url: Url,
+    activity_url: Option<Url>,
 }
 
 impl AppSettings {
-    fn market_api(&self) -> Result<ya_client::market::ApiClient, Box<dyn std::error::Error>> {
-        let host_port = format!(
-            "{}:{}",
-            self.market_url.host_str().unwrap_or_default(),
-            self.market_url.port_or_known_default().unwrap_or_default()
-        );
-
-        let connection = WebClient::builder()
-            .auth(WebAuth::Bearer(self.app_key.clone()))
-            .host_port(host_port);
-
-        Ok(ApiClient::new(connection)?)
+    fn market_api(
+        &self,
+    ) -> Result<ya_client::market::MarketRequestorApi, Box<dyn std::error::Error>> {
+        Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
     }
 
     fn activity_api(
         &self,
-    ) -> Result<ya_client::activity::RequestorControlApiClient, Box<dyn std::error::Error>> {
-        let host_port = format!(
-            "{}:{}",
-            self.activity_url.host_str().unwrap_or_default(),
-            self.activity_url
-                .port_or_known_default()
-                .unwrap_or_default()
-        );
-
-        let connection = WebClient::builder()
-            .auth(WebAuth::Bearer(self.app_key.clone()))
-            .host_port(host_port)
-            .api_root(self.activity_url.path())
-            .build()?;
-        let client = std::sync::Arc::new(connection);
-
-        Ok(ya_client::activity::RequestorControlApiClient::new(&client))
+    ) -> Result<ya_client::activity::ActivityRequestorControlApi, Box<dyn std::error::Error>> {
+        let client = WebClient::with_token(&self.app_key)?;
+        if let Some(url) = &self.activity_url {
+            Ok(client.interface_at(url.clone()))
+        } else {
+            Ok(client.interface()?)
+        }
     }
 }
 
 async fn process_offer(
-    requestor_api: RequestorApi,
-    _provider_id: String,
+    requestor_api: MarketRequestorApi,
     offer: Proposal,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let agreement_id = offer.id.clone();
-    let agreement = Agreement::new(agreement_id.clone(), "2021-01-01".to_string());
+    let agreement_id = offer.proposal_id.unwrap().clone();
+    let agreement =
+        AgreementProposal::new(agreement_id.clone(), "2021-01-01T18:54:16.655397Z".parse()?);
     let _ack = requestor_api.create_agreement(&agreement).await?;
     log::info!("confirm agreement = {}", agreement_id);
     requestor_api.confirm_agreement(&agreement_id).await?;
     log::info!("wait for agreement = {}", agreement_id);
     requestor_api.wait_for_approval(&agreement_id).await?;
+    log::info!("agreement = {} CONFIRMED!", agreement_id);
 
     Ok(agreement_id)
 }
 
 async fn spawn_workers(
-    requestor_api: RequestorApi,
+    requestor_api: MarketRequestorApi,
     subscription_id: &str,
     tx: futures::channel::mpsc::Sender<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -91,19 +79,25 @@ async fn spawn_workers(
 
         if !events.is_empty() {
             log::debug!("events={:?}", events);
+        } else {
+            tokio::time::delay_for(Duration::from_millis(3000)).await;
         }
         for event in events {
             match event {
-                RequestorEvent::OfferEvent {
-                    provider_id,
-                    offer: Some(offer),
+                RequestorEvent::ProposalEvent {
+                    event_date: _,
+                    proposal,
                 } => {
                     let mut tx = tx.clone();
                     let requestor_api = requestor_api.clone();
                     Arbiter::spawn(async move {
-                        let agreement_id = process_offer(requestor_api, provider_id, offer)
-                            .await
-                            .unwrap();
+                        let agreement_id = match process_offer(requestor_api, proposal).await {
+                            Ok(id) => id,
+                            Err(e) => {
+                                log::error!("unable to process offer: {}", e);
+                                return;
+                            }
+                        };
                         tx.send(agreement_id.clone()).await.unwrap();
                     });
                 }
@@ -115,16 +109,8 @@ async fn spawn_workers(
     }
 }
 
-#[actix_rt::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv::dotenv().ok();
-    env_logger::try_init()?;
-
-    let settings = AppSettings::from_args();
-
-    let node_name = "test1";
-
-    let demand = Demand {
+fn build_demand(node_name: &str) -> Demand {
+    Demand {
         properties: serde_json::json!({
             "golem": {
                 "node": {
@@ -140,23 +126,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             (golem.inf.storage.gib>1)
         )"#
         .to_string(),
-    };
+
+        demand_id: Default::default(),
+        requestor_id: Default::default(),
+    }
+}
+
+#[actix_rt::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenv::dotenv().ok();
+    env_logger::init();
+
+    let settings = AppSettings::from_args();
+
+    let node_name = "test1";
+
+    let demand = build_demand(node_name);
     //(golem.runtime.wasm.wasi.version@v=*)
 
-    let client = settings.market_api()?;
-    let subscription_id = client.requestor().subscribe(&demand).await?;
+    let market_api = settings.market_api()?;
+    let subscription_id = market_api.subscribe(&demand).await?;
 
-    eprintln!("sub_id={}", subscription_id);
+    log::info!("sub_id={}", subscription_id);
 
     {
-        let requestor_api = client.requestor().clone();
+        let requestor_api = market_api.clone();
         let subscription_id = subscription_id.clone();
         Arbiter::spawn(async move {
             tokio::signal::ctrl_c().await.unwrap();
             requestor_api.unsubscribe(&subscription_id).await.unwrap();
         })
     }
-    let requestor_api = client.requestor().clone();
+    let requestor_api = market_api.clone();
     let activity_api = settings.activity_api()?;
 
     let (tx, mut rx): (mpsc::Sender<String>, mpsc::Receiver<String>) =
@@ -165,12 +166,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(id) = rx.next().await {
             log::info!("new agreement = {}", id);
             let act_id = activity_api.create_activity(&id).await.unwrap();
-            log::info!("new activity = (({}))", act_id);
+            log::info!("new activity = (({})); destroying...", act_id);
+            let _ = activity_api.destroy_activity(&act_id).await.unwrap();
+            log::info!("I'M DONE FOR NOW");
             //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
         }
     });
     spawn_workers(requestor_api.clone(), &subscription_id, tx).await?;
 
-    client.requestor().unsubscribe(&subscription_id).await?;
+    market_api.unsubscribe(&subscription_id).await?;
     Ok(())
 }

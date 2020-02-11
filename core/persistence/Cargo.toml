@@ -1,19 +1,22 @@
 [package]
 name = "ya-persistence"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 
 [dependencies]
 ya-core-model = { version = "0.1", features=["ethaddr"]}
+ya-model = "0.1"
+
+anyhow = "1.0.26"
 chrono = { version = "0.4.6", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
 dotenv = "0.14"
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
+log = "0.4.8"
 r2d2 = "0.8"
+serde_json = "^1.0"
 thiserror = "1.0.9"
-anyhow = "1.0.26"
-tokio={version="0.2", features=["blocking"]}
-log="0.4.8"
+tokio = { version="0.2", features=["blocking"] }

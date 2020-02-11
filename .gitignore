@@ -9,6 +9,8 @@
 .idea
 .vs
 
+.env
+
 # Databases
 test/yagna/test1/provider_data/yagna.db
 test/yagna/test1/provider_data/yagna.db-shm
