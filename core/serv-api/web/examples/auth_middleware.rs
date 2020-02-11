@@ -8,13 +8,21 @@ use structopt::StructOpt;
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR, YAGNA_HTTP_ADDR_STR};
+use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api_derive::services;
 use ya_service_api_web::middleware::auth;
 use ya_service_bus::RpcEndpoint;
+
+#[services(DbExecutor)]
+enum Service {
+    #[enable(gsb)]
+    Identity(ya_identity::service::Identity),
+}
 
 async fn server() -> anyhow::Result<()> {
     let db = DbExecutor::new(":memory:")?;
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
-    ya_identity::service::activate(&db).await?;
+    Service::gsb(&db).await?;
 
     HttpServer::new(move || {
         App::new()

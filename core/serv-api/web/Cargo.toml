@@ -22,6 +22,8 @@ actix-web-httpauth="0.4"
 ya-identity = "0.2"
 ya-persistence = "0.2"
 ya-sb-router = "0.1"
+ya-service-api-derive = "0.1"
+ya-service-api-interfaces = "0.1"
 
 actix-rt = "1.0"
 anyhow = "1.0"
