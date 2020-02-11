@@ -7,7 +7,7 @@ edition = "2018"
 [features]
 default = ['with-diesel']
 full = ['activity', 'appkey', 'identity', 'market', 'net', 'payment']
-activity = []
+activity = ['ethaddr']
 appkey = []
 ethaddr=[]
 identity = ['ethaddr']
