@@ -33,3 +33,4 @@ ya-sb-router = "0.1"
 
 actix-rt = "1.0"
 anyhow = "1.0"
+structopt = "0.3"
