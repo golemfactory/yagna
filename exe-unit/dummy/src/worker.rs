@@ -13,7 +13,7 @@ use std::pin::Pin;
 use ya_core_model::activity::*;
 use ya_model::activity::*;
 use ya_service_api::constants::ACTIVITY_SERVICE_ID;
-use ya_service_bus::{RpcEndpoint, RpcEnvelope, RpcMessage};
+use ya_service_bus::{RpcEnvelope, RpcMessage};
 
 #[inline(always)]
 fn invalid_service_id<R>(service_id: &String) -> std::result::Result<R, RpcMessageError> {
@@ -58,7 +58,7 @@ impl Default for Worker {
 impl Worker {
     async fn rpc<M: RpcMessage + Unpin>(uri: &str, msg: M) -> Result<<M as RpcMessage>::Item> {
         ya_service_bus::typed::service(uri)
-            .send(msg)
+            .call(msg)
             .map_err(Error::from)
             .await?
             .map_err(|e| Error::RemoteServiceError(format!("{:?}", e)))

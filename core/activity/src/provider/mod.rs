@@ -10,7 +10,6 @@ use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 use ya_persistence::executor::{ConnType, DbExecutor};
 use ya_service_api_web::middleware::Identity;
-use ya_service_bus::timeout::IntoTimeoutFuture;
 
 pub mod service;
 
@@ -146,11 +145,14 @@ async fn get_events_web(
 ) -> Result<Vec<ProviderEvent>, Error> {
     log::debug!("getting events");
 
-    EventDao::new(&db_conn!(db)?)
+    Ok(EventDao::new(&db_conn!(db)?)
         .get_events_fut(query.max_count)
-        .timeout(query.timeout)
+        //        .timeout(query.timeout)
+        //        .map_err(Error::from)
+        //        .await?
         .map_err(Error::from)
         .await?
-        .map_err(Error::from)
-        .map(|events| events.into_iter().map(ProviderEvent::from).collect())
+        .into_iter()
+        .map(ProviderEvent::from)
+        .collect())
 }

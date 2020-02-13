@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
 
     match options.side {
         Side::Listener => {
-            let _ = bus::bind_public("", |p: Test| async move {
+            let _ = bus::bind("/public", |p: Test| async move {
                 log::info!("test called!!");
                 Ok(format!("pong {}", p.0))
             });

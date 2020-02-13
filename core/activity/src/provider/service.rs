@@ -8,7 +8,7 @@ use crate::error::Error;
 use ya_core_model::activity::*;
 use ya_model::activity::{provider_event::ProviderEventType, State};
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::timeout::IntoTimeoutFuture;
+use ya_service_bus::timeout::*;
 
 lazy_static::lazy_static! {
     static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
