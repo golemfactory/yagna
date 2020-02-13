@@ -1,7 +1,6 @@
 use ya_exe_framework::{ExeUnit, ExeUnitBuilder};
 
 use wasmtime::*;
-use wasmtime_wasi::create_wasi_instance;
 use wasi_common::preopen_dir;
 
 use anyhow::{bail, Context, Result, Error};
@@ -120,10 +119,23 @@ impl Wasmtime {
         info!("Loading wasi.");
 
         let preopen_dirs = Wasmtime::compute_preopen_dirs(&self.mounts)?;
-        let wasi_unstable = create_wasi_instance(&self.store, &preopen_dirs, &args, &vec![])
-            .with_context(|| { format!("Failed to create wasi module.") })?;
+        // Create and instantiate snapshot0 of WASI ABI (FWIW, this is one *can* still
+        // be targeted when using an older Rust toolchain)
+        let snapshot0 = wasmtime_wasi::old::snapshot0::create_wasi_instance(
+            &self.store,
+            &preopeon_dirs,
+            &args,
+            &vec![],
+        )
+        .with_context(|| format!("Failed to create snapshot0 WASI module."))?;
+        // Create and instantiate snapshot1 of WASI ABI, aka the "current stable"
+        let snapshot1 =
+            wasmtime_wasi::create_wasi_instance(&self.store, &preopen_dirs, &args, &vec![])
+                .with_context(|| format!("Failed to create snapshot1 WASI module."))?;
 
-        self.module_registry.insert("wasi_unstable".to_owned(), wasi_unstable);
+        self.module_registry.insert("wasi_unstable".to_owned(), snapshot0);
+        self.module_registry.insert("wasi_snapshot_preview1".to_owned(), snapshot1);
+
         Ok(())
     }
 
