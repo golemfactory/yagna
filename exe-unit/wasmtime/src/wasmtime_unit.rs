@@ -3,7 +3,7 @@ use ya_exe_framework::{ExeUnit, ExeUnitBuilder, DirectoryMount};
 use wasmtime::*;
 use wasi_common::preopen_dir;
 use wasmtime_wasi::{
-    create_wasi_instance, old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
+    old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
 };
 
 use anyhow::{bail, Context, Result, Error};
@@ -139,7 +139,7 @@ impl Wasmtime {
         let wasm_binary = read(binary_file)
             .with_context(|| format!("Can't load wasm binary {}.", binary_file.display()))?;
 
-        let mut module = Module::new(&self.store, &wasm_binary)
+        let module = Module::new(&self.store, &wasm_binary)
             .with_context(|| format!("WASM module creation failed."))?;
 
         self.modules.insert(Wasmtime::get_module_name(binary_file), module);
