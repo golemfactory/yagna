@@ -14,8 +14,8 @@ members = [
     "core/serv-api",
     "core/serv-api/cache",
     "core/serv-api/web",
+    "exe-unit",
     "exe-unit/api",
-    "exe-unit/framework",
     "exe-unit/dummy",
     "exe-unit/wasm-mozjs",
     "exe-unit/wasmtime",
@@ -36,6 +36,7 @@ ya-agent-offer-model = { path = "agent/offer-model" }
 ya-client = { path = "interfaces/client" }
 ya-core-model = { path = "core/model" }
 ya-exe-api = { path = "exe-unit/api" }
+ya-exe-unit = { path = "exe-unit" }
 ya-identity = { path = "core/identity" }
 ya-market = { path = "core/market" }
 ya-model = { path = "interfaces/model" }
