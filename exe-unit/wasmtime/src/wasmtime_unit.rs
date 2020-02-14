@@ -2,6 +2,9 @@ use ya_exe_framework::{ExeUnit, ExeUnitBuilder};
 
 use wasmtime::*;
 use wasi_common::preopen_dir;
+use wasmtime_wasi::{
+    create_wasi_instance, old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
+};
 
 use anyhow::{bail, Context, Result, Error};
 use log::info;
@@ -121,9 +124,9 @@ impl Wasmtime {
         let preopen_dirs = Wasmtime::compute_preopen_dirs(&self.mounts)?;
         // Create and instantiate snapshot0 of WASI ABI (FWIW, this is one *can* still
         // be targeted when using an older Rust toolchain)
-        let snapshot0 = wasmtime_wasi::old::snapshot0::create_wasi_instance(
+        let snapshot0 = create_wasi_instance_snapshot_0(
             &self.store,
-            &preopeon_dirs,
+            &preopen_dirs,
             &args,
             &vec![],
         )
