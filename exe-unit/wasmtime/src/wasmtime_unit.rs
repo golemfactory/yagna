@@ -161,6 +161,8 @@ impl Wasmtime {
         let wasm_binary = read(binary_file)
             .with_context(|| format!("Can't load wasm binary {}.", binary_file.display()))?;
 
+        info!("Creating wasm module from binary.");
+
         let mut module = Module::new(&self.store, &wasm_binary)
             .with_context(|| format!("WASM module creation failed."))?;
 
@@ -169,7 +171,7 @@ impl Wasmtime {
     }
 
     fn create_instance(&mut self, module_name: &str) -> Result<Instance> {
-        info!("Resolving module [{}] dependencies.", module_name);
+        info!("Resolving [{}] module's dependencies.", module_name);
 
         match self.modules.get_mut(module_name) {
             Some(mut module) => {
@@ -211,7 +213,7 @@ impl Wasmtime {
         let mut preopen_dirs = Vec::new();
 
         for DirectoryMount { guest, host } in dirs.iter() {
-            println!("Mounting: {}::{}", host.display(), guest.display());
+            info!("Mounting: {}::{}", host.display(), guest.display());
 
             preopen_dirs.push((
                 guest.as_os_str().to_str().unwrap().to_string(),

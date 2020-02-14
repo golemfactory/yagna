@@ -9,6 +9,7 @@ use ya_utils_actix::actix_handler::{ResultTypeGetter, send_message};
 use actix::prelude::*;
 use anyhow::{Error, Result};
 use log::{error, info};
+use futures::FutureExt;
 
 
 // =========================================== //
@@ -97,8 +98,27 @@ impl Supervisor {
 
     fn deploy_command(&self, msg: DeployCommand) -> Result<()> {
         info!("Running Deploy command.");
-        send_message(self.worker.clone(), msg);
-        Ok(())
+
+        let addr = self.worker.clone();
+        let future = addr.send(msg)
+            .map(|result|{
+                match result {
+                    Ok(result) => {
+                        match result {
+                            Err(error) => {
+                                error!("Deploying failed with error: {}.", error);
+                            },
+                            Ok(response) => {
+                                info!("Deploying finished");
+                            }
+                        }
+                    },
+                    Err(error) => {
+                        error!("Failed to send deploy message to worker.");
+                    }
+                }
+            });
+        Ok(Arbiter::spawn(future))
     }
 
     fn start_command(&self, msg: StartCommand) -> Result<()> {
@@ -108,8 +128,27 @@ impl Supervisor {
 
     fn run_command(&self, msg: RunCommand) -> Result<()> {
         info!("Running Run command.");
-        send_message(self.worker.clone(), msg);
-        Ok(())
+
+        let addr = self.worker.clone();
+        let future = addr.send(msg)
+            .map(|result|{
+                match result {
+                    Ok(result) => {
+                        match result {
+                            Err(error) => {
+                                error!("Running failed with error: {}.", error);
+                            },
+                            Ok(response) => {
+                                info!("Running finished");
+                            }
+                        }
+                    },
+                    Err(error) => {
+                        error!("Failed to send run message to worker.");
+                    }
+                }
+            });
+        Ok(Arbiter::spawn(future))
     }
 
     fn stop_command(&self, msg: StopCommand) -> Result<()> {

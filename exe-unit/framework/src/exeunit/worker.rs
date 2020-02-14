@@ -41,10 +41,15 @@ impl Worker {
     fn deploy_command(&mut self, msg: DeployCommand) -> Result<()> {
         info!("Worker - Running Deploy command.");
 
-        let mut exeunit = self.exeunit_factory.create()?;
+        if let None = self.exeunit{
+            let mut exeunit = self.exeunit_factory.create()?;
+            self.exeunit = Some(exeunit);
+        }
 
-        exeunit.on_deploy(msg.args)?;
-        self.exeunit = Some(exeunit);
+        // Unwrap because we created exeunit in lines above.
+        self.exeunit.as_mut().unwrap().on_deploy(msg.args)?;
+
+        info!("Worker - Deploying finished.");
         Ok(())
     }
 
@@ -53,11 +58,13 @@ impl Worker {
         unimplemented!();
     }
 
-    fn run_command(&self, msg: RunCommand) -> Result<()> {
+    fn run_command(&mut self, msg: RunCommand) -> Result<()> {
         info!("Worker - Running Run command.");
 
-        //self.exeunit.unwrap().
-        Ok(())
+        if let Some(exeunit) = self.exeunit.as_mut() {
+            return Ok(exeunit.on_run(msg.args)?)
+        }
+        Err(Error::msg(format!("ExeUnit was not deployed.")))
     }
 
     fn stop_command(&self, msg: StopCommand) -> Result<()> {
