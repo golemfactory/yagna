@@ -1,11 +1,17 @@
 
 use anyhow::{Result};
+use std::path::PathBuf;
 
+
+pub struct DirectoryMount {
+    pub host: PathBuf,
+    pub guest: PathBuf,
+}
 
 
 /// Create ExeUnit and allowas to query useful information about it.
 pub trait ExeUnitBuilder: std::marker::Send {
-    fn create(&self) -> Result<Box<dyn ExeUnit>>;
+    fn create(&self, mounts: Vec<DirectoryMount>) -> Result<Box<dyn ExeUnit>>;
 }
 
 

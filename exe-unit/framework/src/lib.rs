@@ -10,5 +10,5 @@ use supervisor::Supervisor;
 
 use cmd_args::Config;
 
-pub use exeunit::{ExeUnitBuilder, ExeUnit};
+pub use exeunit::{ExeUnitBuilder, ExeUnit, DirectoryMount};
 pub use framework::ExeUnitFramework;

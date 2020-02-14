@@ -1,4 +1,4 @@
-use ya_exe_framework::{ExeUnit, ExeUnitBuilder};
+use ya_exe_framework::{ExeUnit, ExeUnitBuilder, DirectoryMount};
 
 use wasmtime::*;
 use wasi_common::preopen_dir;
@@ -13,11 +13,6 @@ use std::fs::{read, File};
 use std::path::{Path, PathBuf, Component};
 use std::{ffi::OsStr};
 
-
-struct DirectoryMount {
-    host: PathBuf,
-    guest: PathBuf,
-}
 
 
 pub struct WasmtimeFactory;
@@ -34,10 +29,10 @@ pub struct Wasmtime {
 
 
 impl Wasmtime {
-    pub fn new() -> Box<dyn ExeUnit> {
+    pub fn new(mounts: Vec<DirectoryMount>) -> Box<dyn ExeUnit> {
         let wasmtime = Wasmtime {
             store: Store::default(),
-            mounts: vec![],
+            mounts,
             dependencies: HashMap::<String, Instance>::new(),
             modules: HashMap::<String, Module>::new(),
         };
@@ -47,8 +42,8 @@ impl Wasmtime {
 }
 
 impl ExeUnitBuilder for WasmtimeFactory {
-    fn create(&self) -> Result<Box<dyn ExeUnit>> {
-        Ok(Wasmtime::new())
+    fn create(&self, mounts: Vec<DirectoryMount>) -> Result<Box<dyn ExeUnit>> {
+        Ok(Wasmtime::new(mounts))
     }
 }
 
@@ -66,23 +61,6 @@ impl ExeUnit for Wasmtime {
         }
 
         let wasm_binary = args[ 0 ].clone();
-
-        //TODO: Get from external world
-        let args = vec![wasm_binary.clone()];
-
-        //TODO: Get from external world
-//        let dirs_mapping = vec![
-//            DirectoryMount {
-//                host: cmdargs.input_dir,
-//                guest: PathBuf::from("/in/"),
-//            },
-//            DirectoryMount {
-//                host: cmdargs.output_dir,
-//                guest: PathBuf::from("/out/"),
-//            },
-//        ];
-//        self.mounts = dirs_mapping;
-
         self.load_binary(&PathBuf::from(wasm_binary))?;
         Ok(())
     }
@@ -160,8 +138,6 @@ impl Wasmtime {
 
         let wasm_binary = read(binary_file)
             .with_context(|| format!("Can't load wasm binary {}.", binary_file.display()))?;
-
-        info!("Creating wasm module from binary.");
 
         let mut module = Module::new(&self.store, &wasm_binary)
             .with_context(|| format!("WASM module creation failed."))?;

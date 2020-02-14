@@ -1,11 +1,12 @@
 use ya_utils_actix::forward_actix_handler;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 
-use crate::exeunit::{ExeUnitBuilder, ExeUnit};
+use crate::exeunit::{ExeUnitBuilder, ExeUnit, DirectoryMount};
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
 use log::{error, info};
+use std::env;
 
 
 // =========================================== //
@@ -22,7 +23,8 @@ use crate::supervisor::{
     DeployCommand,
     TransferCommand
 };
-
+use std::fs::DirEntry;
+use std::path::PathBuf;
 
 
 /// Actor responsible for direct interaction with ExeUnit trait
@@ -38,11 +40,24 @@ impl Worker {
         Worker{exeunit_factory, exeunit: None}
     }
 
+    fn create_mount_points() -> Result<Vec<DirectoryMount>> {
+        let path = env::current_dir()?;
+        let mut mounts = vec![];
+
+        let input = path.join("input");
+        let output = path.join("output");
+
+        mounts.push(DirectoryMount{host: input, guest: PathBuf::from("in")});
+        mounts.push(DirectoryMount{host: output, guest: PathBuf::from("out")});
+        Ok(mounts)
+    }
+
     fn deploy_command(&mut self, msg: DeployCommand) -> Result<()> {
         info!("Worker - Running Deploy command.");
 
-        if let None = self.exeunit{
-            let mut exeunit = self.exeunit_factory.create()?;
+        if let None = self.exeunit {
+            let mounts = Worker::create_mount_points()?;
+            let mut exeunit = self.exeunit_factory.create(mounts)?;
             self.exeunit = Some(exeunit);
         }
 
