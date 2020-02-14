@@ -12,12 +12,13 @@ use diesel::sql_types::Integer;
 use serde::Serialize;
 use uuid::Uuid;
 use ya_model::payment as api_model;
+use ya_persistence::types::BigDecimalField;
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "pay_allocation"]
 pub struct Allocation {
     pub id: String,
-    pub total_amount: i32,
+    pub total_amount: BigDecimalField,
     pub timeout: NaiveDateTime,
     pub make_deposit: bool,
 }
@@ -33,7 +34,7 @@ pub struct DebitNote {
     pub activity_id: Option<String>,
     pub status: String,
     pub timestamp: NaiveDateTime,
-    pub total_amount_due: i32,
+    pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub credit_account_id: String,
     pub payment_platform: Option<String>,
@@ -51,7 +52,7 @@ impl From<api_model::DebitNote> for DebitNote {
             activity_id: debit_note.activity_id,
             status: debit_note.status.into(),
             timestamp: debit_note.timestamp.naive_utc(),
-            total_amount_due: debit_note.total_amount_due,
+            total_amount_due: debit_note.total_amount_due.into(),
             usage_counter_vector: debit_note
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
@@ -72,7 +73,7 @@ impl From<DebitNote> for api_model::DebitNote {
             timestamp: Utc.from_utc_datetime(&debit_note.timestamp),
             agreement_id: debit_note.agreement_id,
             activity_id: debit_note.activity_id,
-            total_amount_due: debit_note.total_amount_due,
+            total_amount_due: debit_note.total_amount_due.into(),
             usage_counter_vector: debit_note
                 .usage_counter_vector
                 .map(|v| serde_json::from_str(&String::from_utf8(v).unwrap()).unwrap()),
@@ -95,7 +96,7 @@ pub struct NewDebitNote {
     pub previous_debit_note_id: Option<String>,
     pub agreement_id: String,
     pub activity_id: Option<String>,
-    pub total_amount_due: i32,
+    pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub credit_account_id: String,
     pub payment_platform: Option<String>,
@@ -115,7 +116,7 @@ impl NewDebitNote {
             previous_debit_note_id: None,
             agreement_id: debit_note.agreement_id,
             activity_id: debit_note.activity_id,
-            total_amount_due: debit_note.total_amount_due,
+            total_amount_due: debit_note.total_amount_due.into(),
             usage_counter_vector: debit_note
                 .usage_counter_vector
                 .map(|v| v.to_string().into_bytes()),
@@ -146,7 +147,7 @@ pub struct InvoiceModel {
     pub agreement_id: String,
     pub status: String,
     pub timestamp: NaiveDateTime,
-    pub amount: i32,
+    pub amount: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub credit_account_id: String,
     pub payment_platform: Option<String>,
@@ -170,7 +171,7 @@ impl From<api_model::Invoice> for Invoice {
                 agreement_id: invoice.agreement_id,
                 status: invoice.status.into(),
                 timestamp: invoice.timestamp.naive_utc(),
-                amount: invoice.amount,
+                amount: invoice.amount.into(),
                 usage_counter_vector: invoice
                     .usage_counter_vector
                     .map(|v| v.to_string().into_bytes()),
@@ -195,7 +196,7 @@ impl From<Invoice> for api_model::Invoice {
             timestamp: Utc.from_utc_datetime(&invoice.timestamp),
             agreement_id: invoice.agreement_id,
             activity_ids,
-            amount: invoice.amount,
+            amount: invoice.amount.into(),
             usage_counter_vector: invoice
                 .usage_counter_vector
                 .map(|v| serde_json::from_str(&String::from_utf8(v).unwrap()).unwrap()),
@@ -215,7 +216,7 @@ pub struct NewInvoiceModel {
     pub recipient_id: String,
     pub last_debit_note_id: Option<String>,
     pub agreement_id: String,
-    pub amount: i32,
+    pub amount: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub credit_account_id: String,
     pub payment_platform: Option<String>,
@@ -241,7 +242,7 @@ impl NewInvoice {
                 recipient_id,
                 last_debit_note_id: None,
                 agreement_id: invoice.agreement_id,
-                amount: invoice.amount,
+                amount: invoice.amount.into(),
                 usage_counter_vector: invoice
                     .usage_counter_vector
                     .map(|v| v.to_string().into_bytes()),
@@ -290,7 +291,7 @@ pub struct InvoiceXActivity {
 #[table_name = "pay_payment"]
 pub struct Payment {
     pub id: String,
-    pub amount: i32,
+    pub amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub allocation_id: Option<String>,
     pub details: String,

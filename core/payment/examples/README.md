@@ -22,7 +22,7 @@ Payload:
 {
   "agreementId": "agreement_id",
   "activityId": "activity_id",
-  "totalAmountDue": 1000,
+  "totalAmountDue": "1000.123456789012345678",
   "usageCounterVector": {
     "comment": "This field can contain anything",
     "values": [1.222, 2.333, 4.555]
@@ -53,7 +53,7 @@ Payload:
 {
   "agreementId": "agreement_id",
   "activityIds": ["activity_id1", "activity_id2"],
-  "amount": 10000,
+  "amount": "10000.123456789012345678",
   "usageCounterVector": {
     "comment": "This field can contain anything",
     "values": [1.222, 2.333, 4.555]

@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -6,7 +7,7 @@ pub struct Payment {
     pub payment_id: String,
     pub payer_id: String,
     pub payee_id: String,
-    pub amount: i32,
+    pub amount: BigDecimal,
     pub timestamp: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub allocation_id: Option<String>,
@@ -22,7 +23,7 @@ impl Payment {
         payment_id: String,
         payer_id: String,
         payee_id: String,
-        amount: i32,
+        amount: BigDecimal,
         timestamp: String,
         details: serde_json::Value,
     ) -> Payment {

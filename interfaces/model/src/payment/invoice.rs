@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +13,7 @@ pub struct Invoice {
     pub timestamp: DateTime<Utc>,
     pub agreement_id: String,
     pub activity_ids: Vec<String>,
-    pub amount: i32,
+    pub amount: BigDecimal,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub usage_counter_vector: Option<serde_json::Value>,
     pub credit_account_id: String,
@@ -28,7 +29,7 @@ pub struct NewInvoice {
     pub agreement_id: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub activity_ids: Option<Vec<String>>,
-    pub amount: i32,
+    pub amount: BigDecimal,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub usage_counter_vector: Option<serde_json::Value>,
     pub credit_account_id: String,
@@ -45,7 +46,7 @@ impl Invoice {
         timestamp: DateTime<Utc>,
         agreement_id: String,
         activity_ids: Vec<String>,
-        amount: i32,
+        amount: BigDecimal,
         credit_account_id: String,
         payment_due_date: DateTime<Utc>,
         status: crate::payment::InvoiceStatus,

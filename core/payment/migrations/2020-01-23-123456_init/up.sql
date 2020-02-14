@@ -20,7 +20,7 @@ CREATE TABLE "pay_debit_note"(
 	"activity_id" VARCHAR(50) NULL,
 	"status" VARCHAR(50) NOT NULL DEFAULT 'ISSUED',
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	"total_amount_due" INTEGER NOT NULL,
+	"total_amount_due" VARCHAR(32) NOT NULL,
 	"usage_counter_vector" BLOB NULL,
 	"credit_account_id" VARCHAR(50) NOT NULL,
 	"payment_platform" VARCHAR(50) NULL,
@@ -37,7 +37,7 @@ CREATE TABLE "pay_invoice"(
 	"agreement_id" VARCHAR(50) NOT NULL,
 	"status" VARCHAR(50) NOT NULL DEFAULT 'ISSUED',
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	"amount" INTEGER NOT NULL,
+	"amount" VARCHAR(32) NOT NULL,
 	"usage_counter_vector" BLOB NULL,
 	"credit_account_id" VARCHAR(50) NOT NULL,
 	"payment_platform" VARCHAR(50) NULL,
@@ -55,7 +55,7 @@ CREATE TABLE "pay_invoice_x_activity"(
 
 CREATE TABLE "pay_allocation"(
 	"id" VARCHAR(50) NOT NULL PRIMARY KEY,
-	"total_amount" INTEGER NOT NULL,
+	"total_amount" VARCHAR(32) NOT NULL,
 	"timeout" DATETIME NOT NULL,
 	"make_deposit" BOOLEAN NOT NULL
 );
@@ -64,7 +64,7 @@ CREATE TABLE "pay_payment"(
 	"id" VARCHAR(50) NOT NULL PRIMARY KEY,
 	"payer_id" VARCHAR(50) NOT NULL,
 	"payee_id" VARCHAR(50) NOT NULL,
-	"amount" INTEGER NOT NULL,
+	"amount" VARCHAR(32) NOT NULL,
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	"allocation_id" VARCHAR(50) NULL,
 	"details" TEXT NOT NULL,

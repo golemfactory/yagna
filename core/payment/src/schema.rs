@@ -1,7 +1,7 @@
 table! {
     pay_allocation (id) {
         id -> Text,
-        total_amount -> Integer,
+        total_amount -> Text,
         timeout -> Timestamp,
         make_deposit -> Bool,
     }
@@ -17,7 +17,7 @@ table! {
         activity_id -> Nullable<Text>,
         status -> Text,
         timestamp -> Timestamp,
-        total_amount_due -> Integer,
+        total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
         credit_account_id -> Text,
         payment_platform -> Nullable<Text>,
@@ -43,7 +43,7 @@ table! {
         agreement_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
-        amount -> Integer,
+        amount -> Text,
         usage_counter_vector -> Nullable<Binary>,
         credit_account_id -> Text,
         payment_platform -> Nullable<Text>,
@@ -84,7 +84,7 @@ table! {
         id -> Text,
         payer_id -> Text,
         payee_id -> Text,
-        amount -> Integer,
+        amount -> Text,
         timestamp -> Timestamp,
         allocation_id -> Nullable<Text>,
         details -> Text,

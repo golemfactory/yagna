@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +14,7 @@ pub struct DebitNote {
     pub agreement_id: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub activity_id: Option<String>,
-    pub total_amount_due: i32,
+    pub total_amount_due: BigDecimal,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub usage_counter_vector: Option<serde_json::Value>,
     pub credit_account_id: String,
@@ -30,7 +31,7 @@ pub struct NewDebitNote {
     pub agreement_id: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub activity_id: Option<String>,
-    pub total_amount_due: i32,
+    pub total_amount_due: BigDecimal,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub usage_counter_vector: Option<serde_json::Value>,
     pub credit_account_id: String,
@@ -47,7 +48,7 @@ impl DebitNote {
         recipient_id: String,
         timestamp: DateTime<Utc>,
         agreement_id: String,
-        total_amount_due: i32,
+        total_amount_due: BigDecimal,
         credit_account_id: String,
         status: crate::payment::InvoiceStatus,
     ) -> DebitNote {

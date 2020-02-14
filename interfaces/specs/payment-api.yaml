@@ -1077,7 +1077,7 @@ components:
         activityId:
           type: string
         totalAmountDue:
-          type: integer
+          type: string
         usageCounterVector:
           type: object
         creditAccountId:
@@ -1138,7 +1138,7 @@ components:
           items:
             type: string
         amount:
-          type: integer
+          type: string
         usageCounterVector:
           type: object
         creditAccountId:
@@ -1199,7 +1199,7 @@ components:
       type: object
       properties:
         totalAmountAccepted:
-          type: integer
+          type: string
         allocationId:
           type: string
       required:
@@ -1212,7 +1212,7 @@ components:
         rejectionReason:
           $ref: '#/components/schemas/RejectionReason'
         totalAmountAccepted:
-          type: integer
+          type: string
         message:
           type: string
       required:
@@ -1235,12 +1235,12 @@ components:
           type: string
           readOnly: true
         totalAmount:
-          type: integer
+          type: string
         spentAmount:
-          type: integer
+          type: string
           readOnly: true
         remainingAmount:
-          type: integer
+          type: string
           readOnly: true
         timeout:
           type: string
@@ -1266,7 +1266,7 @@ components:
         payeeId:
           type: string
         amount:
-          type: integer
+          type: string
         timestamp:
           type: string
           format: date-time
