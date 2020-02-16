@@ -1,7 +1,10 @@
 mod dispatchers;
-mod supervisor;
 mod exeunit;
 mod framework;
+mod supervisor;
+
+#[cfg(feature = "metrics")]
+pub mod metrics;
 
 mod cmd_args;
 
@@ -10,5 +13,5 @@ use supervisor::Supervisor;
 
 use cmd_args::Config;
 
-pub use exeunit::{ExeUnitBuilder, ExeUnit};
+pub use exeunit::{ExeUnit, ExeUnitBuilder};
 pub use framework::ExeUnitFramework;
