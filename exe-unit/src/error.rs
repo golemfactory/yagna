@@ -1,5 +1,6 @@
 use serde::Serialize;
 use thiserror::Error;
+use ya_core_model::activity::RpcMessageError as RpcError;
 
 #[derive(Error, Debug, Serialize)]
 pub enum RuntimeError {
@@ -7,6 +8,12 @@ pub enum RuntimeError {
     InitializationError(String),
     #[error("Shutdown error: {0}")]
     ShutdownError(String),
+}
+
+#[derive(Error, Debug, Serialize)]
+pub enum LocalServiceError {
+    #[error("Invalid service state: {0}")]
+    InvalidState(String),
 }
 
 #[derive(Error, Debug, Serialize)]
@@ -87,4 +94,32 @@ pub enum Error {
         #[from]
         serde_json::Error,
     ),
+    #[error("Gsb error {0}")]
+    GsbError(String),
+    #[error("Local service error {0}")]
+    LocalServiceError(#[from] LocalServiceError),
+    #[error("Remote service error {0}")]
+    RemoteServiceError(String),
+}
+
+impl From<ya_service_bus::Error> for Error {
+    fn from(e: ya_service_bus::Error) -> Self {
+        Error::GsbError(format!("{:?}", e))
+    }
+}
+
+impl From<Error> for RpcError {
+    fn from(e: Error) -> Self {
+        match e {
+            Error::RuntimeError(e) => RpcError::Activity(e.to_string()),
+            Error::SignalError(e) => RpcError::Activity(e.to_string()),
+            Error::IoError(e) => RpcError::Activity(e.to_string()),
+            Error::MailboxError(e) => RpcError::Activity(e.to_string()),
+            Error::ChannelError(e) => RpcError::Activity(e.to_string()),
+            Error::JsonError(e) => RpcError::Activity(e.to_string()),
+            Error::LocalServiceError(e) => RpcError::Activity(e.to_string()),
+            Error::RemoteServiceError(e) => RpcError::Service(e.to_string()),
+            Error::GsbError(e) => RpcError::Service(e.to_string()),
+        }
+    }
 }

@@ -1,17 +1,14 @@
 use crate::commands::*;
 use crate::runtime::{Runtime, RuntimeThreadExt};
-use crate::service::Service;
 use crate::ExeUnit;
 use actix::prelude::*;
-use futures::FutureExt;
 use std::time::Duration;
 use ya_model::activity::State;
-use ya_service_bus::timeout::IntoTimeoutFuture;
 
 impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     type Result = <SetState as Message>::Result;
 
-    fn handle(&mut self, msg: SetState, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: SetState, _: &mut Context<Self>) -> Self::Result {
         match msg {
             SetState::State(state) => self.state.state = state,
             SetState::BatchResult(batch_id, result) => self.state.push_result(batch_id, result),
@@ -42,7 +39,7 @@ impl<R: Runtime> Handler<Signal> for ExeUnit<R> {
 impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
     type Result = ActorResponse<Self, (), LocalError>;
 
-    fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
         let s = &self.state.state;
         if s != &StateExt::ShuttingDown && s != &StateExt::State(State::Terminated) {
             let address = ctx.address();
@@ -62,12 +59,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
                     }
                 }
 
-                services.iter_mut().for_each(|svc| {
-                    if let Err(e) = svc.stop() {
-                        log::warn!("Failed to stop service {:?}: {:?}", svc, e);
-                    }
-                });
-
+                services.iter_mut().for_each(|svc| svc.stop());
                 set_state(&address, StateExt::State(State::Terminated)).await;
                 Arbiter::current().stop();
                 Ok(())

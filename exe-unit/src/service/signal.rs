@@ -1,59 +1,80 @@
-use crate::commands::Signal;
+use crate::commands::{Shutdown, Signal};
 use crate::service::Service;
-use crate::Result;
 use actix::dev::ToEnvelope;
-use actix::{Actor, Addr, Handler};
+use actix::prelude::*;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 
 #[derive(Debug)]
-pub struct SignalMonitor<A: Actor>
+pub struct SignalMonitor<A>
 where
-    A: Actor + Handler<Signal>,
+    A: Actor<Context = Context<A>> + Handler<Signal>,
 {
     signals: Vec<signal_hook::SigId>,
-    phantom: PhantomData<A>,
+    parent: Option<Addr<A>>,
 }
 
 macro_rules! register_signal {
-    ($handler:ident, $sig:expr) => {{
-        let handler_ = $handler.clone();
+    ($handler:expr, $sig:expr) => {{
+        let handler_ = $handler.clone().unwrap();
         let f = move || {
             handler_.do_send(Signal($sig));
         };
-        unsafe { signal_hook::register($sig, f)? }
+        unsafe { signal_hook::register($sig, f).unwrap() }
     }};
 }
 
-impl<A> Service<A> for SignalMonitor<A>
+impl<A> Service for SignalMonitor<A>
 where
-    A: Actor + Handler<Signal> + Debug,
+    A: Actor<Context = Context<A>> + Handler<Signal> + Debug,
     <A as Actor>::Context: ToEnvelope<A, Signal>,
 {
-    fn start(&mut self, actor: Addr<A>) -> Result<()> {
-        self.signals
-            .push(register_signal!(actor, signal_hook::SIGABRT));
-        self.signals
-            .push(register_signal!(actor, signal_hook::SIGINT));
-        self.signals
-            .push(register_signal!(actor, signal_hook::SIGTERM));
-        #[cfg(not(windows))]
-        self.signals
-            .push(register_signal!(actor, signal_hook::SIGHUP));
-        #[cfg(not(windows))]
-        self.signals
-            .push(register_signal!(actor, signal_hook::SIGQUIT));
+    type Parent = A;
 
-        Ok(())
+    fn bind(&mut self, parent: Addr<A>) {
+        self.parent = Some(parent);
+    }
+}
+
+impl<A> Actor for SignalMonitor<A>
+where
+    A: Actor<Context = Context<A>> + Handler<Signal> + Debug,
+    <A as Actor>::Context: ToEnvelope<A, Signal>,
+{
+    type Context = Context<Self>;
+
+    fn started(&mut self, _: &mut Self::Context) {
+        self.signals
+            .push(register_signal!(self.parent, signal_hook::SIGABRT));
+        self.signals
+            .push(register_signal!(self.parent, signal_hook::SIGINT));
+        self.signals
+            .push(register_signal!(self.parent, signal_hook::SIGTERM));
+        #[cfg(not(windows))]
+        self.signals
+            .push(register_signal!(self.parent, signal_hook::SIGHUP));
+        #[cfg(not(windows))]
+        self.signals
+            .push(register_signal!(self.parent, signal_hook::SIGQUIT));
     }
 
-    fn stop(&mut self) -> Result<()> {
+    fn stopped(&mut self, _: &mut Self::Context) {
         std::mem::replace(&mut self.signals, Vec::new())
             .into_iter()
             .for_each(|s| {
                 signal_hook::unregister(s);
             });
+    }
+}
 
+impl<A> Handler<Shutdown> for SignalMonitor<A>
+where
+    A: Actor<Context = Context<A>> + Handler<Signal> + Debug,
+    <A as Actor>::Context: ToEnvelope<A, Signal>,
+{
+    type Result = <Shutdown as Message>::Result;
+
+    fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        ctx.stop();
         Ok(())
     }
 }

@@ -31,7 +31,7 @@ impl<R: Runtime> RuntimeThread<R> {
             let sys = System::new("runtime");
             let addr = SyncArbiter::start(1, factory);
             tx.send(addr).expect("Channel error");
-            sys.run().expect("actix::System initialization failed");
+            sys.run().expect("actix::System run failed");
         });
 
         let addr = rx.recv().map_err(ChannelError::from)?;

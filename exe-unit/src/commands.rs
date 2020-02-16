@@ -92,6 +92,7 @@ pub struct Signal(pub i32);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum LocalError {
+    InvalidServiceError(String),
     InvalidStateError,
     UnsupportedSignalError,
 }
