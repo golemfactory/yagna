@@ -89,5 +89,6 @@ where
     F: Fn() -> M + 'static,
     M: RpcMessage + Unpin,
 {
+    const ID: &'static str = "Reporter";
     type Parent = P;
 }

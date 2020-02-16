@@ -5,6 +5,7 @@ use crate::commands::Shutdown;
 use actix::prelude::*;
 
 pub trait Service: Actor<Context = Context<Self>> + Handler<Shutdown> {
+    const ID: &'static str;
     type Parent: Actor<Context = Context<Self::Parent>>;
 
     /// Set the parent actor address. Always called before starting the service.

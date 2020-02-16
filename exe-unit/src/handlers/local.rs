@@ -2,6 +2,7 @@ use crate::commands::*;
 use crate::runtime::{Runtime, RuntimeThreadExt};
 use crate::ExeUnit;
 use actix::prelude::*;
+use std::collections::HashMap;
 use std::time::Duration;
 use ya_model::activity::State;
 
@@ -44,7 +45,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         if s != &StateExt::ShuttingDown && s != &StateExt::State(State::Terminated) {
             let address = ctx.address();
             let runtime = self.runtime.flatten_addr();
-            let mut services = std::mem::replace(&mut self.services, Vec::new());
+            let mut services = std::mem::replace(&mut self.services, HashMap::new());
 
             let fut = async move {
                 set_state(&address, StateExt::ShuttingDown).await;
@@ -59,7 +60,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
                     }
                 }
 
-                services.iter_mut().for_each(|svc| svc.stop());
+                services.values_mut().for_each(|svc| svc.stop());
                 set_state(&address, StateExt::State(State::Terminated)).await;
                 Arbiter::current().stop();
                 Ok(())

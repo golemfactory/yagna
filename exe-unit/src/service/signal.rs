@@ -4,13 +4,24 @@ use actix::dev::ToEnvelope;
 use actix::prelude::*;
 use std::fmt::Debug;
 
-#[derive(Debug)]
 pub struct SignalMonitor<A>
 where
     A: Actor<Context = Context<A>> + Handler<Signal>,
 {
     signals: Vec<signal_hook::SigId>,
     parent: Option<Addr<A>>,
+}
+
+impl<A> SignalMonitor<A>
+where
+    A: Actor<Context = Context<A>> + Handler<Signal>,
+{
+    pub fn new() -> Self {
+        SignalMonitor {
+            signals: Vec::new(),
+            parent: None,
+        }
+    }
 }
 
 macro_rules! register_signal {
@@ -25,9 +36,10 @@ macro_rules! register_signal {
 
 impl<A> Service for SignalMonitor<A>
 where
-    A: Actor<Context = Context<A>> + Handler<Signal> + Debug,
+    A: Actor<Context = Context<A>> + Handler<Signal>,
     <A as Actor>::Context: ToEnvelope<A, Signal>,
 {
+    const ID: &'static str = "SignalMonitor";
     type Parent = A;
 
     fn bind(&mut self, parent: Addr<A>) {
@@ -37,7 +49,7 @@ where
 
 impl<A> Actor for SignalMonitor<A>
 where
-    A: Actor<Context = Context<A>> + Handler<Signal> + Debug,
+    A: Actor<Context = Context<A>> + Handler<Signal>,
     <A as Actor>::Context: ToEnvelope<A, Signal>,
 {
     type Context = Context<Self>;
@@ -68,7 +80,7 @@ where
 
 impl<A> Handler<Shutdown> for SignalMonitor<A>
 where
-    A: Actor<Context = Context<A>> + Handler<Signal> + Debug,
+    A: Actor<Context = Context<A>> + Handler<Signal>,
     <A as Actor>::Context: ToEnvelope<A, Signal>,
 {
     type Result = <Shutdown as Message>::Result;

@@ -10,6 +10,7 @@ use crate::error::Error;
 use crate::runtime::*;
 use crate::service::{Service, ServiceControl, ServiceState};
 
+use crate::service::signal::SignalMonitor;
 use actix::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -66,7 +67,7 @@ pub struct ExeUnit<R: Runtime> {
     ctx: ExeUnitContext,
     state: ExeUnitState,
     runtime: Option<RuntimeThread<R>>,
-    services: Vec<Box<dyn ServiceControl<Parent = Self>>>,
+    services: HashMap<&'static str, Box<dyn ServiceControl<Parent = Self>>>,
 }
 
 macro_rules! actix_rpc_bind {
@@ -83,20 +84,25 @@ impl<R: Runtime> ExeUnit<R> {
             ctx,
             state: ExeUnitState::default(),
             runtime: None,
-            services: Vec::new(),
+            services: HashMap::new(),
         }
+    }
+
+    pub fn default_services(mut self) -> Self {
+        self.service(SignalMonitor::new())
     }
 
     pub fn service<S>(mut self, service: S) -> Self
     where
         S: Service<Parent = Self> + 'static,
     {
-        self.services.push(Box::new(ServiceState::new(service)));
+        self.services
+            .insert(S::ID, Box::new(ServiceState::new(service)));
         self
     }
 
     fn start_services(&mut self, actor: &Addr<Self>) {
-        for svc in self.services.iter_mut() {
+        for svc in self.services.values_mut() {
             svc.start(actor.clone());
         }
     }
