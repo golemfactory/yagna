@@ -13,15 +13,14 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     fn handle(&mut self, msg: SetState, ctx: &mut Context<Self>) -> Self::Result {
         match msg {
             SetState::State(state) => {
-                let state_differs = self.state.state != state;
-                self.state.state = state;
+                let state_differs = self.state.inner != state;
+                self.state.inner = state;
 
-                if let StateExt::State(state) = &self.state.state {
+                if let StateExt::State(state) = &self.state.inner {
                     if !state_differs {
                         return;
                     }
 
-                    let report_url = self.report_url.clone();
                     let activity_id = match &self.ctx.service_id {
                         Some(id) => id.clone(),
                         None => return,
@@ -32,22 +31,21 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                         error_message: None,
                     };
 
-                    let fut = async move {
-                        report(
-                            &report_url,
-                            SetActivityState {
-                                activity_id,
-                                state: activity_state,
-                                timeout: None,
-                            },
-                        )
-                        .await;
-                    };
+                    let fut = report(
+                        self.report_url.clone(),
+                        SetActivityState {
+                            activity_id,
+                            state: activity_state,
+                            timeout: None,
+                        },
+                    );
 
                     ctx.spawn(fut.into_actor(self));
                 }
             }
-            SetState::BatchResult(batch_id, result) => self.state.push_result(batch_id, result),
+            SetState::BatchResult(batch_id, result) => {
+                self.state.push_batch_result(batch_id, result)
+            }
             SetState::RunningCommand(command) => self.state.running_command = command,
         }
     }
@@ -69,11 +67,13 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        let state = self.state.state.clone();
         let address = ctx.address();
 
-        if state != StateExt::ShuttingDown && state != StateExt::State(State::Terminated) {
-            address.do_send(SetState::State(StateExt::ShuttingDown));
+        if self.state.inner.alive() {
+            address.do_send(SetState::State(StateExt::Transitioning {
+                from: self.state.inner.unwrap(),
+                to: State::Terminated,
+            }));
 
             let runtime = self.runtime.flatten_addr();
             let mut services = std::mem::replace(&mut self.services, Vec::new());

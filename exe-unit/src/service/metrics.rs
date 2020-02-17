@@ -17,16 +17,8 @@ impl MetricsService {
         cpu_usage_limit: Option<<CpuMetric as Metric>::Data>,
         mem_usage_limit: Option<<MemMetric as Metric>::Data>,
     ) -> Self {
-        let cpu = MetricService::new(
-            CpuMetric::default(),
-            backlog_limit.clone(),
-            cpu_usage_limit.clone(),
-        );
-        let mem = MetricService::new(
-            MemMetric::default(),
-            backlog_limit.clone(),
-            mem_usage_limit.clone(),
-        );
+        let cpu = MetricService::new(CpuMetric::default(), backlog_limit.clone(), cpu_usage_limit);
+        let mem = MetricService::new(MemMetric::default(), backlog_limit, mem_usage_limit);
         MetricsService { cpu, mem }
     }
 }

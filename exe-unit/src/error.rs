@@ -4,14 +4,6 @@ use thiserror::Error;
 use ya_core_model::activity::RpcMessageError as RpcError;
 
 #[derive(Error, Debug, Serialize)]
-pub enum RuntimeError {
-    #[error("Initialization error: {0}")]
-    InitializationError(String),
-    #[error("Shutdown error: {0}")]
-    ShutdownError(String),
-}
-
-#[derive(Error, Debug, Serialize)]
 pub enum LocalServiceError {
     #[error("Invalid service state: {0}")]
     InvalidState(String),
@@ -77,8 +69,6 @@ impl<T> From<crossbeam_channel::SendTimeoutError<T>> for ChannelError {
 
 #[derive(Error, Debug, Serialize)]
 pub enum Error {
-    #[error("Runtime error: {0}")]
-    RuntimeError(#[from] RuntimeError),
     #[error("Signal error: {0}")]
     SignalError(#[from] SignalError),
     #[error("IO error: {0}")]
@@ -120,7 +110,6 @@ impl From<ya_service_bus::Error> for Error {
 impl From<Error> for RpcError {
     fn from(e: Error) -> Self {
         match e {
-            Error::RuntimeError(e) => RpcError::Activity(e.to_string()),
             Error::SignalError(e) => RpcError::Activity(e.to_string()),
             Error::IoError(e) => RpcError::Activity(e.to_string()),
             Error::MailboxError(e) => RpcError::Activity(e.to_string()),
