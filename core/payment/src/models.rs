@@ -5,6 +5,7 @@
 
 
 use crate::schema::*;
+use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::backend::Backend;
 use diesel::serialize::{IsNull, Output, ToSql};
@@ -14,13 +15,46 @@ use uuid::Uuid;
 use ya_model::payment as api_model;
 use ya_persistence::types::BigDecimalField;
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_allocation"]
-pub struct Allocation {
+pub struct NewAllocation {
     pub id: String,
     pub total_amount: BigDecimalField,
-    pub timeout: NaiveDateTime,
+    pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
+}
+
+impl From<api_model::NewAllocation> for NewAllocation {
+    fn from(allocation: api_model::NewAllocation) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            total_amount: allocation.total_amount.into(),
+            timeout: allocation.timeout.map(|v| v.naive_utc()),
+            make_deposit: allocation.make_deposit,
+        }
+    }
+}
+
+pub struct Allocation {
+    pub allocation: NewAllocation,
+    pub spent_amount: BigDecimal,
+    pub remaining_amount: BigDecimal,
+}
+
+impl From<Allocation> for api_model::Allocation {
+    fn from(allocation: Allocation) -> Self {
+        Self {
+            allocation_id: allocation.allocation.id,
+            total_amount: allocation.allocation.total_amount.into(),
+            spent_amount: allocation.spent_amount,
+            remaining_amount: allocation.remaining_amount,
+            timeout: allocation
+                .allocation
+                .timeout
+                .map(|v| Utc.from_utc_datetime(&v)),
+            make_deposit: allocation.allocation.make_deposit,
+        }
+    }
 }
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
@@ -139,7 +173,7 @@ pub struct DebitNoteEvent {
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice"]
-pub struct InvoiceModel {
+pub struct PureInvoice {
     pub id: String,
     pub issuer_id: String,
     pub recipient_id: String,
@@ -156,14 +190,14 @@ pub struct InvoiceModel {
 
 // Because Diesel doesn't support collections of associated objects :(
 pub struct Invoice {
-    pub invoice: InvoiceModel,
+    pub invoice: PureInvoice,
     pub activity_ids: Vec<String>,
 }
 
 impl From<api_model::Invoice> for Invoice {
     fn from(invoice: api_model::Invoice) -> Self {
         Invoice {
-            invoice: InvoiceModel {
+            invoice: PureInvoice {
                 id: invoice.invoice_id,
                 issuer_id: invoice.issuer_id,
                 recipient_id: invoice.recipient_id,
@@ -291,6 +325,8 @@ pub struct InvoiceXActivity {
 #[table_name = "pay_payment"]
 pub struct Payment {
     pub id: String,
+    pub payer_id: String,
+    pub payee_id: String,
     pub amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub allocation_id: Option<String>,

@@ -73,3 +73,18 @@ To see invoices issued by the provider:
 
 To see invoices received by the requestor:  
 `GET` `http://127.0.0.1:8465/payment-api/v1/requestor/invoices`
+
+#### Allocations
+
+To create an allocation:  
+`POST` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations`
+
+Payload:
+```json
+{
+  "totalAmount": "10000.123456789012345678",
+  "timeout": "2020-02-17T11:42:56.739Z",
+  "makeDeposit": false
+}
+```
+Don't forget to copy `allocationId` from the response!

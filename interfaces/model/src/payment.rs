@@ -13,6 +13,7 @@ pub mod rejection_reason;
 
 pub use self::acceptance::Acceptance;
 pub use self::allocation::Allocation;
+pub use self::allocation::NewAllocation;
 pub use self::debit_note::DebitNote;
 pub use self::debit_note::NewDebitNote;
 pub use self::debit_note_event::DebitNoteEvent;

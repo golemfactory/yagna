@@ -48,7 +48,7 @@ pub struct InvoiceId {
 
 #[derive(Deserialize)]
 pub struct AllocationId {
-    pub payment_id: String,
+    pub allocation_id: String,
 }
 
 #[derive(Deserialize)]

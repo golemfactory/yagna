@@ -2,7 +2,7 @@ table! {
     pay_allocation (id) {
         id -> Text,
         total_amount -> Text,
-        timeout -> Timestamp,
+        timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
     }
 }

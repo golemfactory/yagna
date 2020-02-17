@@ -76,7 +76,7 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn get(&self, invoice_id: String) -> DbResult<Option<Invoice>> {
         do_with_transaction(self.pool, move |conn| {
-            let invoice: Option<InvoiceModel> = dsl::pay_invoice
+            let invoice: Option<PureInvoice> = dsl::pay_invoice
                 .find(invoice_id.clone())
                 .first(conn)
                 .optional()?;
@@ -148,7 +148,7 @@ impl<'c> InvoiceDao<'c> {
 }
 
 fn join_invoices_with_activities(
-    invoices: Vec<InvoiceModel>,
+    invoices: Vec<PureInvoice>,
     activities: Vec<InvoiceXActivity>,
 ) -> Vec<Invoice> {
     let mut activities_map = activities

@@ -56,7 +56,7 @@ CREATE TABLE "pay_invoice_x_activity"(
 CREATE TABLE "pay_allocation"(
 	"id" VARCHAR(50) NOT NULL PRIMARY KEY,
 	"total_amount" VARCHAR(32) NOT NULL,
-	"timeout" DATETIME NOT NULL,
+	"timeout" DATETIME NULL,
 	"make_deposit" BOOLEAN NOT NULL
 );
 

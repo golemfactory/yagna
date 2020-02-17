@@ -1,6 +1,9 @@
 use crate::api::*;
+use crate::dao::allocation::AllocationDao;
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
+use crate::error::DbError;
+use crate::models as db_models;
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use ya_model::payment::*;
@@ -151,16 +154,44 @@ async fn get_invoice_events(db: Data<DbExecutor>, query: Query<EventParams>) -> 
 
 // ************************** ALLOCATION **************************
 
-async fn create_allocation(db: Data<DbExecutor>, body: Json<Allocation>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+async fn create_allocation(db: Data<DbExecutor>, body: Json<NewAllocation>) -> HttpResponse {
+    // TODO: Handle deposits & timeouts
+    let allocation: db_models::NewAllocation = body.into_inner().into();
+    let allocation_id = allocation.id.clone();
+    let dao: AllocationDao = db.as_dao();
+    match async move {
+        dao.create(allocation).await?;
+        Ok(dao.get(allocation_id).await?)
+    }
+    .await
+    {
+        Ok(Some(allocation)) => HttpResponse::Created().json(Into::<Allocation>::into(allocation)),
+        Ok(None) => HttpResponse::InternalServerError().body("Database error"),
+        Err(DbError::Query(e)) => HttpResponse::BadRequest().body(e.to_string()),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
 async fn get_allocations(db: Data<DbExecutor>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    let dao: AllocationDao = db.as_dao();
+    match dao.get_all().await {
+        Ok(allocations) => HttpResponse::Ok().json(
+            allocations
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<Allocation>>(),
+        ),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
 async fn get_allocation(db: Data<DbExecutor>, path: Path<AllocationId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    let dao: AllocationDao = db.as_dao();
+    match dao.get(path.allocation_id.clone()).await {
+        Ok(Some(allocation)) => HttpResponse::Ok().json(Into::<Allocation>::into(allocation)),
+        Ok(None) => HttpResponse::NotFound().finish(),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
 async fn amend_allocation(
@@ -172,7 +203,11 @@ async fn amend_allocation(
 }
 
 async fn release_allocation(db: Data<DbExecutor>, path: Path<AllocationId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    let dao: AllocationDao = db.as_dao();
+    match dao.delete(path.allocation_id.clone()).await {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
 // *************************** PAYMENT ****************************

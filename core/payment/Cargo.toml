@@ -13,6 +13,7 @@ ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 
 actix-web = "2.0"
+bigdecimal = "0.1.0"
 chrono = { version = "0.4", features = ["serde"]}
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
