@@ -1,28 +1,67 @@
 use crate::commands::*;
-use crate::error::{Error, LocalServiceError};
+use crate::error::Error;
 use crate::runtime::{Runtime, RuntimeThreadExt};
-use crate::service::{Service, ServiceAddr};
-use crate::ExeUnit;
+use crate::service::ServiceAddr;
+use crate::{report, ExeUnit};
 use actix::prelude::*;
-use ya_model::activity::State;
-
-impl<S: Service, R: Runtime> Handler<RegisterService<S>> for ExeUnit<R> {
-    type Result = <RegisterService<S> as Message>::Result;
-
-    fn handle(&mut self, msg: RegisterService<S>, _: &mut Context<Self>) -> Self::Result {
-        self.services.push(Box::new(ServiceAddr::new(msg.0)));
-    }
-}
+use ya_core_model::activity::SetActivityState;
+use ya_model::activity::{ActivityState, State};
 
 impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     type Result = <SetState as Message>::Result;
 
-    fn handle(&mut self, msg: SetState, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: SetState, ctx: &mut Context<Self>) -> Self::Result {
         match msg {
-            SetState::State(state) => self.state.state = state,
+            SetState::State(state) => {
+                let state_differs = self.state.state != state;
+                self.state.state = state;
+
+                if let StateExt::State(state) = &self.state.state {
+                    if !state_differs {
+                        return;
+                    }
+
+                    let report_url = self.report_url.clone();
+                    let activity_id = match &self.ctx.service_id {
+                        Some(id) => id.clone(),
+                        None => return,
+                    };
+                    let activity_state = ActivityState {
+                        state: state.clone(),
+                        reason: None,
+                        error_message: None,
+                    };
+
+                    let fut = async move {
+                        report(
+                            &report_url,
+                            SetActivityState {
+                                activity_id,
+                                state: activity_state,
+                                timeout: None,
+                            },
+                        )
+                        .await;
+                    };
+
+                    ctx.spawn(fut.into_actor(self));
+                }
+            }
             SetState::BatchResult(batch_id, result) => self.state.push_result(batch_id, result),
             SetState::RunningCommand(command) => self.state.running_command = command,
         }
+    }
+}
+
+impl<Svc, R> Handler<RegisterService<Svc>> for ExeUnit<R>
+where
+    R: Runtime,
+    Svc: Actor<Context = Context<Svc>> + Handler<Shutdown>,
+{
+    type Result = <RegisterService<Svc> as Message>::Result;
+
+    fn handle(&mut self, msg: RegisterService<Svc>, _: &mut Context<Self>) -> Self::Result {
+        self.services.push(Box::new(ServiceAddr::new(msg.0)));
     }
 }
 

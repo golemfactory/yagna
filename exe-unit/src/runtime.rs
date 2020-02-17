@@ -5,16 +5,8 @@ use actix::prelude::*;
 use crossbeam_channel::bounded;
 use std::path::PathBuf;
 
-pub trait Runtime:
-    Actor<Context = SyncContext<Self>>
-    + Handler<Deploy>
-    + Handler<Start>
-    + Handler<Run>
-    + Handler<Stop>
-    + Handler<Transfer>
-    + Handler<Shutdown>
-{
-    fn new(config_path: Option<PathBuf>, input_dir: PathBuf, output_dir: PathBuf) -> Self;
+pub trait Runtime: Actor<Context = SyncContext<Self>> + Handler<Shutdown> {
+    fn new(config_path: Option<PathBuf>, work_dir: PathBuf, cache_dir: PathBuf) -> Self;
 }
 
 pub(crate) struct RuntimeThread<R: Runtime> {

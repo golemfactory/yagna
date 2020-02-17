@@ -1,8 +1,6 @@
 use crate::commands::{Shutdown, ShutdownReason};
-use crate::service::Service;
 use actix::dev::ToEnvelope;
 use actix::prelude::*;
-use serde::{Deserialize, Serialize};
 
 pub struct SignalMonitor<A>
 where
@@ -33,8 +31,6 @@ macro_rules! register_signal {
         unsafe { signal_hook::register($sig, f).unwrap() }
     }};
 }
-
-impl<A> Service for SignalMonitor<A> where A: Actor<Context = Context<A>> + Handler<Shutdown> {}
 
 impl<A> Actor for SignalMonitor<A>
 where

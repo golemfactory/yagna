@@ -1,17 +1,16 @@
-use crate::commands::StateExt;
+use crate::commands::{MetricsRequest, StateExt};
+use crate::error::Error;
 use crate::runtime::Runtime;
 use crate::ExeUnit;
 use actix::prelude::*;
 use ya_core_model::activity::*;
-use ya_model::activity::{ActivityState, State};
+use ya_model::activity::{ActivityState, ActivityUsage, State};
 use ya_service_bus::RpcEnvelope;
 
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
-        //        self.check_service_id(msg.caller())?;
-        //        Ok(())
         unimplemented!()
     }
 }
@@ -26,9 +25,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
     ) -> Self::Result {
         self.check_service_id(msg.caller())?;
 
-        let state = match self.state.state {
-            StateExt::State(state) => state,
-            StateExt::Transitioning { from, .. } => from,
+        let state = match &self.state.state {
+            StateExt::State(state) => state.clone(),
+            StateExt::Transitioning { from, .. } => from.clone(),
             StateExt::ShuttingDown => State::Terminated,
         };
 
@@ -41,16 +40,41 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcEnvelope<GetActivityUsage>> for ExeUnit<R> {
-    type Result = <RpcEnvelope<GetActivityUsage> as Message>::Result;
+    type Result = ActorResponse<Self, ActivityUsage, RpcMessageError>;
 
     fn handle(
         &mut self,
         msg: RpcEnvelope<GetActivityUsage>,
         ctx: &mut Self::Context,
     ) -> Self::Result {
-        //        self.check_service_id(msg.caller())?;
-        //        Ok(())
-        unimplemented!()
+        if let Err(e) = self.check_service_id(msg.caller()) {
+            return ActorResponse::r#async(futures::future::err(e.into()).into_actor(self));
+        }
+
+        let metrics = self.metrics.clone();
+        let activity_id = match &self.ctx.service_id {
+            Some(id) => id.clone(),
+            None => String::new(),
+        };
+
+        let fut = async move {
+            let resp = match metrics.send(MetricsRequest).await {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!("Unable to report activity usage: {:?}", e);
+                    return Err(Error::from(e).into());
+                }
+            };
+
+            match resp {
+                Ok(data) => Ok(ActivityUsage {
+                    current_usage: Some(data),
+                }),
+                Err(e) => Err(Error::from(e).into()),
+            }
+        };
+
+        ActorResponse::r#async(fut.into_actor(self))
     }
 }
 

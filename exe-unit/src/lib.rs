@@ -10,25 +10,32 @@ pub mod service;
 use crate::commands::*;
 use crate::error::Error;
 use crate::runtime::*;
-use crate::service::ServiceControl;
+use crate::service::{ServiceAddr, ServiceControl};
 
+use crate::service::metrics::MetricsService;
 use actix::prelude::*;
+use futures::TryFutureExt;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use ya_core_model::activity as activity_model;
-use ya_model::activity::{ExeScriptCommandResult, ExeScriptCommandState, State};
-use ya_service_bus::actix_rpc;
+use ya_core_model::activity::SetActivityUsage;
+use ya_model::activity::{ActivityUsage, ExeScriptCommandResult, ExeScriptCommandState, State};
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 pub type Result<T> = std::result::Result<T, Error>;
 pub type BatchResult = ExeScriptCommandResult;
+
+lazy_static::lazy_static! {
+    static ref DEFAULT_REPORT_INTERVAL: Duration = Duration::from_secs(1u64);
+}
 
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
     service_id: Option<String>,
     config_path: Option<PathBuf>,
-    input_dir: PathBuf,
-    output_dir: PathBuf,
+    work_dir: PathBuf,
+    cache_dir: PathBuf,
 }
 
 pub struct ExeUnitState {
@@ -69,6 +76,8 @@ pub struct ExeUnit<R: Runtime> {
     ctx: ExeUnitContext,
     state: ExeUnitState,
     runtime: Option<RuntimeThread<R>>,
+    metrics: Addr<MetricsService>,
+    report_url: String,
     services: Vec<Box<dyn ServiceControl>>,
 }
 
@@ -81,19 +90,61 @@ macro_rules! actix_rpc_bind {
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    pub fn new(ctx: ExeUnitContext) -> Self {
-        Self {
+    pub fn new(ctx: ExeUnitContext, report_url: String) -> Self {
+        let metrics = MetricsService::default().start();
+        ExeUnit {
             ctx,
             state: ExeUnitState::default(),
             runtime: None,
-            services: Vec::new(),
+            metrics: metrics.clone(),
+            report_url,
+            services: vec![Box::new(ServiceAddr::new(metrics))],
         }
+    }
+
+    fn report_usage(&mut self, context: &mut Context<Self>) {
+        let actor = context.address();
+        let report_url = self.report_url.clone();
+        let metrics = self.metrics.clone();
+        let activity_id = match &self.ctx.service_id {
+            Some(id) => id.clone(),
+            None => return,
+        };
+
+        let fut = async move {
+            let resp = metrics.send(MetricsRequest).await;
+            if let Err(e) = resp {
+                log::warn!("Unable to report activity usage: {:?}", e);
+                return;
+            };
+
+            match resp.unwrap() {
+                Ok(data) => {
+                    let msg = SetActivityUsage {
+                        activity_id,
+                        usage: ActivityUsage {
+                            current_usage: Some(data),
+                        },
+                        timeout: None,
+                    };
+                    report(&report_url, msg).await;
+                }
+                Err(e) => match e {
+                    Error::UsageLimitExceeded(exceeded) => {
+                        actor.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(exceeded)));
+                    }
+                    _ => (),
+                },
+            };
+        };
+
+        context.spawn(fut.into_actor(self));
     }
 
     fn start_runtime(&mut self) -> Result<()> {
         let config_path = self.ctx.config_path.clone();
-        let input_dir = self.ctx.input_dir.clone();
-        let output_dir = self.ctx.output_dir.clone();
+        let input_dir = self.ctx.work_dir.clone();
+        let output_dir = self.ctx.cache_dir.clone();
         let runtime = RuntimeThread::spawn(move || {
             R::new(config_path.clone(), input_dir.clone(), output_dir.clone())
         })?;
@@ -150,6 +201,10 @@ impl<R: Runtime> Actor for ExeUnit<R> {
                 ]
             );
         }
+
+        IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
+            .finish()
+            .spawn(ctx);
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -160,5 +215,16 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             },
             _ => Running::Continue,
         }
+    }
+}
+
+pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: &String, msg: M) {
+    let result = ya_service_bus::typed::service(url)
+        .send(msg)
+        .map_err(Error::from)
+        .await;
+
+    if let Err(e) = result {
+        log::warn!("Error reporting to {}: {:?}", url, e);
     }
 }
