@@ -13,9 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExeScriptCommand {
-    Deploy {
-        args: Vec<String>,
-    },
+    Deploy {},
     Start {
         #[serde(default)]
         args: Vec<String>,
@@ -25,7 +23,7 @@ pub enum ExeScriptCommand {
         #[serde(default)]
         args: Vec<String>,
     },
-    Stop {},
+    Terminate {},
     Transfer {
         from: String,
         to: String,

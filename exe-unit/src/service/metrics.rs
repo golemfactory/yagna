@@ -66,11 +66,13 @@ macro_rules! parse_report {
 impl Handler<MetricsRequest> for MetricsService {
     type Result = <MetricsRequest as Message>::Result;
 
-    fn handle(&mut self, _: MetricsRequest, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: MetricsRequest, _: &mut Self::Context) -> Self::Result {
         let cpu_report = self.cpu.report();
+        self.cpu.log_report(cpu_report.clone());
         let cpu_data: f64 = parse_report!(CpuMetric::ID, cpu_report)?;
 
         let mem_report = self.mem.report();
+        self.mem.log_report(mem_report.clone());
         let mem_data: f64 = parse_report!(MemMetric::ID, mem_report)?;
 
         Ok(vec![cpu_data, mem_data])
@@ -103,16 +105,6 @@ impl<M: Metric + 'static> MetricService<M> {
             backlog_limit,
             usage_limit,
         }
-    }
-
-    pub fn usage_limit(mut self, limit: <M as Metric>::Data) -> Self {
-        self.usage_limit = Some(limit);
-        self
-    }
-
-    pub fn backlog_limit(mut self, limit: usize) -> Self {
-        self.backlog_limit = Some(limit);
-        self
     }
 }
 

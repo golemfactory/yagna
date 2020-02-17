@@ -70,10 +70,11 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
 
     fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
         let state = self.state.state.clone();
-        if state != StateExt::ShuttingDown && state != StateExt::State(State::Terminated) {
-            self.state.state = StateExt::ShuttingDown;
+        let address = ctx.address();
 
-            let address = ctx.address();
+        if state != StateExt::ShuttingDown && state != StateExt::State(State::Terminated) {
+            address.do_send(SetState::State(StateExt::ShuttingDown));
+
             let runtime = self.runtime.flatten_addr();
             let mut services = std::mem::replace(&mut self.services, Vec::new());
 
@@ -83,14 +84,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
                 }
 
                 services.iter_mut().for_each(|svc| svc.stop());
-
-                if let Err(e) = address
-                    .send(SetState::State(StateExt::State(State::Terminated)))
-                    .await
-                {
-                    log::error!("Error updating state to {:?}: {:?}", State::Terminated, e);
-                }
-
+                address.do_send(SetState::State(StateExt::State(State::Terminated)));
                 Arbiter::current().stop();
                 Ok(())
             };

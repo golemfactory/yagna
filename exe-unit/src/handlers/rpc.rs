@@ -10,7 +10,7 @@ use ya_service_bus::RpcEnvelope;
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: RpcEnvelope<Exec>, _ctx: &mut Self::Context) -> Self::Result {
         unimplemented!()
     }
 }
@@ -21,9 +21,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
     fn handle(
         &mut self,
         msg: RpcEnvelope<GetActivityState>,
-        ctx: &mut Self::Context,
+        _: &mut Self::Context,
     ) -> Self::Result {
-        self.check_service_id(msg.caller())?;
+        self.check_service_id(&msg.activity_id)?;
 
         let state = match &self.state.state {
             StateExt::State(state) => state.clone(),
@@ -45,18 +45,13 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityUsage>> for ExeUnit<R> {
     fn handle(
         &mut self,
         msg: RpcEnvelope<GetActivityUsage>,
-        ctx: &mut Self::Context,
+        _: &mut Self::Context,
     ) -> Self::Result {
-        if let Err(e) = self.check_service_id(msg.caller()) {
+        if let Err(e) = self.check_service_id(&msg.activity_id) {
             return ActorResponse::r#async(futures::future::err(e.into()).into_actor(self));
         }
 
         let metrics = self.metrics.clone();
-        let activity_id = match &self.ctx.service_id {
-            Some(id) => id.clone(),
-            None => String::new(),
-        };
-
         let fut = async move {
             let resp = match metrics.send(MetricsRequest).await {
                 Ok(r) => r,
@@ -84,9 +79,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
     fn handle(
         &mut self,
         msg: RpcEnvelope<GetRunningCommand>,
-        ctx: &mut Self::Context,
+        _: &mut Self::Context,
     ) -> Self::Result {
-        self.check_service_id(msg.caller())?;
+        self.check_service_id(&msg.activity_id)?;
 
         match &self.state.running_command {
             Some(command) => Ok(command.clone()),
@@ -101,9 +96,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
     fn handle(
         &mut self,
         msg: RpcEnvelope<GetExecBatchResults>,
-        ctx: &mut Self::Context,
+        _: &mut Self::Context,
     ) -> Self::Result {
-        self.check_service_id(msg.caller())?;
+        self.check_service_id(&msg.activity_id)?;
 
         let msg = msg.into_inner();
         match self.state.batch_results.get(&msg.batch_id) {

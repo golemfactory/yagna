@@ -30,48 +30,6 @@ lazy_static::lazy_static! {
     static ref DEFAULT_REPORT_INTERVAL: Duration = Duration::from_secs(1u64);
 }
 
-#[derive(Clone, Debug)]
-pub struct ExeUnitContext {
-    service_id: Option<String>,
-    config_path: Option<PathBuf>,
-    work_dir: PathBuf,
-    cache_dir: PathBuf,
-}
-
-pub struct ExeUnitState {
-    pub state: StateExt,
-    batch_results: HashMap<String, Vec<BatchResult>>,
-    pub running_command: Option<ExeScriptCommandState>,
-}
-
-impl ExeUnitState {
-    pub fn get_results(&self, batch_id: &String) -> Vec<BatchResult> {
-        match self.batch_results.get(batch_id) {
-            Some(vec) => vec.clone(),
-            None => Vec::new(),
-        }
-    }
-
-    pub fn push_result(&mut self, batch_id: String, result: BatchResult) {
-        match self.batch_results.get_mut(&batch_id) {
-            Some(vec) => vec.push(result),
-            None => {
-                self.batch_results.insert(batch_id, vec![result]);
-            }
-        }
-    }
-}
-
-impl Default for ExeUnitState {
-    fn default() -> Self {
-        ExeUnitState {
-            state: StateExt::default(),
-            batch_results: HashMap::new(),
-            running_command: None,
-        }
-    }
-}
-
 pub struct ExeUnit<R: Runtime> {
     ctx: ExeUnitContext,
     state: ExeUnitState,
@@ -103,42 +61,19 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
-        let actor = context.address();
-        let report_url = self.report_url.clone();
-        let metrics = self.metrics.clone();
         let activity_id = match &self.ctx.service_id {
             Some(id) => id.clone(),
             None => return,
         };
 
-        let fut = async move {
-            let resp = metrics.send(MetricsRequest).await;
-            if let Err(e) = resp {
-                log::warn!("Unable to report activity usage: {:?}", e);
-                return;
-            };
+        let exe_unit = context.address();
+        let report_url = self.report_url.clone();
+        let metrics = self.metrics.clone();
 
-            match resp.unwrap() {
-                Ok(data) => {
-                    let msg = SetActivityUsage {
-                        activity_id,
-                        usage: ActivityUsage {
-                            current_usage: Some(data),
-                        },
-                        timeout: None,
-                    };
-                    report(&report_url, msg).await;
-                }
-                Err(e) => match e {
-                    Error::UsageLimitExceeded(exceeded) => {
-                        actor.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(exceeded)));
-                    }
-                    _ => (),
-                },
-            };
-        };
-
-        context.spawn(fut.into_actor(self));
+        context.spawn(
+            async move { report_usage(report_url, activity_id, exe_unit, metrics).await }
+                .into_actor(self),
+        );
     }
 
     fn start_runtime(&mut self) -> Result<()> {
@@ -218,6 +153,48 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ExeUnitContext {
+    service_id: Option<String>,
+    config_path: Option<PathBuf>,
+    work_dir: PathBuf,
+    cache_dir: PathBuf,
+}
+
+pub struct ExeUnitState {
+    pub state: StateExt,
+    batch_results: HashMap<String, Vec<BatchResult>>,
+    pub running_command: Option<ExeScriptCommandState>,
+}
+
+impl ExeUnitState {
+    pub fn get_results(&self, batch_id: &String) -> Vec<BatchResult> {
+        match self.batch_results.get(batch_id) {
+            Some(vec) => vec.clone(),
+            None => Vec::new(),
+        }
+    }
+
+    pub fn push_result(&mut self, batch_id: String, result: BatchResult) {
+        match self.batch_results.get_mut(&batch_id) {
+            Some(vec) => vec.push(result),
+            None => {
+                self.batch_results.insert(batch_id, vec![result]);
+            }
+        }
+    }
+}
+
+impl Default for ExeUnitState {
+    fn default() -> Self {
+        ExeUnitState {
+            state: StateExt::default(),
+            batch_results: HashMap::new(),
+            running_command: None,
+        }
+    }
+}
+
 pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: &String, msg: M) {
     let result = ya_service_bus::typed::service(url)
         .send(msg)
@@ -227,4 +204,36 @@ pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: &String, msg: M
     if let Err(e) = result {
         log::warn!("Error reporting to {}: {:?}", url, e);
     }
+}
+
+async fn report_usage<R: Runtime>(
+    report_url: String,
+    activity_id: String,
+    exe_unit: Addr<ExeUnit<R>>,
+    metrics: Addr<MetricsService>,
+) {
+    let resp = metrics.send(MetricsRequest).await;
+    if let Err(e) = resp {
+        log::warn!("Unable to report activity usage: {:?}", e);
+        return;
+    };
+
+    match resp.unwrap() {
+        Ok(data) => {
+            let msg = SetActivityUsage {
+                activity_id,
+                usage: ActivityUsage {
+                    current_usage: Some(data),
+                },
+                timeout: None,
+            };
+            report(&report_url, msg).await;
+        }
+        Err(e) => match e {
+            Error::UsageLimitExceeded(info) => {
+                exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
+            }
+            _ => (),
+        },
+    };
 }
