@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{PathBuf, Path, Component};
 use structopt::StructOpt;
 
-use crate::manifest::{MountPoint, load_manifest};
+use crate::manifest::{MountPoint, WasmImage};
 use crate::wasmtime_unit::Wasmtime;
 
 
@@ -55,24 +55,52 @@ impl ExeUnitMain {
         let image_url = args[0].clone();
         info!("Deploying image: {}", image_url);
 
-        let image_path = download_image(&image_url, cachedir)?;
-        let manifest = load_manifest(&image_path)?;
-        let mounts = directories_mounts(workdir, &manifest.mount_points)?;
+        let mut image = download_image(&image_url, cachedir)?;
+        let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
 
-        create_mount_points(&mounts)?;
-
-        let mut wasmtime = Wasmtime::new(mounts);
-        Ok(wasmtime.deploy(&image_path)?)
+        Ok(wasmtime.deploy(&mut image)?)
     }
 
     fn run(workdir: &Path, cachedir: &Path, args: Vec<String>) -> Result<()> {
-        info!("Called run command");
-        Ok(())
+        if args.len() < 1 {
+            return Err(Error::msg(format!("Run: invalid number of args {}.", args.len())));
+        }
+
+        let image_url = args[0].clone();
+
+        // This will load cached image if deploy step was performed.
+        // Otherwise we will download image anyway.
+        let mut image = download_image(&image_url, cachedir)?;
+        let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
+
+        info!("Running image: {}", image_url);
+
+        // Since wasmtime object doesn't live across binary executions,
+        // we must deploy image for the second time, what will load binary to wasmtime.
+        wasmtime.deploy(&mut image)?;
+        Ok(wasmtime.run(&mut image, args)?)
+    }
+
+    fn create_wasmtime(workdir: &Path, image: &mut WasmImage) -> Result<Wasmtime> {
+        let manifest = image.get_manifest();
+        let mounts = directories_mounts(workdir, &manifest.mount_points)?;
+
+        create_mount_points(&mounts)?;
+        Ok(Wasmtime::new(mounts))
     }
 }
 
-fn download_image(url: &str, cachedir: &Path) -> Result<PathBuf> {
-    unimplemented!()
+fn download_image(url: &str, cachedir: &Path) -> Result<WasmImage> {
+    //TODO: implement real downloading
+
+    let image_path = PathBuf::from(url);
+    let name = image_path.file_name()
+        .ok_or(Error::msg(format!("Image path has no filename: {}", image_path.display())))?;
+
+    let cache_path = cachedir.join(name);
+    fs::copy(&image_path, &cache_path)?;
+
+    Ok(WasmImage::new(&cache_path)?)
 }
 
 fn create_mount_points(mounts: &Vec<DirectoryMount>) -> Result<()> {

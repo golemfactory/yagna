@@ -1,4 +1,5 @@
 use crate::entrypoint::DirectoryMount;
+use crate::manifest::WasmImage;
 
 use wasmtime::*;
 use wasi_common::preopen_dir;
@@ -41,22 +42,17 @@ impl Wasmtime {
 
 
 impl Wasmtime {
-    pub fn deploy(&mut self, wasm_binary: &Path) -> Result<()> {
+    pub fn deploy(&mut self, mut wasm_binary: &mut WasmImage) -> Result<()> {
         // Loading binary will validate if it can be correctly loaded by wasmtime.
-        self.load_binary(wasm_binary)?;
+        self.load_binary(&mut wasm_binary)?;
         Ok(())
     }
 
-    pub fn run(&mut self, args: Vec<String>) -> Result<()> {
-
-        if args.len() < 1 {
-            return Err(Error::msg(format!("Run command not specified.")));
-        }
-
-        let args = Wasmtime::prepare_args(&args);
+    pub fn run(&mut self, image: &mut WasmImage, args: Vec<String>) -> Result<()> {
+        let args = Wasmtime::prepare_args(&args, &image);
 
         self.create_wasi_module(&args)?;
-        let instance = self.create_instance(&args[0])?;
+        let instance = self.create_instance(image.get_module_name())?;
         Ok(Wasmtime::run_instance(&instance, "_start")?)
     }
 
@@ -98,16 +94,16 @@ impl Wasmtime {
         Ok(())
     }
 
-    fn load_binary(&mut self, binary_file: &Path) -> Result<()> {
-        info!("Loading wasm binary: {}", binary_file.display());
+    fn load_binary(&mut self, image: &mut WasmImage) -> Result<()> {
+        info!("Loading wasm binary: {}", image.path().display());
 
-        let wasm_binary = read(binary_file)
-            .with_context(|| format!("Can't load wasm binary {}.", binary_file.display()))?;
+        let wasm_binary = image.load_binary()
+            .with_context(|| format!("Can't load wasm binary {}.", image.path().display()))?;
 
         let module = Module::new(&self.store, &wasm_binary)
             .with_context(|| format!("WASM module creation failed."))?;
 
-        self.modules.insert(Wasmtime::get_module_name(binary_file), module);
+        self.modules.insert(image.get_module_name().to_string(), module);
         Ok(())
     }
 
@@ -166,14 +162,11 @@ impl Wasmtime {
         Ok(preopen_dirs)
     }
 
-    fn prepare_args(args: &Vec<String>) -> Vec<String> {
+    fn prepare_args(args: &Vec<String>, image: &WasmImage) -> Vec<String> {
         let mut new_args = Vec::new();
 
-        // Translate binary path to module name, to avoid leaking path information.
-        let binary_path = PathBuf::from(args[0].as_str());
-        let module_name = Wasmtime::get_module_name(&binary_path);
-
-        new_args.push(module_name);
+        // We set first arg to module name, to avoid leaking path information.
+        new_args.push(image.get_module_name().to_owned());
 
         for arg in args[1..].iter() {
             new_args.push(arg.clone());
