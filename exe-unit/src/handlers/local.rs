@@ -1,10 +1,18 @@
 use crate::commands::*;
+use crate::error::{Error, LocalServiceError};
 use crate::runtime::{Runtime, RuntimeThreadExt};
+use crate::service::{Service, ServiceAddr};
 use crate::ExeUnit;
 use actix::prelude::*;
-use std::collections::HashMap;
-use std::time::Duration;
 use ya_model::activity::State;
+
+impl<S: Service, R: Runtime> Handler<RegisterService<S>> for ExeUnit<R> {
+    type Result = <RegisterService<S> as Message>::Result;
+
+    fn handle(&mut self, msg: RegisterService<S>, _: &mut Context<Self>) -> Self::Result {
+        self.services.push(Box::new(ServiceAddr::new(msg.0)));
+    }
+}
 
 impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     type Result = <SetState as Message>::Result;
@@ -18,65 +26,44 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     }
 }
 
-impl<R: Runtime> Handler<Signal> for ExeUnit<R> {
-    type Result = <Signal as Message>::Result;
-
-    fn handle(&mut self, msg: Signal, ctx: &mut Context<Self>) -> Self::Result {
-        match msg.0 {
-            signal_hook::SIGABRT | signal_hook::SIGINT | signal_hook::SIGTERM => {
-                ctx.address().do_send(Shutdown::new())
-            }
-            #[cfg(not(windows))]
-            signal_hook::SIGQUIT => ctx.address().do_send(Shutdown::new()),
-            #[cfg(not(windows))]
-            signal_hook::SIGHUP => {}
-            _ => {
-                log::warn!("Unsupported signal: {}", msg.0);
-            }
-        }
-    }
-}
-
 impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), LocalError>;
+    type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, _: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        let s = &self.state.state;
-        if s != &StateExt::ShuttingDown && s != &StateExt::State(State::Terminated) {
+    fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
+        let state = self.state.state.clone();
+        if state != StateExt::ShuttingDown && state != StateExt::State(State::Terminated) {
+            self.state.state = StateExt::ShuttingDown;
+
             let address = ctx.address();
             let runtime = self.runtime.flatten_addr();
-            let mut services = std::mem::replace(&mut self.services, HashMap::new());
+            let mut services = std::mem::replace(&mut self.services, Vec::new());
 
             let fut = async move {
-                set_state(&address, StateExt::ShuttingDown).await;
-
-                if let Some(ref r) = runtime {
-                    if let Err(e) = r
-                        .send(Shutdown::new())
-                        .timeout(Duration::from_secs(5u64))
-                        .await
-                    {
-                        log::warn!("Unable to stop the runtime: {:?}", e);
-                    }
+                if let Some(runtime) = runtime {
+                    Self::stop_runtime(runtime, msg.0).await;
                 }
 
-                services.values_mut().for_each(|svc| svc.stop());
-                set_state(&address, StateExt::State(State::Terminated)).await;
+                services.iter_mut().for_each(|svc| svc.stop());
+
+                if let Err(e) = address
+                    .send(SetState::State(StateExt::State(State::Terminated)))
+                    .await
+                {
+                    log::error!("Error updating state to {:?}: {:?}", State::Terminated, e);
+                }
+
                 Arbiter::current().stop();
                 Ok(())
             };
 
             ActorResponse::r#async(fut.into_actor(self))
         } else {
-            let fut = async move { Err(LocalError::InvalidStateError) };
+            let fut = async move {
+                log::warn!("Shutdown already triggered");
+                Ok(())
+            };
+
             ActorResponse::r#async(fut.into_actor(self))
         }
-    }
-}
-
-#[inline]
-async fn set_state<R: Runtime>(address: &Addr<ExeUnit<R>>, state: StateExt) {
-    if let Err(e) = address.send(SetState::State(state)).await {
-        log::error!("Error updating state to {:?}: {:?}", State::Terminated, e);
     }
 }

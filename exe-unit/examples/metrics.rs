@@ -1,4 +1,4 @@
-use ya_exe_framework::metrics::{CpuMetric, MemMetric, Metric};
+use ya_exe_unit::metrics::{CpuMetric, MemMetric, Metric};
 
 fn main() {
     let mut v: Vec<Vec<u64>> = Vec::new();

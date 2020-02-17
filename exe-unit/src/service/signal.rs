@@ -1,56 +1,45 @@
-use crate::commands::{Shutdown, Signal};
+use crate::commands::{Shutdown, ShutdownReason};
 use crate::service::Service;
 use actix::dev::ToEnvelope;
 use actix::prelude::*;
-use std::fmt::Debug;
+use serde::{Deserialize, Serialize};
 
 pub struct SignalMonitor<A>
 where
-    A: Actor<Context = Context<A>> + Handler<Signal>,
+    A: Actor<Context = Context<A>> + Handler<Shutdown>,
 {
     signals: Vec<signal_hook::SigId>,
-    parent: Option<Addr<A>>,
+    parent: Addr<A>,
 }
 
 impl<A> SignalMonitor<A>
 where
-    A: Actor<Context = Context<A>> + Handler<Signal>,
+    A: Actor<Context = Context<A>> + Handler<Shutdown>,
 {
-    pub fn new() -> Self {
+    pub fn new(parent: Addr<A>) -> Self {
         SignalMonitor {
             signals: Vec::new(),
-            parent: None,
+            parent,
         }
     }
 }
 
 macro_rules! register_signal {
     ($handler:expr, $sig:expr) => {{
-        let handler_ = $handler.clone().unwrap();
+        let handler_ = $handler.clone();
         let f = move || {
-            handler_.do_send(Signal($sig));
+            handler_.do_send(Shutdown(ShutdownReason::Interrupted($sig as i32)));
         };
         unsafe { signal_hook::register($sig, f).unwrap() }
     }};
 }
 
-impl<A> Service for SignalMonitor<A>
-where
-    A: Actor<Context = Context<A>> + Handler<Signal>,
-    <A as Actor>::Context: ToEnvelope<A, Signal>,
-{
-    const ID: &'static str = "SignalMonitor";
-    type Parent = A;
-
-    fn bind(&mut self, parent: Addr<A>) {
-        self.parent = Some(parent);
-    }
-}
+impl<A> Service for SignalMonitor<A> where A: Actor<Context = Context<A>> + Handler<Shutdown> {}
 
 impl<A> Actor for SignalMonitor<A>
 where
-    A: Actor<Context = Context<A>> + Handler<Signal>,
-    <A as Actor>::Context: ToEnvelope<A, Signal>,
+    A: Actor<Context = Context<A>> + Handler<Shutdown>,
+    <A as Actor>::Context: ToEnvelope<A, Shutdown>,
 {
     type Context = Context<Self>;
 
@@ -61,9 +50,6 @@ where
             .push(register_signal!(self.parent, signal_hook::SIGINT));
         self.signals
             .push(register_signal!(self.parent, signal_hook::SIGTERM));
-        #[cfg(not(windows))]
-        self.signals
-            .push(register_signal!(self.parent, signal_hook::SIGHUP));
         #[cfg(not(windows))]
         self.signals
             .push(register_signal!(self.parent, signal_hook::SIGQUIT));
@@ -80,8 +66,8 @@ where
 
 impl<A> Handler<Shutdown> for SignalMonitor<A>
 where
-    A: Actor<Context = Context<A>> + Handler<Signal>,
-    <A as Actor>::Context: ToEnvelope<A, Signal>,
+    A: Actor<Context = Context<A>> + Handler<Shutdown>,
+    <A as Actor>::Context: ToEnvelope<A, Shutdown>,
 {
     type Result = <Shutdown as Message>::Result;
 

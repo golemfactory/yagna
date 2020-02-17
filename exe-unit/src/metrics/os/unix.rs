@@ -1,7 +1,5 @@
 use crate::metrics::{error::MetricError, Result};
-use nix::errno::{errno, Errno};
 use nix::libc;
-use nix::unistd::{getpid, Pid};
 use std::mem;
 use std::time::Duration;
 

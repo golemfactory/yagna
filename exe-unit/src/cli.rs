@@ -5,9 +5,9 @@ pub struct Cli {
     #[structopt(long, short, set = structopt::clap::ArgSettings::Global)]
     agreement: Option<PathBuf>,
     #[structopt(long, short, set = structopt::clap::ArgSettings::Global)]
-    input_path: PathBuf,
+    work_dir: PathBuf,
     #[structopt(long, short, set = structopt::clap::ArgSettings::Global)]
-    output_path: PathBuf,
+    cache_dir: PathBuf,
     #[structopt(subcommand)]
     command: Command,
 }

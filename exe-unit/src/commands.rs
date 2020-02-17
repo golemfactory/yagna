@@ -1,10 +1,14 @@
+use crate::metrics;
+use crate::service::Service;
+use crate::Result;
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::marker::PhantomData;
 use ya_model::activity::State;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Vec<u8>")]
-pub struct Deploy(Vec<u8>);
+pub struct Deploy {}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Vec<u8>")]
@@ -53,20 +57,6 @@ pub struct Batch {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "StateExt")]
-pub struct GetState;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "Option<RuntimeCommand>")]
-pub struct GetRunningCommand;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "Vec<Vec<u8>>")]
-pub struct GetBatchResults {
-    pub batch_id: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub enum SetState {
     State(StateExt),
@@ -74,25 +64,44 @@ pub enum SetState {
     BatchResult(String, Vec<u8>),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "Result<(), LocalError>")]
-pub struct Shutdown;
+#[derive(Clone, Debug, PartialEq, Message)]
+#[rtype(result = "()")]
+pub struct RegisterService<S: Service>(pub Addr<S>);
 
-unsafe impl Send for Shutdown {}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum ShutdownReason {
+    Finished,
+    Interrupted(i32),
+    UsageLimitExceeded(String),
+}
 
-impl Shutdown {
-    pub fn new() -> Self {
-        Shutdown {}
+impl Default for ShutdownReason {
+    fn default() -> Self {
+        ShutdownReason::Finished
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "()")]
-pub struct Signal(pub i32);
+#[rtype(result = "Result<()>")]
+pub struct Shutdown(pub ShutdownReason);
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum LocalError {
-    InvalidServiceError(String),
-    InvalidStateError,
-    UnsupportedSignalError,
+unsafe impl Send for Shutdown {}
+
+impl Default for Shutdown {
+    fn default() -> Self {
+        Shutdown(ShutdownReason::default())
+    }
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[rtype(result = "MetricReportRes<M>")]
+pub struct MetricReportReq<M: metrics::Metric + 'static>(pub PhantomData<M>);
+
+impl<M: metrics::Metric + 'static> MetricReportReq<M> {
+    pub fn new() -> Self {
+        MetricReportReq(PhantomData)
+    }
+}
+
+#[derive(Clone, Debug, MessageResponse)]
+pub struct MetricReportRes<M: metrics::Metric + 'static>(pub metrics::MetricReport<M>);

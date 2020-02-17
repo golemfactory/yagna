@@ -1,3 +1,4 @@
+use crate::metrics::error::MetricError;
 use serde::Serialize;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError as RpcError;
@@ -14,6 +15,12 @@ pub enum RuntimeError {
 pub enum LocalServiceError {
     #[error("Invalid service state: {0}")]
     InvalidState(String),
+    #[error("Metric error: {0}")]
+    MetricError(
+        #[serde(skip)]
+        #[from]
+        MetricError,
+    ),
 }
 
 #[derive(Error, Debug, Serialize)]
@@ -100,6 +107,8 @@ pub enum Error {
     LocalServiceError(#[from] LocalServiceError),
     #[error("Remote service error {0}")]
     RemoteServiceError(String),
+    #[error("Usage limit exceeded: {0}")]
+    UsageLimitExceeded(String),
 }
 
 impl From<ya_service_bus::Error> for Error {
@@ -118,8 +127,9 @@ impl From<Error> for RpcError {
             Error::ChannelError(e) => RpcError::Activity(e.to_string()),
             Error::JsonError(e) => RpcError::Activity(e.to_string()),
             Error::LocalServiceError(e) => RpcError::Activity(e.to_string()),
-            Error::RemoteServiceError(e) => RpcError::Service(e.to_string()),
-            Error::GsbError(e) => RpcError::Service(e.to_string()),
+            Error::RemoteServiceError(e) => RpcError::Service(e),
+            Error::GsbError(e) => RpcError::Service(e),
+            Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
         }
     }
 }

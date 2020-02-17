@@ -1,4 +1,4 @@
-use crate::commands::{RuntimeCommand, Shutdown};
+use crate::commands::*;
 use crate::error::ChannelError;
 use crate::Result;
 use actix::prelude::*;
@@ -6,7 +6,13 @@ use crossbeam_channel::bounded;
 use std::path::PathBuf;
 
 pub trait Runtime:
-    Actor<Context = SyncContext<Self>> + Handler<RuntimeCommand> + Handler<Shutdown>
+    Actor<Context = SyncContext<Self>>
+    + Handler<Deploy>
+    + Handler<Start>
+    + Handler<Run>
+    + Handler<Stop>
+    + Handler<Transfer>
+    + Handler<Shutdown>
 {
     fn new(config_path: Option<PathBuf>, input_dir: PathBuf, output_dir: PathBuf) -> Self;
 }

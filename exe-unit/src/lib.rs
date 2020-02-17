@@ -2,18 +2,20 @@ pub mod cli;
 pub mod commands;
 pub mod error;
 mod handlers;
+#[cfg(feature = "metrics")]
+pub mod metrics;
 pub mod runtime;
 pub mod service;
 
 use crate::commands::*;
 use crate::error::Error;
 use crate::runtime::*;
-use crate::service::{Service, ServiceControl, ServiceState};
+use crate::service::ServiceControl;
 
-use crate::service::signal::SignalMonitor;
 use actix::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
 use ya_core_model::activity as activity_model;
 use ya_model::activity::State;
 use ya_service_bus::actix_rpc;
@@ -67,7 +69,7 @@ pub struct ExeUnit<R: Runtime> {
     ctx: ExeUnitContext,
     state: ExeUnitState,
     runtime: Option<RuntimeThread<R>>,
-    services: HashMap<&'static str, Box<dyn ServiceControl<Parent = Self>>>,
+    services: Vec<Box<dyn ServiceControl>>,
 }
 
 macro_rules! actix_rpc_bind {
@@ -84,26 +86,7 @@ impl<R: Runtime> ExeUnit<R> {
             ctx,
             state: ExeUnitState::default(),
             runtime: None,
-            services: HashMap::new(),
-        }
-    }
-
-    pub fn default_services(mut self) -> Self {
-        self.service(SignalMonitor::new())
-    }
-
-    pub fn service<S>(mut self, service: S) -> Self
-    where
-        S: Service<Parent = Self> + 'static,
-    {
-        self.services
-            .insert(S::ID, Box::new(ServiceState::new(service)));
-        self
-    }
-
-    fn start_services(&mut self, actor: &Addr<Self>) {
-        for svc in self.services.values_mut() {
-            svc.start(actor.clone());
+            services: Vec::new(),
         }
     }
 
@@ -118,6 +101,16 @@ impl<R: Runtime> ExeUnit<R> {
         Ok(())
     }
 
+    async fn stop_runtime(runtime: Addr<R>, reason: ShutdownReason) {
+        if let Err(e) = runtime
+            .send(Shutdown(reason))
+            .timeout(Duration::from_secs(5u64))
+            .await
+        {
+            log::warn!("Unable to stop the runtime: {:?}", e);
+        }
+    }
+
     fn check_service_id(&self, service_id: &str) -> Result<()> {
         match &self.ctx.service_id {
             Some(sid) => {
@@ -125,7 +118,7 @@ impl<R: Runtime> ExeUnit<R> {
                     Ok(())
                 } else {
                     Err(Error::RemoteServiceError(format!(
-                        "Invalid destination service: {}",
+                        "Invalid destination service address: {}",
                         service_id
                     )))
                 }
@@ -140,11 +133,9 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         let address = ctx.address();
-        self.start_services(&address);
-
         if let Err(e) = self.start_runtime() {
             log::error!("Failed to start runtime: {:?}", e);
-            return address.do_send(Shutdown::new());
+            return address.do_send(Shutdown::default());
         }
         if let Some(service_id) = &self.ctx.service_id {
             actix_rpc_bind!(

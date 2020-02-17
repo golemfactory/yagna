@@ -3,9 +3,6 @@ mod exeunit;
 mod framework;
 mod supervisor;
 
-#[cfg(feature = "metrics")]
-pub mod metrics;
-
 mod cmd_args;
 
 use dispatchers::Dispatcher;
