@@ -1,4 +1,4 @@
-use ya_exe_framework::{ExeUnit, ExeUnitBuilder, DirectoryMount};
+use crate::entrypoint::DirectoryMount;
 
 use wasmtime::*;
 use wasi_common::preopen_dir;
@@ -15,8 +15,6 @@ use std::{ffi::OsStr};
 
 
 
-pub struct WasmtimeFactory;
-
 
 pub struct Wasmtime {
     store: Store,
@@ -29,7 +27,7 @@ pub struct Wasmtime {
 
 
 impl Wasmtime {
-    pub fn new(mounts: Vec<DirectoryMount>) -> Box<dyn ExeUnit> {
+    pub fn new(mounts: Vec<DirectoryMount>) -> Wasmtime {
         let wasmtime = Wasmtime {
             store: Store::default(),
             mounts,
@@ -37,23 +35,12 @@ impl Wasmtime {
             modules: HashMap::<String, Module>::new(),
         };
 
-        Box::new(wasmtime)
+        wasmtime
     }
 }
 
-impl ExeUnitBuilder for WasmtimeFactory {
-    fn create(&self, mounts: Vec<DirectoryMount>) -> Result<Box<dyn ExeUnit>> {
-        Ok(Wasmtime::new(mounts))
-    }
-}
 
-impl WasmtimeFactory {
-    pub fn new() -> Box<dyn ExeUnitBuilder> {
-        Box::new(WasmtimeFactory{})
-    }
-}
-
-impl ExeUnit for Wasmtime {
+impl Wasmtime {
     fn on_deploy(&mut self, args: Vec<String>) -> Result<()> {
 
         if args.len() != 1 {
@@ -62,16 +49,6 @@ impl ExeUnit for Wasmtime {
 
         let wasm_binary = args[ 0 ].clone();
         self.load_binary(&PathBuf::from(wasm_binary))?;
-        Ok(())
-    }
-
-    fn on_start(&mut self) -> Result<()> {
-        // This step does nothing.
-        Ok(())
-    }
-
-    fn on_transferred(&mut self) -> Result<()> {
-        // In current implementation do nothing.
         Ok(())
     }
 
@@ -87,13 +64,6 @@ impl ExeUnit for Wasmtime {
         let instance = self.create_instance(&args[0])?;
         Ok(Wasmtime::run_instance(&instance, "_start")?)
     }
-
-    fn on_stop(&mut self) -> Result<()> {
-        unimplemented!();
-    }
-}
-
-impl Wasmtime {
 
     fn run_instance(instance: &Instance, entrypoint: &str) -> Result<()> {
         info!("Running wasm binary entrypoint {}", entrypoint);

@@ -1,10 +1,10 @@
 mod wasmtime_unit;
 mod entrypoint;
+mod manifest;
 
 use anyhow::{Result, Error};
 use structopt::StructOpt;
 
-use crate::wasmtime_unit::WasmtimeFactory;
 use crate::entrypoint::{ExeUnitMain, CmdArgs};
 
 
