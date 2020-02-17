@@ -57,7 +57,8 @@ impl ExeUnitMain {
         let mut image = download_image(&image_url, cachedir)?;
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
 
-        Ok(wasmtime.deploy(&mut image)?)
+        wasmtime.deploy(&mut image)?;
+        Ok(info!("Deploying completed."))
     }
 
     fn run(workdir: &Path, cachedir: &Path, args: Vec<String>) -> Result<()> {
@@ -77,7 +78,9 @@ impl ExeUnitMain {
         // Since wasmtime object doesn't live across binary executions,
         // we must deploy image for the second time, what will load binary to wasmtime.
         wasmtime.deploy(&mut image)?;
-        Ok(wasmtime.run(&mut image, args)?)
+        wasmtime.run(&mut image, args)?;
+
+        Ok(info!("Computations completed."))
     }
 
     fn create_wasmtime(workdir: &Path, image: &mut WasmImage) -> Result<Wasmtime> {
