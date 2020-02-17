@@ -41,18 +41,13 @@ impl Wasmtime {
 
 
 impl Wasmtime {
-    fn on_deploy(&mut self, args: Vec<String>) -> Result<()> {
-
-        if args.len() != 1 {
-            return Err(Error::msg(format!("Deploy: invalid number of args.")));
-        }
-
-        let wasm_binary = args[ 0 ].clone();
-        self.load_binary(&PathBuf::from(wasm_binary))?;
+    pub fn deploy(&mut self, wasm_binary: &Path) -> Result<()> {
+        // Loading binary will validate if it can be correctly loaded by wasmtime.
+        self.load_binary(wasm_binary)?;
         Ok(())
     }
 
-    fn on_run(&mut self, args: Vec<String>) -> Result<()> {
+    pub fn run(&mut self, args: Vec<String>) -> Result<()> {
 
         if args.len() < 1 {
             return Err(Error::msg(format!("Run command not specified.")));

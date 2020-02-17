@@ -34,7 +34,7 @@ impl MountPoint {
 }
 
 
-fn load_manifest(image_path: &Path) -> Result<Manifest> {
+pub fn load_manifest(image_path: &Path) -> Result<Manifest> {
     let mut archive = zip::ZipArchive::new(OpenOptions::new().read(true).open(image_path)?)?;
     let entry = archive.by_name("manifest.json")?;
 
