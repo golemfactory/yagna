@@ -1,6 +1,5 @@
 use anyhow::{Result, Error};
 use log::info;
-use std::env;
 use std::fs;
 use std::path::{PathBuf, Path, Component};
 use structopt::StructOpt;
@@ -125,7 +124,7 @@ fn directories_mounts(workdir: &Path, mount_points: &Vec<MountPoint>) -> Result<
 fn validate_path(path: &str) -> Result<()> {
     // Protect ExeUnit from directory traversal attack.
     // Wasm can access only paths inside working directory.
-    let mut path = PathBuf::from(path);
+    let path = PathBuf::from(path);
     for component in path.components() {
         match component {
             Component::RootDir | Component::Prefix{..} => {

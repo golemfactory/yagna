@@ -10,10 +10,7 @@ use wasmtime_wasi::{
 use anyhow::{bail, Context, Result, Error};
 use log::info;
 use std::collections::HashMap;
-use std::fs::{read, File};
-use std::path::{Path, PathBuf, Component};
-use std::{ffi::OsStr};
-
+use std::fs::File;
 
 
 
@@ -173,16 +170,6 @@ impl Wasmtime {
         }
 
         return new_args;
-    }
-
-    fn get_module_name(binary_path: &Path) -> String {
-        binary_path
-            .components()
-            .next_back()
-            .map(Component::as_os_str)
-            .and_then(OsStr::to_str)
-            .unwrap_or("module")
-            .to_owned()
     }
 }
 

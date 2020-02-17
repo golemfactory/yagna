@@ -2,7 +2,7 @@ mod wasmtime_unit;
 mod entrypoint;
 mod manifest;
 
-use anyhow::{Result, Error};
+use anyhow::Result;
 use structopt::StructOpt;
 
 use crate::entrypoint::{ExeUnitMain, CmdArgs};

@@ -20,5 +20,3 @@ wasmtime-wasi = "0.9"
 wasmtime-interface-types = "0.9.0"
 wasmtime-runtime = "0.9.0"
 wasi-common = "0.9.0"
-
-ya-exe-framework = { version="0.1.0", path="../framework"}

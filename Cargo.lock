@@ -3161,7 +3161,6 @@ dependencies = [
  "wasmtime-interface-types 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-runtime 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmtime-wasi 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-exe-framework 0.1.0",
  "zip 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3457,23 +3456,6 @@ dependencies = [
  "ya-model 0.1.0",
  "ya-service-api 0.1.1",
  "ya-service-bus 0.2.1",
-]
-
-[[package]]
-name = "ya-exe-framework"
-version = "0.1.0"
-dependencies = [
- "actix 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "actix_derive 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.46 (registry+https://github.com/rust-lang/crates.io-index)",
- "structopt 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-core-model 0.1.0",
- "ya-model 0.1.0",
- "ya-utils-actix 0.1.0",
 ]
 
 [[package]]
