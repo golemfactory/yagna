@@ -17,11 +17,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use ya_core_model::activity as activity_model;
-use ya_model::activity::State;
+use ya_model::activity::{ExeScriptCommandResult, ExeScriptCommandState, State};
 use ya_service_bus::actix_rpc;
 
 pub type Result<T> = std::result::Result<T, Error>;
-pub type BatchResult = Vec<u8>;
+pub type BatchResult = ExeScriptCommandResult;
 
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
@@ -34,7 +34,7 @@ pub struct ExeUnitContext {
 pub struct ExeUnitState {
     pub state: StateExt,
     batch_results: HashMap<String, Vec<BatchResult>>,
-    pub running_command: Option<RuntimeCommand>,
+    pub running_command: Option<ExeScriptCommandState>,
 }
 
 impl ExeUnitState {

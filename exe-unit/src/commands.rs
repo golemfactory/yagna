@@ -1,10 +1,10 @@
-use crate::metrics;
 use crate::service::Service;
 use crate::Result;
+use crate::{metrics, BatchResult};
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
-use ya_model::activity::State;
+use ya_model::activity::{ExeScriptCommandState, State};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Vec<u8>")]
@@ -60,8 +60,8 @@ pub struct Batch {
 #[rtype(result = "()")]
 pub enum SetState {
     State(StateExt),
-    RunningCommand(Option<RuntimeCommand>),
-    BatchResult(String, Vec<u8>),
+    RunningCommand(Option<ExeScriptCommandState>),
+    BatchResult(String, BatchResult),
 }
 
 #[derive(Clone, Debug, PartialEq, Message)]
