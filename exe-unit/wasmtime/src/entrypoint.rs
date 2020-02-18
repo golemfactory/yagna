@@ -63,19 +63,29 @@ impl ExeUnitMain {
         let image_url = load_package_url(workdir, agreement_path)
             .with_context(|| format!("Failed to parse agreement file [{}].", agreement_path.display()))?;
 
-        info!("Deploying image: {}", image_url);
+        info!("Downloading image: {}", image_url);
 
-        let mut image = download_image(&image_url, cachedir)?;
+        let image = download_image(&image_url, cachedir)?;
+        write_deploy_file(workdir, &image)?;
+
+        Ok(info!("Donwloading completed."))
+    }
+
+    fn start(workdir: &Path, _cachedir: &Path) -> Result<()> {
+        info!("Validating deployed images.");
+
+        info!("Loading deploy file: {}", get_deploy_path(workdir).display());
+
+        let deploy_file = read_deploy_file(workdir)
+            .with_context(|| format!("Can't read deploy file {}. Did you run deploy command?",
+                                     get_deploy_path(workdir).display()))?;
+
+        let mut image = WasmImage::new(&deploy_file.image_path)?;
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
 
         wasmtime.deploy(&mut image)?;
-        write_deploy_file(workdir, &image)?;
 
-        Ok(info!("Deploying completed."))
-    }
-
-    fn start(_workdir: &Path, _cachedir: &Path) -> Result<()> {
-        Ok(info!("Running start command whichis empty in current implementation."))
+        Ok(info!("Start command completed."))
     }
 
     fn run(workdir: &Path, _cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
