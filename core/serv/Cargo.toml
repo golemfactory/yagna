@@ -33,3 +33,12 @@ lazy_static = "1.4"
 structopt = "0.3"
 dotenv = "0.15.0"
 url="2.1.1"
+
+[package.metadata.deb]
+assets = [
+    ["target/release/yagna", "usr/bin/", "755"],
+    ["target/release/ya-requestor", "usr/bin/", "755"],
+    ["target/release/ya-provider", "usr/bin/", "755"],
+    ["target/release/wasmtime-exeunit", "usr/bin/", "755"],
+    ["target/release/wasm-mozjs-exeunit", "usr/bin/", "755"],
+]
