@@ -40,5 +40,4 @@ assets = [
     ["target/release/ya-requestor", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
     ["target/release/wasmtime-exeunit", "usr/bin/", "755"],
-    ["target/release/wasm-mozjs-exeunit", "usr/bin/", "755"],
 ]
