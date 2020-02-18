@@ -166,6 +166,12 @@ fn print_table(
     let _ = table.printstd();
 }
 
+impl From<()> for CommandOutput {
+    fn from(_: ()) -> Self {
+        CommandOutput::NoOutput
+    }
+}
+
 impl From<ResponseTable> for CommandOutput {
     fn from(table: ResponseTable) -> Self {
         CommandOutput::Table {

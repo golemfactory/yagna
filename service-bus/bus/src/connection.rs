@@ -1,12 +1,13 @@
 use actix::prelude::*;
-use futures::channel::oneshot;
+use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 
 use crate::error::Error;
 use crate::local_router::router;
-use crate::RpcRawCall;
+use crate::{ResponseChunk, RpcRawCall, RpcRawStreamCall};
 use futures::stream::SplitSink;
 
+use futures::future::ErrInto;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
 use std::pin::Pin;
@@ -24,7 +25,7 @@ fn gen_id() -> u64 {
 }
 
 pub trait CallRequestHandler {
-    type Reply: futures::Future<Output = Result<Vec<u8>, Error>> + Unpin;
+    type Reply: Stream<Item = Result<ResponseChunk, Error>> + Unpin;
 
     fn do_call(
         &mut self,
@@ -35,11 +36,29 @@ pub trait CallRequestHandler {
     ) -> Self::Reply;
 }
 
+impl ResponseChunk {
+    #[inline]
+    fn reply_type(&self) -> CallReplyType {
+        match self {
+            ResponseChunk::Full(_) => CallReplyType::Full,
+            ResponseChunk::Part(_) => CallReplyType::Partial,
+        }
+    }
+
+    #[inline]
+    fn into_vec(self) -> Vec<u8> {
+        match self {
+            ResponseChunk::Full(v) => v,
+            ResponseChunk::Part(v) => v,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct LocalRouterHandler;
 
 impl CallRequestHandler for LocalRouterHandler {
-    type Reply = Pin<Box<dyn futures::Future<Output = Result<Vec<u8>, Error>>>>;
+    type Reply = Pin<Box<dyn futures::Stream<Item = Result<ResponseChunk, Error>>>>;
 
     fn do_call(
         &mut self,
@@ -48,17 +67,16 @@ impl CallRequestHandler for LocalRouterHandler {
         address: String,
         data: Vec<u8>,
     ) -> Self::Reply {
-        Box::pin(
-            router()
-                .lock()
-                .unwrap()
-                .forward_bytes_local(&address, &caller, data.as_ref()),
-        )
+        router()
+            .lock()
+            .unwrap()
+            .forward_bytes_local(&address, &caller, data.as_ref())
+            .boxed_local()
     }
 }
 
 impl<
-        R: futures::Future<Output = Result<Vec<u8>, Error>> + Unpin,
+        R: futures::Stream<Item = Result<ResponseChunk, Error>> + Unpin,
         F: FnMut(String, String, String, Vec<u8>) -> R,
     > CallRequestHandler for F
 {
@@ -82,7 +100,7 @@ where
 {
     writer: actix::io::SinkWrite<GsbMessage, futures::sink::Buffer<W, GsbMessage>>,
     register_reply: VecDeque<oneshot::Sender<Result<(), Error>>>,
-    call_reply: HashMap<String, oneshot::Sender<Result<Vec<u8>, Error>>>,
+    call_reply: HashMap<String, mpsc::Sender<Result<ResponseChunk, Error>>>,
     handler: H,
 }
 
@@ -146,38 +164,56 @@ where
             address,
             request_id
         );
+        let eos_request_id = request_id.clone();
         let do_call = self
             .handler
             .do_call(request_id.clone(), caller, address, data)
             .into_actor(self)
-            .then(move |r, act: &mut Self, _ctx| {
-                // TODO: handle write error
-                let _ = act.writer.write(GsbMessage::CallReply(match r {
+            .fold(false, move |_got_eos, r, act: &mut Self, _ctx| {
+                let request_id = request_id.clone();
+                let (got_eos, reply) = match r {
                     Ok(data) => {
                         let code = CallReplyCode::CallReplyOk as i32;
-                        let reply_type = CallReplyType::Full as i32;
-                        CallReply {
-                            request_id,
-                            code,
-                            reply_type,
-                            data,
-                        }
+                        let reply_type = data.reply_type() as i32;
+                        (
+                            reply_type == 0,
+                            CallReply {
+                                request_id,
+                                code,
+                                reply_type,
+                                data: data.into_vec(),
+                            },
+                        )
                     }
                     Err(e) => {
                         let code = CallReplyCode::ServiceFailure as i32;
                         let reply_type = Default::default();
                         let data = format!("{}", e).into_bytes();
-                        CallReply {
-                            request_id,
-                            code,
-                            reply_type,
-                            data,
-                        }
+                        (
+                            true,
+                            CallReply {
+                                request_id,
+                                code,
+                                reply_type,
+                                data,
+                            },
+                        )
                     }
-                }));
-                //Ok(())
+                };
+                // TODO: handle write error
+                let _ = act.writer.write(GsbMessage::CallReply(reply));
+                fut::ready(got_eos)
+            })
+            .then(|got_eos, act, _ctx| {
+                if !got_eos {
+                    let _ = act.writer.write(GsbMessage::CallReply(CallReply {
+                        request_id: eos_request_id,
+                        code: 0,
+                        reply_type: 0,
+                        data: Default::default(),
+                    }));
+                }
                 fut::ready(())
-                //fut::ok::<_, Error, _>(())
             });
         //do_call.spawn(ctx);
         ctx.spawn(do_call);
@@ -187,28 +223,55 @@ where
         &mut self,
         request_id: String,
         code: i32,
-        _reply_type: i32,
+        reply_type: i32,
         data: Vec<u8>,
         ctx: &mut <Self as Actor>::Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         log::debug!(
-            "handling replay for request_id={}, code={}",
+            "handling replay for request_id={}, code={}, reply_type={}",
             request_id,
-            code
+            code,
+            reply_type
         );
-        if let Some(r) = self.call_reply.remove(&request_id) {
+
+        let chunk = if reply_type == CallReplyType::Partial as i32 {
+            ResponseChunk::Part(data)
+        } else {
+            ResponseChunk::Full(data)
+        };
+
+        let is_full = chunk.is_full();
+
+        if let Some(r) = self.call_reply.get_mut(&request_id) {
             // TODO: check error
-            let _ = r.send(match code.try_into()? {
-                CallReplyCode::CallReplyOk => Ok(data),
+            let mut r = (*r).clone();
+            let code: CallReplyCode = code.try_into()?;
+            let item = match code {
+                CallReplyCode::CallReplyOk => Ok(chunk),
                 CallReplyCode::CallReplyBadRequest => {
-                    Err(Error::GsbBadRequest(String::from_utf8(data)?))
+                    Err(Error::GsbBadRequest(String::from_utf8(chunk.into_bytes())?))
                 }
-                CallReplyCode::ServiceFailure => Err(Error::GsbFailure(String::from_utf8(data)?)),
-            });
+                CallReplyCode::ServiceFailure => {
+                    Err(Error::GsbFailure(String::from_utf8(chunk.into_bytes())?))
+                }
+            };
+            let _ = ctx.spawn(
+                async move {
+                    let s = r.send(item);
+                    s.await
+                        .unwrap_or_else(|e| log::warn!("undelivered reply: {}", e))
+                }
+                .into_actor(self),
+            );
         } else {
             log::error!("unmatched call reply");
             ctx.stop()
         }
+
+        if is_full {
+            let _ = self.call_reply.remove(&request_id);
+        }
+
         Ok(())
     }
 }
@@ -288,20 +351,55 @@ where
     type Result = ActorResponse<Self, Vec<u8>, Error>;
 
     fn handle(&mut self, msg: RpcRawCall, _ctx: &mut Self::Context) -> Self::Result {
-        let (tx, rx) = oneshot::channel();
+        let (tx, mut rx) = mpsc::channel(1);
         let request_id = format!("{}", gen_id());
         let _ = self.call_reply.insert(request_id.clone(), tx);
         let caller = msg.caller;
         let address = msg.addr;
         let data = msg.body;
-        log::info!("handling caller: {}, addr:{}", caller, address);
+        log::debug!("handling caller: {}, addr:{}", caller, address);
         let _r = self.writer.write(GsbMessage::CallRequest(CallRequest {
             request_id,
             caller,
             address,
             data,
         }));
-        ActorResponse::r#async(rx.then(|v| async { v? }).into_actor(self))
+        let fetch_response = async move {
+            match futures::StreamExt::next(&mut rx).await {
+                Some(Ok(ResponseChunk::Full(data))) => Ok(data),
+                Some(Err(e)) => Err(e),
+                Some(Ok(ResponseChunk::Part(_))) => {
+                    Err(Error::GsbFailure("streaming response".to_string()))
+                }
+                None => Err(Error::GsbFailure("unexpected EOS".to_string())),
+            }
+        };
+        ActorResponse::r#async(fetch_response.into_actor(self))
+    }
+}
+
+impl<W: Unpin + 'static, H: CallRequestHandler + 'static> Handler<RpcRawStreamCall>
+    for Connection<W, H>
+where
+    W: Sink<GsbMessage, Error = ProtocolError>,
+{
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: RpcRawStreamCall, _ctx: &mut Self::Context) -> Self::Result {
+        let request_id = format!("{}", gen_id());
+        let rx = msg.reply;
+        let _ = self.call_reply.insert(request_id.clone(), rx);
+        let caller = msg.caller;
+        let address = msg.addr;
+        let data = msg.body;
+        log::debug!("handling caller: {}, addr:{}", caller, address);
+        let _r = self.writer.write(GsbMessage::CallRequest(CallRequest {
+            request_id,
+            caller,
+            address,
+            data,
+        }));
+        ActorResponse::reply(Ok(()))
     }
 }
 
@@ -373,7 +471,7 @@ impl<
         addr: impl Into<String>,
     ) -> impl Future<Output = Result<(), Error>> + 'static {
         let addr = addr.into();
-        log::info!("Binding remote service '{}'", addr);
+        log::debug!("Binding remote service '{}'", addr);
         self.0.send(Bind { addr }).then(|v| async {
             log::trace!("send bind result: {:?}", v);
             v?
@@ -393,6 +491,40 @@ impl<
                 body: body.into(),
             })
             .then(|v| async { v? })
+    }
+
+    pub fn call_streaming(
+        &self,
+        caller: impl Into<String>,
+        addr: impl Into<String>,
+        body: impl Into<Vec<u8>>,
+    ) -> impl Stream<Item = Result<ResponseChunk, Error>> {
+        let (tx, rx) = futures::channel::mpsc::channel(16);
+
+        let args = RpcRawStreamCall {
+            caller: caller.into(),
+            addr: addr.into(),
+            body: body.into(),
+            reply: tx.clone(),
+        };
+        let connection = self.0.clone();
+        let _ = Arbiter::spawn(async move {
+            let mut tx = tx;
+            match connection.send(args).await {
+                Ok(Ok(())) => (),
+                Ok(Err(e)) => {
+                    tx.send(Err(e))
+                        .await
+                        .unwrap_or_else(|e| log::error!("fail: {}", e));
+                }
+                Err(e) => {
+                    tx.send(Err(e.into()))
+                        .await
+                        .unwrap_or_else(|e| log::error!("fail: {}", e));
+                }
+            }
+        });
+        rx
     }
 
     pub fn connected(&self) -> bool {

@@ -8,7 +8,7 @@ use crate::error::Error;
 use ya_core_model::activity::*;
 use ya_model::activity::{provider_event::ProviderEventType, State};
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::timeout::IntoTimeoutFuture;
+use ya_service_bus::timeout::*;
 
 lazy_static::lazy_static! {
     static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
@@ -50,7 +50,7 @@ async fn create_activity_gsb(
             ActivityDao::new(&conn)
                 .create(&activity_id, &agreement_id)
                 .map_err(Error::from)?;
-            log::info!("activity inserted: {}", activity_id);
+            log::debug!("activity inserted: {}", activity_id);
             EventDao::new(&conn)
                 .create(
                     &activity_id,
@@ -59,7 +59,7 @@ async fn create_activity_gsb(
                         .as_str(),
                 )
                 .map_err(Error::from)?;
-            log::info!("event inserted");
+            log::debug!("event inserted");
             Ok::<_, crate::error::Error>(())
         })
         .await?;
@@ -73,7 +73,7 @@ async fn create_activity_gsb(
             .map_err(Error::from)
             .await?
             .map_err(Error::from)?;
-        log::info!("activity state: {:?}", state);
+        log::debug!("activity state: {:?}", state);
     }
 
     Ok(activity_id)
