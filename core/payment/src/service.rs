@@ -1,12 +1,26 @@
+use crate::dao::debit_note::DebitNoteDao;
+use crate::dao::invoice::InvoiceDao;
+use crate::error::DbError;
+use crate::utils::*;
+use futures::prelude::*;
 use ya_core_model::payment::*;
+use ya_model::payment::InvoiceStatus;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 
 macro_rules! bind_gsb_method {
     ($db_executor:expr, $method:ident) => {{
         let db_ = $db_executor.clone();
-        let _ = bus::bind_with_caller(&SERVICE_ID, move |addr, msg| {
-            $method(db_.clone(), addr.to_string(), msg)
+        let _ = bus::bind_with_caller(&format!("/public{}", &SERVICE_ID), move |addr, msg| {
+            log::info!(stringify!(Received call to $method));
+            let future = $method(db_.clone(), addr.to_string(), msg);
+            future.map(|res| {
+                match &res {
+                    Ok(_) => log::info!("Call successful"),
+                    Err(e) => log::info!("Error occurred: {}", e.to_string())
+                }
+                res
+            })
         });
     }};
 }
@@ -36,7 +50,34 @@ async fn send_debit_note(
     sender: String,
     msg: SendDebitNote,
 ) -> Result<Ack, SendError> {
-    unimplemented!() // TODO
+    let mut debit_note = msg.0;
+    let agreement = match get_agreement(debit_note.agreement_id.clone()).await {
+        Err(e) => {
+            return Err(SendError::ServiceError(e.to_string()));
+        }
+        Ok(None) => {
+            return Err(SendError::BadRequest(format!(
+                "Agreement {} not found",
+                debit_note.agreement_id
+            )));
+        }
+        Ok(Some(agreement)) => agreement,
+    };
+    let sender_id = sender.trim_start_matches("/net/");
+    let offeror_id = agreement.offer.provider_id.unwrap();
+    let issuer_id = debit_note.issuer_id.clone();
+    if sender_id != offeror_id || sender_id != issuer_id {
+        // FIXME: provider_id shouldn't be an Option
+        return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
+    }
+
+    let dao: DebitNoteDao = db.as_dao();
+    debit_note.status = InvoiceStatus::Received;
+    match dao.insert(debit_note.into()).await {
+        Ok(_) => Ok(Ack {}),
+        Err(DbError::Query(e)) => Err(SendError::BadRequest(e.to_string())),
+        Err(e) => Err(SendError::ServiceError(e.to_string())),
+    }
 }
 
 async fn accept_debit_note(
@@ -66,7 +107,34 @@ async fn cancel_debit_note(
 // *************************** INVOICE ****************************
 
 async fn send_invoice(db: DbExecutor, sender: String, msg: SendInvoice) -> Result<Ack, SendError> {
-    unimplemented!() // TODO
+    let mut invoice = msg.0;
+    let agreement = match get_agreement(invoice.agreement_id.clone()).await {
+        Err(e) => {
+            return Err(SendError::ServiceError(e.to_string()));
+        }
+        Ok(None) => {
+            return Err(SendError::BadRequest(format!(
+                "Agreement {} not found",
+                invoice.agreement_id
+            )));
+        }
+        Ok(Some(agreement)) => agreement,
+    };
+    let sender_id = sender.trim_start_matches("/net/");
+    let offeror_id = agreement.offer.provider_id.unwrap();
+    let issuer_id = invoice.issuer_id.clone();
+    if sender_id != offeror_id || sender_id != issuer_id {
+        // FIXME: provider_id shouldn't be an Option
+        return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
+    }
+
+    let dao: InvoiceDao = db.as_dao();
+    invoice.status = InvoiceStatus::Received;
+    match dao.insert(invoice.into()).await {
+        Ok(_) => Ok(Ack {}),
+        Err(DbError::Query(e)) => Err(SendError::BadRequest(e.to_string())),
+        Err(e) => Err(SendError::ServiceError(e.to_string())),
+    }
 }
 
 async fn accept_invoice(

@@ -13,12 +13,14 @@ INSERT INTO "pay_invoice_status"("status") VALUES("CANCELLED");
 
 CREATE TABLE "pay_debit_note"(
 	"id" VARCHAR(50) NOT NULL PRIMARY KEY,
+	"issuer_id" VARCHAR(50) NOT NULL,
+	"recipient_id" VARCHAR(50) NOT NULL,
 	"previous_debit_note_id" VARCHAR(50) NULL,
 	"agreement_id" VARCHAR(50) NOT NULL,
 	"activity_id" VARCHAR(50) NULL,
-	"status" VARCHAR(50) NOT NULL,
+	"status" VARCHAR(50) NOT NULL DEFAULT 'ISSUED',
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	"total_amount_due" INTEGER NOT NULL,
+	"total_amount_due" VARCHAR(32) NOT NULL,
 	"usage_counter_vector" BLOB NULL,
 	"credit_account_id" VARCHAR(50) NOT NULL,
 	"payment_platform" VARCHAR(50) NULL,
@@ -29,11 +31,13 @@ CREATE TABLE "pay_debit_note"(
 
 CREATE TABLE "pay_invoice"(
 	"id" VARCHAR(50) NOT NULL PRIMARY KEY,
-	"last_debit_note_id" VARCHAR(50) NOT NULL,
+	"issuer_id" VARCHAR(50) NOT NULL,
+	"recipient_id" VARCHAR(50) NOT NULL,
+	"last_debit_note_id" VARCHAR(50) NULL,
 	"agreement_id" VARCHAR(50) NOT NULL,
-	"status" VARCHAR(50) NOT NULL,
+	"status" VARCHAR(50) NOT NULL DEFAULT 'ISSUED',
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	"amount" VARCHAR(36) NOT NULL,
+	"amount" VARCHAR(32) NOT NULL,
 	"usage_counter_vector" BLOB NULL,
 	"credit_account_id" VARCHAR(50) NOT NULL,
 	"payment_platform" VARCHAR(50) NULL,
@@ -51,14 +55,16 @@ CREATE TABLE "pay_invoice_x_activity"(
 
 CREATE TABLE "pay_allocation"(
 	"id" VARCHAR(50) NOT NULL PRIMARY KEY,
-	"total_amount" INTEGER NOT NULL,
-	"timeout" DATETIME NOT NULL,
+	"total_amount" VARCHAR(32) NOT NULL,
+	"timeout" DATETIME NULL,
 	"make_deposit" BOOLEAN NOT NULL
 );
 
 CREATE TABLE "pay_payment"(
 	"id" VARCHAR(50) NOT NULL PRIMARY KEY,
-	"amount" INTEGER NOT NULL,
+	"payer_id" VARCHAR(50) NOT NULL,
+	"payee_id" VARCHAR(50) NOT NULL,
+	"amount" VARCHAR(32) NOT NULL,
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	"allocation_id" VARCHAR(50) NULL,
 	"details" TEXT NOT NULL,
