@@ -1,47 +1,51 @@
-use crate::dao::Result;
+use crate::dao::{DaoError, Result};
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
 use serde_json;
-use ya_persistence::executor::ConnType;
+use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
 use ya_persistence::models::ActivityUsage;
 use ya_persistence::schema;
 
 pub struct ActivityUsageDao<'c> {
-    conn: &'c ConnType,
+    pool: &'c PoolType,
 }
 
-impl<'c> ActivityUsageDao<'c> {
-    pub fn new(conn: &'c ConnType) -> Self {
-        Self { conn }
+impl<'a> AsDao<'a> for ActivityUsageDao<'a> {
+    fn as_dao(pool: &'a PoolType) -> Self {
+        ActivityUsageDao { pool }
     }
 }
 
 impl<'c> ActivityUsageDao<'c> {
-    pub fn get(&self, activity_id: &str) -> Result<ActivityUsage> {
+    pub async fn get(&self, activity_id: &str) -> Result<ActivityUsage> {
         use schema::activity::dsl;
         use schema::activity_usage::dsl as dsl_usage;
 
-        self.conn.transaction(|| {
+        let activity_id = activity_id.to_owned();
+        do_with_connection(self.pool, move |conn| {
             let usage: ActivityUsage = dsl::activity
                 .inner_join(dsl_usage::activity_usage)
                 .select(schema::activity_usage::all_columns)
                 .filter(dsl::natural_id.eq(activity_id))
-                .first(self.conn)?;
+                .first(conn)
+                .map_err(DaoError::from)?;
 
             Ok(usage)
         })
+        .await
     }
 
-    pub fn set(&self, activity_id: &str, vector: &Option<Vec<f64>>) -> Result<()> {
+    pub async fn set(&self, activity_id: &str, vector: &Option<Vec<f64>>) -> Result<()> {
         use schema::activity::dsl;
         use schema::activity_usage::dsl as dsl_usage;
 
         let vector = serde_json::to_string(vector).unwrap();
         let now = Utc::now().naive_utc();
 
-        self.conn.transaction(|| {
-            let num_updates = diesel::update(
+        let activity_id = activity_id.to_owned();
+        do_with_connection(self.pool, move |conn| {
+            diesel::update(
                 dsl_usage::activity_usage.filter(exists(
                     dsl::activity
                         .filter(dsl::natural_id.eq(activity_id))
@@ -52,13 +56,11 @@ impl<'c> ActivityUsageDao<'c> {
                 dsl_usage::vector_json.eq(&vector),
                 dsl_usage::updated_date.eq(now),
             ))
-            .execute(self.conn)?;
+            .execute(conn)
+            .map_err(DaoError::from)?;
 
-            match num_updates {
-                0 => Err(diesel::result::Error::NotFound),
-                1 => Ok(()),
-                _ => Err(diesel::result::Error::RollbackTransaction),
-            }
+            Ok(())
         })
+        .await
     }
 }
