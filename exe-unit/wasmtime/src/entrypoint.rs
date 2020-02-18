@@ -115,9 +115,13 @@ fn download_image(url: &str, cachedir: &Path) -> Result<WasmImage> {
         .ok_or(Error::msg(format!("Image path has no filename: {}", image_path.display())))?;
 
     let cache_path = cachedir.join(name);
-    fs::copy(&image_path, &cache_path)?;
+    fs::copy(&image_path, &cache_path)
+        .with_context(|| format!("Can't copy file from {} to {}.", &image_path.display(), cache_path.display()))?;
 
-    Ok(WasmImage::new(&cache_path)?)
+    let image = WasmImage::new(&cache_path)
+        .with_context(|| format!("Can't read image file {}.", cache_path.display()))?;
+
+    Ok(image)
 }
 
 fn create_mount_points(mounts: &Vec<DirectoryMount>) -> Result<()> {
