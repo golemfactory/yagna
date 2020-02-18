@@ -14,6 +14,7 @@ pub enum Commands {
         args: Vec<String>,
     },
     Run {
+        entrypoint: String,
         args: Vec<String>,
     }
 }
@@ -41,7 +42,7 @@ impl ExeUnitMain {
 
     pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
         match cmdline.command {
-            Commands::Run{args} => ExeUnitMain::run(&cmdline.workdir, &cmdline.cachedir, args),
+            Commands::Run{entrypoint, args} => ExeUnitMain::run(&cmdline.workdir, &cmdline.cachedir, &entrypoint, args),
             Commands::Deploy{args} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.cachedir, args),
         }
     }
@@ -61,7 +62,7 @@ impl ExeUnitMain {
         Ok(info!("Deploying completed."))
     }
 
-    fn run(workdir: &Path, cachedir: &Path, args: Vec<String>) -> Result<()> {
+    fn run(workdir: &Path, cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
         if args.len() < 1 {
             return Err(Error::msg(format!("Run: invalid number of args {}.", args.len())));
         }
@@ -78,7 +79,7 @@ impl ExeUnitMain {
         // Since wasmtime object doesn't live across binary executions,
         // we must deploy image for the second time, what will load binary to wasmtime.
         wasmtime.deploy(&mut image)?;
-        wasmtime.run(&mut image, args)?;
+        wasmtime.run(image.find_entrypoint(entrypoint)?, args)?;
 
         Ok(info!("Computations completed."))
     }

@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{Error, Result, Context};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::fs::{OpenOptions, File};
 use zip::ZipArchive;
 use std::io::Read;
@@ -12,9 +12,21 @@ pub struct Manifest {
     /// Deployment id in url like form.
     pub id: String,
     pub name: String,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub entry_points: Vec<EntryPoint>,
+
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mount_points: Vec<MountPoint>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct EntryPoint {
+    pub id: String,
+    pub wasm_path: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,7 +49,6 @@ impl MountPoint {
 
 pub struct WasmImage {
     archive: ZipArchive<File>,
-    image_path: PathBuf,
     manifest: Manifest,
 }
 
@@ -48,7 +59,7 @@ impl WasmImage {
         let mut archive = zip::ZipArchive::new(OpenOptions::new().read(true).open(image_path)?)?;
         let manifest = WasmImage::load_manifest(&mut archive)?;
 
-        Ok(WasmImage{image_path: image_path.to_owned(), archive, manifest})
+        Ok(WasmImage{archive, manifest})
     }
 
     fn load_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
@@ -60,21 +71,32 @@ impl WasmImage {
         &self.manifest
     }
 
-    pub fn get_module_name(&self) -> &str {
-        &self.manifest.name
+    pub fn list_entrypoints(&self) -> Vec<EntryPoint> {
+        self.manifest.entry_points.clone()
     }
 
-    pub fn load_binary(&mut self) -> Result<Vec<u8>> {
-        let binary_name = format!("{}.wasm", self.manifest.name);
-        let mut entry = self.archive.by_name(&binary_name)?;
+    pub fn find_entrypoint(&self, entrypoint_id: &str) -> Result<EntryPoint> {
+        let entrypoint= self.manifest.entry_points
+            .iter()
+            .find(|entry| entry.id == entrypoint_id)
+            .map(|entry| entry.clone());
+
+        Ok(entrypoint.ok_or(Error::msg(format!("Entrypoint {} not found.", entrypoint_id)))?)
+    }
+
+    pub fn load_binary(&mut self, entrypoint: &EntryPoint) -> Result<Vec<u8>> {
+        let image_name = self.manifest.name.clone();
+        let mut entry = self.archive.by_name(&entrypoint.wasm_path)
+            .with_context(|| {
+                format!("Can't find file [{}] for entrypoint [{}] in [{}] image.",
+                    entrypoint.wasm_path,
+                    entrypoint.id,
+                    image_name)
+            })?;
 
         let mut bytes = vec![];
         entry.read_to_end(&mut bytes)?;
         return Ok(bytes);
-    }
-
-    pub fn path(&self) -> &Path {
-        return &self.image_path;
     }
 }
 

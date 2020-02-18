@@ -1,5 +1,5 @@
 use crate::entrypoint::DirectoryMount;
-use crate::manifest::WasmImage;
+use crate::manifest::{WasmImage, EntryPoint};
 
 use wasmtime::*;
 use wasi_common::preopen_dir;
@@ -39,17 +39,19 @@ impl Wasmtime {
 
 
 impl Wasmtime {
-    pub fn deploy(&mut self, mut wasm_binary: &mut WasmImage) -> Result<()> {
+    pub fn deploy(&mut self, mut image: &mut WasmImage) -> Result<()> {
         // Loading binary will validate if it can be correctly loaded by wasmtime.
-        self.load_binary(&mut wasm_binary)?;
+        for entrypoint in image.list_entrypoints().iter() {
+            self.load_binary(&mut image, entrypoint)?;
+        }
         Ok(())
     }
 
-    pub fn run(&mut self, image: &mut WasmImage, args: Vec<String>) -> Result<()> {
+    pub fn run(&mut self, image: EntryPoint, args: Vec<String>) -> Result<()> {
         let args = Wasmtime::prepare_args(&args, &image);
 
         self.create_wasi_module(&args)?;
-        let instance = self.create_instance(image.get_module_name())?;
+        let instance = self.create_instance(&image.id)?;
         Ok(Wasmtime::run_instance(&instance, "_start")?)
     }
 
@@ -91,16 +93,16 @@ impl Wasmtime {
         Ok(())
     }
 
-    fn load_binary(&mut self, image: &mut WasmImage) -> Result<()> {
-        info!("Loading wasm binary: {}", image.path().display());
+    fn load_binary(&mut self, image: &mut WasmImage, entrypoint: &EntryPoint) -> Result<()> {
+        info!("Loading wasm binary: {}.", entrypoint.id);
 
-        let wasm_binary = image.load_binary()
-            .with_context(|| format!("Can't load wasm binary {}.", image.path().display()))?;
+        let wasm_binary = image.load_binary(entrypoint)
+            .with_context(|| format!("Can't load wasm binary {}.", entrypoint.id))?;
 
         let module = Module::new(&self.store, &wasm_binary)
-            .with_context(|| format!("WASM module creation failed."))?;
+            .with_context(|| format!("WASM module creation failed for binary: {}.", entrypoint.id))?;
 
-        self.modules.insert(image.get_module_name().to_string(), module);
+        self.modules.insert(entrypoint.id.clone(), module);
         Ok(())
     }
 
@@ -159,11 +161,16 @@ impl Wasmtime {
         Ok(preopen_dirs)
     }
 
-    fn prepare_args(args: &Vec<String>, image: &WasmImage) -> Vec<String> {
+    fn prepare_args(args: &Vec<String>, entrypoint: &EntryPoint) -> Vec<String> {
         let mut new_args = Vec::new();
 
-        // We set first arg to module name, to avoid leaking path information.
-        new_args.push(image.get_module_name().to_owned());
+        // Entrypoint path is relative to wasm binary package, so we don't
+        // leak directory structure here.
+        // TODO: What if someone uses this argument to access something in
+        //       filesystem? We don't mount wasm binary image to sandbox,
+        //       so he won't find expected file. Can this break code that depends
+        //       on binary existance?
+        new_args.push(entrypoint.wasm_path.clone());
 
         for arg in args[1..].iter() {
             new_args.push(arg.clone());
