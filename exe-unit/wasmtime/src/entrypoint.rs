@@ -72,20 +72,20 @@ impl ExeUnitMain {
     }
 
     fn start(workdir: &Path, _cachedir: &Path) -> Result<()> {
-        info!("Validating deployed images.");
-
         info!("Loading deploy file: {}", get_deploy_path(workdir).display());
 
         let deploy_file = read_deploy_file(workdir)
             .with_context(|| format!("Can't read deploy file {}. Did you run deploy command?",
                                      get_deploy_path(workdir).display()))?;
 
+        info!("Validating deployed image {}.", deploy_file.image_path.display());
+
         let mut image = WasmImage::new(&deploy_file.image_path)?;
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
 
-        wasmtime.deploy(&mut image)?;
+        wasmtime.load_binaries(&mut image)?;
 
-        Ok(info!("Start command completed."))
+        Ok(info!("Validation completed."))
     }
 
     fn run(workdir: &Path, _cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
@@ -102,8 +102,9 @@ impl ExeUnitMain {
 
         // Since wasmtime object doesn't live across binary executions,
         // we must deploy image for the second time, what will load binary to wasmtime.
-        wasmtime.deploy(&mut image)?;
-        wasmtime.run(image.find_entrypoint(entrypoint)?, args)?;
+        let entrypoint = image.find_entrypoint(entrypoint)?;
+        wasmtime.load_binary(&mut image, &entrypoint)?;
+        wasmtime.run(entrypoint, args)?;
 
         Ok(info!("Computations completed."))
     }

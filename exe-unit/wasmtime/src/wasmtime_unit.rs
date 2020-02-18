@@ -39,7 +39,7 @@ impl Wasmtime {
 
 
 impl Wasmtime {
-    pub fn deploy(&mut self, mut image: &mut WasmImage) -> Result<()> {
+    pub fn load_binaries(&mut self, mut image: &mut WasmImage) -> Result<()> {
         // Loading binary will validate if it can be correctly loaded by wasmtime.
         for entrypoint in image.list_entrypoints().iter() {
             self.load_binary(&mut image, entrypoint)?;
@@ -55,6 +55,19 @@ impl Wasmtime {
 
         info!("Running wasm binary with arguments {:?}", args);
         Ok(Wasmtime::run_instance(&instance, "_start")?)
+    }
+
+    pub fn load_binary(&mut self, image: &mut WasmImage, entrypoint: &EntryPoint) -> Result<()> {
+        info!("Loading wasm binary: {}.", entrypoint.id);
+
+        let wasm_binary = image.load_binary(entrypoint)
+            .with_context(|| format!("Can't load wasm binary {}.", entrypoint.id))?;
+
+        let module = Module::new(&self.store, &wasm_binary)
+            .with_context(|| format!("WASM module creation failed for binary: {}.", entrypoint.id))?;
+
+        self.modules.insert(entrypoint.id.clone(), module);
+        Ok(())
     }
 
     fn run_instance(instance: &Instance, entrypoint: &str) -> Result<()> {
@@ -92,19 +105,6 @@ impl Wasmtime {
 
         self.dependencies.insert("wasi_unstable".to_owned(), snapshot0);
         self.dependencies.insert("wasi_snapshot_preview1".to_owned(), snapshot1);
-        Ok(())
-    }
-
-    fn load_binary(&mut self, image: &mut WasmImage, entrypoint: &EntryPoint) -> Result<()> {
-        info!("Loading wasm binary: {}.", entrypoint.id);
-
-        let wasm_binary = image.load_binary(entrypoint)
-            .with_context(|| format!("Can't load wasm binary {}.", entrypoint.id))?;
-
-        let module = Module::new(&self.store, &wasm_binary)
-            .with_context(|| format!("WASM module creation failed for binary: {}.", entrypoint.id))?;
-
-        self.modules.insert(entrypoint.id.clone(), module);
         Ok(())
     }
 
