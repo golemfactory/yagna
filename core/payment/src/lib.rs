@@ -19,7 +19,7 @@ pub mod migrations {
     struct _Dummy;
 }
 
-struct PaymentService;
+pub struct PaymentService;
 
 impl Service for PaymentService {
     type Cli = ();
@@ -32,5 +32,9 @@ impl PaymentService {
 
         self::service::bind_service(&db);
         Ok(())
+    }
+
+    pub fn rest(db: &DbExecutor) -> actix_web::Scope {
+        api::web_scope(db)
     }
 }

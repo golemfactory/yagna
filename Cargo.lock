@@ -4478,6 +4478,7 @@ dependencies = [
  "ya-model 0.1.0",
  "ya-persistence 0.2.0",
  "ya-service-api 0.1.1",
+ "ya-service-api-interfaces 0.1.0",
  "ya-service-bus 0.2.1",
 ]
 

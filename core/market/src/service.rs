@@ -1,37 +1,46 @@
 use std::rc::Rc;
 use url::Url;
 
+use crate::Error;
 use ya_client::{
     market::MarketProviderApi,
     web::{WebClient, WebInterface},
 };
 use ya_core_model::{appkey, market};
 use ya_persistence::executor::DbExecutor;
+use ya_service_api_interfaces::Service;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
-
-use crate::Error;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
-pub async fn activate(_db: &DbExecutor) {
-    log::info!("activating market service");
-    let _ = bus::bind(market::BUS_ID, |get: market::GetAgreement| async move {
-        let market_api: MarketProviderApi = WebClient::builder()
-            .build()
-            .map_err(Error::from)?
-            .interface()
-            .map_err(Error::from)?;
-        let agreement = market_api
-            .get_agreement(&get.agreement_id)
-            .await
-            .map_err(Error::from)?;
-        Ok(agreement)
-    });
+pub struct MarketService;
 
-    tmp_send_keys()
-        .await
-        .unwrap_or_else(|e| log::info!("app-key export error: {}", e));
-    log::info!("market service activated");
+impl Service for MarketService {
+    type Cli = ();
+}
+
+impl MarketService {
+    pub async fn gsb<Context>(_: &Context) -> anyhow::Result<()> {
+        log::info!("activating market service");
+        let _ = bus::bind(market::BUS_ID, |get: market::GetAgreement| async move {
+            let market_api: MarketProviderApi = WebClient::builder()
+                .build()
+                .map_err(Error::from)?
+                .interface()
+                .map_err(Error::from)?;
+            let agreement = market_api
+                .get_agreement(&get.agreement_id)
+                .await
+                .map_err(Error::from)?;
+            Ok(agreement)
+        });
+
+        tmp_send_keys()
+            .await
+            .unwrap_or_else(|e| log::info!("app-key export error: {}", e));
+        log::info!("market service activated");
+        Ok(())
+    }
 }
 
 async fn tmp_send_keys() -> anyhow::Result<()> {
