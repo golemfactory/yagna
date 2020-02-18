@@ -1,11 +1,14 @@
-use anyhow::{Result, Error};
+use anyhow::{Result, Error, Context};
 use log::info;
+use serde::{Serialize, Deserialize};
 use std::fs;
 use std::path::{PathBuf, Path, Component};
 use structopt::StructOpt;
 
 use crate::manifest::{MountPoint, WasmImage};
 use crate::wasmtime_unit::Wasmtime;
+use std::fs::File;
+use std::io::BufReader;
 
 
 #[derive(StructOpt)]
@@ -14,6 +17,7 @@ pub enum Commands {
         args: Vec<String>,
     },
     Run {
+        #[structopt(short = "e", long = "entrypoint")]
         entrypoint: String,
         args: Vec<String>,
     }
@@ -33,6 +37,11 @@ pub struct CmdArgs {
 pub struct DirectoryMount {
     pub host: PathBuf,
     pub guest: PathBuf,
+}
+
+#[derive(Serialize, Deserialize)]
+struct DeployFile {
+    image_path: PathBuf,
 }
 
 
@@ -59,22 +68,21 @@ impl ExeUnitMain {
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
 
         wasmtime.deploy(&mut image)?;
+        write_deploy_file(workdir, &image)?;
         Ok(info!("Deploying completed."))
     }
 
-    fn run(workdir: &Path, cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
-        if args.len() < 1 {
-            return Err(Error::msg(format!("Run: invalid number of args {}.", args.len())));
-        }
+    fn run(workdir: &Path, _cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
+        info!("Loading deploy file: {}", get_deploy_path(workdir).display());
 
-        let image_url = args[0].clone();
+        let deploy_file = read_deploy_file(workdir)
+            .with_context(|| format!("Can't read deploy file {}. Did you run deploy command?",
+                                     get_deploy_path(workdir).display()))?;
 
-        // This will load cached image if deploy step was performed.
-        // Otherwise we will download image anyway.
-        let mut image = download_image(&image_url, cachedir)?;
+        let mut image = WasmImage::new(&deploy_file.image_path)?;
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
 
-        info!("Running image: {}", image_url);
+        info!("Running image: {}", deploy_file.image_path.display());
 
         // Since wasmtime object doesn't live across binary executions,
         // we must deploy image for the second time, what will load binary to wasmtime.
@@ -145,6 +153,26 @@ fn validate_path(path: &str) -> Result<()> {
     }
     Ok(())
 }
+
+fn write_deploy_file(workdir: &Path, image: &WasmImage) -> Result<()> {
+    let deploy_file = get_deploy_path(workdir);
+    let deploy = DeployFile{image_path: image.path().to_owned()};
+
+    Ok(serde_json::to_writer(&File::create(deploy_file)?, &deploy)?)
+}
+
+fn read_deploy_file(workdir: &Path) -> Result<DeployFile> {
+    let deploy_file = get_deploy_path(workdir);
+
+    let reader = BufReader::new(File::open(deploy_file)?);
+    let deploy = serde_json::from_reader(reader)?;
+    return Ok(deploy);
+}
+
+fn get_deploy_path(workdir: &Path) -> PathBuf {
+    workdir.join("deploy.json")
+}
+
 
 
 #[cfg(test)]

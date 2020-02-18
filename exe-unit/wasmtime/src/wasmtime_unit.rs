@@ -52,6 +52,8 @@ impl Wasmtime {
 
         self.create_wasi_module(&args)?;
         let instance = self.create_instance(&image.id)?;
+
+        info!("Running wasm binary with arguments {:?}", args);
         Ok(Wasmtime::run_instance(&instance, "_start")?)
     }
 
@@ -172,7 +174,7 @@ impl Wasmtime {
         //       on binary existance?
         new_args.push(entrypoint.wasm_path.clone());
 
-        for arg in args[1..].iter() {
+        for arg in args.iter() {
             new_args.push(arg.clone());
         }
 

@@ -1,6 +1,6 @@
 use anyhow::{Error, Result, Context};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs::{OpenOptions, File};
 use zip::ZipArchive;
 use std::io::Read;
@@ -50,6 +50,7 @@ impl MountPoint {
 pub struct WasmImage {
     archive: ZipArchive<File>,
     manifest: Manifest,
+    image_path: PathBuf,
 }
 
 
@@ -59,7 +60,7 @@ impl WasmImage {
         let mut archive = zip::ZipArchive::new(OpenOptions::new().read(true).open(image_path)?)?;
         let manifest = WasmImage::load_manifest(&mut archive)?;
 
-        Ok(WasmImage{archive, manifest})
+        Ok(WasmImage{image_path: image_path.to_owned(), archive, manifest})
     }
 
     fn load_manifest(archive: &mut ZipArchive<File>) -> Result<Manifest> {
@@ -97,6 +98,10 @@ impl WasmImage {
         let mut bytes = vec![];
         entry.read_to_end(&mut bytes)?;
         return Ok(bytes);
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.image_path
     }
 }
 
