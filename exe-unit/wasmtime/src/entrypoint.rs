@@ -13,9 +13,7 @@ use std::io::BufReader;
 
 #[derive(StructOpt)]
 pub enum Commands {
-    Deploy {
-        args: Vec<String>,
-    },
+    Deploy {},
     Start {},
     Run {
         #[structopt(short = "e", long = "entrypoint")]
@@ -31,6 +29,8 @@ pub struct CmdArgs {
     workdir: PathBuf,
     #[structopt(short = "c", long = "cachedir")]
     cachedir: PathBuf,
+    #[structopt(short = "a", long = "agreement")]
+    agreement_path: PathBuf,
     #[structopt(subcommand)]
     command: Commands,
 }
@@ -53,17 +53,16 @@ impl ExeUnitMain {
     pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
         match cmdline.command {
             Commands::Run{entrypoint, args} => ExeUnitMain::run(&cmdline.workdir, &cmdline.cachedir, &entrypoint, args),
-            Commands::Deploy{args} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.cachedir, args),
+            Commands::Deploy{} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.cachedir, &cmdline.agreement_path),
             Commands::Start {} => ExeUnitMain::start(&cmdline.workdir, &cmdline.cachedir),
         }
     }
 
-    fn deploy(workdir: &Path, cachedir: &Path, args: Vec<String>) -> Result<()> {
-        if args.len() != 1 {
-            return Err(Error::msg(format!("Deploy: invalid number of args {}.", args.len())));
-        }
+    fn deploy(workdir: &Path, cachedir: &Path, agreement_path: &Path) -> Result<()> {
 
-        let image_url = args[0].clone();
+        let image_url = load_package_url(workdir, agreement_path)
+            .with_context(|| format!("Failed to parse agreement file [{}].", agreement_path.display()))?;
+
         info!("Deploying image: {}", image_url);
 
         let mut image = download_image(&image_url, cachedir)?;
@@ -71,6 +70,7 @@ impl ExeUnitMain {
 
         wasmtime.deploy(&mut image)?;
         write_deploy_file(workdir, &image)?;
+
         Ok(info!("Deploying completed."))
     }
 
@@ -179,6 +179,21 @@ fn get_deploy_path(workdir: &Path) -> PathBuf {
     workdir.join("deploy.json")
 }
 
+fn load_package_url(workdir: &Path, agreement_path: &Path) -> Result<String> {
+    let agreement_file = workdir.join(agreement_path);
+    let reader = BufReader::new(File::open(agreement_file)?);
+
+    let json: serde_json::Value =serde_json::from_reader(reader)?;
+
+    let package_value = json.pointer("/golem.srv.comp.wasm.task_package")
+        .ok_or(Error::msg(format!("Agreement field 'golem.srv.comp.wasm.task_package' doesn't exist.")))?;
+
+    let package = package_value
+        .as_str()
+        .ok_or(Error::msg(format!("Agreement field 'golem.srv.comp.wasm.task_package' is not string type.")))?
+        .to_owned();
+    return Ok(package);
+}
 
 
 #[cfg(test)]
