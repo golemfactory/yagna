@@ -16,6 +16,7 @@ pub enum Commands {
     Deploy {
         args: Vec<String>,
     },
+    Start {},
     Run {
         #[structopt(short = "e", long = "entrypoint")]
         entrypoint: String,
@@ -53,6 +54,7 @@ impl ExeUnitMain {
         match cmdline.command {
             Commands::Run{entrypoint, args} => ExeUnitMain::run(&cmdline.workdir, &cmdline.cachedir, &entrypoint, args),
             Commands::Deploy{args} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.cachedir, args),
+            Commands::Start {} => ExeUnitMain::start(&cmdline.workdir, &cmdline.cachedir),
         }
     }
 
@@ -70,6 +72,10 @@ impl ExeUnitMain {
         wasmtime.deploy(&mut image)?;
         write_deploy_file(workdir, &image)?;
         Ok(info!("Deploying completed."))
+    }
+
+    fn start(_workdir: &Path, _cachedir: &Path) -> Result<()> {
+        Ok(info!("Running start command whichis empty in current implementation."))
     }
 
     fn run(workdir: &Path, _cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
