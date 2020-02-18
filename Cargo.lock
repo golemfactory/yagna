@@ -4537,6 +4537,7 @@ dependencies = [
  "ya-persistence 0.2.0",
  "ya-sb-router 0.1.0",
  "ya-service-api 0.1.1",
+ "ya-service-api-interfaces 0.1.0",
  "ya-service-api-web 0.1.1",
  "ya-service-bus 0.2.1",
 ]
@@ -4790,6 +4791,7 @@ dependencies = [
  "ya-identity 0.2.0",
  "ya-market 0.1.0",
  "ya-net 0.1.1",
+ "ya-payment 0.1.0",
  "ya-persistence 0.2.0",
  "ya-sb-router 0.1.0",
  "ya-service-api 0.1.1",

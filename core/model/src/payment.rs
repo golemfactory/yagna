@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 use ya_model::payment::*;
 use ya_service_bus::RpcMessage;
 
-pub const SERVICE_ID: &str = "/payment";
-pub const BUS_ID: &'static str = "/private/payment";
+pub const BUS_ID: &'static str = "/public/payment";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Ack {}

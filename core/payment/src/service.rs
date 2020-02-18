@@ -3,42 +3,46 @@ use crate::dao::invoice::InvoiceDao;
 use crate::error::DbError;
 use crate::utils::*;
 use futures::prelude::*;
+use std::future::Future;
 use ya_core_model::payment::*;
 use ya_model::payment::InvoiceStatus;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
+use ya_service_bus::RpcMessage;
 
-macro_rules! bind_gsb_method {
-    ($db_executor:expr, $method:ident) => {{
-        let db_ = $db_executor.clone();
-        let _ = bus::bind_with_caller(&format!("/public{}", &SERVICE_ID), move |addr, msg| {
-            log::info!(stringify!(Received call to $method));
-            let future = $method(db_.clone(), addr.to_string(), msg);
-            future.map(|res| {
-                match &res {
-                    Ok(_) => log::info!("Call successful"),
-                    Err(e) => log::info!("Error occurred: {}", e.to_string())
-                }
-                res
-            })
-        });
-    }};
+struct ServiceBinder<'a, 'b> {
+    addr: &'b str,
+    db: &'a DbExecutor,
+}
+
+impl<'a, 'b> ServiceBinder<'a, 'b> {
+    fn bind<F: 'static, Msg: RpcMessage, Output: 'static>(self, f: F) -> Self
+    where
+        F: Fn(DbExecutor, String, Msg) -> Output,
+        Output: Future<Output = Result<Msg::Item, Msg::Error>>,
+    {
+        let db = self.db.clone();
+        let _ = bus::bind_with_caller(self.addr, move |addr, msg| f(db.clone(), addr, msg));
+        self
+    }
 }
 
 pub fn bind_service(db: &DbExecutor) {
     log::info!("Binding payment service to service bus");
 
-    bind_gsb_method!(db, send_debit_note);
-    bind_gsb_method!(db, accept_debit_note);
-    bind_gsb_method!(db, reject_debit_note);
-    bind_gsb_method!(db, cancel_debit_note);
-
-    bind_gsb_method!(db, send_invoice);
-    bind_gsb_method!(db, accept_invoice);
-    bind_gsb_method!(db, reject_invoice);
-    bind_gsb_method!(db, cancel_invoice);
-
-    bind_gsb_method!(db, send_payment);
+    let _ = ServiceBinder {
+        db,
+        addr: ya_core_model::payment::BUS_ID,
+    }
+    .bind(send_debit_note)
+    .bind(accept_debit_note)
+    .bind(reject_debit_note)
+    .bind(cancel_debit_note)
+    .bind(send_invoice)
+    .bind(accept_invoice)
+    .bind(reject_invoice)
+    .bind(cancel_invoice)
+    .bind(send_payment);
 
     log::info!("Successfully bound payment service to service bus");
 }

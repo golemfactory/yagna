@@ -125,7 +125,7 @@ enum Services {
     #[enable(gsb, rest)]
     Activity(ya_activity::service::Activity),
     #[enable(gsb)]
-    Net(ya_net::service::Net),
+    Net(ya_net::Net),
 }
 
 #[derive(StructOpt, Debug)]
