@@ -26,16 +26,17 @@ impl RuntimeProcess {
         }
     }
 
-    fn extend_args(&self, mut cmd_args: Vec<OsString>) -> Vec<OsString> {
-        cmd_args.extend(vec![
+    fn args(&self, cmd_args: Vec<OsString>) -> Vec<OsString> {
+        let mut args = vec![
             OsString::from("--agreement"),
             self.agreement.clone().unwrap().into_os_string(),
             OsString::from("--cachedir"),
             self.cache_dir.clone().unwrap().into_os_string(),
             OsString::from("--workdir"),
             self.work_dir.clone().unwrap().into_os_string(),
-        ]);
-        cmd_args
+        ];
+        args.extend(cmd_args);
+        args
     }
 }
 
@@ -82,7 +83,7 @@ impl Handler<ExecCmd> for RuntimeProcess {
 
         match cmd_args {
             Some(mut cmd_args) => {
-                cmd_args = self.extend_args(cmd_args);
+                cmd_args = self.args(cmd_args);
                 log::debug!("Executing {:?}", cmd_args);
 
                 let spawn = Command::new(self.binary.clone())
