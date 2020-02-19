@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::message::*;
-use crate::runtime::{Runtime, RuntimeHandlerExt};
+use crate::runtime::Runtime;
 use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
@@ -27,7 +27,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 if let Some(id) = &self.ctx.service_id {
                     ctx.spawn(
                         report(
-                            self.report_url.clone(),
+                            self.ctx.report_url.clone().unwrap(),
                             SetActivityState {
                                 activity_id: id.clone(),
                                 state: ActivityState::from(state),
@@ -72,18 +72,16 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         }
 
         let address = ctx.address();
-        let runtime = self.runtime.flatten_addr();
+        let runtime = self.runtime.clone();
         let services = std::mem::replace(&mut self.services, Vec::new());
         let state = self.state.inner.to_pending(State::Terminated);
 
         let fut = async move {
             let _ = address.send(SetState::from(state)).await;
 
-            if let Some(runtime) = runtime {
-                Self::stop_runtime(runtime, msg.0).await;
-            }
-
+            Self::stop_runtime(runtime, msg.0).await;
             services.into_iter().for_each(|mut svc| svc.stop());
+
             let _ = address.send(SetState::from(State::Terminated)).await;
 
             Arbiter::current().stop();

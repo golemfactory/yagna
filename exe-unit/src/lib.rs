@@ -3,7 +3,6 @@ pub mod error;
 mod handlers;
 pub mod message;
 pub mod metrics;
-pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
@@ -32,46 +31,39 @@ lazy_static::lazy_static! {
 pub struct ExeUnit<R: Runtime> {
     ctx: ExeUnitContext,
     state: ExeUnitState,
-    runtime: Option<RuntimeHandler<R>>,
+    runtime: Addr<R>,
     metrics: Addr<MetricsService>,
-    report_url: String,
     services: Vec<Box<dyn ServiceControl>>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    pub fn new(ctx: ExeUnitContext, report_url: String) -> Self {
+    pub fn new(ctx: ExeUnitContext, runtime: R) -> Self {
+        let state = ExeUnitState::default();
+        let runtime = runtime.with_context(ctx.clone()).start();
         let metrics = MetricsService::default().start();
+
         ExeUnit {
             ctx,
-            state: ExeUnitState::default(),
-            runtime: None,
+            state,
+            runtime: runtime.clone(),
             metrics: metrics.clone(),
-            report_url,
-            services: vec![Box::new(ServiceAddr::new(metrics))],
+            services: vec![
+                Box::new(ServiceAddr::new(metrics)),
+                Box::new(ServiceAddr::new(runtime)),
+            ],
         }
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
         if let Some(activity_id) = &self.ctx.service_id {
             let fut = report_usage(
-                self.report_url.clone(),
+                self.ctx.report_url.clone().unwrap(),
                 activity_id.clone(),
                 context.address(),
                 self.metrics.clone(),
             );
             context.spawn(fut.into_actor(self));
         };
-    }
-
-    fn start_runtime(&mut self) -> Result<()> {
-        let config_path = self.ctx.agreement.clone();
-        let work_dir = self.ctx.work_dir.clone();
-        let cache_dir = self.ctx.cache_dir.clone();
-        let runtime = RuntimeHandler::spawn(move || {
-            R::new(config_path.clone(), work_dir.clone(), cache_dir.clone())
-        })?;
-        self.runtime = Some(runtime);
-        Ok(())
     }
 
     async fn stop_runtime(runtime: Addr<R>, reason: ShutdownReason) {
@@ -171,11 +163,11 @@ impl<R: Runtime> ExeUnit<R> {
         .await?;
 
         let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
-        let check_state = addr.send(GetState {}).await?.0;
 
-        if check_state != before_state {
+        let sanity_state = addr.send(GetState {}).await?.0;
+        if sanity_state != before_state {
             return Err(StateError::UnexpectedState {
-                current: check_state,
+                current: sanity_state,
                 expected: before_state,
             }
             .into());
@@ -184,7 +176,7 @@ impl<R: Runtime> ExeUnit<R> {
         addr.send(SetState {
             state: Some(StatePair(before_state.1.unwrap(), None)),
             running_command: Some(None),
-            batch_result: Some((ctx.batch_id.clone(), exe_result.result)),
+            batch_result: Some((ctx.batch_id.clone(), exe_result.into_exe_result(ctx.idx))),
         })
         .await?;
 
@@ -198,9 +190,6 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     fn started(&mut self, ctx: &mut Self::Context) {
         let addr = ctx.address();
 
-        if let Err(e) = self.start_runtime() {
-            return addr.do_send(Shutdown(e.into()));
-        }
         if let Some(s) = &self.ctx.service_id {
             actix_rpc::bind::<Exec>(&s, addr.clone().recipient());
             actix_rpc::bind::<GetActivityState>(&s, addr.clone().recipient());
@@ -224,10 +213,11 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
-    service_id: Option<String>,
-    agreement: PathBuf,
-    work_dir: PathBuf,
-    cache_dir: PathBuf,
+    pub service_id: Option<String>,
+    pub report_url: Option<String>,
+    pub agreement: PathBuf,
+    pub work_dir: PathBuf,
+    pub cache_dir: PathBuf,
 }
 
 impl ExeUnitContext {

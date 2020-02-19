@@ -4,6 +4,14 @@ version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[lib]
+name = "ya_exe_unit"
+path = "src/lib.rs"
+
+[[bin]]
+name = "exe-unit"
+path = "src/bin.rs"
+
 [features]
 default = ["nix", "winapi"]
 
@@ -17,6 +25,7 @@ anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
 crossbeam-channel = "0.3"
+dotenv = "0.15.0"
 env_logger = "0.7"
 futures = "0.3"
 lazy_static = "1.4.0"

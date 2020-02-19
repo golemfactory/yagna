@@ -1,8 +1,6 @@
 use crate::error::Error;
-use crate::error::LocalServiceError;
 use crate::message::GetMetrics;
 use crate::runtime::Runtime;
-use crate::state::StateError;
 use crate::ExeUnit;
 use actix::prelude::*;
 use ya_core_model::activity::*;
@@ -15,19 +13,11 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
         self.ctx.match_service(&msg.activity_id)?;
 
-        match &self.runtime {
-            Some(runtime) => {
-                let batch_id = msg.batch_id.clone();
-                let fut = Self::exec(ctx.address(), runtime.addr.clone(), msg.into_inner());
-                ctx.spawn(fut.into_actor(self));
+        let batch_id = msg.batch_id.clone();
+        let fut = Self::exec(ctx.address(), self.runtime.clone(), msg.into_inner());
+        ctx.spawn(fut.into_actor(self));
 
-                Ok(batch_id)
-            }
-            None => Err(Error::LocalServiceError(LocalServiceError::from(
-                StateError::InvalidState(self.state.inner.clone()),
-            ))
-            .into()),
-        }
+        Ok(batch_id)
     }
 }
 

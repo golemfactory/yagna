@@ -3,7 +3,9 @@ use crate::Result;
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
 use ya_model::activity::activity_state::{State, StatePair};
-use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState};
+use ya_model::activity::{
+    CommandResult, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
+};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
@@ -50,9 +52,24 @@ pub struct ExecCmd(pub ExeScriptCommand);
 
 #[derive(Clone, Debug)]
 pub struct ExecCmdResult {
-    pub result: ExeScriptCommandResult,
-    pub stdout: String,
-    pub stderr: String,
+    pub result: CommandResult,
+    pub message: Option<String>,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+}
+
+impl ExecCmdResult {
+    pub fn into_exe_result(self, index: usize) -> ExeScriptCommandResult {
+        let message = match self.result {
+            CommandResult::Ok => self.stdout,
+            CommandResult::Error => self.stderr,
+        };
+        ExeScriptCommandResult {
+            index: index as u32,
+            result: Some(self.result),
+            message,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Message)]
