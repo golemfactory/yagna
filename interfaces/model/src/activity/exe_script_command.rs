@@ -8,6 +8,7 @@
  *
  */
 
+use crate::activity::ExeScriptCommandState;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -28,4 +29,42 @@ pub enum ExeScriptCommand {
         from: String,
         to: String,
     },
+}
+
+impl From<ExeScriptCommand> for ExeScriptCommandState {
+    fn from(cmd: ExeScriptCommand) -> Self {
+        match cmd {
+            ExeScriptCommand::Deploy { .. } => ExeScriptCommandState {
+                command: "Deploy".to_string(),
+                progress: None,
+                params: None,
+            },
+            ExeScriptCommand::Start { args } => ExeScriptCommandState {
+                command: "Start".to_string(),
+                progress: None,
+                params: Some(args),
+            },
+            ExeScriptCommand::Run {
+                entry_point,
+                mut args,
+            } => ExeScriptCommandState {
+                command: "Run".to_string(),
+                progress: None,
+                params: Some({
+                    args.insert(0, entry_point);
+                    args
+                }),
+            },
+            ExeScriptCommand::Terminate {} => ExeScriptCommandState {
+                command: "Terminate".to_string(),
+                progress: None,
+                params: None,
+            },
+            ExeScriptCommand::Transfer { from, to } => ExeScriptCommandState {
+                command: "Transfer".to_string(),
+                progress: None,
+                params: Some(vec![from, to]),
+            },
+        }
+    }
 }
