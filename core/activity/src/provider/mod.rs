@@ -2,7 +2,7 @@ use crate::common::{is_activity_executor, PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
 use crate::error::Error;
 use crate::{db_conn, impl_restful_handler};
-use actix_web::web;
+use actix_web::{web, Responder};
 use futures::prelude::*;
 use std::convert::From;
 
@@ -19,10 +19,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
             "/events",
             web::get().to(impl_restful_handler!(get_events_web, query)),
         )
-        .route(
-            "/activity/{activity_id}/state",
-            web::get().to(impl_restful_handler!(get_activity_state_web, path, id)),
-        )
+        .service(get_activity_state_web)
         .route(
             "/activity/{activity_id}/state",
             web::put().to(impl_restful_handler!(
@@ -68,17 +65,20 @@ async fn get_activity_state(conn: &ConnType, activity_id: &str) -> Result<Activi
         .ok_or(Error::NotFound.into())
 }
 
+#[actix_web::get("/activity/{activity_id}/state")]
 async fn get_activity_state_web(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     id: Identity,
-) -> Result<ActivityState, Error> {
+) -> impl Responder {
     let conn = &db_conn!(db)?;
     if !is_activity_executor(&conn, id.name, &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    get_activity_state(&conn, &path.activity_id).await
+    get_activity_state(&conn, &path.activity_id)
+        .await
+        .map(web::Json)
 }
 
 /// Set state of specified Activity.

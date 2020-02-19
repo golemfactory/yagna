@@ -1,12 +1,10 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
+use ya_persistence::executor::DbExecutor;
+use ya_service_api_interfaces::*;
 
 #[macro_use]
 extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-#[macro_use]
-extern crate ya_service_bus;
 
 pub mod api;
 pub mod dao;
@@ -17,6 +15,26 @@ pub mod service;
 pub mod utils;
 
 pub mod migrations {
-    #[derive(EmbedMigrations)]
+    #[derive(diesel_migrations::EmbedMigrations)]
     struct _Dummy;
+}
+
+pub struct PaymentService;
+
+impl Service for PaymentService {
+    type Cli = ();
+}
+
+impl PaymentService {
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
+        let db: DbExecutor = context.component();
+        db.apply_migration(migrations::run_with_output)?;
+
+        self::service::bind_service(&db);
+        Ok(())
+    }
+
+    pub fn rest(db: &DbExecutor) -> actix_web::Scope {
+        api::web_scope(db)
+    }
 }

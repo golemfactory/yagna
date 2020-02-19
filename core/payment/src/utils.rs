@@ -1,7 +1,6 @@
 use crate::error::{Error, ExternalServiceError};
-use ya_core_model::{market, payment};
+use ya_core_model::market;
 use ya_model::market::Agreement;
-use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
@@ -33,15 +32,4 @@ pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Er
         }
         Err(e) => Err(e),
     }
-}
-
-#[inline]
-pub fn remote_service_addr(recipient_id: String) -> String {
-    format!(
-        "{}{}/{}{}",
-        PRIVATE_SERVICE,
-        NET_SERVICE_ID,
-        recipient_id,
-        payment::SERVICE_ID
-    )
 }

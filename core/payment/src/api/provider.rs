@@ -6,11 +6,15 @@ use crate::models as db_models;
 use crate::utils::*;
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use futures::Future;
+use std::time::Duration;
+use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment;
 use ya_model::payment::*;
+use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
-use ya_service_bus::{timeout::IntoTimeoutFuture, typed as bus, RpcEndpoint};
+use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -120,6 +124,22 @@ async fn get_debit_note(
     }
 }
 
+async fn with_timeout<Work: Future<Output = HttpResponse>>(
+    timeout: impl Into<u64>,
+    work: Work,
+) -> HttpResponse {
+    let timeout = timeout.into();
+
+    if timeout > 0 {
+        match tokio::time::timeout(Duration::from_secs(timeout.into()), work).await {
+            Ok(v) => v,
+            Err(_) => return HttpResponse::GatewayTimeout().finish(),
+        }
+    } else {
+        work.await
+    }
+}
+
 async fn send_debit_note(
     db: Data<DbExecutor>,
     path: Path<DebitNoteId>,
@@ -134,44 +154,42 @@ async fn send_debit_note(
     };
     let debit_note_id = debit_note.debit_note_id.clone();
 
-    let node_id = id.identity.to_string();
-    let recipient_id = debit_note.recipient_id.clone();
-    if node_id != debit_note.issuer_id {
+    let node_id = id.identity;
+    let recipient_id = debit_note.recipient_id.clone().parse::<NodeId>().unwrap();
+    if Some(node_id) != debit_note.issuer_id.parse().ok() {
         // FIXME: provider_id shouldn't be an Option
         return HttpResponse::Unauthorized().body(format!(
-            "Identity {} is not authorized to send this debit note",
+            "Identity {:?} is not authorized to send this debit note",
             node_id,
         ));
     }
 
-    let msg = payment::SendDebitNote(debit_note);
-    let addr = remote_service_addr(recipient_id);
-    let timeout = if query.timeout > 0 {
-        Some(query.timeout * 1000)
-    } else {
-        None
-    };
-    match async move {
-        bus::service(addr).send(msg).timeout(timeout).await???;
-        Ok(())
-    }
-    .await
-    {
-        Err(Error::Timeout(_)) => return HttpResponse::GatewayTimeout().finish(),
-        Err(Error::Rpc(payment::RpcMessageError::Send(payment::SendError::BadRequest(e)))) => {
-            return { HttpResponse::BadRequest().body(e) }
-        }
-        Err(e) => return { HttpResponse::InternalServerError().body(e.to_string()) },
-        _ => {}
-    }
+    with_timeout(query.timeout, async move {
+        let result = match node_id
+            .service(payment::BUS_ID)
+            .call(payment::SendDebitNote(debit_note))
+            .await
+        {
+            Ok(v) => v,
+            Err(err) => return HttpResponse::InternalServerError().body(err.to_string()),
+        };
 
-    match dao
-        .update_status(debit_note_id, InvoiceStatus::Received.into())
-        .await
-    {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-    }
+        match result {
+            Ok(_) => (),
+            Err(payment::SendError::BadRequest(msg)) => {
+                return HttpResponse::BadRequest().body(msg)
+            }
+            Err(err) => return HttpResponse::InternalServerError().body(err.to_string()),
+        }
+        match dao
+            .update_status(debit_note_id, InvoiceStatus::Received.into())
+            .await
+        {
+            Ok(_) => HttpResponse::Ok().finish(),
+            Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        }
+    })
+    .await
 }
 
 async fn cancel_debit_note(
@@ -279,14 +297,17 @@ async fn send_invoice(
     }
 
     let msg = payment::SendInvoice(invoice);
-    let addr = remote_service_addr(recipient_id);
+    let addr = recipient_id.parse::<NodeId>().unwrap();
     let timeout = if query.timeout > 0 {
         Some(query.timeout * 1000)
     } else {
         None
     };
     match async move {
-        bus::service(addr).send(msg).timeout(timeout).await???;
+        addr.service(payment::BUS_ID)
+            .send(msg)
+            .timeout(timeout)
+            .await???;
         Ok(())
     }
     .await

@@ -11,6 +11,7 @@ ya-model = "0.1"
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-bus = "0.2"
+ya-service-api-interfaces = "0.1"
 
 actix-web = "2.0"
 anyhow = "1.0"
