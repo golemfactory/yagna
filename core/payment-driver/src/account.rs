@@ -7,13 +7,13 @@ pub enum Chain {
     Rinkeby,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Currency {
     Eth,
     Gnt,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Balance {
     pub amount: U256,
     pub currency: Currency,
@@ -23,12 +23,12 @@ impl Balance {
     pub fn new(amount: U256, currency: Currency) -> Balance {
         Balance {
             amount: amount,
-            currency: currency
+            currency: currency,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AccountBalance {
     pub base_currency: Balance,
     pub gas: Option<Balance>,

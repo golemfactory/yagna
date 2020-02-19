@@ -2,17 +2,18 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use ethereum_types::Address;
 
-mod account;
 mod dummy;
 mod error;
-mod gnt;
 mod payment;
+
+pub mod account;
 pub mod ethereum;
+pub mod gnt;
 
 pub use account::{AccountBalance, Balance, Chain, Currency};
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
-pub use gnt::GNTDriver;
+pub use gnt::GntDriver;
 pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
