@@ -1,28 +1,29 @@
 pub mod cli;
-pub mod commands;
 pub mod error;
 mod handlers;
-#[cfg(feature = "metrics")]
+pub mod message;
 pub mod metrics;
+pub mod process;
 pub mod runtime;
 pub mod service;
+pub mod state;
 
-use crate::commands::*;
 use crate::error::Error;
+use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
 use crate::service::{ServiceAddr, ServiceControl};
+use crate::state::{ExeUnitState, StateError};
 use actix::prelude::*;
 use futures::TryFutureExt;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use ya_core_model::activity::*;
-use ya_model::activity::{ActivityUsage, ExeScriptCommandResult, ExeScriptCommandState};
+use ya_model::activity::activity_state::StatePair;
+use ya_model::activity::{ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, State};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 pub type Result<T> = std::result::Result<T, Error>;
-pub type BatchResult = ExeScriptCommandResult;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_REPORT_INTERVAL: Duration = Duration::from_secs(1u64);
@@ -31,18 +32,10 @@ lazy_static::lazy_static! {
 pub struct ExeUnit<R: Runtime> {
     ctx: ExeUnitContext,
     state: ExeUnitState,
-    runtime: Option<RuntimeThread<R>>,
+    runtime: Option<RuntimeHandler<R>>,
     metrics: Addr<MetricsService>,
     report_url: String,
     services: Vec<Box<dyn ServiceControl>>,
-}
-
-macro_rules! actix_rpc_bind {
-    ($sid:expr, $addr:expr, [$($ty:ty),*]) => {
-        $(
-            actix_rpc::bind::<$ty>($sid, $addr.clone().recipient());
-        )*
-    };
 }
 
 impl<R: Runtime> ExeUnit<R> {
@@ -59,24 +52,22 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
-        let activity_id = match &self.ctx.service_id {
-            Some(id) => id.clone(),
-            None => return,
+        if let Some(activity_id) = &self.ctx.service_id {
+            let fut = report_usage(
+                self.report_url.clone(),
+                activity_id.clone(),
+                context.address(),
+                self.metrics.clone(),
+            );
+            context.spawn(fut.into_actor(self));
         };
-        let fut = report_usage(
-            self.report_url.clone(),
-            activity_id,
-            context.address(),
-            self.metrics.clone(),
-        );
-        context.spawn(fut.into_actor(self));
     }
 
     fn start_runtime(&mut self) -> Result<()> {
-        let config_path = self.ctx.config_path.clone();
+        let config_path = self.ctx.agreement.clone();
         let work_dir = self.ctx.work_dir.clone();
         let cache_dir = self.ctx.cache_dir.clone();
-        let runtime = RuntimeThread::spawn(move || {
+        let runtime = RuntimeHandler::spawn(move || {
             R::new(config_path.clone(), work_dir.clone(), cache_dir.clone())
         })?;
         self.runtime = Some(runtime);
@@ -92,18 +83,112 @@ impl<R: Runtime> ExeUnit<R> {
             log::warn!("Unable to stop the runtime: {:?}", e);
         }
     }
+}
 
-    fn match_service_id(&self, service_id: &str) -> Result<()> {
-        match &self.ctx.service_id {
-            Some(sid) => match sid == service_id {
-                true => Ok(()),
-                false => Err(Error::RemoteServiceError(format!(
-                    "Invalid destination service address: {}",
-                    service_id
-                ))),
-            },
-            None => Ok(()),
+#[derive(Clone, Debug)]
+struct ExecCtx {
+    batch_id: String,
+    idx: usize,
+    cmd: ExeScriptCommand,
+}
+
+impl<R: Runtime> ExeUnit<R> {
+    async fn exec(addr: Addr<Self>, exe_unit: Addr<R>, exec: Exec) {
+        for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
+            let ctx = ExecCtx {
+                batch_id: exec.batch_id.clone(),
+                idx,
+                cmd,
+            };
+
+            if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), ctx.clone()).await {
+                let shutdown = Shutdown(ShutdownReason::Error(error.to_string()));
+
+                let cmd_result = ExeScriptCommandResult {
+                    index: ctx.idx as u32,
+                    result: Some(ya_model::activity::CommandResult::Error),
+                    message: Some(error.to_string()),
+                };
+                let set_state = SetState {
+                    state: None,
+                    running_command: Some(None),
+                    batch_result: Some((ctx.batch_id, cmd_result)),
+                };
+
+                if let Err(error) = addr.send(set_state).await {
+                    log::error!(
+                        "Unable to update the state during exec failure: {:?}",
+                        error
+                    );
+                }
+                if let Err(error) = addr.send(shutdown).await {
+                    log::error!(
+                        "Unable to perform a graceful shutdown: {:?}. Terminating",
+                        error
+                    );
+                    Arbiter::current().stop();
+                }
+
+                break;
+            }
         }
+    }
+
+    async fn exec_cmd(addr: Addr<Self>, exe_unit: Addr<R>, ctx: ExecCtx) -> Result<()> {
+        let state = addr.send(GetState {}).await?.0;
+        let before_state = match (&state.0, &state.1) {
+            (_, Some(_)) => {
+                return Err(StateError::Busy(state).into());
+            }
+            (State::Terminated, _) => {
+                return Err(StateError::InvalidState(state).into());
+            }
+            (State::New, _) => match &ctx.cmd {
+                ExeScriptCommand::Deploy { .. } => StatePair(State::New, Some(State::Deployed)),
+                _ => {
+                    return Err(StateError::InvalidState(state).into());
+                }
+            },
+            (State::Deployed, _) => match &ctx.cmd {
+                ExeScriptCommand::Start { .. } => StatePair(State::Deployed, Some(State::Ready)),
+                _ => {
+                    return Err(StateError::InvalidState(state).into());
+                }
+            },
+            (s, _) => match &ctx.cmd {
+                ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
+                    return Err(StateError::InvalidState(state).into());
+                }
+                _ => StatePair(s.clone(), Some(*s)),
+            },
+        };
+
+        addr.send(SetState {
+            state: Some(before_state.clone()),
+            running_command: Some(Some(ctx.cmd.clone().into())),
+            batch_result: None,
+        })
+        .await?;
+
+        let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
+        let check_state = addr.send(GetState {}).await?.0;
+
+        if check_state != before_state {
+            return Err(StateError::UnexpectedState {
+                current: check_state,
+                expected: before_state,
+            }
+            .into());
+        }
+
+        addr.send(SetState {
+            state: Some(StatePair(before_state.1.unwrap(), None)),
+            running_command: Some(None),
+            batch_result: Some((ctx.batch_id.clone(), exe_result.result)),
+        })
+        .await?;
+
+        Ok(())
     }
 }
 
@@ -111,23 +196,17 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let address = ctx.address();
+        let addr = ctx.address();
 
         if let Err(e) = self.start_runtime() {
-            return address.do_send(Shutdown(e.into()));
+            return addr.do_send(Shutdown(e.into()));
         }
-        if let Some(service_id) = &self.ctx.service_id {
-            actix_rpc_bind!(
-                service_id,
-                ctx.address(),
-                [
-                    Exec,
-                    GetActivityState,
-                    GetActivityUsage,
-                    GetRunningCommand,
-                    GetExecBatchResults
-                ]
-            );
+        if let Some(s) = &self.ctx.service_id {
+            actix_rpc::bind::<Exec>(&s, addr.clone().recipient());
+            actix_rpc::bind::<GetActivityState>(&s, addr.clone().recipient());
+            actix_rpc::bind::<GetActivityUsage>(&s, addr.clone().recipient());
+            actix_rpc::bind::<GetRunningCommand>(&s, addr.clone().recipient());
+            actix_rpc::bind::<GetExecBatchResults>(&s, addr.clone().recipient());
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
@@ -136,7 +215,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        if self.state.inner.terminated() {
+        if self.state.inner.0 == State::Terminated {
             return Running::Stop;
         }
         Running::Continue
@@ -146,41 +225,22 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
     service_id: Option<String>,
-    config_path: Option<PathBuf>,
+    agreement: PathBuf,
     work_dir: PathBuf,
     cache_dir: PathBuf,
 }
 
-pub struct ExeUnitState {
-    pub inner: StateExt,
-    pub running_command: Option<ExeScriptCommandState>,
-    batch_results: HashMap<String, Vec<BatchResult>>,
-}
-
-impl ExeUnitState {
-    pub fn batch_results(&self, batch_id: &String) -> Vec<BatchResult> {
-        match self.batch_results.get(batch_id) {
-            Some(vec) => vec.clone(),
-            None => Vec::new(),
-        }
-    }
-
-    pub fn push_batch_result(&mut self, batch_id: String, result: BatchResult) {
-        match self.batch_results.get_mut(&batch_id) {
-            Some(vec) => vec.push(result),
-            None => {
-                self.batch_results.insert(batch_id, vec![result]);
-            }
-        }
-    }
-}
-
-impl Default for ExeUnitState {
-    fn default() -> Self {
-        ExeUnitState {
-            inner: StateExt::default(),
-            batch_results: HashMap::new(),
-            running_command: None,
+impl ExeUnitContext {
+    pub fn match_service(&self, service_id: &str) -> Result<()> {
+        match &self.service_id {
+            Some(sid) => match sid == service_id {
+                true => Ok(()),
+                false => Err(Error::RemoteServiceError(format!(
+                    "Invalid destination service address: {}",
+                    service_id
+                ))),
+            },
+            None => Ok(()),
         }
     }
 }
@@ -202,30 +262,23 @@ async fn report_usage<R: Runtime>(
     exe_unit: Addr<ExeUnit<R>>,
     metrics: Addr<MetricsService>,
 ) {
-    let resp = match metrics.send(MetricsRequest).await {
-        Ok(r) => r,
-        Err(e) => {
-            log::warn!("Unable to report activity usage: {:?}", e);
-            return;
-        }
-    };
-
-    match resp {
-        Ok(data) => {
-            let msg = SetActivityUsage {
-                activity_id,
-                usage: ActivityUsage {
-                    current_usage: Some(data),
-                },
-                timeout: None,
-            };
-            report(report_url, msg).await;
-        }
-        Err(err) => match err {
-            Error::UsageLimitExceeded(info) => {
-                exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
+    match metrics.send(GetMetrics).await {
+        Ok(resp) => match resp {
+            Ok(data) => {
+                let msg = SetActivityUsage {
+                    activity_id,
+                    usage: ActivityUsage::from(data),
+                    timeout: None,
+                };
+                report(report_url, msg).await;
             }
-            error => log::warn!("Unable to retrieve metrics: {:?}", error),
+            Err(err) => match err {
+                Error::UsageLimitExceeded(info) => {
+                    exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
+                }
+                error => log::warn!("Unable to retrieve metrics: {:?}", error),
+            },
         },
-    };
+        Err(e) => log::warn!("Unable to report activity usage: {:?}", e),
+    }
 }

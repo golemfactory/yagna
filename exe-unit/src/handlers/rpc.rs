@@ -1,19 +1,33 @@
-use crate::commands::{MetricsRequest, StateExt};
 use crate::error::Error;
+use crate::error::LocalServiceError;
+use crate::message::GetMetrics;
 use crate::runtime::Runtime;
+use crate::state::StateError;
 use crate::ExeUnit;
 use actix::prelude::*;
 use ya_core_model::activity::*;
-use ya_model::activity::{ActivityState, ActivityUsage, State};
+use ya_model::activity::{ActivityState, ActivityUsage};
 use ya_service_bus::RpcEnvelope;
 
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<Exec>, _ctx: &mut Self::Context) -> Self::Result {
-        self.match_service_id(&msg.activity_id)?;
+    fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
+        self.ctx.match_service(&msg.activity_id)?;
 
-        Ok(msg.batch_id.clone())
+        match &self.runtime {
+            Some(runtime) => {
+                let batch_id = msg.batch_id.clone();
+                let fut = Self::exec(ctx.address(), runtime.addr.clone(), msg.into_inner());
+                ctx.spawn(fut.into_actor(self));
+
+                Ok(batch_id)
+            }
+            None => Err(Error::LocalServiceError(LocalServiceError::from(
+                StateError::InvalidState(self.state.inner.clone()),
+            ))
+            .into()),
+        }
     }
 }
 
@@ -25,19 +39,10 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
         msg: RpcEnvelope<GetActivityState>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        self.match_service_id(&msg.activity_id)?;
-
-        let state = match &self.state.inner {
-            StateExt::State(state) => state.clone(),
-            StateExt::Transitioning {
-                from: _,
-                to: State::Terminated,
-            } => State::Terminated,
-            StateExt::Transitioning { from, .. } => from.clone(),
-        };
+        self.ctx.match_service(&msg.activity_id)?;
 
         Ok(ActivityState {
-            state,
+            state: self.state.inner.clone(),
             reason: None,
             error_message: None,
         })
@@ -52,13 +57,13 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityUsage>> for ExeUnit<R> {
         msg: RpcEnvelope<GetActivityUsage>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        if let Err(e) = self.match_service_id(&msg.activity_id) {
+        if let Err(e) = self.ctx.match_service(&msg.activity_id) {
             return ActorResponse::r#async(futures::future::err(e.into()).into_actor(self));
         }
 
         let metrics = self.metrics.clone();
         let fut = async move {
-            let resp = match metrics.send(MetricsRequest).await {
+            let resp = match metrics.send(GetMetrics).await {
                 Ok(r) => r,
                 Err(e) => {
                     log::warn!("Unable to report activity usage: {:?}", e);
@@ -86,7 +91,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
         msg: RpcEnvelope<GetRunningCommand>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        self.match_service_id(&msg.activity_id)?;
+        self.ctx.match_service(&msg.activity_id)?;
 
         match &self.state.running_command {
             Some(command) => Ok(command.clone()),
@@ -103,12 +108,8 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         msg: RpcEnvelope<GetExecBatchResults>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        self.match_service_id(&msg.activity_id)?;
+        self.ctx.match_service(&msg.activity_id)?;
 
-        let msg = msg.into_inner();
-        match self.state.batch_results.get(&msg.batch_id) {
-            Some(batch) => Ok(batch.clone()),
-            None => Ok(Vec::new()),
-        }
+        Ok(self.state.batch_results(&msg.batch_id))
     }
 }

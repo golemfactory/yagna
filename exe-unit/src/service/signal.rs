@@ -1,4 +1,4 @@
-use crate::commands::{Shutdown, ShutdownReason};
+use crate::message::{Shutdown, ShutdownReason};
 use actix::dev::ToEnvelope;
 use actix::prelude::*;
 

@@ -1,7 +1,7 @@
 pub mod metrics;
 pub mod signal;
 
-use crate::commands::Shutdown;
+use crate::message::{Shutdown, ShutdownReason};
 use actix::prelude::*;
 
 pub trait ServiceControl {
@@ -29,6 +29,6 @@ where
     Svc: Actor<Context = Context<Svc>> + Handler<Shutdown>,
 {
     fn stop(&mut self) {
-        self.addr.do_send(Shutdown::default())
+        self.addr.do_send(Shutdown(ShutdownReason::Finished))
     }
 }

@@ -1,12 +1,13 @@
 use crate::metrics::error::MetricError;
+use crate::state::StateError;
 use serde::Serialize;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError as RpcError;
 
 #[derive(Error, Debug, Serialize)]
 pub enum LocalServiceError {
-    #[error("Invalid service state: {0}")]
-    InvalidState(String),
+    #[error("State error: {0}")]
+    StateError(#[from] StateError),
     #[error("Metric error: {0}")]
     MetricError(
         #[serde(skip)]
@@ -93,6 +94,8 @@ pub enum Error {
     ),
     #[error("Gsb error {0}")]
     GsbError(String),
+    #[error("Process error")]
+    ProcessError,
     #[error("Local service error {0}")]
     LocalServiceError(#[from] LocalServiceError),
     #[error("Remote service error {0}")]
@@ -101,9 +104,15 @@ pub enum Error {
     UsageLimitExceeded(String),
 }
 
+impl From<StateError> for Error {
+    fn from(e: StateError) -> Self {
+        Error::from(LocalServiceError::StateError(e))
+    }
+}
+
 impl From<ya_service_bus::Error> for Error {
     fn from(e: ya_service_bus::Error) -> Self {
-        Error::GsbError(format!("{:?}", e))
+        Error::GsbError(e.to_string())
     }
 }
 
@@ -115,6 +124,7 @@ impl From<Error> for RpcError {
             Error::MailboxError(e) => RpcError::Activity(e.to_string()),
             Error::ChannelError(e) => RpcError::Activity(e.to_string()),
             Error::JsonError(e) => RpcError::Activity(e.to_string()),
+            Error::ProcessError => RpcError::Activity("Process error".to_string()),
             Error::LocalServiceError(e) => RpcError::Activity(e.to_string()),
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),

@@ -1,24 +1,28 @@
-use crate::commands::*;
 use crate::error::ChannelError;
+use crate::message::*;
 use crate::Result;
 use actix::prelude::*;
 use crossbeam_channel::bounded;
 use std::path::PathBuf;
 
-pub trait Runtime: Actor<Context = SyncContext<Self>> + Handler<Shutdown> {
-    fn new(config_path: Option<PathBuf>, work_dir: PathBuf, cache_dir: PathBuf) -> Self;
+pub trait Runtime:
+    Actor<Context = SyncContext<Self>> + Handler<ExecCmd> + Handler<Shutdown>
+{
+    const EXECUTABLE: &'static str;
+
+    fn new(agreement: PathBuf, workdir: PathBuf, cachedir: PathBuf) -> Self;
 }
 
-pub(crate) struct RuntimeThread<R: Runtime> {
+pub(crate) struct RuntimeHandler<R: Runtime> {
     pub handle: std::thread::JoinHandle<()>,
     pub addr: Addr<R>,
 }
 
-pub(crate) trait RuntimeThreadExt<R: Runtime> {
+pub(crate) trait RuntimeHandlerExt<R: Runtime> {
     fn flatten_addr(&self) -> Option<Addr<R>>;
 }
 
-impl<R: Runtime> RuntimeThread<R> {
+impl<R: Runtime> RuntimeHandler<R> {
     pub fn spawn<F>(factory: F) -> Result<Self>
     where
         F: Fn() -> R + Send + Sync + 'static,
@@ -33,11 +37,11 @@ impl<R: Runtime> RuntimeThread<R> {
         });
 
         let addr = rx.recv().map_err(ChannelError::from)?;
-        Ok(RuntimeThread { handle, addr })
+        Ok(RuntimeHandler { handle, addr })
     }
 }
 
-impl<R: Runtime> RuntimeThreadExt<R> for Option<RuntimeThread<R>> {
+impl<R: Runtime> RuntimeHandlerExt<R> for Option<RuntimeHandler<R>> {
     fn flatten_addr(&self) -> Option<Addr<R>> {
         match &self {
             Some(runtime) => Some(runtime.addr.clone()),

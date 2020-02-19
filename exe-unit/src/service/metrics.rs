@@ -1,5 +1,5 @@
-use crate::commands::{MetricsRequest, Shutdown};
 use crate::error::{Error, LocalServiceError};
+use crate::message::{GetMetrics, Shutdown};
 use crate::metrics::{CpuMetric, MemMetric, Metric, MetricData, MetricReport};
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
@@ -55,10 +55,10 @@ macro_rules! parse_report {
     };
 }
 
-impl Handler<MetricsRequest> for MetricsService {
-    type Result = <MetricsRequest as Message>::Result;
+impl Handler<GetMetrics> for MetricsService {
+    type Result = <GetMetrics as Message>::Result;
 
-    fn handle(&mut self, _: MetricsRequest, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: GetMetrics, _: &mut Self::Context) -> Self::Result {
         let cpu_report = self.cpu.report();
         self.cpu.log_report(cpu_report.clone());
         let cpu_data: f64 = parse_report!(CpuMetric::ID, cpu_report)?;

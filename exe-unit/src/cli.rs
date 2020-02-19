@@ -3,11 +3,11 @@ use std::path::PathBuf;
 #[derive(structopt::StructOpt, Debug)]
 pub struct Cli {
     #[structopt(long, short, set = structopt::clap::ArgSettings::Global)]
-    agreement: Option<PathBuf>,
+    agreement: PathBuf,
     #[structopt(long, short, set = structopt::clap::ArgSettings::Global)]
-    work_dir: PathBuf,
+    workdir: PathBuf,
     #[structopt(long, short, set = structopt::clap::ArgSettings::Global)]
-    cache_dir: PathBuf,
+    cachedir: PathBuf,
     #[structopt(subcommand)]
     command: Command,
 }
