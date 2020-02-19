@@ -28,7 +28,7 @@ pub fn download_image_http(url: &str, cachedir: &Path) -> Result<PathBuf> {
 }
 
 fn url_to_filename(url: &str) -> String {
-    let mut hasher = Sha3::new(Sha3Mode::Sha3_512);
+    let mut hasher = Sha3::new(Sha3Mode::Sha3_256);
     hasher.input_str(url);
     hasher.result_str()
 }

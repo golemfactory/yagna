@@ -70,7 +70,7 @@ impl ExeUnitMain {
         let image = download_image(&image_url, cachedir)?;
         write_deploy_file(workdir, &image)?;
 
-        Ok(info!("Donwloading completed."))
+        Ok(info!("Downloading completed."))
     }
 
     fn start(workdir: &Path, _cachedir: &Path) -> Result<()> {
