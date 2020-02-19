@@ -10,6 +10,6 @@ pub enum PaymentDriverError {
     NotFound,
     #[error("Connection refused")]
     ConnectionRefused,
-    #[error("Unexpected error")]
-    UnexpectedError,
+    #[error("Library error")]
+    LibraryError { msg: String },
 }
