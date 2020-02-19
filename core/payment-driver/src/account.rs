@@ -1,22 +1,26 @@
 use ethereum_types::U256;
-#[allow(unused)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Chain {
     Mainnet,
     Rinkeby,
 }
-#[allow(unused)]
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Currency {
     Eth,
-    GNT,
-}
-#[allow(unused)]
-pub struct Balance {
-    currency: Currency,
-    amount: U256,
+    Gnt,
 }
 
-#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Balance {
+    pub currency: Currency,
+    pub amount: U256,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountBalance {
-    base_currency: Balance,
-    gas: Option<Balance>,
+    pub base_currency: Balance,
+    pub gas: Option<Balance>,
 }

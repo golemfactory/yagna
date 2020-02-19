@@ -1,10 +1,10 @@
-use crate::account::Currency;
 use chrono::{DateTime, Utc};
 use ethereum_types::{Address, U256};
+use serde::{Deserialize, Serialize};
 
-#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentConfirmation {
-    confirmation: Vec<u8>,
+    pub confirmation: Vec<u8>,
 }
 
 impl PaymentConfirmation {
@@ -15,42 +15,23 @@ impl PaymentConfirmation {
     }
 }
 
-#[allow(unused)]
-pub struct Balance {
-    currency: Currency,
-    amount: U256,
-}
-
-#[allow(unused)]
-pub struct AccountBalance {
-    base_currency: Balance,
-    gas: Option<Balance>,
-}
-
-#[allow(unused)]
-pub enum TransactionStatus {
-    Ok,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PaymentStatus {
+    Ok(PaymentConfirmation),
     NotYet,
-    NotFound,
     NotEnoughFunds,
     NotEnoughGas,
 }
 
-#[allow(unused)]
-pub struct PaymentStatus {
-    status: TransactionStatus,
-    confirmation: Option<PaymentConfirmation>,
-}
-
-#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentDetails {
-    receiver: Address,
-    amount: U256,
-    date: Option<DateTime<Utc>>,
+    pub recipient: Address,
+    pub amount: U256,
+    pub date: Option<DateTime<Utc>>,
 }
 
-#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentAmount {
-    base_currency_amount: U256,
-    gas_amount: Option<U256>,
+    pub base_currency_amount: U256,
+    pub gas_amount: Option<U256>,
 }
