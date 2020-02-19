@@ -1,5 +1,5 @@
 use crate::error::{Error, ExternalServiceError};
-use ya_core_model::{market, payment};
+use ya_core_model::market;
 use ya_model::market::Agreement;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 

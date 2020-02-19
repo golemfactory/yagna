@@ -7,7 +7,6 @@ use ya_client::{
     web::{WebClient, WebInterface},
 };
 use ya_core_model::{appkey, market};
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Service;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 

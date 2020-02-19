@@ -8,7 +8,7 @@ use ya_service_bus::RpcEndpoint;
 
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::str::FromStr;
-use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE, PUBLIC_SERVICE};
+use ya_service_api::constants::{NET_SERVICE_ID, PRIVATE_SERVICE};
 use ya_service_bus::{connection, untyped as local_bus, ResponseChunk};
 
 #[derive(Default)]
