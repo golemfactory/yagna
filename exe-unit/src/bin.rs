@@ -46,9 +46,9 @@ fn main() -> anyhow::Result<()> {
     let mut ctx = ExeUnitContext {
         service_id: None,
         report_url: None,
-        agreement: cli.agreement,
-        work_dir: cli.work_dir,
-        cache_dir: cli.cache_dir,
+        agreement: std::fs::canonicalize(&cli.agreement)?,
+        work_dir: std::fs::canonicalize(cli.work_dir)?,
+        cache_dir: std::fs::canonicalize(cli.cache_dir)?,
     };
 
     match cli.command {

@@ -3,7 +3,9 @@ use crate::message::{ExecCmd, ExecCmdResult, Shutdown};
 use crate::runtime::Runtime;
 use crate::ExeUnitContext;
 use actix::prelude::*;
+use std::ffi::OsString;
 use std::path::PathBuf;
+use std::process::Stdio;
 use tokio::process::Command;
 use ya_model::activity::{CommandResult, ExeScriptCommand};
 
@@ -24,14 +26,14 @@ impl RuntimeProcess {
         }
     }
 
-    fn extend_args(&self, mut cmd_args: Vec<String>) -> Vec<String> {
+    fn extend_args(&self, mut cmd_args: Vec<OsString>) -> Vec<OsString> {
         cmd_args.extend(vec![
-            "--workdir".to_owned(),
-            format!("{:?}", self.work_dir.as_ref().unwrap()),
-            "--cachedir".to_owned(),
-            format!("{:?}", self.cache_dir.as_ref().unwrap()),
-            "--agreement".to_owned(),
-            format!("{:?}", self.agreement.as_ref().unwrap()),
+            OsString::from("--agreement"),
+            self.agreement.clone().unwrap().into_os_string(),
+            OsString::from("--cachedir"),
+            self.cache_dir.clone().unwrap().into_os_string(),
+            OsString::from("--workdir"),
+            self.work_dir.clone().unwrap().into_os_string(),
         ]);
         cmd_args
     }
@@ -50,11 +52,11 @@ impl Actor for RuntimeProcess {
     type Context = Context<Self>;
 
     fn started(&mut self, _: &mut Self::Context) {
-        log::debug!("Runtime process started");
+        log::debug!("Runtime handler started");
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        log::debug!("Runtime process stopped");
+        log::debug!("Runtime handler stopped");
     }
 }
 
@@ -65,24 +67,28 @@ impl Handler<ExecCmd> for RuntimeProcess {
         let cmd_args = match msg.0 {
             ExeScriptCommand::Transfer { .. } => unimplemented!(),
             ExeScriptCommand::Terminate {} => None,
-            ExeScriptCommand::Deploy {} => Some(vec!["deploy".to_owned()]),
+            ExeScriptCommand::Deploy {} => Some(vec![OsString::from("deploy")]),
             ExeScriptCommand::Start { args } => {
-                let mut result = vec!["start".to_owned()];
-                result.extend(args);
+                let mut result = vec![OsString::from("start")];
+                result.extend(args.into_iter().map(OsString::from));
                 Some(result)
             }
             ExeScriptCommand::Run { entry_point, args } => {
-                let mut result = vec!["run".to_owned(), entry_point];
-                result.extend(args);
+                let mut result = vec![OsString::from("run"), OsString::from(entry_point)];
+                result.extend(args.into_iter().map(OsString::from));
                 Some(result)
             }
         };
 
         match cmd_args {
-            Some(cmd_args) => {
+            Some(mut cmd_args) => {
+                cmd_args = self.extend_args(cmd_args);
                 log::debug!("Executing {:?}", cmd_args);
+
                 let spawn = Command::new(self.binary.clone())
-                    .args(self.extend_args(cmd_args))
+                    .args(cmd_args)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
                     .spawn();
 
                 let fut = async move {

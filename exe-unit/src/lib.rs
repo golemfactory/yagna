@@ -167,8 +167,9 @@ impl<R: Runtime> ExeUnit<R> {
         let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exe_result.result {
             return Err(Error::CommandError(format!(
-                "{:?} command error: {:?}",
-                ctx.cmd, exe_result.stderr
+                "{:?} command error: {}",
+                ctx.cmd,
+                exe_result.stderr.unwrap_or("<no stderr output>".to_owned())
             )));
         }
 
