@@ -1,0 +1,13 @@
+[
+  {"deploy": {
+  }},
+  {"start": {
+    "args": []
+  }},
+  {"run": {
+    "entry_point": "_start",
+    "args": []
+  }},
+  {"terminate": {
+  }}
+]

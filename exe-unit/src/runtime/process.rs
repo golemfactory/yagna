@@ -82,33 +82,30 @@ impl Handler<ExecCmd> for RuntimeProcess {
         };
 
         match cmd_args {
-            Some(mut cmd_args) => {
-                cmd_args = self.args(cmd_args);
-                log::debug!("Executing {:?}", cmd_args);
+            Some(cmd_args) => {
+                let args = self.args(cmd_args);
+                log::debug!("Executing {:?}", args);
 
                 let spawn = Command::new(self.binary.clone())
-                    .args(cmd_args)
+                    .args(args)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .spawn();
 
                 let fut = async move {
-                    match spawn {
-                        Ok(child) => match child.wait_with_output().await {
-                            Ok(output) => Ok(ExecCmdResult {
-                                result: if output.status.success() {
-                                    CommandResult::Ok
-                                } else {
-                                    CommandResult::Error
-                                },
-                                message: None,
-                                stdout: Some(vec_to_string(output.stdout)),
-                                stderr: Some(vec_to_string(output.stderr)),
-                            }),
-                            Err(error) => Err(Error::from(error)),
-                        },
-                        Err(error) => Err(Error::from(error)),
-                    }
+                    let output = spawn?.wait_with_output().await?;
+                    let result = if output.status.success() {
+                        CommandResult::Ok
+                    } else {
+                        CommandResult::Error
+                    };
+
+                    Ok(ExecCmdResult {
+                        result,
+                        message: None,
+                        stdout: Some(vec_to_string(output.stdout)),
+                        stderr: Some(vec_to_string(output.stderr)),
+                    })
                 };
                 ActorResponse::r#async(fut.into_actor(self))
             }
