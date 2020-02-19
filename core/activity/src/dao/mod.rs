@@ -7,10 +7,32 @@ pub use activity::ActivityDao;
 pub use activity_state::ActivityStateDao;
 pub use activity_usage::ActivityUsageDao;
 pub use event::{Event, EventDao};
+use thiserror::Error;
 
-type Result<T> = std::result::Result<T, diesel::result::Error>;
+type Result<T> = std::result::Result<T, DaoError>;
 
 no_arg_sql_function!(last_insert_rowid, diesel::sql_types::Integer);
+
+#[derive(Error, Debug)]
+pub enum DaoError {
+    #[error("Not found")]
+    NotFound,
+    #[error("Diesel error: {0}")]
+    DieselError(String),
+    #[error("Tokio error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
+    #[error("R2D2 error: {0}")]
+    R2D2Error(#[from] r2d2::Error),
+}
+
+impl From<diesel::result::Error> for DaoError {
+    fn from(error: diesel::result::Error) -> Self {
+        match &error {
+            diesel::result::Error::NotFound => DaoError::NotFound,
+            _ => DaoError::DieselError(format!("{:?}", error)),
+        }
+    }
+}
 
 pub trait NotFoundAsOption<T> {
     fn not_found_as_option(self) -> Result<Option<T>>;
@@ -21,7 +43,7 @@ impl<T> NotFoundAsOption<T> for Result<T> {
         match self {
             Ok(t) => Ok(Some(t)),
             Err(e) => match e {
-                diesel::result::Error::NotFound => Ok(None),
+                DaoError::NotFound => Ok(None),
                 _ => Err(e),
             },
         }

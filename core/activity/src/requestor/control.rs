@@ -46,7 +46,6 @@ async fn create_activity(
     body: web::Json<String>,
     id: Identity,
 ) -> Result<String, Error> {
-    let conn = db_conn!(db)?;
     let agreement_id = body.into_inner();
 
     if !is_agreement_initiator(id.identity.to_string(), agreement_id.clone()).await? {
@@ -74,8 +73,9 @@ async fn create_activity(
     let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
     log::debug!("creating activity: {}", activity_id);
 
-    ActivityDao::new(&conn)
+    db.as_dao::<ActivityDao>()
         .create(&activity_id, &agreement_id)
+        .await
         .map_err(Error::from)?;
 
     Ok(activity_id)
@@ -88,12 +88,11 @@ async fn destroy_activity(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<(), Error> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.identity.to_string(), &path.activity_id).await? {
+    if !is_activity_initiator(&db, id.identity.to_string(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = DestroyActivity {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
@@ -102,8 +101,9 @@ async fn destroy_activity(
 
     let uri = provider_activity_service_id(&agreement)?;
     let _ = gsb_send!(None, msg, &uri, query.timeout)?;
-    ActivityStateDao::new(&conn)
+    db.as_dao::<ActivityStateDao>()
         .set(&path.activity_id, State::Terminated, None, None)
+        .await
         .map_err(Error::from)?;
 
     Ok(())
@@ -117,14 +117,13 @@ async fn exec(
     body: web::Json<ExeScriptRequest>,
     id: Identity,
 ) -> Result<String, Error> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.identity.to_string(), &path.activity_id).await? {
+    if !is_activity_initiator(&db, id.identity.to_string(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
-    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let batch_id = generate_id();
     let msg = Exec {
         activity_id: path.activity_id.clone(),
@@ -145,12 +144,11 @@ async fn get_batch_results(
     query: web::Query<QueryTimeoutMaxCount>,
     id: Identity,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.identity.to_string(), &path.activity_id).await? {
+    if !is_activity_initiator(&db, id.identity.to_string(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
