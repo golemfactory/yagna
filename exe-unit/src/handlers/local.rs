@@ -84,7 +84,9 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
 
             let _ = address.send(SetState::from(State::Terminated)).await;
 
-            Arbiter::current().stop();
+            System::current().stop();
+
+            log::info!("Shutdown process complete");
             Ok(())
         };
 

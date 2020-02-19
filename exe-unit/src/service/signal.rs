@@ -49,6 +49,8 @@ where
         #[cfg(not(windows))]
         self.signals
             .push(register_signal!(self.parent, signal_hook::SIGQUIT));
+
+        log::debug!("Signal monitoring service started");
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -57,6 +59,8 @@ where
             .for_each(|s| {
                 signal_hook::unregister(s);
             });
+
+        log::debug!("Signal monitoring service stopped");
     }
 }
 

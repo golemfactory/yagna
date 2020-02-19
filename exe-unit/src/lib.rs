@@ -18,7 +18,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use ya_core_model::activity::*;
 use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, State};
+use ya_model::activity::{
+    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
+};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -94,6 +96,7 @@ impl<R: Runtime> ExeUnit<R> {
 
             if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), ctx.clone()).await {
                 let shutdown = Shutdown(ShutdownReason::Error(error.to_string()));
+                log::error!("Triggering shutdown: {:?}", shutdown.0);
 
                 let cmd_result = ExeScriptCommandResult {
                     index: ctx.idx as u32,
@@ -117,7 +120,7 @@ impl<R: Runtime> ExeUnit<R> {
                         "Unable to perform a graceful shutdown: {:?}. Terminating",
                         error
                     );
-                    Arbiter::current().stop();
+                    System::current().stop();
                 }
 
                 break;
@@ -162,6 +165,12 @@ impl<R: Runtime> ExeUnit<R> {
         .await?;
 
         let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
+        if let CommandResult::Error = exe_result.result {
+            return Err(Error::CommandError(format!(
+                "{:?} command error: {:?}",
+                ctx.cmd, exe_result.stderr
+            )));
+        }
 
         let sanity_state = addr.send(GetState {}).await?.0;
         if sanity_state != before_state {

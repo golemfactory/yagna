@@ -92,13 +92,13 @@ pub enum Error {
         #[from]
         serde_json::Error,
     ),
-    #[error("Gsb error {0}")]
+    #[error("Gsb error: {0}")]
     GsbError(String),
-    #[error("Process error")]
-    ProcessError,
-    #[error("Local service error {0}")]
+    #[error("{0}")]
+    CommandError(String),
+    #[error("Local service error: {0}")]
     LocalServiceError(#[from] LocalServiceError),
-    #[error("Remote service error {0}")]
+    #[error("Remote service error: {0}")]
     RemoteServiceError(String),
     #[error("Usage limit exceeded: {0}")]
     UsageLimitExceeded(String),
@@ -124,8 +124,8 @@ impl From<Error> for RpcError {
             Error::MailboxError(e) => RpcError::Activity(e.to_string()),
             Error::ChannelError(e) => RpcError::Activity(e.to_string()),
             Error::JsonError(e) => RpcError::Activity(e.to_string()),
-            Error::ProcessError => RpcError::Activity("Process error".to_string()),
             Error::LocalServiceError(e) => RpcError::Activity(e.to_string()),
+            Error::CommandError(e) => RpcError::Service(e),
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),

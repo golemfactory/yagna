@@ -48,6 +48,14 @@ impl Runtime for RuntimeProcess {
 
 impl Actor for RuntimeProcess {
     type Context = Context<Self>;
+
+    fn started(&mut self, _: &mut Self::Context) {
+        log::debug!("Runtime process started");
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        log::debug!("Runtime process stopped");
+    }
 }
 
 impl Handler<ExecCmd> for RuntimeProcess {
@@ -72,6 +80,7 @@ impl Handler<ExecCmd> for RuntimeProcess {
 
         match cmd_args {
             Some(cmd_args) => {
+                log::debug!("Executing {:?}", cmd_args);
                 let spawn = Command::new(self.binary.clone())
                     .args(self.extend_args(cmd_args))
                     .spawn();
@@ -130,36 +139,3 @@ fn vec_to_string(vec: Vec<u8>) -> String {
             .collect::<String>(),
     }
 }
-//
-// pub struct Process {
-//     pub proc: Option<Child>,
-//     pub stdout: Option<FramedRead<ChildStdout, LinesCodec>>,
-//     pub stderr: Option<FramedRead<ChildStderr, LinesCodec>>,
-// }
-//
-// impl Process {
-//     pub fn spawn(mut cmd: Command) -> Result<Self> {
-//         let mut proc = cmd.spawn()?;
-//
-//         let stdout = match proc.stdout.take() {
-//             Some(stdout) => FramedRead::new(stdout, LinesCodec::new()),
-//             None => {
-//                 proc.kill()?;
-//                 return Err(Error::ProcessError);
-//             }
-//         };
-//         let stderr = match proc.stderr.take() {
-//             Some(stderr) => FramedRead::new(stderr, LinesCodec::new()),
-//             None => {
-//                 proc.kill()?;
-//                 return Err(Error::ProcessError);
-//             }
-//         };
-//
-//         Ok(Process {
-//             proc: Some(proc),
-//             stdout: Some(stdout),
-//             stderr: Some(stderr),
-//         })
-//     }
-// }
