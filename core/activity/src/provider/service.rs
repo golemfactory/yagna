@@ -3,7 +3,6 @@ use std::convert::From;
 
 use crate::common::{generate_id, is_activity_initiator, is_agreement_initiator, RpcMessageResult};
 use crate::dao::*;
-use crate::db_conn;
 use crate::error::Error;
 use ya_core_model::activity::*;
 use ya_model::activity::{provider_event::ProviderEventType, State};
@@ -43,38 +42,34 @@ async fn create_activity_gsb(
         return Err(Error::Forbidden.into());
     }
 
-    {
-        let activity_id = activity_id.clone();
-        let agreement_id = msg.agreement_id.clone();
-        db.with_transaction(move |conn| {
-            ActivityDao::new(&conn)
-                .create(&activity_id, &agreement_id)
-                .map_err(Error::from)?;
-            log::debug!("activity inserted: {}", activity_id);
-            EventDao::new(&conn)
-                .create(
-                    &activity_id,
-                    serde_json::to_string(&ProviderEventType::CreateActivity)
-                        .unwrap()
-                        .as_str(),
-                )
-                .map_err(Error::from)?;
-            log::debug!("event inserted");
-            Ok::<_, crate::error::Error>(())
-        })
-        .await?;
-    }
+    let activity_id = activity_id.clone();
+    let agreement_id = msg.agreement_id.clone();
 
-    {
-        let conn = db.conn().map_err(crate::error::Error::from)?;
-        let state = ActivityStateDao::new(&conn)
-            .get_future(&activity_id, None)
-            .timeout(msg.timeout)
-            .map_err(Error::from)
-            .await?
-            .map_err(Error::from)?;
-        log::debug!("activity state: {:?}", state);
-    }
+    db.as_dao::<ActivityDao>()
+        .create(&activity_id, &agreement_id)
+        .await
+        .map_err(Error::from)?;
+    log::debug!("activity inserted: {}", activity_id);
+
+    db.as_dao::<EventDao>()
+        .create(
+            &activity_id,
+            serde_json::to_string(&ProviderEventType::CreateActivity)
+                .unwrap()
+                .as_str(),
+        )
+        .await
+        .map_err(Error::from)?;
+    log::debug!("event inserted");
+
+    let state = db
+        .as_dao::<ActivityStateDao>()
+        .get_future(&activity_id, None)
+        .timeout(msg.timeout)
+        .map_err(Error::from)
+        .await?
+        .map_err(Error::from)?;
+    log::debug!("activity state: {:?}", state);
 
     Ok(activity_id)
 }
@@ -85,23 +80,22 @@ async fn destroy_activity_gsb(
     caller: String,
     msg: DestroyActivity,
 ) -> RpcMessageResult<DestroyActivity> {
-    let conn = db_conn!(db)?;
-
-    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
     log::info!("creating event for destroying activity");
-    EventDao::new(&conn)
+    db.as_dao::<EventDao>()
         .create(
             &msg.activity_id,
             serde_json::to_string(&ProviderEventType::DestroyActivity)
                 .unwrap()
                 .as_str(),
         )
+        .await
         .map_err(Error::from)?;
 
-    ActivityStateDao::new(&conn)
+    db.as_dao::<ActivityStateDao>()
         .get_future(&msg.activity_id, Some(State::Terminated))
         .timeout(msg.timeout)
         .map_err(Error::from)
@@ -116,12 +110,11 @@ async fn get_activity_state_gsb(
     caller: String,
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
-    let conn = &db_conn!(db)?;
-    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    super::get_activity_state(&conn, &msg.activity_id)
+    super::get_activity_state(&db, &msg.activity_id)
         .await
         .map_err(Into::into)
 }
@@ -133,12 +126,11 @@ async fn set_activity_state_gsb(
     caller: String,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    super::set_activity_state(&conn, &msg.activity_id, msg.state)
+    super::set_activity_state(&db, &msg.activity_id, msg.state)
         .map_err(Into::into)
         .await
 }
@@ -148,12 +140,11 @@ async fn get_activity_usage_gsb(
     caller: String,
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
-    let conn = &db_conn!(db)?;
-    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    super::get_activity_usage(&conn, &msg.activity_id)
+    super::get_activity_usage(&db, &msg.activity_id)
         .await
         .map_err(Error::into)
 }
@@ -165,12 +156,12 @@ async fn set_activity_usage_gsb(
     caller: String,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, caller, &msg.activity_id).await? {
+    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    ActivityUsageDao::new(&conn)
+    db.as_dao::<ActivityUsageDao>()
         .set(&msg.activity_id, &msg.usage.current_usage)
+        .await
         .map_err(|e| Error::from(e).into())
 }

@@ -34,20 +34,18 @@ async fn get_activity_state(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ActivityState, Error> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityState {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
     // Return a locally persisted state if activity has been terminated
-    let dao = ActivityStateDao::new(&conn);
-    let persisted_state = get_persisted_state(&dao, &path.activity_id)?;
+    let persisted_state = get_persisted_state(&db, &path.activity_id).await?;
     if persisted_state.terminated() {
         return Ok(persisted_state.unwrap());
     }
@@ -55,12 +53,14 @@ async fn get_activity_state(
     // Retrieve and persist activity state
     let uri = provider_activity_service_id(&agreement)?;
     let activity_state = gsb_send!(None, msg, &uri, query.timeout)?;
-    dao.set(
-        &path.activity_id,
-        activity_state.state.clone(),
-        activity_state.reason.clone(),
-        activity_state.error_message.clone(),
-    )?;
+    db.as_dao::<ActivityStateDao>()
+        .set(
+            &path.activity_id,
+            activity_state.state.clone(),
+            activity_state.reason.clone(),
+            activity_state.error_message.clone(),
+        )
+        .await?;
 
     Ok(activity_state)
 }
@@ -72,24 +72,20 @@ async fn get_activity_usage(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ActivityUsage, Error> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityUsage {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
-    let state_dao = ActivityStateDao::new(&conn);
-    let usage_dao = ActivityUsageDao::new(&conn);
-
     // Return locally persisted usage if activity has been terminated
-    let persisted_state = get_persisted_state(&state_dao, &path.activity_id)?;
+    let persisted_state = get_persisted_state(&db, &path.activity_id).await?;
     if persisted_state.terminated() {
-        let persisted_usage = get_persisted_usage(&usage_dao, &path.activity_id)?;
+        let persisted_usage = get_persisted_usage(&db, &path.activity_id).await?;
         if let Some(activity_usage) = persisted_usage {
             return Ok(activity_usage);
         }
@@ -98,7 +94,9 @@ async fn get_activity_usage(
     // Retrieve and persist activity usage
     let uri = provider_activity_service_id(&agreement)?;
     let activity_usage = gsb_send!(None, msg, &uri, query.timeout)?;
-    usage_dao.set(&path.activity_id, &activity_usage.current_usage)?;
+    db.as_dao::<ActivityUsageDao>()
+        .set(&path.activity_id, &activity_usage.current_usage)
+        .await?;
 
     Ok(activity_usage)
 }
@@ -110,12 +108,11 @@ async fn get_running_command(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ExeScriptCommandState, Error> {
-    let conn = db_conn!(db)?;
-    if !is_activity_initiator(&conn, id.name.clone(), &path.activity_id).await? {
+    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    let agreement = get_activity_agreement(&conn, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetRunningCommand {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -125,12 +122,14 @@ async fn get_running_command(
     gsb_send!(None, msg, &uri, query.timeout)
 }
 
-fn get_persisted_state(
-    dao: &ActivityStateDao,
+async fn get_persisted_state(
+    db: &DbExecutor,
     activity_id: &str,
 ) -> Result<Option<ActivityState>, Error> {
-    let maybe_state = dao
+    let maybe_state = db
+        .as_dao::<ActivityStateDao>()
         .get(activity_id)
+        .await
         .not_found_as_option()
         .map_err(Error::from)?;
 
@@ -148,12 +147,14 @@ fn get_persisted_state(
     Ok(None)
 }
 
-fn get_persisted_usage(
-    dao: &ActivityUsageDao,
+async fn get_persisted_usage(
+    db: &DbExecutor,
     activity_id: &str,
 ) -> Result<Option<ActivityUsage>, Error> {
-    let maybe_usage = dao
+    let maybe_usage = db
+        .as_dao::<ActivityUsageDao>()
         .get(&activity_id)
+        .await
         .not_found_as_option()
         .map_err(Error::from)?;
 
