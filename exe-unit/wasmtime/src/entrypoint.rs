@@ -10,6 +10,8 @@ use crate::wasmtime_unit::Wasmtime;
 use std::fs::File;
 use std::io::BufReader;
 
+use exe_unit_tools::download_image_http;
+
 
 #[derive(StructOpt)]
 pub enum Commands {
@@ -119,18 +121,9 @@ impl ExeUnitMain {
 }
 
 fn download_image(url: &str, cachedir: &Path) -> Result<WasmImage> {
-    //TODO: implement real downloading
-
-    let image_path = PathBuf::from(url);
-    let name = image_path.file_name()
-        .ok_or(Error::msg(format!("Image path has no filename: {}", image_path.display())))?;
-
-    let cache_path = cachedir.join(name);
-    fs::copy(&image_path, &cache_path)
-        .with_context(|| format!("Can't copy file from {} to {}.", &image_path.display(), cache_path.display()))?;
-
-    let image = WasmImage::new(&cache_path)
-        .with_context(|| format!("Can't read image file {}.", cache_path.display()))?;
+    let image_path = download_image_http(url, cachedir)?;
+    let image = WasmImage::new(&image_path)
+        .with_context(|| format!("Can't read image file {}.", image_path.display()))?;
 
     Ok(image)
 }
