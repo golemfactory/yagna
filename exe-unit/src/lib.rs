@@ -1,4 +1,3 @@
-pub mod cli;
 pub mod error;
 mod handlers;
 pub mod message;

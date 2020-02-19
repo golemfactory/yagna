@@ -1,7 +1,7 @@
 use actix::{Actor, System};
+use std::path::PathBuf;
 use structopt::StructOpt;
 use ya_core_model::activity::Exec;
-use ya_exe_unit::cli::{Cli, Command};
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::service::signal::SignalMonitor;
@@ -10,6 +10,29 @@ use ya_service_bus::RpcEnvelope;
 
 // Temporary
 const BINARY: &'static str = "wasmtime";
+
+#[derive(structopt::StructOpt, Debug)]
+pub struct Cli {
+    #[structopt(long, short)]
+    pub agreement: PathBuf,
+    #[structopt(long, short)]
+    pub work_dir: PathBuf,
+    #[structopt(long, short)]
+    pub cache_dir: PathBuf,
+    #[structopt(subcommand)]
+    pub command: Command,
+}
+
+#[derive(structopt::StructOpt, Debug)]
+pub enum Command {
+    ServiceBus {
+        service_id: String,
+        report_url: String,
+    },
+    FromFile {
+        input: PathBuf,
+    },
+}
 
 fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
@@ -39,25 +62,18 @@ fn main() -> anyhow::Result<()> {
     }
 
     let sys = System::new("exe-unit");
-
-    let activity_id = match &ctx.service_id {
-        Some(service_id) => service_id.clone(),
-        None => "".to_owned(),
-    };
-    let runtime = RuntimeProcess::new(BINARY.into());
-    let exe_unit = ExeUnit::new(ctx, runtime).start();
+    let exe_unit = ExeUnit::new(ctx, RuntimeProcess::new(BINARY.into())).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
-
     exe_unit.do_send(Register(signals));
 
     if let Some(exe_script) = commands {
         let msg = Exec {
-            activity_id: activity_id.clone(),
-            batch_id: "cli-batch".to_owned(),
+            activity_id: String::new(),
+            batch_id: String::new(),
             exe_script,
             timeout: None,
         };
-        exe_unit.do_send(RpcEnvelope::with_caller(activity_id, msg));
+        exe_unit.do_send(RpcEnvelope::with_caller(String::new(), msg));
     }
 
     sys.run()?;
