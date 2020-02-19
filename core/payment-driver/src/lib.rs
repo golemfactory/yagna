@@ -46,9 +46,4 @@ pub trait PaymentDriver {
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn test_it_works() {
-        assert!(true);
-    }
-}
+mod tests {}
