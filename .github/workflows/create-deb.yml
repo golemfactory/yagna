@@ -15,6 +15,7 @@ jobs:
     - name: Copy .deb file
       run: docker run create-deb bash -c "cat /src/target/debian/*.deb" >yagna.deb
     - name: Download artifact
-      uses: actions/download-artifact@v1.0.0
+      uses: actions/upload-artifact@v1.0.0
       with:
-        name: Yagna Debian Package
+        name: yagna.deb
+        path: yagna.deb
