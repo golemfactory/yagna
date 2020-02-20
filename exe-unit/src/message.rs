@@ -53,7 +53,6 @@ pub struct ExecCmd(pub ExeScriptCommand);
 #[derive(Clone, Debug)]
 pub struct ExecCmdResult {
     pub result: CommandResult,
-    pub message: Option<String>,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
 }

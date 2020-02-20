@@ -138,7 +138,6 @@ impl Handler<ExecCmd> for RuntimeProcess {
 
                     Ok(ExecCmdResult {
                         result: output_to_result(&output),
-                        message: None,
                         stdout: Some(vec_to_string(output.stdout)),
                         stderr: Some(vec_to_string(output.stderr)),
                     })
@@ -149,7 +148,6 @@ impl Handler<ExecCmd> for RuntimeProcess {
                 let fut = async {
                     Ok(ExecCmdResult {
                         result: CommandResult::Ok,
-                        message: None,
                         stdout: None,
                         stderr: None,
                     })
