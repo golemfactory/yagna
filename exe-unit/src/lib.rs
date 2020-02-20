@@ -10,6 +10,7 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
+use crate::service::transfer_service::TransferService;
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 use actix::prelude::*;
@@ -42,6 +43,7 @@ impl<R: Runtime> ExeUnit<R> {
         let state = ExeUnitState::default();
         let runtime = runtime.with_context(ctx.clone()).start();
         let metrics = MetricsService::default().start();
+        let transfers = TransferService::new(&ctx.work_dir, &ctx.cache_dir).start();
 
         ExeUnit {
             ctx,
@@ -51,6 +53,7 @@ impl<R: Runtime> ExeUnit<R> {
             services: vec![
                 Box::new(ServiceAddr::new(metrics)),
                 Box::new(ServiceAddr::new(runtime)),
+                Box::new(ServiceAddr::new(transfers)),
             ],
         }
     }

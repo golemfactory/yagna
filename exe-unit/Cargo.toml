@@ -41,3 +41,4 @@ structopt = "0.3"
 thiserror = "1.0.10"
 tokio = { version = "0.2.11", features = ["process", "signal"] }
 tokio-util = { version = "0.2", features = ["codec"] }
+url = "2.1.1"
