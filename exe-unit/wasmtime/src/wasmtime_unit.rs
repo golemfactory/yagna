@@ -1,171 +1,135 @@
-use ya_exe_framework::{ExeUnit, ExeUnitBuilder};
+use crate::entrypoint::DirectoryMount;
+use crate::manifest::{WasmImage, EntryPoint};
 
 use wasmtime::*;
 use wasi_common::preopen_dir;
 use wasmtime_wasi::{
-    create_wasi_instance, old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
+    old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
 };
 
 use anyhow::{bail, Context, Result, Error};
 use log::info;
 use std::collections::HashMap;
-use std::fs::{read, File};
-use std::path::{Path, PathBuf};
+use std::fs::File;
 
-
-struct DirectoryMount {
-    host: PathBuf,
-    guest: PathBuf,
-}
-
-
-pub struct WasmtimeFactory;
 
 
 pub struct Wasmtime {
     store: Store,
     mounts: Vec<DirectoryMount>,
-    module_registry: HashMap<String, Instance>,
+    /// Wasi modules instances and other dependencies, that we can add in future.
+    dependencies: HashMap<String, Instance>,
+    /// Modules loaded by user.
+    modules: HashMap<String, Module>,
 }
 
 
 impl Wasmtime {
-    pub fn new() -> Box<dyn ExeUnit> {
+    pub fn new(mounts: Vec<DirectoryMount>) -> Wasmtime {
         let wasmtime = Wasmtime {
             store: Store::default(),
-            mounts: vec![],
-            module_registry: HashMap::<String, Instance>::new()
+            mounts,
+            dependencies: HashMap::<String, Instance>::new(),
+            modules: HashMap::<String, Module>::new(),
         };
 
-        Box::new(wasmtime)
+        wasmtime
     }
 }
 
-impl ExeUnitBuilder for WasmtimeFactory {
-    fn create(&self) -> Result<Box<dyn ExeUnit>> {
-        Ok(Wasmtime::new())
-    }
-}
-
-impl WasmtimeFactory {
-    pub fn new() -> Box<dyn ExeUnitBuilder> {
-        Box::new(WasmtimeFactory{})
-    }
-}
-
-impl ExeUnit for Wasmtime {
-    fn on_deploy(&mut self, args: Vec<String>) -> Result<()> {
-
-        if args.len() != 1 {
-            return Err(Error::msg(format!("Deploy: invalid number of args.")));
-        }
-
-        let wasm_binary = args[ 0 ].clone();
-
-        //TODO: Get from external world
-        let args = vec![wasm_binary.clone()];
-
-        //TODO: Get from external world
-//        let dirs_mapping = vec![
-//            DirectoryMount {
-//                host: cmdargs.input_dir,
-//                guest: PathBuf::from("/in/"),
-//            },
-//            DirectoryMount {
-//                host: cmdargs.output_dir,
-//                guest: PathBuf::from("/out/"),
-//            },
-//        ];
-//        self.mounts = dirs_mapping;
-
-        self.create_wasi_module(args)?;
-        self.load_binary(&PathBuf::from(wasm_binary))?;
-        Ok(())
-    }
-
-    fn on_start(&mut self) -> Result<()> {
-        // This step does nothing.
-        Ok(())
-    }
-
-    fn on_transferred(&mut self) -> Result<()> {
-        // In current implementation do nothing.
-        Ok(())
-    }
-
-    fn on_run(&mut self, args: Vec<String>) -> Result<()> {
-
-        match self.module_registry.get("main") {
-            Some(instance) => {
-                let answer = instance
-                    .find_export_by_name("_start")
-                    .with_context(|| format!("Can't find _start entrypoint."))?
-                    .func()
-                    .with_context(|| format!("Can't find _start entrypoint."))?;
-                let _result = answer.borrow().call(&[])?;
-                Ok(())
-            },
-            None => {
-                Err(Error::msg(format!("Module not loaded.")))
-            }
-        }
-    }
-
-    fn on_stop(&mut self) -> Result<()> {
-        unimplemented!();
-    }
-}
 
 impl Wasmtime {
+    pub fn load_binaries(&mut self, mut image: &mut WasmImage) -> Result<()> {
+        // Loading binary will validate if it can be correctly loaded by wasmtime.
+        for entrypoint in image.list_entrypoints().iter() {
+            self.load_binary(&mut image, entrypoint)?;
+        }
+        Ok(())
+    }
 
-    fn create_wasi_module(&mut self, args: Vec<String>) -> Result<()> {
+    pub fn run(&mut self, image: EntryPoint, args: Vec<String>) -> Result<()> {
+        let args = Wasmtime::prepare_args(&args, &image);
+
+        self.create_wasi_module(&args)?;
+        let instance = self.create_instance(&image.id)?;
+
+        info!("Running wasm binary with arguments {:?}", args);
+        Ok(Wasmtime::run_instance(&instance, "_start")?)
+    }
+
+    pub fn load_binary(&mut self, image: &mut WasmImage, entrypoint: &EntryPoint) -> Result<()> {
+        info!("Loading wasm binary: {}.", entrypoint.id);
+
+        let wasm_binary = image.load_binary(entrypoint)
+            .with_context(|| format!("Can't load wasm binary {}.", entrypoint.id))?;
+
+        let module = Module::new(&self.store, &wasm_binary)
+            .with_context(|| format!("WASM module creation failed for binary: {}.", entrypoint.id))?;
+
+        self.modules.insert(entrypoint.id.clone(), module);
+        Ok(())
+    }
+
+    fn run_instance(instance: &Instance, entrypoint: &str) -> Result<()> {
+        info!("Running wasm binary entrypoint {}", entrypoint);
+
+        let function = instance
+            .find_export_by_name("_start")
+            .with_context(|| format!("Can't find {} entrypoint.", entrypoint))?
+            .func()
+            .with_context(|| format!("Can't find {} entrypoint.", entrypoint))?;
+        //TODO: Return error code from execution.
+        let _result = function.borrow().call(&[])?;
+        Ok(())
+    }
+
+    fn create_wasi_module(&mut self, args: &Vec<String>) -> Result<()> {
         info!("Loading wasi.");
 
         let preopen_dirs = Wasmtime::compute_preopen_dirs(&self.mounts)?;
+
         // Create and instantiate snapshot0 of WASI ABI (FWIW, this is one *can* still
         // be targeted when using an older Rust toolchain)
         let snapshot0 = create_wasi_instance_snapshot_0(
             &self.store,
             &preopen_dirs,
-            &args,
+            args,
             &vec![],
         )
         .with_context(|| format!("Failed to create snapshot0 WASI module."))?;
+
         // Create and instantiate snapshot1 of WASI ABI, aka the "current stable"
         let snapshot1 =
-            wasmtime_wasi::create_wasi_instance(&self.store, &preopen_dirs, &args, &vec![])
+            wasmtime_wasi::create_wasi_instance(&self.store, &preopen_dirs, args, &vec![])
                 .with_context(|| format!("Failed to create snapshot1 WASI module."))?;
 
-        self.module_registry.insert("wasi_unstable".to_owned(), snapshot0);
-        self.module_registry.insert("wasi_snapshot_preview1".to_owned(), snapshot1);
-
+        self.dependencies.insert("wasi_unstable".to_owned(), snapshot0);
+        self.dependencies.insert("wasi_snapshot_preview1".to_owned(), snapshot1);
         Ok(())
     }
 
-    fn load_binary(&mut self, binary_file: &Path) -> Result<()> {
-        info!("Loading wasm binary: {}", binary_file.display());
+    fn create_instance(&mut self, module_name: &str) -> Result<Instance> {
+        info!("Resolving [{}] module's dependencies.", module_name);
 
-        let wasm_binary = read(binary_file)
-            .with_context(|| format!("Can't load wasm binary {}.", binary_file.display()))?;
+        match self.modules.get_mut(module_name) {
+            Some(mut module) => {
 
-        let mut module = Module::new(&self.store, &wasm_binary)
-            .with_context(|| format!("WASM module creation failed."))?;
-
-        let imports = self.resolve_imports(&mut module)?;
-
-        let instance = Instance::new(&self.store, &module, &imports)
-            .with_context(|| format!("WASM instance creation failed."))?;
-
-        self.module_registry.insert("main".to_string(), instance);
-        Ok(())
+                let imports = Wasmtime::resolve_imports(&self.dependencies, &mut module)?;
+                let instance = Instance::new(&self.store, &module, &imports)
+                    .with_context(|| format!("WASM instance creation failed."))?;
+                Ok(instance)
+            },
+            None => return Err(Error::msg(format!("Module {} is not loaded. Did you forgot to run deploy step.", module_name)))
+        }
     }
 
-    fn resolve_imports(&self, module: &mut Module) -> Result<Vec<Extern>> {
+    fn resolve_imports(dependencies: &HashMap<String, Instance>,
+                       module: &mut Module) -> Result<Vec<Extern>> {
         Ok(module.imports()
             .iter()
             .map(|import| {
                 let module_name = import.module();
-                if let Some(instance) = self.module_registry.get(module_name) {
+                if let Some(instance) = dependencies.get(module_name) {
                     let field_name = import.name();
                     if let Some(export) = instance.find_export_by_name(field_name) {
                         Ok(export.clone())
@@ -187,7 +151,7 @@ impl Wasmtime {
         let mut preopen_dirs = Vec::new();
 
         for DirectoryMount { guest, host } in dirs.iter() {
-            println!("Mounting: {}::{}", host.display(), guest.display());
+            info!("Mounting: {}::{}", host.display(), guest.display());
 
             preopen_dirs.push((
                 guest.as_os_str().to_str().unwrap().to_string(),
@@ -197,6 +161,24 @@ impl Wasmtime {
         }
 
         Ok(preopen_dirs)
+    }
+
+    fn prepare_args(args: &Vec<String>, entrypoint: &EntryPoint) -> Vec<String> {
+        let mut new_args = Vec::new();
+
+        // Entrypoint path is relative to wasm binary package, so we don't
+        // leak directory structure here.
+        // TODO: What if someone uses this argument to access something in
+        //       filesystem? We don't mount wasm binary image to sandbox,
+        //       so he won't find expected file. Can this break code that depends
+        //       on binary existance?
+        new_args.push(entrypoint.wasm_path.clone());
+
+        for arg in args.iter() {
+            new_args.push(arg.clone());
+        }
+
+        return new_args;
     }
 }
 

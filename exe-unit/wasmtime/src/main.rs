@@ -1,17 +1,14 @@
-use ya_exe_framework::ExeUnit;
-use ya_exe_framework::ExeUnitFramework;
-
-use anyhow::Result;
-
-mod runtime;
+mod entrypoint;
+mod manifest;
 mod wasmtime_unit;
 
-use crate::wasmtime_unit::WasmtimeFactory;
-use wasmtime_unit::Wasmtime;
+use crate::entrypoint::{CmdArgs, ExeUnitMain};
+use anyhow::Result;
+use structopt::StructOpt;
 
 fn main() -> Result<()> {
     env_logger::init();
 
-    let framework = ExeUnitFramework::from_cmd_args(WasmtimeFactory::new())?;
-    Ok(framework.run()?)
+    let cmdargs = CmdArgs::from_args();
+    Ok(ExeUnitMain::entrypoint(cmdargs)?)
 }
