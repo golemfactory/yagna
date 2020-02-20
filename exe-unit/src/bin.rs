@@ -36,6 +36,16 @@ pub enum Command {
     },
 }
 
+fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
+    if let Err(error) = std::fs::create_dir_all(path) {
+        match &error.kind() {
+            std::io::ErrorKind::AlreadyExists => (),
+            _ => return Err(error.into()),
+        }
+    }
+    Ok(path.canonicalize()?)
+}
+
 fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
@@ -46,9 +56,9 @@ fn main() -> anyhow::Result<()> {
     let mut ctx = ExeUnitContext {
         service_id: None,
         report_url: None,
-        agreement: std::fs::canonicalize(&cli.agreement)?,
-        work_dir: std::fs::canonicalize(cli.work_dir)?,
-        cache_dir: std::fs::canonicalize(cli.cache_dir)?,
+        agreement: create_path(&cli.agreement)?,
+        work_dir: create_path(&cli.work_dir)?,
+        cache_dir: create_path(&cli.cache_dir)?,
     };
 
     match cli.command {
