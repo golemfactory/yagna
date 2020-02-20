@@ -24,13 +24,16 @@ pub trait PaymentDriver {
     async fn get_account_balance(&self) -> PaymentDriverResult<AccountBalance>;
 
     /// Schedules payment
-    async fn schedule_payment(
+    async fn schedule_payment<F>(
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
         recipient: Address,
         due_date: DateTime<Utc>,
-    ) -> PaymentDriverResult<()>;
+        tx_sign: F,
+    ) -> PaymentDriverResult<()>
+    where
+        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send;
 
     /// Returns payment status
     async fn get_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus>;
