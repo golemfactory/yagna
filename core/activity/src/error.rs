@@ -79,6 +79,7 @@ impl From<RpcMessageError> for Error {
         match e {
             RpcMessageError::Activity(err) => Error::Service(err),
             RpcMessageError::Service(err) => Error::Service(err),
+            RpcMessageError::UsageLimitExceeded(err) => Error::Service(err),
             RpcMessageError::BadRequest(err) => Error::BadRequest(err),
             RpcMessageError::Forbidden => Error::Forbidden,
             RpcMessageError::NotFound => Error::NotFound,

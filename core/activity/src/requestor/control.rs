@@ -18,6 +18,7 @@ use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
 use crate::requestor::provider_activity_service_id;
 use std::str::FromStr;
+use ya_model::activity::activity_state::StatePair;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -103,7 +104,12 @@ async fn destroy_activity(
     let uri = provider_activity_service_id(&agreement)?;
     let _ = gsb_send!(None, msg, &uri, query.timeout)?;
     ActivityStateDao::new(&conn)
-        .set(&path.activity_id, State::Terminated, None, None)
+        .set(
+            &path.activity_id,
+            StatePair(State::Terminated, None),
+            None,
+            None,
+        )
         .map_err(Error::from)?;
 
     Ok(())

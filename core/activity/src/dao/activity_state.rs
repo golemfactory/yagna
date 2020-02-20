@@ -5,6 +5,7 @@ use diesel::prelude::*;
 use serde_json;
 use std::time::Duration;
 use tokio::time::delay_for;
+use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::State;
 use ya_persistence::executor::ConnType;
 use ya_persistence::models::ActivityState;
@@ -64,7 +65,7 @@ impl<'c> ActivityStateDao<'c> {
     pub fn set(
         &self,
         activity_id: &str,
-        state: State,
+        state: StatePair,
         reason: Option<String>,
         error_message: Option<String>,
     ) -> Result<()> {
