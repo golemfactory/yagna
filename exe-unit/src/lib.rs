@@ -78,7 +78,7 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     async fn shutdown(addr: &Addr<Self>, reason: ShutdownReason) {
-        log::info!("Triggering shutdown: {:?}", reason);
+        log::info!("Initiating shutdown: {:?}", reason);
 
         if let Err(error) = addr.send(Shutdown(reason)).await {
             log::error!(
@@ -218,6 +218,8 @@ impl<R: Runtime> Actor for ExeUnit<R> {
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
             .finish()
             .spawn(ctx);
+
+        log::info!("Started");
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {

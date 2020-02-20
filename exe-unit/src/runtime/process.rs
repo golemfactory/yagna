@@ -3,9 +3,10 @@ use crate::message::{ExecCmd, ExecCmdResult, Shutdown};
 use crate::runtime::Runtime;
 use crate::ExeUnitContext;
 use actix::prelude::*;
+use futures::future::{AbortHandle, Abortable};
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::process::Stdio;
+use std::process::{Output, Stdio};
 use tokio::process::Command;
 use ya_model::activity::{CommandResult, ExeScriptCommand};
 
@@ -14,6 +15,7 @@ pub struct RuntimeProcess {
     agreement: Option<PathBuf>,
     work_dir: Option<PathBuf>,
     cache_dir: Option<PathBuf>,
+    child_handle: Option<AbortHandle>,
 }
 
 impl RuntimeProcess {
@@ -23,6 +25,7 @@ impl RuntimeProcess {
             agreement: None,
             work_dir: None,
             cache_dir: None,
+            child_handle: None,
         }
     }
 
@@ -61,10 +64,30 @@ impl Actor for RuntimeProcess {
     }
 }
 
+trait MapSelf<T, E>
+where
+    Self: Sized,
+{
+    fn map_self<F: FnOnce(Self) -> Result<T, E>>(self, f: F) -> Result<T, E>;
+}
+
+impl<T, E, Tm, Em> MapSelf<Tm, Em> for Result<T, E>
+where
+    Self: Sized,
+{
+    fn map_self<F: FnOnce(Self) -> Result<Tm, Em>>(self, f: F) -> Result<Tm, Em> {
+        f(self)
+    }
+}
+
+#[derive(Debug, Message)]
+#[rtype("()")]
+struct ClearChildHandle;
+
 impl Handler<ExecCmd> for RuntimeProcess {
     type Result = ActorResponse<Self, ExecCmdResult, Error>;
 
-    fn handle(&mut self, msg: ExecCmd, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ExecCmd, ctx: &mut Self::Context) -> Self::Result {
         let cmd_args = match msg.0.clone() {
             ExeScriptCommand::Transfer { .. } => None,
             ExeScriptCommand::Terminate {} => None,
@@ -85,27 +108,35 @@ impl Handler<ExecCmd> for RuntimeProcess {
             }
         };
 
+        let address = ctx.address();
         match cmd_args {
             Some(cmd_args) => {
                 let args = self.args(cmd_args);
-                log::debug!("Executing {:?}", args);
 
+                log::debug!("Executing {:?}", args);
                 let spawn = Command::new(self.binary.clone())
                     .args(args)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
                     .spawn();
 
+                let (handle, reg) = AbortHandle::new_pair();
+                self.child_handle = Some(handle);
+
                 let fut = async move {
-                    let output = spawn?.wait_with_output().await?;
-                    let result = if output.status.success() {
-                        CommandResult::Ok
-                    } else {
-                        CommandResult::Error
-                    };
+                    let output = Abortable::new(spawn?.wait_with_output(), reg)
+                        .await
+                        .map_self(|r| {
+                            address.do_send(ClearChildHandle {});
+                            r.map_err(|_| Error::CommandError("Process aborted".to_owned()))
+                        })?
+                        .map_self(|r| {
+                            address.do_send(ClearChildHandle {});
+                            r
+                        })?;
 
                     Ok(ExecCmdResult {
-                        result,
+                        result: output_to_result(&output),
                         message: None,
                         stdout: Some(vec_to_string(output.stdout)),
                         stderr: Some(vec_to_string(output.stderr)),
@@ -128,12 +159,32 @@ impl Handler<ExecCmd> for RuntimeProcess {
     }
 }
 
+impl Handler<ClearChildHandle> for RuntimeProcess {
+    type Result = <ClearChildHandle as Message>::Result;
+
+    fn handle(&mut self, _: ClearChildHandle, _: &mut Self::Context) -> Self::Result {
+        self.child_handle = None;
+    }
+}
+
 impl Handler<Shutdown> for RuntimeProcess {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        if let Some(handle) = &self.child_handle {
+            handle.abort();
+        }
         ctx.stop();
         Ok(())
+    }
+}
+
+#[inline]
+fn output_to_result(output: &Output) -> CommandResult {
+    if output.status.success() {
+        CommandResult::Ok
+    } else {
+        CommandResult::Error
     }
 }
 
