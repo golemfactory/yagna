@@ -1,4 +1,4 @@
-name: Docker Image CI
+name: Create Debian Package for Yagna
 
 on: [push]
 
@@ -13,4 +13,8 @@ jobs:
     - name: Build the Docker image
       run: docker build . -f create-deb.Dockerfile -t create-deb
     - name: Copy .deb file
-      run: docker run create-deb cat /src/target/debian/*.deb >yagna.deb
+      run: docker run create-deb bash -c "cat /src/target/debian/*.deb" >yagna.deb
+    - name: Download artifact
+      uses: actions/download-artifact@v1.0.0
+      with:
+        name: Yagna Debian Package

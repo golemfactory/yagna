@@ -40,5 +40,5 @@ assets = [
     ["target/release/ya-requestor", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
     ["target/release/wasmtime-exeunit", "usr/lib/yagna/plugins/", "755"],
-    ["src/exe-unit/wasmtime/example-exeunits.json", "usr/lib/yagna/plugins/", "644"],
+    ["../../exe-unit/example-exeunits.json", "usr/lib/yagna/plugins/", "644"],
 ]
