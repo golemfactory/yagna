@@ -12,15 +12,20 @@ pub fn cpu_time() -> Result<Duration> {
 }
 
 pub fn mem_rss() -> Result<i64> {
-    // Include child processes with:
-    //
-    // let children = getrusage(Resource::Children)?;
     Err(MetricError::Unsupported)
 }
 
 pub fn mem_peak_rss() -> Result<i64> {
+    let children = getrusage(Resource::Children)?;
     let process = getrusage(Resource::Process)?;
-    Ok(process.ru_maxrss + process.ru_ixrss + process.ru_idrss + process.ru_isrss)
+    Ok(process.ru_maxrss
+        + process.ru_ixrss
+        + process.ru_idrss
+        + process.ru_isrss
+        + children.ru_maxrss
+        + children.ru_ixrss
+        + children.ru_idrss
+        + children.ru_isrss)
 }
 
 #[repr(i32)]
