@@ -64,25 +64,25 @@ impl Actor for RuntimeProcess {
     }
 }
 
-trait MapSelf<T, E>
+trait Transform<T, E>
 where
     Self: Sized,
 {
-    fn map_self<F: FnOnce(Self) -> Result<T, E>>(self, f: F) -> Result<T, E>;
+    fn transform<F: FnOnce(Self) -> Result<T, E>>(self, f: F) -> Result<T, E>;
 }
 
-impl<T, E, Tm, Em> MapSelf<Tm, Em> for Result<T, E>
+impl<T, E, Tm, Em> Transform<Tm, Em> for Result<T, E>
 where
     Self: Sized,
 {
-    fn map_self<F: FnOnce(Self) -> Result<Tm, Em>>(self, f: F) -> Result<Tm, Em> {
+    fn transform<F: FnOnce(Self) -> Result<Tm, Em>>(self, f: F) -> Result<Tm, Em> {
         f(self)
     }
 }
 
 #[derive(Debug, Message)]
 #[rtype("()")]
-struct ClearChildHandle;
+struct SetChildHandle(Option<AbortHandle>);
 
 impl Handler<ExecCmd> for RuntimeProcess {
     type Result = ActorResponse<Self, ExecCmdResult, Error>;
@@ -112,26 +112,27 @@ impl Handler<ExecCmd> for RuntimeProcess {
         match cmd_args {
             Some(cmd_args) => {
                 let args = self.args(cmd_args);
+                let binary = self.binary.clone();
 
-                log::debug!("Executing {:?}", args);
-                let spawn = Command::new(self.binary.clone())
-                    .args(args)
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .spawn();
-
-                let (handle, reg) = AbortHandle::new_pair();
-                self.child_handle = Some(handle);
-
+                log::debug!("Executing {:?} with {:?}", binary, args);
                 let fut = async move {
-                    let output = Abortable::new(spawn?.wait_with_output(), reg)
+                    let child = Command::new(binary)
+                        .args(args)
+                        .stdout(Stdio::piped())
+                        .stderr(Stdio::piped())
+                        .spawn()?;
+
+                    let (handle, reg) = AbortHandle::new_pair();
+                    address.do_send(SetChildHandle(Some(handle)));
+
+                    let output = Abortable::new(child.wait_with_output(), reg)
                         .await
-                        .map_self(|r| {
-                            address.do_send(ClearChildHandle {});
+                        .transform(|r| {
+                            address.do_send(SetChildHandle(None));
                             r.map_err(|_| Error::CommandError("Process aborted".to_owned()))
                         })?
-                        .map_self(|r| {
-                            address.do_send(ClearChildHandle {});
+                        .transform(|r| {
+                            address.do_send(SetChildHandle(None));
                             r
                         })?;
 
@@ -159,11 +160,11 @@ impl Handler<ExecCmd> for RuntimeProcess {
     }
 }
 
-impl Handler<ClearChildHandle> for RuntimeProcess {
-    type Result = <ClearChildHandle as Message>::Result;
+impl Handler<SetChildHandle> for RuntimeProcess {
+    type Result = <SetChildHandle as Message>::Result;
 
-    fn handle(&mut self, _: ClearChildHandle, _: &mut Self::Context) -> Self::Result {
-        self.child_handle = None;
+    fn handle(&mut self, msg: SetChildHandle, _: &mut Self::Context) -> Self::Result {
+        self.child_handle = msg.0;
     }
 }
 
