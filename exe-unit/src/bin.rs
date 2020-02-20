@@ -8,31 +8,32 @@ use ya_exe_unit::service::signal::SignalMonitor;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
 use ya_service_bus::RpcEnvelope;
 
-// Temporary
-const BINARY: &'static str = "wasmtime";
-
 #[derive(structopt::StructOpt, Debug)]
 pub struct Cli {
+    /// Agreement file path
     #[structopt(long, short)]
     pub agreement: PathBuf,
+    /// Working directory
     #[structopt(long, short)]
     pub work_dir: PathBuf,
+    /// Common cache directory
     #[structopt(long, short)]
     pub cache_dir: PathBuf,
+    /// Runtime binary
     #[structopt(long, short)]
-    pub binary: Option<PathBuf>,
+    pub binary: PathBuf,
     #[structopt(subcommand)]
     pub command: Command,
 }
 
 #[derive(structopt::StructOpt, Debug)]
 pub enum Command {
+    /// Execute commands from file
+    FromFile { input: PathBuf },
+    /// Bind to Service Bus
     ServiceBus {
         service_id: String,
         report_url: String,
-    },
-    FromFile {
-        input: PathBuf,
     },
 }
 
@@ -51,7 +52,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let cli: Cli = Cli::from_args();
-    let binary = cli.binary.clone().unwrap_or(PathBuf::from(BINARY));
+    let binary = cli.binary.clone();
     let mut commands = None;
     let mut ctx = ExeUnitContext {
         service_id: None,
