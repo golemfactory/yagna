@@ -65,8 +65,8 @@ impl Handler<ExecCmd> for RuntimeProcess {
     type Result = ActorResponse<Self, ExecCmdResult, Error>;
 
     fn handle(&mut self, msg: ExecCmd, _: &mut Self::Context) -> Self::Result {
-        let cmd_args = match msg.0 {
-            ExeScriptCommand::Transfer { .. } => unimplemented!(),
+        let cmd_args = match msg.0.clone() {
+            ExeScriptCommand::Transfer { .. } => None,
             ExeScriptCommand::Terminate {} => None,
             ExeScriptCommand::Deploy {} => Some(vec![OsString::from("deploy")]),
             ExeScriptCommand::Start { args } => {
@@ -75,7 +75,11 @@ impl Handler<ExecCmd> for RuntimeProcess {
                 Some(result)
             }
             ExeScriptCommand::Run { entry_point, args } => {
-                let mut result = vec![OsString::from("run"), OsString::from(entry_point)];
+                let mut result = vec![
+                    OsString::from("run"),
+                    OsString::from("--entrypoint"),
+                    OsString::from(entry_point),
+                ];
                 result.extend(args.into_iter().map(OsString::from));
                 Some(result)
             }

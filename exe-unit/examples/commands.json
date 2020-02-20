@@ -5,7 +5,7 @@
     "args": []
   }},
   {"run": {
-    "entry_point": "_start",
+    "entry_point": "hello-world",
     "args": []
   }},
   {"terminate": {

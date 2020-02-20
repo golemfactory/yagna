@@ -76,6 +76,18 @@ impl<R: Runtime> ExeUnit<R> {
             log::warn!("Unable to stop the runtime: {:?}", e);
         }
     }
+
+    async fn shutdown(addr: &Addr<Self>, reason: ShutdownReason) {
+        log::info!("Triggering shutdown: {:?}", reason);
+
+        if let Err(error) = addr.send(Shutdown(reason)).await {
+            log::error!(
+                "Unable to perform a graceful shutdown: {:?}. Terminating",
+                error
+            );
+            System::current().stop();
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -95,9 +107,6 @@ impl<R: Runtime> ExeUnit<R> {
             };
 
             if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), ctx.clone()).await {
-                let shutdown = Shutdown(ShutdownReason::Error(error.to_string()));
-                log::error!("Triggering shutdown: {:?}", shutdown.0);
-
                 let cmd_result = ExeScriptCommandResult {
                     index: ctx.idx as u32,
                     result: Some(ya_model::activity::CommandResult::Error),
@@ -115,14 +124,13 @@ impl<R: Runtime> ExeUnit<R> {
                         error
                     );
                 }
-                if let Err(error) = addr.send(shutdown).await {
-                    log::error!(
-                        "Unable to perform a graceful shutdown: {:?}. Terminating",
-                        error
-                    );
-                    System::current().stop();
-                }
 
+                Self::shutdown(&addr, ShutdownReason::Error(error.to_string())).await;
+                break;
+            }
+
+            if let ExeScriptCommand::Terminate {} = &ctx.cmd {
+                Self::shutdown(&addr, ShutdownReason::Finished).await;
                 break;
             }
         }
