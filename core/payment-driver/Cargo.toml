@@ -14,3 +14,4 @@ thiserror = "1.0"
 web3 = { git = "https://github.com/bidzyyys/rust-web3" }
 futures = "0.3"
 ethereum-tx-sign = { git = "https://github.com/bidzyyys/ethereum-tx-sign" }
+ethsign = "0.7"

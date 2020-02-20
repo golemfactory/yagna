@@ -1,3 +1,5 @@
+use ethsign::{KeyFile, Protected};
+
 use futures::executor::block_on;
 
 use ya_payment_driver::account::{AccountBalance, Chain};
@@ -10,9 +12,21 @@ const GNT_RINKEBY_CONTRACT: &str = "924442A66cFd812308791872C4B242440c108E19";
 const FAUCET_TESTNET_CONTRACT: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
 const ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 
-// TODO
-fn sign_tx(tx: Vec<u8>) -> Vec<u8> {
-    tx
+fn sign_tx(bytes: Vec<u8>) -> Vec<u8> {
+    let file = std::fs::File::open("/home/daniel/work/datadir/keys/keystore.json").unwrap();
+    let key: KeyFile = serde_json::from_reader(file).unwrap();
+    let password: Protected = "@Golem1234".into();
+    let secret = key.to_secret_key(&password).unwrap();
+
+    // Sign the message
+    let signature = secret.sign(&bytes).unwrap();
+
+    let mut v = Vec::with_capacity(65);
+    v.push(signature.v);
+    v.extend_from_slice(&signature.r[..]);
+    v.extend_from_slice(&signature.s[..]);
+
+    v
 }
 
 fn main() {
@@ -28,6 +42,7 @@ fn main() {
 
     let balance_result = block_on(driver.get_account_balance());
     let balance: AccountBalance = balance_result.unwrap();
+    println!("{:?}", balance);
 
     driver
         .bind_faucet_contract(faucet_rinkeby_address)
@@ -40,12 +55,10 @@ fn main() {
                     |e| {
                         println!("{:?}", e);
                     },
-                    |_| {
-                        println!("Requested");
+                    |tx| {
+                        println!("Requested: {:?}", tx);
                     },
                 );
             },
         );
-
-    println!("{:?}", balance);
 }

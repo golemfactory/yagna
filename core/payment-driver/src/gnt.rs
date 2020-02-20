@@ -105,7 +105,7 @@ impl GntDriver {
                     },
                     |gas_price| {
                         let nonce = self.get_next_nonce();
-                        let _tx = self.prepare_raw_tx(
+                        let tx = self.prepare_raw_tx(
                             nonce,
                             gas_price,
                             U256::from(GAS_FAUCET),
@@ -113,9 +113,10 @@ impl GntDriver {
                             "create",
                             (),
                         );
-                        // TODO tx encoding
-                        let encoded_tx: Vec<u8> = vec![0, 0, 0];
-                        let result = self.send_transaction(tx_sign(encoded_tx));
+                        let chain_id = self.ethereum_client.get_chain_id();
+                        let encoded_signed_tx =
+                            tx.encode_signed_tx(tx_sign(tx.hash(chain_id)), chain_id);
+                        let result = self.send_transaction(encoded_signed_tx);
                         // TODO persistence
                         result
                     },
