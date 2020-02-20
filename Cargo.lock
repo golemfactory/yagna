@@ -3977,26 +3977,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-exe-dummy"
-version = "0.1.0"
-dependencies = [
- "actix 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.104 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.47 (registry+https://github.com/rust-lang/crates.io-index)",
- "structopt 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror 1.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-core-model 0.1.0",
- "ya-exe-api 0.1.0",
- "ya-model 0.1.0",
- "ya-service-api 0.1.1",
- "ya-service-bus 0.2.1",
-]
-
-[[package]]
 name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
