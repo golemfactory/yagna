@@ -36,13 +36,17 @@ impl PaymentDriver for DummyDriver {
         })
     }
 
-    async fn schedule_payment(
+    async fn schedule_payment<F>(
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
         recipient: Address,
         _due_date: DateTime<Utc>,
-    ) -> Result<(), PaymentDriverError> {
+        _tx_sign: F,
+    ) -> Result<(), PaymentDriverError>
+    where
+        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
+    {
         match self.payments.entry(invoice_id.to_string()) {
             Entry::Occupied(_) => Err(PaymentDriverError::AlreadyScheduled),
             Entry::Vacant(entry) => {
