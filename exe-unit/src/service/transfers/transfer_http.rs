@@ -2,9 +2,10 @@ use super::transfer_protocol::TransferProtocol;
 use std::path::Path;
 use anyhow::{Result, Error };
 use url::Url;
+use std::sync::Arc;
 
 
-struct HttpTransfer;
+pub struct HttpTransfer;
 
 
 impl TransferProtocol for HttpTransfer {
@@ -21,4 +22,11 @@ impl TransferProtocol for HttpTransfer {
         }
     }
 }
+
+impl HttpTransfer {
+    pub fn new() -> Arc<Box<dyn TransferProtocol>> {
+        Arc::new(Box::new(HttpTransfer{}))
+    }
+}
+
 

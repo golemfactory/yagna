@@ -1,9 +1,12 @@
 use actix::prelude::*;
-use anyhow::{Result, Error};
+use crate::Result;
+use crate::error::Error;
 use std::path::{Path, PathBuf};
 use log::{info};
+use url::Url;
 
 use super::transfers::Transfers;
+use super::transfers::{LocalTransfer, HttpTransfer};
 use crate::message::Shutdown;
 
 
@@ -14,14 +17,14 @@ use crate::message::Shutdown;
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct TransferResource {
-    from: String,
-    to: String,
+    pub from: String,
+    pub to: String,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct DeployImage {
-    image: String,
+    pub image: String,
 }
 
 // =========================================== //
@@ -50,8 +53,12 @@ impl Actor for TransferService {
 
 impl TransferService {
     pub fn new(workdir: &Path, cachedir: &Path) -> TransferService {
+        let mut transfers = Transfers::new();
+        transfers.register_protocol(LocalTransfer::new());
+        transfers.register_protocol(HttpTransfer::new());
+
         TransferService{
-            transfers: Transfers::new(),
+            transfers,
             workdir: workdir.to_path_buf(),
             cachedir: cachedir.to_path_buf(),
         }
@@ -62,9 +69,24 @@ impl Handler<TransferResource> for TransferService {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: TransferResource, ctx: &mut Self::Context) -> Self::Result {
+        info!("Transfering resource from [{}] to [{}].", &msg.from, &msg.to);
+
+        let from = Url::parse(&msg.from)
+            .map_err(|error| Error::CommandError(format!("Can't parse source URL [{}]. Error: {}", &msg.from, error)));
+        let to = Url::parse(&msg.to)
+            .map_err(|error| Error::CommandError(format!("Can't parse destination URL [{}]. Error: {}", &msg.to, error)));
+
+        if from.is_err() {
+            return ActorResponse::reply(from.map(|_| ()));
+        }
+
+        if to.is_err() {
+            return ActorResponse::reply(to.map(|_| ()));
+        }
 
         //TODO: Check if paths are inside workdir
-        ActorResponse::reply(self.transfers.transfer(&msg.from, &msg.to))
+        ActorResponse::reply(self.transfers.transfer(&from.unwrap(), &to.unwrap(), &self.workdir)
+            .map_err(|error| Error::CommandError(error.to_string())))
     }
 }
 

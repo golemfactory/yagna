@@ -3,6 +3,7 @@ use super::transfer_protocol::TransferProtocol;
 use anyhow::{Result, Error, Context};
 use url::Url;
 use std::sync::Arc;
+use std::path::{Path, PathBuf};
 
 
 pub struct Transfers {
@@ -15,11 +16,9 @@ impl Transfers {
         Transfers{protocols: vec![]}
     }
 
-    pub fn transfer(&self, from: &str, to: &str) -> Result<()> {
-        let src_url = Url::parse(from)
-            .with_context(|| format!("Can't parse source URL [{}].", from))?;
-        let dest_url = Url::parse(from)
-            .with_context(|| format!("Can't parse destination URL [{}].", from))?;
+    pub fn transfer(&self, from: &Url, to: &Url, local_root: &Path) -> Result<()> {
+        let src_url = Self::translate_local_path(from, local_root)?;
+        let dest_url = Self::translate_local_path(to, local_root)?;
 
         let protocol = self.find_protocol(&src_url, &dest_url)?;
         Ok(protocol.transfer(&src_url, &dest_url)?)
@@ -33,13 +32,13 @@ impl Transfers {
         let src_prefix = from.scheme();
         let dest_prefix = to.scheme();
 
-        if !dest_prefix.is_empty() && !src_prefix.is_empty() {
+        if !Self::is_local(dest_prefix) && !Self::is_local(src_prefix) {
             return Err(Error::msg(format!("One of urls source [{}] or destination [{}] must be local path.", from, to)));
         };
 
         // Choose prefix of remote path. If both paths are local paths
         // remote_prefix will be empty and we will do local copy of file.
-        let remote_prefix = if !src_prefix.is_empty() {
+        let remote_prefix = if !Self::is_local(src_prefix) {
             src_prefix
         } else {
             dest_prefix
@@ -50,6 +49,28 @@ impl Transfers {
         }
         else {
             Err(Error::msg(format!("Protocol for transfering from [{}] to [{}] not found.", from, to)))
+        }
+    }
+
+    fn is_local(prefix: &str) -> bool {
+        prefix.is_empty() || prefix == "file"
+    }
+
+    /// Translates all local paths to be relative to workdir.
+    /// We do this, because remote requestor shouldn't know our file system.
+    /// We treat working directory as filesystem root.
+    fn translate_local_path(path: &Url, root: &Path) -> Result<Url> {
+        let prefix = path.scheme();
+        if Self::is_local(&prefix) {
+            // Remove root from path, which we know is absolute.
+            let original_without_prefix = PathBuf::from(path.path());
+            let relative = original_without_prefix.strip_prefix("/")?;
+            let absolute = root.join(relative);
+            Ok(Url::parse(&format!("file://{}", absolute.display()))?)
+        }
+        else {
+            // Don't translate remote path.
+            Ok(path.clone())
         }
     }
 }

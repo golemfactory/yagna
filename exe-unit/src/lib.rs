@@ -10,7 +10,7 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
-use crate::service::transfer_service::TransferService;
+use crate::service::transfer_service::{TransferService, TransferResource, DeployImage};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 use actix::prelude::*;
@@ -103,7 +103,7 @@ struct ExecCtx {
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    async fn exec(addr: Addr<Self>, exe_unit: Addr<R>, exec: Exec) {
+    async fn exec(addr: Addr<Self>, exe_unit: Addr<R>, transfer_service: Addr<TransferService>, exec: Exec) {
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
                 batch_id: exec.batch_id.clone(),
@@ -111,7 +111,7 @@ impl<R: Runtime> ExeUnit<R> {
                 cmd,
             };
 
-            if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), ctx.clone()).await {
+            if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), transfer_service.clone(), ctx.clone()).await {
                 let cmd_result = ExeScriptCommandResult {
                     index: ctx.idx as u32,
                     result: Some(ya_model::activity::CommandResult::Error),
@@ -142,7 +142,7 @@ impl<R: Runtime> ExeUnit<R> {
         }
     }
 
-    async fn exec_cmd(addr: Addr<Self>, exe_unit: Addr<R>, ctx: ExecCtx) -> Result<()> {
+    async fn exec_cmd(addr: Addr<Self>, exe_unit: Addr<R>, transfer_service: Addr<TransferService>, ctx: ExecCtx) -> Result<()> {
         let state = addr.send(GetState {}).await?.0;
         let before_state = match (&state.0, &state.1) {
             (_, Some(_)) => {
@@ -178,6 +178,8 @@ impl<R: Runtime> ExeUnit<R> {
         })
         .await?;
 
+        Self::pre_exec(addr.clone(), exe_unit.clone(), transfer_service, ctx.clone()).await?;
+
         let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exe_result.result {
             return Err(Error::CommandError(format!(
@@ -204,6 +206,19 @@ impl<R: Runtime> ExeUnit<R> {
         .await?;
 
         Ok(())
+    }
+
+    async fn pre_exec(addr: Addr<Self>, exe_unit: Addr<R>, transfer_service: Addr<TransferService>, ctx: ExecCtx) -> Result<()> {
+        if let ExeScriptCommand::Transfer {from, to} = &ctx.cmd {
+            let msg = TransferResource{from: from.clone(), to: to.clone()};
+            return Ok(transfer_service.send(msg).await??);
+        }
+        else if let ExeScriptCommand::Deploy {} = &ctx.cmd {
+            return Ok(());
+        }
+        else {
+            return Ok(());
+        }
     }
 }
 
