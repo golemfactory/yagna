@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use chrono::{DateTime, Utc};
 
 use ethereum_types::{Address, H256, U256};
@@ -88,7 +90,7 @@ impl GntDriver {
     }
 
     /// Requests Gnt from faucet
-    pub async fn request_gnt_from_faucet<F>(&self, tx_sign: F) -> PaymentDriverResult<H256>
+    pub async fn request_gnt_from_faucet<F>(&self, tx_sign: F) -> PaymentDriverResult<()>
     where
         F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
     {
@@ -97,28 +99,16 @@ impl GntDriver {
                 msg: String::from("Faucet contract not bound"),
             }),
             Some(contract) => {
-                self.get_gas_price().map_or_else(
+                let mut tx = self.prepare_raw_tx(U256::from(GAS_FAUCET), contract, "create", ());
+                self.send_raw_transaction(&mut tx, tx_sign).map_or_else(
                     |e| {
                         Err(PaymentDriverError::LibraryError {
                             msg: format!("{:?}", e),
                         })
                     },
-                    |gas_price| {
-                        let nonce = self.get_next_nonce();
-                        let tx = self.prepare_raw_tx(
-                            nonce,
-                            gas_price,
-                            U256::from(GAS_FAUCET),
-                            contract,
-                            "create",
-                            (),
-                        );
-                        let chain_id = self.ethereum_client.get_chain_id();
-                        let encoded_signed_tx =
-                            tx.encode_signed_tx(tx_sign(tx.hash(chain_id)), chain_id);
-                        let result = self.send_transaction(encoded_signed_tx);
-                        // TODO persistence
-                        result
+                    |tx_hash| {
+                        println!("Tx hash: {:?}", tx_hash);
+                        Ok(())
                     },
                 )
             }
@@ -148,10 +138,40 @@ impl GntDriver {
         )
     }
 
+    fn send_raw_transaction<F>(
+        &self,
+        raw_tx: &mut RawTransaction,
+        sign_tx: F,
+    ) -> PaymentDriverResult<H256>
+    where
+        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
+    {
+        self.get_gas_price().map_or_else(
+            |e| {
+                Err(PaymentDriverError::LibraryError {
+                    msg: format!("{:?}", e),
+                })
+            },
+            |gas_price| {
+                raw_tx.nonce = self.get_next_nonce();
+                raw_tx.gas_price = gas_price;
+                let chain_id = self.get_chain_id();
+                let signature = sign_tx(raw_tx.hash(chain_id));
+                let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
+                self.send_transaction(signed_tx).map_or_else(
+                    |e| {
+                        Err(PaymentDriverError::LibraryError {
+                            msg: format!("{:?}", e),
+                        })
+                    },
+                    |tx_hash| Ok(tx_hash),
+                )
+            },
+        )
+    }
+
     fn prepare_raw_tx<P>(
         &self,
-        nonce: U256,
-        gas_price: U256,
         gas: U256,
         contract: &Contract<Http>,
         func: &str,
@@ -161,10 +181,12 @@ impl GntDriver {
         P: Tokenize,
     {
         RawTransaction {
-            nonce: nonce,
+            // nonce will be overwritten
+            nonce: U256::from(0),
             to: Some(contract.address()),
             value: U256::from(0),
-            gas_price: gas_price,
+            // gas price will be overwritten
+            gas_price: U256::from(0),
             gas: gas,
             data: contract.encode(func, tokens).unwrap(),
         }
@@ -185,6 +207,10 @@ impl GntDriver {
         )
     }
 
+    fn get_chain_id(&self) -> u64 {
+        self.ethereum_client.get_chain_id()
+    }
+
     fn send_transaction(&self, tx: Vec<u8>) -> PaymentDriverResult<H256> {
         self.ethereum_client.send_tx(tx).map_or_else(
             |e| {
@@ -197,7 +223,7 @@ impl GntDriver {
     }
 
     fn get_next_nonce(&self) -> U256 {
-        let current_nonce = 23_u64;
+        let current_nonce = 27_u64;
         U256::from(current_nonce + 1)
     }
 
@@ -211,9 +237,18 @@ impl GntDriver {
             |gas_price| Ok(gas_price),
         )
     }
+
+    fn prepare_payment_amounts(&self, amount: PaymentAmount) -> (U256, U256) {
+        let gas_amount = if amount.gas_amount.is_some() {
+            amount.gas_amount.unwrap()
+        } else {
+            U256::from(55000)
+        };
+        (amount.base_currency_amount, gas_amount)
+    }
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl PaymentDriver for GntDriver {
     /// Returns account balance
     async fn get_account_balance(&self) -> PaymentDriverResult<AccountBalance> {
@@ -240,7 +275,7 @@ impl PaymentDriver for GntDriver {
     #[allow(unused)]
     async fn schedule_payment<F>(
         &mut self,
-        invoice_id: &str,
+        _invoice_id: &str,
         amount: PaymentAmount,
         recipient: Address,
         due_date: DateTime<Utc>,
@@ -249,7 +284,24 @@ impl PaymentDriver for GntDriver {
     where
         F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
     {
-        unimplemented!();
+        let (payment_amount, gas_amount) = self.prepare_payment_amounts(amount);
+        let mut tx = self.prepare_raw_tx(
+            gas_amount,
+            &self.gnt_contract,
+            "transfer",
+            (recipient, payment_amount),
+        );
+        self.send_raw_transaction(&mut tx, tx_sign).map_or_else(
+            |e| {
+                Err(PaymentDriverError::LibraryError {
+                    msg: format!("{:?}", e),
+                })
+            },
+            |tx_hash| {
+                println!("Tx hash: {:?}", tx_hash);
+                Ok(())
+            },
+        )
     }
 
     /// Returns payment status

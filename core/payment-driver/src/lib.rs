@@ -4,11 +4,11 @@ use ethereum_types::Address;
 
 mod dummy;
 mod error;
-mod payment;
 
 pub mod account;
 pub mod ethereum;
 pub mod gnt;
+pub mod payment;
 
 pub use account::{AccountBalance, Balance, Chain, Currency};
 pub use dummy::DummyDriver;
