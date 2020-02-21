@@ -1,6 +1,6 @@
 use anyhow::{Result, Error, Context};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use url::Url;
 
@@ -12,10 +12,8 @@ pub struct LocalTransfer;
 
 impl TransferProtocol for LocalTransfer {
     fn transfer(&self, from: &Url, to: &Url) -> Result<()> {
-        let from = from.to_file_path()
-            .map_err(|_| Error::msg(format!("Invalid source path [{}].", from)))?;
-        let to = to.to_file_path()
-            .map_err(|_| Error::msg(format!("Invalid source path [{}].", to)))?;
+        let from = Self::extract_file_path(&from)?;
+        let to = Self::extract_file_path(&to)?;
 
         std::fs::copy(&from, &to)
             .with_context(|| format!("Can't transfer from [{}] to [{}].", from.display(), to.display()))?;
@@ -30,6 +28,11 @@ impl TransferProtocol for LocalTransfer {
 impl LocalTransfer {
     pub fn new() -> Arc<Box<dyn TransferProtocol>> {
         Arc::new(Box::new(LocalTransfer{}))
+    }
+
+    fn extract_file_path(url: &Url) -> Result<PathBuf> {
+        Ok(url.to_file_path()
+            .map_err(|_| Error::msg(format!("Invalid file path [{}].", url)))?)
     }
 }
 

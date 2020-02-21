@@ -84,9 +84,11 @@ impl Handler<TransferResource> for TransferService {
             return ActorResponse::reply(to.map(|_| ()));
         }
 
-        //TODO: Check if paths are inside workdir
-        ActorResponse::reply(self.transfers.transfer(&from.unwrap(), &to.unwrap(), &self.workdir)
-            .map_err(|error| Error::CommandError(error.to_string())))
+        let response = ActorResponse::reply(self.transfers.transfer(&from.unwrap(), &to.unwrap(), &self.workdir)
+            .map_err(|error| Error::CommandError(error.to_string())));
+
+        info!("Transfer from [{}] to [{}] finished.", &msg.from, &msg.to);
+        return response;
     }
 }
 
