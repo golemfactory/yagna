@@ -5,6 +5,11 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-persistence = "0.2"
+diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "1.4"
+libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
+anyhow = "1.0"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"]}
 ethereum-types = "0.6.0"
