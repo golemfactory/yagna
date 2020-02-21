@@ -12,8 +12,11 @@ path = "src/lib.rs"
 name = "exe-unit"
 path = "src/bin.rs"
 
-[features]
-default = ["nix", "winapi"]
+[target.'cfg(not(windows))'.dependencies]
+nix = { version = "0.17.0" }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.8", features = ["jobapi2", "psapi"] }
 
 [dependencies]
 ya-model = "0.1"
@@ -38,6 +41,3 @@ structopt = "0.3"
 thiserror = "1.0.10"
 tokio = { version = "0.2.11", features = ["process", "signal"] }
 tokio-util = { version = "0.2", features = ["codec"] }
-
-nix = { version = "0.17.0", optional = true }
-winapi = { version = "0.3.8", features = ["psapi"], optional = true }

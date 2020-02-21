@@ -1,17 +1,32 @@
+use crate::metrics::error::MetricError;
 use crate::metrics::Result;
 use std::mem;
 use std::ptr;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 use thiserror::Error;
-use winapi::shared::minwindef::{DWORD, FALSE, FILETIME};
+use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
+use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um;
+
+lazy_static::lazy_static! {
+    static ref JOB_OBJECT: Arc<Mutex<JobObject>> = Arc::new(Mutex::new(JobObject::new()));
+}
 
 #[derive(Clone, Debug, Error)]
 pub enum SystemError {
     #[error("Null pointer: {0}")]
     NullPointer(String),
+    #[error("Mutex poison error")]
+    PoisonError,
     #[error("API error: {0}")]
     ApiError(u32),
+}
+
+impl<T> From<PoisonError<T>> for SystemError {
+    fn from(_: PoisonError<T>) -> Self {
+        SystemError::PoisonError
+    }
 }
 
 impl SystemError {
@@ -22,97 +37,109 @@ impl SystemError {
 }
 
 pub fn cpu_time() -> Result<Duration> {
-    let pid = unsafe { um::processthreadsapi::GetCurrentProcessId() };
-    let times = proc_times(pid)?;
-    Ok(to_duration(&times.kernel_time) + to_duration(&times.user_time))
+    let info = JOB_OBJECT.lock().map_err(SystemError::from)?.accounting()?;
+    let user_time = to_duration(unsafe { info.TotalUserTime.u() });
+    let kernel_time = to_duration(unsafe { info.TotalKernelTime.u() });
+
+    Ok(user_time + kernel_time)
 }
 
 pub fn mem_rss() -> Result<i64> {
-    let pid = unsafe { um::processthreadsapi::GetCurrentProcessId() };
-    let info = mem_info(pid)?;
-    Ok(info.WorkingSetSize as i64)
+    Err(MetricError::Unsupported)
 }
 
 pub fn mem_peak_rss() -> Result<i64> {
-    let pid = unsafe { um::processthreadsapi::GetCurrentProcessId() };
-    let info = mem_info(pid)?;
-    Ok(info.PeakWorkingSetSize as i64)
+    let info = JOB_OBJECT.lock().map_err(SystemError::from)?.limits()?;
+    Ok(info.PeakJobMemoryUsed as i64)
 }
 
-struct ProcessTimes {
-    creation_time: FILETIME,
-    exit_time: FILETIME,
-    kernel_time: FILETIME,
-    user_time: FILETIME,
+struct JobObject {
+    handle: HANDLE,
 }
 
-fn proc_times(pid: DWORD) -> Result<ProcessTimes> {
-    let mut creation_time = mem::MaybeUninit::<FILETIME>::uninit();
-    let mut exit_time = mem::MaybeUninit::<FILETIME>::uninit();
-    let mut kernel_time = mem::MaybeUninit::<FILETIME>::uninit();
-    let mut user_time = mem::MaybeUninit::<FILETIME>::uninit();
+unsafe impl Send for JobObject {}
 
-    let handle = unsafe {
-        um::processthreadsapi::OpenProcess(
-            um::winnt::PROCESS_QUERY_INFORMATION | um::winnt::PROCESS_VM_READ,
-            FALSE,
-            pid,
-        )
-    };
-    if handle.is_null() {
-        return Err(SystemError::NullPointer(format!("handle to process {}", pid)).into());
+impl JobObject {
+    pub fn new() -> Self {
+        let job_object = JobObject {
+            handle: Self::create_job().unwrap(),
+        };
+
+        let mut info: um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { mem::zeroed() };
+        info.BasicLimitInformation.LimitFlags = um::winnt::JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        job_object.set_limits(info).unwrap();
+
+        job_object
     }
 
-    let ret = unsafe {
-        um::processthreadsapi::GetProcessTimes(
-            handle,
-            creation_time.as_mut_ptr(),
-            exit_time.as_mut_ptr(),
-            kernel_time.as_mut_ptr(),
-            user_time.as_mut_ptr(),
-        )
-    };
-    unsafe { um::handleapi::CloseHandle(handle) };
+    fn accounting(&self) -> Result<um::winnt::JOBOBJECT_BASIC_ACCOUNTING_INFORMATION> {
+        let mut info: um::winnt::JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = unsafe { mem::zeroed() };
 
-    match ret {
-        0 => Err(SystemError::last().into()),
-        _ => Ok(ProcessTimes {
-            creation_time: unsafe { creation_time.assume_init() },
-            exit_time: unsafe { exit_time.assume_init() },
-            kernel_time: unsafe { kernel_time.assume_init() },
-            user_time: unsafe { user_time.assume_init() },
-        }),
+        if unsafe {
+            um::jobapi2::QueryInformationJobObject(
+                self.handle,
+                um::winnt::JobObjectBasicAccountingInformation,
+                &mut info as *mut _ as LPVOID,
+                mem::size_of::<um::winnt::JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as DWORD,
+                NULL as *mut _ as LPDWORD,
+            )
+        } == 0
+        {
+            return Err(SystemError::last().into());
+        }
+
+        Ok(info)
+    }
+
+    fn limits(&self) -> Result<um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION> {
+        let mut info: um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { mem::zeroed() };
+
+        if unsafe {
+            um::jobapi2::QueryInformationJobObject(
+                self.handle,
+                um::winnt::JobObjectExtendedLimitInformation,
+                &mut info as *mut _ as LPVOID,
+                mem::size_of::<um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as DWORD,
+                NULL as *mut _ as LPDWORD,
+            )
+        } == 0
+        {
+            return Err(SystemError::last().into());
+        }
+
+        Ok(info)
+    }
+
+    fn set_limits(&self, mut info: um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION) -> Result<()> {
+        if unsafe {
+            um::jobapi2::SetInformationJobObject(
+                self.handle,
+                um::winnt::JobObjectExtendedLimitInformation,
+                &mut info as *mut _ as LPVOID,
+                mem::size_of::<um::winnt::JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as DWORD,
+            )
+        } == 0
+        {
+            return Err(SystemError::last().into());
+        }
+        Ok(())
+    }
+
+    fn create_job() -> Result<HANDLE> {
+        let handle = unsafe { um::jobapi2::CreateJobObjectW(ptr::null_mut(), ptr::null()) };
+        if handle.is_null() {
+            return Err(SystemError::NullPointer(format!("handle to JobObject")).into());
+        }
+
+        let proc = unsafe { um::processthreadsapi::GetCurrentProcess() };
+        if unsafe { um::jobapi2::AssignProcessToJobObject(handle, proc) } == 0 {
+            return Err(SystemError::last().into());
+        }
+
+        Ok(handle)
     }
 }
 
-fn mem_info(pid: DWORD) -> Result<um::psapi::PROCESS_MEMORY_COUNTERS> {
-    let handle = unsafe {
-        um::processthreadsapi::OpenProcess(
-            um::winnt::PROCESS_QUERY_INFORMATION | um::winnt::PROCESS_VM_READ,
-            FALSE,
-            pid,
-        )
-    };
-    if handle.is_null() {
-        return Err(SystemError::NullPointer(format!("handle to process {}", pid)).into());
-    }
-
-    let mut counters = mem::MaybeUninit::<um::psapi::PROCESS_MEMORY_COUNTERS>::uninit();
-    let ret = unsafe {
-        um::psapi::GetProcessMemoryInfo(
-            handle,
-            counters.as_mut_ptr(),
-            mem::size_of::<um::psapi::PROCESS_MEMORY_COUNTERS>() as DWORD,
-        )
-    };
-    unsafe { um::handleapi::CloseHandle(handle) };
-
-    match ret {
-        0 => Err(SystemError::last().into()),
-        _ => Ok(unsafe { counters.assume_init() }),
-    }
-}
-
-fn to_duration(ft: &FILETIME) -> Duration {
-    Duration::from_nanos(((ft.dwHighDateTime as u64) << 32) + ft.dwLowDateTime as u64)
+fn to_duration(large_int: &um::winnt::LARGE_INTEGER_u) -> Duration {
+    Duration::from_nanos(((large_int.HighPart as u64) << 32) + large_int.LowPart as u64)
 }
