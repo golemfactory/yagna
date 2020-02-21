@@ -16,7 +16,7 @@ path = "src/bin.rs"
 nix = { version = "0.17.0" }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3.8", features = ["jobapi2", "psapi"] }
+winapi = { version = "0.3.8", features = ["jobapi2"] }
 
 [dependencies]
 ya-model = "0.1"
