@@ -22,14 +22,18 @@ where
     }
 }
 
-macro_rules! register_signal {
-    ($handler:expr, $sig:expr) => {{
-        let handler_ = $handler.clone();
-        let f = move || {
-            handler_.do_send(Shutdown(ShutdownReason::Interrupted($sig as i32)));
-        };
-        unsafe { signal_hook::register($sig, f).unwrap() }
-    }};
+fn register_signal<A>(addr: &Addr<A>, signal: i32) -> signal_hook::SigId
+where
+    A: Actor<Context = Context<A>> + Handler<Shutdown>,
+    <A as Actor>::Context: ToEnvelope<A, Shutdown>,
+{
+    let handler_ = addr.clone();
+    let f = move || {
+        log::info!("Caught signal: {}", signal);
+        handler_.do_send(Shutdown(ShutdownReason::Interrupted(signal)));
+    };
+
+    unsafe { signal_hook::register(signal, f) }.unwrap()
 }
 
 impl<A> Actor for SignalMonitor<A>
@@ -41,14 +45,14 @@ where
 
     fn started(&mut self, _: &mut Self::Context) {
         self.signals
-            .push(register_signal!(self.parent, signal_hook::SIGABRT));
+            .push(register_signal(&self.parent, signal_hook::SIGABRT));
         self.signals
-            .push(register_signal!(self.parent, signal_hook::SIGINT));
+            .push(register_signal(&self.parent, signal_hook::SIGINT));
         self.signals
-            .push(register_signal!(self.parent, signal_hook::SIGTERM));
+            .push(register_signal(&self.parent, signal_hook::SIGTERM));
         #[cfg(not(windows))]
         self.signals
-            .push(register_signal!(self.parent, signal_hook::SIGQUIT));
+            .push(register_signal(&self.parent, signal_hook::SIGQUIT));
 
         log::debug!("Signal monitoring service started");
     }
