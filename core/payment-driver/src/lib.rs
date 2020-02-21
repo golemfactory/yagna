@@ -6,6 +6,7 @@ mod dummy;
 mod error;
 
 pub mod account;
+pub mod dao;
 pub mod ethereum;
 pub mod gnt;
 pub mod payment;

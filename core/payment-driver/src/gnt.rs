@@ -11,6 +11,8 @@ use web3::contract::{Contract, Options};
 use web3::futures::Future;
 use web3::transports::Http;
 
+// use ya_persistence::executor::DbExecutor;
+
 use crate::account::{AccountBalance, Balance, Currency};
 use crate::error::PaymentDriverError;
 use crate::ethereum::EthereumClient;
