@@ -78,7 +78,7 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     async fn shutdown(addr: &Addr<Self>, reason: ShutdownReason) {
-        log::info!("Initiating shutdown: {:?}", reason);
+        log::warn!("Initiating shutdown: {}", reason);
 
         if let Err(error) = addr.send(Shutdown(reason)).await {
             log::error!(
@@ -125,13 +125,14 @@ impl<R: Runtime> ExeUnit<R> {
                     );
                 }
 
-                Self::shutdown(&addr, ShutdownReason::Error(error.to_string())).await;
+                let message = format!("Command interrupted: {}", error.to_string());
+                Self::shutdown(&addr, ShutdownReason::Error(message)).await;
                 break;
             }
 
             if let ExeScriptCommand::Terminate {} = &ctx.cmd {
                 Self::shutdown(&addr, ShutdownReason::Finished).await;
-                break;
+                return;
             }
         }
     }

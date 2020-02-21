@@ -22,6 +22,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     fn handle(&mut self, msg: SetState, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(state) = &msg.state {
             if &self.state.inner != state {
+                log::debug!("Entering state: {:?}", state);
                 self.state.inner = state.clone();
 
                 if let Some(id) = &self.ctx.service_id {
@@ -77,6 +78,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         let state = self.state.inner.to_pending(State::Terminated);
 
         let fut = async move {
+            log::info!("Shutting down ...");
             let _ = address.send(SetState::from(state)).await;
 
             Self::stop_runtime(runtime, msg.0).await;

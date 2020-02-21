@@ -89,6 +89,21 @@ pub enum ShutdownReason {
     Error(String),
 }
 
+impl std::fmt::Display for ShutdownReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            ShutdownReason::Finished => f.write_str("Finished"),
+            ShutdownReason::Interrupted(sig) => {
+                f.write_str(&format!("Interrupted by signal {}", sig))
+            }
+            ShutdownReason::UsageLimitExceeded(error) => {
+                f.write_str(&format!("Usage limit exceeded: {}", error))
+            }
+            ShutdownReason::Error(error) => f.write_str(&error),
+        }
+    }
+}
+
 impl From<Error> for ShutdownReason {
     fn from(e: Error) -> Self {
         match e {
