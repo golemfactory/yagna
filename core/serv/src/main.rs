@@ -60,7 +60,7 @@ impl CliArgs {
     pub fn get_data_dir(&self) -> Result<PathBuf> {
         Ok(match &self.data_dir {
             Some(data_dir) => data_dir.to_owned(),
-            None => ya_service_api::default_data_dir()?,
+            None => ya_service_api::get_or_create_data_dir(clap::crate_name!())?,
         })
     }
 
