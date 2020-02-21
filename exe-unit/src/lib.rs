@@ -35,21 +35,23 @@ pub struct ExeUnit<R: Runtime> {
     state: ExeUnitState,
     runtime: Addr<R>,
     metrics: Addr<MetricsService>,
+    transfers: Addr<TransferService>,
     services: Vec<Box<dyn ServiceControl>>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(ctx: ExeUnitContext, runtime: R) -> Self {
         let state = ExeUnitState::default();
+        let transfers = TransferService::new(&ctx.work_dir, &ctx.cache_dir).start();
         let runtime = runtime.with_context(ctx.clone()).start();
         let metrics = MetricsService::default().start();
-        let transfers = TransferService::new(&ctx.work_dir, &ctx.cache_dir).start();
 
         ExeUnit {
             ctx,
             state,
             runtime: runtime.clone(),
             metrics: metrics.clone(),
+            transfers: transfers.clone(),
             services: vec![
                 Box::new(ServiceAddr::new(metrics)),
                 Box::new(ServiceAddr::new(runtime)),
