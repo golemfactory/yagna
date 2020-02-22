@@ -62,8 +62,8 @@ impl DbExecutor {
         Self::new(database_url.to_string_lossy())
     }
 
-    pub fn from_data_dir(data_dir: &Path) -> Result<Self, Error> {
-        let db = data_dir.join("yagna.db");
+    pub fn from_data_dir(data_dir: &Path, name: &str) -> Result<Self, Error> {
+        let db = data_dir.join(name).with_extension("db");
         Self::new(db.to_string_lossy())
     }
 

@@ -186,7 +186,7 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
 
-                let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
+                let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 let context = ServiceContext { db: db.clone() };
 
