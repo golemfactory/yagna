@@ -160,8 +160,11 @@ fn define_gsb_services(
             continue;
         }
         let path = &service.path;
+        let service_name = format!("{}", &service.name);
         inner.extend(quote! {
+            log::info!("activating {} service", #service_name);
             #path::gsb(context).await?;
+            log::info!("{} service successfully activated", #service_name);
         });
     }
 

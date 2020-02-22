@@ -40,7 +40,7 @@ impl<'a, 'b> ServiceBinder<'a, 'b> {
 }
 
 pub fn bind_service(db: &DbExecutor) {
-    log::info!("Binding payment service to service bus");
+    log::debug!("Binding payment service to service bus");
 
     let _ = ServiceBinder {
         db,
@@ -56,7 +56,7 @@ pub fn bind_service(db: &DbExecutor) {
     .bind(cancel_invoice)
     .bind(send_payment);
 
-    log::info!("Successfully bound payment service to service bus");
+    log::debug!("Successfully bound payment service to service bus");
 }
 
 // ************************** DEBIT NOTE **************************

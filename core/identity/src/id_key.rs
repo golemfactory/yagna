@@ -32,7 +32,7 @@ impl IdentityKey {
     }
 
     pub fn to_key_file(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(&self.key_file)
+        serde_json::to_string_pretty(&self.key_file)
     }
 
     pub fn is_locked(&self) -> bool {
