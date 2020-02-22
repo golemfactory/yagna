@@ -128,10 +128,10 @@ impl<Service> Provider<Service, DbExecutor> for ServiceContext {
 enum Services {
     #[enable(gsb, cli(flatten))]
     Identity(ya_identity::service::Identity),
-    #[enable(gsb, rest)]
-    Activity(ya_activity::service::Activity),
     #[enable(gsb)]
     Net(ya_net::Net),
+    #[enable(gsb, rest)]
+    Activity(ya_activity::service::Activity),
     #[enable(gsb)]
     Market(ya_market::service::MarketService),
     #[enable(gsb, rest)]
