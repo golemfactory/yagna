@@ -2,13 +2,20 @@ use structopt::StructOpt;
 
 use ya_identity::cli::{AppKeyCommand, IdentityCommand};
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{constants::YAGNA_BUS_ADDR, CliCtx};
+use ya_service_api::{constants::YAGNA_BUS_ADDR, CliCtx, CommandOutput};
+use ya_service_api_derive::services;
 
 #[derive(StructOpt)]
 enum Args {
     Server,
     ClientAK(AppKeyCommand),
     ClientID(IdentityCommand),
+}
+
+#[services(DbExecutor)]
+enum Service {
+    #[enable(gsb)]
+    Identity(ya_identity::service::Identity),
 }
 
 #[actix_rt::main]
@@ -21,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         Args::Server => {
             let db = DbExecutor::new(":memory:")?;
             ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
-            ya_identity::service::activate(&db).await?;
+            Service::gsb(&db).await?;
 
             actix_rt::signal::ctrl_c().await?;
             println!();

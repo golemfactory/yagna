@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct DebitNoteEvent {
     pub debit_note_id: String,
     pub timestamp: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub details: Option<serde_json::Value>,
     pub event_type: crate::payment::EventType,
 }

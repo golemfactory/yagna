@@ -9,6 +9,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+/// AppKey management
 pub enum AppKeyCommand {
     Create {
         name: String,

@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use ya_core_model::market;
 
-use ya_persistence::executor::ConnType;
+use ya_persistence::executor::DbExecutor;
 use ya_service_api::constants::NET_SERVICE_ID;
 use ya_service_bus::{RpcEndpoint, RpcMessage};
 
@@ -76,12 +76,14 @@ pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreeme
 }
 
 pub(crate) async fn get_activity_agreement(
-    conn: &ConnType,
+    db: &DbExecutor,
     activity_id: &str,
     _timeout: Option<u32>,
 ) -> Result<Agreement, Error> {
-    let agreement_id = ActivityDao::new(conn)
+    let agreement_id = db
+        .as_dao::<ActivityDao>()
         .get_agreement_id(activity_id)
+        .await
         .not_found_as_option()
         .map_err(Error::from)?
         .ok_or(Error::NotFound)?;
@@ -94,23 +96,27 @@ pub(crate) async fn get_activity_agreement(
 }
 
 pub(crate) async fn is_activity_initiator(
-    conn: &ConnType,
+    db: &DbExecutor,
     caller: String,
     activity_id: &str,
 ) -> std::result::Result<bool, Error> {
-    let agreement_id = ActivityDao::new(&conn)
+    let agreement_id = db
+        .as_dao::<ActivityDao>()
         .get_agreement_id(&activity_id)
+        .await
         .map_err(Error::from)?;
     is_agreement_initiator(caller, agreement_id).await
 }
 
 pub(crate) async fn is_activity_executor(
-    conn: &ConnType,
+    db: &DbExecutor,
     caller: String,
     activity_id: &str,
 ) -> std::result::Result<bool, Error> {
-    let agreement_id = ActivityDao::new(&conn)
+    let agreement_id = db
+        .as_dao::<ActivityDao>()
         .get_agreement_id(&activity_id)
+        .await
         .map_err(Error::from)?;
     is_agreement_executor(caller, agreement_id).await
 }
@@ -145,7 +151,7 @@ pub(crate) async fn is_agreement_executor(
 pub(crate) fn validate_caller(caller: String, expected: String) -> bool {
     // FIXME: impl a proper caller struct / parser
     let pat = format!("{}/", NET_SERVICE_ID);
-    let expected = expected.replacen(&pat, "", 1);
+    let caller = caller.replacen(&pat, "", 1);
     log::info!("checking caller: {} vs expected: {}", caller, expected);
     caller == expected
 }

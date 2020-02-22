@@ -1,8 +1,8 @@
 table! {
     pay_allocation (id) {
         id -> Text,
-        total_amount -> Integer,
-        timeout -> Timestamp,
+        total_amount -> Text,
+        timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
     }
 }
@@ -10,12 +10,14 @@ table! {
 table! {
     pay_debit_note (id) {
         id -> Text,
+        issuer_id -> Text,
+        recipient_id -> Text,
         previous_debit_note_id -> Nullable<Text>,
         agreement_id -> Text,
         activity_id -> Nullable<Text>,
         status -> Text,
         timestamp -> Timestamp,
-        total_amount_due -> Integer,
+        total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
         credit_account_id -> Text,
         payment_platform -> Nullable<Text>,
@@ -35,7 +37,9 @@ table! {
 table! {
     pay_invoice (id) {
         id -> Text,
-        last_debit_note_id -> Text,
+        issuer_id -> Text,
+        recipient_id -> Text,
+        last_debit_note_id -> Nullable<Text>,
         agreement_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
@@ -78,7 +82,9 @@ table! {
 table! {
     pay_payment (id) {
         id -> Text,
-        amount -> Integer,
+        payer_id -> Text,
+        payee_id -> Text,
+        amount -> Text,
         timestamp -> Timestamp,
         allocation_id -> Nullable<Text>,
         details -> Text,

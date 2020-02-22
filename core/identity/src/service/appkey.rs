@@ -11,7 +11,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let dbx = db.clone();
 
     // Create a new application key entry
-    let _ = bus::bind_private(&model::SERVICE_ID, move |create: model::Create| {
+    let _ = bus::bind(&model::BUS_ID, move |create: model::Create| {
         let key = Uuid::new_v4().to_simple().to_string();
         let db = dbx.clone();
         async move {

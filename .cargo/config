@@ -1,2 +1,2 @@
 [build]
-rustflags = ["-C", "target-feature=+crt-static", "-C", "target_cpu=native"]
+rustflags = ["-C", "target-feature=+crt-static"]

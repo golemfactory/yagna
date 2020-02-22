@@ -10,17 +10,21 @@ edition = "2018"
 
 [dependencies]
 ya-activity = "0.2"
-ya-core-model = "0.1"
+ya-payment = "0.1"
 ya-identity = "0.2"
 ya-market = "0.1"
-ya-net = "0.1"
+
+ya-core-model = "0.1"
 ya-persistence = "0.2"
 ya-sb-router = "0.1"
 ya-service-api = "0.1"
+ya-service-api-derive = "0.1"
+ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 
 actix-rt = "1.0"
+actix-service = "1.0"
 actix-web = "2.0"
 anyhow = "1.0"
 env_logger = "0.7"
@@ -30,3 +34,6 @@ lazy_static = "1.4"
 structopt = "0.3"
 dotenv = "0.15.0"
 url="2.1.1"
+ya-net = {version = "0.1", features=["service"]}
+
+

@@ -8,16 +8,16 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 
-use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api_derive::services;
 use ya_service_api_web::middleware::{auth, Identity};
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
 use std::net::SocketAddr;
 use url::Url;
+use ya_service_api_interfaces::Provider;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -108,14 +108,35 @@ impl TryFrom<&CliArgs> for CliCtx {
     }
 }
 
+struct ServiceContext {
+    db: DbExecutor,
+}
+
+impl<Service> Provider<Service, DbExecutor> for ServiceContext {
+    fn component(&self) -> DbExecutor {
+        self.db.clone()
+    }
+}
+
+#[services(ServiceContext)]
+enum Services {
+    #[enable(gsb, cli(flatten))]
+    Identity(ya_identity::service::Identity),
+    #[enable(gsb, rest)]
+    Activity(ya_activity::service::Activity),
+    #[enable(gsb)]
+    Net(ya_net::Net),
+    #[enable(gsb)]
+    Market(ya_market::service::MarketService),
+    #[enable(gsb, rest)]
+    Payment(ya_payment::PaymentService),
+}
+
 #[derive(StructOpt, Debug)]
 enum CliCommand {
-    /// AppKey management
-    AppKey(ya_identity::cli::AppKeyCommand),
-
-    /// Identity management
+    #[structopt(flatten)]
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Id(ya_identity::cli::IdentityCommand),
+    Commands(Services),
 
     #[structopt(name = "complete")]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
@@ -129,9 +150,8 @@ enum CliCommand {
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::AppKey(appkey) => appkey.run_command(ctx).await,
+            CliCommand::Commands(command) => command.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
-            CliCommand::Id(id) => id.run_command(ctx).await,
             CliCommand::Service(service) => service.run_command(ctx).await,
         }
     }
@@ -161,33 +181,17 @@ impl ServiceCommand {
                     .context("binding service bus router")?;
 
                 let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
-
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
-                ya_identity::service::activate(&db).await?;
-                ya_activity::provider::service::bind_gsb(&db);
-                ya_market::service::activate(&db).await;
+                let context = ServiceContext { db: db.clone() };
 
-                let default_id = bus::service(identity::BUS_ID)
-                    .send(identity::Get::ByDefault)
-                    .await??
-                    .ok_or(anyhow::Error::msg("no default identity"))?
-                    .node_id
-                    .to_string();
-                log::info!("using default identity as network id: {:?}", default_id);
-                let net_host = ya_net::resolve_default()?;
-                ya_net::bind_remote(&net_host, &default_id)
-                    .await
-                    .context(format!(
-                        "Error binding network service at {} for {}",
-                        net_host, default_id
-                    ))?;
+                Services::gsb(&context).await?;
 
                 HttpServer::new(move || {
-                    App::new()
+                    let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .service(ya_activity::api::web_scope(&db))
-                        .route("/me", web::get().to(me))
+                        .route("/me", web::get().to(me));
+                    Services::rest(app, &db)
                 })
                 .bind(ctx.http_address())
                 .context(format!(

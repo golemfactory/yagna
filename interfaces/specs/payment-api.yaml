@@ -1059,6 +1059,12 @@ components:
         debitNoteId:
           type: string
           readOnly: true
+        issuerId:
+          type: string
+          readOnly: true
+        recipientId:
+          type: string
+          readOnly: true
         previousDebitNoteId:
           type: string
           readOnly: true
@@ -1071,7 +1077,7 @@ components:
         activityId:
           type: string
         totalAmountDue:
-          type: integer
+          type: string
         usageCounterVector:
           type: object
         creditAccountId:
@@ -1086,6 +1092,8 @@ components:
 
       required:
         - debitNoteId
+        - issuerId
+        - recipientId
         - timestamp
         - agreementId
         - totalAmountDue
@@ -1110,6 +1118,12 @@ components:
         invoiceId:
           type: string
           readOnly: true
+        issuerId:
+          type: string
+          readOnly: true
+        recipientId:
+          type: string
+          readOnly: true
         lastDebitNoteId:
           type: string
           readOnly: true
@@ -1124,7 +1138,7 @@ components:
           items:
             type: string
         amount:
-          type: integer
+          type: string
         usageCounterVector:
           type: object
         creditAccountId:
@@ -1139,6 +1153,8 @@ components:
 
       required:
         - invoiceId
+        - issuerId
+        - recipientId
         - timestamp
         - agreementId
         - amount
@@ -1183,7 +1199,7 @@ components:
       type: object
       properties:
         totalAmountAccepted:
-          type: integer
+          type: string
         allocationId:
           type: string
       required:
@@ -1196,7 +1212,7 @@ components:
         rejectionReason:
           $ref: '#/components/schemas/RejectionReason'
         totalAmountAccepted:
-          type: integer
+          type: string
         message:
           type: string
       required:
@@ -1219,12 +1235,12 @@ components:
           type: string
           readOnly: true
         totalAmount:
-          type: integer
+          type: string
         spentAmount:
-          type: integer
+          type: string
           readOnly: true
         remainingAmount:
-          type: integer
+          type: string
           readOnly: true
         timeout:
           type: string
@@ -1245,8 +1261,12 @@ components:
       properties:
         paymentId:
           type: string
+        payerId:
+          type: string
+        payeeId:
+          type: string
         amount:
-          type: integer
+          type: string
         timestamp:
           type: string
           format: date-time
@@ -1264,6 +1284,8 @@ components:
           type: object
       required:
         - paymentId
+        - payerId
+        - payeeId
         - amount
         - timestamp
         - details
