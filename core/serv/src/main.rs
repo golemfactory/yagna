@@ -4,6 +4,7 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
+    ops::Not,
     path::PathBuf,
 };
 use structopt::{clap, StructOpt};
@@ -59,7 +60,12 @@ struct CliArgs {
 impl CliArgs {
     pub fn get_data_dir(&self) -> Result<PathBuf> {
         Ok(match &self.data_dir {
-            Some(data_dir) => data_dir.to_owned(),
+            Some(data_dir) => {
+                if data_dir.exists().not() {
+                    anyhow::bail!(format!("the data dir {:?} does not exist", data_dir))
+                }
+                data_dir.to_owned()
+            }
             None => ya_service_api::get_or_create_data_dir(clap::crate_name!())?,
         })
     }
