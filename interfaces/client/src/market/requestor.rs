@@ -31,6 +31,12 @@ impl MarketRequestorApi {
         self.client.post("demands").send_json(&demand).json().await
     }
 
+    /// Fetches all active Demands which have been published by the Requestor.
+    ///
+    pub async fn get_demands(&self) -> Result<Vec<Demand>> {
+        self.client.get("demands").send().json().await
+    }
+
     /// Stop subscription by invalidating a previously published Demand.
     pub async fn unsubscribe(&self, subscription_id: &str) -> Result<String> {
         let url = url_format!("demands/{subscription_id}", subscription_id);
