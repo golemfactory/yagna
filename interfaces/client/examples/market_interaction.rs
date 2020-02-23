@@ -48,10 +48,10 @@ async fn provider_interact(client: MarketProviderApi, host_port: &String) -> Res
 
     println!(
         "PROVIDER=>  | {} active subscriptions\n\t {:#?}",
-        provider_subscriptions.len(), provider_subscriptions
+        provider_subscriptions.len(),
+        provider_subscriptions
     );
 
-    
     // provider - get events
     let mut provider_events = vec![];
 
@@ -148,7 +148,8 @@ async fn requestor_interact(client: MarketRequestorApi, host_port: &String) -> R
 
     println!(
         "REQUESTOR=>  | {} active subscriptions\n\t {:#?}",
-        requestor_subscriptions.len(), requestor_subscriptions
+        requestor_subscriptions.len(),
+        requestor_subscriptions
     );
 
     // requestor - get events
