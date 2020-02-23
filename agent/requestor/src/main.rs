@@ -144,12 +144,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let demand = build_demand(node_name);
     //(golem.runtime.wasm.wasi.version@v=*)
 
-    log::error!("Market API URL: {}", settings.market_url);
-
     let market_api = settings.market_api()?;
     let subscription_id = market_api.subscribe(&demand).await?;
 
-    log::error!("sub_id={}", subscription_id);
+    log::info!("sub_id={}", subscription_id);
 
     {
         let requestor_api = market_api.clone();
