@@ -10,6 +10,7 @@ ya-core-model = { version = "0.1", features=["ethaddr"]}
 ya-model = "0.1"
 
 anyhow = "1.0.26"
+bigdecimal = "0.1.0"
 chrono = { version = "0.4.6", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"

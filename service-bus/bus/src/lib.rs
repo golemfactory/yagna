@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
 use actix::Message;
 use futures::prelude::Stream;
 use serde::{de::DeserializeOwned, Serialize};
@@ -12,12 +14,12 @@ mod remote_router;
 pub mod typed;
 pub mod untyped;
 
-pub mod macros;
+pub use error::Error;
+use futures::TryStream;
+
 pub mod timeout;
 
-pub use error::Error;
-
-pub trait BusMessage {}
+mod serialization;
 
 pub trait RpcMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
     const ID: &'static str;
@@ -25,12 +27,66 @@ pub trait RpcMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
     type Error: Serialize + DeserializeOwned + 'static + Sync + Send + Debug;
 }
 
-pub struct RpcEnvelope<T: RpcMessage> {
+pub trait RpcStreamMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
+    const ID: &'static str;
+    type Item: Serialize + DeserializeOwned + 'static + Sync + Send;
+    type Error: Serialize + DeserializeOwned + 'static + Sync + Send + Debug;
+}
+
+pub struct RpcEnvelope<T> {
     caller: String,
     body: T,
 }
 
 #[derive(Debug)]
+pub struct RpcStreamCall<T: RpcStreamMessage> {
+    pub caller: String,
+    pub addr: String,
+    pub body: T,
+    pub reply: futures::channel::mpsc::Sender<Result<T::Item, T::Error>>,
+}
+
+// Represents raw response chunk
+pub enum ResponseChunk {
+    Part(Vec<u8>),
+    Full(Vec<u8>),
+}
+
+impl ResponseChunk {
+    pub fn into_bytes(self) -> Vec<u8> {
+        match self {
+            ResponseChunk::Part(data) => data,
+            ResponseChunk::Full(data) => data,
+        }
+    }
+
+    #[inline]
+    pub fn is_full(&self) -> bool {
+        match self {
+            ResponseChunk::Full(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_eos(&self) -> bool {
+        match self {
+            ResponseChunk::Full(data) => data.is_empty(),
+            _ => false,
+        }
+    }
+}
+
+pub struct RpcRawStreamCall {
+    pub caller: String,
+    pub addr: String,
+    pub body: Vec<u8>,
+    pub reply: futures::channel::mpsc::Sender<Result<ResponseChunk, error::Error>>,
+}
+
+impl Message for RpcRawStreamCall {
+    type Result = Result<(), error::Error>;
+}
+
 pub struct RpcRawCall {
     pub caller: String,
     pub addr: String,
@@ -39,6 +95,10 @@ pub struct RpcRawCall {
 
 impl Message for RpcRawCall {
     type Result = Result<Vec<u8>, error::Error>;
+}
+
+impl<T: RpcStreamMessage> Message for RpcStreamCall<T> {
+    type Result = Result<(), error::Error>;
 }
 
 impl<T: RpcMessage> RpcEnvelope<T> {
@@ -99,8 +159,6 @@ pub trait RpcEndpoint<T: RpcMessage>: Clone {
     type Result: Future<Output = Result<<RpcEnvelope<T> as Message>::Result, error::Error>>;
 
     fn send(&self, msg: T) -> Self::Result;
-
-    fn send_with_caller(&self, caller: String, msg: T) -> Self::Result;
 }
 
 pub trait RpcHandler<T: RpcMessage> {
@@ -109,10 +167,10 @@ pub trait RpcHandler<T: RpcMessage> {
     fn handle(&mut self, caller: String, msg: T) -> Self::Result;
 }
 
-pub trait RpcStreamHandler<T: RpcMessage> {
-    type Result: Stream<Item = <RpcEnvelope<T> as Message>::Result>;
+pub trait RpcStreamHandler<T: RpcStreamMessage> {
+    type Result: Stream<Item = Result<T::Item, T::Error>> + Unpin;
 
-    fn handle(&mut self, caller: String, msgs: Vec<T>) -> Self::Result;
+    fn handle(&mut self, caller: &str, msg: T) -> Self::Result;
 }
 
 pub struct Handle {

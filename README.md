@@ -1,5 +1,7 @@
 # Project YAGNA
 
+![CI](https://github.com/golemfactory/yagna/workflows/CI/badge.svg)
+
 An open platform and marketplace for distributed computations.
 
 ## Project Layout

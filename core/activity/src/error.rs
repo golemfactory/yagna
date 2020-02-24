@@ -1,3 +1,4 @@
+use crate::dao::DaoError;
 use actix_web::error::ResponseError;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError;
@@ -9,7 +10,7 @@ pub enum Error {
     #[error("DB connection error: {0}")]
     Db(#[from] r2d2::Error),
     #[error("DAO error: {0}")]
-    Dao(#[from] diesel::result::Error),
+    Dao(#[from] DaoError),
     #[error("GSB error: {0}")]
     Gsb(ya_service_bus::error::Error),
     #[error("Serialization error: {0}")]
@@ -46,7 +47,7 @@ impl From<ya_persistence::executor::Error> for Error {
     fn from(e: ya_persistence::executor::Error) -> Self {
         log::error!("ya_persistence::executor::Error: {}", e);
         match e {
-            ya_persistence::executor::Error::Diesel(e) => Error::from(e),
+            ya_persistence::executor::Error::Diesel(e) => Error::from(DaoError::from(e)),
             ya_persistence::executor::Error::Pool(e) => Error::from(e),
             ya_persistence::executor::Error::RuntimeError(e) => Error::from(e),
         }

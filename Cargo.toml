@@ -9,11 +9,14 @@ members = [
     "core/model",
     "core/net",
     "core/payment",
+    "core/payment-driver",
     "core/persistence",
     "core/serv",
     "core/serv-api",
     "core/serv-api/cache",
+    "core/serv-api/interfaces",
     "core/serv-api/web",
+    "core/serv-api-derive",
     "exe-unit",
     "exe-unit/api",
     "exe-unit/wasm-mozjs",
@@ -31,21 +34,31 @@ members = [
 ]
 
 [patch.crates-io]
+## SERVICES
 ya-activity = { path = "core/activity" }
+ya-payment = { path = "core/payment" }
+ya-identity = { path = "core/identity" }
+ya-market = { path = "core/market" }
+
+
 ya-agent-offer-model = { path = "agent/offer-model" }
 ya-client = { path = "interfaces/client" }
 ya-core-model = { path = "core/model" }
 ya-exe-api = { path = "exe-unit/api" }
 ya-exe-unit = { path = "exe-unit" }
-ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
 ya-model = { path = "interfaces/model" }
 ya-net = { path = "core/net" }
 ya-persistence = { path = "core/persistence" }
+
+## CORE UTILS
+ya-service-api = { path = "core/serv-api" }
+ya-service-api-cache = { path = "core/serv-api/cache" }
+ya-service-api-derive = { path = "core/serv-api-derive" }
+ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
+ya-service-api-web = { path = "core/serv-api/web" }
+ya-service-bus = { path = "service-bus/bus/" }
+
+## SERVICE BUS
 ya-sb-proto = { path = "service-bus/proto" }
 ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
-ya-service-api = { path = "core/serv-api" }
-ya-service-api-cache = { path = "core/serv-api/cache" }
-ya-service-api-web = { path = "core/serv-api/web" }
-ya-service-bus = { path = "service-bus/bus/" }

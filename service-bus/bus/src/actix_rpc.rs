@@ -1,4 +1,5 @@
 /// Using GSB with actix 0.9
+use crate::{RpcStreamCall, RpcStreamMessage};
 use actix::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -15,6 +16,14 @@ where
     <RpcEnvelope<M> as Message>::Result: Serialize + DeserializeOwned + Sync + Send,
 {
     router().lock().unwrap().bind_actor(addr, actor);
+    Handle { _inner: {} }
+}
+
+pub fn binds<M: RpcStreamMessage>(addr: &str, actor: Recipient<RpcStreamCall<M>>) -> Handle
+where
+    Result<M::Item, M::Error>: Serialize + DeserializeOwned + Sync + Send,
+{
+    router().lock().unwrap().bind_stream_actor(addr, actor);
     Handle { _inner: {} }
 }
 
@@ -39,5 +48,15 @@ impl Endpoint {
     {
         let mut b = self.router.lock().unwrap();
         b.forward(self.addr.as_ref(), caller, msg)
+    }
+
+    pub fn call_stream<M: RpcStreamMessage>(
+        &self,
+        msg: M,
+    ) -> impl Stream<Item = Result<Result<M::Item, M::Error>, BusError>> {
+        self.router
+            .lock()
+            .unwrap()
+            .streaming_forward(&self.addr, msg)
     }
 }
