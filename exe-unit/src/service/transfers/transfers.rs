@@ -1,9 +1,14 @@
 use super::transfer_protocol::TransferProtocol;
+use super::cache::ContentHash;
 
 use anyhow::{Result, Error, Context};
-use url::Url;
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::sync::Arc;
 use std::path::{Path, PathBuf};
+use url::Url;
+
+
 
 
 pub struct Transfers {
@@ -16,12 +21,13 @@ impl Transfers {
         Transfers{protocols: vec![]}
     }
 
-    pub fn transfer(&self, from: &Url, to: &Url, local_root: &Path) -> Result<()> {
+    pub fn transfer(&self, from: &Url, to: &Url, local_root: &Path) -> Result<Url> {
         let src_url = Self::translate_local_path(from, local_root)?;
         let dest_url = Self::translate_local_path(to, local_root)?;
 
         let protocol = self.find_protocol(&src_url, &dest_url)?;
-        Ok(protocol.transfer(&src_url, &dest_url)?)
+        protocol.transfer(&src_url, &dest_url)?;
+        Ok(dest_url)
     }
 
     pub fn register_protocol(&mut self, protocol: Arc<Box<dyn TransferProtocol>>) {
@@ -59,7 +65,7 @@ impl Transfers {
     /// Translates all local paths to be relative to workdir.
     /// We do this, because remote requestor shouldn't know our file system.
     /// We treat working directory as filesystem root.
-    fn translate_local_path(path: &Url, root: &Path) -> Result<Url> {
+    pub fn translate_local_path(path: &Url, root: &Path) -> Result<Url> {
         let prefix = path.scheme();
         if Self::is_local(&prefix) {
             // Remove root from path, which we know is absolute.
@@ -72,6 +78,31 @@ impl Transfers {
             // Don't translate remote path.
             Ok(path.clone())
         }
+    }
+
+    pub fn extract_hash(url: &str) -> Result<(Option<ContentHash>, Url)> {
+//        lazy_static! {
+//            static ref hash_regex: Regex = Regex::new("^hash://([[:alnum:]]+):([[:digit:]]+):([[:print:]]+)$").unwrap();
+//        }
+//
+//        match hash_regex.captures(url) {
+//            Ok(captures) => {
+//                let algorithm = captures[1];
+//                let digest = captures[2];
+//                let url = captures[3];
+//
+//                return Ok((Some(ContentHash{algorithm, digest}), url.clone()));
+//            },
+//            Err(error) => {
+//                let url = Url::parse(url)?;
+//                return Ok((None, url));
+//            }
+//        }
+        unimplemented!();
+    }
+
+    pub fn validate_hash(url: &Url, hash: &ContentHash) -> Result<()> {
+        unimplemented!();
     }
 }
 

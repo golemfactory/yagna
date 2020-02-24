@@ -42,7 +42,7 @@ pub struct ExeUnit<R: Runtime> {
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(ctx: ExeUnitContext, runtime: R) -> Self {
         let state = ExeUnitState::default();
-        let transfers = TransferService::new(&ctx.work_dir, &ctx.cache_dir).start();
+        let transfers = TransferService::new(&ctx.work_dir, &ctx.cache_dir, &ctx.agreement).start();
         let runtime = runtime.with_context(ctx.clone()).start();
         let metrics = MetricsService::default().start();
 
@@ -214,7 +214,9 @@ impl<R: Runtime> ExeUnit<R> {
             return Ok(transfer_service.send(msg).await??);
         }
         else if let ExeScriptCommand::Deploy {} = &ctx.cmd {
-            return Ok(());
+            let msg = DeployImage{};
+            let path = transfer_service.send(msg).await??;
+            Ok(())
         }
         else {
             return Ok(());
