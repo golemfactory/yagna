@@ -5,34 +5,160 @@
 
 
 use crate::schema::*;
-use chrono::NaiveDateTime;
+use bigdecimal::BigDecimal;
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::backend::Backend;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::sql_types::Integer;
+use serde::Serialize;
+use uuid::Uuid;
+use ya_model::payment as api_model;
+use ya_persistence::types::BigDecimalField;
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_allocation"]
-pub struct Allocation {
+pub struct NewAllocation {
     pub id: String,
-    pub total_amount: i32,
-    pub timeout: NaiveDateTime,
+    pub total_amount: BigDecimalField,
+    pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+impl From<api_model::NewAllocation> for NewAllocation {
+    fn from(allocation: api_model::NewAllocation) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            total_amount: allocation.total_amount.into(),
+            timeout: allocation.timeout.map(|v| v.naive_utc()),
+            make_deposit: allocation.make_deposit,
+        }
+    }
+}
+
+pub struct Allocation {
+    pub allocation: NewAllocation,
+    pub spent_amount: BigDecimal,
+    pub remaining_amount: BigDecimal,
+}
+
+impl From<Allocation> for api_model::Allocation {
+    fn from(allocation: Allocation) -> Self {
+        Self {
+            allocation_id: allocation.allocation.id,
+            total_amount: allocation.allocation.total_amount.into(),
+            spent_amount: allocation.spent_amount,
+            remaining_amount: allocation.remaining_amount,
+            timeout: allocation
+                .allocation
+                .timeout
+                .map(|v| Utc.from_utc_datetime(&v)),
+            make_deposit: allocation.allocation.make_deposit,
+        }
+    }
+}
+
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_debit_note"]
 pub struct DebitNote {
     pub id: String,
+    pub issuer_id: String,
+    pub recipient_id: String,
     pub previous_debit_note_id: Option<String>,
     pub agreement_id: String,
     pub activity_id: Option<String>,
     pub status: String,
     pub timestamp: NaiveDateTime,
-    pub total_amount_due: i32,
+    pub total_amount_due: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub credit_account_id: String,
     pub payment_platform: Option<String>,
     pub payment_due_date: Option<NaiveDateTime>,
+}
+
+impl From<api_model::DebitNote> for DebitNote {
+    fn from(debit_note: api_model::DebitNote) -> Self {
+        Self {
+            id: debit_note.debit_note_id,
+            issuer_id: debit_note.issuer_id,
+            recipient_id: debit_note.recipient_id,
+            previous_debit_note_id: debit_note.previous_debit_note_id,
+            agreement_id: debit_note.agreement_id,
+            activity_id: debit_note.activity_id,
+            status: debit_note.status.into(),
+            timestamp: debit_note.timestamp.naive_utc(),
+            total_amount_due: debit_note.total_amount_due.into(),
+            usage_counter_vector: debit_note
+                .usage_counter_vector
+                .map(|v| v.to_string().into_bytes()),
+            credit_account_id: debit_note.credit_account_id,
+            payment_platform: debit_note.payment_platform,
+            payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
+        }
+    }
+}
+
+impl From<DebitNote> for api_model::DebitNote {
+    fn from(debit_note: DebitNote) -> Self {
+        api_model::DebitNote {
+            debit_note_id: debit_note.id,
+            issuer_id: debit_note.issuer_id,
+            recipient_id: debit_note.recipient_id,
+            previous_debit_note_id: debit_note.previous_debit_note_id,
+            timestamp: Utc.from_utc_datetime(&debit_note.timestamp),
+            agreement_id: debit_note.agreement_id,
+            activity_id: debit_note.activity_id,
+            total_amount_due: debit_note.total_amount_due.into(),
+            usage_counter_vector: debit_note
+                .usage_counter_vector
+                .map(|v| serde_json::from_str(&String::from_utf8(v).unwrap()).unwrap()),
+            credit_account_id: debit_note.credit_account_id,
+            payment_platform: debit_note.payment_platform,
+            payment_due_date: debit_note
+                .payment_due_date
+                .map(|d| Utc.from_utc_datetime(&d)),
+            status: debit_note.status.into(),
+        }
+    }
+}
+
+#[derive(Debug, Insertable)]
+#[table_name = "pay_debit_note"]
+pub struct NewDebitNote {
+    pub id: String,
+    pub issuer_id: String,
+    pub recipient_id: String,
+    pub previous_debit_note_id: Option<String>,
+    pub agreement_id: String,
+    pub activity_id: Option<String>,
+    pub total_amount_due: BigDecimalField,
+    pub usage_counter_vector: Option<Vec<u8>>,
+    pub credit_account_id: String,
+    pub payment_platform: Option<String>,
+    pub payment_due_date: Option<NaiveDateTime>,
+}
+
+impl NewDebitNote {
+    pub fn from_api_model(
+        debit_note: api_model::NewDebitNote,
+        issuer_id: String,
+        recipient_id: String,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            issuer_id,
+            recipient_id,
+            previous_debit_note_id: None,
+            agreement_id: debit_note.agreement_id,
+            activity_id: debit_note.activity_id,
+            total_amount_due: debit_note.total_amount_due.into(),
+            usage_counter_vector: debit_note
+                .usage_counter_vector
+                .map(|v| v.to_string().into_bytes()),
+            credit_account_id: debit_note.credit_account_id,
+            payment_platform: debit_note.payment_platform,
+            payment_due_date: debit_note.payment_due_date.map(|d| d.naive_utc()),
+        }
+    }
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -45,19 +171,122 @@ pub struct DebitNoteEvent {
     pub details: Option<String>,
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice"]
-pub struct Invoice {
+pub struct PureInvoice {
     pub id: String,
-    pub last_debit_note_id: String,
+    pub issuer_id: String,
+    pub recipient_id: String,
+    pub last_debit_note_id: Option<String>,
     pub agreement_id: String,
     pub status: String,
     pub timestamp: NaiveDateTime,
-    pub amount: String,
+    pub amount: BigDecimalField,
     pub usage_counter_vector: Option<Vec<u8>>,
     pub credit_account_id: String,
     pub payment_platform: Option<String>,
     pub payment_due_date: NaiveDateTime,
+}
+
+// Because Diesel doesn't support collections of associated objects :(
+pub struct Invoice {
+    pub invoice: PureInvoice,
+    pub activity_ids: Vec<String>,
+}
+
+impl From<api_model::Invoice> for Invoice {
+    fn from(invoice: api_model::Invoice) -> Self {
+        Invoice {
+            invoice: PureInvoice {
+                id: invoice.invoice_id,
+                issuer_id: invoice.issuer_id,
+                recipient_id: invoice.recipient_id,
+                last_debit_note_id: invoice.last_debit_note_id,
+                agreement_id: invoice.agreement_id,
+                status: invoice.status.into(),
+                timestamp: invoice.timestamp.naive_utc(),
+                amount: invoice.amount.into(),
+                usage_counter_vector: invoice
+                    .usage_counter_vector
+                    .map(|v| v.to_string().into_bytes()),
+                credit_account_id: invoice.credit_account_id,
+                payment_platform: invoice.payment_platform,
+                payment_due_date: invoice.payment_due_date.naive_utc(),
+            },
+            activity_ids: invoice.activity_ids,
+        }
+    }
+}
+
+impl From<Invoice> for api_model::Invoice {
+    fn from(invoice_with_activity_ids: Invoice) -> Self {
+        let invoice = invoice_with_activity_ids.invoice;
+        let activity_ids = invoice_with_activity_ids.activity_ids;
+        api_model::Invoice {
+            invoice_id: invoice.id,
+            issuer_id: invoice.issuer_id,
+            recipient_id: invoice.recipient_id,
+            last_debit_note_id: invoice.last_debit_note_id,
+            timestamp: Utc.from_utc_datetime(&invoice.timestamp),
+            agreement_id: invoice.agreement_id,
+            activity_ids,
+            amount: invoice.amount.into(),
+            usage_counter_vector: invoice
+                .usage_counter_vector
+                .map(|v| serde_json::from_str(&String::from_utf8(v).unwrap()).unwrap()),
+            credit_account_id: invoice.credit_account_id,
+            payment_platform: invoice.payment_platform,
+            payment_due_date: Utc.from_utc_datetime(&invoice.payment_due_date),
+            status: invoice.status.into(),
+        }
+    }
+}
+
+#[derive(Debug, Insertable)]
+#[table_name = "pay_invoice"]
+pub struct NewInvoiceModel {
+    pub id: String,
+    pub issuer_id: String,
+    pub recipient_id: String,
+    pub last_debit_note_id: Option<String>,
+    pub agreement_id: String,
+    pub amount: BigDecimalField,
+    pub usage_counter_vector: Option<Vec<u8>>,
+    pub credit_account_id: String,
+    pub payment_platform: Option<String>,
+    pub payment_due_date: NaiveDateTime,
+}
+
+// Because Diesel doesn't support collections of associated objects :(
+pub struct NewInvoice {
+    pub invoice: NewInvoiceModel,
+    pub activity_ids: Vec<String>,
+}
+
+impl NewInvoice {
+    pub fn from_api_model(
+        invoice: api_model::NewInvoice,
+        issuer_id: String,
+        recipient_id: String,
+    ) -> Self {
+        Self {
+            invoice: NewInvoiceModel {
+                id: Uuid::new_v4().to_string(),
+                issuer_id,
+                recipient_id,
+                last_debit_note_id: None,
+                agreement_id: invoice.agreement_id,
+                amount: invoice.amount.into(),
+                usage_counter_vector: invoice
+                    .usage_counter_vector
+                    .map(|v| v.to_string().into_bytes()),
+                credit_account_id: invoice.credit_account_id,
+                payment_platform: invoice.payment_platform,
+                payment_due_date: invoice.payment_due_date.naive_utc(),
+            },
+            activity_ids: invoice.activity_ids.unwrap_or(vec![]),
+        }
+    }
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -84,7 +313,7 @@ pub struct InvoiceStatus {
     pub status: String,
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice_x_activity"]
 #[primary_key(invoice_id, activity_id)]
 pub struct InvoiceXActivity {
@@ -96,7 +325,9 @@ pub struct InvoiceXActivity {
 #[table_name = "pay_payment"]
 pub struct Payment {
     pub id: String,
-    pub amount: i32,
+    pub payer_id: String,
+    pub payee_id: String,
+    pub amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub allocation_id: Option<String>,
     pub details: String,
