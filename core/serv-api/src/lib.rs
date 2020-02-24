@@ -1,22 +1,9 @@
 use anyhow::Result;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
-use std::{ops::Not, path::PathBuf};
+use std::path::PathBuf;
 
 pub mod constants;
-
-pub fn get_or_create_data_dir(app_name: &str) -> Result<PathBuf> {
-    Ok(appdirs::user_data_dir(Some(app_name), None, false)
-        .map_err(|_| anyhow::Error::msg("user data dir creation failure"))
-        .and_then(|path| {
-            if path.as_path().exists().not() {
-                log::info!("creating default data dir {:?}", path);
-                Ok(std::fs::create_dir_all(&path).map(|_| path)?)
-            } else {
-                Ok(path)
-            }
-        })?)
-}
 
 #[derive(Debug, Default)]
 pub struct CliCtx {
