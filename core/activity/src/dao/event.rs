@@ -1,7 +1,7 @@
 use crate::dao::{DaoError, NotFoundAsOption, Result};
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel::sql_types::Timestamp;
+use diesel::sql_types::{Integer, Timestamp};
 use std::cmp::min;
 use std::time::Duration;
 use tokio::time::delay_for;
@@ -40,18 +40,20 @@ impl<'c> EventDao<'c> {
         let event_type = event_type.to_owned();
         do_with_connection(self.pool, move |conn| {
             {
+                let event_type_id = dsl_type::activity_event_type
+                    .select(dsl_type::id)
+                    .filter(dsl_type::name.eq(event_type))
+                    .first::<i32>(conn)?;
+
                 diesel::insert_into(dsl_event::activity_event)
                     .values(
-                        dsl_event::activity_event
-                            .inner_join(schema::activity::table)
-                            .inner_join(schema::activity_event_type::table)
+                        dsl::activity
                             .select((
-                                dsl_event::activity_id,
+                                dsl::id,
                                 now.into_sql::<Timestamp>(),
-                                dsl_type::id,
+                                event_type_id.into_sql::<Integer>(),
                             ))
                             .filter(dsl::natural_id.eq(activity_id))
-                            .filter(dsl_type::name.eq(event_type))
                             .limit(1),
                     )
                     .into_columns((
