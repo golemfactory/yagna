@@ -58,6 +58,11 @@ impl GntDriver {
         )
     }
 
+    /// Initialize Rinkeby account
+    pub async fn init_funds(&self) -> PaymentDriverResult<()> {
+        Ok(())
+    }
+
     /// Returns Gnt balance
     pub fn get_gnt_balance(
         &self,
@@ -225,7 +230,7 @@ impl GntDriver {
     }
 
     fn get_next_nonce(&self) -> U256 {
-        let current_nonce = 27_u64;
+        let current_nonce = 28_u64;
         U256::from(current_nonce + 1)
     }
 

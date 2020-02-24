@@ -90,6 +90,21 @@ impl EthereumClient {
             Chain::Rinkeby => 4,
         }
     }
+
+    pub fn get_next_nonce(&self, eth_address: Address) -> EthereumClientResult<U256> {
+        self.web3
+            .eth()
+            .transaction_count(eth_address, None)
+            .wait()
+            .map_or_else(
+                |e| {
+                    Err(PaymentDriverError::LibraryError {
+                        msg: format!("{:?}", e),
+                    })
+                },
+                |nonce| Ok(nonce),
+            )
+    }
 }
 
 #[cfg(test)]

@@ -18,3 +18,6 @@ test/yagna/test1/provider_data/yagna.db-wal
 test/yagna/test1/requestor_data/yagna.db
 test/yagna/test1/requestor_data/yagna.db-shm
 test/yagna/test1/requestor_data/yagna.db-wal
+
+# Keystore
+keystore.json
