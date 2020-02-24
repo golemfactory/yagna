@@ -1,18 +1,14 @@
 use crate::entrypoint::DirectoryMount;
-use crate::manifest::{WasmImage, EntryPoint};
+use crate::manifest::{EntryPoint, WasmImage};
 
-use wasmtime::*;
 use wasi_common::preopen_dir;
-use wasmtime_wasi::{
-    old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0,
-};
+use wasmtime::*;
+use wasmtime_wasi::old::snapshot_0::create_wasi_instance as create_wasi_instance_snapshot_0;
 
-use anyhow::{bail, Context, Result, Error};
+use anyhow::{bail, Context, Error, Result};
 use log::info;
 use std::collections::HashMap;
 use std::fs::File;
-
-
 
 pub struct Wasmtime {
     store: Store,
@@ -22,7 +18,6 @@ pub struct Wasmtime {
     /// Modules loaded by user.
     modules: HashMap<String, Module>,
 }
-
 
 impl Wasmtime {
     pub fn new(mounts: Vec<DirectoryMount>) -> Wasmtime {
@@ -36,7 +31,6 @@ impl Wasmtime {
         wasmtime
     }
 }
-
 
 impl Wasmtime {
     pub fn load_binaries(&mut self, mut image: &mut WasmImage) -> Result<()> {
@@ -60,11 +54,13 @@ impl Wasmtime {
     pub fn load_binary(&mut self, image: &mut WasmImage, entrypoint: &EntryPoint) -> Result<()> {
         info!("Loading wasm binary: {}.", entrypoint.id);
 
-        let wasm_binary = image.load_binary(entrypoint)
+        let wasm_binary = image
+            .load_binary(entrypoint)
             .with_context(|| format!("Can't load wasm binary {}.", entrypoint.id))?;
 
-        let module = Module::new(&self.store, &wasm_binary)
-            .with_context(|| format!("WASM module creation failed for binary: {}.", entrypoint.id))?;
+        let module = Module::new(&self.store, &wasm_binary).with_context(|| {
+            format!("WASM module creation failed for binary: {}.", entrypoint.id)
+        })?;
 
         self.modules.insert(entrypoint.id.clone(), module);
         Ok(())
@@ -90,21 +86,18 @@ impl Wasmtime {
 
         // Create and instantiate snapshot0 of WASI ABI (FWIW, this is one *can* still
         // be targeted when using an older Rust toolchain)
-        let snapshot0 = create_wasi_instance_snapshot_0(
-            &self.store,
-            &preopen_dirs,
-            args,
-            &vec![],
-        )
-        .with_context(|| format!("Failed to create snapshot0 WASI module."))?;
+        let snapshot0 = create_wasi_instance_snapshot_0(&self.store, &preopen_dirs, args, &vec![])
+            .with_context(|| format!("Failed to create snapshot0 WASI module."))?;
 
         // Create and instantiate snapshot1 of WASI ABI, aka the "current stable"
         let snapshot1 =
             wasmtime_wasi::create_wasi_instance(&self.store, &preopen_dirs, args, &vec![])
                 .with_context(|| format!("Failed to create snapshot1 WASI module."))?;
 
-        self.dependencies.insert("wasi_unstable".to_owned(), snapshot0);
-        self.dependencies.insert("wasi_snapshot_preview1".to_owned(), snapshot1);
+        self.dependencies
+            .insert("wasi_unstable".to_owned(), snapshot0);
+        self.dependencies
+            .insert("wasi_snapshot_preview1".to_owned(), snapshot1);
         Ok(())
     }
 
@@ -113,19 +106,26 @@ impl Wasmtime {
 
         match self.modules.get_mut(module_name) {
             Some(mut module) => {
-
                 let imports = Wasmtime::resolve_imports(&self.dependencies, &mut module)?;
                 let instance = Instance::new(&self.store, &module, &imports)
                     .with_context(|| format!("WASM instance creation failed."))?;
                 Ok(instance)
-            },
-            None => return Err(Error::msg(format!("Module {} is not loaded. Did you forgot to run deploy step.", module_name)))
+            }
+            None => {
+                return Err(Error::msg(format!(
+                    "Module {} is not loaded. Did you forgot to run deploy step.",
+                    module_name
+                )))
+            }
         }
     }
 
-    fn resolve_imports(dependencies: &HashMap<String, Instance>,
-                       module: &mut Module) -> Result<Vec<Extern>> {
-        Ok(module.imports()
+    fn resolve_imports(
+        dependencies: &HashMap<String, Instance>,
+        module: &mut Module,
+    ) -> Result<Vec<Extern>> {
+        Ok(module
+            .imports()
             .iter()
             .map(|import| {
                 let module_name = import.module();
@@ -181,4 +181,3 @@ impl Wasmtime {
         return new_args;
     }
 }
-

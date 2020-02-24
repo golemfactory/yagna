@@ -1,11 +1,11 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 
-use ya_utils_actix::forward_actix_handler;
-use ya_utils_actix::actix_handler::ResultTypeGetter;
-use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_client::market::MarketProviderApi;
 use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
+use ya_utils_actix::actix_handler::ResultTypeGetter;
+use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
+use ya_utils_actix::forward_actix_handler;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};

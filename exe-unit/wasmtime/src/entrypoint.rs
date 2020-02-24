@@ -1,8 +1,8 @@
-use anyhow::{Result, Error, Context};
+use anyhow::{Context, Error, Result};
 use log::info;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{PathBuf, Path, Component};
+use std::path::{Component, Path, PathBuf};
 use structopt::StructOpt;
 
 use crate::manifest::{MountPoint, WasmImage};
@@ -12,7 +12,6 @@ use std::io::BufReader;
 
 use exe_unit_tools::download_image_http;
 
-
 #[derive(StructOpt)]
 pub enum Commands {
     Deploy {},
@@ -21,9 +20,8 @@ pub enum Commands {
         #[structopt(short = "e", long = "entrypoint")]
         entrypoint: String,
         args: Vec<String>,
-    }
+    },
 }
-
 
 #[derive(StructOpt)]
 pub struct CmdArgs {
@@ -47,23 +45,28 @@ struct DeployFile {
     image_path: PathBuf,
 }
 
-
 pub struct ExeUnitMain;
 
 impl ExeUnitMain {
-
     pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
         match cmdline.command {
-            Commands::Run{entrypoint, args} => ExeUnitMain::run(&cmdline.workdir, &cmdline.cachedir, &entrypoint, args),
-            Commands::Deploy{} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.cachedir, &cmdline.agreement_path),
+            Commands::Run { entrypoint, args } => {
+                ExeUnitMain::run(&cmdline.workdir, &cmdline.cachedir, &entrypoint, args)
+            }
+            Commands::Deploy {} => {
+                ExeUnitMain::deploy(&cmdline.workdir, &cmdline.cachedir, &cmdline.agreement_path)
+            }
             Commands::Start {} => ExeUnitMain::start(&cmdline.workdir, &cmdline.cachedir),
         }
     }
 
     fn deploy(workdir: &Path, cachedir: &Path, agreement_path: &Path) -> Result<()> {
-
-        let image_url = load_package_url(workdir, agreement_path)
-            .with_context(|| format!("Failed to parse agreement file [{}].", agreement_path.display()))?;
+        let image_url = load_package_url(workdir, agreement_path).with_context(|| {
+            format!(
+                "Failed to parse agreement file [{}].",
+                agreement_path.display()
+            )
+        })?;
 
         info!("Downloading image: {}", image_url);
 
@@ -74,13 +77,22 @@ impl ExeUnitMain {
     }
 
     fn start(workdir: &Path, _cachedir: &Path) -> Result<()> {
-        info!("Loading deploy file: {}", get_deploy_path(workdir).display());
+        info!(
+            "Loading deploy file: {}",
+            get_deploy_path(workdir).display()
+        );
 
-        let deploy_file = read_deploy_file(workdir)
-            .with_context(|| format!("Can't read deploy file {}. Did you run deploy command?",
-                                     get_deploy_path(workdir).display()))?;
+        let deploy_file = read_deploy_file(workdir).with_context(|| {
+            format!(
+                "Can't read deploy file {}. Did you run deploy command?",
+                get_deploy_path(workdir).display()
+            )
+        })?;
 
-        info!("Validating deployed image {}.", deploy_file.image_path.display());
+        info!(
+            "Validating deployed image {}.",
+            deploy_file.image_path.display()
+        );
 
         let mut image = WasmImage::new(&deploy_file.image_path)?;
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
@@ -91,11 +103,17 @@ impl ExeUnitMain {
     }
 
     fn run(workdir: &Path, _cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
-        info!("Loading deploy file: {}", get_deploy_path(workdir).display());
+        info!(
+            "Loading deploy file: {}",
+            get_deploy_path(workdir).display()
+        );
 
-        let deploy_file = read_deploy_file(workdir)
-            .with_context(|| format!("Can't read deploy file {}. Did you run deploy command?",
-                                     get_deploy_path(workdir).display()))?;
+        let deploy_file = read_deploy_file(workdir).with_context(|| {
+            format!(
+                "Can't read deploy file {}. Did you run deploy command?",
+                get_deploy_path(workdir).display()
+            )
+        })?;
 
         let mut image = WasmImage::new(&deploy_file.image_path)?;
         let mut wasmtime = ExeUnitMain::create_wasmtime(workdir, &mut image)?;
@@ -135,14 +153,21 @@ fn create_mount_points(mounts: &Vec<DirectoryMount>) -> Result<()> {
     Ok(())
 }
 
-fn directories_mounts(workdir: &Path, mount_points: &Vec<MountPoint>) -> Result<Vec<DirectoryMount>> {
-    mount_points.iter()
-        .map(|mount_point|{
+fn directories_mounts(
+    workdir: &Path,
+    mount_points: &Vec<MountPoint>,
+) -> Result<Vec<DirectoryMount>> {
+    mount_points
+        .iter()
+        .map(|mount_point| {
             let mount = mount_point.path();
             let host_path = workdir.join(mount);
 
             validate_path(mount)?;
-            Ok(DirectoryMount{host: host_path, guest: PathBuf::from(mount)})
+            Ok(DirectoryMount {
+                host: host_path,
+                guest: PathBuf::from(mount),
+            })
         })
         .collect()
 }
@@ -153,16 +178,25 @@ fn validate_path(path: &str) -> Result<()> {
     let path = PathBuf::from(path);
     for component in path.components() {
         match component {
-            Component::RootDir | Component::Prefix{..} => {
-                return Err(Error::msg(format!("Expected relative path instead of [{}].", path.display())));
-            },
-            Component::ParentDir{..} => {
-                return Err(Error::msg(format!("Path [{}] contains illegal '..' component.", path.display())))
-            },
+            Component::RootDir | Component::Prefix { .. } => {
+                return Err(Error::msg(format!(
+                    "Expected relative path instead of [{}].",
+                    path.display()
+                )));
+            }
+            Component::ParentDir { .. } => {
+                return Err(Error::msg(format!(
+                    "Path [{}] contains illegal '..' component.",
+                    path.display()
+                )))
+            }
             Component::CurDir => {
-                return Err(Error::msg(format!("Path [{}] contains illegal '.' component.", path.display())))
-            },
-            _ => ()
+                return Err(Error::msg(format!(
+                    "Path [{}] contains illegal '.' component.",
+                    path.display()
+                )))
+            }
+            _ => (),
         }
     }
     Ok(())
@@ -170,7 +204,9 @@ fn validate_path(path: &str) -> Result<()> {
 
 fn write_deploy_file(workdir: &Path, image: &WasmImage) -> Result<()> {
     let deploy_file = get_deploy_path(workdir);
-    let deploy = DeployFile{image_path: image.path().to_owned()};
+    let deploy = DeployFile {
+        image_path: image.path().to_owned(),
+    };
 
     Ok(serde_json::to_writer(&File::create(deploy_file)?, &deploy)?)
 }
@@ -191,18 +227,22 @@ fn load_package_url(workdir: &Path, agreement_path: &Path) -> Result<String> {
     let agreement_file = workdir.join(agreement_path);
     let reader = BufReader::new(File::open(agreement_file)?);
 
-    let json: serde_json::Value =serde_json::from_reader(reader)?;
+    let json: serde_json::Value = serde_json::from_reader(reader)?;
 
-    let package_value = json.pointer("/golem.srv.comp.wasm.task_package")
-        .ok_or(Error::msg(format!("Agreement field 'golem.srv.comp.wasm.task_package' doesn't exist.")))?;
+    let package_value = json
+        .pointer("/golem.srv.comp.wasm.task_package")
+        .ok_or(Error::msg(format!(
+            "Agreement field 'golem.srv.comp.wasm.task_package' doesn't exist."
+        )))?;
 
     let package = package_value
         .as_str()
-        .ok_or(Error::msg(format!("Agreement field 'golem.srv.comp.wasm.task_package' is not string type.")))?
+        .ok_or(Error::msg(format!(
+            "Agreement field 'golem.srv.comp.wasm.task_package' is not string type."
+        )))?
         .to_owned();
     return Ok(package);
 }
-
 
 #[cfg(test)]
 mod tests {
