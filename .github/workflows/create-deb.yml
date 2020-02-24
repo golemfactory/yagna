@@ -1,6 +1,10 @@
 name: Create Debian Package for Yagna
 
-on: [push]
+on:
+  push:
+    branches:
+      - master
+      - filip/install-deb
 
 jobs:
 
