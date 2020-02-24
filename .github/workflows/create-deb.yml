@@ -1,4 +1,4 @@
-name: Create Debian Package for Yagna
+name: Create .deb
 
 on:
   push:
