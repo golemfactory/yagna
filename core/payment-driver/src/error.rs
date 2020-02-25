@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
 pub enum PaymentDriverError {
+    #[error("Insufficient gas")]
+    InsufficientGas,
     #[error("Insufficient funds")]
     InsufficientFunds,
     #[error("Payment already scheduled")]

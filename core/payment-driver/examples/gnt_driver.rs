@@ -4,99 +4,97 @@ use ethsign::{KeyFile, Protected};
 
 use ethkey::prelude::*;
 
-// use futures::executor::block_on;
+use futures::executor::block_on;
 
-// use ya_payment_driver::account::{AccountBalance, Chain};
-// use ya_payment_driver::ethereum::EthereumClient;
-// use ya_payment_driver::gnt::GntDriver;
+use std::{thread, time};
+
+use ya_payment_driver::account::{AccountBalance, Chain};
+use ya_payment_driver::ethereum::EthereumClient;
+use ya_payment_driver::gnt::GntDriver;
 // use ya_payment_driver::payment::PaymentAmount;
-// use ya_payment_driver::PaymentDriver;
+use ya_payment_driver::PaymentDriver;
 
 // use ya_persistence::executor::DbExecutor;
 
-// const GETH_ADDRESS: &str = "http://188.165.227.180:55555";
-// const GNT_RINKEBY_CONTRACT: &str = "924442A66cFd812308791872C4B242440c108E19";
-// const FAUCET_TESTNET_CONTRACT: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
-// const ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
+const GETH_ADDRESS: &str = "http://188.165.227.180:55555";
+const GNT_RINKEBY_CONTRACT: &str = "924442A66cFd812308791872C4B242440c108E19";
 
-// fn sign_tx(bytes: Vec<u8>) -> Vec<u8> {
-//     let file = std::fs::File::open("/home/daniel/work/datadir/keys/keystore.json").unwrap();
-//     let key: KeyFile = serde_json::from_reader(file).unwrap();
-//     let password: Protected = "@Golem1234".into();
-//     let secret = key.to_secret_key(&password).unwrap();
+const ETH_FAUCET_ADDRESS: &str = "http://188.165.227.180:4000/donate";
+const GNT_FAUCET_CONTRACT: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
 
-//     // Sign the message
-//     let signature = secret.sign(&bytes).unwrap();
+const KEYSTORE: &str = "/tmp/keystore.json";
+const PASSWORD: &str = "";
 
-//     let mut v = Vec::with_capacity(65);
-//     v.push(signature.v);
-//     v.extend_from_slice(&signature.r[..]);
-//     v.extend_from_slice(&signature.s[..]);
+const SLEEP_TIME: u64 = 60;
 
-//     v
-// }
+fn sign_tx(bytes: Vec<u8>) -> Vec<u8> {
+    let secret = get_secret_key(KEYSTORE, PASSWORD);
 
-fn main() {
-    let keystore = "./keystore.json";
-    let password = "";
-    let _key = EthAccount::load_or_generate(keystore, password)
+    // Sign the message
+    let signature = secret.sign(&bytes).unwrap();
+
+    // Prepare signature
+    let mut v = Vec::with_capacity(65);
+    v.push(signature.v);
+    v.extend_from_slice(&signature.r[..]);
+    v.extend_from_slice(&signature.s[..]);
+
+    v
+}
+
+fn load_or_generate_account(keystore: &str, password: &str) {
+    let _ = EthAccount::load_or_generate(keystore, password)
         .expect("should load or generate new eth key");
+}
 
+fn get_key(keystore: &str) -> KeyFile {
     let file = std::fs::File::open(keystore).unwrap();
     let key: KeyFile = serde_json::from_reader(file).unwrap();
-    let password: Protected = password.into();
-    let _secret = key.to_secret_key(&password).unwrap();
+    key
+}
 
+fn get_secret_key(keystore: &str, password: &str) -> SecretKey {
+    let key = get_key(keystore);
+    let pwd: Protected = password.into();
+    let secret = key.to_secret_key(&pwd).unwrap();
+    secret
+}
+
+fn get_address(key: KeyFile) -> String {
     let address: Vec<u8> = key.address.unwrap().0;
-    println!("Address: {:?}", hex::encode(address));
+    hex::encode(address)
+}
 
-    // let (_eloop, transport) = web3::transports::Http::new(GETH_ADDRESS).unwrap();
-    // let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+fn wait_for_confirmations() {
+    let sleep_time = time::Duration::from_secs(SLEEP_TIME);
+    println!("Waiting {:?} seconds for confirmations...", SLEEP_TIME);
+    thread::sleep(sleep_time);
+}
 
-    // let address: ethereum_types::Address = ADDRESS.parse().unwrap();
-    // let gnt_rinkeby_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse().unwrap();
-    // let faucet_rinkeby_address: ethereum_types::Address = FAUCET_TESTNET_CONTRACT.parse().unwrap();
+fn show_balance(gnt_driver: &GntDriver) {
+    let balance_result = block_on(gnt_driver.get_account_balance());
+    let balance: AccountBalance = balance_result.unwrap();
+    println!("{:?}", balance);
+}
 
-    // let mut driver: GntDriver =
-    //     GntDriver::new(address, ethereum_client, gnt_rinkeby_address).unwrap();
+fn main() {
+    load_or_generate_account(KEYSTORE, PASSWORD);
+    let key = get_key(KEYSTORE);
 
-    // let balance_result = block_on(driver.get_account_balance());
-    // let balance: AccountBalance = balance_result.unwrap();
-    // println!("{:?}", balance);
+    let address = get_address(key);
+    println!("Address: {:?}", address);
 
-    // driver
-    //     .bind_faucet_contract(faucet_rinkeby_address)
-    //     .map_or_else(
-    //         |e| {
-    //             println!("Failed to bind faucet contract: {:?}", e);
-    //         },
-    //         |_| {
-    //             block_on(driver.request_gnt_from_faucet(sign_tx)).map_or_else(
-    //                 |e| {
-    //                     println!("{:?}", e);
-    //                 },
-    //                 |tx| {
-    //                     println!("Requested: {:?}", tx);
-    //                 },
-    //             );
-    //         },
-    //     );
-    // let payment_amount = PaymentAmount {
-    //     base_currency_amount: U256::from(10000),
-    //     gas_amount: Some(U256::from(55000)),
-    // };
-    // let due_date = Utc::now() + Duration::days(1i64);
-    // let transfer = block_on(driver.schedule_payment(
-    //     "invoice_1234",
-    //     payment_amount,
-    //     address,
-    //     due_date,
-    //     sign_tx,
-    // ));
-    // transfer.map_or_else(
-    //     |e| println!("Unexpected error: {:?}", e),
-    //     |_| {
-    //         println!("Transferred");
-    //     },
-    // )
+    let (_eloop, transport) = web3::transports::Http::new(GETH_ADDRESS).unwrap();
+    let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+
+    let address: ethereum_types::Address = address.parse().unwrap();
+    let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse().unwrap();
+    let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse().unwrap();
+
+    let gnt_driver = GntDriver::new(address, ethereum_client, gnt_contract_address).unwrap();
+
+    block_on(gnt_driver.init_funds(ETH_FAUCET_ADDRESS, gnt_faucet_address, sign_tx)).unwrap();
+
+    wait_for_confirmations();
+    show_balance(&gnt_driver);
 }
