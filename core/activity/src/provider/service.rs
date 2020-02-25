@@ -15,8 +15,6 @@ lazy_static::lazy_static! {
 }
 
 pub fn bind_gsb(db: &DbExecutor) {
-    log::info!("activating activity provider service");
-
     // public for remote requestors interactions
     bind_gsb_method!(&PUBLIC_ID, db, create_activity_gsb);
     bind_gsb_method!(&PUBLIC_ID, db, destroy_activity_gsb);
@@ -26,8 +24,6 @@ pub fn bind_gsb(db: &DbExecutor) {
     // local for ExeUnit interactions
     bind_gsb_method!(&PRIVATE_ID, db, set_activity_state_gsb);
     bind_gsb_method!(&PRIVATE_ID, db, set_activity_usage_gsb);
-
-    log::info!("activity provider service activated");
 }
 
 /// Creates new Activity based on given Agreement.
