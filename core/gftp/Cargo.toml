@@ -1,0 +1,16 @@
+[package]
+name = "gftp"
+version = "0.1.0"
+authors = ["nieznanysprawiciel <nieznany.sprawiciel@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ya-core-model = { version = "0.1", features = ["gftp"] }
+ya-service-api = "0.1"
+ya-service-api-derive = "0.1"
+ya-service-api-interfaces = "0.1"
+ya-service-bus = "0.2"
+
+structopt = "0.3.9"
