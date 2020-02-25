@@ -5,11 +5,6 @@ use std::path::PathBuf;
 
 pub mod constants;
 
-pub fn default_data_dir() -> Result<PathBuf> {
-    Ok(appdirs::user_data_dir(Some("yagna"), Some("golem"), false)
-        .map_err(|_| anyhow::Error::msg("user data dir creation failure"))?)
-}
-
 #[derive(Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
@@ -27,11 +22,6 @@ impl CliCtx {
         output.print(self.json_output)
     }
 }
-
-// commented out until Rust enables async or return impl Trait for Trait fns
-//pub trait Command {
-//    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
-//}
 
 pub enum CommandOutput {
     NoOutput,

@@ -31,7 +31,7 @@ struct ConnectionInit;
 
 impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for ConnectionInit {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
-        log::debug!("on_acquire connection");
+        log::trace!("on_acquire connection");
         Ok(conn
             .batch_execute(
                 "PRAGMA synchronous = NORMAL; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;",
@@ -62,8 +62,8 @@ impl DbExecutor {
         Self::new(database_url.to_string_lossy())
     }
 
-    pub fn from_data_dir(data_dir: &Path) -> Result<Self, Error> {
-        let db = data_dir.join("yagna.db");
+    pub fn from_data_dir(data_dir: &Path, name: &str) -> Result<Self, Error> {
+        let db = data_dir.join(name).with_extension("db");
         Self::new(db.to_string_lossy())
     }
 
