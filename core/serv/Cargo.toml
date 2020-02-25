@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.2.4"
+version = "0.3.0"
 description = "Yagna server daemon and CLI"
 authors = ["Golem Factory <contact@golem.network>"]
 homepage = "https://github.com/golemfactory/yagna/core/serv"
@@ -10,11 +10,11 @@ edition = "2018"
 
 [dependencies]
 ya-activity = "0.2"
-ya-payment = "0.1"
+ya-core-model = "0.1"
 ya-identity = "0.2"
 ya-market = "0.1"
-
-ya-core-model = "0.1"
+ya-net = { version = "0.1", features = [ "service" ] }
+ya-payment = "0.1"
 ya-persistence = "0.2"
 ya-sb-router = "0.1"
 ya-service-api = "0.1"
@@ -27,13 +27,13 @@ actix-rt = "1.0"
 actix-service = "1.0"
 actix-web = "2.0"
 anyhow = "1.0"
+directories = "2.0.2"
+dotenv = "0.15.0"
 env_logger = "0.7"
 futures = "0.3"
-log = "0.4"
 lazy_static = "1.4"
+log = "0.4"
 structopt = "0.3"
-dotenv = "0.15.0"
-url="2.1.1"
-ya-net = {version = "0.1", features=["service"]}
+url = "2.1.1"
 
 
