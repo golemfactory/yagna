@@ -31,7 +31,7 @@ pub trait PaymentDriver {
         amount: PaymentAmount,
         recipient: Address,
         due_date: DateTime<Utc>,
-        tx_sign: F,
+        sign_tx: F,
     ) -> PaymentDriverResult<()>
     where
         F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send;

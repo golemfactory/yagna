@@ -42,7 +42,7 @@ impl PaymentDriver for DummyDriver {
         amount: PaymentAmount,
         recipient: Address,
         _due_date: DateTime<Utc>,
-        _tx_sign: F,
+        _sign_tx: F,
     ) -> Result<(), PaymentDriverError>
     where
         F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,

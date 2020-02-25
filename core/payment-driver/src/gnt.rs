@@ -23,8 +23,8 @@ use crate::ethereum::EthereumClient;
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{PaymentDriver, PaymentDriverResult};
 
-const GAS_GNT_TRANSFER: u32 = 55000;
-const GAS_GNT_FAUCET: u32 = 90000;
+const GNT_TRANSFER_GAS: u32 = 55000;
+const GNT_FAUCET_GAS: u32 = 90000;
 
 const MAX_ETH_FAUCET_REQUESTS: u32 = 10;
 const ETH_FAUCET_SLEEP_SECONDS: u64 = 1;
@@ -87,6 +87,33 @@ impl GntDriver {
         }
 
         Ok(())
+    }
+
+    /// Transfers Gnt
+    pub async fn transfer_gnt<F>(
+        &self,
+        amount: PaymentAmount,
+        recipient: Address,
+        sign_tx: F,
+    ) -> PaymentDriverResult<H256>
+    where
+        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
+    {
+        let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount);
+
+        if gnt_amount > self.get_gnt_balance(self.address)?.amount {
+            return Err(PaymentDriverError::InsufficientFunds);
+        }
+
+        let tx = self.prepare_raw_tx(
+            gas_amount,
+            &self.gnt_contract,
+            "transfer",
+            (recipient, gnt_amount),
+        )?;
+
+        let tx_hash = self.send_raw_transaction(&tx, sign_tx)?;
+        Ok(tx_hash)
     }
 
     /// Returns Gnt balance
@@ -170,46 +197,29 @@ impl GntDriver {
             include_bytes!("./contracts/faucet.json"),
         )?;
 
-        let mut tx = self.prepare_raw_tx(U256::from(GAS_GNT_FAUCET), &contract, "create", ());
-        self.send_raw_transaction(&mut tx, sign_tx).map_or_else(
-            |e| {
-                Err(PaymentDriverError::LibraryError {
-                    msg: format!("{:?}", e),
-                })
-            },
-            |tx_hash| {
-                println!("Tx hash: {:?}", tx_hash);
-                Ok(())
-            },
-        )
+        let tx = self.prepare_raw_tx(U256::from(GNT_FAUCET_GAS), &contract, "create", ())?;
+
+        let tx_hash = self.send_raw_transaction(&tx, sign_tx)?;
+
+        println!("Tx hash: {:?}", tx_hash);
+        Ok(())
     }
 
     fn send_raw_transaction<F>(
         &self,
-        raw_tx: &mut RawTransaction,
+        raw_tx: &RawTransaction,
         sign_tx: F,
     ) -> PaymentDriverResult<H256>
     where
         F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
     {
-        raw_tx.nonce = self.get_next_nonce()?;
-        raw_tx.gas_price = self.get_gas_price()?;
-
-        self.check_gas_amount(raw_tx)?;
-
         let chain_id = self.get_chain_id();
         let signature = sign_tx(raw_tx.hash(chain_id));
         let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
 
         // TODO persistence
-        self.send_transaction(signed_tx).map_or_else(
-            |e| {
-                Err(PaymentDriverError::LibraryError {
-                    msg: format!("{:?}", e),
-                })
-            },
-            |tx_hash| Ok(tx_hash),
-        )
+        let tx_hash = self.send_transaction(signed_tx)?;
+        Ok(tx_hash)
     }
 
     fn check_gas_amount(&self, raw_tx: &RawTransaction) -> PaymentDriverResult<()> {
@@ -227,20 +237,22 @@ impl GntDriver {
         contract: &Contract<Http>,
         func: &str,
         tokens: P,
-    ) -> RawTransaction
+    ) -> PaymentDriverResult<RawTransaction>
     where
         P: Tokenize,
     {
-        RawTransaction {
-            // nonce will be overwritten
-            nonce: U256::from(0),
+        let tx = RawTransaction {
+            nonce: self.get_next_nonce()?,
             to: Some(contract.address()),
             value: U256::from(0),
-            // gas price will be overwritten
-            gas_price: U256::from(0),
+            gas_price: self.get_gas_price()?,
             gas: gas,
             data: contract.encode(func, tokens).unwrap(),
-        }
+        };
+
+        self.check_gas_amount(&tx)?;
+
+        Ok(tx)
     }
 
     fn prepare_contract(
@@ -301,7 +313,7 @@ impl GntDriver {
         let gas_amount = if amount.gas_amount.is_some() {
             amount.gas_amount.unwrap()
         } else {
-            U256::from(GAS_GNT_TRANSFER)
+            U256::from(GNT_TRANSFER_GAS)
         };
         (amount.base_currency_amount, gas_amount)
     }
@@ -311,56 +323,27 @@ impl GntDriver {
 impl PaymentDriver for GntDriver {
     /// Returns account balance
     async fn get_account_balance(&self) -> PaymentDriverResult<AccountBalance> {
-        self.get_gnt_balance(self.address).map_or_else(
-            |e| {
-                Err(PaymentDriverError::LibraryError {
-                    msg: format!("{:?}", e),
-                })
-            },
-            |gnt_balance| {
-                self.get_eth_balance(self.address).map_or_else(
-                    |e| {
-                        Err(PaymentDriverError::LibraryError {
-                            msg: format!("{:?}", e),
-                        })
-                    },
-                    |eth_balance| Ok(AccountBalance::new(gnt_balance, Some(eth_balance))),
-                )
-            },
-        )
+        let gnt_balance = self.get_gnt_balance(self.address)?;
+        let eth_balance = self.get_eth_balance(self.address)?;
+
+        Ok(AccountBalance::new(gnt_balance, Some(eth_balance)))
     }
 
     /// Schedules payment
-    #[allow(unused)]
     async fn schedule_payment<F>(
         &mut self,
         _invoice_id: &str,
         amount: PaymentAmount,
         recipient: Address,
-        due_date: DateTime<Utc>,
-        tx_sign: F,
+        _due_date: DateTime<Utc>,
+        sign_tx: F,
     ) -> PaymentDriverResult<()>
     where
         F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
     {
-        let (payment_amount, gas_amount) = self.prepare_payment_amounts(amount);
-        let mut tx = self.prepare_raw_tx(
-            gas_amount,
-            &self.gnt_contract,
-            "transfer",
-            (recipient, payment_amount),
-        );
-        self.send_raw_transaction(&mut tx, tx_sign).map_or_else(
-            |e| {
-                Err(PaymentDriverError::LibraryError {
-                    msg: format!("{:?}", e),
-                })
-            },
-            |tx_hash| {
-                println!("Tx hash: {:?}", tx_hash);
-                Ok(())
-            },
-        )
+        let tx_hash = self.transfer_gnt(amount, recipient, sign_tx).await?;
+        println!("Tx hash: {:?}", tx_hash);
+        Ok(())
     }
 
     /// Returns payment status
