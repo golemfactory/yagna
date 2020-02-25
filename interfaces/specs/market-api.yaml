@@ -1,6 +1,6 @@
 openapi: 3.0.2
 info:
-  version: 1.4.2
+  version: 1.5.0
   title: Yagna Market API
   description: '
     ## Yagna Market
@@ -44,6 +44,30 @@ paths:
 
 
   /offers:
+    get:
+      tags:
+        - provider
+      summary: Fetches all active Offers which have been published by the Provider.
+      description: >
+
+      operationId: getOffers
+      responses:
+        '200':
+          description: Offer list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  oneOf:
+                    - $ref: '#/components/schemas/Offer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
     post:
       tags:
         - provider
@@ -245,6 +269,30 @@ paths:
           $ref: '#/components/responses/UnexpectedError'
 
   /demands:
+    get:
+      tags:
+        - requestor
+      summary: Fetches all active Demands which have been published by the Requestor.
+      description: >
+
+      operationId: getDemands
+      responses:
+        '200':
+          description: Demand list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  oneOf:
+                    - $ref: '#/components/schemas/Demand'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
     post:
       tags:
         - requestor
