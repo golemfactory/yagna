@@ -6,6 +6,10 @@ use ethereum_types::{Address, H256, U256};
 
 use ethereum_tx_sign::RawTransaction;
 
+use std::collections::HashMap;
+
+use std::{thread, time};
+
 use web3::contract::tokens::Tokenize;
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
@@ -19,14 +23,18 @@ use crate::ethereum::EthereumClient;
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{PaymentDriver, PaymentDriverResult};
 
-// const GAS_GNT_TRANSFER: u128 = 55000;
-const GAS_FAUCET: u128 = 90000;
+const GAS_GNT_TRANSFER: u32 = 55000;
+const GAS_GNT_FAUCET: u32 = 90000;
+
+const MAX_ETH_FAUCET_REQUESTS: u32 = 10;
+const ETH_FAUCET_SLEEP_SECONDS: u64 = 1;
+
+const MAX_TESTNET_BALANCE: &str = "10000000000000";
 
 pub struct GntDriver {
     address: Address,
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
-    faucet_contract: Option<Contract<Http>>,
 }
 
 impl GntDriver {
@@ -36,30 +44,48 @@ impl GntDriver {
         ethereum_client: EthereumClient,
         gnt_contract_address: Address,
     ) -> PaymentDriverResult<GntDriver> {
-        GntDriver::prepare_contract(
+        let gnt_contract = GntDriver::prepare_contract(
             &ethereum_client,
             gnt_contract_address,
             include_bytes!("./contracts/gnt.json"),
-        )
-        .map_or_else(
-            |e| {
-                Err(PaymentDriverError::LibraryError {
-                    msg: format!("{:?}", e),
-                })
-            },
-            |contract| {
-                Ok(GntDriver {
-                    address: address,
-                    ethereum_client: ethereum_client,
-                    gnt_contract: contract,
-                    faucet_contract: None,
-                })
-            },
-        )
+        )?;
+
+        Ok(GntDriver {
+            address: address,
+            ethereum_client: ethereum_client,
+            gnt_contract: gnt_contract,
+        })
     }
 
-    /// Initialize Rinkeby account
-    pub async fn init_funds(&self) -> PaymentDriverResult<()> {
+    /// Initializes testnet funds
+    pub async fn init_funds<F>(
+        &self,
+        eth_faucet_address: &str,
+        gnt_faucet_address: Address,
+        sign_tx: F,
+    ) -> PaymentDriverResult<()>
+    where
+        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
+    {
+        let max_testnet_balance = U256::from_dec_str(MAX_TESTNET_BALANCE).unwrap();
+
+        if self.get_eth_balance(self.address)?.amount < max_testnet_balance {
+            println!("Requesting Eth from Faucet...");
+            self.request_eth_from_faucet(eth_faucet_address).await?;
+        } else {
+            println!("To much Eth...");
+        }
+
+        // cannot have more than "10000000000000" Gnt
+        // blocked by Faucet contract
+        if self.get_gnt_balance(self.address)?.amount < max_testnet_balance {
+            println!("Requesting Gnt from Faucet...");
+            self.request_gnt_from_faucet(gnt_faucet_address, sign_tx)
+                .await?;
+        } else {
+            println!("To much Gnt...");
+        }
+
         Ok(())
     }
 
@@ -96,50 +122,63 @@ impl GntDriver {
             )
     }
 
-    /// Requests Gnt from faucet
-    pub async fn request_gnt_from_faucet<F>(&self, tx_sign: F) -> PaymentDriverResult<()>
-    where
-        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
-    {
-        match &self.faucet_contract {
-            None => Err(PaymentDriverError::LibraryError {
-                msg: String::from("Faucet contract not bound"),
-            }),
-            Some(contract) => {
-                let mut tx = self.prepare_raw_tx(U256::from(GAS_FAUCET), contract, "create", ());
-                self.send_raw_transaction(&mut tx, tx_sign).map_or_else(
-                    |e| {
-                        Err(PaymentDriverError::LibraryError {
-                            msg: format!("{:?}", e),
-                        })
-                    },
-                    |tx_hash| {
-                        println!("Tx hash: {:?}", tx_hash);
-                        Ok(())
-                    },
-                )
+    /// Requests Eth from Faucet
+    async fn request_eth_from_faucet(&self, faucet_address: &str) -> PaymentDriverResult<()> {
+        let sleep_time = time::Duration::from_secs(ETH_FAUCET_SLEEP_SECONDS);
+        let mut counter = 0;
+        while counter < MAX_ETH_FAUCET_REQUESTS {
+            if self.request_eth(faucet_address).is_ok() {
+                break;
+            } else {
+                println!("Failed to request Eth from Faucet...");
             }
+            thread::sleep(sleep_time);
+            counter += 1;
+        }
+
+        if counter < MAX_ETH_FAUCET_REQUESTS {
+            Ok(())
+        } else {
+            Err(PaymentDriverError::LibraryError {
+                msg: format!("Cannot request Eth from Faucet"),
+            })
         }
     }
 
-    /// Binds faucet contract
-    pub fn bind_faucet_contract(
-        &mut self,
+    fn request_eth(&self, faucet_address: &str) -> Result<(), reqwest::Error> {
+        let mut uri: String = faucet_address.into();
+        uri.push('/');
+        let addr: String = format!("{:x?}", self.address);
+        uri.push_str(&addr.as_str()[2..]);
+        println!("HTTP GET {:?}", uri);
+        let _body = reqwest::blocking::get(uri.as_str())?.json::<HashMap<String, String>>()?;
+        Ok(())
+    }
+
+    /// Requests Gnt from Faucet
+    async fn request_gnt_from_faucet<F>(
+        &self,
         faucet_contract_address: Address,
-    ) -> PaymentDriverResult<()> {
-        GntDriver::prepare_contract(
+        sign_tx: F,
+    ) -> PaymentDriverResult<()>
+    where
+        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
+    {
+        let contract = GntDriver::prepare_contract(
             &self.ethereum_client,
             faucet_contract_address,
             include_bytes!("./contracts/faucet.json"),
-        )
-        .map_or_else(
+        )?;
+
+        let mut tx = self.prepare_raw_tx(U256::from(GAS_GNT_FAUCET), &contract, "create", ());
+        self.send_raw_transaction(&mut tx, sign_tx).map_or_else(
             |e| {
                 Err(PaymentDriverError::LibraryError {
                     msg: format!("{:?}", e),
                 })
             },
-            |contract| {
-                self.faucet_contract = Some(contract);
+            |tx_hash| {
+                println!("Tx hash: {:?}", tx_hash);
                 Ok(())
             },
         )
@@ -153,28 +192,33 @@ impl GntDriver {
     where
         F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
     {
-        self.get_gas_price().map_or_else(
+        raw_tx.nonce = self.get_next_nonce()?;
+        raw_tx.gas_price = self.get_gas_price()?;
+
+        self.check_gas_amount(raw_tx)?;
+
+        let chain_id = self.get_chain_id();
+        let signature = sign_tx(raw_tx.hash(chain_id));
+        let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
+
+        // TODO persistence
+        self.send_transaction(signed_tx).map_or_else(
             |e| {
                 Err(PaymentDriverError::LibraryError {
                     msg: format!("{:?}", e),
                 })
             },
-            |gas_price| {
-                raw_tx.nonce = self.get_next_nonce();
-                raw_tx.gas_price = gas_price;
-                let chain_id = self.get_chain_id();
-                let signature = sign_tx(raw_tx.hash(chain_id));
-                let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
-                self.send_transaction(signed_tx).map_or_else(
-                    |e| {
-                        Err(PaymentDriverError::LibraryError {
-                            msg: format!("{:?}", e),
-                        })
-                    },
-                    |tx_hash| Ok(tx_hash),
-                )
-            },
+            |tx_hash| Ok(tx_hash),
         )
+    }
+
+    fn check_gas_amount(&self, raw_tx: &RawTransaction) -> PaymentDriverResult<()> {
+        let eth_balance = self.get_eth_balance(self.address)?;
+        if raw_tx.gas_price * raw_tx.gas > eth_balance.amount {
+            Err(PaymentDriverError::InsufficientGas)
+        } else {
+            Ok(())
+        }
     }
 
     fn prepare_raw_tx<P>(
@@ -229,9 +273,17 @@ impl GntDriver {
         )
     }
 
-    fn get_next_nonce(&self) -> U256 {
-        let current_nonce = 28_u64;
-        U256::from(current_nonce + 1)
+    fn get_next_nonce(&self) -> PaymentDriverResult<U256> {
+        self.ethereum_client
+            .get_next_nonce(self.address)
+            .map_or_else(
+                |e| {
+                    Err(PaymentDriverError::LibraryError {
+                        msg: format!("{:?}", e),
+                    })
+                },
+                |nonce| Ok(nonce),
+            )
     }
 
     fn get_gas_price(&self) -> PaymentDriverResult<U256> {
@@ -249,7 +301,7 @@ impl GntDriver {
         let gas_amount = if amount.gas_amount.is_some() {
             amount.gas_amount.unwrap()
         } else {
-            U256::from(55000)
+            U256::from(GAS_GNT_TRANSFER)
         };
         (amount.base_currency_amount, gas_amount)
     }
