@@ -1,7 +1,3 @@
-use crate::common::{is_activity_executor, PathActivity, QueryTimeoutMaxCount};
-use crate::dao::*;
-use crate::error::Error;
-use crate::impl_restful_handler;
 use actix_web::{web, Responder};
 use futures::prelude::*;
 use std::convert::From;
@@ -10,6 +6,11 @@ use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+
+use crate::common::{authorize_activity_executor, PathActivity, QueryTimeoutMaxCount};
+use crate::dao::*;
+use crate::error::Error;
+use crate::impl_restful_handler;
 
 pub mod service;
 
@@ -72,9 +73,7 @@ async fn get_activity_state_web(
     path: web::Path<PathActivity>,
     id: Identity,
 ) -> impl Responder {
-    if !is_activity_executor(&db, id.name, &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
 
     get_activity_state(&db, &path.activity_id)
         .await
@@ -104,9 +103,7 @@ async fn set_activity_state_web(
     state: web::Json<ActivityState>,
     id: Identity,
 ) -> Result<(), Error> {
-    if !is_activity_executor(&db, id.name, &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
 
     set_activity_state(&db, &path.activity_id, state.into_inner()).await
 }
@@ -131,9 +128,7 @@ async fn get_activity_usage_web(
     path: web::Path<PathActivity>,
     id: Identity,
 ) -> Result<ActivityUsage, Error> {
-    if !is_activity_executor(&db, id.name, &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
 
     get_activity_usage(&db, &path.activity_id).await
 }

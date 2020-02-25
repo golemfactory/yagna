@@ -5,7 +5,9 @@ use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningComm
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState, State};
 use ya_persistence::executor::DbExecutor;
 
-use crate::common::{get_activity_agreement, is_activity_initiator, PathActivity, QueryTimeout};
+use crate::common::{
+    authorize_activity_initiator, get_activity_agreement, PathActivity, QueryTimeout,
+};
 use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
 use crate::error::Error;
 use crate::requestor::provider_activity_service_id;
@@ -34,9 +36,7 @@ async fn get_activity_state(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ActivityState, Error> {
-    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityState {
@@ -72,9 +72,7 @@ async fn get_activity_usage(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ActivityUsage, Error> {
-    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityUsage {
@@ -108,9 +106,7 @@ async fn get_running_command(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ExeScriptCommandState, Error> {
-    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetRunningCommand {
