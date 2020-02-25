@@ -1,14 +1,16 @@
 //! Web utils
 use awc::{
+    error::PayloadError,
     http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     ClientRequest, ClientResponse, SendClientRequest,
 };
 use bytes::Bytes;
+use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{rc::Rc, str::FromStr, time::Duration};
 use url::{form_urlencoded, Url};
 
-use crate::Result;
+use crate::{Error, Result};
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -116,24 +118,31 @@ impl WebRequest<ClientRequest> {
     }
 }
 
-fn filter_http_status<T>(response: ClientResponse<T>, url: String) -> Result<ClientResponse<T>> {
+async fn filter_http_status<T>(
+    mut response: ClientResponse<T>,
+    url: String,
+) -> Result<ClientResponse<T>>
+where
+    T: Stream<Item = std::result::Result<Bytes, PayloadError>> + Unpin,
+{
+    log::trace!("{:?}", response.headers());
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err((response.status(), url).into())
+        Err((response.status(), url, response.json().await?).into())
     }
 }
 
 impl WebRequest<SendClientRequest> {
     pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
         let url = self.url.clone();
-        let mut response = self
+        let response = self
             .inner_request
             .await
-            .map_err(|e| (e, url.clone()).into())
-            .and_then(|r| filter_http_status(r, url))?;
+            .map_err(|e| Error::from((e, url.clone())))?;
 
-        log::debug!("{:?}", response.headers());
+        let mut response = filter_http_status(response, url).await?;
+
         // allow empty body and no content (204) to pass smoothly
         if StatusCode::NO_CONTENT == response.status()
             || Some("0")
@@ -148,18 +157,7 @@ impl WebRequest<SendClientRequest> {
             ))?);
         }
 
-        response.json().await.map_err(From::from)
-    }
-
-    pub async fn body(self) -> Result<Bytes> {
-        let url = self.url.clone();
-        self.inner_request
-            .await
-            .map_err(|e| (e, url.clone()).into())
-            .and_then(|r| filter_http_status(r, url))?
-            .body()
-            .await
-            .map_err(From::from)
+        Ok(response.json().await?)
     }
 }
 
