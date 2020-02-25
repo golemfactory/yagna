@@ -1,0 +1,26 @@
+[package]
+name = "ya-transfer"
+version = "0.1.0"
+description = "Yagna transfer util"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+actix-http = "1.0.1"
+actix-rt = "1.0.0"
+awc = "1.0.1"
+bytes = "0.5.4"
+futures = { version = "0.3.4" }
+url = "2.1.1"
+lazy_static = "1.4.0"
+log = "0.4.8"
+thiserror = "1.0.11"
+tokio = {version = "0.2.11", features = ["fs"] }
+tokio-util = { version = "0.2", features = ["codec"] }
+
+[dev-dependencies]
+actix-files = "0.2.1"
+actix-web = "2.0.0"
+rand = "0.7.3"
+sha2 = "0.8.1"
+tempdir = "0.3.7"

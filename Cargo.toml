@@ -31,6 +31,7 @@ members = [
     "service-bus/util",
     "utils/scheduler",
     "utils/actix_utils",
+    "utils/transfer",
 ]
 
 [patch.crates-io]
@@ -61,4 +62,5 @@ ya-core-model = { path = "core/model" }
 ya-exe-unit = { path = "exe-unit" }
 ya-model = { path = "interfaces/model" }
 ya-persistence = { path = "core/persistence" }
+ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
