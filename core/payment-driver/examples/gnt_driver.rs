@@ -1,5 +1,7 @@
-// use chrono::{Duration, Utc};
-// use ethereum_types::U256;
+use chrono::{Duration, Utc};
+
+use ethereum_types::U256;
+
 use ethsign::{KeyFile, Protected};
 
 use ethkey::prelude::*;
@@ -11,7 +13,7 @@ use std::{thread, time};
 use ya_payment_driver::account::{AccountBalance, Chain};
 use ya_payment_driver::ethereum::EthereumClient;
 use ya_payment_driver::gnt::GntDriver;
-// use ya_payment_driver::payment::PaymentAmount;
+use ya_payment_driver::payment::PaymentAmount;
 use ya_payment_driver::PaymentDriver;
 
 // use ya_persistence::executor::DbExecutor;
@@ -91,9 +93,31 @@ fn main() {
     let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse().unwrap();
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse().unwrap();
 
-    let gnt_driver = GntDriver::new(address, ethereum_client, gnt_contract_address).unwrap();
+    let mut gnt_driver = GntDriver::new(address, ethereum_client, gnt_contract_address).unwrap();
 
     block_on(gnt_driver.init_funds(ETH_FAUCET_ADDRESS, gnt_faucet_address, sign_tx)).unwrap();
+
+    wait_for_confirmations();
+    show_balance(&gnt_driver);
+
+    let payment_amount = PaymentAmount {
+        base_currency_amount: U256::from(10000),
+        gas_amount: None,
+    };
+    let due_date = Utc::now() + Duration::days(1i64);
+    let transfer = block_on(gnt_driver.schedule_payment(
+        "invoice_1234",
+        payment_amount,
+        address,
+        due_date,
+        sign_tx,
+    ));
+    transfer.map_or_else(
+        |e| println!("Unexpected error while sending Gnt: {:?}", e),
+        |_| {
+            println!("Gnt transferred!");
+        },
+    );
 
     wait_for_confirmations();
     show_balance(&gnt_driver);
