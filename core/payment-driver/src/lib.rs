@@ -2,6 +2,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use ethereum_types::Address;
 
+#[macro_use]
+extern crate diesel;
+
 mod dummy;
 mod error;
 
@@ -9,7 +12,9 @@ pub mod account;
 pub mod dao;
 pub mod ethereum;
 pub mod gnt;
+pub mod models;
 pub mod payment;
+pub mod schema;
 
 pub use account::{AccountBalance, Balance, Chain, Currency};
 pub use dummy::DummyDriver;
