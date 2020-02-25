@@ -16,10 +16,10 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Build the Docker image
-        run: docker build . -f create-deb.Dockerfile -t create-deb
+        run: docker build . -f build-deb.Dockerfile -t build-deb
 
       - name: Copy .deb file
-        run: docker run create-deb bash -c "cat /src/target/debian/*.deb" > yagna.deb
+        run: docker run build-deb bash -c "cat /src/target/debian/*.deb" > yagna.deb
 
       - name: Download artifact
         uses: actions/upload-artifact@v1.0.0
