@@ -95,7 +95,7 @@ fn main() {
 
     let mut gnt_driver = GntDriver::new(address, ethereum_client, gnt_contract_address).unwrap();
 
-    block_on(gnt_driver.init_funds(ETH_FAUCET_ADDRESS, gnt_faucet_address, sign_tx)).unwrap();
+    block_on(gnt_driver.init_funds(ETH_FAUCET_ADDRESS, gnt_faucet_address, &sign_tx)).unwrap();
 
     wait_for_confirmations();
     show_balance(&gnt_driver);
@@ -110,7 +110,7 @@ fn main() {
         payment_amount,
         address,
         due_date,
-        sign_tx,
+        &sign_tx,
     ));
     transfer.map_or_else(
         |e| println!("Unexpected error while sending Gnt: {:?}", e),

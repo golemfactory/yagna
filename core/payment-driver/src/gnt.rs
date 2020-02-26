@@ -21,7 +21,7 @@ use crate::account::{AccountBalance, Balance, Currency};
 use crate::error::PaymentDriverError;
 use crate::ethereum::EthereumClient;
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
-use crate::{PaymentDriver, PaymentDriverResult};
+use crate::{PaymentDriver, PaymentDriverResult, SignTx};
 
 const GNT_TRANSFER_GAS: u32 = 55000;
 const GNT_FAUCET_GAS: u32 = 90000;
@@ -58,15 +58,12 @@ impl GntDriver {
     }
 
     /// Initializes testnet funds
-    pub async fn init_funds<F>(
+    pub async fn init_funds(
         &self,
         eth_faucet_address: &str,
         gnt_faucet_address: Address,
-        sign_tx: F,
-    ) -> PaymentDriverResult<()>
-    where
-        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
-    {
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<()> {
         let max_testnet_balance = U256::from_dec_str(MAX_TESTNET_BALANCE).unwrap();
 
         if self.get_eth_balance(self.address)?.amount < max_testnet_balance {
@@ -90,15 +87,12 @@ impl GntDriver {
     }
 
     /// Transfers Gnt
-    pub async fn transfer_gnt<F>(
+    pub async fn transfer_gnt(
         &self,
         amount: PaymentAmount,
         recipient: Address,
-        sign_tx: F,
-    ) -> PaymentDriverResult<H256>
-    where
-        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
-    {
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<H256> {
         let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount);
 
         if gnt_amount > self.get_gnt_balance(self.address)?.amount {
@@ -183,14 +177,11 @@ impl GntDriver {
     }
 
     /// Requests Gnt from Faucet
-    async fn request_gnt_from_faucet<F>(
+    async fn request_gnt_from_faucet(
         &self,
         faucet_contract_address: Address,
-        sign_tx: F,
-    ) -> PaymentDriverResult<()>
-    where
-        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
-    {
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<()> {
         let contract = GntDriver::prepare_contract(
             &self.ethereum_client,
             faucet_contract_address,
@@ -205,14 +196,11 @@ impl GntDriver {
         Ok(())
     }
 
-    fn send_raw_transaction<F>(
+    fn send_raw_transaction(
         &self,
         raw_tx: &RawTransaction,
-        sign_tx: F,
-    ) -> PaymentDriverResult<H256>
-    where
-        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
-    {
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<H256> {
         let chain_id = self.get_chain_id();
         let signature = sign_tx(raw_tx.hash(chain_id));
         let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
@@ -330,17 +318,14 @@ impl PaymentDriver for GntDriver {
     }
 
     /// Schedules payment
-    async fn schedule_payment<F>(
+    async fn schedule_payment(
         &mut self,
         _invoice_id: &str,
         amount: PaymentAmount,
         recipient: Address,
         _due_date: DateTime<Utc>,
-        sign_tx: F,
-    ) -> PaymentDriverResult<()>
-    where
-        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
-    {
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<()> {
         let tx_hash = self.transfer_gnt(amount, recipient, sign_tx).await?;
         println!("Tx hash: {:?}", tx_hash);
         Ok(())
