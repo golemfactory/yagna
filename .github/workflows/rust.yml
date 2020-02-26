@@ -7,7 +7,6 @@ on:
   pull_request:
     branches:
       - master
-      - feature/*
 
 jobs:
   build:
@@ -17,6 +16,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        #commented bc of too much spend on Macos which is counted 10x, Windows is 2x
+        # os: [macos-latest, windows-latest, ubuntu-latest]
         os: [windows-latest, ubuntu-latest]
       fail-fast: true
 
@@ -24,7 +25,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Install Rust
+      - name: Install Last Stable Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -33,43 +34,50 @@ jobs:
         uses: actions/cache@v1
         with:
           path: ~/.cargo/registry
-          key: ${{ matrix.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
       - name: Cache cargo index
         uses: actions/cache@v1
         with:
           path: ~/.cargo/git
-          key: ${{ matrix.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
       - name: Cache cargo build
         uses: actions/cache@v1
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cargo fmt
+      - name: cargo fmt
         uses: actions-rs/cargo@v1
         if: matrix.os == 'ubuntu-latest'
         with:
           command: fmt
           args: --all -- --check
 
-      - name: Cargo Test
+      - name: cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
 
-      - name: Cargo build
+      - name: cargo build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --bins
 
-      - name: Copy Binaries Unix
+      - name: Copy binaries Unix
         if: runner.os != 'Windows'
         run: |
           mkdir build
           cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit,wasmtime-exeunit} build
           strip -x build/*
-      - name: Copy Binaries Windows
+
+      - name: Copy binaries Windows
         if: runner.os == 'Windows'
         run: |
           mkdir build
@@ -78,7 +86,6 @@ jobs:
           copy target\debug\ya-requestor.exe build
           copy target\debug\exe-unit.exe build
           copy target\debug\wasmtime-exeunit.exe build
-
 
       - name: Upload binaries
         uses: actions/upload-artifact@v1
