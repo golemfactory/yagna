@@ -8,6 +8,7 @@ edition = "2018"
 ya-client = {version = "0.1", path = "../../interfaces/client"}
 ya-model = "0.1"
 ya-agent-offer-model="0.1.0"
+ya-utils-actix = {version = "0.1", path = "../../utils/actix_utils"}
 
 actix = "0.9"
 actix-rt = "1.0"

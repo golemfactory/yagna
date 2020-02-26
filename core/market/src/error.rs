@@ -2,7 +2,7 @@ use actix_web::error::ResponseError;
 use thiserror::Error;
 
 use ya_core_model::{appkey, market::RpcMessageError};
-use ya_model::market::Error as MarketApiError;
+use ya_model::ErrorMessage;
 
 use crate::db::models::ConversionError;
 
@@ -38,14 +38,13 @@ pub enum Error {
 
 macro_rules! service_error {
     ($err:expr) => {
-        RpcMessageError::Service(format!("{:?}", $err))
+        RpcMessageError::Service(format!("{}", $err))
     };
 }
 
 macro_rules! internal_error_http_response {
     ($err:expr) => {
-        actix_web::HttpResponse::InternalServerError()
-            .json(MarketApiError::new("".into(), format!("{:?}", $err)))
+        actix_web::HttpResponse::InternalServerError().json(ErrorMessage::new(format!("{}", $err)))
     };
 }
 
@@ -112,13 +111,12 @@ impl actix_web::error::ResponseError for Error {
             Error::Gsb(err) => internal_error_http_response!(err),
             Error::Serialization(err) => internal_error_http_response!(err),
             Error::Service(err) => internal_error_http_response!(err),
-            Error::BadRequest(err) => actix_web::HttpResponse::BadRequest()
-                .json(MarketApiError::new("Bad Request".into(), err.clone())),
+            Error::BadRequest(err) => {
+                actix_web::HttpResponse::BadRequest().json(ErrorMessage::new(err.clone()))
+            }
             Error::NotFound => actix_web::HttpResponse::NotFound().finish(),
-            Error::Forbidden => actix_web::HttpResponse::Forbidden().json(MarketApiError::new(
-                "Forbidden".into(),
-                "Invalid credentials".into(),
-            )),
+            Error::Forbidden => actix_web::HttpResponse::Forbidden()
+                .json(ErrorMessage::new("Invalid credentials".into())),
             Error::Timeout => actix_web::HttpResponse::RequestTimeout().finish(),
             Error::RuntimeError(err) => internal_error_http_response!(err),
             Error::ClientError(err) => internal_error_http_response!(err),

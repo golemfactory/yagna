@@ -3,6 +3,7 @@ use awc::error::{JsonPayloadError, PayloadError, SendRequestError};
 use awc::http::StatusCode;
 use backtrace::Backtrace as Trace; // needed b/c of thiserror magic
 use thiserror::Error;
+use ya_model::ErrorMessage;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -11,19 +12,17 @@ pub enum Error {
     #[error("AWC timeout requesting {url}: {e}")]
     TimeoutError { e: String, url: String, bt: Trace },
     #[error("AWC payload error: {e}")]
-    PayloadError {
-        e: awc::error::PayloadError,
-        bt: Trace,
-    },
+    PayloadError { e: PayloadError, bt: Trace },
     #[error("AWC JSON payload error: {e}")]
-    JsonPayloadError {
-        e: awc::error::JsonPayloadError,
-        bt: Trace,
-    },
+    JsonPayloadError { e: JsonPayloadError, bt: Trace },
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::error::Error),
-    #[error("HTTP status code: {0}")]
-    HttpStatusCode(awc::http::StatusCode),
+    #[error("request for {url} resulted in HTTP status code: {code}: {msg}")]
+    HttpStatusCode {
+        code: StatusCode,
+        url: String,
+        msg: String,
+    },
     #[error("serde JSON error: {0}")]
     SerdeJsonError(serde_json::Error),
     #[error("invalid address: {0}")]
@@ -90,16 +89,20 @@ impl From<JsonPayloadError> for Error {
     }
 }
 
-impl From<(StatusCode, String)> for Error {
-    fn from((status_code, url): (StatusCode, String)) -> Self {
-        if status_code == StatusCode::REQUEST_TIMEOUT {
+impl From<(StatusCode, String, ErrorMessage)> for Error {
+    fn from((code, url, err_msg): (StatusCode, String, ErrorMessage)) -> Self {
+        if code == StatusCode::REQUEST_TIMEOUT {
             Error::TimeoutError {
-                e: format!("{:?}", status_code),
+                e: format!("{:?}", code),
                 url,
                 bt: Trace::new(),
             }
         } else {
-            Error::HttpStatusCode(status_code)
+            Error::HttpStatusCode {
+                code,
+                url,
+                msg: err_msg.message.unwrap_or_default(),
+            }
         }
     }
 }

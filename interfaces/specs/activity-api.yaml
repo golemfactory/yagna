@@ -40,25 +40,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
         403:
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
       x-codegen-request-body-name: agreementId
   /activity/{activityId}/exec:
     post:
@@ -92,25 +92,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
         403:
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
       x-codegen-request-body-name: script
   /activity/{activityId}/exec/{batchId}:
     get:
@@ -155,25 +155,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
         403:
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
   /activity/{activityId}:
     delete:
       tags:
@@ -197,19 +197,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
   /events:
     get:
       tags:
@@ -240,13 +240,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProblemDetails'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
   /activity/{activityId}/state:
     get:
       tags:
@@ -272,13 +272,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
     put:
       tags:
         - provider
@@ -305,13 +305,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
   /activity/{activityId}/usage:
     get:
       tags:
@@ -345,13 +345,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
   /activity/{activityId}/command:
     get:
       tags:
@@ -377,13 +377,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorMessage'
+                $ref: 'error_message.yaml#/ErrorMessage'
 components:
   schemas:
     ExeScriptRequest:
@@ -498,27 +498,3 @@ components:
     GetActivityUsage:
       allOf:
         - $ref: '#/components/schemas/ProviderEvent'
-
-    ErrorMessage:
-      type: object
-      properties:
-        message:
-          type: string
-
-    ProblemDetails:
-      type: object
-      properties:
-        type:
-          type: string
-        title:
-          type: string
-        status:
-          type: integer
-          format: int32
-        detail:
-          type: string
-        instance:
-          type: string
-      additionalProperties:
-        type: object
-        properties: {}
