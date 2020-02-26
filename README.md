@@ -10,7 +10,6 @@ An open platform and marketplace for distributed computations.
 * [core](core) - core services for open computation market.
 basic wasm provider and simple wasm requestor.
 * [exe-unit](exe-unit) -  ExeUnit Supervisor.
-    * [api](exe-unit/api) - ExeUnit API.
     * [wasm-mozjs](exe-unit/wasm-mozjs) - [SpiderMonkey](https://github.com/servo/rust-mozjs) based ExeUnit.
     * [wasmtime](exe-unit/wasmtime) - [Wasmtime](https://github.com/bytecodealliance/wasmtime) based ExeUnit.
 * [interfaces](interfaces) - public API for core services and data model.
