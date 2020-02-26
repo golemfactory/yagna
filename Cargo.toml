@@ -16,7 +16,7 @@ members = [
     "core/serv-api/cache",
     "core/serv-api/interfaces",
     "core/serv-api/web",
-    "core/serv-api-derive",
+    "core/serv-api/derive",
     "exe-unit",
     "exe-unit/api",
     "exe-unit/wasm-mozjs",
@@ -53,7 +53,7 @@ ya-persistence = { path = "core/persistence" }
 ## CORE UTILS
 ya-service-api = { path = "core/serv-api" }
 ya-service-api-cache = { path = "core/serv-api/cache" }
-ya-service-api-derive = { path = "core/serv-api-derive" }
+ya-service-api-derive = { path = "core/serv-api/derive" }
 ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 ya-service-bus = { path = "service-bus/bus/" }

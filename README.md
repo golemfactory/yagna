@@ -6,15 +6,17 @@ An open platform and marketplace for distributed computations.
 
 ## Project Layout
 
-* [core](core) - core services for open computation market.
 * [agent](agent) - applications based on core services. In MVP there are
+* [core](core) - core services for open computation market.
 basic wasm provider and simple wasm requestor.
-* [exe-unit](exe-unit) -  execution environments implementation. For MVP there are:
-    * [dummy](exe-unit/dummy) - mock exe unit for tests, and one of below:
-    * [wasm-mozjs](exe-unit/wasm-mozjs) - [SpiderMonkey](https://github.com/servo/rust-mozjs) based provider.
-    * [wasmtime](exe-unit/wasmtime) - [Wasmtime](https://github.com/bytecodealliance/wasmtime) based provider.
+* [exe-unit](exe-unit) -  ExeUnit Supervisor.
+    * [api](exe-unit/api) - ExeUnit API.
+    * [wasm-mozjs](exe-unit/wasm-mozjs) - [SpiderMonkey](https://github.com/servo/rust-mozjs) based ExeUnit.
+    * [wasmtime](exe-unit/wasmtime) - [Wasmtime](https://github.com/bytecodealliance/wasmtime) based ExeUnit.
 * [interfaces](interfaces) - public API for core services and data model.
 * [service-bus](service-bus) - portable, rust-oriented service bus for IPC.
+* [test-utils](test-utils) - some helpers for testing purposes
+* [utils](utils) - trash bin for all other stuff ;)
 * [docs](docs) - project documentation including analysis and specifications.
 
 ## Requirements
