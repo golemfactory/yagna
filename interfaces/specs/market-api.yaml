@@ -889,28 +889,28 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     Unauthorized:
       description: Authorization information is missing or invalid.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     NotFound:
       description: The specified resource was not found.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     UnexpectedError:
       description: Unexpected error.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
   schemas:
 
@@ -1099,14 +1099,3 @@ components:
       properties:
         propertyQuery:
           $ref: '#/components/schemas/PropertyQuery'
-
-    Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-        message:
-          type: string

@@ -1,30 +1,27 @@
-use actix_web::web;
+use actix_web::{web, Responder};
 use futures::prelude::*;
 use serde::Deserialize;
-use ya_core_model::activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults};
-use ya_core_model::ethaddr::NodeId;
-use ya_core_model::market;
+use std::str::FromStr;
+
+use ya_core_model::{
+    activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults},
+    ethaddr::NodeId,
+};
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
-use ya_service_bus::typed as bus;
-use ya_service_bus::RpcEndpoint;
 
 use crate::common::{
-    generate_id, get_activity_agreement, is_activity_initiator, is_agreement_initiator,
-    PathActivity, QueryTimeout, QueryTimeoutMaxCount,
+    authorize_activity_initiator, authorize_agreement_initiator, generate_id,
+    get_activity_agreement, get_agreement, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
 use crate::requestor::provider_activity_service_id;
-use std::str::FromStr;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
-        .route(
-            "/activity",
-            web::post().to(impl_restful_handler!(create_activity, query, body, id)),
-        )
+        .service(create_activity)
         .route(
             "/activity/{activity_id}",
             web::delete().to(impl_restful_handler!(destroy_activity, path, query, id)),
@@ -40,26 +37,18 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
 }
 
 /// Creates new Activity based on given Agreement.
+#[actix_web::post("/activity")]
 async fn create_activity(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeout>,
     body: web::Json<String>,
     id: Identity,
-) -> Result<String, Error> {
+) -> impl Responder {
     let agreement_id = body.into_inner();
+    authorize_agreement_initiator(id.identity, agreement_id.clone()).await?;
 
-    if !is_agreement_initiator(id.identity.to_string(), agreement_id.clone()).await? {
-        return Err(Error::Forbidden.into());
-    }
-
-    let caller = Some(format!("/net/{}", id.name));
-    log::debug!("caller from context: {:?}", caller);
-    let agreement = bus::service(market::BUS_ID)
-        .send(market::GetAgreement {
-            agreement_id: agreement_id.clone(),
-        })
-        .await??;
-    log::debug!("agreement: {:#?}", agreement);
+    let agreement = get_agreement(&agreement_id).await?;
+    log::trace!("agreement: {:#?}", agreement);
 
     let msg = CreateActivity {
         // TODO: fix this
@@ -68,17 +57,18 @@ async fn create_activity(
         timeout: query.timeout.clone(),
     };
 
+    let caller = Some(format!("/net/{:?}", id.identity));
     let uri = provider_activity_service_id(&agreement)?;
-    log::debug!("creating activity at: {}", uri);
-    let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
-    log::debug!("creating activity: {}", activity_id);
 
+    log::debug!("creating activity at: {}, caller: {:?}", uri, caller);
+    let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
+
+    log::debug!("activity created: {}, inserting", activity_id);
     db.as_dao::<ActivityDao>()
         .create(&activity_id, &agreement_id)
-        .await
-        .map_err(Error::from)?;
+        .await?;
 
-    Ok(activity_id)
+    Ok::<_, Error>(web::Json(activity_id))
 }
 
 /// Destroys given Activity.
@@ -88,9 +78,7 @@ async fn destroy_activity(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<(), Error> {
-    if !is_activity_initiator(&db, id.identity.to_string(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = DestroyActivity {
@@ -117,9 +105,7 @@ async fn exec(
     body: web::Json<ExeScriptRequest>,
     id: Identity,
 ) -> Result<String, Error> {
-    if !is_activity_initiator(&db, id.identity.to_string(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
@@ -144,9 +130,7 @@ async fn get_batch_results(
     query: web::Query<QueryTimeoutMaxCount>,
     id: Identity,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {
-    if !is_activity_initiator(&db, id.identity.to_string(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetExecBatchResults {
