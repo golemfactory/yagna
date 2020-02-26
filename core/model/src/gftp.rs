@@ -10,6 +10,8 @@ pub const BUS_ID: &'static str = "/public/gftp";
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
+    #[error("Can't read bytes.")]
+    ReadError,
 }
 
 
@@ -17,9 +19,7 @@ pub enum Error {
 /// Returns GftpMetadata structure.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GetMetadata {
-    pub hash: String,
-}
+pub struct GetMetadata;
 
 impl RpcMessage for GetMetadata {
     const ID: &'static str = "GetMetadata";
