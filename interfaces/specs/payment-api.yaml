@@ -1204,6 +1204,7 @@ components:
           type: string
       required:
         - totalAmountAccepted
+        - allocationId
 
     Rejection:
       description: Message sent when Requestor rejects a Debit Note or Invoice.

@@ -2,11 +2,15 @@ use crate::api::*;
 use crate::dao::allocation::AllocationDao;
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
-use crate::error::DbError;
+use crate::error::{DbError, Error};
 use crate::models as db_models;
+use crate::utils::with_timeout;
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use ya_core_model::ethaddr::NodeId;
+use ya_core_model::payment;
 use ya_model::payment::*;
+use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -135,8 +139,84 @@ async fn accept_invoice(
     path: Path<InvoiceId>,
     query: Query<Timeout>,
     body: Json<Acceptance>,
+    id: Identity,
 ) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    let invoice_id = path.invoice_id.clone();
+    let recipient_id = id.identity.to_string();
+    let acceptance = body.into_inner();
+
+    let dao: InvoiceDao = db.as_dao();
+    let invoice: Invoice = match dao.get(invoice_id.clone()).await {
+        Ok(Some(invoice)) if invoice.invoice.recipient_id == recipient_id => invoice.into(),
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        _ => return HttpResponse::NotFound().finish(),
+    };
+
+    let node_id = id.identity;
+    if Some(node_id) != invoice.recipient_id.parse().ok() {
+        return HttpResponse::Unauthorized().body(format!(
+            "Identity {:?} is not authorized to send this debit note",
+            node_id,
+        ));
+    }
+
+    if invoice.amount != acceptance.total_amount_accepted {
+        return HttpResponse::BadRequest().finish();
+    }
+
+    match invoice.status {
+        InvoiceStatus::Received => (),
+        InvoiceStatus::Rejected => (),
+        InvoiceStatus::Accepted => return HttpResponse::Ok().finish(),
+        InvoiceStatus::Settled => return HttpResponse::Ok().finish(),
+        InvoiceStatus::Issued => return HttpResponse::InternalServerError().finish(),
+        InvoiceStatus::Cancelled => return HttpResponse::BadRequest().finish(),
+        InvoiceStatus::Failed => return HttpResponse::BadRequest().finish(),
+    }
+
+    let allocation_dao: AllocationDao = db.as_dao();
+    let allocation: Allocation = match allocation_dao.get(acceptance.allocation_id.clone()).await {
+        Ok(Some(allocation)) => allocation.into(),
+        Ok(None) => return HttpResponse::BadRequest().finish(),
+        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+    };
+    if invoice.amount > allocation.remaining_amount {
+        let msg = format!(
+            "Not enough funds. Allocated: {} Needed: {}",
+            allocation.remaining_amount, invoice.amount
+        );
+        return HttpResponse::BadRequest().body(msg);
+    }
+
+    with_timeout(query.timeout, async move {
+        let issuer_id: NodeId = invoice.issuer_id.parse().unwrap();
+        let msg = payment::AcceptInvoice {
+            invoice_id: invoice_id.clone(),
+            acceptance,
+        };
+        match async move {
+            issuer_id.service(payment::BUS_ID).call(msg).await??;
+            Ok(())
+        }
+        .await
+        {
+            Err(Error::Rpc(payment::RpcMessageError::AcceptReject(
+                payment::AcceptRejectError::BadRequest(e),
+            ))) => return { HttpResponse::BadRequest().body(e) },
+            Err(e) => return { HttpResponse::InternalServerError().body(e.to_string()) },
+            _ => (),
+        }
+
+        match dao
+            .update_status(invoice_id, InvoiceStatus::Accepted.into())
+            .await
+        {
+            Ok(_) => HttpResponse::Ok().finish(),
+            Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        }
+        // TODO: Trigger payment
+    })
+    .await
 }
 
 async fn reject_invoice(
