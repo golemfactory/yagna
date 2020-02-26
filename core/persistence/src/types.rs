@@ -1,9 +1,10 @@
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use std::io::Write;
+use std::ops::Add;
 use std::str::FromStr;
 
 #[derive(Debug, Clone, AsExpression, FromSqlRow)]
@@ -44,5 +45,21 @@ where
             Ok(x) => Ok(BigDecimalField(x)),
             Err(e) => Err(e.into()),
         }
+    }
+}
+
+pub trait Summable {
+    fn sum(self) -> BigDecimal;
+}
+
+impl<T> Summable for T
+where
+    T: IntoIterator,
+    T::Item: Into<BigDecimal>,
+{
+    fn sum(self) -> BigDecimal {
+        self.into_iter()
+            .map(Into::into)
+            .fold(BigDecimal::zero(), <BigDecimal as Add<BigDecimal>>::add)
     }
 }

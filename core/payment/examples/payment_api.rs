@@ -5,7 +5,9 @@ use structopt::StructOpt;
 use ya_core_model::ethaddr::NodeId;
 use ya_model::market;
 use ya_model::payment::PAYMENT_API_PATH;
+use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
+use ya_payment_driver::DummyDriver;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR};
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
@@ -44,7 +46,9 @@ async fn main() -> anyhow::Result<()> {
     migrations::run_with_output(&db.conn()?, &mut std::io::stdout())?;
 
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
-    ya_payment::service::bind_service(&db);
+    let driver = DummyDriver::new();
+    let processor = PaymentProcessor::new(Box::new(driver), db.clone());
+    ya_payment::service::bind_service(&db, processor.clone());
 
     let net_host = ya_net::resolve_default()?;
     ya_net::bind_remote(&net_host, &node_id).await?;
@@ -83,7 +87,10 @@ async fn main() -> anyhow::Result<()> {
             Command::Provider => ya_payment::api::provider_scope(),
             Command::Requestor => ya_payment::api::requestor_scope(),
         };
-        let payment_service = Scope::new(PAYMENT_API_PATH).data(db.clone()).service(scope);
+        let payment_service = Scope::new(PAYMENT_API_PATH)
+            .data(db.clone())
+            .data(processor.clone())
+            .service(scope);
         App::new()
             .wrap(middleware::Logger::default())
             .wrap(DummyAuth::new(identity.clone()))

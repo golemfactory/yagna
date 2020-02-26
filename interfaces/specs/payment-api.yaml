@@ -1282,7 +1282,8 @@ components:
           items:
             type: string
         details:
-          type: object
+          type: string
+          description: base64-encoded payment confirmation
       required:
         - paymentId
         - payerId

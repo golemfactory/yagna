@@ -5,9 +5,8 @@ use crate::schema::pay_payment::dsl as payment_dsl;
 use bigdecimal::{BigDecimal, Zero};
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
-use std::ops::Add;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::types::BigDecimalField;
+use ya_persistence::types::{BigDecimalField, Summable};
 
 pub struct AllocationDao<'c> {
     pool: &'c PoolType,
@@ -42,10 +41,7 @@ impl<'c> AllocationDao<'c> {
                         .select(payment_dsl::amount)
                         .filter(payment_dsl::allocation_id.eq(allocation_id))
                         .load(conn)?;
-                    let spent_amount = payments
-                        .into_iter()
-                        .map(Into::into)
-                        .fold(BigDecimal::zero(), <BigDecimal as Add<BigDecimal>>::add);
+                    let spent_amount = payments.sum();
                     let remaining_amount = &allocation.total_amount.0 - &spent_amount;
                     Ok(Some(Allocation {
                         allocation,
@@ -62,7 +58,7 @@ impl<'c> AllocationDao<'c> {
     pub async fn get_all(&self) -> DbResult<Vec<Allocation>> {
         do_with_transaction(self.pool, move |conn| {
             let allocations: Vec<NewAllocation> = dsl::pay_allocation.load(conn)?;
-            let payments: Vec<Payment> = payment_dsl::pay_payment.load(conn)?;
+            let payments: Vec<BarePayment> = payment_dsl::pay_payment.load(conn)?;
             let mut payments_map = payments
                 .into_iter()
                 .fold(HashMap::new(), |mut map, payment| {

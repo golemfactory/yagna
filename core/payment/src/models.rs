@@ -173,7 +173,7 @@ pub struct DebitNoteEvent {
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice"]
-pub struct PureInvoice {
+pub struct BareInvoice {
     pub id: String,
     pub issuer_id: String,
     pub recipient_id: String,
@@ -189,15 +189,16 @@ pub struct PureInvoice {
 }
 
 // Because Diesel doesn't support collections of associated objects :(
+#[derive(Debug)]
 pub struct Invoice {
-    pub invoice: PureInvoice,
+    pub invoice: BareInvoice,
     pub activity_ids: Vec<String>,
 }
 
 impl From<api_model::Invoice> for Invoice {
     fn from(invoice: api_model::Invoice) -> Self {
         Invoice {
-            invoice: PureInvoice {
+            invoice: BareInvoice {
                 id: invoice.invoice_id,
                 issuer_id: invoice.issuer_id,
                 recipient_id: invoice.recipient_id,
@@ -244,7 +245,7 @@ impl From<Invoice> for api_model::Invoice {
 
 #[derive(Debug, Insertable)]
 #[table_name = "pay_invoice"]
-pub struct NewInvoiceModel {
+pub struct BareNewInvoice {
     pub id: String,
     pub issuer_id: String,
     pub recipient_id: String,
@@ -258,8 +259,9 @@ pub struct NewInvoiceModel {
 }
 
 // Because Diesel doesn't support collections of associated objects :(
+#[derive(Debug)]
 pub struct NewInvoice {
-    pub invoice: NewInvoiceModel,
+    pub invoice: BareNewInvoice,
     pub activity_ids: Vec<String>,
 }
 
@@ -270,7 +272,7 @@ impl NewInvoice {
         recipient_id: String,
     ) -> Self {
         Self {
-            invoice: NewInvoiceModel {
+            invoice: BareNewInvoice {
                 id: Uuid::new_v4().to_string(),
                 issuer_id,
                 recipient_id,
@@ -323,17 +325,99 @@ pub struct InvoiceXActivity {
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "pay_payment"]
-pub struct Payment {
+pub struct BarePayment {
     pub id: String,
     pub payer_id: String,
     pub payee_id: String,
     pub amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub allocation_id: Option<String>,
-    pub details: String,
+    pub details: Vec<u8>,
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Debug)]
+pub struct Payment {
+    pub payment: BarePayment,
+    pub debit_note_ids: Vec<String>,
+    pub invoice_ids: Vec<String>,
+}
+
+impl From<api_model::Payment> for Payment {
+    fn from(payment: api_model::Payment) -> Self {
+        Self {
+            payment: BarePayment {
+                id: payment.payment_id,
+                payer_id: payment.payer_id,
+                payee_id: payment.payee_id,
+                amount: payment.amount.into(),
+                timestamp: payment.timestamp.naive_utc(),
+                allocation_id: payment.allocation_id,
+                details: base64::decode(&payment.details).unwrap(),
+            },
+            debit_note_ids: payment.debit_note_ids.unwrap_or(vec![]),
+            invoice_ids: payment.invoice_ids.unwrap_or(vec![]),
+        }
+    }
+}
+
+impl From<Payment> for api_model::Payment {
+    fn from(payment: Payment) -> Self {
+        Self {
+            payment_id: payment.payment.id,
+            payer_id: payment.payment.payer_id,
+            payee_id: payment.payment.payee_id,
+            amount: payment.payment.amount.into(),
+            timestamp: Utc.from_utc_datetime(&payment.payment.timestamp),
+            allocation_id: payment.payment.allocation_id,
+            debit_note_ids: Some(payment.debit_note_ids),
+            invoice_ids: Some(payment.invoice_ids),
+            details: base64::encode(&payment.payment.details),
+        }
+    }
+}
+
+#[derive(Debug, Identifiable, Insertable)]
+#[table_name = "pay_payment"]
+pub struct BareNewPayment {
+    pub id: String,
+    pub payer_id: String,
+    pub payee_id: String,
+    pub amount: BigDecimalField,
+    pub allocation_id: Option<String>,
+    pub details: Vec<u8>,
+}
+
+impl From<BarePayment> for BareNewPayment {
+    fn from(payment: BarePayment) -> Self {
+        Self {
+            id: payment.id,
+            payer_id: payment.payer_id,
+            payee_id: payment.payee_id,
+            amount: payment.amount,
+            allocation_id: None,
+            details: payment.details,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct NewPayment {
+    pub payment: BareNewPayment,
+    pub debit_note_ids: Vec<String>,
+    pub invoice_ids: Vec<String>,
+}
+
+impl From<Payment> for NewPayment {
+    fn from(payment: Payment) -> Self {
+        Self {
+            payment: payment.payment.into(),
+            debit_note_ids: payment.debit_note_ids,
+            invoice_ids: payment.invoice_ids,
+        }
+    }
+}
+
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_payment_x_debit_note"]
 #[primary_key(payment_id, debit_note_id)]
 pub struct PaymentXDebitNote {
@@ -341,7 +425,7 @@ pub struct PaymentXDebitNote {
     pub debit_note_id: String,
 }
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_payment_x_invoice"]
 #[primary_key(payment_id, invoice_id)]
 pub struct PaymentXInvoice {

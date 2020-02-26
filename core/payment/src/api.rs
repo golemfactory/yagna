@@ -1,3 +1,4 @@
+use crate::processor::PaymentProcessor;
 use actix_web::Scope;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -16,9 +17,10 @@ pub fn requestor_scope() -> Scope {
     Scope::new("/requestor").extend(requestor::register_endpoints)
 }
 
-pub fn web_scope(db: &DbExecutor) -> Scope {
+pub fn web_scope(db: &DbExecutor, processor: PaymentProcessor) -> Scope {
     Scope::new(PAYMENT_API_PATH)
         .data(db.clone())
+        .data(processor)
         .service(provider_scope())
         .service(requestor_scope())
 }

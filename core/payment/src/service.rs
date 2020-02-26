@@ -1,6 +1,7 @@
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
-use crate::error::DbError;
+use crate::error::{DbError, Error, PaymentError};
+use crate::processor::PaymentProcessor;
 use crate::utils::*;
 use futures::prelude::*;
 use std::fmt::Display;
@@ -14,6 +15,7 @@ use ya_service_bus::RpcMessage;
 struct ServiceBinder<'a, 'b> {
     addr: &'b str,
     db: &'a DbExecutor,
+    processor: PaymentProcessor,
 }
 
 impl<'a, 'b> ServiceBinder<'a, 'b> {
@@ -37,14 +39,37 @@ impl<'a, 'b> ServiceBinder<'a, 'b> {
         });
         self
     }
+
+    fn bind_with_processor<F: 'static, Msg: RpcMessage, Output: 'static>(self, f: F) -> Self
+    where
+        F: Fn(DbExecutor, PaymentProcessor, String, Msg) -> Output,
+        Output: Future<Output = Result<Msg::Item, Msg::Error>>,
+        Msg::Error: Display,
+    {
+        let db = self.db.clone();
+        let processor = self.processor.clone();
+        let _ = bus::bind_with_caller(self.addr, move |addr, msg| {
+            log::debug!("Received call to {}", Msg::ID);
+            let fut = f(db.clone(), processor.clone(), addr, msg);
+            fut.map(|res| {
+                match &res {
+                    Ok(_) => log::debug!("Call to {} successful", Msg::ID),
+                    Err(e) => log::debug!("Call to {} failed: {}", Msg::ID, e),
+                }
+                res
+            })
+        });
+        self
+    }
 }
 
-pub fn bind_service(db: &DbExecutor) {
+pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
     log::debug!("Binding payment service to service bus");
 
     let _ = ServiceBinder {
-        db,
         addr: ya_core_model::payment::BUS_ID,
+        db,
+        processor,
     }
     .bind(send_debit_note)
     .bind(accept_debit_note)
@@ -54,7 +79,7 @@ pub fn bind_service(db: &DbExecutor) {
     .bind(accept_invoice)
     .bind(reject_invoice)
     .bind(cancel_invoice)
-    .bind(send_payment);
+    .bind_with_processor(send_payment);
 
     log::debug!("Successfully bound payment service to service bus");
 }
@@ -223,6 +248,25 @@ async fn cancel_invoice(
 
 // *************************** PAYMENT ****************************
 
-async fn send_payment(db: DbExecutor, sender: String, msg: SendPayment) -> Result<Ack, SendError> {
-    unimplemented!() // TODO
+async fn send_payment(
+    db: DbExecutor,
+    processor: PaymentProcessor,
+    sender: String,
+    msg: SendPayment,
+) -> Result<Ack, SendError> {
+    let payment = msg.0;
+    let sender_id = sender.trim_start_matches("/net/");
+    if sender_id != payment.payer_id {
+        return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
+    }
+
+    match processor.verify_payment(payment).await {
+        Err(Error::Payment(PaymentError::Driver(e))) => {
+            return Err(SendError::ServiceError(e.to_string()))
+        }
+        Err(e) => return Err(SendError::BadRequest(e.to_string())),
+        Ok(_) => {}
+    }
+
+    Ok(Ack {})
 }

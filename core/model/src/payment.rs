@@ -150,7 +150,7 @@ impl RpcMessage for CancelInvoice {
 // *************************** PAYMENT ****************************
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct SendPayment(Payment);
+pub struct SendPayment(pub Payment);
 
 impl RpcMessage for SendPayment {
     const ID: &'static str = "SendPayment";

@@ -3,9 +3,11 @@ use crate::models::*;
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
+use bigdecimal::BigDecimal;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::types::{BigDecimalField, Summable};
 
 pub struct InvoiceDao<'c> {
     pool: &'c PoolType,
@@ -76,7 +78,7 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn get(&self, invoice_id: String) -> DbResult<Option<Invoice>> {
         do_with_transaction(self.pool, move |conn| {
-            let invoice: Option<PureInvoice> = dsl::pay_invoice
+            let invoice: Option<BareInvoice> = dsl::pay_invoice
                 .find(invoice_id.clone())
                 .first(conn)
                 .optional()?;
@@ -145,10 +147,33 @@ impl<'c> InvoiceDao<'c> {
         })
         .await
     }
+
+    pub async fn get_total_amount(&self, invoice_ids: Vec<String>) -> DbResult<BigDecimal> {
+        do_with_transaction(self.pool, move |conn| {
+            let amounts: Vec<BigDecimalField> = dsl::pay_invoice
+                .filter(dsl::id.eq_any(invoice_ids))
+                .select(dsl::amount)
+                .load(conn)?;
+            Ok(amounts.sum())
+        })
+        .await
+    }
+
+    pub async fn get_accounts_ids(&self, invoice_ids: Vec<String>) -> DbResult<Vec<String>> {
+        do_with_transaction(self.pool, move |conn| {
+            let account_ids: Vec<String> = dsl::pay_invoice
+                .filter(dsl::id.eq_any(invoice_ids))
+                .select(dsl::credit_account_id)
+                .distinct()
+                .load(conn)?;
+            Ok(account_ids)
+        })
+        .await
+    }
 }
 
 fn join_invoices_with_activities(
-    invoices: Vec<PureInvoice>,
+    invoices: Vec<BareInvoice>,
     activities: Vec<InvoiceXActivity>,
 ) -> Vec<Invoice> {
     let mut activities_map = activities

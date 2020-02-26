@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 ya-core-model = { version = "0.1", features = ["payment", "market", "identity"] }
 ya-model = "0.1"
+ya-payment-driver = "0.1"
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-web = "0.1"
@@ -15,23 +16,27 @@ ya-service-api-interfaces = "0.1"
 ya-net="0.1"
 
 actix-web = "2.0"
+anyhow = "1.0.26"
+base64 = "0.11"
 bigdecimal = "0.1.0"
 chrono = { version = "0.4", features = ["serde"]}
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
 env_logger = "0.7"
+ethereum-types = "0.6"
 futures = "0.3"
+hex = "0.4"
+lazy_static = "1.4"
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 log = "0.4"
+num-bigint = "0.2"
 r2d2 = "0.8"
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
 thiserror = "1.0"
 tokio = "0.2"
+uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
-anyhow = "1.0.26"
-
-
 
 [dev-dependencies]
 ya-net = {version = "0.1", features=["service"]}

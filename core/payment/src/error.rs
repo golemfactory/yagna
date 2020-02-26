@@ -17,6 +17,32 @@ pub enum ExternalServiceError {
 }
 
 #[derive(thiserror::Error, Debug)]
+pub enum PaymentError {
+    #[error("Currency conversion error")]
+    Conversion(String),
+    #[error("Invalid address: {0}")]
+    Address(String),
+    #[error("Verification error: {0}")]
+    Verification(String),
+    #[error("Payment driver error: {0}")]
+    Driver(#[from] ya_payment_driver::PaymentDriverError),
+}
+
+pub type PaymentResult<T> = Result<T, PaymentError>;
+
+impl From<uint::FromDecStrErr> for PaymentError {
+    fn from(e: uint::FromDecStrErr) -> Self {
+        Self::Conversion(format!("{:?}", e))
+    }
+}
+
+impl From<bigdecimal::ParseBigDecimalError> for PaymentError {
+    fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
+        Self::Conversion(e.to_string())
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Database error: {0}")]
     Database(#[from] DbError),
@@ -24,6 +50,8 @@ pub enum Error {
     ServiceBus(#[from] ya_service_bus::Error),
     #[error("External service error: {0}")]
     ExtService(#[from] ExternalServiceError),
+    #[error("Payment error: {0}")]
+    Payment(#[from] PaymentError),
     #[error("RPC error: {0}")]
     Rpc(#[from] ya_core_model::payment::RpcMessageError),
     #[error("Timeout")]
@@ -51,5 +79,11 @@ impl From<ya_core_model::payment::AcceptRejectError> for Error {
 impl From<ya_core_model::payment::CancelError> for Error {
     fn from(e: ya_core_model::payment::CancelError) -> Self {
         Into::<ya_core_model::payment::RpcMessageError>::into(e).into()
+    }
+}
+
+impl From<ya_payment_driver::PaymentDriverError> for Error {
+    fn from(e: ya_payment_driver::PaymentDriverError) -> Self {
+        Into::<PaymentError>::into(e).into()
     }
 }

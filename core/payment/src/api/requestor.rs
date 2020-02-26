@@ -4,6 +4,7 @@ use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
 use crate::error::{DbError, Error};
 use crate::models as db_models;
+use crate::processor::PaymentProcessor;
 use crate::utils::with_timeout;
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
@@ -136,6 +137,7 @@ async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>, id: Identity) 
 
 async fn accept_invoice(
     db: Data<DbExecutor>,
+    processor: Data<PaymentProcessor>,
     path: Path<InvoiceId>,
     query: Query<Timeout>,
     body: Json<Acceptance>,
@@ -144,6 +146,7 @@ async fn accept_invoice(
     let invoice_id = path.invoice_id.clone();
     let recipient_id = id.identity.to_string();
     let acceptance = body.into_inner();
+    let allocation_id = acceptance.allocation_id.clone();
 
     let dao: InvoiceDao = db.as_dao();
     let invoice: Invoice = match dao.get(invoice_id.clone()).await {
@@ -175,7 +178,7 @@ async fn accept_invoice(
     }
 
     let allocation_dao: AllocationDao = db.as_dao();
-    let allocation: Allocation = match allocation_dao.get(acceptance.allocation_id.clone()).await {
+    let allocation: Allocation = match allocation_dao.get(allocation_id.clone()).await {
         Ok(Some(allocation)) => allocation.into(),
         Ok(None) => return HttpResponse::BadRequest().finish(),
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
@@ -207,6 +210,10 @@ async fn accept_invoice(
             _ => (),
         }
 
+        if let Err(e) = processor.schedule_payment(invoice, allocation_id).await {
+            return HttpResponse::InternalServerError().body(e.to_string());
+        }
+
         match dao
             .update_status(invoice_id, InvoiceStatus::Accepted.into())
             .await
@@ -214,7 +221,6 @@ async fn accept_invoice(
             Ok(_) => HttpResponse::Ok().finish(),
             Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
         }
-        // TODO: Trigger payment
     })
     .await
 }
