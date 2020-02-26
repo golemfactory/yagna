@@ -38,15 +38,7 @@ ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
 ya-identity = { path = "core/identity" }
 ya-market = { path = "core/market" }
-
-
-ya-agent-offer-model = { path = "agent/offer-model" }
-ya-client = { path = "interfaces/client" }
-ya-core-model = { path = "core/model" }
-ya-exe-unit = { path = "exe-unit" }
-ya-model = { path = "interfaces/model" }
 ya-net = { path = "core/net" }
-ya-persistence = { path = "core/persistence" }
 
 ## CORE UTILS
 ya-service-api = { path = "core/serv-api" }
@@ -54,9 +46,18 @@ ya-service-api-cache = { path = "core/serv-api/cache" }
 ya-service-api-derive = { path = "core/serv-api/derive" }
 ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
-ya-service-bus = { path = "service-bus/bus/" }
 
 ## SERVICE BUS
+ya-service-bus = { path = "service-bus/bus/" }
 ya-sb-proto = { path = "service-bus/proto" }
 ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
+
+## OTHERS
+ya-agent-offer-model = { path = "agent/offer-model" }
+ya-client = { path = "interfaces/client" }
+ya-core-model = { path = "core/model" }
+ya-exe-unit = { path = "exe-unit" }
+ya-model = { path = "interfaces/model" }
+ya-persistence = { path = "core/persistence" }
+ya-utils-actix = { path = "utils/actix_utils"}
