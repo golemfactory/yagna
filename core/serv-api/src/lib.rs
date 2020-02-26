@@ -1,20 +1,14 @@
 use anyhow::Result;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
-use std::{net::SocketAddr, path::PathBuf};
+use std::path::PathBuf;
 
 pub mod constants;
-
-pub fn default_data_dir() -> Result<PathBuf> {
-    Ok(appdirs::user_data_dir(Some("yagna"), Some("golem"), false)
-        .map_err(|_| anyhow::Error::msg("user data dir creation failure"))?)
-}
 
 #[derive(Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
     pub http_address: (String, u16),
-    pub router_address: (String, u16),
     pub json_output: bool,
     pub interactive: bool,
 }
@@ -24,22 +18,10 @@ impl CliCtx {
         (&self.http_address.0, self.http_address.1)
     }
 
-    pub fn router_address(&self) -> Result<SocketAddr> {
-        Ok(SocketAddr::new(
-            self.router_address.0.parse()?,
-            self.router_address.1,
-        ))
-    }
-
     pub fn output(&self, output: CommandOutput) {
         output.print(self.json_output)
     }
 }
-
-// commented out until Rust enables async or return impl Trait for Trait fns
-//pub trait Command {
-//    fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput>;
-//}
 
 pub enum CommandOutput {
     NoOutput,
@@ -172,6 +154,12 @@ fn print_table(
         }
     }
     let _ = table.printstd();
+}
+
+impl From<()> for CommandOutput {
+    fn from(_: ()) -> Self {
+        CommandOutput::NoOutput
+    }
 }
 
 impl From<ResponseTable> for CommandOutput {

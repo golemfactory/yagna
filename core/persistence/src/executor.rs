@@ -31,7 +31,7 @@ struct ConnectionInit;
 
 impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for ConnectionInit {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
-        log::debug!("on_acquire connection");
+        log::trace!("on_acquire connection");
         Ok(conn
             .batch_execute(
                 "PRAGMA synchronous = NORMAL; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;",
@@ -46,6 +46,8 @@ impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for ConnectionIn
 
 impl DbExecutor {
     pub fn new<S: Into<String>>(database_url: S) -> Result<Self, Error> {
+        let database_url = database_url.into();
+        log::info!("using database at: {}", database_url);
         let manager = ConnectionManager::new(database_url);
         let pool = Pool::builder()
             .connection_customizer(Box::new(ConnectionInit))
@@ -60,8 +62,8 @@ impl DbExecutor {
         Self::new(database_url.to_string_lossy())
     }
 
-    pub fn from_data_dir(data_dir: &Path) -> Result<Self, Error> {
-        let db = data_dir.join("yagna.db");
+    pub fn from_data_dir(data_dir: &Path, name: &str) -> Result<Self, Error> {
+        let db = data_dir.join(name).with_extension("db");
         Self::new(db.to_string_lossy())
     }
 
@@ -127,4 +129,19 @@ where
         Ok(v) => v,
         Err(join_err) => Err(From::from(join_err)),
     }
+}
+
+pub async fn do_with_transaction<R: Send + 'static, Error, F>(
+    pool: &PoolType,
+    f: F,
+) -> Result<R, Error>
+where
+    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    Error: Send
+        + 'static
+        + From<tokio::task::JoinError>
+        + From<r2d2::Error>
+        + From<diesel::result::Error>,
+{
+    do_with_connection(pool, move |conn| conn.transaction(|| f(conn))).await
 }

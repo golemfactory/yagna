@@ -1,106 +1,106 @@
-use crate::dao::{NotFoundAsOption, Result};
+use crate::dao::{DaoError, NotFoundAsOption, Result};
 use chrono::Utc;
 use diesel::prelude::*;
-use diesel::sql_types::Timestamp;
+use diesel::sql_types::{Integer, Timestamp};
 use std::cmp::min;
 use std::time::Duration;
 use tokio::time::delay_for;
-use ya_persistence::executor::ConnType;
+use ya_persistence::executor::{do_with_connection, do_with_transaction, AsDao, PoolType};
+use ya_persistence::models::ActivityEventType;
 use ya_persistence::schema;
 
 pub const MAX_EVENTS: u32 = 100;
 
-#[derive(Queryable)]
+#[derive(Queryable, Debug)]
 pub struct Event {
     pub id: i32,
-    pub name: String,
+    pub event_type: ActivityEventType,
     pub activity_natural_id: String,
     pub agreement_natural_id: String,
 }
 
 pub struct EventDao<'c> {
-    conn: &'c ConnType,
+    pool: &'c PoolType,
 }
 
-impl<'c> EventDao<'c> {
-    pub fn new(conn: &'c ConnType) -> Self {
-        Self { conn }
+impl<'a> AsDao<'a> for EventDao<'a> {
+    fn as_dao(pool: &'a PoolType) -> Self {
+        EventDao { pool }
     }
 }
 
 impl<'c> EventDao<'c> {
-    pub fn create(&self, activity_id: &str, event_type: &str) -> Result<()> {
+    pub async fn create(&self, activity_id: &str, event_type: ActivityEventType) -> Result<()> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
-        use schema::activity_event_type::dsl as dsl_type;
 
         let now = Utc::now().naive_utc();
 
-        self.conn.transaction(|| {
-            diesel::insert_into(dsl_event::activity_event)
-                .values(
-                    dsl_event::activity_event
-                        .inner_join(schema::activity::table)
-                        .inner_join(schema::activity_event_type::table)
-                        .select((
-                            dsl_event::activity_id,
-                            now.into_sql::<Timestamp>(),
-                            dsl_type::id,
-                        ))
-                        .filter(dsl::natural_id.eq(activity_id))
-                        .filter(dsl_type::name.eq(event_type))
-                        .limit(1),
-                )
-                .into_columns((
-                    dsl_event::activity_id,
-                    dsl_event::event_date,
-                    dsl_event::event_type_id,
-                ))
-                .execute(self.conn)
-                .map(|_| ())
+        let activity_id = activity_id.to_owned();
+        do_with_connection(self.pool, move |conn| {
+            {
+                diesel::insert_into(dsl_event::activity_event)
+                    .values(
+                        dsl::activity
+                            .select((
+                                dsl::id,
+                                now.into_sql::<Timestamp>(),
+                                event_type.into_sql::<Integer>(),
+                            ))
+                            .filter(dsl::natural_id.eq(activity_id))
+                            .limit(1),
+                    )
+                    .into_columns((
+                        dsl_event::activity_id,
+                        dsl_event::event_date,
+                        dsl_event::event_type_id,
+                    ))
+                    .execute(conn)
+                    .map(|_| ())
+            }
+            .map_err(DaoError::from)
         })
+        .await
     }
 
-    pub fn get_events(&self, max_count: Option<u32>) -> Result<Vec<Event>> {
+    pub async fn get_events(&self, max_count: Option<u32>) -> Result<Vec<Event>> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
-        use schema::activity_event_type::dsl as dsl_type;
-        use schema::agreement::dsl as dsl_agreement;
 
         let limit = match max_count {
             Some(val) => min(MAX_EVENTS, val),
             None => MAX_EVENTS,
         };
 
-        self.conn.transaction(|| {
+        log::debug!("starting db query");
+        do_with_transaction(self.pool, move |conn| {
             let results: Vec<Event> = dsl_event::activity_event
-                .inner_join(schema::activity_event_type::table)
                 .inner_join(schema::activity::table)
-                .inner_join(dsl_agreement::agreement.on(dsl_agreement::id.eq(dsl::agreement_id)))
                 .select((
                     dsl_event::id,
-                    dsl_type::name,
+                    dsl_event::event_type_id,
                     dsl::natural_id,
-                    dsl_agreement::natural_id,
+                    dsl::agreement_id,
                 ))
                 .order(dsl_event::event_date.asc())
                 .limit(limit as i64)
-                .load::<Event>(self.conn)?;
+                .load::<Event>(conn)?;
 
-            let mut ids = Vec::new();
-            results.iter().for_each(|event| ids.push(event.id));
-            diesel::delete(dsl_event::activity_event.filter(dsl_event::id.eq_any(ids)))
-                .execute(self.conn)?;
-
+            let ids = results.iter().map(|event| event.id).collect::<Vec<_>>();
+            if !ids.is_empty() {
+                diesel::delete(dsl_event::activity_event.filter(dsl_event::id.eq_any(ids)))
+                    .execute(conn)?;
+            }
             Ok(results)
         })
+        .await
     }
 
     pub async fn get_events_fut(&self, max_count: Option<u32>) -> Result<Vec<Event>> {
         let duration = Duration::from_millis(750);
 
         loop {
-            let result = self.get_events(max_count).not_found_as_option()?;
+            let result = self.get_events(max_count).await.not_found_as_option()?;
             if let Some(events) = result {
                 if events.len() > 0 {
                     return Ok(events);

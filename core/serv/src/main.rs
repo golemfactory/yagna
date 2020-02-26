@@ -4,21 +4,23 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
+    net::SocketAddr,
     path::PathBuf,
 };
 use structopt::{clap, StructOpt};
+use url::Url;
 
-use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{
-    constants::{CENTRAL_NET_HOST, YAGNA_BUS_PORT, YAGNA_HOST, YAGNA_HTTP_PORT},
-    CliCtx, CommandOutput,
-};
+use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api_derive::services;
+use ya_service_api_interfaces::Provider;
 use ya_service_api_web::middleware::{auth, Identity};
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
+
+mod data_dir;
+use data_dir::DataDir;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -26,21 +28,26 @@ use autocomplete::CompleteCommand;
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
     /// Daemon data dir
-    #[structopt(short, long = "datadir", set = clap::ArgSettings::Global)]
-    data_dir: Option<PathBuf>,
+    #[structopt(
+        short,
+        long = "datadir",
+        set = clap::ArgSettings::Global,
+        env = "YAGNA_DATADIR",
+        default_value
+    )]
+    data_dir: DataDir,
 
     /// Daemon address
-    #[structopt(short, long, default_value = &*YAGNA_HOST, env = "YAGNA_HOST")]
-    address: String,
+    #[structopt(
+        short,
+        long,
+        env = "YAGNA_API_URL",
+        default_value = "http://127.0.0.1:7465"
+    )]
+    api_url: Url,
 
-    /// Daemon HTTP port
-    #[structopt(short = "p", long, default_value = &*YAGNA_HTTP_PORT, env = "YAGNA_HTTP_PORT")]
-    http_port: u16,
-
-    /// Service bus router port
-    #[structopt(long, default_value = &*YAGNA_BUS_PORT, env = "YAGNA_BUS_PORT")]
-    #[structopt(set = clap::ArgSettings::Global)]
-    router_port: u16,
+    #[structopt(long = "net-addr", env = "ya_net::NET_ENV_VAR")]
+    net_addr: Option<SocketAddr>,
 
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -60,18 +67,20 @@ struct CliArgs {
 
 impl CliArgs {
     pub fn get_data_dir(&self) -> Result<PathBuf> {
-        Ok(match &self.data_dir {
-            Some(data_dir) => data_dir.to_owned(),
-            None => ya_service_api::default_data_dir()?,
-        })
+        self.data_dir.get_or_create()
     }
 
     pub fn get_http_address(&self) -> Result<(String, u16)> {
-        Ok((self.address.clone(), self.http_port))
-    }
-
-    pub fn get_router_address(&self) -> Result<(String, u16)> {
-        Ok((self.address.clone(), self.router_port))
+        let host = self
+            .api_url
+            .host()
+            .ok_or_else(|| anyhow::anyhow!("invalid api url"))?
+            .to_owned();
+        let port = self
+            .api_url
+            .port_or_known_default()
+            .ok_or_else(|| anyhow::anyhow!("invalid api url, no port"))?;
+        Ok((host.to_string(), port))
     }
 
     pub fn log_level(&self) -> String {
@@ -98,7 +107,6 @@ impl TryFrom<&CliArgs> for CliCtx {
 
         Ok(CliCtx {
             http_address: args.get_http_address()?,
-            router_address: args.get_router_address()?,
             data_dir,
             json_output: args.json,
             interactive: args.interactive,
@@ -106,14 +114,35 @@ impl TryFrom<&CliArgs> for CliCtx {
     }
 }
 
+struct ServiceContext {
+    db: DbExecutor,
+}
+
+impl<Service> Provider<Service, DbExecutor> for ServiceContext {
+    fn component(&self) -> DbExecutor {
+        self.db.clone()
+    }
+}
+
+#[services(ServiceContext)]
+enum Services {
+    #[enable(gsb, cli(flatten))]
+    Identity(ya_identity::service::Identity),
+    #[enable(gsb)]
+    Net(ya_net::Net),
+    #[enable(gsb, rest)]
+    Activity(ya_activity::service::Activity),
+    #[enable(gsb)]
+    Market(ya_market::service::MarketService),
+    #[enable(gsb, rest)]
+    Payment(ya_payment::PaymentService),
+}
+
 #[derive(StructOpt, Debug)]
 enum CliCommand {
-    /// AppKey management
-    AppKey(ya_identity::cli::AppKeyCommand),
-
-    /// Identity management
+    #[structopt(flatten)]
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-    Id(ya_identity::cli::IdentityCommand),
+    Commands(Services),
 
     #[structopt(name = "complete")]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
@@ -127,9 +156,8 @@ enum CliCommand {
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::AppKey(appkey) => appkey.run_command(ctx).await,
+            CliCommand::Commands(command) => command.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
-            CliCommand::Id(id) => id.run_command(ctx).await,
             CliCommand::Service(service) => service.run_command(ctx).await,
         }
     }
@@ -154,37 +182,22 @@ impl ServiceCommand {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                ya_sb_router::bind_router(ctx.router_address()?)
+                ya_sb_router::bind_gsb_router()
                     .await
                     .context("binding service bus router")?;
 
-                let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
-
+                let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
-                ya_identity::service::activate(&db).await?;
-                ya_activity::provider::service::bind_gsb(&db);
+                let context = ServiceContext { db: db.clone() };
 
-                let default_id = bus::private_service(identity::IDENTITY_SERVICE_ID)
-                    .send(identity::Get::ByDefault)
-                    .await
-                    .map_err(anyhow::Error::msg)??
-                    .ok_or(anyhow::Error::msg("no default identity"))?
-                    .node_id
-                    .to_string();
-                log::info!("using default identity as network id: {:?}", default_id);
-                ya_net::bind_remote(&*CENTRAL_NET_HOST, &default_id)
-                    .await
-                    .context(format!(
-                        "Error binding network service at {} for {}",
-                        *CENTRAL_NET_HOST, default_id
-                    ))?;
+                Services::gsb(&context).await?;
 
                 HttpServer::new(move || {
-                    App::new()
+                    let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .service(ya_activity::api::web_scope(&db))
-                        .route("/me", web::get().to(me))
+                        .route("/me", web::get().to(me));
+                    Services::rest(app, &db)
                 })
                 .bind(ctx.http_address())
                 .context(format!(
@@ -211,10 +224,16 @@ async fn me(id: Identity) -> impl Responder {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
+    dotenv::dotenv().ok();
     let args: CliArgs = CliArgs::from_args();
 
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
+
+    // TODO: fix this hack
+    if let Some(net_addr) = args.net_addr {
+        std::env::set_var(ya_net::NET_ENV_VAR, net_addr.to_string());
+    }
 
     args.run_command().await
 }

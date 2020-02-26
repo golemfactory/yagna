@@ -1,14 +1,16 @@
 //! Web utils
 use awc::{
+    error::PayloadError,
     http::{header, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     ClientRequest, ClientResponse, SendClientRequest,
 };
 use bytes::Bytes;
+use futures::Stream;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{str::FromStr, time::Duration};
-use url::form_urlencoded;
+use std::{rc::Rc, str::FromStr, time::Duration};
+use url::{form_urlencoded, Url};
 
-use crate::{configuration::ApiConfiguration, Error, Result};
+use crate::{Error, Result};
 
 #[derive(Clone, Debug)]
 pub enum WebAuth {
@@ -17,9 +19,24 @@ pub enum WebAuth {
 
 /// Convenient wrapper for the [`awc::Client`](
 /// https://docs.rs/awc/0.2.8/awc/struct.Client.html) with builder.
+#[derive(Clone)]
 pub struct WebClient {
-    pub(crate) configuration: ApiConfiguration,
-    pub(crate) awc: awc::Client,
+    base_url: Rc<Url>,
+    awc: awc::Client,
+}
+
+pub trait WebInterface {
+    const API_URL_ENV_VAR: &'static str;
+    const API_SUFFIX: &'static str;
+
+    fn rebase_service_url(base_url: Rc<Url>) -> Result<Rc<Url>> {
+        if let Some(url) = std::env::var(Self::API_URL_ENV_VAR).ok() {
+            return Ok(Url::from_str(&url)?.into());
+        }
+        Ok(base_url.join(Self::API_SUFFIX)?.into())
+    }
+
+    fn from(client: WebClient) -> Self;
 }
 
 pub struct WebRequest<T> {
@@ -32,13 +49,22 @@ impl WebClient {
         WebClientBuilder::default()
     }
 
-    fn url<T: Into<String>>(&self, suffix: T) -> url::Url {
-        self.configuration.endpoint_url(suffix)
+    pub fn with_token(token: &str) -> Result<WebClient> {
+        WebClientBuilder::default()
+            .auth(WebAuth::Bearer(token.to_string()))
+            .build()
+    }
+
+    /// constructs endpoint url in form of `<base_url>/<suffix>`.
+    ///
+    /// suffix should not have leading slash ie. `offer` not `/offer`
+    fn url<T: AsRef<str>>(&self, suffix: T) -> Result<url::Url> {
+        Ok(self.base_url.join(suffix.as_ref())?)
     }
 
     pub fn request(&self, method: Method, url: &str) -> WebRequest<ClientRequest> {
-        let url = format!("{}", self.url(url));
-        log::info!("doing {} on {}", method, url);
+        let url = self.url(url).unwrap().to_string();
+        log::debug!("doing {} on {}", method, url);
         WebRequest {
             inner_request: self.awc.request(method, &url),
             url,
@@ -60,6 +86,20 @@ impl WebClient {
     pub fn delete(&self, url: &str) -> WebRequest<ClientRequest> {
         self.request(Method::DELETE, url)
     }
+
+    pub fn interface<T: WebInterface>(&self) -> Result<T> {
+        let base_url = T::rebase_service_url(self.base_url.clone())?;
+        let awc = self.awc.clone();
+        Ok(T::from(WebClient { base_url, awc }))
+    }
+
+    pub fn interface_at<T: WebInterface>(&self, base_url: Url) -> T {
+        let awc = self.awc.clone();
+        T::from(WebClient {
+            base_url: base_url.into(),
+            awc,
+        })
+    }
 }
 
 impl WebRequest<ClientRequest> {
@@ -78,24 +118,31 @@ impl WebRequest<ClientRequest> {
     }
 }
 
-fn filter_http_status<T>(response: ClientResponse<T>) -> Result<ClientResponse<T>> {
+async fn filter_http_status<T>(
+    mut response: ClientResponse<T>,
+    url: String,
+) -> Result<ClientResponse<T>>
+where
+    T: Stream<Item = std::result::Result<Bytes, PayloadError>> + Unpin,
+{
+    log::trace!("{:?}", response.headers());
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err(Error::HttpStatusCode(response.status()))
+        Err((response.status(), url, response.json().await?).into())
     }
 }
 
 impl WebRequest<SendClientRequest> {
     pub async fn json<T: DeserializeOwned>(self) -> Result<T> {
         let url = self.url.clone();
-        let mut response = self
+        let response = self
             .inner_request
             .await
-            .map_err(|e| (e, url).into())
-            .and_then(filter_http_status)?;
+            .map_err(|e| Error::from((e, url.clone())))?;
 
-        log::debug!("{:?}", response.headers());
+        let mut response = filter_http_status(response, url).await?;
+
         // allow empty body and no content (204) to pass smoothly
         if StatusCode::NO_CONTENT == response.status()
             || Some("0")
@@ -110,18 +157,7 @@ impl WebRequest<SendClientRequest> {
             ))?);
         }
 
-        response.json().await.map_err(From::from)
-    }
-
-    pub async fn body(self) -> Result<Bytes> {
-        let url = self.url.clone();
-        self.inner_request
-            .await
-            .map_err(|e| (e, url).into())
-            .and_then(filter_http_status)?
-            .body()
-            .await
-            .map_err(From::from)
+        Ok(response.json().await?)
     }
 }
 
@@ -178,10 +214,20 @@ impl WebClientBuilder {
             builder = builder.header(key.clone(), value.clone());
         }
 
-        Ok(WebClient {
-            configuration: ApiConfiguration::from(self.host_port, self.api_root)?,
-            awc: builder.finish(),
-        })
+        if let Some(env_url) = std::env::var("YAGNA_API_URL").ok() {
+            Ok(WebClient {
+                base_url: Rc::new(Url::parse(&env_url)?),
+                awc: builder.finish(),
+            })
+        } else {
+            Ok(WebClient {
+                base_url: Rc::new(Url::parse(&format!(
+                    "http://{}",
+                    self.host_port.unwrap_or_else(|| "127.0.0.1:5001".into())
+                ))?),
+                awc: builder.finish(),
+            })
+        }
     }
 }
 

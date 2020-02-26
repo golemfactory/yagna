@@ -1,10 +1,9 @@
 /// Using GSB with actix 0.9
+use crate::{RpcStreamCall, RpcStreamMessage};
 use actix::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
-
-use ya_service_api::constants::PRIVATE_SERVICE;
 
 use crate::local_router::{router, Router};
 use crate::{RpcEnvelope, RpcMessage};
@@ -20,9 +19,17 @@ where
     Handle { _inner: {} }
 }
 
-pub fn private_service(addr: &str) -> Endpoint {
+pub fn binds<M: RpcStreamMessage>(addr: &str, actor: Recipient<RpcStreamCall<M>>) -> Handle
+where
+    Result<M::Item, M::Error>: Serialize + DeserializeOwned + Sync + Send,
+{
+    router().lock().unwrap().bind_stream_actor(addr, actor);
+    Handle { _inner: {} }
+}
+
+pub fn service(addr: &str) -> Endpoint {
     Endpoint {
-        addr: format!("{}{}", PRIVATE_SERVICE, addr),
+        addr: addr.to_string(),
         router: router(),
     }
 }
@@ -35,10 +42,21 @@ pub struct Endpoint {
 impl Endpoint {
     pub fn send<M: RpcMessage + Serialize + DeserializeOwned + Sync + Send + Unpin>(
         &self,
+        caller: Option<String>,
         msg: M,
     ) -> impl Future<Output = Result<<RpcEnvelope<M> as Message>::Result, BusError>> + Unpin + 'static
     {
         let mut b = self.router.lock().unwrap();
-        b.forward(self.addr.as_ref(), msg)
+        b.forward(self.addr.as_ref(), caller, msg)
+    }
+
+    pub fn call_stream<M: RpcStreamMessage>(
+        &self,
+        msg: M,
+    ) -> impl Stream<Item = Result<Result<M::Item, M::Error>, BusError>> {
+        self.router
+            .lock()
+            .unwrap()
+            .streaming_forward(&self.addr, msg)
     }
 }

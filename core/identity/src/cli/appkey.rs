@@ -9,6 +9,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+/// AppKey management
 pub enum AppKeyCommand {
     Create {
         name: String,
@@ -34,7 +35,7 @@ pub enum AppKeyCommand {
 
 impl AppKeyCommand {
     async fn get_identity(get_by: idm::Get) -> anyhow::Result<IdentityInfo> {
-        bus::private_service(idm::IDENTITY_SERVICE_ID)
+        bus::service(idm::BUS_ID)
             .send(get_by)
             .await
             .map_err(anyhow::Error::msg)?
@@ -62,7 +63,7 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity,
                 };
-                let key = bus::private_service(&model::APP_KEY_SERVICE_ID)
+                let key = bus::service(model::BUS_ID)
                     .send(create)
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -74,7 +75,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::private_service(&model::APP_KEY_SERVICE_ID)
+                let _ = bus::service(model::BUS_ID)
                     .send(remove)
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -87,12 +88,11 @@ impl AppKeyCommand {
                     page: page.clone(),
                     per_page: per_page.clone(),
                 };
-                let result: (Vec<model::AppKey>, u32) =
-                    bus::private_service(&model::APP_KEY_SERVICE_ID)
-                        .send(list)
-                        .await
-                        .map_err(anyhow::Error::msg)?
-                        .unwrap();
+                let result: (Vec<model::AppKey>, u32) = bus::service(model::BUS_ID)
+                    .send(list)
+                    .await
+                    .map_err(anyhow::Error::msg)?
+                    .unwrap();
 
                 Ok(ResponseTable {
                     columns: vec![

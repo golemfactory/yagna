@@ -1,73 +1,67 @@
-use crate::common::{generate_id, RpcMessageResult};
-use crate::dao::*;
-use crate::error::Error;
-use crate::timeout::IntoTimeoutFuture;
-
 use futures::prelude::*;
 use std::convert::From;
+
+use crate::common::{
+    authorize_activity_initiator, authorize_agreement_initiator, generate_id, RpcMessageResult,
+};
+use crate::dao::*;
+use crate::error::Error;
 use ya_core_model::activity::*;
-use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::State;
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::models::ActivityEventType;
+use ya_service_bus::timeout::*;
+
+lazy_static::lazy_static! {
+    static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
+    static ref PUBLIC_ID: String = format!("/public{}", SERVICE_ID);
+}
 
 pub fn bind_gsb(db: &DbExecutor) {
-    log::info!("activating activity provider service");
-
     // public for remote requestors interactions
-    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, create_activity_gsb);
-    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, destroy_activity_gsb);
-    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, get_activity_state_gsb);
-    bind_gsb_method!(bind_public, ACTIVITY_SERVICE_ID, db, get_activity_usage_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, create_activity_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, destroy_activity_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, get_activity_state_gsb);
+    bind_gsb_method!(&PUBLIC_ID, db, get_activity_usage_gsb);
 
     // local for ExeUnit interactions
-    bind_gsb_method!(
-        bind_private,
-        ACTIVITY_SERVICE_ID,
-        db,
-        set_activity_state_gsb
-    );
-    bind_gsb_method!(
-        bind_private,
-        ACTIVITY_SERVICE_ID,
-        db,
-        set_activity_usage_gsb
-    );
-
-    log::info!("activity provider service activated");
+    bind_gsb_method!(&PRIVATE_ID, db, set_activity_state_gsb);
+    bind_gsb_method!(&PRIVATE_ID, db, set_activity_usage_gsb);
 }
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity_gsb(
     db: DbExecutor,
+    caller: String,
     msg: CreateActivity,
 ) -> RpcMessageResult<CreateActivity> {
-    let conn = db_conn!(db)?;
     let activity_id = generate_id();
 
-    // Check whether agreement exists
-    AgreementDao::new(&conn)
-        .get(&msg.agreement_id)
-        .map_err(Error::from)?;
+    authorize_agreement_initiator(caller, msg.agreement_id.clone()).await?;
 
-    ActivityDao::new(&conn)
-        .create(&activity_id, &msg.agreement_id)
-        .map_err(Error::from)?;
+    let activity_id = activity_id.clone();
+    let agreement_id = msg.agreement_id.clone();
 
-    EventDao::new(&conn)
-        .create(
-            &activity_id,
-            serde_json::to_string(&ProviderEventType::CreateActivity)
-                .unwrap()
-                .as_str(),
-        )
+    db.as_dao::<ActivityDao>()
+        .create(&activity_id, &agreement_id)
+        .await
         .map_err(Error::from)?;
+    log::debug!("activity inserted: {}", activity_id);
 
-    ActivityStateDao::new(&conn)
+    db.as_dao::<EventDao>()
+        .create(&activity_id, ActivityEventType::CreateActivity)
+        .await
+        .map_err(Error::from)?;
+    log::debug!("event inserted");
+
+    let state = db
+        .as_dao::<ActivityStateDao>()
         .get_future(&activity_id, None)
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?
         .map_err(Error::from)?;
+    log::debug!("activity state: {:?}", state);
 
     Ok(activity_id)
 }
@@ -75,20 +69,18 @@ async fn create_activity_gsb(
 /// Destroys given Activity.
 async fn destroy_activity_gsb(
     db: DbExecutor,
+    caller: String,
     msg: DestroyActivity,
 ) -> RpcMessageResult<DestroyActivity> {
-    let conn = db_conn!(db)?;
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-    EventDao::new(&conn)
-        .create(
-            &msg.activity_id,
-            serde_json::to_string(&ProviderEventType::DestroyActivity)
-                .unwrap()
-                .as_str(),
-        )
+    log::info!("creating event for destroying activity");
+    db.as_dao::<EventDao>()
+        .create(&msg.activity_id, ActivityEventType::DestroyActivity)
+        .await
         .map_err(Error::from)?;
 
-    ActivityStateDao::new(&conn)
+    db.as_dao::<ActivityStateDao>()
         .get_future(&msg.activity_id, Some(State::Terminated))
         .timeout(msg.timeout)
         .map_err(Error::from)
@@ -100,45 +92,53 @@ async fn destroy_activity_gsb(
 
 async fn get_activity_state_gsb(
     db: DbExecutor,
+    caller: String,
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+
     super::get_activity_state(&db, &msg.activity_id)
         .await
         .map_err(Into::into)
 }
 
 /// Pass activity state (which may include error details).
+/// Called by ExeUnits.
 async fn set_activity_state_gsb(
     db: DbExecutor,
+    caller: String,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
-    // TODO: caller authorization
-    ActivityStateDao::new(&db_conn!(db)?)
-        .set(
-            &msg.activity_id,
-            msg.state.state.clone(),
-            msg.state.reason.clone(),
-            msg.state.error_message.clone(),
-        )
-        .map_err(|e| Error::from(e).into())
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+
+    super::set_activity_state(&db, &msg.activity_id, msg.state)
+        .map_err(Into::into)
+        .await
 }
 
 async fn get_activity_usage_gsb(
     db: DbExecutor,
+    caller: String,
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+
     super::get_activity_usage(&db, &msg.activity_id)
         .await
         .map_err(Error::into)
 }
 
 /// Pass current activity usage (which may include error details).
+/// Called by ExeUnits.
 async fn set_activity_usage_gsb(
     db: DbExecutor,
+    caller: String,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
-    // TODO: caller authorization
-    ActivityUsageDao::new(&db_conn!(db)?)
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+
+    db.as_dao::<ActivityUsageDao>()
         .set(&msg.activity_id, &msg.usage.current_usage)
+        .await
         .map_err(|e| Error::from(e).into())
 }

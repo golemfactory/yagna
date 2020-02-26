@@ -1,27 +1,34 @@
+use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Allocation {
-    #[serde(rename = "allocationId")]
     pub allocation_id: String,
-    #[serde(rename = "totalAmount")]
-    pub total_amount: i32,
-    #[serde(rename = "spentAmount")]
-    pub spent_amount: i32,
-    #[serde(rename = "remainingAmount")]
-    pub remaining_amount: i32,
-    #[serde(rename = "timeout", skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<String>,
-    #[serde(rename = "makeDeposit")]
+    pub total_amount: BigDecimal,
+    pub spent_amount: BigDecimal,
+    pub remaining_amount: BigDecimal,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub timeout: Option<DateTime<Utc>>,
+    pub make_deposit: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewAllocation {
+    pub total_amount: BigDecimal,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub timeout: Option<DateTime<Utc>>,
     pub make_deposit: bool,
 }
 
 impl Allocation {
     pub fn new(
         allocation_id: String,
-        total_amount: i32,
-        spent_amount: i32,
-        remaining_amount: i32,
+        total_amount: BigDecimal,
+        spent_amount: BigDecimal,
+        remaining_amount: BigDecimal,
         make_deposit: bool,
     ) -> Allocation {
         Allocation {

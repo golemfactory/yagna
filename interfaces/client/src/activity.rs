@@ -1,9 +1,9 @@
 //! Activity API part of the Yagna API
-pub mod provider;
-pub mod requestor;
+mod provider;
+mod requestor;
 
-pub use provider::ProviderApiClient;
-pub use requestor::control::RequestorControlApiClient;
-pub use requestor::state::RequestorStateApiClient;
+pub use provider::ActivityProviderApi;
+pub use requestor::control::ActivityRequestorControlApi;
+pub use requestor::state::ActivityRequestorStateApi;
 
-pub use ya_service_api::constants::ACTIVITY_API;
+const ACTIVITY_URL_ENV_VAR: &str = "YAGNA_ACTIVITY_URL";

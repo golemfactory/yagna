@@ -72,11 +72,9 @@ async fn main() -> Result<()> {
 
     match options.side {
         Side::Listener => {
-            let _ = bus::bind_public("", |p: Test| {
-                async move {
-                    log::info!("test called!!");
-                    Ok(format!("pong {}", p.0))
-                }
+            let _ = bus::bind("/public", |p: Test| async move {
+                log::info!("test called!!");
+                Ok(format!("pong {}", p.0))
             });
             log::info!("Started listening on the local bus");
             actix_rt::signal::ctrl_c().await?;
@@ -85,7 +83,7 @@ async fn main() -> Result<()> {
         }
         Side::Sender => {
             let listener_id = Options::id(&Side::Listener);
-            let r = bus::private_service(&format!("/net/{}", listener_id))
+            let r = bus::service(&format!("/net/{}", listener_id))
                 .send(Test("Test".into()))
                 .map_err(Error::msg)
                 .await?;

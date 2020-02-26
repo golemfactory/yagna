@@ -5,20 +5,22 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [features]
-default = ['with-diesel']
-full = ['activity', 'appkey', 'identity']
-activity = []
-identity = ['ethaddr']
+default = ['ethaddr', 'with-diesel']
+full = ['activity', 'appkey', 'identity', 'market', 'net', 'payment']
+activity = ['ethaddr']
 appkey = []
-with-diesel=['diesel']
 ethaddr=[]
+identity = ['ethaddr']
+market=[]
+net=[]
+payment=[]
+with-diesel=['diesel']
 
 [dependencies]
 ya-model = "0.1"
 ya-service-bus = "0.2"
-ya-service-api = "0.1"
 
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }
-diesel = { version = "1.4", optional = true, features=["sqlite"] }
+diesel = { version = "1.4", optional = true }
 thiserror = "1.0.9"

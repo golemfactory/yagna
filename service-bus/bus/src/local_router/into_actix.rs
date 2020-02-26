@@ -1,6 +1,10 @@
-use crate::{RpcEnvelope, RpcHandler, RpcMessage};
+use crate::Error;
+use crate::{
+    RpcEnvelope, RpcHandler, RpcMessage, RpcStreamCall, RpcStreamHandler, RpcStreamMessage,
+};
 use actix::prelude::*;
 
+use futures::SinkExt;
 use std::marker::PhantomData;
 
 pub struct RpcHandlerWrapper<T, H>(pub(super) H, PhantomData<T>);
@@ -23,10 +27,37 @@ impl<T: RpcMessage, H: RpcHandler<T> + 'static> Handler<RpcEnvelope<T>>
     type Result = ActorResponse<Self, T::Item, T::Error>;
 
     fn handle(&mut self, msg: RpcEnvelope<T>, _ctx: &mut Self::Context) -> Self::Result {
-        ActorResponse::r#async(
-            self.0
-                .handle(msg.caller.as_str(), msg.body)
-                .into_actor(self),
-        )
+        ActorResponse::r#async(self.0.handle(msg.caller, msg.body).into_actor(self))
+    }
+}
+
+pub struct RpcStreamHandlerWrapper<T, H>(pub(super) H, PhantomData<T>);
+
+impl<T, H> RpcStreamHandlerWrapper<T, H> {
+    pub fn new(h: H) -> Self {
+        RpcStreamHandlerWrapper(h, PhantomData)
+    }
+}
+
+impl<T: 'static, H: 'static> Actor for RpcStreamHandlerWrapper<T, H> {
+    type Context = Context<Self>;
+}
+
+impl<T: 'static, H: 'static> Unpin for RpcStreamHandlerWrapper<T, H> {}
+
+impl<T: RpcStreamMessage, H: RpcStreamHandler<T> + 'static> Handler<RpcStreamCall<T>>
+    for RpcStreamHandlerWrapper<T, H>
+{
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: RpcStreamCall<T>, _ctx: &mut Self::Context) -> Self::Result {
+        use futures::stream::{Stream, StreamExt, TryStream, TryStreamExt};
+        // Stream<Item = Result<T::Item, T::Error>> + Unpin
+
+        let mut reply = msg.reply.sink_map_err(|e| Error::GsbFailure(e.to_string()));
+        let mut result = self.0.handle(&msg.caller, msg.body).map(|v| Ok(v));
+        let send_all = async move { reply.send_all(&mut result).await };
+
+        ActorResponse::r#async(send_all.into_actor(self))
     }
 }

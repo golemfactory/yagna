@@ -39,6 +39,7 @@ impl IdentityService {
         let default_key = db
             .as_dao::<IdentityDao>()
             .init_default_key(|| {
+                log::info!("generating new default identity");
                 let key: IdentityKey = generate_new(None, "".into()).into();
                 let new_identity = Identity {
                     identity_id: key.id(),
@@ -54,6 +55,8 @@ impl IdentityService {
             })
             .await?
             .identity_id;
+
+        log::info!("using default identity: {:?}", default_key);
 
         let mut ids: HashMap<NodeId, _> = Default::default();
         let mut alias_to_id: HashMap<String, _> = Default::default();
@@ -205,6 +208,15 @@ impl IdentityService {
         Ok(output)
     }
 
+    pub async fn sign(&mut self, node_id: NodeId, data: Vec<u8>) -> Result<Vec<u8>, model::Error> {
+        let key = self.get_key_by_id(&node_id)?;
+        if let Some(signature) = key.sign(data.as_slice()) {
+            Ok(signature)
+        } else {
+            Err(model::Error::new_err_msg("sign error"))
+        }
+    }
+
     pub async fn update_identity(
         &mut self,
         update: model::Update,
@@ -263,12 +275,12 @@ impl IdentityService {
 
     pub fn bind_service(me: Arc<Mutex<Self>>) {
         let this = me.clone();
-        let _ = bus::bind_private(model::IDENTITY_SERVICE_ID, move |_list: model::List| {
+        let _ = bus::bind(model::BUS_ID, move |_list: model::List| {
             let this = this.clone();
             async move { this.lock().await.list_ids() }
         });
         let this = me.clone();
-        let _ = bus::bind_private(model::IDENTITY_SERVICE_ID, move |get: model::Get| {
+        let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
             let this = this.clone();
             async move {
                 match get {
@@ -280,47 +292,44 @@ impl IdentityService {
             }
         });
         let this = me.clone();
-        let _ = bus::bind_private(
-            model::IDENTITY_SERVICE_ID,
-            move |create: model::CreateGenerated| {
-                let this = this.clone();
-                async move {
-                    if let Some(key_store) = create.from_keystore {
-                        let key: KeyFile = serde_json::from_str(key_store.as_str())
-                            .map_err(model::Error::keystore_format)?;
-                        let addr_bytes = match &key.address {
-                            Some(addr_bytes) => addr_bytes.0.as_slice(),
-                            None => {
-                                return Err(model::Error::BadKeyStoreFormat(
-                                    "missing address".to_string(),
-                                ))
-                            }
-                        };
-                        let node_id: NodeId = NodeId::from(addr_bytes);
+        let _ = bus::bind(model::BUS_ID, move |create: model::CreateGenerated| {
+            let this = this.clone();
+            async move {
+                if let Some(key_store) = create.from_keystore {
+                    let key: KeyFile = serde_json::from_str(key_store.as_str())
+                        .map_err(model::Error::keystore_format)?;
+                    let addr_bytes = match &key.address {
+                        Some(addr_bytes) => addr_bytes.0.as_slice(),
+                        None => {
+                            return Err(model::Error::BadKeyStoreFormat(
+                                "missing address".to_string(),
+                            ))
+                        }
+                    };
+                    let node_id: NodeId = NodeId::from(addr_bytes);
 
-                        this.lock()
-                            .await
-                            .create_from_keystore(create.alias, node_id, key)
-                            .await
-                    } else {
-                        this.lock().await.create_identity(create.alias).await
-                    }
+                    this.lock()
+                        .await
+                        .create_from_keystore(create.alias, node_id, key)
+                        .await
+                } else {
+                    this.lock().await.create_identity(create.alias).await
                 }
-            },
-        );
+            }
+        });
 
         let this = me.clone();
-        let _ = bus::bind_private(model::IDENTITY_SERVICE_ID, move |update: model::Update| {
+        let _ = bus::bind(model::BUS_ID, move |update: model::Update| {
             let this = this.clone();
             async move { this.lock().await.update_identity(update).await }
         });
         let this = me.clone();
-        let _ = bus::bind_private(model::IDENTITY_SERVICE_ID, move |lock: model::Lock| {
+        let _ = bus::bind(model::BUS_ID, move |lock: model::Lock| {
             let this = this.clone();
             async move { this.lock().await.lock(lock.node_id).await }
         });
         let this = me.clone();
-        let _ = bus::bind_private(model::IDENTITY_SERVICE_ID, move |unlock: model::Unlock| {
+        let _ = bus::bind(model::BUS_ID, move |unlock: model::Unlock| {
             let this = this.clone();
             async move {
                 this.lock()
@@ -328,6 +337,11 @@ impl IdentityService {
                     .unlock(unlock.node_id, unlock.password.into())
                     .await
             }
+        });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |sign: model::Sign| {
+            let this = this.clone();
+            async move { this.lock().await.sign(sign.node_id, sign.payload).await }
         });
     }
 }

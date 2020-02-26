@@ -1,35 +1,38 @@
+use crate::connection::{self, ConnectionRef, LocalRouterHandler, TcpTransport};
+use crate::error::Error;
+use crate::error::Error::GsbFailure;
+use crate::{Handle, RpcRawCall, RpcRawStreamCall};
 use actix::{prelude::*, WrapFuture};
-use futures::{channel::oneshot, prelude::*};
-use std::{collections::HashSet, net::SocketAddr};
+use futures::{channel::oneshot, prelude::*, FutureExt, SinkExt, StreamExt};
+use std::collections::HashSet;
+use std::time::Duration;
 
-use ya_service_api::constants::YAGNA_BUS_ADDR;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
-use crate::{
-    connection::{self, ConnectionRef, LocalRouterHandler, TcpTransport},
-    {error::Error, RpcRawCall},
-};
-
-fn gsb_addr() -> SocketAddr {
-    *YAGNA_BUS_ADDR
-}
+type RemoteConncetion = ConnectionRef<TcpTransport, LocalRouterHandler>;
 
 pub struct RemoteRouter {
     local_bindings: HashSet<String>,
-    pending_calls: Vec<(RpcRawCall, oneshot::Sender<Result<Vec<u8>, Error>>)>,
-    connection: Option<ConnectionRef<TcpTransport, LocalRouterHandler>>,
+    pending_calls: Vec<oneshot::Sender<RemoteConncetion>>,
+    connection: Option<RemoteConncetion>,
 }
 
 impl Actor for RemoteRouter {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        self.try_connect(ctx)
+        self.try_connect(ctx);
+        let _ = ctx.run_later(CONNECT_TIMEOUT, |act, _ctx| {
+            if act.connection.is_none() {
+                act.pending_calls.clear();
+            }
+        });
     }
 }
 
 impl RemoteRouter {
     fn try_connect(&mut self, ctx: &mut <Self as Actor>::Context) {
-        let addr = gsb_addr();
+        let addr = ya_sb_proto::gsb_addr();
         let connect_fut = connection::tcp(addr)
             .map_err(move |e| Error::BusConnectionFail(addr, e))
             .into_actor(self)
@@ -48,7 +51,7 @@ impl RemoteRouter {
                             .into_iter()
                             .map(move |service_id| connection.bind(service_id)),
                     )
-                    .and_then(|_| async { Ok(log::info!("registered all services")) })
+                    .and_then(|_| async { Ok(log::debug!("registered all services")) })
                     .into_actor(act),
                 )
             })
@@ -67,16 +70,28 @@ impl RemoteRouter {
         connection: ConnectionRef<TcpTransport, LocalRouterHandler>,
         ctx: &mut <Self as Actor>::Context,
     ) {
-        for (msg, tx) in std::mem::replace(&mut self.pending_calls, Default::default()) {
-            let send_fut = connection
-                .call(msg.caller, msg.addr, msg.body)
-                .then(|r| {
-                    let _ = tx.send(r);
-                    future::ready(())
-                })
-                .into_actor(self);
-            ctx.spawn(send_fut);
+        log::debug!(
+            "got connection activating {} calls",
+            self.pending_calls.len()
+        );
+        for tx in std::mem::replace(&mut self.pending_calls, Default::default()) {
+            let connection = connection.clone();
+            let send_fut = async move {
+                let _v = tx.send(connection);
+            }
+            .into_actor(self);
+            let _ = ctx.spawn(send_fut);
         }
+    }
+
+    fn connection(&mut self) -> impl Future<Output = Result<RemoteConncetion, Error>> + 'static {
+        if let Some(c) = &self.connection {
+            return future::ok((*c).clone()).left_future();
+        }
+        log::debug!("wait for connection");
+        let (tx, rx) = oneshot::channel();
+        self.pending_calls.push(tx);
+        rx.map_err(From::from).right_future()
     }
 }
 
@@ -122,12 +137,12 @@ impl Handler<UpdateService> for RemoteRouter {
             UpdateService::Add(service_id) => {
                 if let Some(c) = &mut self.connection {
                     Arbiter::spawn(
-                        c.bind(service_id.clone()).then(|v| {
-                            async { v.unwrap_or_else(|e| log::error!("bind error: {}", e)) }
+                        c.bind(service_id.clone()).then(|v| async {
+                            v.unwrap_or_else(|e| log::error!("bind error: {}", e))
                         }),
                     )
                 }
-                log::info!("Binding local service '{}'", service_id);
+                log::trace!("Binding local service '{}'", service_id);
                 self.local_bindings.insert(service_id);
             }
             UpdateService::Remove(service_id) => {
@@ -142,12 +157,34 @@ impl Handler<RpcRawCall> for RemoteRouter {
     type Result = ActorResponse<Self, Vec<u8>, Error>;
 
     fn handle(&mut self, msg: RpcRawCall, _ctx: &mut Self::Context) -> Self::Result {
-        if let Some(c) = &self.connection {
-            ActorResponse::r#async(c.call(msg.caller, msg.addr, msg.body).into_actor(self))
-        } else {
-            let (tx, rx) = oneshot::channel();
-            self.pending_calls.push((msg, tx));
-            ActorResponse::r#async(rx.then(|v| async { v? }).into_actor(self))
-        }
+        ActorResponse::r#async(
+            self.connection()
+                .and_then(|connection| connection.call(msg.caller, msg.addr, msg.body))
+                .into_actor(self),
+        )
+    }
+}
+
+impl Handler<RpcRawStreamCall> for RemoteRouter {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: RpcRawStreamCall, _ctx: &mut Self::Context) -> Self::Result {
+        ActorResponse::r#async(
+            self.connection()
+                .and_then(|connection| async move {
+                    let reply = msg.reply.sink_map_err(|e| Error::GsbFailure(e.to_string()));
+                    futures::pin_mut!(reply);
+
+                    let result = SinkExt::send_all(
+                        &mut reply,
+                        &mut connection
+                            .call_streaming(msg.caller, msg.addr, msg.body)
+                            .map(|v| Ok(v)),
+                    )
+                    .await;
+                    result
+                })
+                .into_actor(self),
+        )
     }
 }

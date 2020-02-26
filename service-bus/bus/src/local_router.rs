@@ -1,16 +1,24 @@
+use crate::local_router::into_actix::RpcHandlerWrapper;
+use crate::remote_router::{RemoteRouter, UpdateService};
+use crate::untyped::RawHandler;
+use crate::ResponseChunk::Full;
 use crate::{
-    error::Error,
-    remote_router::{RemoteRouter, UpdateService},
-    Handle, RpcEnvelope, RpcHandler, RpcMessage, RpcRawCall,
+    error::Error, Handle, ResponseChunk, RpcEnvelope, RpcHandler, RpcMessage, RpcRawCall,
+    RpcRawStreamCall, RpcStreamCall, RpcStreamHandler, RpcStreamMessage,
 };
 use actix::prelude::*;
+use actix::{Actor, SystemService};
+use futures::future::ErrInto;
 use futures::prelude::*;
-use std::{
-    any::Any,
-    sync::{Arc, Mutex},
-};
-
+use futures::{future, FutureExt, SinkExt, StreamExt, TryStreamExt};
+use serde::{Deserialize, Serialize};
+use std::any::Any;
+use std::collections::HashMap;
+use std::io::Cursor;
+use std::marker::PhantomData;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use ya_sb_util::futures::IntoFlatten;
 use ya_sb_util::PrefixLookupBag;
 
 mod into_actix;
@@ -18,18 +26,91 @@ mod into_actix;
 trait RawEndpoint: Any {
     fn send(&self, msg: RpcRawCall) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>>>>;
 
+    fn call_stream(
+        &self,
+        msg: RpcRawCall,
+    ) -> Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>>;
+
     fn recipient(&self) -> &dyn Any;
 }
 
+// Implementation for non-streaming service
 impl<T: RpcMessage> RawEndpoint for Recipient<RpcEnvelope<T>> {
     fn send(&self, msg: RpcRawCall) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>>>> {
         // TODO: do not panic with unwrap, but rather return Error
-        let body: T = rmp_serde::decode::from_read(msg.body.as_slice()).unwrap();
+        let body: T = crate::serialization::from_read(msg.body.as_slice()).unwrap();
         Box::pin(
             Recipient::send(self, RpcEnvelope::with_caller(&msg.caller, body))
                 .map_err(|e| e.into())
-                .and_then(|r| async move { rmp_serde::to_vec(&r).map_err(Error::from) }),
+                .and_then(|r| async move { crate::serialization::to_vec(&r).map_err(Error::from) }),
         )
+    }
+
+    fn call_stream(
+        &self,
+        msg: RpcRawCall,
+    ) -> Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>> {
+        let body: T = crate::serialization::from_read(msg.body.as_slice()).unwrap();
+
+        Box::pin(
+            Recipient::send(self, RpcEnvelope::with_caller(&msg.caller, body))
+                .map_err(|e| e.into())
+                .and_then(|r| future::ready(crate::serialization::to_vec(&r).map_err(Error::from)))
+                .map_ok(|v| ResponseChunk::Full(v))
+                .into_stream(),
+        )
+    }
+
+    fn recipient(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl<T: RpcStreamMessage> RawEndpoint for Recipient<RpcStreamCall<T>> {
+    fn send(&self, _msg: RpcRawCall) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>>>> {
+        Box::pin(future::err(Error::GsbBadRequest(
+            "non-streaming-request on streaming endpoint".into(),
+        )))
+    }
+
+    fn call_stream(
+        &self,
+        msg: RpcRawCall,
+    ) -> Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>> {
+        let body: T = crate::serialization::from_read(msg.body.as_slice()).unwrap();
+        let (tx, rx) = futures::channel::mpsc::channel(16);
+        let (txe, rxe) = futures::channel::oneshot::channel();
+
+        let call = RpcStreamCall {
+            caller: msg.caller,
+            addr: msg.addr,
+            body,
+            reply: tx,
+        };
+        let me = self.clone();
+        Arbiter::spawn(async move {
+            match me.send(call).await {
+                Err(e) => {
+                    let _ = txe.send(Err(e.into()));
+                }
+                Ok(Err(e)) => {
+                    let _ = txe.send(Err(e));
+                }
+                Ok(Ok(())) => (),
+            };
+        });
+
+        let recv_stream = rx
+            .then(|r| {
+                future::ready(
+                    crate::serialization::to_vec(&r)
+                        .map_err(Error::from)
+                        .and_then(|r| Ok(ResponseChunk::Part(r))),
+                )
+            })
+            .chain(rxe.into_stream().filter_map(|v| future::ready(v.ok())));
+
+        Box::pin(recv_stream)
     }
 
     fn recipient(&self) -> &dyn Any {
@@ -44,6 +125,73 @@ impl RawEndpoint for Recipient<RpcRawCall> {
                 .map_err(Error::from)
                 .then(|v| async { v? }),
         )
+    }
+
+    fn call_stream(
+        &self,
+        msg: RpcRawCall,
+    ) -> Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>> {
+        Box::pin(
+            Recipient::<RpcRawCall>::send(self, msg)
+                .map_err(Error::from)
+                .flatten_fut()
+                .and_then(|v| future::ok(ResponseChunk::Full(v)))
+                .into_stream(),
+        )
+    }
+
+    fn recipient(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl RawEndpoint for Recipient<RpcRawStreamCall> {
+    fn send(&self, msg: RpcRawCall) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>>>> {
+        let (tx, rx) = futures::channel::mpsc::channel(1);
+        // TODO: send error to caller
+        Arbiter::spawn(
+            self.send(RpcRawStreamCall {
+                caller: msg.caller,
+                addr: msg.addr,
+                body: msg.body,
+                reply: tx,
+            })
+            .flatten_fut()
+            .map_err(|e| eprintln!("cell error={}", e))
+            .then(|_v| future::ready(())),
+        );
+        async move {
+            futures::pin_mut!(rx);
+            match StreamExt::next(&mut rx).await {
+                Some(Ok(ResponseChunk::Full(v))) => Ok(v),
+                Some(Ok(ResponseChunk::Part(_))) => {
+                    Err(Error::GsbBadRequest("partial response".into()))
+                }
+                Some(Err(e)) => Err(e),
+                None => Err(Error::GsbBadRequest("unexpected EOS".into())),
+            }
+        }
+        .boxed_local()
+    }
+
+    fn call_stream(
+        &self,
+        msg: RpcRawCall,
+    ) -> Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>> {
+        let (tx, rx) = futures::channel::mpsc::channel(16);
+        // TODO: send error to caller
+        Arbiter::spawn(
+            self.send(RpcRawStreamCall {
+                caller: msg.caller,
+                addr: msg.addr,
+                body: msg.body,
+                reply: tx,
+            })
+            .flatten_fut()
+            .map_err(|e| eprintln!("cell error={}", e))
+            .then(|_| future::ready(())),
+        );
+        Box::pin(rx)
     }
 
     fn recipient(&self) -> &dyn Any {
@@ -66,11 +214,27 @@ impl Slot {
         }
     }
 
+    fn from_stream_handler<T: RpcStreamMessage, H: RpcStreamHandler<T> + 'static>(
+        handler: H,
+    ) -> Self {
+        Slot {
+            inner: Box::new(
+                into_actix::RpcStreamHandlerWrapper::new(handler)
+                    .start()
+                    .recipient(),
+            ),
+        }
+    }
+
     fn from_raw(r: Recipient<RpcRawCall>) -> Self {
         Slot { inner: Box::new(r) }
     }
 
     fn from_actor<T: RpcMessage>(r: Recipient<RpcEnvelope<T>>) -> Self {
+        Slot { inner: Box::new(r) }
+    }
+
+    fn from_stream_actor<T: RpcStreamMessage>(r: Recipient<RpcStreamCall<T>>) -> Self {
         Slot { inner: Box::new(r) }
     }
 
@@ -89,8 +253,69 @@ impl Slot {
         }
     }
 
+    fn stream_recipient<T: RpcStreamMessage>(&self) -> Option<actix::Recipient<RpcStreamCall<T>>> {
+        if let Some(r) = self
+            .inner
+            .recipient()
+            .downcast_ref::<actix::Recipient<RpcStreamCall<T>>>()
+        {
+            Some(r.clone())
+        } else {
+            None
+        }
+    }
+
     fn send(&self, msg: RpcRawCall) -> impl Future<Output = Result<Vec<u8>, Error>> + Unpin {
         self.inner.send(msg)
+    }
+
+    fn send_streaming(&self, msg: RpcRawCall) -> impl Stream<Item = Result<ResponseChunk, Error>> {
+        self.inner.call_stream(msg)
+    }
+
+    fn streaming_forward<T: RpcStreamMessage>(
+        &self,
+        caller: String,
+        addr: String,
+        body: T,
+    ) -> impl Stream<Item = Result<Result<T::Item, T::Error>, Error>> {
+        if let Some(h) = self.stream_recipient() {
+            let (reply, rx) = futures::channel::mpsc::channel(16);
+            let call = RpcStreamCall {
+                caller,
+                addr,
+                body,
+                reply,
+            };
+
+            Arbiter::spawn(async move {
+                h.send(call)
+                    .await
+                    .unwrap_or_else(|e| Ok(log::error!("streaming forward error: {}", e)))
+                    .unwrap_or_else(|e| log::error!("streaming forward error: {}", e));
+            });
+            rx.map(|v| Ok(v)).left_stream()
+        } else {
+            (move || {
+                let body = match crate::serialization::to_vec(&body) {
+                    Ok(body) => body,
+                    Err(e) => return stream::once(future::err(Error::from(e))).right_stream(),
+                };
+                self.send_streaming(RpcRawCall { caller, addr, body })
+                    .map(|chunk_result| {
+                        (move || -> Result<Result<T::Item, T::Error>, Error> {
+                            let chunk = match chunk_result {
+                                Ok(ResponseChunk::Part(chunk)) => chunk,
+                                Ok(ResponseChunk::Full(chunk)) => chunk,
+                                Err(e) => return Err(e),
+                            };
+                            Ok(crate::serialization::from_read(Cursor::new(chunk))?)
+                        })()
+                    })
+                    .left_stream()
+            })()
+            .right_stream()
+        }
     }
 }
 
@@ -107,27 +332,53 @@ impl Router {
 
     pub fn bind<T: RpcMessage>(
         &mut self,
-        visibility: &str,
         addr: &str,
         endpoint: impl RpcHandler<T> + 'static,
     ) -> Handle {
         let slot = Slot::from_handler(endpoint);
-        let addr = format!("{}{}/{}", visibility, addr, T::ID);
+        let addr = format!("{}/{}", addr, T::ID);
         log::debug!("binding {}", addr);
         let _ = self.handlers.insert(addr.clone(), slot);
         RemoteRouter::from_registry().do_send(UpdateService::Add(addr.into()));
         Handle { _inner: () }
     }
 
+    pub fn bind_stream<T: RpcStreamMessage>(
+        &mut self,
+        addr: &str,
+        endpoint: impl RpcStreamHandler<T> + Unpin + 'static,
+    ) -> Handle {
+        let slot = Slot::from_stream_handler(endpoint);
+        let addr = format!("{}/{}", addr, T::ID);
+        log::debug!("binding stream {}", addr);
+        let _ = self.handlers.insert(addr.clone(), slot);
+        RemoteRouter::from_registry().do_send(UpdateService::Add(addr.into()));
+        Handle { _inner: () }
+    }
+
+    pub fn bind_stream_actor<T: RpcStreamMessage>(
+        &mut self,
+        addr: &str,
+        endpoint: Recipient<RpcStreamCall<T>>,
+    ) {
+        let slot = Slot::from_stream_actor(endpoint);
+        let addr = format!("{}/{}", addr, T::ID);
+        log::debug!("binding stream actor {}", addr);
+        let _ = self.handlers.insert(addr.clone(), slot);
+        RemoteRouter::from_registry().do_send(UpdateService::Add(addr));
+    }
+
     pub fn bind_actor<T: RpcMessage>(&mut self, addr: &str, endpoint: Recipient<RpcEnvelope<T>>) {
         let slot = Slot::from_actor(endpoint);
         let addr = format!("{}/{}", addr, T::ID);
+        log::debug!("binding actor {}", addr);
         let _ = self.handlers.insert(addr.clone(), slot);
         RemoteRouter::from_registry().do_send(UpdateService::Add(addr));
     }
 
     pub fn bind_raw(&mut self, addr: &str, endpoint: Recipient<RpcRawCall>) -> Handle {
         let slot = Slot::from_raw(endpoint);
+        log::debug!("binding raw {}", addr);
         let _ = self.handlers.insert(addr.to_string(), slot);
         RemoteRouter::from_registry().do_send(UpdateService::Add(addr.into()));
         Handle { _inner: () }
@@ -136,40 +387,34 @@ impl Router {
     pub fn forward<T: RpcMessage + Unpin>(
         &mut self,
         addr: &str,
+        caller: Option<String>,
         msg: T,
     ) -> impl Future<Output = Result<Result<T::Item, T::Error>, Error>> + Unpin {
-        let caller = "local";
+        let caller = caller.unwrap_or("local".into());
         let addr = format!("{}/{}", addr, T::ID);
         if let Some(slot) = self.handlers.get_mut(&addr) {
             (if let Some(h) = slot.recipient() {
-                h.send(RpcEnvelope::local(msg))
+                h.send(RpcEnvelope::with_caller(caller, msg))
                     .map_err(Error::from)
                     .left_future()
             } else {
-                let body = rmp_serde::to_vec(&msg).unwrap();
-                slot.send(RpcRawCall {
-                    caller: caller.into(),
-                    addr,
-                    body,
-                })
-                .then(|b| {
-                    future::ready(match b {
-                        Ok(b) => rmp_serde::from_read_ref(&b).map_err(From::from),
-                        Err(e) => Err(e),
+                let body = crate::serialization::to_vec(&msg).unwrap();
+                slot.send(RpcRawCall { caller, addr, body })
+                    .then(|b| {
+                        future::ready(match b {
+                            Ok(b) => crate::serialization::from_read(std::io::Cursor::new(&b))
+                                .map_err(From::from),
+                            Err(e) => Err(e),
+                        })
                     })
-                })
-                .right_future()
+                    .right_future()
             })
             .left_future()
         } else {
-            let body = rmp_serde::to_vec(&msg).unwrap();
+            let body = crate::serialization::to_vec(&msg).unwrap();
 
             RemoteRouter::from_registry()
-                .send(RpcRawCall {
-                    caller: caller.into(),
-                    addr,
-                    body,
-                })
+                .send(RpcRawCall { caller, addr, body })
                 .then(|v| {
                     future::ready(match v {
                         Ok(v) => v,
@@ -178,11 +423,48 @@ impl Router {
                 })
                 .then(|b| {
                     future::ready(match b {
-                        Ok(b) => rmp_serde::from_read_ref(&b).map_err(From::from),
+                        Ok(b) => crate::serialization::from_read(std::io::Cursor::new(&b))
+                            .map_err(From::from),
                         Err(e) => Err(e),
                     })
                 })
                 .right_future()
+        }
+    }
+
+    pub fn streaming_forward<T: RpcStreamMessage>(
+        &mut self,
+        addr: &str,
+        msg: T,
+    ) -> impl Stream<Item = Result<Result<T::Item, T::Error>, Error>> {
+        let caller = "local".to_string();
+        let addr = format!("{}/{}", addr, T::ID);
+        if let Some(slot) = self.handlers.get_mut(&addr) {
+            slot.streaming_forward(caller, addr, msg).left_stream()
+        } else {
+            //use futures::StreamExt;
+            log::debug!("call remote");
+            let body = crate::serialization::to_vec(&msg).unwrap();
+            let (reply, tx) = futures::channel::mpsc::channel(16);
+            let call = RpcRawStreamCall {
+                caller,
+                addr,
+                body,
+                reply,
+            };
+            let _ = Arbiter::spawn(async move {
+                let v = RemoteRouter::from_registry().send(call).await;
+                log::debug!("call result={:?}", v);
+            });
+
+            tx.filter(|s| future::ready(s.as_ref().map(|s| !s.is_eos()).unwrap_or(true)))
+                .map(|b| {
+                    let body = b?.into_bytes();
+                    Ok(crate::serialization::from_read(std::io::Cursor::new(
+                        &body,
+                    ))?)
+                })
+                .right_stream()
         }
     }
 
@@ -219,17 +501,17 @@ impl Router {
         addr: &str,
         from: &str,
         msg: &[u8],
-    ) -> impl Future<Output = Result<Vec<u8>, Error>> {
+    ) -> impl Stream<Item = Result<ResponseChunk, Error>> {
         if let Some(slot) = self.handlers.get_mut(addr) {
-            slot.send(RpcRawCall {
+            slot.send_streaming(RpcRawCall {
                 caller: from.into(),
                 addr: addr.into(),
                 body: msg.into(),
             })
-            .left_future()
+            .left_stream()
         } else {
             log::warn!("no endpoint: {}", addr);
-            future::err(Error::NoEndpoint).right_future()
+            futures::stream::once(async { Err(Error::NoEndpoint) }).right_stream()
         }
     }
 }
@@ -239,5 +521,5 @@ static ref ROUTER: Arc<Mutex<Router>> = Arc::new(Mutex::new(Router::new()));
 }
 
 pub fn router() -> Arc<Mutex<Router>> {
-    ROUTER.clone()
+    (*ROUTER).clone()
 }

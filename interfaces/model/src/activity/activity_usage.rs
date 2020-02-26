@@ -22,3 +22,11 @@ impl ActivityUsage {
         ActivityUsage { current_usage }
     }
 }
+
+impl From<Vec<f64>> for ActivityUsage {
+    fn from(vec: Vec<f64>) -> Self {
+        ActivityUsage {
+            current_usage: Some(vec),
+        }
+    }
+}
