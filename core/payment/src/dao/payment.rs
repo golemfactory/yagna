@@ -5,6 +5,7 @@ use crate::schema::pay_payment_x_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_payment_x_invoice::dsl as invoice_dsl;
 use bigdecimal::BigDecimal;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use std::collections::HashMap;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::types::{BigDecimalField, Summable};
 
@@ -85,6 +86,54 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
+    pub async fn get_sent(&self, payer_id: String) -> DbResult<Vec<Payment>> {
+        do_with_transaction(self.pool, move |conn| {
+            let payments = dsl::pay_payment
+                .filter(dsl::payer_id.eq(payer_id.clone()))
+                .load(conn)?;
+            let debit_notes = debit_note_dsl::pay_payment_x_debit_note
+                .inner_join(dsl::pay_payment)
+                .filter(dsl::payer_id.eq(payer_id.clone()))
+                .select(crate::schema::pay_payment_x_debit_note::all_columns)
+                .load(conn)?;
+            let invoices = invoice_dsl::pay_payment_x_invoice
+                .inner_join(dsl::pay_payment)
+                .filter(dsl::payer_id.eq(payer_id))
+                .select(crate::schema::pay_payment_x_invoice::all_columns)
+                .load(conn)?;
+            Ok(join_payments_with_debit_notes_and_payments(
+                payments,
+                debit_notes,
+                invoices,
+            ))
+        })
+        .await
+    }
+
+    pub async fn get_received(&self, payee_id: String) -> DbResult<Vec<Payment>> {
+        do_with_transaction(self.pool, move |conn| {
+            let payments = dsl::pay_payment
+                .filter(dsl::payee_id.eq(payee_id.clone()))
+                .load(conn)?;
+            let debit_notes = debit_note_dsl::pay_payment_x_debit_note
+                .inner_join(dsl::pay_payment)
+                .filter(dsl::payee_id.eq(payee_id.clone()))
+                .select(crate::schema::pay_payment_x_debit_note::all_columns)
+                .load(conn)?;
+            let invoices = invoice_dsl::pay_payment_x_invoice
+                .inner_join(dsl::pay_payment)
+                .filter(dsl::payee_id.eq(payee_id))
+                .select(crate::schema::pay_payment_x_invoice::all_columns)
+                .load(conn)?;
+            Ok(join_payments_with_debit_notes_and_payments(
+                payments,
+                debit_notes,
+                invoices,
+            ))
+        })
+        .await
+    }
+
     pub async fn get_transaction_balance(&self, payer_id: String) -> DbResult<BigDecimal> {
         do_with_transaction(self.pool, move |conn| {
             let amounts: Vec<BigDecimalField> = dsl::pay_payment
@@ -95,4 +144,36 @@ impl<'c> PaymentDao<'c> {
         })
         .await
     }
+}
+
+fn join_payments_with_debit_notes_and_payments(
+    payments: Vec<BarePayment>,
+    debit_notes: Vec<PaymentXDebitNote>,
+    invoices: Vec<PaymentXInvoice>,
+) -> Vec<Payment> {
+    let mut debit_notes_map =
+        debit_notes
+            .into_iter()
+            .fold(HashMap::new(), |mut map, debit_note| {
+                map.entry(debit_note.payment_id)
+                    .or_insert_with(Vec::new)
+                    .push(debit_note.debit_note_id);
+                map
+            });
+    let mut invoices_map = invoices
+        .into_iter()
+        .fold(HashMap::new(), |mut map, invoice| {
+            map.entry(invoice.payment_id)
+                .or_insert_with(Vec::new)
+                .push(invoice.invoice_id);
+            map
+        });
+    payments
+        .into_iter()
+        .map(|payment| Payment {
+            debit_note_ids: debit_notes_map.remove(&payment.id).unwrap_or(vec![]),
+            invoice_ids: invoices_map.remove(&payment.id).unwrap_or(vec![]),
+            payment,
+        })
+        .collect()
 }

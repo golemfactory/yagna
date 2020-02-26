@@ -1283,7 +1283,7 @@ components:
             type: string
         details:
           type: string
-          description: base64-encoded payment confirmation
+          format: byte
       required:
         - paymentId
         - payerId

@@ -2,6 +2,7 @@ use crate::api::*;
 use crate::dao::allocation::AllocationDao;
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
+use crate::dao::payment::PaymentDao;
 use crate::error::{DbError, Error};
 use crate::models as db_models;
 use crate::processor::PaymentProcessor;
@@ -298,12 +299,34 @@ async fn release_allocation(db: Data<DbExecutor>, path: Path<AllocationId>) -> H
 
 // *************************** PAYMENT ****************************
 
-async fn get_payments(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+async fn get_payments(
+    db: Data<DbExecutor>,
+    query: Query<EventParams>,
+    id: Identity,
+) -> HttpResponse {
+    let payer_id = id.identity.to_string();
+    let dao: PaymentDao = db.as_dao();
+    match dao.get_sent(payer_id).await {
+        Ok(payments) => HttpResponse::Ok().json(
+            payments
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<Payment>>(),
+        ),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
-async fn get_payment(db: Data<DbExecutor>, path: Path<PaymentId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+async fn get_payment(db: Data<DbExecutor>, path: Path<PaymentId>, id: Identity) -> HttpResponse {
+    let payer_id = id.identity.to_string();
+    let dao: PaymentDao = db.as_dao();
+    match dao.get(path.payment_id.clone()).await {
+        Ok(Some(payment)) if payment.payment.payer_id == payer_id => {
+            HttpResponse::Ok().json(Into::<Payment>::into(payment))
+        }
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        _ => HttpResponse::NotFound().finish(),
+    }
 }
 
 async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
