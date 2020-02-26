@@ -23,3 +23,5 @@ ethsign = "0.7"
 reqwest = { version = "0.10", features = ["blocking", "json"] }
 ethkey = "0.3.1"
 hex = "0.4"
+r2d2 = "0.8"
+tokio = "0.2"

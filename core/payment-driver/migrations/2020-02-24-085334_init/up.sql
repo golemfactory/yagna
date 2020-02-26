@@ -11,7 +11,6 @@ INSERT INTO "gnt_driver_payment_status"("status_id", "status") VALUES(4, "NOT_EN
 CREATE TABLE "gnt_driver_transaction"(
 	-- H256 in hex
 	"tx_hash" VARCHAR(64) NOT NULL PRIMARY KEY,
-	-- H160 in hex
 	"sender" VARCHAR(40) NOT NULL,
 	"chain" INTEGER NOT NULL,
     -- U256 in little endian hex
@@ -25,7 +24,6 @@ CREATE TABLE "gnt_driver_payment"(
 	"amount" VARCHAR(64) NOT NULL,
 	-- U256 in little endian hex
 	"gas" VARCHAR(64) NOT NULL,
-    -- H160 in hex
 	"recipient" VARCHAR(40) NOT NULL,
 	"payment_due_date" DATETIME NOT NULL,
 	"status" INTEGER NOT NULL,
