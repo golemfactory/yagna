@@ -16,6 +16,7 @@ pub enum CmdLine {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
+    std::env::set_var("RUST_LOG", "info");
     env_logger::init();
 
     let cmd_args = CmdLine::from_args();
@@ -26,6 +27,9 @@ async fn main() -> Result<()> {
 
             let hash = GftpService::publish_file(gftp_service, &path).await?;
             info!("Published file [{}], hash [{}].", &path.display(), &hash);
+
+            actix_rt::signal::ctrl_c().await?;
+            info!("Received ctrl-c signal. Shutting down.");
             Ok(())
         }
     }
