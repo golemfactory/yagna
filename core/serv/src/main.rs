@@ -4,20 +4,23 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
+    net::SocketAddr,
     path::PathBuf,
 };
 use structopt::{clap, StructOpt};
+use url::Url;
 
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
+use ya_service_api_interfaces::Provider;
 use ya_service_api_web::middleware::{auth, Identity};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
-use std::net::SocketAddr;
-use url::Url;
-use ya_service_api_interfaces::Provider;
+
+mod data_dir;
+use data_dir::DataDir;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -25,15 +28,21 @@ use ya_service_api_interfaces::Provider;
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
     /// Daemon data dir
-    #[structopt(short, long = "datadir", set = clap::ArgSettings::Global, env = "YAGNA_DATADIR")]
-    data_dir: Option<PathBuf>,
+    #[structopt(
+        short,
+        long = "datadir",
+        set = clap::ArgSettings::Global,
+        env = "YAGNA_DATADIR",
+        default_value
+    )]
+    data_dir: DataDir,
 
     /// Daemon address
     #[structopt(
         short,
         long,
-        default_value = "http://127.0.0.1:7465",
-        env = "YAGNA_API_URL"
+        env = "YAGNA_API_URL",
+        default_value = "http://127.0.0.1:7465"
     )]
     api_url: Url,
 
@@ -58,10 +67,7 @@ struct CliArgs {
 
 impl CliArgs {
     pub fn get_data_dir(&self) -> Result<PathBuf> {
-        Ok(match &self.data_dir {
-            Some(data_dir) => data_dir.to_owned(),
-            None => ya_service_api::default_data_dir()?,
-        })
+        self.data_dir.get_or_create()
     }
 
     pub fn get_http_address(&self) -> Result<(String, u16)> {
@@ -122,10 +128,10 @@ impl<Service> Provider<Service, DbExecutor> for ServiceContext {
 enum Services {
     #[enable(gsb, cli(flatten))]
     Identity(ya_identity::service::Identity),
-    #[enable(gsb, rest)]
-    Activity(ya_activity::service::Activity),
     #[enable(gsb)]
     Net(ya_net::Net),
+    #[enable(gsb, rest)]
+    Activity(ya_activity::service::Activity),
     #[enable(gsb)]
     Market(ya_market::service::MarketService),
     #[enable(gsb, rest)]
@@ -180,7 +186,7 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
 
-                let db = DbExecutor::from_data_dir(&ctx.data_dir)?;
+                let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 let context = ServiceContext { db: db.clone() };
 

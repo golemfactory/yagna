@@ -1,7 +1,9 @@
 use futures::prelude::*;
 use std::convert::From;
 
-use crate::common::{generate_id, is_activity_initiator, is_agreement_initiator, RpcMessageResult};
+use crate::common::{
+    authorize_activity_initiator, authorize_agreement_initiator, generate_id, RpcMessageResult,
+};
 use crate::dao::*;
 use crate::error::Error;
 use ya_core_model::activity::*;
@@ -16,8 +18,6 @@ lazy_static::lazy_static! {
 }
 
 pub fn bind_gsb(db: &DbExecutor) {
-    log::info!("activating activity provider service");
-
     // public for remote requestors interactions
     bind_gsb_method!(&PUBLIC_ID, db, create_activity_gsb);
     bind_gsb_method!(&PUBLIC_ID, db, destroy_activity_gsb);
@@ -27,8 +27,6 @@ pub fn bind_gsb(db: &DbExecutor) {
     // local for ExeUnit interactions
     bind_gsb_method!(&PRIVATE_ID, db, set_activity_state_gsb);
     bind_gsb_method!(&PRIVATE_ID, db, set_activity_usage_gsb);
-
-    log::info!("activity provider service activated");
 }
 
 /// Creates new Activity based on given Agreement.
@@ -39,9 +37,7 @@ async fn create_activity_gsb(
 ) -> RpcMessageResult<CreateActivity> {
     let activity_id = generate_id();
 
-    if !is_agreement_initiator(caller, msg.agreement_id.clone()).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_agreement_initiator(caller, msg.agreement_id.clone()).await?;
 
     let activity_id = activity_id.clone();
     let agreement_id = msg.agreement_id.clone();
@@ -76,9 +72,7 @@ async fn destroy_activity_gsb(
     caller: String,
     msg: DestroyActivity,
 ) -> RpcMessageResult<DestroyActivity> {
-    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     log::info!("creating event for destroying activity");
     db.as_dao::<EventDao>()
@@ -101,9 +95,7 @@ async fn get_activity_state_gsb(
     caller: String,
     msg: GetActivityState,
 ) -> RpcMessageResult<GetActivityState> {
-    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     super::get_activity_state(&db, &msg.activity_id)
         .await
@@ -117,9 +109,7 @@ async fn set_activity_state_gsb(
     caller: String,
     msg: SetActivityState,
 ) -> RpcMessageResult<SetActivityState> {
-    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     super::set_activity_state(&db, &msg.activity_id, msg.state)
         .map_err(Into::into)
@@ -131,9 +121,7 @@ async fn get_activity_usage_gsb(
     caller: String,
     msg: GetActivityUsage,
 ) -> RpcMessageResult<GetActivityUsage> {
-    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     super::get_activity_usage(&db, &msg.activity_id)
         .await
@@ -147,9 +135,7 @@ async fn set_activity_usage_gsb(
     caller: String,
     msg: SetActivityUsage,
 ) -> RpcMessageResult<SetActivityUsage> {
-    if !is_activity_initiator(&db, caller, &msg.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     db.as_dao::<ActivityUsageDao>()
         .set(&msg.activity_id, &msg.usage.current_usage)

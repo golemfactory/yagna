@@ -20,7 +20,6 @@ impl Service for MarketService {
 
 impl MarketService {
     pub async fn gsb<Context>(_: &Context) -> anyhow::Result<()> {
-        log::info!("activating market service");
         let _ = bus::bind(market::BUS_ID, |get: market::GetAgreement| async move {
             let market_api: MarketProviderApi = WebClient::builder()
                 .build()
@@ -36,8 +35,8 @@ impl MarketService {
 
         tmp_send_keys()
             .await
-            .unwrap_or_else(|e| log::info!("app-key export error: {}", e));
-        log::info!("market service activated");
+            .unwrap_or_else(|e| log::error!("app-key export error: {}", e));
+
         Ok(())
     }
 }
@@ -72,7 +71,7 @@ async fn tmp_send_keys() -> anyhow::Result<()> {
         .json()
         .await
         .map_err(|e| anyhow::Error::msg(e.to_string()))?;
-    log::debug!("done. number of keys exported: {}", resp);
+    log::info!("done. number of keys exported: {}", resp);
 
     Ok(())
 }
