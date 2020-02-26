@@ -1,14 +1,14 @@
 use crate::common::{is_activity_executor, PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
 use crate::error::Error;
-use crate::{db_conn, impl_restful_handler};
-use actix_web::web;
+use crate::impl_restful_handler;
+use actix_web::{web, Responder};
 use futures::prelude::*;
 use std::convert::From;
 
 use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
-use ya_persistence::executor::{ConnType, DbExecutor};
+use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 pub mod service;
@@ -19,10 +19,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
             "/events",
             web::get().to(impl_restful_handler!(get_events_web, query)),
         )
-        .route(
-            "/activity/{activity_id}/state",
-            web::get().to(impl_restful_handler!(get_activity_state_web, path, id)),
-        )
+        .service(get_activity_state_web)
         .route(
             "/activity/{activity_id}/state",
             web::put().to(impl_restful_handler!(
@@ -55,9 +52,10 @@ impl From<Event> for ProviderEvent {
 }
 
 /// Get state of specified Activity.
-async fn get_activity_state(conn: &ConnType, activity_id: &str) -> Result<ActivityState, Error> {
-    ActivityStateDao::new(conn)
+async fn get_activity_state(db: &DbExecutor, activity_id: &str) -> Result<ActivityState, Error> {
+    db.as_dao::<ActivityStateDao>()
         .get(activity_id)
+        .await
         .not_found_as_option()
         .map_err(Error::from)?
         .map(|state| ActivityState {
@@ -68,32 +66,35 @@ async fn get_activity_state(conn: &ConnType, activity_id: &str) -> Result<Activi
         .ok_or(Error::NotFound.into())
 }
 
+#[actix_web::get("/activity/{activity_id}/state")]
 async fn get_activity_state_web(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     id: Identity,
-) -> Result<ActivityState, Error> {
-    let conn = &db_conn!(db)?;
-    if !is_activity_executor(&conn, id.name, &path.activity_id).await? {
+) -> impl Responder {
+    if !is_activity_executor(&db, id.name, &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    get_activity_state(&conn, &path.activity_id).await
+    get_activity_state(&db, &path.activity_id)
+        .await
+        .map(web::Json)
 }
 
 /// Set state of specified Activity.
 async fn set_activity_state(
-    conn: &ConnType,
+    db: &DbExecutor,
     activity_id: &str,
     activity_state: ActivityState,
 ) -> Result<(), Error> {
-    ActivityStateDao::new(&conn)
+    db.as_dao::<ActivityStateDao>()
         .set(
             &activity_id,
             activity_state.state.clone(),
             activity_state.reason.clone(),
             activity_state.error_message.clone(),
         )
+        .await
         .map_err(|e| Error::from(e).into())
 }
 
@@ -103,18 +104,18 @@ async fn set_activity_state_web(
     state: web::Json<ActivityState>,
     id: Identity,
 ) -> Result<(), Error> {
-    let conn = &db_conn!(db)?;
-    if !is_activity_executor(&conn, id.name, &path.activity_id).await? {
+    if !is_activity_executor(&db, id.name, &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    set_activity_state(&conn, &path.activity_id, state.into_inner()).await
+    set_activity_state(&db, &path.activity_id, state.into_inner()).await
 }
 
 /// Get usage of specified Activity.
-async fn get_activity_usage(conn: &ConnType, activity_id: &str) -> Result<ActivityUsage, Error> {
-    ActivityUsageDao::new(conn)
+async fn get_activity_usage(db: &DbExecutor, activity_id: &str) -> Result<ActivityUsage, Error> {
+    db.as_dao::<ActivityUsageDao>()
         .get(activity_id)
+        .await
         .not_found_as_option()
         .map_err(Error::from)?
         .map(|usage| ActivityUsage {
@@ -130,12 +131,11 @@ async fn get_activity_usage_web(
     path: web::Path<PathActivity>,
     id: Identity,
 ) -> Result<ActivityUsage, Error> {
-    let conn = &db_conn!(db)?;
-    if !is_activity_executor(&conn, id.name, &path.activity_id).await? {
+    if !is_activity_executor(&db, id.name, &path.activity_id).await? {
         return Err(Error::Forbidden.into());
     }
 
-    get_activity_usage(&conn, &path.activity_id).await
+    get_activity_usage(&db, &path.activity_id).await
 }
 
 /// Fetch Requestor command events.
@@ -145,7 +145,8 @@ async fn get_events_web(
 ) -> Result<Vec<ProviderEvent>, Error> {
     log::debug!("getting events");
 
-    Ok(EventDao::new(&db_conn!(db)?)
+    Ok(db
+        .as_dao::<EventDao>()
         .get_events_fut(query.max_count)
         //        .timeout(query.timeout)
         //        .map_err(Error::from)
