@@ -74,6 +74,17 @@ To see invoices issued by the provider:
 To see invoices received by the requestor:  
 `GET` `http://127.0.0.1:8465/payment-api/v1/requestor/invoices`
 
+To accept an invoice:
+`POST` `http://127.0.0.1:8465/payment-api/v1/requestor/invoices/<invoiceId>/accept`
+
+Payload:
+```json
+{
+  "totalAmountAccepted": "10000.123456789012345678",
+  "allocationId": "<allocationId>"
+}
+```
+
 #### Allocations
 
 To create an allocation:  
@@ -88,3 +99,9 @@ Payload:
 }
 ```
 Don't forget to copy `allocationId` from the response!
+
+To see all created allocations:
+`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations`
+
+To release an allocation:
+`DELETE` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations/<allocationId>`

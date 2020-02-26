@@ -2,13 +2,16 @@ use actix_web::web;
 use futures::prelude::*;
 
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
-use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState, State};
+use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState};
 use ya_persistence::executor::DbExecutor;
 
-use crate::common::{get_activity_agreement, is_activity_initiator, PathActivity, QueryTimeout};
+use crate::common::{
+    authorize_activity_initiator, get_activity_agreement, PathActivity, QueryTimeout,
+};
 use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
 use crate::error::Error;
 use crate::requestor::provider_activity_service_id;
+use ya_model::activity::activity_state::StatePair;
 use ya_service_api_web::middleware::Identity;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -34,9 +37,7 @@ async fn get_activity_state(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ActivityState, Error> {
-    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityState {
@@ -72,9 +73,7 @@ async fn get_activity_usage(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ActivityUsage, Error> {
-    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityUsage {
@@ -108,9 +107,7 @@ async fn get_running_command(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<ExeScriptCommandState, Error> {
-    if !is_activity_initiator(&db, id.name.clone(), &path.activity_id).await? {
-        return Err(Error::Forbidden.into());
-    }
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetRunningCommand {
@@ -134,8 +131,8 @@ async fn get_persisted_state(
         .map_err(Error::from)?;
 
     if let Some(s) = maybe_state {
-        let state = serde_json::from_str(&s.name)?;
-        if state == State::Terminated {
+        let state: StatePair = serde_json::from_str(&s.name)?;
+        if !state.alive() {
             return Ok(Some(ActivityState {
                 state,
                 reason: s.reason,
@@ -176,7 +173,7 @@ trait TerminatedCheck {
 impl TerminatedCheck for Option<ActivityState> {
     fn terminated(&self) -> bool {
         if let Some(s) = &self {
-            return s.state == State::Terminated;
+            return !s.state.alive();
         }
         false
     }

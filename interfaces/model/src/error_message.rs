@@ -17,7 +17,9 @@ pub struct ErrorMessage {
 }
 
 impl ErrorMessage {
-    pub fn new() -> ErrorMessage {
-        ErrorMessage { message: None }
+    pub fn new(message: String) -> ErrorMessage {
+        ErrorMessage {
+            message: Some(message),
+        }
     }
 }
