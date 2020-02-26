@@ -59,7 +59,9 @@ impl Proposal {
     }
 
     pub fn prev_proposal_id(&self) -> Result<&String, ErrorMessage> {
-        self.prev_proposal_id.as_ref().ok_or("no previous proposal id".into())
+        self.prev_proposal_id
+            .as_ref()
+            .ok_or("no previous proposal id".into())
     }
 }
 
