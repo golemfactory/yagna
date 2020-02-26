@@ -2,26 +2,26 @@ use chrono::NaiveDateTime;
 
 use crate::schema::*;
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, Debug, Identifiable, Insertable, PartialEq)]
 #[primary_key(tx_hash)]
 #[table_name = "gnt_driver_transaction"]
 pub struct TransactionEntity {
-    tx_hash: String,
-    sender: String,
-    chain: i32,
-    nonce: String,
-    timestamp: NaiveDateTime,
+    pub tx_hash: String,
+    pub sender: String,
+    pub chain: i32,
+    pub nonce: String,
+    pub timestamp: NaiveDateTime,
 }
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, Debug, Identifiable, Insertable, PartialEq)]
 #[primary_key(invoice_id)]
 #[table_name = "gnt_driver_payment"]
 pub struct PaymentEntity {
-    invoice_id: String,
-    amount: String,
-    gas: String,
-    recipient: String,
-    payment_due_date: NaiveDateTime,
-    status: i32,
-    tx_hash: Option<String>,
+    pub invoice_id: String,
+    pub amount: String,
+    pub gas: String,
+    pub recipient: String,
+    pub payment_due_date: NaiveDateTime,
+    pub status: i32,
+    pub tx_hash: Option<String>,
 }

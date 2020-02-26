@@ -6,10 +6,10 @@ use ethereum_types::Address;
 extern crate diesel;
 
 mod dummy;
-mod error;
 
 pub mod account;
 pub mod dao;
+pub mod error;
 pub mod ethereum;
 pub mod gnt;
 pub mod models;
