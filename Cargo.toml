@@ -2,6 +2,7 @@
 members = [
     "agent/provider",
     "agent/requestor",
+    "agent/batch-requestor",
     "agent/offer-model",
     "core/activity",
     "core/identity",
