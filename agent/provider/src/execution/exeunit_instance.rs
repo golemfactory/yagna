@@ -21,7 +21,7 @@ impl ExeUnitInstance {
         args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
         info!("spawning exeunit instance : {}", name);
-//        let child = Command::new(binary_path)
+        //        let child = Command::new(binary_path)
         let child = Command::new("echo")
             .args(args)
             .current_dir(working_dir)
