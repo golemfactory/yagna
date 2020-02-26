@@ -17,10 +17,11 @@ members = [
     "core/serv-api/interfaces",
     "core/serv-api/web",
     "core/serv-api-derive",
+    "exe-unit",
     "exe-unit/api",
-    "exe-unit/dummy",
     "exe-unit/wasm-mozjs",
     "exe-unit/wasmtime",
+    "exe-unit/exe-unit-tools",
     "interfaces/client",
     "interfaces/model",
     "service-bus/bus",
@@ -28,7 +29,8 @@ members = [
     "service-bus/proto",
     "service-bus/router",
     "service-bus/util",
-    "utils/scheduler"
+    "utils/scheduler",
+    "utils/actix_utils",
 ]
 
 [patch.crates-io]
@@ -43,6 +45,7 @@ ya-agent-offer-model = { path = "agent/offer-model" }
 ya-client = { path = "interfaces/client" }
 ya-core-model = { path = "core/model" }
 ya-exe-api = { path = "exe-unit/api" }
+ya-exe-unit = { path = "exe-unit" }
 ya-model = { path = "interfaces/model" }
 ya-net = { path = "core/net" }
 ya-persistence = { path = "core/persistence" }

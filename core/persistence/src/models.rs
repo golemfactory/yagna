@@ -1,10 +1,14 @@
 #![allow(unused)]
 #![allow(clippy::all)]
 
-use chrono::NaiveDateTime;
-use std::error::Error;
-
 use crate::schema::*;
+use chrono::NaiveDateTime;
+use diesel::backend::Backend;
+use diesel::deserialize;
+use diesel::serialize::Output;
+use diesel::sql_types::Integer;
+use diesel::types::{FromSql, ToSql};
+use std::error::Error;
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "activity"]
@@ -22,14 +26,37 @@ pub struct ActivityEvent {
     pub id: i32,
     pub activity_id: i32,
     pub event_date: NaiveDateTime,
-    pub event_type_id: i32,
+    pub event_type_id: ActivityEventType,
 }
 
-#[derive(Queryable, Debug, Identifiable)]
-#[table_name = "activity_event_type"]
-pub struct ActivityEventType {
-    pub id: i32,
-    pub name: String,
+#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[sql_type = "Integer"]
+pub enum ActivityEventType {
+    CreateActivity = 1,
+    DestroyActivity = 2,
+}
+
+impl<DB: Backend> ToSql<Integer, DB> for ActivityEventType
+where
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
+        (*self as i32).to_sql(out)
+    }
+}
+
+impl<DB> FromSql<Integer, DB> for ActivityEventType
+where
+    i32: FromSql<Integer, DB>,
+    DB: Backend,
+{
+    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
+        Ok(match i32::from_sql(bytes)? {
+            1 => ActivityEventType::CreateActivity,
+            2 => ActivityEventType::DestroyActivity,
+            _ => return Err(anyhow::anyhow!("invalid value").into()),
+        })
+    }
 }
 
 #[derive(Queryable, Debug, Identifiable)]

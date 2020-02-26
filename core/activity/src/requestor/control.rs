@@ -7,6 +7,7 @@ use ya_core_model::{
     activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults},
     ethaddr::NodeId,
 };
+use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::{ExeScriptCommand, ExeScriptCommandResult, ExeScriptRequest, State};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -90,7 +91,12 @@ async fn destroy_activity(
     let uri = provider_activity_service_id(&agreement)?;
     let _ = gsb_send!(None, msg, &uri, query.timeout)?;
     db.as_dao::<ActivityStateDao>()
-        .set(&path.activity_id, State::Terminated, None, None)
+        .set(
+            &path.activity_id,
+            StatePair(State::Terminated, None),
+            None,
+            None,
+        )
         .await
         .map_err(Error::from)?;
 
