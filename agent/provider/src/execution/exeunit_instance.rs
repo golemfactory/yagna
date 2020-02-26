@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
-
 use anyhow::{Error, Result};
 use log::info;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command};
+//TODO: use tokio::process::{Child, Command};
 
 /// Working ExeUnit instance representation.
 #[derive(Debug)]
@@ -21,7 +21,8 @@ impl ExeUnitInstance {
         args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
         info!("spawning exeunit instance : {}", name);
-        let child = Command::new(binary_path)
+//        let child = Command::new(binary_path)
+        let child = Command::new("echo")
             .args(args)
             .current_dir(working_dir)
             .spawn() // FIXME -- this is not returning
@@ -31,6 +32,7 @@ impl ExeUnitInstance {
                     name, binary_path.display(), working_dir.display(), error
                 ))
             })?;
+        info!("exeunit spawned, pid: {}", child.id());
 
         let instance = ExeUnitInstance {
             name: name.to_string(),

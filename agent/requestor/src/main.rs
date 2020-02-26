@@ -1,6 +1,5 @@
-use actix_rt::{Arbiter};
-use futures::channel::mpsc;
-use futures::prelude::*;
+use actix_rt::Arbiter;
+use futures::{channel::mpsc, prelude::*};
 use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
@@ -31,9 +30,7 @@ struct AppSettings {
 }
 
 impl AppSettings {
-    fn market_api(
-        &self,
-    ) -> Result<ya_client::market::MarketRequestorApi, anyhow::Error> {
+    fn market_api(&self) -> Result<ya_client::market::MarketRequestorApi, anyhow::Error> {
         Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
     }
 
