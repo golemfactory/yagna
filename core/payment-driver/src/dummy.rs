@@ -1,6 +1,6 @@
 use crate::{
     AccountBalance, Balance, Currency, PaymentAmount, PaymentConfirmation, PaymentDetails,
-    PaymentDriver, PaymentDriverError, PaymentStatus,
+    PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -36,17 +36,14 @@ impl PaymentDriver for DummyDriver {
         })
     }
 
-    async fn schedule_payment<F>(
+    async fn schedule_payment(
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
         recipient: Address,
         _due_date: DateTime<Utc>,
-        _sign_tx: F,
-    ) -> Result<(), PaymentDriverError>
-    where
-        F: 'static + FnOnce(Vec<u8>) -> Vec<u8> + Sync + Send,
-    {
+        _sign_tx: SignTx<'_>,
+    ) -> Result<(), PaymentDriverError> {
         match self.payments.entry(invoice_id.to_string()) {
             Entry::Occupied(_) => Err(PaymentDriverError::AlreadyScheduled),
             Entry::Vacant(entry) => {
