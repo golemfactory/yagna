@@ -106,7 +106,7 @@ impl GntDriver {
             (recipient, gnt_amount),
         )?;
 
-        let tx_hash = self.send_raw_transaction(&tx, sign_tx)?;
+        let tx_hash = self.send_raw_transaction(&tx, sign_tx).await?;
         Ok(tx_hash)
     }
 
@@ -190,19 +190,19 @@ impl GntDriver {
 
         let tx = self.prepare_raw_tx(U256::from(GNT_FAUCET_GAS), &contract, "create", ())?;
 
-        let tx_hash = self.send_raw_transaction(&tx, sign_tx)?;
+        let tx_hash = self.send_raw_transaction(&tx, sign_tx).await?;
 
         println!("Tx hash: {:?}", tx_hash);
         Ok(())
     }
 
-    fn send_raw_transaction(
+    async fn send_raw_transaction(
         &self,
         raw_tx: &RawTransaction,
         sign_tx: SignTx<'_>,
     ) -> PaymentDriverResult<H256> {
         let chain_id = self.get_chain_id();
-        let signature = sign_tx(raw_tx.hash(chain_id));
+        let signature = sign_tx(raw_tx.hash(chain_id)).await;
         let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
 
         // TODO persistence

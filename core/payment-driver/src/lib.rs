@@ -19,12 +19,14 @@ pub mod schema;
 pub use account::{AccountBalance, Balance, Chain, Currency};
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
+use futures::Future;
 pub use gnt::GntDriver;
 pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
 
-pub type SignTx<'a> = &'a (dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync);
+pub type SignTx<'a> =
+    &'a (dyn Fn(Vec<u8>) -> Box<dyn Future<Output = Vec<u8>> + Unpin + Send + Sync> + Send + Sync);
 
 #[async_trait]
 pub trait PaymentDriver {
