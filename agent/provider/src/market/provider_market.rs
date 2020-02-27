@@ -219,7 +219,7 @@ impl ProviderMarket {
     ) -> Result<()> {
         match event {
             ProviderEvent::ProposalEvent { proposal, .. } => {
-                let proposal_id = &proposal.id().map_err(Error::msg)?;
+                let proposal_id = &proposal.proposal_id().map_err(Error::msg)?;
                 info!("Got demand proposal [id={}].", proposal_id);
 
                 ProviderMarket::process_proposal(addr, market_api, subscription_id, proposal)
@@ -334,7 +334,7 @@ impl ProviderMarket {
             .counter_proposal(
                 proposal,
                 subscription_id,
-                proposal.id().map_err(Error::msg)?,
+                proposal.proposal_id().map_err(Error::msg)?,
             )
             .await?;
         Ok(())
@@ -354,7 +354,7 @@ impl ProviderMarket {
             .counter_proposal(
                 proposal,
                 subscription_id,
-                proposal.id().map_err(Error::msg)?,
+                proposal.proposal_id().map_err(Error::msg)?,
             )
             .await?;
         Ok(())
@@ -371,7 +371,10 @@ impl ProviderMarket {
         );
 
         market_api
-            .reject_proposal(subscription_id, &proposal.id().map_err(Error::msg)?)
+            .reject_proposal(
+                subscription_id,
+                &proposal.proposal_id().map_err(Error::msg)?,
+            )
             .await?;
         Ok(())
     }

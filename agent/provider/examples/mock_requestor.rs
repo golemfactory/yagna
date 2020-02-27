@@ -52,7 +52,7 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
             event_date: _,
             proposal,
         } => {
-            let proposal_id = proposal.id().unwrap();
+            let proposal_id = proposal.proposal_id().unwrap();
 
             println!("Received offer {}. Sending agreeement.", &proposal_id);
 
