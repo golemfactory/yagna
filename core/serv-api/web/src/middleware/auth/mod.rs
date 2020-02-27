@@ -11,21 +11,21 @@ use actix_web::error::{Error, ErrorUnauthorized};
 use actix_web::{http::header::Header, HttpMessage};
 use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
 use futures::future::{ok, Future, Ready};
-use std::cell::RefCell;
+use futures::lock::Mutex;
 use std::pin::Pin;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use ya_service_api_cache::AutoResolveLruCache;
 
 pub type Cache = AutoResolveLruCache<AppKeyResolver>;
 
 pub struct Auth {
-    cache: Rc<RefCell<Cache>>,
+    cache: Arc<Mutex<Cache>>,
 }
 
 impl Default for Auth {
     fn default() -> Self {
-        let cache = Rc::new(RefCell::new(Cache::default()));
+        let cache = Arc::new(Mutex::new(Cache::default()));
         Auth { cache }
     }
 }
@@ -45,15 +45,15 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         ok(AuthMiddleware {
-            service: Rc::new(RefCell::new(service)),
+            service: Arc::new(Mutex::new(service)),
             cache: self.cache.clone(),
         })
     }
 }
 
 pub struct AuthMiddleware<S> {
-    service: Rc<RefCell<S>>,
-    cache: Rc<RefCell<Cache>>,
+    service: Arc<Mutex<S>>,
+    cache: Arc<Mutex<Cache>>,
 }
 
 impl<S, B> Service for AuthMiddleware<S>
@@ -67,7 +67,10 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(cx)
+        self.service
+            .try_lock()
+            .expect("AuthMiddleware already called")
+            .poll_ready(cx)
     }
 
     fn call(&mut self, req: ServiceRequest) -> Self::Future {
@@ -80,10 +83,10 @@ where
 
         Box::pin(async move {
             match header {
-                Some(key) => match (*cache).borrow_mut().get(&key).await {
+                Some(key) => match (*cache).lock().await.get(&key).await {
                     Some(app_key) => {
                         req.extensions_mut().insert(Identity::from(app_key));
-                        Ok(service.borrow_mut().call(req).await?)
+                        Ok(service.lock().await.call(req).await?)
                     }
                     None => {
                         log::debug!(
