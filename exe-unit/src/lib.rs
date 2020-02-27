@@ -10,7 +10,7 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
-use crate::service::transfer_service::{TransferService, TransferResource, DeployImage};
+use crate::service::transfer::{DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 use actix::prelude::*;
@@ -42,9 +42,9 @@ pub struct ExeUnit<R: Runtime> {
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(ctx: ExeUnitContext, runtime: R) -> Self {
         let state = ExeUnitState::default();
-        let transfers = TransferService::new(&ctx.work_dir, &ctx.cache_dir, &ctx.agreement).start();
-        let runtime = runtime.with_context(ctx.clone()).start();
         let metrics = MetricsService::default().start();
+        let transfers = TransferService::new(ctx.clone()).start();
+        let runtime = runtime.with_context(ctx.clone()).start();
 
         ExeUnit {
             ctx,
@@ -54,8 +54,8 @@ impl<R: Runtime> ExeUnit<R> {
             transfers: transfers.clone(),
             services: vec![
                 Box::new(ServiceAddr::new(metrics)),
-                Box::new(ServiceAddr::new(runtime)),
                 Box::new(ServiceAddr::new(transfers)),
+                Box::new(ServiceAddr::new(runtime)),
             ],
         }
     }
@@ -103,7 +103,12 @@ struct ExecCtx {
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    async fn exec(addr: Addr<Self>, exe_unit: Addr<R>, transfer_service: Addr<TransferService>, exec: Exec) {
+    async fn exec(
+        addr: Addr<Self>,
+        exe_unit: Addr<R>,
+        transfer_service: Addr<TransferService>,
+        exec: Exec,
+    ) {
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
                 batch_id: exec.batch_id.clone(),
@@ -111,7 +116,14 @@ impl<R: Runtime> ExeUnit<R> {
                 cmd,
             };
 
-            if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), transfer_service.clone(), ctx.clone()).await {
+            if let Err(error) = Self::exec_cmd(
+                addr.clone(),
+                exe_unit.clone(),
+                transfer_service.clone(),
+                ctx.clone(),
+            )
+            .await
+            {
                 let cmd_result = ExeScriptCommandResult {
                     index: ctx.idx as u32,
                     result: Some(ya_model::activity::CommandResult::Error),
@@ -142,7 +154,12 @@ impl<R: Runtime> ExeUnit<R> {
         }
     }
 
-    async fn exec_cmd(addr: Addr<Self>, exe_unit: Addr<R>, transfer_service: Addr<TransferService>, ctx: ExecCtx) -> Result<()> {
+    async fn exec_cmd(
+        addr: Addr<Self>,
+        exe_unit: Addr<R>,
+        transfer_service: Addr<TransferService>,
+        ctx: ExecCtx,
+    ) -> Result<()> {
         let state = addr.send(GetState {}).await?.0;
         let before_state = match (&state.0, &state.1) {
             (_, Some(_)) => {
@@ -178,7 +195,13 @@ impl<R: Runtime> ExeUnit<R> {
         })
         .await?;
 
-        Self::pre_exec(addr.clone(), exe_unit.clone(), transfer_service, ctx.clone()).await?;
+        Self::pre_exec(
+            addr.clone(),
+            exe_unit.clone(),
+            transfer_service,
+            ctx.clone(),
+        )
+        .await?;
 
         let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exe_result.result {
@@ -208,17 +231,23 @@ impl<R: Runtime> ExeUnit<R> {
         Ok(())
     }
 
-    async fn pre_exec(addr: Addr<Self>, exe_unit: Addr<R>, transfer_service: Addr<TransferService>, ctx: ExecCtx) -> Result<()> {
-        if let ExeScriptCommand::Transfer {from, to} = &ctx.cmd {
-            let msg = TransferResource{from: from.clone(), to: to.clone()};
+    async fn pre_exec(
+        addr: Addr<Self>,
+        exe_unit: Addr<R>,
+        transfer_service: Addr<TransferService>,
+        ctx: ExecCtx,
+    ) -> Result<()> {
+        if let ExeScriptCommand::Transfer { from, to } = &ctx.cmd {
+            let msg = TransferResource {
+                from: from.clone(),
+                to: to.clone(),
+            };
             return Ok(transfer_service.send(msg).await??);
-        }
-        else if let ExeScriptCommand::Deploy {} = &ctx.cmd {
-            let msg = DeployImage{};
+        } else if let ExeScriptCommand::Deploy {} = &ctx.cmd {
+            let msg = DeployImage {};
             let path = transfer_service.send(msg).await??;
             Ok(())
-        }
-        else {
+        } else {
             return Ok(());
         }
     }

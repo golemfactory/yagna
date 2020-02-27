@@ -15,7 +15,7 @@ pub struct RuntimeProcess {
     agreement: Option<PathBuf>,
     work_dir: Option<PathBuf>,
     cache_dir: Option<PathBuf>,
-    child_handle: Option<AbortHandle>,
+    abort_handles: Vec<AbortHandle>,
 }
 
 impl RuntimeProcess {
@@ -25,7 +25,7 @@ impl RuntimeProcess {
             agreement: None,
             work_dir: None,
             cache_dir: None,
-            child_handle: None,
+            abort_handles: Vec::new(),
         }
     }
 
@@ -82,7 +82,11 @@ where
 
 #[derive(Debug, Message)]
 #[rtype("()")]
-struct SetChildHandle(Option<AbortHandle>);
+struct AddChildHandle(AbortHandle);
+
+#[derive(Debug, Message)]
+#[rtype("()")]
+struct RemoveChildHandle(AbortHandle);
 
 impl Handler<ExecCmd> for RuntimeProcess {
     type Result = ActorResponse<Self, ExecCmdResult, Error>;
@@ -123,18 +127,14 @@ impl Handler<ExecCmd> for RuntimeProcess {
                         .spawn()?;
 
                     let (handle, reg) = AbortHandle::new_pair();
-                    address.do_send(SetChildHandle(Some(handle)));
+                    address.do_send(AddChildHandle(handle.clone()));
 
                     let output = Abortable::new(child.wait_with_output(), reg)
                         .await
                         .transform(|r| {
-                            address.do_send(SetChildHandle(None));
+                            address.do_send(RemoveChildHandle(handle));
                             r.map_err(|_| Error::CommandError("Process aborted".to_owned()))
-                        })?
-                        .transform(|r| {
-                            address.do_send(SetChildHandle(None));
-                            r
-                        })?;
+                        })??;
 
                     Ok(ExecCmdResult {
                         result: output_to_result(&output),
@@ -158,11 +158,22 @@ impl Handler<ExecCmd> for RuntimeProcess {
     }
 }
 
-impl Handler<SetChildHandle> for RuntimeProcess {
-    type Result = <SetChildHandle as Message>::Result;
+impl Handler<AddChildHandle> for RuntimeProcess {
+    type Result = <AddChildHandle as Message>::Result;
 
-    fn handle(&mut self, msg: SetChildHandle, _: &mut Self::Context) -> Self::Result {
-        self.child_handle = msg.0;
+    fn handle(&mut self, msg: AddChildHandle, _: &mut Self::Context) -> Self::Result {
+        self.abort_handles.push(msg.0);
+    }
+}
+
+impl Handler<RemoveChildHandle> for RuntimeProcess {
+    type Result = <RemoveChildHandle as Message>::Result;
+
+    fn handle(&mut self, msg: RemoveChildHandle, _: &mut Self::Context) -> Self::Result {
+        match self.abort_handles.iter().position(|c| c == &msg.0) {
+            Some(idx) => self.abort_handles.remove(idx),
+            None => (),
+        }
     }
 }
 
@@ -170,8 +181,8 @@ impl Handler<Shutdown> for RuntimeProcess {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        if let Some(handle) = &self.child_handle {
-            handle.abort();
+        for handle in std::mem::replace(&mut self.abort_handles, Vec::new()).into_iter() {
+            handle.0.abort();
         }
         ctx.stop();
         Ok(())

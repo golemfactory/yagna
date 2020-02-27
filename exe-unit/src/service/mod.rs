@@ -1,7 +1,6 @@
 pub mod metrics;
 pub mod signal;
-pub mod transfer_service;
-mod transfers;
+pub mod transfer;
 
 use crate::message::{Shutdown, ShutdownReason};
 use actix::prelude::*;

@@ -1,6 +1,8 @@
 use actix_http::client::SendRequestError;
 use actix_http::error::PayloadError;
+use actix_http::ResponseError;
 use futures::channel::mpsc::SendError;
+use futures::future::Aborted;
 
 #[derive(thiserror::Error, Debug)]
 pub enum HttpError {
@@ -34,9 +36,29 @@ pub enum Error {
     IoError(#[from] std::io::Error),
     #[error("Send error: {0}")]
     SendError(#[from] SendError),
+    #[error("URL parse error: {0}")]
+    UrlParseError(#[from] url::ParseError),
+    #[error("Invalid url: {0}")]
+    InvalidUrlError(String),
+    #[error("Unsupported digest: {0}")]
+    UnsupportedDigestError(String),
+    #[error("Invalid digest: {hash}, expected {expected}")]
+    InvalidHashError { hash: String, expected: String },
+    #[error("Hex error: {0}")]
+    HexError(#[from] hex::FromHexError),
+    #[error("Interrupted: {0}")]
+    Interrupted(String),
 }
 
 unsafe impl Send for Error {}
+
+impl ResponseError for Error {}
+
+impl From<Aborted> for Error {
+    fn from(_: Aborted) -> Self {
+        Error::Interrupted("Action aborted".to_owned())
+    }
+}
 
 impl From<PayloadError> for Error {
     fn from(error: PayloadError) -> Self {
@@ -47,19 +69,5 @@ impl From<PayloadError> for Error {
 impl From<SendRequestError> for Error {
     fn from(error: SendRequestError) -> Self {
         Error::HttpError(HttpError::from(error))
-    }
-}
-
-impl From<Error> for actix_http::error::Error {
-    fn from(error: Error) -> Self {
-        match error {
-            Error::HttpError(e) => match e {
-                HttpError::PayloadError(e) => actix_http::error::Error::from(e),
-                HttpError::SendRequestError(e) => actix_http::error::Error::from(e),
-                HttpError::Unspecified => actix_http::error::Error::from(()),
-            },
-            Error::IoError(e) => actix_http::error::Error::from(e),
-            Error::SendError(_) => actix_http::error::Error::from(()),
-        }
     }
 }

@@ -3,6 +3,7 @@ use crate::state::StateError;
 use serde::Serialize;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError as RpcError;
+use ya_transfer::error::Error as TransferError;
 
 #[derive(Error, Debug, Serialize)]
 pub enum LocalServiceError {
@@ -42,6 +43,8 @@ pub enum ChannelError {
         #[from]
         crossbeam_channel::RecvTimeoutError,
     ),
+    #[error("Transfer error: {0}")]
+    TransferError(#[from] TransferError),
     #[error("Send error: {0}")]
     SendError(String),
     #[error("Send error: {0}")]
