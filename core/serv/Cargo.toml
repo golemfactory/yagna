@@ -13,7 +13,7 @@ ya-activity = "0.2"
 ya-core-model = "0.1"
 ya-identity = "0.2"
 ya-market = "0.1"
-ya-net = { version = "0.1", features = [ "service" ] }
+ya-net = { version = "0.1", features = ["service"] }
 ya-payment = "0.1"
 ya-persistence = "0.2"
 ya-sb-router = "0.1"
