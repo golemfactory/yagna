@@ -3,17 +3,13 @@ use ya_service_bus::RpcMessage;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-
-
 pub const BUS_ID: &'static str = "/public/gftp";
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
     #[error("Can't read from file. {0}")]
     ReadError(String),
 }
-
 
 /// Gets metadata of file publish through gftp.
 /// Returns GftpMetadata structure.
@@ -55,4 +51,3 @@ pub struct GftpChunk {
     #[serde(with = "serde_bytes")]
     pub content: Vec<u8>,
 }
-

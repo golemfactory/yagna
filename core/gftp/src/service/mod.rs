@@ -1,3 +1,3 @@
 mod gftp;
 
-pub use gftp::{GftpService, GftpConfig};
+pub use gftp::{GftpConfig, GftpService};

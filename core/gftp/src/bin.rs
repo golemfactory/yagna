@@ -1,10 +1,9 @@
-use structopt::StructOpt;
-use std::path::PathBuf;
 use anyhow::Result;
 use log::info;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 use gftp::{GftpConfig, GftpService};
-
 
 #[derive(StructOpt)]
 pub enum CmdLine {
@@ -17,9 +16,8 @@ pub enum CmdLine {
         gftp_address: String,
         #[structopt(short = "o", long = "output", help = "Where to place downloaded file")]
         path: PathBuf,
-    }
+    },
 }
-
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
@@ -28,19 +26,23 @@ async fn main() -> Result<()> {
 
     let cmd_args = CmdLine::from_args();
 
-    let config = GftpConfig{chunk_size: 4096};
+    let config = GftpConfig { chunk_size: 4096 };
     let gftp_service = GftpService::new(config);
 
     match cmd_args {
-        CmdLine::Publish {path} => {
+        CmdLine::Publish { path } => {
             let hash = GftpService::publish_file(gftp_service, &path).await?;
             info!("Published file [{}], hash [{}].", &path.display(), &hash);
 
             actix_rt::signal::ctrl_c().await?;
             info!("Received ctrl-c signal. Shutting down.")
-        },
-        CmdLine::Download {gftp_address, path} => {
-            info!("Downloading file [{}], target path [{}].", &gftp_address, &path.display());
+        }
+        CmdLine::Download { gftp_address, path } => {
+            info!(
+                "Downloading file [{}], target path [{}].",
+                &gftp_address,
+                &path.display()
+            );
 
             GftpService::download_file(gftp_service, &gftp_address, &path).await?;
             info!("File downloaded.")
@@ -48,4 +50,3 @@ async fn main() -> Result<()> {
     }
     Ok(())
 }
-
