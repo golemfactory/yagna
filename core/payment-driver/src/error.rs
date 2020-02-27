@@ -16,6 +16,12 @@ pub enum PaymentDriverError {
     LibraryError { msg: String },
 }
 
+impl From<secp256k1::Error> for PaymentDriverError {
+    fn from(e: secp256k1::Error) -> Self {
+        PaymentDriverError::LibraryError { msg: e.to_string() }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
     #[error("Database connection error: {0}")]

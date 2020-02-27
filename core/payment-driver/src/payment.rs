@@ -26,6 +26,7 @@ pub enum PaymentStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentDetails {
     pub recipient: Address,
+    pub sender: Address,
     pub amount: U256,
     pub date: Option<DateTime<Utc>>,
 }
