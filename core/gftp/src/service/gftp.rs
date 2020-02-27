@@ -87,8 +87,7 @@ impl GftpService {
     pub async fn download_file(_me: Arc<Mutex<GftpService>>, gsb_path: &str, dst_path: &Path) -> Result<()> {
         debug!("Creating target file {}", dst_path.display());
 
-        let mut file = File::create(dst_path)
-            .with_context(|| format!("Can't create destination file: [{}].", dst_path.display()))?;
+        let mut file = GftpService::create_dest_file(dst_path)?;
 
         info!("Loading file {} metadata.", dst_path.display());
         let metadata = GftpService::load_metadata(gsb_path).await?;
@@ -173,6 +172,19 @@ impl GftpService {
                 GftpService::get_chunk(filedesc, msg.chunk_number).await
             }
         });
+    }
+
+    fn ensure_dir_exists(file_path: &Path) -> Result<()> {
+        let mut dir = file_path.to_path_buf();
+        dir.pop();
+        Ok(fs::create_dir_all(&dir)?)
+    }
+
+    fn create_dest_file(file_path: &Path) -> Result<File> {
+        GftpService::ensure_dir_exists(file_path)
+            .with_context(|| format!("Can't create destination directory for file: [{}].", file_path.display()))?;
+        Ok(File::create(file_path)
+            .with_context(|| format!("Can't create destination file: [{}].", file_path.display()))?)
     }
 }
 
