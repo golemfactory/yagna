@@ -2,10 +2,9 @@ use anyhow::{Context, Error, Result};
 use futures::lock::Mutex;
 use log::{debug, info};
 use sha3::{Digest, Sha3_256};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
 
@@ -14,7 +13,6 @@ use ya_core_model::gftp::GftpMetadata;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 struct FileDesc {
-    path: PathBuf,
     hash: String,
     file: fs::File,
     meta: model::GftpMetadata,
@@ -26,19 +24,16 @@ pub struct GftpConfig {
 }
 
 pub struct GftpService {
-    files: HashMap<String, Arc<Mutex<FileDesc>>>,
     config: GftpConfig,
 }
 
 impl FileDesc {
     fn new(
-        path: &Path,
         file: fs::File,
         hash: String,
         meta: model::GftpMetadata,
     ) -> Arc<Mutex<FileDesc>> {
         Arc::new(Mutex::new(FileDesc {
-            path: path.to_owned(),
             hash: hash.to_string(),
             file,
             meta,
@@ -52,7 +47,7 @@ impl FileDesc {
         let hash = Self::hash_file_sha256(&mut file)?;
         let meta = Self::meta_from_file(&file, &config)?;
 
-        Ok(FileDesc::new(path, file, hash, meta))
+        Ok(FileDesc::new(file, hash, meta))
     }
 
     pub fn meta_from_file(file: &fs::File, config: &GftpConfig) -> Result<model::GftpMetadata> {
@@ -80,7 +75,6 @@ impl FileDesc {
 impl GftpService {
     pub fn new(config: GftpConfig) -> Arc<Mutex<GftpService>> {
         Arc::new(Mutex::new(GftpService {
-            files: HashMap::new(),
             config,
         }))
     }
