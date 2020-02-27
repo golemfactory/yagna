@@ -1,4 +1,3 @@
-use futures::lock::Mutex;
 use futures::Future;
 use lru_time_cache::LruCache;
 use std::pin::Pin;
@@ -21,7 +20,7 @@ where
     <R as ValueResolver>::Key: Clone + std::cmp::Ord + std::fmt::Debug,
 {
     inner: LruCache<<R as ValueResolver>::Key, Option<<R as ValueResolver>::Value>>,
-    resolver: Mutex<R>,
+    resolver: R,
 }
 
 impl<R> AutoResolveLruCache<R>
@@ -33,7 +32,7 @@ where
     pub fn new(ttl: Duration, capacity: usize, resolver: R) -> Self {
         Self {
             inner: LruCache::with_expiry_duration_and_capacity(ttl, capacity),
-            resolver: Mutex::new(resolver),
+            resolver,
         }
     }
 
@@ -45,14 +44,11 @@ where
         let inner = &mut self.inner;
 
         if !inner.contains_key(key) {
-            let resolver = resolver.lock().await;
-            if !inner.contains_key(key) {
-                match resolver.resolve(key).await {
-                    Ok(v) => {
-                        inner.insert(key.clone(), v);
-                    }
-                    Err(e) => log::error!("Error resolving key '{:?}': {:?}", key, e),
+            match resolver.resolve(key).await {
+                Ok(v) => {
+                    inner.insert(key.clone(), v);
                 }
+                Err(e) => log::error!("Error resolving key '{:?}': {:?}", key, e),
             }
         }
 
