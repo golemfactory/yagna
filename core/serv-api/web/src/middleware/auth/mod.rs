@@ -67,10 +67,10 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service
-            .try_lock()
-            .expect("AuthMiddleware already called")
-            .poll_ready(cx)
+        match self.service.try_lock() {
+            Some(mut service) => service.poll_ready(cx),
+            None => Poll::Ready(Ok(())),
+        }
     }
 
     fn call(&mut self, req: ServiceRequest) -> Self::Future {
