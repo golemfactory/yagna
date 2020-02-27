@@ -14,7 +14,6 @@ use thiserror::Error;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Error)]
 #[error("Yagna API error: {message:?}")]
 pub struct ErrorMessage {
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
 
