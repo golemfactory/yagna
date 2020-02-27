@@ -1,11 +1,11 @@
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
-use crate::forward_actix_handler;
 use crate::market::provider_market::AgreementSigned;
-use crate::utils::actix_handler::ResultTypeGetter;
 
 use ya_client::activity::ActivityProviderApi;
 use ya_model::activity::ProviderEvent;
+use ya_utils_actix::actix_handler::ResultTypeGetter;
+use ya_utils_actix::forward_actix_handler;
 
 use actix::prelude::*;
 

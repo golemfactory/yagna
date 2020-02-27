@@ -1,4 +1,7 @@
 use crate::error::{Error, ExternalServiceError};
+use actix_web::HttpResponse;
+use futures::Future;
+use std::time::Duration;
 use ya_core_model::market;
 use ya_model::market::Agreement;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -31,5 +34,20 @@ pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Er
             Ok(None)
         }
         Err(e) => Err(e),
+    }
+}
+
+pub async fn with_timeout<Work: Future<Output = HttpResponse>>(
+    timeout_secs: impl Into<u64>,
+    work: Work,
+) -> HttpResponse {
+    let timeout_secs = timeout_secs.into();
+    if timeout_secs > 0 {
+        match tokio::time::timeout(Duration::from_secs(timeout_secs), work).await {
+            Ok(v) => v,
+            Err(_) => return HttpResponse::GatewayTimeout().finish(),
+        }
+    } else {
+        work.await
     }
 }

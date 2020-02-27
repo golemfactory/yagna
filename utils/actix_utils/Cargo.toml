@@ -1,0 +1,11 @@
+[package]
+name = "ya-utils-actix"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+actix = "0.9"
+anyhow = "1.0"
+futures = "0.3"
+log = "0.4.8"

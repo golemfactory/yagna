@@ -1,0 +1,28 @@
+name: Build .deb
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+
+  build:
+    name: Build (ubuntu-latest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Build the Docker image
+        run: docker build . -f build-deb.Dockerfile -t build-deb
+
+      - name: Copy .deb file
+        run: docker run build-deb bash -c "cat /src/target/debian/*.deb" > yagna.deb
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@v1
+        with:
+          name: yagna.deb
+          path: yagna.deb

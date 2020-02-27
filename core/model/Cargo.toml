@@ -5,9 +5,9 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [features]
-default = ['with-diesel']
+default = ['ethaddr', 'with-diesel']
 full = ['activity', 'appkey', 'identity', 'market', 'net', 'payment', 'gftp']
-activity = []
+activity = ['ethaddr']
 appkey = []
 ethaddr=[]
 gftp = []

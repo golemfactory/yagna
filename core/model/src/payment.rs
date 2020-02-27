@@ -112,7 +112,7 @@ impl RpcMessage for SendInvoice {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AcceptInvoice {
-    pub debit_note_id: String,
+    pub invoice_id: String,
     pub acceptance: Acceptance,
 }
 

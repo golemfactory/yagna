@@ -1,15 +1,15 @@
 use ya_client::Result;
+use ya_utils_actix::actix_handler::send_message;
+use ya_utils_actix::actix_signal::Subscribe;
 
 use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarket};
 use crate::startup_config::StartupConfig;
-use crate::utils::actix_handler::send_message;
-use crate::utils::actix_signal::Subscribe;
 
 use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
@@ -32,11 +32,19 @@ impl ProviderAgent {
 
         let exe_unit_path = format!(
             "{}/example-exeunits.json",
-            match config.exe_unit_path.is_empty() {
-                true => "exe-unit".into(),
-                false => config.exe_unit_path,
+            match config.exe_unit_path.is_none() {
+                true => {
+                    let global_path_linux = "/usr/lib/yagna/plugins";
+                    if cfg!(target_os = "linux") && Path::new(global_path_linux).exists() {
+                        global_path_linux.into()
+                    } else {
+                        "exe-unit".into()
+                    }
+                }
+                false => config.exe_unit_path.unwrap(),
             }
         );
+        log::debug!("Exe unit configuration path: {}", exe_unit_path);
 
         let mut provider = ProviderAgent {
             market,

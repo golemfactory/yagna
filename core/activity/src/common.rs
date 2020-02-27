@@ -95,63 +95,66 @@ pub(crate) async fn get_activity_agreement(
     Ok(agreement)
 }
 
-pub(crate) async fn is_activity_initiator(
+pub(crate) async fn authorize_activity_initiator(
     db: &DbExecutor,
-    caller: String,
+    caller: impl ToString,
     activity_id: &str,
-) -> std::result::Result<bool, Error> {
+) -> Result<(), Error> {
     let agreement_id = db
         .as_dao::<ActivityDao>()
         .get_agreement_id(&activity_id)
         .await
         .map_err(Error::from)?;
-    is_agreement_initiator(caller, agreement_id).await
+    authorize_agreement_initiator(caller, agreement_id).await
 }
 
-pub(crate) async fn is_activity_executor(
+pub(crate) async fn authorize_activity_executor(
     db: &DbExecutor,
-    caller: String,
+    caller: impl ToString,
     activity_id: &str,
-) -> std::result::Result<bool, Error> {
+) -> Result<(), Error> {
     let agreement_id = db
         .as_dao::<ActivityDao>()
         .get_agreement_id(&activity_id)
         .await
         .map_err(Error::from)?;
-    is_agreement_executor(caller, agreement_id).await
+    authorize_agreement_executor(caller, agreement_id).await
 }
 
-pub(crate) async fn is_agreement_initiator(
-    caller: String,
+pub(crate) async fn authorize_agreement_initiator(
+    caller: impl ToString,
     agreement_id: String,
-) -> std::result::Result<bool, Error> {
+) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
     let initiator_id = agreement
         .demand
         .requestor_id
         .ok_or(Error::BadRequest("no requestor id".into()))?;
 
-    Ok(validate_caller(caller, initiator_id))
+    authorize_caller(caller, initiator_id)
 }
 
-pub(crate) async fn is_agreement_executor(
-    caller: String,
+pub(crate) async fn authorize_agreement_executor(
+    caller: impl ToString,
     agreement_id: String,
-) -> std::result::Result<bool, Error> {
+) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
     let executor_id = agreement
         .offer
         .provider_id
         .ok_or(Error::BadRequest("no provider id".into()))?;
 
-    Ok(validate_caller(caller, executor_id))
+    authorize_caller(caller, executor_id)
 }
 
 #[inline(always)]
-pub(crate) fn validate_caller(caller: String, expected: String) -> bool {
+pub(crate) fn authorize_caller(caller: impl ToString, authorized: String) -> Result<(), Error> {
     // FIXME: impl a proper caller struct / parser
     let pat = format!("{}/", NET_SERVICE_ID);
-    let caller = caller.replacen(&pat, "", 1);
-    log::info!("checking caller: {} vs expected: {}", caller, expected);
-    caller == expected
+    let caller = caller.to_string().replacen(&pat, "", 1);
+    log::debug!("checking caller: {} vs expected: {}", caller, authorized);
+    match caller == authorized {
+        true => Ok(()),
+        false => Err(Error::Forbidden),
+    }
 }

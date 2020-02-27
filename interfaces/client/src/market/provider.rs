@@ -24,6 +24,12 @@ impl MarketProviderApi {
         self.client.post("offers").send_json(&offer).json().await
     }
 
+    /// Fetches all active Offers which have been published by the Provider.
+    ///
+    pub async fn get_offers(&self) -> Result<Vec<Offer>> {
+        self.client.get("offers").send().json().await
+    }
+
     /// Stop subscription by invalidating a previously published Offer.
     ///
     /// Stop receiving Proposals.

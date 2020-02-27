@@ -1,0 +1,43 @@
+[package]
+name = "ya-exe-unit"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[lib]
+name = "ya_exe_unit"
+path = "src/lib.rs"
+
+[[bin]]
+name = "exe-unit"
+path = "src/bin.rs"
+
+[target.'cfg(not(windows))'.dependencies]
+nix = { version = "0.17.0" }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.8", features = ["jobapi2"] }
+
+[dependencies]
+ya-model = "0.1"
+ya-core-model = { version = "0.1", features = ["activity", "appkey"] }
+ya-service-bus = "0.2"
+
+actix = "0.9"
+anyhow = "1.0.19"
+async-trait = "0.1.24"
+chrono = "0.4.10"
+crossbeam-channel = "0.3"
+dotenv = "0.15.0"
+env_logger = "0.7"
+futures = "0.3"
+lazy_static = "1.4.0"
+log = "0.4.8"
+pretty_env_logger = "0.3.0"
+serde = { version = "^1.0", features = ["derive"] }
+serde_json = "1.0"
+signal-hook = { version = "0.1.13", features = ["tokio-support"] }
+structopt = "0.3"
+thiserror = "1.0.10"
+tokio = { version = "0.2.11", features = ["process", "signal"] }
+tokio-util = { version = "0.2", features = ["codec"] }
