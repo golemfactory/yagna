@@ -6,6 +6,7 @@ use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::common::{authorize_activity_executor, PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
@@ -142,11 +143,9 @@ async fn get_events_web(
     Ok(db
         .as_dao::<EventDao>()
         .get_events_fut(query.max_count)
-        //        .timeout(query.timeout)
-        //        .map_err(Error::from)
-        //        .await?
+        .timeout(query.timeout)
         .map_err(Error::from)
-        .await?
+        .await??
         .into_iter()
         .map(ProviderEvent::from)
         .collect())
