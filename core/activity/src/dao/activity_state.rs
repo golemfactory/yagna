@@ -6,7 +6,6 @@ use serde_json;
 use std::time::Duration;
 use tokio::time::delay_for;
 use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::State;
 use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
 use ya_persistence::models::ActivityState;
 use ya_persistence::schema;
@@ -43,19 +42,22 @@ impl<'c> ActivityStateDao<'c> {
     pub async fn get_future(
         &self,
         activity_id: &str,
-        state: Option<State>,
+        state: Option<StatePair>,
     ) -> Result<ActivityState> {
         let state = state.map(|s| serde_json::to_string(&s).unwrap());
         let duration = Duration::from_millis(750);
 
+        log::debug!("waiting {:?} for activity state: {:?}", duration, state);
         loop {
             let result = self.get(activity_id).await.not_found_as_option()?;
             if let Some(s) = result {
                 match &state {
                     Some(state) => {
                         if &s.name == state {
+                            log::debug!("got state {}", state);
                             return Ok(s);
                         }
+                        log::debug!("got state: {} != {}", s.name, state);
                     }
                     None => return Ok(s),
                 }
