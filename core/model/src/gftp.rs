@@ -10,8 +10,8 @@ pub const BUS_ID: &'static str = "/public/gftp";
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
-    #[error("Can't read bytes.")]
-    ReadError,
+    #[error("Can't read from file. {0}")]
+    ReadError(String),
 }
 
 

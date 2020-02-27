@@ -1,14 +1,18 @@
 use anyhow::{Result, Error, Context};
-use sha3::{Digest, Sha3_256};
+use log::{info, debug};
 use futures::lock::Mutex;
+use sha3::{Digest, Sha3_256};
 use std::collections::HashMap;
 use std::{fs, io};
 use std::path::{PathBuf, Path};
 use std::sync::Arc;
+use std::fs::File;
+use std::io::{Read, Write, SeekFrom, Seek};
 
 
-use ya_service_bus::{typed as bus};
+use ya_service_bus::{typed as bus, RpcEndpoint};
 use ya_core_model::gftp as model;
+use ya_core_model::gftp::GftpMetadata;
 
 
 struct FileDesc {
@@ -80,9 +84,82 @@ impl GftpService {
         Ok(hash)
     }
 
+    pub async fn download_file(_me: Arc<Mutex<GftpService>>, gsb_path: &str, dst_path: &Path) -> Result<()> {
+        debug!("Creating target file {}", dst_path.display());
+
+        let mut file = File::create(dst_path)
+            .with_context(|| format!("Can't create destination file: [{}].", dst_path.display()))?;
+
+        info!("Loading file {} metadata.", dst_path.display());
+        let metadata = GftpService::load_metadata(gsb_path).await?;
+        debug!("Metadata: file size {}, number of chunks {}, chunk size {}.", metadata.file_size, metadata.chunks_num, metadata.chunk_size);
+
+        let num_chunks = metadata.chunks_num;
+        file.set_len(metadata.file_size)?;
+
+        for chunk_idx in 0..num_chunks {
+            debug!("Loading chunk {} of file {}.", chunk_idx, dst_path.display());
+
+            let chunk = GftpService::download_chunk(gsb_path, chunk_idx).await?;
+            let written = file.write(&chunk.content[..])?;
+
+            if written != chunk.content.len() {
+                return Err(Error::msg(format!("Less bytes written to file, than got from gsb.")));
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn load_metadata(gsb_path: &str) -> Result<GftpMetadata> {
+        Ok(bus::service(gsb_path)
+            .send(model::GetMetadata{})
+            .await
+            .map_err(anyhow::Error::msg)?
+            .map_err(anyhow::Error::msg)?)
+    }
+
+    async fn download_chunk(gsb_path: &str, chunk_idx: u64) -> Result<model::GftpChunk> {
+        let msg = model::GetChunk{chunk_number: chunk_idx};
+
+        Ok(bus::service(gsb_path)
+            .send(msg)
+            .await
+            .map_err(anyhow::Error::msg)?
+            .map_err(anyhow::Error::msg)?)
+    }
+
+    async fn get_metadata(desc: Arc<Mutex<FileDesc>>) -> Result<model::GftpMetadata, model::Error> {
+        Ok(desc.lock().await.meta.clone())
+    }
+
+    async fn get_chunk(desc: Arc<Mutex<FileDesc>>, chunk_num: u64) -> Result<model::GftpChunk, model::Error> {
+        let mut desc = desc.lock().await;
+        let chunk_size = desc.meta.chunk_size;
+        let offset = chunk_size * chunk_num;
+
+        let bytes_to_read = if desc.meta.file_size - offset < chunk_size {
+            desc.meta.file_size - offset
+        } else {
+            chunk_size
+        } as usize;
+
+        debug!("Reading chunk at offset {}", offset);
+
+        desc.file.seek(SeekFrom::Start(offset))
+            .map_err(|error| model::Error::ReadError(format!("Can't seek file at offset {}, {}", offset, error)))?;
+
+        let mut buffer = vec![0u8; bytes_to_read];
+
+        desc.file.read_exact(&mut buffer)
+            .map_err(|error| model::Error::ReadError(format!("Can't read {} bytes at offset {}, error: {}", bytes_to_read, offset, error)))?;
+
+        Ok(model::GftpChunk{content: buffer})
+    }
+
     fn bind_gsb_handlers(gsb_address: &str, filedesc: Arc<Mutex<FileDesc>>) {
         let desc = filedesc.clone();
-        let _ = bus::bind(&gsb_address, move |msg: model::GetMetadata| {
+        let _ = bus::bind(&gsb_address, move |_msg: model::GetMetadata| {
             let filedesc = desc.clone();
             async move {
                 GftpService::get_metadata(filedesc).await
@@ -96,16 +173,6 @@ impl GftpService {
                 GftpService::get_chunk(filedesc, msg.chunk_number).await
             }
         });
-    }
-
-    async fn get_metadata(desc: Arc<Mutex<FileDesc>>) -> Result<model::GftpMetadata, model::Error> {
-        Ok(desc.lock().await.meta.clone())
-    }
-
-    async fn get_chunk(desc: Arc<Mutex<FileDesc>>, chunk_num: u64) -> Result<model::GftpChunk, model::Error> {
-        //let desc = desc.lock().await;
-
-        Err(model::Error::ReadError)
     }
 }
 
