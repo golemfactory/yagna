@@ -137,7 +137,7 @@ dependencies = [
 
 [[package]]
 name = "actix-server"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "actix-codec 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -169,7 +169,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "actix-macros 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-rt 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "actix-server 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "actix-server 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-service 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -232,7 +232,7 @@ dependencies = [
  "actix-macros 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-router 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-rt 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "actix-server 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "actix-server 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-service 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-testing 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-threadpool 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -348,7 +348,7 @@ dependencies = [
 
 [[package]]
 name = "aho-corasick"
-version = "0.7.8"
+version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "memchr 2.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2798,7 +2798,7 @@ name = "regex"
 version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "aho-corasick 0.7.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aho-corasick 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "memchr 2.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex-syntax 0.6.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "thread_local 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4901,7 +4901,7 @@ dependencies = [
 "checksum actix-macros 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "21705adc76bbe4bc98434890e73a89cd00c6015e5704a60bb6eea6c3b72316b6"
 "checksum actix-router 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "9d7a10ca4d94e8c8e7a87c5173aba1b97ba9a6563ca02b0e1cd23531093d3ec8"
 "checksum actix-rt 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3f6a0a55507046441a496b2f0d26a84a65e67c8cafffe279072412f624b5fb6d"
-"checksum actix-server 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "51d3455eaac03ca3e49d7b822eb35c884b861f715627254ccbe4309d08f1841a"
+"checksum actix-server 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "582a7173c281a4f46b5aa168a11e7f37183dcb71177a39312cc2264da7a632c9"
 "checksum actix-service 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)" = "d3e4fc95dfa7e24171b2d0bb46b85f8ab0e8499e4e3caec691fc4ea65c287564"
 "checksum actix-testing 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "48494745b72d0ea8ff0cf874aaf9b622a3ee03d7081ee0c04edea4f26d32c911"
 "checksum actix-threadpool 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "cf4082192601de5f303013709ff84d81ca6a1bc4af7fb24f367a500a23c6e84e"
@@ -4917,7 +4917,7 @@ dependencies = [
 "checksum aes-ctr 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d2e5b0458ea3beae0d1d8c0f3946564f8e10f90646cf78c06b4351052058d1ee"
 "checksum aes-soft 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "cfd7e7ae3f9a1fb5c03b389fc6bb9a51400d0c13053f0dca698c832bfd893a0d"
 "checksum aesni 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2f70a6b5f971e473091ab7cfb5ffac6cde81666c4556751d8d5620ead8abf100"
-"checksum aho-corasick 0.7.8 (registry+https://github.com/rust-lang/crates.io-index)" = "743ad5a418686aad3b87fd14c43badd828cf26e214a00f92a384291cf22e1811"
+"checksum aho-corasick 0.7.9 (registry+https://github.com/rust-lang/crates.io-index)" = "d5e63fd144e18ba274ae7095c0197a870a7b9468abc801dd62f190d80817d2ec"
 "checksum ansi_term 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
 "checksum anyhow 1.0.26 (registry+https://github.com/rust-lang/crates.io-index)" = "7825f6833612eb2414095684fcf6c635becf3ce97fe48cf6421321e93bfbd53c"
 "checksum appdirs 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d512b3e61196d27562dcc71446a58ba8a93d3bed2a03a87f96101b9a17f1d378"

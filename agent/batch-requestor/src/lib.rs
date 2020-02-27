@@ -1,69 +1,101 @@
 use std::time::Duration;
 
-/* TODO */
-
-enum WasmRuntime {
+pub enum WasmRuntime {
     Wasi(i32), /* Wasi version */
 }
 
-struct ImageSpec {
+pub struct ImageSpec {
     runtime: WasmRuntime,
+    /* TODO */
 }
 
 impl ImageSpec {
-    fn from_github<T: Into<String>>(_github_repository: T) -> Self {
+    pub fn from_github<T: Into<String>>(_github_repository: T) -> Self {
         Self {
             runtime: WasmRuntime::Wasi(1),
         }
+        /* TODO connect and download image specification */
     }
-    fn runtime(&mut self, runtime: WasmRuntime) {
-        self.runtime = runtime
+    pub fn runtime(self, runtime: WasmRuntime) -> Self {
+        Self { runtime }
     }
 }
 
-struct TaskSession {
+pub enum Command {
+    Deploy,
+    Start,
+    Run(Vec<String>),
+    Stop,
+}
+
+pub struct CommandList(Vec<Command>);
+
+impl CommandList {
+    pub fn new(v: Vec<Command>) -> Self {
+        Self(v)
+    }
+}
+
+pub struct TaskSession {
     name: String,
     timeout: Duration,
-    // TODO demand: WasmDemand,
+    demand: Option<WasmDemand>,
+    tasks: Vec<CommandList>,
 }
 
 impl TaskSession {
-    fn new() -> TaskSession {
+    pub fn new<T: Into<String>>(name: T) -> Self {
         Self {
-            name: "".into(),
+            name: name.into(),
             timeout: Duration::from_secs(60),
+            demand: None,
+            tasks: vec![],
         }
     }
-    fn with_timeout(mut self, duration: std::time::Duration) -> Self {
-        self.timeout = duration;
-        self
+    pub fn with_timeout(self, timeout: std::time::Duration) -> Self {
+        Self { timeout, ..self }
     }
-    fn demand(self) -> Self {
-        self
+    pub fn demand(self, demand: WasmDemand) -> Self {
+        Self {
+            demand: Some(demand),
+            ..self
+        }
     }
-    fn run() {}
+    pub fn tasks<T: std::iter::Iterator<Item = CommandList>>(self, tasks: T) -> Self {
+        Self {
+            tasks: tasks.collect(),
+            ..self
+        }
+    }
+    pub fn run(self) {
+        /* TODO */
+    }
 }
 
-struct WasmDemand {
+pub struct WasmDemand {
     spec: ImageSpec,
-    min_ram_gib: f32,
-    min_storage_gib: f32,
+    min_ram_gib: f64,
+    min_storage_gib: f64,
 }
 
 impl WasmDemand {
-    fn with_image(spec: ImageSpec) -> Self {
+    pub fn with_image(spec: ImageSpec) -> Self {
         Self {
             spec,
             min_ram_gib: 0.0,
             min_storage_gib: 0.0,
         }
     }
-    fn min_ram_gib(mut self, min_ram_gib: f32) -> Self {
-        self.min_ram_gib = min_ram_gib;
-        self
+    pub fn min_ram_gib<T: Into<f64>>(self, min_ram_gib: T) -> Self {
+        Self {
+            min_ram_gib: min_ram_gib.into(),
+            ..self
+        }
     }
-    fn min_storage_gib(mut self, min_storage_gib: f32) -> Self {
-        self.min_storage_gib = min_storage_gib;
-        self
+    pub fn min_storage_gib<T: Into<f64>>(self, min_storage_gib: T) -> Self {
+        Self {
+            min_storage_gib: min_storage_gib.into(),
+            ..self
+        }
     }
 }
