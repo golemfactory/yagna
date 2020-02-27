@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::BufReader;
 
 /// Descriptor of ExeUnit
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExeUnitDesc {
     name: String,
     path: PathBuf,
@@ -33,6 +33,7 @@ impl ExeUnitsRegistry {
 
     pub fn spawn_exeunit(&self, name: &str, working_dir: &Path) -> Result<ExeUnitInstance> {
         let exeunit_desc = self.find_exeunit(name)?;
+        info!("spawning exeunit: {:?}", exeunit_desc);
         ExeUnitInstance::new(name, &exeunit_desc.path, working_dir, &exeunit_desc.args)
     }
 

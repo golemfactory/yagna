@@ -103,6 +103,7 @@ async fn set_activity_state_web(
     state: web::Json<ActivityState>,
     id: Identity,
 ) -> Result<(), Error> {
+    log::debug!("set_activity_state_web {:?}", state);
     authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
 
     set_activity_state(&db, &path.activity_id, state.into_inner()).await

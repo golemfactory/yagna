@@ -7,7 +7,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::error::Error;
 use ya_core_model::activity::*;
-use ya_model::activity::State;
+use ya_model::activity::{activity_state::StatePair, State};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
 use ya_service_bus::timeout::*;
@@ -80,8 +80,12 @@ async fn destroy_activity_gsb(
         .await
         .map_err(Error::from)?;
 
+    log::info!(
+        "waiting {:?}ms for activity status change to Terminate",
+        msg.timeout
+    );
     db.as_dao::<ActivityStateDao>()
-        .get_future(&msg.activity_id, Some(State::Terminated))
+        .get_future(&msg.activity_id, Some(StatePair(State::Terminated, None)))
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?
