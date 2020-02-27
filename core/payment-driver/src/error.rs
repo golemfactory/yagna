@@ -13,12 +13,20 @@ pub enum PaymentDriverError {
     #[error("Connection refused")]
     ConnectionRefused,
     #[error("Library error")]
-    LibraryError { msg: String },
+    LibraryError(String),
+    #[error("Database error")]
+    DatabaseError(String),
 }
 
 impl From<secp256k1::Error> for PaymentDriverError {
     fn from(e: secp256k1::Error) -> Self {
-        PaymentDriverError::LibraryError { msg: e.to_string() }
+        PaymentDriverError::LibraryError(e.to_string())
+    }
+}
+
+impl From<DbError> for PaymentDriverError {
+    fn from(e: DbError) -> Self {
+        PaymentDriverError::DatabaseError(e.to_string())
     }
 }
 

@@ -30,11 +30,7 @@ impl EthereumClient {
         json_abi: &[u8],
     ) -> EthereumClientResult<Contract<Http>> {
         Contract::from_json(self.web3.eth(), address, json_abi).map_or_else(
-            |e| {
-                Err(PaymentDriverError::LibraryError {
-                    msg: format!("{:?}", e),
-                })
-            },
+            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
             |contract| Ok(contract),
         )
     }
@@ -49,22 +45,14 @@ impl EthereumClient {
             .balance(address, block_number)
             .wait()
             .map_or_else(
-                |e| {
-                    Err(PaymentDriverError::LibraryError {
-                        msg: format!("{:?}", e),
-                    })
-                },
+                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
                 |balance| Ok(balance),
             )
     }
 
     pub fn get_gas_price(&self) -> EthereumClientResult<U256> {
         self.web3.eth().gas_price().wait().map_or_else(
-            |e| {
-                Err(PaymentDriverError::LibraryError {
-                    msg: format!("{:?}", e),
-                })
-            },
+            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
             |gas_price| Ok(gas_price),
         )
     }
@@ -75,11 +63,7 @@ impl EthereumClient {
             .send_raw_transaction(Bytes::from(signed_tx))
             .wait()
             .map_or_else(
-                |e| {
-                    Err(PaymentDriverError::LibraryError {
-                        msg: format!("{:?}", e),
-                    })
-                },
+                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
                 |tx_hash| Ok(tx_hash),
             )
     }
@@ -97,11 +81,7 @@ impl EthereumClient {
             .transaction_count(eth_address, None)
             .wait()
             .map_or_else(
-                |e| {
-                    Err(PaymentDriverError::LibraryError {
-                        msg: format!("{:?}", e),
-                    })
-                },
+                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
                 |nonce| Ok(nonce),
             )
     }

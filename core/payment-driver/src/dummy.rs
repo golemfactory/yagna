@@ -109,9 +109,9 @@ async fn recover_addr(sign_tx: SignTx<'_>) -> Result<Address, PaymentDriverError
     let sig = match sig_from_vec(sig) {
         Ok(sig) => sig,
         Err(_) => {
-            return Err(PaymentDriverError::LibraryError {
-                msg: "Invalid signature".to_string(),
-            })
+            return Err(PaymentDriverError::LibraryError(
+                "Invalid signature".to_string(),
+            ))
         }
     };
     let pub_key = sig.recover(&msg)?;

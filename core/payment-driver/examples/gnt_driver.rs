@@ -1,3 +1,5 @@
+use actix_rt;
+
 use chrono::{Duration, Utc};
 
 use ethereum_types::U256;
@@ -5,8 +7,6 @@ use ethereum_types::U256;
 use ethsign::{KeyFile, Protected};
 
 use ethkey::prelude::*;
-
-use futures::executor::block_on;
 
 use std::{thread, time};
 
@@ -17,7 +17,7 @@ use ya_payment_driver::gnt::GntDriver;
 use ya_payment_driver::payment::PaymentAmount;
 use ya_payment_driver::PaymentDriver;
 
-// use ya_persistence::executor::DbExecutor;
+use ya_persistence::executor::DbExecutor;
 
 const GETH_ADDRESS: &str = "http://188.165.227.180:55555";
 const GNT_RINKEBY_CONTRACT: &str = "924442A66cFd812308791872C4B242440c108E19";
@@ -74,52 +74,57 @@ fn wait_for_confirmations() {
     thread::sleep(sleep_time);
 }
 
-fn show_balance(gnt_driver: &GntDriver) {
-    let balance_result = block_on(gnt_driver.get_account_balance());
+async fn show_balance(gnt_driver: &GntDriver) {
+    let balance_result = gnt_driver.get_account_balance().await;
     let balance: AccountBalance = balance_result.unwrap();
     println!("{:?}", balance);
 }
 
-fn main() {
+#[actix_rt::main]
+async fn main() -> anyhow::Result<()> {
     load_or_generate_account(KEYSTORE, PASSWORD);
     let key = get_key(KEYSTORE);
 
     let address = get_address(key);
     println!("Address: {:?}", address);
 
-    let (_eloop, transport) = web3::transports::Http::new(GETH_ADDRESS).unwrap();
+    let (_eloop, transport) = web3::transports::Http::new(GETH_ADDRESS)?;
     let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
 
     let address: ethereum_types::Address = address.parse().unwrap();
-    let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse().unwrap();
-    let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse().unwrap();
+    let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
+    let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
 
-    let mut gnt_driver = GntDriver::new(address, ethereum_client, gnt_contract_address).unwrap();
+    let db = DbExecutor::new(":memory:")?;
+    let mut gnt_driver = GntDriver::new(address, ethereum_client, gnt_contract_address, db)?;
 
-    block_on(gnt_driver.init_funds(ETH_FAUCET_ADDRESS, gnt_faucet_address, &sign_tx)).unwrap();
+    gnt_driver
+        .init_funds(ETH_FAUCET_ADDRESS, gnt_faucet_address, &sign_tx)
+        .await
+        .unwrap();
 
     wait_for_confirmations();
-    show_balance(&gnt_driver);
+    show_balance(&gnt_driver).await;
 
+    let invoice_id = "invoice_1234";
     let payment_amount = PaymentAmount {
         base_currency_amount: U256::from(10000),
         gas_amount: None,
     };
     let due_date = Utc::now() + Duration::days(1i64);
-    let transfer = block_on(gnt_driver.schedule_payment(
-        "invoice_1234",
-        payment_amount,
-        address,
-        due_date,
-        &sign_tx,
-    ));
-    transfer.map_or_else(
-        |e| println!("Unexpected error while sending Gnt: {:?}", e),
-        |_| {
-            println!("Gnt transferred!");
-        },
-    );
+
+    gnt_driver
+        .schedule_payment(invoice_id, payment_amount, address, due_date, &sign_tx)
+        .await
+        .unwrap();
+
+    println!("Gnt transferred!");
 
     wait_for_confirmations();
-    show_balance(&gnt_driver);
+    show_balance(&gnt_driver).await;
+
+    let payment_status = gnt_driver.get_payment_status(invoice_id).await?;
+    println!("Payment status: {:?}", payment_status);
+
+    Ok(())
 }
