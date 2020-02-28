@@ -3,7 +3,7 @@ use ethereum_types::{Address, H256, U256};
 use web3::contract::Contract;
 use web3::futures::Future;
 use web3::transports::Http;
-use web3::types::{BlockNumber, Bytes};
+use web3::types::{BlockNumber, Bytes, Filter, FilterBuilder, Log};
 use web3::Web3;
 
 use crate::account::Chain;
@@ -84,6 +84,21 @@ impl EthereumClient {
                 |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
                 |nonce| Ok(nonce),
             )
+    }
+
+    pub fn get_eth_logs(&self, filter: Filter) -> EthereumClientResult<Vec<Log>> {
+        self.web3.eth().logs(filter).wait().map_or_else(
+            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
+            |logs| Ok(logs),
+        )
+    }
+
+    pub fn prepare_filter(&self, address: Address) -> Filter {
+        FilterBuilder::default()
+            .from_block(BlockNumber::Earliest)
+            .to_block(BlockNumber::Latest)
+            .address(vec![address])
+            .build()
     }
 }
 

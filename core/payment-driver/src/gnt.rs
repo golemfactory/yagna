@@ -14,6 +14,7 @@ use web3::contract::tokens::Tokenize;
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
 use web3::transports::Http;
+use web3::types::Log;
 
 use ya_persistence::executor::DbExecutor;
 
@@ -129,6 +130,12 @@ impl GntDriver {
                 |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
                 |balance| Ok(Balance::new(balance, Currency::Gnt {})),
             )
+    }
+
+    pub async fn get_gnt_logs(&self) -> PaymentDriverResult<Vec<Log>> {
+        let filter = self.ethereum_client.prepare_filter(self.gnt_contract.address());
+        let logs = self.ethereum_client.get_eth_logs(filter)?;
+        Ok(logs)
     }
 
     /// Returns ether balance
