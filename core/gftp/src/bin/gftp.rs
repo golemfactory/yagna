@@ -3,8 +3,6 @@ use log::info;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-use gftp::{GftpConfig, GftpService};
-
 #[derive(StructOpt)]
 pub enum CmdLine {
     Publish {
@@ -21,17 +19,19 @@ pub enum CmdLine {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
-    std::env::set_var("RUST_LOG", "debug");
+    //std::env::set_var("RUST_LOG", "debug");
+    dotenv::dotenv().ok();
     env_logger::init();
 
     let cmd_args = CmdLine::from_args();
 
-    let config = GftpConfig { chunk_size: 4096 };
-    let gftp_service = GftpService::new(config);
+    let config = gftp::Config {
+        chunk_size: 40 * 1024,
+    };
 
     match cmd_args {
         CmdLine::Publish { path } => {
-            let hash = GftpService::publish_file(gftp_service, &path).await?;
+            let hash = config.publish(&path).await?;
             info!("Published file [{}], hash [{}].", &path.display(), &hash);
 
             actix_rt::signal::ctrl_c().await?;
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
                 &path.display()
             );
 
-            GftpService::download_file(gftp_service, &gftp_address, &path).await?;
+            gftp::download_file(&gftp_address, &path).await?;
             info!("File downloaded.")
         }
     }

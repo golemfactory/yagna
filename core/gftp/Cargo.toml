@@ -4,14 +4,6 @@ version = "0.1.0"
 authors = ["nieznanysprawiciel <nieznany.sprawiciel@gmail.com>"]
 edition = "2018"
 
-[lib]
-name = "gftp"
-path = "src/lib.rs"
-
-[[bin]]
-name = "gftp-server"
-path = "src/bin.rs"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -29,3 +21,4 @@ env_logger = "0.7.1"
 futures = "0.3"
 structopt = "0.3.9"
 sha3 = "0.8.2"
+dotenv = "0.15.0"
