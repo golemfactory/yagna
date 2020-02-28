@@ -86,12 +86,11 @@ fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output
 
 impl PaymentProcessor {
     pub fn new(
-        driver: Box<dyn PaymentDriver + Send + Sync + 'static>,
+        driver: Arc<Mutex<Box<dyn PaymentDriver + Send + Sync + 'static>>>,
         db_executor: DbExecutor,
     ) -> Self {
-        let mutex: Mutex<Box<dyn PaymentDriver + Send + Sync + 'static>> = Mutex::new(driver);
         Self {
-            driver: Arc::new(mutex),
+            driver,
             db_executor,
         }
     }

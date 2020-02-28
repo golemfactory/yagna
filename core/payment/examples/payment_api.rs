@@ -1,6 +1,8 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
+use futures::lock::Mutex;
 use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
 use ya_core_model::ethaddr::NodeId;
 use ya_model::market;
@@ -47,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
     let driver = DummyDriver::new();
-    let processor = PaymentProcessor::new(Box::new(driver), db.clone());
+    let processor = PaymentProcessor::new(Arc::new(Mutex::new(Box::new(driver))), db.clone());
     ya_payment::service::bind_service(&db, processor.clone());
 
     let net_host = ya_net::resolve_default()?;
