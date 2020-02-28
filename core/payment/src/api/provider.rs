@@ -7,6 +7,7 @@ use crate::models as db_models;
 use crate::utils::*;
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use serde_json::value::Value::Null;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment;
 use ya_model::payment::*;
@@ -61,19 +62,18 @@ async fn issue_debit_note(
     let agreement = match get_agreement(agreement_id).await {
         Ok(Some(agreement)) => agreement,
         Ok(None) => {
-            return HttpResponse::BadRequest()
-                .body(format!("Agreement not found: {}", &debit_note.agreement_id))
+            return response::bad_request(&format!(
+                "Agreement not found: {}",
+                &debit_note.agreement_id
+            ))
         }
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => return response::server_error(&e),
     };
 
     let issuer_id = id.identity.to_string();
     if agreement.offer.provider_id.unwrap() != issuer_id {
         // FIXME: provider_id shouldn't be an Option
-        return HttpResponse::Unauthorized().body(format!(
-            "Identity {} is not authorized to issue this debit note",
-            issuer_id
-        ));
+        return response::unauthorized();
     }
     let recipient_id = agreement.demand.requestor_id.unwrap(); // FIXME: requestor_id shouldn't be an Option
     let debit_note = db_models::NewDebitNote::from_api_model(debit_note, issuer_id, recipient_id);
@@ -86,10 +86,10 @@ async fn issue_debit_note(
     }
     .await
     {
-        Ok(Some(debit_note)) => HttpResponse::Created().json(Into::<DebitNote>::into(debit_note)),
-        Ok(None) => HttpResponse::InternalServerError().body("Database error"),
-        Err(DbError::Query(e)) => HttpResponse::BadRequest().body(e.to_string()),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(Some(debit_note)) => response::created::<DebitNote>(debit_note.into()),
+        Ok(None) => response::server_error(&"Database error"),
+        Err(DbError::Query(e)) => response::bad_request(&e),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -97,13 +97,13 @@ async fn get_debit_notes(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
     let issuer_id = id.identity.to_string();
     let dao: DebitNoteDao = db.as_dao();
     match dao.get_issued(issuer_id).await {
-        Ok(debit_notes) => HttpResponse::Ok().json(
+        Ok(debit_notes) => response::ok(
             debit_notes
                 .into_iter()
                 .map(|d| d.into())
                 .collect::<Vec<DebitNote>>(),
         ),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -116,10 +116,10 @@ async fn get_debit_note(
     let dao: DebitNoteDao = db.as_dao();
     match dao.get(path.debit_note_id.clone()).await {
         Ok(Some(debit_note)) if debit_note.issuer_id == issuer_id => {
-            HttpResponse::Ok().json(Into::<DebitNote>::into(debit_note))
+            response::ok::<DebitNote>(debit_note.into())
         }
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-        _ => HttpResponse::NotFound().finish(),
+        Err(e) => response::server_error(&e),
+        _ => response::not_found(),
     }
 }
 
@@ -132,18 +132,15 @@ async fn send_debit_note(
     let dao: DebitNoteDao = db.as_dao();
     let debit_note: DebitNote = match dao.get(path.debit_note_id.clone()).await {
         Ok(Some(debit_note)) => debit_note.into(),
-        Ok(None) => return HttpResponse::NotFound().finish(),
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
     };
     // TODO: Check status
     let debit_note_id = debit_note.debit_note_id.clone();
 
     let node_id = id.identity;
     if Some(node_id) != debit_note.issuer_id.parse().ok() {
-        return HttpResponse::Unauthorized().body(format!(
-            "Identity {:?} is not authorized to send this debit note",
-            node_id,
-        ));
+        return response::unauthorized();
     }
 
     with_timeout(query.timeout, async move {
@@ -154,22 +151,20 @@ async fn send_debit_note(
             .await
         {
             Ok(v) => v,
-            Err(err) => return HttpResponse::InternalServerError().body(err.to_string()),
+            Err(e) => return response::server_error(&e),
         };
 
         match result {
             Ok(_) => (),
-            Err(payment::SendError::BadRequest(msg)) => {
-                return HttpResponse::BadRequest().body(msg)
-            }
-            Err(err) => return HttpResponse::InternalServerError().body(err.to_string()),
+            Err(payment::SendError::BadRequest(e)) => return response::bad_request(&e),
+            Err(e) => return response::server_error(&e),
         }
         match dao
             .update_status(debit_note_id, InvoiceStatus::Received.into())
             .await
         {
-            Ok(_) => HttpResponse::Ok().finish(),
-            Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+            Ok(_) => response::ok(Null),
+            Err(e) => response::server_error(&e),
         }
     })
     .await
@@ -180,11 +175,11 @@ async fn cancel_debit_note(
     path: Path<DebitNoteId>,
     query: Query<Timeout>,
 ) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn get_debit_note_events(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 // *************************** INVOICE ****************************
@@ -197,19 +192,16 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     let agreement = match get_agreement(agreement_id).await {
         Ok(Some(agreement)) => agreement,
         Ok(None) => {
-            return HttpResponse::BadRequest()
-                .body(format!("Agreement not found: {}", &invoice.agreement_id))
+            let msg = format!("Agreement not found: {}", &invoice.agreement_id);
+            return response::bad_request(&msg);
         }
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => return response::server_error(&e),
     };
 
     let issuer_id = id.identity.to_string();
     if agreement.offer.provider_id.unwrap() != issuer_id {
         // FIXME: provider_id shouldn't be an Option
-        return HttpResponse::Unauthorized().body(format!(
-            "Identity {} is not authorized to issue this invoice",
-            issuer_id
-        ));
+        return response::unauthorized();
     }
     let recipient_id = agreement.demand.requestor_id.unwrap(); // FIXME: requestor_id shouldn't be an Option
     let invoice = db_models::NewInvoice::from_api_model(invoice, issuer_id, recipient_id);
@@ -222,10 +214,10 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     }
     .await
     {
-        Ok(Some(invoice)) => HttpResponse::Created().json(Into::<Invoice>::into(invoice)),
-        Ok(None) => HttpResponse::InternalServerError().body("Database error"),
-        Err(DbError::Query(e)) => HttpResponse::BadRequest().body(e.to_string()),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(Some(invoice)) => response::created::<Invoice>(invoice.into()),
+        Ok(None) => response::server_error(&"Database error"),
+        Err(DbError::Query(e)) => response::bad_request(&e),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -233,13 +225,13 @@ async fn get_invoices(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
     let issuer_id = id.identity.to_string();
     let dao: InvoiceDao = db.as_dao();
     match dao.get_issued(issuer_id).await {
-        Ok(invoices) => HttpResponse::Ok().json(
+        Ok(invoices) => response::ok(
             invoices
                 .into_iter()
                 .map(|d| d.into())
                 .collect::<Vec<Invoice>>(),
         ),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -248,10 +240,10 @@ async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>, id: Identity) 
     let dao: InvoiceDao = db.as_dao();
     match dao.get(path.invoice_id.clone()).await {
         Ok(Some(invoice)) if invoice.invoice.issuer_id == issuer_id => {
-            HttpResponse::Ok().json(Into::<Invoice>::into(invoice))
+            response::ok::<Invoice>(invoice.into())
         }
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-        _ => HttpResponse::NotFound().finish(),
+        Err(e) => response::server_error(&e),
+        _ => response::not_found(),
     }
 }
 
@@ -264,17 +256,14 @@ async fn send_invoice(
     let dao: InvoiceDao = db.as_dao();
     let invoice: Invoice = match dao.get(path.invoice_id.clone()).await {
         Ok(Some(invoice)) => invoice.into(),
-        Ok(None) => return HttpResponse::NotFound().finish(),
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
     };
     let invoice_id = invoice.invoice_id.clone();
 
     let node_id = id.identity;
     if Some(node_id) != invoice.issuer_id.parse().ok() {
-        return HttpResponse::Unauthorized().body(format!(
-            "Identity {:?} is not authorized to send this debit note",
-            node_id,
-        ));
+        return response::unauthorized();
     }
 
     let addr: NodeId = invoice.recipient_id.parse().unwrap();
@@ -293,11 +282,11 @@ async fn send_invoice(
     }
     .await
     {
-        Err(Error::Timeout(_)) => return HttpResponse::GatewayTimeout().finish(),
+        Err(Error::Timeout(_)) => return response::timeout(),
         Err(Error::Rpc(payment::RpcMessageError::Send(payment::SendError::BadRequest(e)))) => {
-            return { HttpResponse::BadRequest().body(e) }
+            return response::bad_request(&e)
         }
-        Err(e) => return { HttpResponse::InternalServerError().body(e.to_string()) },
+        Err(e) => return { response::server_error(&e) },
         _ => {}
     }
 
@@ -305,8 +294,8 @@ async fn send_invoice(
         .update_status(invoice_id, InvoiceStatus::Received.into())
         .await
     {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(_) => response::ok(Null),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -315,11 +304,11 @@ async fn cancel_invoice(
     path: Path<InvoiceId>,
     query: Query<Timeout>,
 ) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn get_invoice_events(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 // *************************** PAYMENT ****************************
@@ -332,13 +321,10 @@ async fn get_payments(
     let payee_id = id.identity.to_string();
     let dao: PaymentDao = db.as_dao();
     match dao.get_received(payee_id).await {
-        Ok(payments) => HttpResponse::Ok().json(
-            payments
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<Payment>>(),
-        ),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(payments) => {
+            response::ok::<Vec<Payment>>(payments.into_iter().map(Into::into).collect())
+        }
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -347,17 +333,17 @@ async fn get_payment(db: Data<DbExecutor>, path: Path<PaymentId>, id: Identity) 
     let dao: PaymentDao = db.as_dao();
     match dao.get(path.payment_id.clone()).await {
         Ok(Some(payment)) if payment.payment.payee_id == payee_id => {
-            HttpResponse::Ok().json(Into::<Payment>::into(payment))
+            response::ok::<Payment>(payment.into())
         }
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-        _ => HttpResponse::NotFound().finish(),
+        Err(e) => response::server_error(&e),
+        _ => response::not_found(),
     }
 }
 
 async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }

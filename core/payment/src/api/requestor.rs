@@ -6,9 +6,10 @@ use crate::dao::payment::PaymentDao;
 use crate::error::{DbError, Error};
 use crate::models as db_models;
 use crate::processor::PaymentProcessor;
-use crate::utils::with_timeout;
+use crate::utils::{response, with_timeout};
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use serde_json::value::Value::Null;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment;
 use ya_model::payment::*;
@@ -60,13 +61,13 @@ async fn get_debit_notes(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
     let recipient_id = id.identity.to_string();
     let dao: DebitNoteDao = db.as_dao();
     match dao.get_received(recipient_id).await {
-        Ok(debit_notes) => HttpResponse::Ok().json(
+        Ok(debit_notes) => response::ok(
             debit_notes
                 .into_iter()
                 .map(|d| d.into())
                 .collect::<Vec<DebitNote>>(),
         ),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -79,10 +80,10 @@ async fn get_debit_note(
     let dao: DebitNoteDao = db.as_dao();
     match dao.get(path.debit_note_id.clone()).await {
         Ok(Some(debit_note)) if debit_note.recipient_id == recipient_id => {
-            HttpResponse::Ok().json(Into::<DebitNote>::into(debit_note))
+            response::ok::<DebitNote>(debit_note.into())
         }
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-        _ => HttpResponse::NotFound().finish(),
+        Err(e) => response::server_error(&e),
+        _ => response::not_found(),
     }
 }
 
@@ -92,7 +93,7 @@ async fn accept_debit_note(
     query: Query<Timeout>,
     body: Json<Acceptance>,
 ) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn reject_debit_note(
@@ -101,11 +102,11 @@ async fn reject_debit_note(
     query: Query<Timeout>,
     body: Json<Rejection>,
 ) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn get_debit_note_events(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 // *************************** INVOICE ****************************
@@ -114,13 +115,13 @@ async fn get_invoices(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
     let recipient_id = id.identity.to_string();
     let dao: InvoiceDao = db.as_dao();
     match dao.get_received(recipient_id).await {
-        Ok(invoices) => HttpResponse::Ok().json(
+        Ok(invoices) => response::ok(
             invoices
                 .into_iter()
                 .map(|d| d.into())
                 .collect::<Vec<Invoice>>(),
         ),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -129,10 +130,10 @@ async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>, id: Identity) 
     let dao: InvoiceDao = db.as_dao();
     match dao.get(path.invoice_id.clone()).await {
         Ok(Some(invoice)) if invoice.invoice.recipient_id == recipient_id => {
-            HttpResponse::Ok().json(Into::<Invoice>::into(invoice))
+            response::ok::<Invoice>(invoice.into())
         }
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-        _ => HttpResponse::NotFound().finish(),
+        Err(e) => response::server_error(&e),
+        _ => response::not_found(),
     }
 }
 
@@ -152,44 +153,43 @@ async fn accept_invoice(
     let dao: InvoiceDao = db.as_dao();
     let invoice: Invoice = match dao.get(invoice_id.clone()).await {
         Ok(Some(invoice)) if invoice.invoice.recipient_id == recipient_id => invoice.into(),
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
-        _ => return HttpResponse::NotFound().finish(),
+        Err(e) => return response::server_error(&e),
+        _ => return response::not_found(),
     };
 
     let node_id = id.identity;
     if Some(node_id) != invoice.recipient_id.parse().ok() {
-        return HttpResponse::Unauthorized().body(format!(
-            "Identity {:?} is not authorized to send this debit note",
-            node_id,
-        ));
+        return response::unauthorized();
     }
 
     if invoice.amount != acceptance.total_amount_accepted {
-        return HttpResponse::BadRequest().finish();
+        return response::bad_request(&"Invalid amount accepted");
     }
 
     match invoice.status {
         InvoiceStatus::Received => (),
         InvoiceStatus::Rejected => (),
-        InvoiceStatus::Accepted => return HttpResponse::Ok().finish(),
-        InvoiceStatus::Settled => return HttpResponse::Ok().finish(),
-        InvoiceStatus::Issued => return HttpResponse::InternalServerError().finish(),
-        InvoiceStatus::Cancelled => return HttpResponse::BadRequest().finish(),
-        InvoiceStatus::Failed => return HttpResponse::BadRequest().finish(),
+        InvoiceStatus::Failed => (),
+        InvoiceStatus::Accepted => return response::ok(Null),
+        InvoiceStatus::Settled => return response::ok(Null),
+        InvoiceStatus::Issued => return response::server_error(&"Illegal status: issued"),
+        InvoiceStatus::Cancelled => return response::bad_request(&"Invoice cancelled"),
     }
 
     let allocation_dao: AllocationDao = db.as_dao();
     let allocation: Allocation = match allocation_dao.get(allocation_id.clone()).await {
         Ok(Some(allocation)) => allocation.into(),
-        Ok(None) => return HttpResponse::BadRequest().finish(),
-        Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(None) => {
+            return response::bad_request(&format!("Allocation {} not found", allocation_id))
+        }
+        Err(e) => return response::server_error(&e),
     };
     if invoice.amount > allocation.remaining_amount {
         let msg = format!(
             "Not enough funds. Allocated: {} Needed: {}",
             allocation.remaining_amount, invoice.amount
         );
-        return HttpResponse::BadRequest().body(msg);
+        return response::bad_request(&msg);
     }
 
     with_timeout(query.timeout, async move {
@@ -206,21 +206,21 @@ async fn accept_invoice(
         {
             Err(Error::Rpc(payment::RpcMessageError::AcceptReject(
                 payment::AcceptRejectError::BadRequest(e),
-            ))) => return { HttpResponse::BadRequest().body(e) },
-            Err(e) => return { HttpResponse::InternalServerError().body(e.to_string()) },
+            ))) => return response::bad_request(&e),
+            Err(e) => return response::server_error(&e),
             _ => (),
         }
 
         if let Err(e) = processor.schedule_payment(invoice, allocation_id).await {
-            return HttpResponse::InternalServerError().body(e.to_string());
+            return response::server_error(&e);
         }
 
         match dao
             .update_status(invoice_id, InvoiceStatus::Accepted.into())
             .await
         {
-            Ok(_) => HttpResponse::Ok().finish(),
-            Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+            Ok(_) => response::ok(Null),
+            Err(e) => response::server_error(&e),
         }
     })
     .await
@@ -232,11 +232,11 @@ async fn reject_invoice(
     query: Query<Timeout>,
     body: Json<Rejection>,
 ) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn get_invoice_events(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 // ************************** ALLOCATION **************************
@@ -252,32 +252,29 @@ async fn create_allocation(db: Data<DbExecutor>, body: Json<NewAllocation>) -> H
     }
     .await
     {
-        Ok(Some(allocation)) => HttpResponse::Created().json(Into::<Allocation>::into(allocation)),
-        Ok(None) => HttpResponse::InternalServerError().body("Database error"),
-        Err(DbError::Query(e)) => HttpResponse::BadRequest().body(e.to_string()),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(Some(allocation)) => response::created::<Allocation>(allocation.into()),
+        Ok(None) => response::server_error(&"Database error"),
+        Err(DbError::Query(e)) => response::bad_request(&e),
+        Err(e) => response::server_error(&e),
     }
 }
 
 async fn get_allocations(db: Data<DbExecutor>) -> HttpResponse {
     let dao: AllocationDao = db.as_dao();
     match dao.get_all().await {
-        Ok(allocations) => HttpResponse::Ok().json(
-            allocations
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<Allocation>>(),
-        ),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(allocations) => {
+            response::ok::<Vec<Allocation>>(allocations.into_iter().map(Into::into).collect())
+        }
+        Err(e) => response::server_error(&e),
     }
 }
 
 async fn get_allocation(db: Data<DbExecutor>, path: Path<AllocationId>) -> HttpResponse {
     let dao: AllocationDao = db.as_dao();
     match dao.get(path.allocation_id.clone()).await {
-        Ok(Some(allocation)) => HttpResponse::Ok().json(Into::<Allocation>::into(allocation)),
-        Ok(None) => HttpResponse::NotFound().finish(),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(Some(allocation)) => response::ok::<Allocation>(allocation.into()),
+        Ok(None) => response::not_found(),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -286,14 +283,14 @@ async fn amend_allocation(
     path: Path<AllocationId>,
     body: Json<Allocation>,
 ) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn release_allocation(db: Data<DbExecutor>, path: Path<AllocationId>) -> HttpResponse {
     let dao: AllocationDao = db.as_dao();
     match dao.delete(path.allocation_id.clone()).await {
-        Ok(_) => HttpResponse::Ok().finish(),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(_) => response::ok(Null),
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -307,13 +304,10 @@ async fn get_payments(
     let payer_id = id.identity.to_string();
     let dao: PaymentDao = db.as_dao();
     match dao.get_sent(payer_id).await {
-        Ok(payments) => HttpResponse::Ok().json(
-            payments
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<Payment>>(),
-        ),
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+        Ok(payments) => {
+            response::ok::<Vec<Payment>>(payments.into_iter().map(Into::into).collect())
+        }
+        Err(e) => response::server_error(&e),
     }
 }
 
@@ -322,17 +316,17 @@ async fn get_payment(db: Data<DbExecutor>, path: Path<PaymentId>, id: Identity) 
     let dao: PaymentDao = db.as_dao();
     match dao.get(path.payment_id.clone()).await {
         Ok(Some(payment)) if payment.payment.payer_id == payer_id => {
-            HttpResponse::Ok().json(Into::<Payment>::into(payment))
+            response::ok::<Payment>(payment.into())
         }
-        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
-        _ => HttpResponse::NotFound().finish(),
+        Err(e) => response::server_error(&e),
+        _ => response::not_found(),
     }
 }
 
 async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
 
 async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
-    HttpResponse::NotImplemented().finish() // TODO
+    response::not_implemented() // TODO
 }
