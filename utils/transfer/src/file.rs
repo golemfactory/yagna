@@ -22,7 +22,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         scheme == "file"
     }
 
-    fn source(self, url: &str) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &str) -> TransferStream<TransferData, Error> {
         let (stream, mut tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let url = url.to_owned();
 
@@ -56,7 +56,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         stream
     }
 
-    fn destination(self, url: &str) -> TransferSink<TransferData, Error> {
+    fn destination(&self, url: &str) -> TransferSink<TransferData, Error> {
         let (mut sink, mut rx) = TransferSink::<TransferData, Error>::create(1);
         let url = url.to_owned();
 

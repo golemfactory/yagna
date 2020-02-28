@@ -71,8 +71,8 @@ impl From<Bytes> for TransferData {
 pub trait TransferProvider<T, E> {
     fn supports(scheme: &str) -> bool;
 
-    fn source(self, url: &str) -> TransferStream<T, E>;
-    fn destination(self, url: &str) -> TransferSink<T, E>;
+    fn source(&self, url: &str) -> TransferStream<T, E>;
+    fn destination(&self, url: &str) -> TransferSink<T, E>;
 }
 
 pub struct TransferStream<T, E> {
