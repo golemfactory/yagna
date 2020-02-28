@@ -912,42 +912,42 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     Unauthorized:
       description: Unauthorized
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     NotFound:
       description: Object not found
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     ServerError:
       description: Server error
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     AckTimeout:
       description: The Requestor has not responded to the request within timeout.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     DebitNoteCancelRefused:
       description: The Requestor has refused to cancel the Debit Note.
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     DebitNote:
       description: OK
@@ -970,7 +970,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorMessage'
+            $ref: 'error_message.yaml#/ErrorMessage'
 
     Invoice:
       description: OK
@@ -1204,6 +1204,7 @@ components:
           type: string
       required:
         - totalAmountAccepted
+        - allocationId
 
     Rejection:
       description: Message sent when Requestor rejects a Debit Note or Invoice.
@@ -1334,9 +1335,3 @@ components:
         - ACCEPTED
         - REJECTED
         - CANCELLED
-
-    ErrorMessage:
-      type: object
-      properties:
-        message:
-          type: string

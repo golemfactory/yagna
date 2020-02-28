@@ -50,12 +50,13 @@ impl IdentityService {
                     note: None,
                     created_date: Utc::now().naive_utc(),
                 };
-                log::info!("default identity generated: {:?}", new_identity);
 
                 Ok(new_identity)
             })
             .await?
             .identity_id;
+
+        log::info!("using default identity: {:?}", default_key);
 
         let mut ids: HashMap<NodeId, _> = Default::default();
         let mut alias_to_id: HashMap<String, _> = Default::default();

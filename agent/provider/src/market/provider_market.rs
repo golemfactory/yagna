@@ -1,11 +1,11 @@
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
-use crate::forward_actix_handler;
-use crate::utils::actix_handler::ResultTypeGetter;
-use crate::utils::actix_signal::{SignalSlot, Subscribe};
 
 use ya_client::market::MarketProviderApi;
 use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
+use ya_utils_actix::actix_handler::ResultTypeGetter;
+use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
+use ya_utils_actix::forward_actix_handler;
 
 use actix::prelude::*;
 use anyhow::{Error, Result};
@@ -219,7 +219,7 @@ impl ProviderMarket {
     ) -> Result<()> {
         match event {
             ProviderEvent::ProposalEvent { proposal, .. } => {
-                let proposal_id = &proposal.id().map_err(Error::msg)?;
+                let proposal_id = &proposal.proposal_id().map_err(Error::msg)?;
                 info!("Got demand proposal [id={}].", proposal_id);
 
                 ProviderMarket::process_proposal(addr, market_api, subscription_id, proposal)
@@ -334,7 +334,7 @@ impl ProviderMarket {
             .counter_proposal(
                 proposal,
                 subscription_id,
-                proposal.id().map_err(Error::msg)?,
+                proposal.proposal_id().map_err(Error::msg)?,
             )
             .await?;
         Ok(())
@@ -354,7 +354,7 @@ impl ProviderMarket {
             .counter_proposal(
                 proposal,
                 subscription_id,
-                proposal.id().map_err(Error::msg)?,
+                proposal.proposal_id().map_err(Error::msg)?,
             )
             .await?;
         Ok(())
@@ -371,7 +371,10 @@ impl ProviderMarket {
         );
 
         market_api
-            .reject_proposal(subscription_id, &proposal.id().map_err(Error::msg)?)
+            .reject_proposal(
+                subscription_id,
+                &proposal.proposal_id().map_err(Error::msg)?,
+            )
             .await?;
         Ok(())
     }

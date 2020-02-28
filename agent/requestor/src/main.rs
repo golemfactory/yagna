@@ -1,16 +1,14 @@
-#![allow(unused_imports)]
-
-use actix_rt::{Arbiter, System};
-use chrono::{TimeZone, Utc};
-use futures::channel::mpsc;
-use futures::prelude::*;
+use actix_rt::Arbiter;
+use futures::{channel::mpsc, prelude::*};
+use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
-use ya_client::{market::MarketRequestorApi, web::WebClient};
 
-use std::time::Duration;
-use ya_model::market::event::RequestorEvent;
-use ya_model::market::{AgreementProposal, Demand, Proposal};
+use ya_client::{
+    activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
+};
+//use ya_model::market::proposal::State;
+use ya_model::market::{AgreementProposal, Demand, Proposal, RequestorEvent};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -32,15 +30,11 @@ struct AppSettings {
 }
 
 impl AppSettings {
-    fn market_api(
-        &self,
-    ) -> Result<ya_client::market::MarketRequestorApi, Box<dyn std::error::Error>> {
+    fn market_api(&self) -> Result<ya_client::market::MarketRequestorApi, anyhow::Error> {
         Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
     }
 
-    fn activity_api(
-        &self,
-    ) -> Result<ya_client::activity::ActivityRequestorControlApi, Box<dyn std::error::Error>> {
+    fn activity_api(&self) -> Result<ActivityRequestorControlApi, anyhow::Error> {
         let client = WebClient::with_token(&self.app_key)?;
         if let Some(url) = &self.activity_url {
             Ok(client.interface_at(url.clone()))
@@ -53,25 +47,31 @@ impl AppSettings {
 async fn process_offer(
     requestor_api: MarketRequestorApi,
     offer: Proposal,
-) -> Result<String, Box<dyn std::error::Error>> {
-    let agreement_id = offer.proposal_id.unwrap().clone();
-    let agreement =
-        AgreementProposal::new(agreement_id.clone(), "2021-01-01T18:54:16.655397Z".parse()?);
-    let _ack = requestor_api.create_agreement(&agreement).await?;
-    log::info!("confirm agreement = {}", agreement_id);
-    requestor_api.confirm_agreement(&agreement_id).await?;
-    log::info!("wait for agreement = {}", agreement_id);
-    requestor_api.wait_for_approval(&agreement_id).await?;
-    log::info!("agreement = {} CONFIRMED!", agreement_id);
+) -> Result<String, anyhow::Error> {
+    //    if offer.state.is_none() {
+    //        requestor_api.counter_proposal(offer)
+    //    }
 
-    Ok(agreement_id)
+    let new_agreement_id = offer.proposal_id()?;
+    let new_agreement = AgreementProposal::new(
+        new_agreement_id.clone(),
+        "2021-01-01T18:54:16.655397Z".parse()?,
+    );
+    let _ack = requestor_api.create_agreement(&new_agreement).await?;
+    log::info!("confirm agreement = {}", new_agreement_id);
+    requestor_api.confirm_agreement(new_agreement_id).await?;
+    log::info!("wait for agreement = {}", new_agreement_id);
+    requestor_api.wait_for_approval(new_agreement_id).await?;
+    log::info!("agreement = {} CONFIRMED!", new_agreement_id);
+
+    Ok(new_agreement_id.clone())
 }
 
 async fn spawn_workers(
     requestor_api: MarketRequestorApi,
     subscription_id: &str,
     tx: futures::channel::mpsc::Sender<String>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), anyhow::Error> {
     loop {
         let events = requestor_api
             .collect(&subscription_id, Some(120), Some(5))
@@ -132,8 +132,27 @@ fn build_demand(node_name: &str) -> Demand {
     }
 }
 
+async fn process_agreement(
+    activity_api: &ActivityRequestorControlApi,
+    agreement_id: String,
+) -> Result<(), anyhow::Error> {
+    log::info!("GOT new agreement = {}", agreement_id);
+
+    let act_id = activity_api.create_activity(&agreement_id).await?;
+    log::info!("GOT new activity = (({})); YAY!", act_id);
+
+    tokio::time::delay_for(Duration::from_millis(7000)).await;
+
+    log::info!("destroying activity = (({})); AGRRR!", act_id);
+    activity_api.destroy_activity(&act_id).await?;
+    log::info!("I'M DONE FOR NOW");
+
+    //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
+    Ok(())
+}
+
 #[actix_rt::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), anyhow::Error> {
     dotenv::dotenv().ok();
     env_logger::init();
 
@@ -166,12 +185,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         futures::channel::mpsc::channel(1);
     Arbiter::spawn(async move {
         while let Some(id) = rx.next().await {
-            log::info!("new agreement = {}", id);
-            let act_id = activity_api.create_activity(&id).await.unwrap();
-            log::info!("new activity = (({})); destroying...", act_id);
-            let _ = activity_api.destroy_activity(&act_id).await.unwrap();
-            log::info!("I'M DONE FOR NOW");
-            //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
+            if let Err(e) = process_agreement(&activity_api, id.clone()).await {
+                log::error!("processing agreement id {} error: {}", id, e);
+                return;
+            }
         }
     });
     spawn_workers(requestor_api.clone(), &subscription_id, tx).await?;

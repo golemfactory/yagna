@@ -84,6 +84,7 @@ pub enum RpcMessageError {
     Service(String),
     Activity(String),
     BadRequest(String),
+    UsageLimitExceeded(String),
     NotFound,
     Forbidden,
     Timeout,

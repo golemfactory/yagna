@@ -6,7 +6,7 @@ use futures::prelude::*;
 use std::fmt::Display;
 use std::future::Future;
 use ya_core_model::payment::*;
-use ya_model::payment::InvoiceStatus;
+use ya_model::payment::*;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcMessage;
@@ -40,7 +40,7 @@ impl<'a, 'b> ServiceBinder<'a, 'b> {
 }
 
 pub fn bind_service(db: &DbExecutor) {
-    log::info!("Binding payment service to service bus");
+    log::debug!("Binding payment service to service bus");
 
     let _ = ServiceBinder {
         db,
@@ -56,7 +56,7 @@ pub fn bind_service(db: &DbExecutor) {
     .bind(cancel_invoice)
     .bind(send_payment);
 
-    log::info!("Successfully bound payment service to service bus");
+    log::debug!("Successfully bound payment service to service bus");
 }
 
 // ************************** DEBIT NOTE **************************
@@ -80,10 +80,9 @@ async fn send_debit_note(
         Ok(Some(agreement)) => agreement,
     };
     let sender_id = sender.trim_start_matches("/net/");
-    let offeror_id = agreement.offer.provider_id.unwrap();
+    let offeror_id = agreement.offer.provider_id.unwrap(); // FIXME: provider_id shouldn't be an Option
     let issuer_id = debit_note.issuer_id.clone();
     if sender_id != offeror_id || sender_id != issuer_id {
-        // FIXME: provider_id shouldn't be an Option
         return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
     }
 
@@ -137,10 +136,9 @@ async fn send_invoice(db: DbExecutor, sender: String, msg: SendInvoice) -> Resul
         Ok(Some(agreement)) => agreement,
     };
     let sender_id = sender.trim_start_matches("/net/");
-    let offeror_id = agreement.offer.provider_id.unwrap();
+    let offeror_id = agreement.offer.provider_id.unwrap(); // FIXME: provider_id shouldn't be an Option
     let issuer_id = invoice.issuer_id.clone();
     if sender_id != offeror_id || sender_id != issuer_id {
-        // FIXME: provider_id shouldn't be an Option
         return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
     }
 
@@ -158,7 +156,53 @@ async fn accept_invoice(
     sender: String,
     msg: AcceptInvoice,
 ) -> Result<Ack, AcceptRejectError> {
-    unimplemented!() // TODO
+    let invoice_id = msg.invoice_id;
+    let acceptance = msg.acceptance;
+    let dao: InvoiceDao = db.as_dao();
+    let invoice: Invoice = match dao.get(invoice_id.clone()).await {
+        Ok(Some(invoice)) => invoice.into(),
+        Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
+        Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
+    };
+
+    let sender_id = sender.trim_start_matches("/net/");
+    if sender_id != invoice.recipient_id {
+        return Err(AcceptRejectError::Forbidden);
+    }
+
+    if invoice.amount != acceptance.total_amount_accepted {
+        let msg = format!(
+            "Invalid amount accepted. Expected: {} Actual: {}",
+            invoice.amount, acceptance.total_amount_accepted
+        );
+        return Err(AcceptRejectError::BadRequest(msg));
+    }
+
+    match invoice.status {
+        InvoiceStatus::Issued => (),
+        InvoiceStatus::Received => (),
+        InvoiceStatus::Rejected => (),
+        InvoiceStatus::Accepted => return Ok(Ack {}),
+        InvoiceStatus::Settled => return Ok(Ack {}),
+        InvoiceStatus::Cancelled => {
+            return Err(AcceptRejectError::BadRequest(
+                "Cannot accept cancelled invoice".to_owned(),
+            ))
+        }
+        InvoiceStatus::Failed => {
+            return Err(AcceptRejectError::BadRequest(
+                "Cannot accept failed invoice".to_owned(),
+            ))
+        }
+    }
+
+    match dao
+        .update_status(invoice_id, InvoiceStatus::Accepted.into())
+        .await
+    {
+        Ok(_) => Ok(Ack {}),
+        Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+    }
 }
 
 async fn reject_invoice(

@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ErrorMessage;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Offer {
     #[serde(rename = "properties")]
@@ -30,5 +32,13 @@ impl Offer {
             offer_id: None,
             provider_id: None,
         }
+    }
+
+    pub fn offer_id(&self) -> Result<&String, ErrorMessage> {
+        self.offer_id.as_ref().ok_or("no offer id".into())
+    }
+
+    pub fn provider_id(&self) -> Result<&String, ErrorMessage> {
+        self.provider_id.as_ref().ok_or("no provider id".into())
     }
 }
