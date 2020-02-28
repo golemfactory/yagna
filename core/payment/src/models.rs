@@ -301,6 +301,36 @@ pub struct InvoiceEvent {
     pub details: Option<String>,
 }
 
+impl From<InvoiceEvent> for api_model::InvoiceEvent {
+    fn from(event: InvoiceEvent) -> Self {
+        Self {
+            invoice_id: event.invoice_id,
+            timestamp: Utc.from_utc_datetime(&event.timestamp),
+            details: event.details.map(|s| serde_json::from_str(&s).unwrap()),
+            event_type: event.event_type.into(),
+        }
+    }
+}
+
+#[derive(Debug, Identifiable, Insertable)]
+#[table_name = "pay_invoice_event"]
+#[primary_key(invoice_id, event_type)]
+pub struct NewInvoiceEvent {
+    pub invoice_id: String,
+    pub event_type: String,
+    pub details: Option<String>,
+}
+
+impl From<api_model::NewInvoiceEvent> for NewInvoiceEvent {
+    fn from(event: api_model::NewInvoiceEvent) -> Self {
+        Self {
+            invoice_id: event.invoice_id,
+            event_type: event.event_type.into(),
+            details: event.details.map(|s| serde_json::to_string(&s).unwrap()),
+        }
+    }
+}
+
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "pay_invoice_event_type"]
 #[primary_key(event_type)]

@@ -2,6 +2,7 @@ use crate::api::*;
 use crate::dao::allocation::AllocationDao;
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
+use crate::dao::invoice_event::InvoiceEventDao;
 use crate::dao::payment::PaymentDao;
 use crate::error::{DbError, Error};
 use crate::models as db_models;
@@ -10,6 +11,7 @@ use crate::utils::{response, with_timeout};
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
+use std::time::Duration;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment;
 use ya_model::payment::*;
@@ -235,14 +237,56 @@ async fn reject_invoice(
     response::not_implemented() // TODO
 }
 
-async fn get_invoice_events(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpResponse {
-    response::not_implemented() // TODO
+async fn get_invoice_events(
+    db: Data<DbExecutor>,
+    query: Query<EventParams>,
+    id: Identity,
+) -> HttpResponse {
+    let recipient_id = id.identity.to_string();
+    let timeout = query.timeout;
+    let later_than = query.later_than.map(|d| d.naive_utc());
+    let dao: InvoiceEventDao = db.as_dao();
+
+    match dao
+        .get_for_recipient(recipient_id.clone(), later_than.clone())
+        .await
+    {
+        Err(e) => return response::server_error(&e),
+        Ok(events) if events.len() > 0 || timeout == 0 => {
+            return response::ok::<Vec<InvoiceEvent>>(events.into_iter().map(Into::into).collect())
+        }
+        _ => (),
+    }
+
+    let timeout = Duration::from_secs(timeout.into());
+    let result = tokio::time::timeout(timeout, async move {
+        loop {
+            tokio::time::delay_for(Duration::from_secs(1)).await;
+            match dao
+                .get_for_recipient(recipient_id.clone(), later_than.clone())
+                .await
+            {
+                Err(e) => break Err(e),
+                Ok(events) if events.len() > 0 => break Ok(events),
+                _ => (),
+            }
+        }
+    })
+    .await
+    .unwrap_or(Ok(vec![]));
+    match result {
+        Err(e) => response::server_error(&e),
+        Ok(events) => {
+            response::ok::<Vec<InvoiceEvent>>(events.into_iter().map(Into::into).collect())
+        }
+    }
 }
 
 // ************************** ALLOCATION **************************
 
 async fn create_allocation(db: Data<DbExecutor>, body: Json<NewAllocation>) -> HttpResponse {
     // TODO: Handle deposits & timeouts
+    // TODO: Allocations should have owners (identities)
     let allocation: db_models::NewAllocation = body.into_inner().into();
     let allocation_id = allocation.id.clone();
     let dao: AllocationDao = db.as_dao();
