@@ -28,6 +28,19 @@ pub enum Command {
     Stop,
 }
 
+pub mod command_helpers {
+    use crate::Command;
+    #[allow(non_upper_case_globals)]
+    pub const deploy: Command = Command::Deploy;
+    #[allow(non_upper_case_globals)]
+    pub const start: Command = Command::Start;
+    #[allow(non_upper_case_globals)]
+    pub const stop: Command = Command::Stop;
+    pub fn run(s: &[&str]) -> Command {
+        Command::Run(s.into_iter().map(|s| s.to_string()).collect())
+    }
+}
+
 pub struct CommandList(Vec<Command>);
 
 impl CommandList {
@@ -98,4 +111,15 @@ impl WasmDemand {
             ..self
         }
     }
+}
+
+#[macro_export]
+macro_rules! commands {
+    ( $( $cmd:expr );* ; ) => {{
+        let mut v = Vec::new();
+        $(
+            v.push($cmd);
+        )*
+        CommandList::new(v)
+    }}
 }

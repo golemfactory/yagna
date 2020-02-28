@@ -1,5 +1,7 @@
 use std::time::Duration;
-use ya_batch_requestor::{Command, CommandList, ImageSpec, TaskSession, WasmDemand, WasmRuntime};
+use ya_batch_requestor::{
+    command_helpers::*, commands, CommandList, ImageSpec, TaskSession, WasmDemand, WasmRuntime,
+};
 
 #[actix_rt::main]
 async fn main() -> Result<(), ()> {
@@ -15,18 +17,12 @@ async fn main() -> Result<(), ()> {
                 .min_storage_gib(1.0),
         )
         .tasks(tasks.into_iter().map(|arg| {
-            CommandList::new(vec![
-                Command::Deploy,
-                Command::Start,
-                Command::Run(vec!["test-wasi".into(), arg.into()]),
-                Command::Stop,
-            ])
-            /*commands! {
+            commands! {
                 deploy;
                 start;
-                run("test-wasi", arg)
+                run(&["abc", arg]);
                 stop;
-            }*/
+            }
         }))
         .run();
 
