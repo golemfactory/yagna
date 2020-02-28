@@ -62,9 +62,9 @@ where
     Self: Future + Sized,
     D: IntoDuration,
 {
-    fn timeout(self, duration: Option<D>) -> Either<Timeout<Self>, MapType<Self>> {
-        match duration {
-            Some(d) => Either::Left(timeout(d.into_duration(), self)),
+    fn timeout(self, duration_ms: Option<D>) -> Either<Timeout<Self>, MapType<Self>> {
+        match duration_ms {
+            Some(ms) => Either::Left(timeout(ms.into_duration(), self)),
             None => Either::Right(self.map(|v| Result::Ok(v))),
         }
     }

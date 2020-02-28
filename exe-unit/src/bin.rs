@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
             activity_id: String::new(),
             batch_id: String::new(),
             exe_script,
-            timeout: None,
+            timeout_ms: None,
         };
         exe_unit.do_send(RpcEnvelope::with_caller(String::new(), msg));
     }

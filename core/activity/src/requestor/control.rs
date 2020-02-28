@@ -14,7 +14,7 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
+    get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
@@ -55,14 +55,14 @@ async fn create_activity(
         // TODO: fix this
         provider_id: NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap()).unwrap(),
         agreement_id: agreement_id.clone(),
-        timeout: query.timeout.clone(),
+        timeout_ms: query.timeout_ms.clone(),
     };
 
     let caller = Some(format!("/net/{:?}", id.identity));
     let uri = provider_activity_service_id(&agreement)?;
 
     log::debug!("creating activity at: {}, caller: {:?}", uri, caller);
-    let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
+    let activity_id = gsb_send!(caller, msg, &uri, query.timeout_ms)?;
 
     log::debug!("activity created: {}, inserting", activity_id);
     db.as_dao::<ActivityDao>()
@@ -81,15 +81,16 @@ async fn destroy_activity(
 ) -> Result<(), Error> {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement =
+        get_activity_agreement(&db, &path.activity_id, query.timeout_ms.clone()).await?;
     let msg = DestroyActivity {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
-        timeout: query.timeout.clone(),
+        timeout_ms: query.timeout_ms.clone(),
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    let _ = gsb_send!(None, msg, &uri, query.timeout)?;
+    let _ = gsb_send!(None, msg, &uri, query.timeout_ms)?;
     db.as_dao::<ActivityStateDao>()
         .set(
             &path.activity_id,
@@ -115,17 +116,18 @@ async fn exec(
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement =
+        get_activity_agreement(&db, &path.activity_id, query.timeout_ms.clone()).await?;
     let batch_id = generate_id();
     let msg = Exec {
         activity_id: path.activity_id.clone(),
         batch_id: batch_id.clone(),
         exe_script: commands,
-        timeout: query.timeout.clone(),
+        timeout_ms: query.timeout_ms.clone(),
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    gsb_send!(None, msg, &uri, query.timeout)?;
+    gsb_send!(None, msg, &uri, query.timeout_ms)?;
     Ok(batch_id)
 }
 
@@ -133,20 +135,21 @@ async fn exec(
 async fn get_batch_results(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
-    query: web::Query<QueryTimeoutMaxCount>,
+    query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement =
+        get_activity_agreement(&db, &path.activity_id, query.timeout_ms.clone()).await?;
     let msg = GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout_ms: query.timeout_ms.clone(),
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    gsb_send!(None, msg, &uri, query.timeout)
+    gsb_send!(None, msg, &uri, query.timeout_ms)
 }
 
 #[derive(Deserialize)]

@@ -57,7 +57,7 @@ async fn create_activity_gsb(
     let state = db
         .as_dao::<ActivityStateDao>()
         .get_future(&activity_id, None)
-        .timeout(msg.timeout)
+        .timeout(msg.timeout_ms)
         .map_err(Error::from)
         .await?
         .map_err(Error::from)?;
@@ -82,11 +82,11 @@ async fn destroy_activity_gsb(
 
     log::info!(
         "waiting {:?}ms for activity status change to Terminate",
-        msg.timeout
+        msg.timeout_ms
     );
     db.as_dao::<ActivityStateDao>()
         .get_future(&msg.activity_id, Some(StatePair(State::Terminated, None)))
-        .timeout(msg.timeout)
+        .timeout(msg.timeout_ms)
         .map_err(Error::from)
         .await?
         .map_err(Error::from)?;

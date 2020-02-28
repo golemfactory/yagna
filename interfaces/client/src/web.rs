@@ -129,7 +129,7 @@ where
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err((response.status(), url, response.json().await?).into())
+        Err((response.status(), url, response.json().await).into())
     }
 }
 

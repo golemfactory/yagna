@@ -131,7 +131,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: timeout
+        - name: timeoutMs
           in: query
           schema:
             type: integer
@@ -217,7 +217,7 @@ paths:
       summary: Fetch Requestor command events.
       operationId: CollectActivityEvents
       parameters:
-        - name: timeout
+        - name: timeoutMs
           in: query
           schema:
             type: integer

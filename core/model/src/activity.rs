@@ -13,7 +13,7 @@ pub const BUS_ID: &str = "/private/activity";
 pub struct CreateActivity {
     pub provider_id: NodeId,
     pub agreement_id: String,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -21,7 +21,7 @@ pub struct CreateActivity {
 pub struct DestroyActivity {
     pub agreement_id: String,
     pub activity_id: String,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -30,7 +30,7 @@ pub struct Exec {
     pub activity_id: String,
     pub batch_id: String,
     pub exe_script: Vec<ExeScriptCommand>,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -38,21 +38,21 @@ pub struct Exec {
 pub struct GetExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetRunningCommand {
     pub activity_id: String,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetActivityState {
     pub activity_id: String,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -60,14 +60,14 @@ pub struct GetActivityState {
 pub struct SetActivityState {
     pub activity_id: String,
     pub state: ActivityState,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetActivityUsage {
     pub activity_id: String,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -75,7 +75,7 @@ pub struct GetActivityUsage {
 pub struct SetActivityUsage {
     pub activity_id: String,
     pub usage: ActivityUsage,
-    pub timeout: Option<u32>,
+    pub timeout_ms: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

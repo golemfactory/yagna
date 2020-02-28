@@ -39,10 +39,11 @@ async fn get_activity_state(
 ) -> Result<ActivityState, Error> {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement =
+        get_activity_agreement(&db, &path.activity_id, query.timeout_ms.clone()).await?;
     let msg = GetActivityState {
         activity_id: path.activity_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout_ms: query.timeout_ms.clone(),
     };
 
     // Return a locally persisted state if activity has been terminated
@@ -53,7 +54,7 @@ async fn get_activity_state(
 
     // Retrieve and persist activity state
     let uri = provider_activity_service_id(&agreement)?;
-    let activity_state = gsb_send!(None, msg, &uri, query.timeout)?;
+    let activity_state = gsb_send!(None, msg, &uri, query.timeout_ms)?;
     db.as_dao::<ActivityStateDao>()
         .set(
             &path.activity_id,
@@ -75,10 +76,11 @@ async fn get_activity_usage(
 ) -> Result<ActivityUsage, Error> {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement =
+        get_activity_agreement(&db, &path.activity_id, query.timeout_ms.clone()).await?;
     let msg = GetActivityUsage {
         activity_id: path.activity_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout_ms: query.timeout_ms.clone(),
     };
 
     // Return locally persisted usage if activity has been terminated
@@ -92,7 +94,7 @@ async fn get_activity_usage(
 
     // Retrieve and persist activity usage
     let uri = provider_activity_service_id(&agreement)?;
-    let activity_usage = gsb_send!(None, msg, &uri, query.timeout)?;
+    let activity_usage = gsb_send!(None, msg, &uri, query.timeout_ms)?;
     db.as_dao::<ActivityUsageDao>()
         .set(&path.activity_id, &activity_usage.current_usage)
         .await?;
@@ -109,14 +111,15 @@ async fn get_running_command(
 ) -> Result<ExeScriptCommandState, Error> {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement =
+        get_activity_agreement(&db, &path.activity_id, query.timeout_ms.clone()).await?;
     let msg = GetRunningCommand {
         activity_id: path.activity_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout_ms: query.timeout_ms.clone(),
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    gsb_send!(None, msg, &uri, query.timeout)
+    gsb_send!(None, msg, &uri, query.timeout_ms)
 }
 
 async fn get_persisted_state(

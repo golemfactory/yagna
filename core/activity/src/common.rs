@@ -15,7 +15,7 @@ use ya_model::market::Agreement;
 use ya_service_bus::typed as bus;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
-pub const DEFAULT_REQUEST_TIMEOUT: u32 = 120 * 1000; // ms
+pub const DEFAULT_REQUEST_TIMEOUT: u32 = 12_000; // ms
 
 #[derive(Deserialize)]
 pub struct PathActivity {
@@ -24,14 +24,16 @@ pub struct PathActivity {
 
 #[derive(Deserialize)]
 pub struct QueryTimeout {
-    #[serde(default = "default_query_timeout")]
-    pub timeout: Option<u32>,
+    #[serde(rename = "timeoutMs", default = "default_query_timeout")]
+    pub timeout_ms: Option<u32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct QueryTimeoutMaxCount {
-    #[serde(default = "default_query_timeout")]
-    pub timeout: Option<u32>,
+    /// number of milliseconds to wait
+    #[serde(rename = "timeoutMs", default = "default_query_timeout")]
+    pub timeout_ms: Option<u32>,
+    /// maximum count of events to return
     #[serde(rename = "maxCount")]
     pub max_count: Option<u32>,
 }

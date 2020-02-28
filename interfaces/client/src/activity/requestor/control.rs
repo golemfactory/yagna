@@ -46,7 +46,8 @@ impl ActivityRequestorControlApi {
         &self,
         activity_id: &str,
         batch_id: &str,
-        timeout: Option<i32>,
+        #[allow(non_snake_case)]
+        timeoutMs: Option<i32>,
         #[allow(non_snake_case)]
         maxCount: Option<i32>,
     ) -> Result<Vec<ExeScriptCommandResult>> {
@@ -54,7 +55,7 @@ impl ActivityRequestorControlApi {
             "activity/{activity_id}/exec/{batch_id}",
             activity_id,
             batch_id,
-            #[query] timeout,
+            #[query] timeoutMs,
             #[query] maxCount
         );
         self.client.get(&uri).send().json().await
