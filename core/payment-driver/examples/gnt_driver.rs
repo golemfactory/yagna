@@ -75,8 +75,8 @@ fn wait_for_confirmations() {
     thread::sleep(sleep_time);
 }
 
-async fn show_balance(gnt_driver: &GntDriver) {
-    let balance_result = gnt_driver.get_account_balance().await;
+async fn show_balance(gnt_driver: &GntDriver, address: ethereum_types::Address) {
+    let balance_result = gnt_driver.get_account_balance(address).await;
     let balance: AccountBalance = balance_result.unwrap();
     println!("{:?}", balance);
 }
@@ -96,16 +96,16 @@ async fn main() -> anyhow::Result<()> {
     let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
 
-    let db = DbExecutor::new(":memory:")?;
-    let mut gnt_driver = GntDriver::new(address, ethereum_client, gnt_contract_address, db)?;
+    let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
+    let mut gnt_driver = GntDriver::new(ethereum_client, gnt_contract_address, db)?;
 
     gnt_driver
-        .init_funds(ETH_FAUCET_ADDRESS, gnt_faucet_address, &sign_tx)
+        .init_funds(address, ETH_FAUCET_ADDRESS, gnt_faucet_address, &sign_tx)
         .await
         .unwrap();
 
     wait_for_confirmations();
-    show_balance(&gnt_driver).await;
+    show_balance(&gnt_driver, address).await;
 
     let invoice_id = "invoice_1234";
     let payment_amount = PaymentAmount {
@@ -115,14 +115,14 @@ async fn main() -> anyhow::Result<()> {
     let due_date = Utc::now() + Duration::days(1i64);
 
     gnt_driver
-        .schedule_payment(invoice_id, payment_amount, address, due_date, &sign_tx)
+        .schedule_payment(invoice_id, payment_amount, address, address, due_date, &sign_tx)
         .await
         .unwrap();
 
     println!("Gnt transferred!");
 
     wait_for_confirmations();
-    show_balance(&gnt_driver).await;
+    show_balance(&gnt_driver, address).await;
 
     let payment_status = gnt_driver.get_payment_status(invoice_id).await?;
     println!("Payment status: {:?}", payment_status);

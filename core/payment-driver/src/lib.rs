@@ -31,13 +31,14 @@ pub type SignTx<'a> = &'a (dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8
 #[async_trait(?Send)]
 pub trait PaymentDriver {
     /// Returns account balance
-    async fn get_account_balance(&self) -> PaymentDriverResult<AccountBalance>;
+    async fn get_account_balance(&self, address: Address) -> PaymentDriverResult<AccountBalance>;
 
     /// Schedules payment
     async fn schedule_payment(
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
+        sender: Address,
         recipient: Address,
         due_date: DateTime<Utc>,
         sign_tx: SignTx<'_>,
@@ -53,7 +54,11 @@ pub trait PaymentDriver {
     ) -> PaymentDriverResult<PaymentDetails>;
 
     /// Returns sum of transactions from given address
-    async fn get_transaction_balance(&self, payee: Address) -> PaymentDriverResult<Balance>;
+    async fn get_transaction_balance(
+        &self,
+        address: Address,
+        payee: Address,
+    ) -> PaymentDriverResult<Balance>;
 }
 
 #[cfg(test)]
