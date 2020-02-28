@@ -24,12 +24,8 @@ impl ActivityProviderApi {
         self.client.get(&uri).send().json().await
     }
 
-    /// Get state of specified Activity.
-    pub async fn set_activity_state(
-        &self,
-        activity_id: &str,
-        state: &ActivityState,
-    ) -> Result<ActivityState> {
+    /// Set state of specified Activity.
+    pub async fn set_activity_state(&self, activity_id: &str, state: &ActivityState) -> Result<()> {
         let uri = url_format!("activity/{activity_id}/state", activity_id);
         self.client.put(&uri).send_json(&state).json().await
     }

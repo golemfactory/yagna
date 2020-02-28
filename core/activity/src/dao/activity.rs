@@ -1,10 +1,12 @@
-use crate::dao::{last_insert_rowid, DaoError, Result};
 use chrono::Utc;
 use diesel::prelude::*;
 use serde_json;
+
 use ya_model::activity::State;
 use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
 use ya_persistence::schema;
+
+use crate::dao::{last_insert_rowid, DaoError, Result};
 
 pub struct ActivityDao<'c> {
     pool: &'c PoolType,

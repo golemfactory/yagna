@@ -1,13 +1,15 @@
-use crate::dao::{DaoError, NotFoundAsOption, Result};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::sql_types::{Integer, Timestamp};
 use std::cmp::min;
 use std::time::Duration;
 use tokio::time::delay_for;
+
 use ya_persistence::executor::{do_with_connection, do_with_transaction, AsDao, PoolType};
 use ya_persistence::models::ActivityEventType;
 use ya_persistence::schema;
+
+use crate::dao::{DaoError, NotFoundAsOption, Result};
 
 pub const MAX_EVENTS: u32 = 100;
 
@@ -35,6 +37,7 @@ impl<'c> EventDao<'c> {
         use schema::activity_event::dsl as dsl_event;
 
         let now = Utc::now().naive_utc();
+        log::trace!("creating event_type: {:?}", event_type);
 
         let activity_id = activity_id.to_owned();
         do_with_connection(self.pool, move |conn| {
@@ -72,7 +75,7 @@ impl<'c> EventDao<'c> {
             None => MAX_EVENTS,
         };
 
-        log::debug!("starting db query");
+        log::trace!("get_events: starting db query");
         do_with_transaction(self.pool, move |conn| {
             let results: Vec<Event> = dsl_event::activity_event
                 .inner_join(schema::activity::table)
