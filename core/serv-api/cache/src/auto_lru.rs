@@ -1,7 +1,7 @@
 use futures::Future;
 use lru_time_cache::LruCache;
 use std::pin::Pin;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 pub trait ValueResolver {
     type Key;
@@ -12,6 +12,22 @@ pub trait ValueResolver {
         &self,
         key: &Self::Key,
     ) -> Pin<Box<dyn Future<Output = Result<Option<Self::Value>, Self::Error>> + 'a>>;
+}
+
+pub struct TtlOrdEntry<V> {
+    time: SystemTime,
+    value: V,
+}
+
+impl<V> PartialEq for TtlOrdEntry<V> {}
+
+pub struct TtlCache<K, V>
+where
+    K: Eq + Hash,
+    V: Clone,
+{
+    map: HashMap<K, (SystemTime, V)>,
+    ord: BinaryHeap<TtlOrdEntry>,
 }
 
 pub struct AutoResolveLruCache<R>
