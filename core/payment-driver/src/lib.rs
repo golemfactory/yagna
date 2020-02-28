@@ -22,13 +22,13 @@ pub use error::PaymentDriverError;
 use futures::Future;
 pub use gnt::GntDriver;
 pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
+use std::pin::Pin;
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
 
-pub type SignTx<'a> =
-    &'a (dyn Fn(Vec<u8>) -> Box<dyn Future<Output = Vec<u8>> + Unpin + Send + Sync> + Send + Sync);
+pub type SignTx<'a> = &'a (dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>);
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait PaymentDriver {
     /// Returns account balance
     async fn get_account_balance(&self) -> PaymentDriverResult<AccountBalance>;

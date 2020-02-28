@@ -326,7 +326,7 @@ impl GntDriver {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl PaymentDriver for GntDriver {
     /// Returns account balance
     async fn get_account_balance(&self) -> PaymentDriverResult<AccountBalance> {

@@ -24,7 +24,7 @@ impl DummyDriver {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl PaymentDriver for DummyDriver {
     async fn get_account_balance(&self) -> Result<AccountBalance, PaymentDriverError> {
         Ok(AccountBalance {
@@ -123,19 +123,20 @@ mod tests {
     use super::*;
     use ethsign::SecretKey;
     use futures::Future;
+    use std::pin::Pin;
 
     #[tokio::test]
     async fn test_recover_addr() {
         let secret: [u8; 32] = [1; 32];
         let secret = SecretKey::from_raw(&secret).unwrap();
         let addr: Address = secret.public().address().into();
-        let sign_tx = |msg: Vec<u8>| -> Box<dyn Future<Output = Vec<u8>> + Unpin + Send + Sync> {
+        let sign_tx = |msg: Vec<u8>| -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
             let sig = secret.sign(msg.as_slice()).unwrap();
             let mut v = Vec::with_capacity(33);
             v.push(sig.v);
             v.extend_from_slice(&sig.r[..]);
             v.extend_from_slice(&sig.s[..]);
-            Box::new(futures::future::ready(v))
+            Box::pin(futures::future::ready(v))
         };
         let recovered_addr = recover_addr(&sign_tx).await.unwrap();
         assert_eq!(recovered_addr, addr);

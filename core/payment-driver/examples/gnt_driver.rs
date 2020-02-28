@@ -11,6 +11,7 @@ use ethkey::prelude::*;
 use std::{thread, time};
 
 use futures::{future, Future};
+use std::pin::Pin;
 use ya_payment_driver::account::{AccountBalance, Chain};
 use ya_payment_driver::ethereum::EthereumClient;
 use ya_payment_driver::gnt::GntDriver;
@@ -30,7 +31,7 @@ const PASSWORD: &str = "";
 
 const SLEEP_TIME: u64 = 60;
 
-fn sign_tx(bytes: Vec<u8>) -> Box<dyn Future<Output = Vec<u8>> + Send + Sync + Unpin> {
+fn sign_tx(bytes: Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
     let secret = get_secret_key(KEYSTORE, PASSWORD);
 
     // Sign the message
@@ -42,7 +43,7 @@ fn sign_tx(bytes: Vec<u8>) -> Box<dyn Future<Output = Vec<u8>> + Send + Sync + U
     v.extend_from_slice(&signature.r[..]);
     v.extend_from_slice(&signature.s[..]);
 
-    Box::new(future::ready(v))
+    Box::pin(future::ready(v))
 }
 
 fn load_or_generate_account(keystore: &str, password: &str) {
