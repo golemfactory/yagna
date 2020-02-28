@@ -166,7 +166,9 @@ impl PaymentProcessor {
             base_currency_amount: big_dec_to_u256(invoice.amount.clone())?,
             gas_amount: Some(GAS_LIMIT.into()),
         };
-        let address = str_to_addr(&invoice.credit_account_id)?;
+        // TODO: Allow signing transactions with different key than node ID
+        let sender = str_to_addr(&invoice.recipient_id)?;
+        let recipient = str_to_addr(&invoice.credit_account_id)?;
         let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
         self.driver
             .lock()
@@ -174,7 +176,8 @@ impl PaymentProcessor {
             .schedule_payment(
                 &invoice_id,
                 amount,
-                address,
+                sender,
+                recipient,
                 invoice.payment_due_date,
                 &sign_tx,
             )
@@ -243,7 +246,7 @@ impl PaymentProcessor {
             .driver
             .lock()
             .await
-            .get_transaction_balance(details.sender)
+            .get_transaction_balance(details.sender, details.recipient)
             .await?;
         let bc_balance = u256_to_big_dec(bc_balance.amount)?;
 

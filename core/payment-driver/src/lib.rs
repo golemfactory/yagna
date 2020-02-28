@@ -53,10 +53,10 @@ pub trait PaymentDriver {
         confirmation: &PaymentConfirmation,
     ) -> PaymentDriverResult<PaymentDetails>;
 
-    /// Returns sum of transactions from given address
+    /// Returns sum of transactions from payer addr to payee addr
     async fn get_transaction_balance(
         &self,
-        address: Address,
+        payer: Address,
         payee: Address,
     ) -> PaymentDriverResult<Balance>;
 }

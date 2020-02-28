@@ -54,7 +54,7 @@ impl PaymentDriver for DummyDriver {
             Entry::Vacant(entry) => {
                 entry.insert(PaymentDetails {
                     recipient,
-                    sender: sender,
+                    sender,
                     amount: amount.base_currency_amount,
                     date: Some(Utc::now()),
                 });
@@ -86,17 +86,12 @@ impl PaymentDriver for DummyDriver {
 
     async fn get_transaction_balance(
         &self,
-        _address: Address,
         _payer: Address,
+        _payee: Address,
     ) -> Result<Balance, PaymentDriverError> {
         Ok(Balance {
             currency: Currency::Gnt,
             amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
         })
     }
-}
-
-#[cfg(test)]
-mod tests {
-    
 }

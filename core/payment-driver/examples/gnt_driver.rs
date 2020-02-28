@@ -115,7 +115,14 @@ async fn main() -> anyhow::Result<()> {
     let due_date = Utc::now() + Duration::days(1i64);
 
     gnt_driver
-        .schedule_payment(invoice_id, payment_amount, address, address, due_date, &sign_tx)
+        .schedule_payment(
+            invoice_id,
+            payment_amount,
+            address,
+            address,
+            due_date,
+            &sign_tx,
+        )
         .await
         .unwrap();
 
