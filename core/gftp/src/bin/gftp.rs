@@ -2,6 +2,8 @@ use anyhow::Result;
 use log::info;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use ya_core_model::{ethaddr::NodeId, identity};
+use ya_service_bus::typed as bus;
 
 #[derive(StructOpt)]
 pub enum CmdLine {
@@ -10,10 +12,9 @@ pub enum CmdLine {
         path: PathBuf,
     },
     Download {
-        #[structopt(short = "u", long = "url", help = "File address on gsb")]
-        gftp_address: String,
-        #[structopt(short = "o", long = "output", help = "Where to place downloaded file")]
-        path: PathBuf,
+        node_id: NodeId,
+        hash: String,
+        output_file: PathBuf,
     },
 }
 
@@ -32,19 +33,34 @@ async fn main() -> Result<()> {
     match cmd_args {
         CmdLine::Publish { path } => {
             let hash = config.publish(&path).await?;
-            info!("Published file [{}], hash [{}].", &path.display(), &hash);
+            let id = bus::service(identity::BUS_ID)
+                .call(identity::Get::ByDefault)
+                .await??
+                .unwrap();
+
+            info!(
+                "Published file gftp://{:?}/{}, file [{}].",
+                id.node_id,
+                hash,
+                &path.display()
+            );
 
             actix_rt::signal::ctrl_c().await?;
             info!("Received ctrl-c signal. Shutting down.")
         }
-        CmdLine::Download { gftp_address, path } => {
+        CmdLine::Download {
+            node_id,
+            hash,
+            output_file,
+        } => {
             info!(
-                "Downloading file [{}], target path [{}].",
-                &gftp_address,
-                &path.display()
+                "Downloading file [{}] from [{:?}], target path [{}].",
+                &hash,
+                node_id,
+                output_file.display()
             );
 
-            gftp::download_file(&gftp_address, &path).await?;
+            gftp::download_file(node_id, &hash, &output_file).await?;
             info!("File downloaded.")
         }
     }

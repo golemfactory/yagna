@@ -8,7 +8,9 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
+use ya_core_model::ethaddr::NodeId;
 use ya_core_model::gftp as model;
+use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 struct FileDesc {
@@ -113,8 +115,8 @@ fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
     Ok(format!("{:x}", hasher.result()))
 }
 
-pub async fn download_file(gsb_path: &str, dst_path: &Path) -> Result<()> {
-    let remote = bus::service(gsb_path);
+pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Result<()> {
+    let remote = node_id.service(&model::file_bus_id(hash));
     debug!("Creating target file {}", dst_path.display());
 
     let mut file = create_dest_file(dst_path)?;
