@@ -28,11 +28,7 @@ pub struct GftpService {
 }
 
 impl FileDesc {
-    fn new(
-        file: fs::File,
-        hash: String,
-        meta: model::GftpMetadata,
-    ) -> Arc<Mutex<FileDesc>> {
+    fn new(file: fs::File, hash: String, meta: model::GftpMetadata) -> Arc<Mutex<FileDesc>> {
         Arc::new(Mutex::new(FileDesc {
             hash: hash.to_string(),
             file,
@@ -74,9 +70,7 @@ impl FileDesc {
 
 impl GftpService {
     pub fn new(config: GftpConfig) -> Arc<Mutex<GftpService>> {
-        Arc::new(Mutex::new(GftpService {
-            config,
-        }))
+        Arc::new(Mutex::new(GftpService { config }))
     }
 
     pub async fn publish_file(me: Arc<Mutex<GftpService>>, path: &Path) -> Result<String> {
