@@ -17,9 +17,9 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use ya_service_api_cache::AutoResolveLruCache;
+use ya_service_api_cache::AutoResolveCache;
 
-pub type Cache = AutoResolveLruCache<AppKeyResolver>;
+pub type Cache = AutoResolveCache<AppKeyResolver>;
 
 pub struct Auth {
     cache: Arc<Mutex<Cache>>,
@@ -82,22 +82,30 @@ where
 
         Box::pin(async move {
             match header {
-                Some(key) => match cache.lock().await.get(&key).await {
-                    Some(app_key) => {
-                        req.extensions_mut().insert(Identity::from(app_key));
-                        let fut = { service.borrow_mut().call(req) };
-                        Ok(fut.await?)
+                Some(key) => {
+                    let cached = cache.lock().await.get(&key);
+                    let resolved = match cached {
+                        Some(opt) => opt,
+                        None => cache.lock().await.resolve(&key).await,
+                    };
+
+                    match resolved {
+                        Some(app_key) => {
+                            req.extensions_mut().insert(Identity::from(app_key));
+                            let fut = { service.borrow_mut().call(req) };
+                            Ok(fut.await?)
+                        }
+                        None => {
+                            log::debug!(
+                                "{} {} Invalid application key: {}",
+                                req.method(),
+                                req.path(),
+                                key
+                            );
+                            Err(ErrorUnauthorized("Invalid application key"))
+                        }
                     }
-                    None => {
-                        log::debug!(
-                            "{} {} Invalid application key: {}",
-                            req.method(),
-                            req.path(),
-                            key
-                        );
-                        Err(ErrorUnauthorized("Invalid application key"))
-                    }
-                },
+                }
                 None => {
                     log::debug!("Missing application key");
                     Err(ErrorUnauthorized("Missing application key"))
