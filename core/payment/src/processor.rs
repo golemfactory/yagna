@@ -1,7 +1,7 @@
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
 use crate::dao::payment::PaymentDao;
-use crate::error::{Error, PaymentError, PaymentResult};
+use crate::error::Error;
 use crate::models as db_models;
 use bigdecimal::BigDecimal;
 use ethereum_types::{Address, U256};
@@ -17,11 +17,10 @@ use ya_core_model::ethaddr::NodeId;
 use ya_core_model::{identity, payment};
 use ya_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_net::RemoteEndpoint;
-use ya_payment_driver::{
-    PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentDriverError, PaymentStatus,
-};
+use ya_payment_driver::{PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentStatus};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_core_model::payment::{PaymentResult, PaymentError};
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 const GAS_LIMIT: u64 = 1_000_000_000_000_000_000; // TODO: Handle gas limits otherwise
@@ -102,11 +101,12 @@ impl PaymentProcessor {
                 .lock()
                 .await
                 .get_payment_status(&invoice_id)
-                .await?
+                .await
             {
-                PaymentStatus::Ok(confirmation) => return Ok(confirmation),
-                PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
-                _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),
+                Ok(PaymentStatus::Ok(confirmation)) => return Ok(confirmation),
+                Ok(PaymentStatus::NotYet) => tokio::time::delay_for(Duration::from_secs(5)).await,
+                Ok(_) => return Err(PaymentError::Driver("Insufficient funds".to_string())),
+                Err(e) => return Err(PaymentError::Driver(e.to_string())),
             }
         }
     }
@@ -135,8 +135,8 @@ impl PaymentProcessor {
             let payment = payment_dao.get(payment_id).await?.unwrap();
 
             let payee_id: NodeId = payment.payment.payee_id.parse().unwrap();
-            let msg = payment::SendPayment(payment.into());
-            payee_id.service(payment::BUS_ID).call(msg).await??;
+            let msg = payment::public::SendPayment(payment.into());
+            payee_id.service(payment::public::BUS_ID).call(msg).await??;
 
             let invoice_dao: InvoiceDao = self.db_executor.as_dao();
             invoice_dao
@@ -170,7 +170,7 @@ impl PaymentProcessor {
         let sender = str_to_addr(&invoice.recipient_id)?;
         let recipient = str_to_addr(&invoice.credit_account_id)?;
         let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
-        self.driver
+        if let Err(e) = self.driver
             .lock()
             .await
             .schedule_payment(
@@ -181,7 +181,9 @@ impl PaymentProcessor {
                 invoice.payment_due_date,
                 &sign_tx,
             )
-            .await?;
+            .await {
+            return Err(PaymentError::Driver(e.to_string()))
+        }
 
         let processor = self.clone();
         tokio::task::spawn_local(async move {

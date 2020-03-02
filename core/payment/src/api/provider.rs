@@ -147,8 +147,8 @@ async fn send_debit_note(
     with_timeout(query.timeout, async move {
         let recipient_id: NodeId = debit_note.recipient_id.parse().unwrap();
         let result = match recipient_id
-            .service(payment::BUS_ID)
-            .call(payment::SendDebitNote(debit_note))
+            .service(payment::public::BUS_ID)
+            .call(payment::public::SendDebitNote(debit_note))
             .await
         {
             Ok(v) => v,
@@ -157,7 +157,7 @@ async fn send_debit_note(
 
         match result {
             Ok(_) => (),
-            Err(payment::SendError::BadRequest(e)) => return response::bad_request(&e),
+            Err(payment::public::SendError::BadRequest(e)) => return response::bad_request(&e),
             Err(e) => return response::server_error(&e),
         }
         match dao
@@ -268,14 +268,14 @@ async fn send_invoice(
     }
 
     let addr: NodeId = invoice.recipient_id.parse().unwrap();
-    let msg = payment::SendInvoice(invoice);
+    let msg = payment::public::SendInvoice(invoice);
     let timeout = if query.timeout > 0 {
         Some(query.timeout * 1000)
     } else {
         None
     };
     match async move {
-        addr.service(payment::BUS_ID)
+        addr.service(payment::public::BUS_ID)
             .send(msg)
             .timeout(timeout)
             .await???;
@@ -284,7 +284,7 @@ async fn send_invoice(
     .await
     {
         Err(Error::Timeout(_)) => return response::timeout(),
-        Err(Error::Rpc(payment::RpcMessageError::Send(payment::SendError::BadRequest(e)))) => {
+        Err(Error::Rpc(payment::public::RpcMessageError::Send(payment::public::SendError::BadRequest(e)))) => {
             return response::bad_request(&e)
         }
         Err(e) => return { response::server_error(&e) },

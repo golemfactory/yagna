@@ -1,3 +1,5 @@
+use ya_core_model::payment::PaymentError;
+
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
     #[error("Database connection error: {0}")]
@@ -17,32 +19,6 @@ pub enum ExternalServiceError {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum PaymentError {
-    #[error("Currency conversion error")]
-    Conversion(String),
-    #[error("Invalid address: {0}")]
-    Address(String),
-    #[error("Verification error: {0}")]
-    Verification(String),
-    #[error("Payment driver error: {0}")]
-    Driver(#[from] ya_payment_driver::PaymentDriverError),
-}
-
-pub type PaymentResult<T> = Result<T, PaymentError>;
-
-impl From<uint::FromDecStrErr> for PaymentError {
-    fn from(e: uint::FromDecStrErr) -> Self {
-        Self::Conversion(format!("{:?}", e))
-    }
-}
-
-impl From<bigdecimal::ParseBigDecimalError> for PaymentError {
-    fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
-        Self::Conversion(e.to_string())
-    }
-}
-
-#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Database error: {0}")]
     Database(#[from] DbError),
@@ -51,9 +27,9 @@ pub enum Error {
     #[error("External service error: {0}")]
     ExtService(#[from] ExternalServiceError),
     #[error("Payment error: {0}")]
-    Payment(#[from] PaymentError),
+    Payment(#[from] ya_core_model::payment::PaymentError),
     #[error("RPC error: {0}")]
-    Rpc(#[from] ya_core_model::payment::RpcMessageError),
+    Rpc(#[from] ya_core_model::payment::public::RpcMessageError),
     #[error("Timeout")]
     Timeout(#[from] tokio::time::Elapsed),
 }
@@ -64,26 +40,26 @@ impl From<ya_core_model::market::RpcMessageError> for Error {
     }
 }
 
-impl From<ya_core_model::payment::SendError> for Error {
-    fn from(e: ya_core_model::payment::SendError) -> Self {
-        Into::<ya_core_model::payment::RpcMessageError>::into(e).into()
+impl From<ya_core_model::payment::public::SendError> for Error {
+    fn from(e: ya_core_model::payment::public::SendError) -> Self {
+        Into::<ya_core_model::payment::public::RpcMessageError>::into(e).into()
     }
 }
 
-impl From<ya_core_model::payment::AcceptRejectError> for Error {
-    fn from(e: ya_core_model::payment::AcceptRejectError) -> Self {
-        Into::<ya_core_model::payment::RpcMessageError>::into(e).into()
+impl From<ya_core_model::payment::public::AcceptRejectError> for Error {
+    fn from(e: ya_core_model::payment::public::AcceptRejectError) -> Self {
+        Into::<ya_core_model::payment::public::RpcMessageError>::into(e).into()
     }
 }
 
-impl From<ya_core_model::payment::CancelError> for Error {
-    fn from(e: ya_core_model::payment::CancelError) -> Self {
-        Into::<ya_core_model::payment::RpcMessageError>::into(e).into()
+impl From<ya_core_model::payment::public::CancelError> for Error {
+    fn from(e: ya_core_model::payment::public::CancelError) -> Self {
+        Into::<ya_core_model::payment::public::RpcMessageError>::into(e).into()
     }
 }
 
 impl From<ya_payment_driver::PaymentDriverError> for Error {
     fn from(e: ya_payment_driver::PaymentDriverError) -> Self {
-        Into::<PaymentError>::into(e).into()
+        Error::Payment(PaymentError::Driver(e.to_string()))
     }
 }

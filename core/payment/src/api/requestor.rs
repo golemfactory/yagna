@@ -195,18 +195,18 @@ async fn accept_invoice(
 
     with_timeout(query.timeout, async move {
         let issuer_id: NodeId = invoice.issuer_id.parse().unwrap();
-        let msg = payment::AcceptInvoice {
+        let msg = payment::public::AcceptInvoice {
             invoice_id: invoice_id.clone(),
             acceptance,
         };
         match async move {
-            issuer_id.service(payment::BUS_ID).call(msg).await??;
+            issuer_id.service(payment::public::BUS_ID).call(msg).await??;
             Ok(())
         }
         .await
         {
-            Err(Error::Rpc(payment::RpcMessageError::AcceptReject(
-                payment::AcceptRejectError::BadRequest(e),
+            Err(Error::Rpc(payment::public::RpcMessageError::AcceptReject(
+                payment::public::AcceptRejectError::BadRequest(e),
             ))) => return response::bad_request(&e),
             Err(e) => return response::server_error(&e),
             _ => (),
