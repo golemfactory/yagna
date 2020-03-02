@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 actix = "0.9"
 actix-rt = "1.0"
+indicatif = "0.14.0"

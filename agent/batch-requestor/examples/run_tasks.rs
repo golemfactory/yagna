@@ -1,6 +1,7 @@
 use std::time::Duration;
 use ya_batch_requestor::{
-    command_helpers::*, commands, CommandList, ImageSpec, TaskSession, WasmDemand, WasmRuntime,
+    command_helpers::*, commands, tui_progress_monitor, CommandList, ImageSpec, TaskSession,
+    WasmDemand, WasmRuntime,
 };
 
 #[actix_rt::main]
@@ -26,6 +27,6 @@ async fn main() -> Result<(), ()> {
         }))
         .run();
 
-    //tui_progress_monitor(progress).await;
+    tui_progress_monitor(batch_req_addr).await;
     Ok(())
 }

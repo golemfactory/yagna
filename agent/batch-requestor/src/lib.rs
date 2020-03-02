@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 
 pub enum WasmRuntime {
@@ -81,10 +82,11 @@ impl TaskSession {
             ..self
         }
     }
-    pub fn run(self) -> Addr<BatchRequestor> {
-        /* TODO */
-        let actor = BatchRequestor {};
-        actor.start()
+    pub fn run(self) -> Addr<TaskSession> {
+        /* TODO 1. download image spec (demand.spec)
+        2. market api -> subscribe
+        3. activity_api -> */
+        self.start()
     }
 }
 
@@ -127,13 +129,15 @@ macro_rules! commands {
     }}
 }
 
-pub struct BatchRequestor {}
-
-impl Actor for BatchRequestor {
+impl Actor for TaskSession {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        eprintln!("BatchRequestor started.");
+        eprintln!(
+            "BatchRequestor started. Timeout: {:?}. Demand: {:?}.",
+            self.timeout,
+            self.demand.is_some()
+        );
     }
 }
 
@@ -143,10 +147,27 @@ impl Message for GetStatus {
     type Result = f32;
 }
 
-impl Handler<GetStatus> for BatchRequestor {
+impl Handler<GetStatus> for TaskSession {
     type Result = f32;
 
     fn handle(&mut self, msg: GetStatus, ctx: &mut Self::Context) -> Self::Result {
         unimplemented!()
     }
+}
+
+pub async fn tui_progress_monitor(task_session: Addr<TaskSession>) -> Result<(), ()> {
+    /* TODO attach to the actor */
+    let progress_bar = ProgressBar::new(100);
+    progress_bar.set_style(
+        ProgressStyle::default_bar()
+            .progress_chars("=> ")
+            .template("{elapsed_precise} [{bar:40}] {msg}"),
+    );
+    progress_bar.set_message("Running tasks");
+    for _ in 0..100 {
+        progress_bar.inc(1);
+        std::thread::sleep(Duration::from_millis(55));
+    }
+    progress_bar.finish();
+    Ok(())
 }
