@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, Error};
+use anyhow::{Context, Error, Result};
 use futures::lock::Mutex;
 use futures::prelude::*;
 use log::{debug, info};
@@ -6,17 +6,16 @@ use sha3::{Digest, Sha3_256};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{fs, io};
-use std::str::FromStr;
-use url::{Url, Position};
+use url::{Position, Url};
 
-use ya_core_model::{ethaddr::NodeId, identity};
+use url::quirks::hostname;
 use ya_core_model::gftp as model;
+use ya_core_model::{ethaddr::NodeId, identity};
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
-use url::quirks::hostname;
-
 
 struct FileDesc {
     hash: String,
@@ -39,7 +38,10 @@ impl Config {
             .await??
             .unwrap();
 
-        Ok(Url::parse(&format!("gftp://{:?}/{}", id.node_id, &filedesc.hash))?)
+        Ok(Url::parse(&format!(
+            "gftp://{:?}/{}",
+            id.node_id, &filedesc.hash
+        ))?)
     }
 }
 
@@ -127,7 +129,10 @@ fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
 
 pub async fn download_from_url(url: &Url, dst_path: &Path) -> Result<()> {
     if url.scheme() != "gftp" {
-        return Err(Error::msg(format!("Unsupported url scheme {}.", url.scheme())));
+        return Err(Error::msg(format!(
+            "Unsupported url scheme {}.",
+            url.scheme()
+        )));
     }
 
     let node_id = NodeId::from_str(hostname(&url))

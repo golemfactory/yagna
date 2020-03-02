@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
 
-
 #[derive(StructOpt)]
 pub enum CmdLine {
     Publish {
@@ -32,19 +31,12 @@ async fn main() -> Result<()> {
         CmdLine::Publish { path } => {
             let url = config.publish(&path).await?;
 
-            info!(
-                "Published file [{}] as {}.",
-                &path.display(),
-                url,
-            );
+            info!("Published file [{}] as {}.", &path.display(), url,);
 
             actix_rt::signal::ctrl_c().await?;
             info!("Received ctrl-c signal. Shutting down.")
         }
-        CmdLine::Download {
-            url,
-            output_file,
-        } => {
+        CmdLine::Download { url, output_file } => {
             info!(
                 "Downloading file from [{}], target path [{}].",
                 url,
