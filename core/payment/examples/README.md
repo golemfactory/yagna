@@ -88,6 +88,9 @@ Payload:
 To listen for requestor's invoice events:
 `GET` `http://127.0.0.1:8465/payment-api/v1/requestor/invoiceEvents?timeout=<seconds>`
 
+To listen for provider's invoice events:
+`GET` `http://127.0.0.1:8465/payment-api/v1/provider/invoiceEvents?timeout=<seconds>`
+
 #### Allocations
 
 To create an allocation:  

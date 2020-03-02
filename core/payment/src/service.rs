@@ -235,12 +235,23 @@ async fn accept_invoice(
         }
     }
 
-    match dao
-        .update_status(invoice_id, InvoiceStatus::Accepted.into())
+    if let Err(e) = dao
+        .update_status(invoice_id.clone(), InvoiceStatus::Accepted.into())
         .await
     {
-        Ok(_) => Ok(Ack {}),
+        return Err(AcceptRejectError::ServiceError(e.to_string()));
+    }
+
+    let dao: InvoiceEventDao = db.as_dao();
+    let event = NewInvoiceEvent {
+        invoice_id,
+        details: None,
+        event_type: EventType::Accepted,
+    };
+    match dao.create(event.into()).await {
+        Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
         Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+        Ok(_) => Ok(Ack {}),
     }
 }
 
