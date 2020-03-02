@@ -1,3 +1,4 @@
+use actix::prelude::*;
 use std::time::Duration;
 
 pub enum WasmRuntime {
@@ -80,8 +81,10 @@ impl TaskSession {
             ..self
         }
     }
-    pub fn run(self) {
+    pub fn run(self) -> Addr<BatchRequestor> {
         /* TODO */
+        let actor = BatchRequestor {};
+        actor.start()
     }
 }
 
@@ -122,4 +125,28 @@ macro_rules! commands {
         )*
         CommandList::new(v)
     }}
+}
+
+pub struct BatchRequestor {}
+
+impl Actor for BatchRequestor {
+    type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        eprintln!("BatchRequestor started.");
+    }
+}
+
+struct GetStatus {}
+
+impl Message for GetStatus {
+    type Result = f32;
+}
+
+impl Handler<GetStatus> for BatchRequestor {
+    type Result = f32;
+
+    fn handle(&mut self, msg: GetStatus, ctx: &mut Self::Context) -> Self::Result {
+        unimplemented!()
+    }
 }

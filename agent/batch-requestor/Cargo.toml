@@ -5,4 +5,5 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+actix = "0.9"
 actix-rt = "1.0"

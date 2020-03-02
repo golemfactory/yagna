@@ -9,7 +9,7 @@ async fn main() -> Result<(), ()> {
     let image_spec =
         ImageSpec::from_github("prekucki/test-wasi@0.1.0").runtime(WasmRuntime::Wasi(1));
 
-    let progress = TaskSession::new("simple wasm app")
+    let batch_req_addr = TaskSession::new("simple wasm app")
         .with_timeout(Duration::from_secs(60))
         .demand(
             WasmDemand::with_image(image_spec)
