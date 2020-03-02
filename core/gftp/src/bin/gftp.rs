@@ -2,7 +2,8 @@ use anyhow::Result;
 use log::info;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use ya_core_model::ethaddr::NodeId;
+use url::Url;
+
 
 #[derive(StructOpt)]
 pub enum CmdLine {
@@ -11,15 +12,13 @@ pub enum CmdLine {
         path: PathBuf,
     },
     Download {
-        node_id: NodeId,
-        hash: String,
+        url: Url,
         output_file: PathBuf,
     },
 }
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
-    //std::env::set_var("RUST_LOG", "debug");
     dotenv::dotenv().ok();
     env_logger::init();
 
@@ -43,18 +42,16 @@ async fn main() -> Result<()> {
             info!("Received ctrl-c signal. Shutting down.")
         }
         CmdLine::Download {
-            node_id,
-            hash,
+            url,
             output_file,
         } => {
             info!(
-                "Downloading file [{}] from [{:?}], target path [{}].",
-                &hash,
-                node_id,
+                "Downloading file from [{}], target path [{}].",
+                url,
                 output_file.display()
             );
 
-            gftp::download_file(node_id, &hash, &output_file).await?;
+            gftp::download_from_url(&url, &output_file).await?;
             info!("File downloaded.")
         }
     }

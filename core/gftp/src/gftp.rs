@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, Error};
 use futures::lock::Mutex;
 use futures::prelude::*;
 use log::{debug, info};
@@ -8,12 +8,15 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
-use url::Url;
+use std::str::FromStr;
+use url::{Url, Position};
 
 use ya_core_model::{ethaddr::NodeId, identity};
 use ya_core_model::gftp as model;
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
+use url::quirks::hostname;
+
 
 struct FileDesc {
     hash: String,
@@ -117,10 +120,24 @@ fn meta_from_file(file: &fs::File, config: &Config) -> Result<model::GftpMetadat
 
 fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
     let mut hasher = Sha3_256::new();
-    //hasher.input(file);
     io::copy(&mut file, &mut hasher)?;
 
     Ok(format!("{:x}", hasher.result()))
+}
+
+pub async fn download_from_url(url: &Url, dst_path: &Path) -> Result<()> {
+    if url.scheme() != "gftp" {
+        return Err(Error::msg(format!("Unsupported url scheme {}.", url.scheme())));
+    }
+
+    let node_id = NodeId::from_str(hostname(&url))
+        .with_context(|| format!("Url {} has invalid node_id.", url))?;
+
+    // Note: Remove slash from begining of path.
+    let hash = &url[Position::BeforePath..Position::BeforeQuery][1..];
+    debug!("Node {}, hash {}", &node_id.to_string(), &hash);
+
+    download_file(node_id, hash, dst_path).await
 }
 
 pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Result<()> {
@@ -132,14 +149,13 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
     info!("Loading file {} metadata.", dst_path.display());
     let metadata = remote.send(model::GetMetadata {}).await??;
 
-    // GftpService::load_metadata(gsb_path).await?;
     debug!(
         "Metadata: file size {}, number of chunks {}, chunk size {}.",
         metadata.file_size, metadata.chunks_num, metadata.chunk_size
     );
 
     let num_chunks = metadata.chunks_num;
-    //file.set_len(metadata.file_size)?;
+    file.set_len(metadata.file_size)?;
 
     futures::stream::iter(0..num_chunks)
         .map(|chunk_number| remote.call(model::GetChunk { chunk_number }))

@@ -1,7 +1,7 @@
 mod gftp;
 
 use url::Url;
-pub use gftp::{download_file, Config};
+pub use gftp::{download_file, download_from_url, Config};
 
 
 const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
