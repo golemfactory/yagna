@@ -56,8 +56,8 @@ async fn main() -> Result<()> {
             info!("File uploaded.")
         },
         CmdLine::AwaitUpload {dir} => {
-            let exepected_file = gftp::open_for_upload(&dir).await?;
-            info!("Waiting for file upload [{}].", &exepected_file.display());
+            let (exepected_file, url) = gftp::open_for_upload(&dir).await?;
+            info!("Waiting for file upload [{}] on url [{}].", &exepected_file.display(), &url);
 
             actix_rt::signal::ctrl_c().await?;
             info!("Received ctrl-c signal. Shutting down.")
