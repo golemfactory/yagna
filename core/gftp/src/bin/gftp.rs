@@ -13,6 +13,13 @@ pub enum CmdLine {
         url: Url,
         output_file: PathBuf,
     },
+    Upload {
+        file: PathBuf,
+        url: Url,
+    },
+    AwaitUpload {
+        dir: PathBuf,
+    }
 }
 
 #[actix_rt::main]
@@ -26,7 +33,7 @@ async fn main() -> Result<()> {
         CmdLine::Publish { files } => {
             for path in files {
                 let url = gftp::publish(&path).await?;
-                info!("Published file [{}] as {}.", &path.display(), url,);
+                info!("Published file [{}] as {}.", &path.display(), url);
             }
 
             actix_rt::signal::ctrl_c().await?;
@@ -41,6 +48,19 @@ async fn main() -> Result<()> {
 
             gftp::download_from_url(&url, &output_file).await?;
             info!("File downloaded.")
+        },
+        CmdLine::Upload {file, url} => {
+            info!("Uploading file [{}] to address [{}].", &file.display(), &url);
+            gftp::upload_file(&file, &url).await?;
+
+            info!("File uploaded.")
+        },
+        CmdLine::AwaitUpload {dir} => {
+            let exepected_file = gftp::open_for_upload(&dir).await?;
+            info!("Waiting for file upload [{}].", &exepected_file.display());
+
+            actix_rt::signal::ctrl_c().await?;
+            info!("Received ctrl-c signal. Shutting down.")
         }
     }
     Ok(())

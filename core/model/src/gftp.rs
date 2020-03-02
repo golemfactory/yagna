@@ -15,6 +15,10 @@ pub enum Error {
     ReadError(String),
 }
 
+// =========================================== //
+// Download messages
+// =========================================== //
+
 /// Gets metadata of file publish through gftp.
 /// Returns GftpMetadata structure.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -35,6 +39,7 @@ pub struct GftpMetadata {
 
 /// Gets chunk of file. Returns GftpChunk.
 /// Result chunk can be smaller if offset + size exceeds end of file.
+/// If offset is greater than file size, operation ends with error.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetChunk {
@@ -48,6 +53,10 @@ impl RpcMessage for GetChunk {
     type Error = Error;
 }
 
+// =========================================== //
+// Upload messages
+// =========================================== //
+
 /// Sends chunk of file.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +69,24 @@ impl RpcMessage for UploadChunk {
     type Item = ();
     type Error = Error;
 }
+
+/// Notifies file publisher that upload has been finished.
+/// Uploader can send optional hash of file.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadFinished {
+    hash: Option<String>,
+}
+
+impl RpcMessage for UploadFinished {
+    const ID: &'static str = "UploadFinished";
+    type Item = ();
+    type Error = Error;
+}
+
+// =========================================== //
+// Chunk structure
+// =========================================== //
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

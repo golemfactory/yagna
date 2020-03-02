@@ -2,16 +2,17 @@ use anyhow::{Context, Error, Result};
 use futures::lock::Mutex;
 use futures::prelude::*;
 use log::{debug, info};
+use rand::Rng;
+use rand::distributions::Alphanumeric;
 use sha3::{Digest, Sha3_256};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{fs, io};
-use url::{Position, Url};
+use url::{Position, Url, quirks::hostname};
 
-use url::quirks::hostname;
 use ya_core_model::gftp as model;
 use ya_core_model::{ethaddr::NodeId, identity};
 use ya_net::RemoteEndpoint;
@@ -157,6 +158,53 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
         .await?;
 
     Ok(())
+}
+
+pub async fn open_for_upload(directory: &Path) -> Result<PathBuf> {
+    let filepath = random_filename(directory);
+    let file = Arc::new(Mutex::new(create_dest_file(&filepath)?));
+    let hash = filepath
+        .file_name()
+        .ok_or(Error::msg(format!("Incorrect directory: {}", directory.display())))?
+        .to_str()
+        .ok_or(Error::msg(format!("Incorrect directory: {}", directory.display())))?;
+
+    let gsb_address = model::file_bus_id(&hash);
+    let file_clone = file.clone();
+    let _ = bus::bind(&gsb_address, move |msg: model::UploadChunk| {
+        let file = file_clone.clone();
+        async move { Ok(chunk_uploaded(file.clone(), msg).await?) }
+    });
+
+    let file_clone = file.clone();
+    let _ = bus::bind(&gsb_address, move |msg: model::UploadFinished| {
+        let file = file_clone.clone();
+        async move { Ok(upload_finished(file.clone(), msg).await?) }
+    });
+
+    Ok(filepath)
+}
+
+pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
+    unimplemented!();
+}
+
+async fn chunk_uploaded(file: Arc<Mutex<File>>, msg: model::UploadChunk) -> Result<(), model::Error> {
+    unimplemented!();
+}
+
+async fn upload_finished(file: Arc<Mutex<File>>, msg: model::UploadFinished) -> Result<(), model::Error> {
+    //TODO: unsubscribe gsb events.
+    //TODO: compare hash of disk file against expected hash from message.
+    unimplemented!();
+}
+
+fn random_filename(dir: &Path) -> PathBuf {
+    let filename = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(65)
+        .collect::<String>();
+    dir.join(filename)
 }
 
 fn ensure_dir_exists(file_path: &Path) -> Result<()> {
