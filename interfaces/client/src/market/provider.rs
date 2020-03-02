@@ -102,7 +102,7 @@ impl MarketProviderApi {
         proposal_id: &str,
     ) -> Result<String> {
         let url = url_format!(
-            "offers/{subscription_id}/proposals/{proposal_id}/offer",
+            "offers/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );

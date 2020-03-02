@@ -74,7 +74,7 @@ impl MarketRequestorApi {
         proposal_id: &str,
     ) -> Result<String> {
         let url = url_format!(
-            "demands/{subscription_id}/proposals/{proposal_id}/demand",
+            "demands/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );
