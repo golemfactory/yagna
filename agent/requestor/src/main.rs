@@ -152,7 +152,7 @@ async fn process_agreement(
 }
 
 #[actix_rt::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
 
