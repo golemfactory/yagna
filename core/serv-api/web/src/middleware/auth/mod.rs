@@ -12,12 +12,14 @@ use actix_web::{http::header::Header, HttpMessage};
 use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
 use futures::future::{ok, Future, Ready};
 use futures::lock::Mutex;
+use std::cell::RefCell;
 use std::pin::Pin;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use ya_service_api_cache::AutoResolveLruCache;
+use ya_service_api_cache::AutoResolveCache;
 
-pub type Cache = AutoResolveLruCache<AppKeyResolver>;
+pub type Cache = AutoResolveCache<AppKeyResolver>;
 
 pub struct Auth {
     cache: Arc<Mutex<Cache>>,
@@ -45,14 +47,14 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         ok(AuthMiddleware {
-            service: Arc::new(Mutex::new(service)),
+            service: Rc::new(RefCell::new(service)),
             cache: self.cache.clone(),
         })
     }
 }
 
 pub struct AuthMiddleware<S> {
-    service: Arc<Mutex<S>>,
+    service: Rc<RefCell<S>>,
     cache: Arc<Mutex<Cache>>,
 }
 
@@ -67,10 +69,7 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        match self.service.try_lock() {
-            Some(mut service) => service.poll_ready(cx),
-            None => Poll::Ready(Ok(())),
-        }
+        self.service.borrow_mut().poll_ready(cx)
     }
 
     fn call(&mut self, req: ServiceRequest) -> Self::Future {
@@ -83,21 +82,30 @@ where
 
         Box::pin(async move {
             match header {
-                Some(key) => match (*cache).lock().await.get(&key).await {
-                    Some(app_key) => {
-                        req.extensions_mut().insert(Identity::from(app_key));
-                        Ok(service.lock().await.call(req).await?)
+                Some(key) => {
+                    let cached = cache.lock().await.get(&key);
+                    let resolved = match cached {
+                        Some(opt) => opt,
+                        None => cache.lock().await.resolve(&key).await,
+                    };
+
+                    match resolved {
+                        Some(app_key) => {
+                            req.extensions_mut().insert(Identity::from(app_key));
+                            let fut = { service.borrow_mut().call(req) };
+                            Ok(fut.await?)
+                        }
+                        None => {
+                            log::debug!(
+                                "{} {} Invalid application key: {}",
+                                req.method(),
+                                req.path(),
+                                key
+                            );
+                            Err(ErrorUnauthorized("Invalid application key"))
+                        }
                     }
-                    None => {
-                        log::debug!(
-                            "{} {} Invalid application key: {}",
-                            req.method(),
-                            req.path(),
-                            key
-                        );
-                        Err(ErrorUnauthorized("Invalid application key"))
-                    }
-                },
+                }
                 None => {
                     log::debug!("Missing application key");
                     Err(ErrorUnauthorized("Missing application key"))
