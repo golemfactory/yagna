@@ -3,11 +3,11 @@ use ya_service_bus::RpcMessage;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-//pub const BUS_ID: &'static str = "/public/gftp";
 
 pub fn file_bus_id(hash: &str) -> String {
     format!("/public/gftp/{}", hash)
 }
+
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
@@ -30,17 +30,16 @@ impl RpcMessage for GetMetadata {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GftpMetadata {
-    pub chunks_num: u64,
-    pub chunk_size: u64,
     pub file_size: u64,
-    //TODO: Add necessary information
 }
 
 /// Gets chunk of file. Returns GftpChunk.
+/// Result chunk can be smaller if offset + size exceeds end of file.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetChunk {
-    pub chunk_number: u64,
+    pub offset: u64,
+    pub size: u64,
 }
 
 impl RpcMessage for GetChunk {
@@ -49,9 +48,23 @@ impl RpcMessage for GetChunk {
     type Error = Error;
 }
 
+/// Sends chunk of file.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadChunk {
+    chunk: GftpChunk,
+}
+
+impl RpcMessage for UploadChunk {
+    const ID: &'static str = "UploadChunk";
+    type Item = ();
+    type Error = Error;
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GftpChunk {
+    pub offset: u64,
     #[serde(with = "serde_bytes")]
     pub content: Vec<u8>,
 }

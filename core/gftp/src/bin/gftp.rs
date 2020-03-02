@@ -23,13 +23,9 @@ async fn main() -> Result<()> {
 
     let cmd_args = CmdLine::from_args();
 
-    let config = gftp::Config {
-        chunk_size: 40 * 1024,
-    };
-
     match cmd_args {
         CmdLine::Publish { path } => {
-            let url = config.publish(&path).await?;
+            let url = gftp::publish(&path).await?;
 
             info!("Published file [{}] as {}.", &path.display(), url,);
 
