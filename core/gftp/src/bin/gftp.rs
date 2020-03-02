@@ -2,8 +2,7 @@ use anyhow::Result;
 use log::info;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use ya_core_model::{ethaddr::NodeId, identity};
-use ya_service_bus::typed as bus;
+use ya_core_model::ethaddr::NodeId;
 
 #[derive(StructOpt)]
 pub enum CmdLine {
@@ -32,17 +31,12 @@ async fn main() -> Result<()> {
 
     match cmd_args {
         CmdLine::Publish { path } => {
-            let hash = config.publish(&path).await?;
-            let id = bus::service(identity::BUS_ID)
-                .call(identity::Get::ByDefault)
-                .await??
-                .unwrap();
+            let url = config.publish(&path).await?;
 
             info!(
-                "Published file gftp://{:?}/{}, file [{}].",
-                id.node_id,
-                hash,
-                &path.display()
+                "Published file [{}] as {}.",
+                &path.display(),
+                url,
             );
 
             actix_rt::signal::ctrl_c().await?;

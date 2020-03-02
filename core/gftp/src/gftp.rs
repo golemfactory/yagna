@@ -8,7 +8,9 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
-use ya_core_model::ethaddr::NodeId;
+use url::Url;
+
+use ya_core_model::{ethaddr::NodeId, identity};
 use ya_core_model::gftp as model;
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -25,10 +27,16 @@ pub struct Config {
 }
 
 impl Config {
-    pub async fn publish(&self, path: &Path) -> Result<String> {
+    pub async fn publish(&self, path: &Path) -> Result<Url> {
         let filedesc = FileDesc::open(path, self)?;
         filedesc.bind_handlers();
-        Ok(filedesc.hash.clone())
+
+        let id = bus::service(identity::BUS_ID)
+            .call(identity::Get::ByDefault)
+            .await??
+            .unwrap();
+
+        Ok(Url::parse(&format!("gftp://{:?}/{}", id.node_id, &filedesc.hash))?)
     }
 }
 
