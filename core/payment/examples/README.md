@@ -111,3 +111,13 @@ To see all created allocations:
 
 To release an allocation:
 `DELETE` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations/<allocationId>`
+
+#### Payments
+
+To see requestor's (sent) payments:
+`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/payments`
+
+To see provider's (received) payments:
+`GET` `http://127.0.0.1:7465/payment-api/v1/provider/payments`
+
+One can also listen for payments by adding `?timeout=<seconds>` parameter.

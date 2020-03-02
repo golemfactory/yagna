@@ -7,11 +7,10 @@ use crate::dao::payment::PaymentDao;
 use crate::error::{DbError, Error};
 use crate::models as db_models;
 use crate::processor::PaymentProcessor;
-use crate::utils::{response, with_timeout};
+use crate::utils::{listen_for_events, response, with_timeout};
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
-use std::time::Duration;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment;
 use ya_model::payment::*;
@@ -247,34 +246,11 @@ async fn get_invoice_events(
     let later_than = query.later_than.map(|d| d.naive_utc());
     let dao: InvoiceEventDao = db.as_dao();
 
-    match dao
-        .get_for_recipient(recipient_id.clone(), later_than.clone())
-        .await
-    {
-        Err(e) => return response::server_error(&e),
-        Ok(events) if events.len() > 0 || timeout == 0 => {
-            return response::ok::<Vec<InvoiceEvent>>(events.into_iter().map(Into::into).collect())
-        }
-        _ => (),
-    }
-
-    let timeout = Duration::from_secs(timeout.into());
-    let result = tokio::time::timeout(timeout, async move {
-        loop {
-            tokio::time::delay_for(Duration::from_secs(1)).await;
-            match dao
-                .get_for_recipient(recipient_id.clone(), later_than.clone())
-                .await
-            {
-                Err(e) => break Err(e),
-                Ok(events) if events.len() > 0 => break Ok(events),
-                _ => (),
-            }
-        }
-    })
-    .await
-    .unwrap_or(Ok(vec![]));
-    match result {
+    let getter = || async {
+        dao.get_for_recipient(recipient_id.clone(), later_than.clone())
+            .await
+    };
+    match listen_for_events(getter, timeout).await {
         Err(e) => response::server_error(&e),
         Ok(events) => {
             response::ok::<Vec<InvoiceEvent>>(events.into_iter().map(Into::into).collect())
@@ -346,8 +322,12 @@ async fn get_payments(
     id: Identity,
 ) -> HttpResponse {
     let payer_id = id.identity.to_string();
+    let timeout = query.timeout;
+    let later_than = query.later_than.map(|d| d.naive_utc());
     let dao: PaymentDao = db.as_dao();
-    match dao.get_sent(payer_id).await {
+
+    let getter = || async { dao.get_sent(payer_id.clone(), later_than.clone()).await };
+    match listen_for_events(getter, timeout).await {
         Ok(payments) => {
             response::ok::<Vec<Payment>>(payments.into_iter().map(Into::into).collect())
         }
