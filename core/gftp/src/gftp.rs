@@ -135,7 +135,6 @@ pub async fn download_from_url(url: &Url, dst_path: &Path) -> Result<()> {
 
     // Note: Remove slash from begining of path.
     let hash = &url[Position::BeforePath..Position::BeforeQuery][1..];
-    debug!("Node {}, hash {}", &node_id.to_string(), &hash);
 
     download_file(node_id, hash, dst_path).await
 }
