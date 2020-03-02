@@ -6,20 +6,10 @@ use url::Url;
 
 #[derive(StructOpt)]
 pub enum CmdLine {
-    Publish {
-        files: Vec<PathBuf>,
-    },
-    Download {
-        url: Url,
-        output_file: PathBuf,
-    },
-    Upload {
-        file: PathBuf,
-        url: Url,
-    },
-    AwaitUpload {
-        dir: PathBuf,
-    }
+    Publish { files: Vec<PathBuf> },
+    Download { url: Url, output_file: PathBuf },
+    Upload { file: PathBuf, url: Url },
+    AwaitUpload { dir: PathBuf },
 }
 
 #[actix_rt::main]
@@ -48,16 +38,24 @@ async fn main() -> Result<()> {
 
             gftp::download_from_url(&url, &output_file).await?;
             info!("File downloaded.")
-        },
-        CmdLine::Upload {file, url} => {
-            info!("Uploading file [{}] to address [{}].", &file.display(), &url);
+        }
+        CmdLine::Upload { file, url } => {
+            info!(
+                "Uploading file [{}] to address [{}].",
+                &file.display(),
+                &url
+            );
             gftp::upload_file(&file, &url).await?;
 
             info!("File uploaded.")
-        },
-        CmdLine::AwaitUpload {dir} => {
+        }
+        CmdLine::AwaitUpload { dir } => {
             let (exepected_file, url) = gftp::open_for_upload(&dir).await?;
-            info!("Waiting for file upload [{}] on url [{}].", &exepected_file.display(), &url);
+            info!(
+                "Waiting for file upload [{}] on url [{}].",
+                &exepected_file.display(),
+                &url
+            );
 
             actix_rt::signal::ctrl_c().await?;
             info!("Received ctrl-c signal. Shutting down.")

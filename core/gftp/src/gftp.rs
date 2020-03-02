@@ -2,22 +2,23 @@ use anyhow::{Context, Error, Result};
 use futures::lock::Mutex;
 use futures::prelude::*;
 use log::{debug, info};
-use rand::Rng;
 use rand::distributions::Alphanumeric;
+use rand::Rng;
 use sha3::{Digest, Sha3_256};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{fs, io};
-use url::{Position, Url, quirks::hostname};
+use url::{quirks::hostname, Position, Url};
 
+use std::ops::Deref;
 use ya_core_model::gftp as model;
+use ya_core_model::gftp::GftpChunk;
 use ya_core_model::{ethaddr::NodeId, identity};
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
-
 
 const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
 
@@ -43,7 +44,9 @@ impl FileDesc {
             .with_context(|| format!("Can't open file {}.", path.display()))?;
 
         let hash = hash_file_sha256(&mut file)?;
-        let meta = model::GftpMetadata { file_size: file.metadata()?.len() };
+        let meta = model::GftpMetadata {
+            file_size: file.metadata()?.len(),
+        };
 
         Ok(FileDesc::new(file, hash, meta))
     }
@@ -62,7 +65,11 @@ impl FileDesc {
         });
     }
 
-    async fn get_chunk(&self, offset: u64, chunk_size: u64) -> Result<model::GftpChunk, model::Error> {
+    async fn get_chunk(
+        &self,
+        offset: u64,
+        chunk_size: u64,
+    ) -> Result<model::GftpChunk, model::Error> {
         let bytes_to_read = if self.meta.file_size - offset < chunk_size {
             self.meta.file_size - offset
         } else {
@@ -86,7 +93,10 @@ impl FileDesc {
             })?;
         }
 
-        Ok(model::GftpChunk { offset, content: buffer })
+        Ok(model::GftpChunk {
+            offset,
+            content: buffer,
+        })
     }
 }
 
@@ -123,7 +133,12 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
     file.set_len(metadata.file_size)?;
 
     futures::stream::iter(0..num_chunks)
-        .map(|chunk_number| remote.call(model::GetChunk { offset: chunk_number * chunk_size, size: chunk_size }))
+        .map(|chunk_number| {
+            remote.call(model::GetChunk {
+                offset: chunk_number * chunk_size,
+                size: chunk_size,
+            })
+        })
         .buffered(12)
         .map_err(anyhow::Error::from)
         .try_for_each(move |result| {
@@ -167,23 +182,34 @@ pub async fn open_for_upload(directory: &Path) -> Result<(PathBuf, Url)> {
     Ok((filepath, gftp_url(&filename).await?))
 }
 
-async fn chunk_uploaded(file: Arc<Mutex<File>>, msg: model::UploadChunk) -> Result<(), model::Error> {
+async fn chunk_uploaded(
+    file: Arc<Mutex<File>>,
+    msg: model::UploadChunk,
+) -> Result<(), model::Error> {
     let mut file = file.lock().await;
     let chunk = msg.chunk;
 
     file.seek(SeekFrom::Start(chunk.offset)).map_err(|error| {
-        model::Error::ReadError(format!("Can't seek file at offset {}, {}", chunk.offset, error))
+        model::Error::ReadError(format!(
+            "Can't seek file at offset {}, {}",
+            chunk.offset, error
+        ))
     })?;
     file.write_all(&chunk.content[..]).map_err(|error| {
         model::Error::ReadError(format!(
             "Can't read {} bytes at offset {}, error: {}",
-            chunk.content.len(), chunk.offset, error
+            chunk.content.len(),
+            chunk.offset,
+            error
         ))
     })?;
     Ok(())
 }
 
-async fn upload_finished(_file: Arc<Mutex<File>>, _msg: model::UploadFinished) -> Result<(), model::Error> {
+async fn upload_finished(
+    _file: Arc<Mutex<File>>,
+    _msg: model::UploadFinished,
+) -> Result<(), model::Error> {
     //TODO: unsubscribe gsb events.
     //TODO: compare hash of disk file against expected hash from message.
     unimplemented!();
@@ -198,30 +224,22 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
     let remote = node_id.service(&model::file_bus_id(&random_filename));
 
     debug!("Opening file to send {}.", path.display());
-    let file = File::open(path)
-        .with_context(|| format!("Can't upload file: [{}].", path.display()))?;
 
-    let filesize = file.metadata()?.len();
     let chunk_size = DEFAULT_CHUNK_SIZE;
-    let num_chunks = (filesize + (chunk_size - 1)) / chunk_size; // Divide and round up.
-    let file = Arc::new(Mutex::new(file));
 
-//    futures::stream::iter(0..num_chunks)
-//        .map(|chunk_number| {
-//            let offset = chunk_number * chunk_size;
-//            get_chunk(file, offset, chunk_size, filesize)
-//        })
-//        .try_for_each_concurrent(12, async move |chunk| {
-//            let chunk = chunk?;
-//            Ok(remote.call(model::UploadChunk { chunk }).await?)
-//        }).await?;
-
-    for chunk_number in 0..num_chunks {
-        let offset = chunk_number * chunk_size;
-        let chunk = get_chunk(file.clone(), offset, chunk_size, filesize).await?;
-
-        remote.call(model::UploadChunk { chunk }).await??;
-    }
+    futures::stream::iter(get_chunks(path, chunk_size)?)
+        .map(|chunk| {
+            let remote = remote.clone();
+            async move {
+                let chunk = chunk?;
+                Ok::<_, anyhow::Error>(remote.call(model::UploadChunk { chunk }).await??)
+            }
+        })
+        .buffered(3)
+        .try_for_each(|_| {
+            future::ok(())
+        })
+        .await?;
 
     Ok(())
 }
@@ -230,31 +248,22 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
 // Utils and common functions
 // =========================================== //
 
-async fn get_chunk(file: Arc<Mutex<File>>, offset: u64, chunk_size: u64, filesize: u64) -> Result<model::GftpChunk, model::Error> {
-    let bytes_to_read = if filesize - offset < chunk_size {
-        filesize - offset
-    } else {
-        chunk_size
-    } as usize;
+fn get_chunks(file_path : &Path, chunk_size : u64) -> Result<impl Iterator<Item = Result<model::GftpChunk, std::io::Error>> + 'static, std::io::Error> {
+    let mut file = OpenOptions::new().read(true).open(file_path)?;
 
-    debug!("Reading chunk at offset: {}, size: {}", offset, chunk_size);
-    let mut buffer = vec![0u8; bytes_to_read];
-    {
-        let mut file = file.lock().await;
+    let file_size = file.metadata()?.len();
+    let n_chunks = (file_size + chunk_size - 1)/chunk_size;
 
-        file.seek(SeekFrom::Start(offset)).map_err(|error| {
-            model::Error::ReadError(format!("Can't seek file at offset {}, {}", offset, error))
-        })?;
-
-        file.read_exact(&mut buffer).map_err(|error| {
-            model::Error::ReadError(format!(
-                "Can't read {} bytes at offset {}, error: {}",
-                bytes_to_read, offset, error
-            ))
-        })?;
-    }
-
-    Ok(model::GftpChunk { offset, content: buffer })
+    Ok((0..n_chunks).map(move |n| {
+        let offset = n*chunk_size;
+        let bytes_to_read = if offset + chunk_size > file_size { file_size - offset } else { chunk_size };
+        let mut buffer = vec![0u8; bytes_to_read as usize];
+        file.read_exact(&mut buffer)?;
+        Ok(model::GftpChunk {
+            offset,
+            content: buffer,
+        })
+    }))
 }
 
 fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
@@ -289,10 +298,7 @@ async fn gftp_url(hash: &str) -> Result<Url> {
         .await??
         .unwrap();
 
-    Ok(Url::parse(&format!(
-        "gftp://{:?}/{}",
-        id.node_id, hash
-    ))?)
+    Ok(Url::parse(&format!("gftp://{:?}/{}", id.node_id, hash))?)
 }
 
 fn ensure_dir_exists(file_path: &Path) -> Result<()> {

@@ -3,11 +3,9 @@ use ya_service_bus::RpcMessage;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-
 pub fn file_bus_id(hash: &str) -> String {
     format!("/public/gftp/{}", hash)
 }
-
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
