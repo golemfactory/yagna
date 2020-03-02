@@ -63,9 +63,8 @@ impl<'c> AllocationDao<'c> {
                 .into_iter()
                 .fold(HashMap::new(), |mut map, payment| {
                     if let Some(allocation_id) = payment.allocation_id.clone() {
-                        map.entry(allocation_id)
-                            .and_modify(|v| *v += Into::<BigDecimal>::into(payment.amount))
-                            .or_insert_with(BigDecimal::zero);
+                        let x = map.entry(allocation_id).or_insert_with(BigDecimal::zero);
+                        *x += Into::<BigDecimal>::into(payment.amount);
                     }
                     map
                 });

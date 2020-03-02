@@ -1,5 +1,6 @@
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
+use crate::dao::invoice_event::InvoiceEventDao;
 use crate::error::{DbError, Error, PaymentError};
 use crate::processor::PaymentProcessor;
 use crate::utils::*;
@@ -148,6 +149,7 @@ async fn cancel_debit_note(
 
 async fn send_invoice(db: DbExecutor, sender: String, msg: SendInvoice) -> Result<Ack, SendError> {
     let mut invoice = msg.0;
+    let invoice_id = invoice.invoice_id.clone();
     let agreement = match get_agreement(invoice.agreement_id.clone()).await {
         Err(e) => {
             return Err(SendError::ServiceError(e.to_string()));
@@ -170,9 +172,21 @@ async fn send_invoice(db: DbExecutor, sender: String, msg: SendInvoice) -> Resul
     let dao: InvoiceDao = db.as_dao();
     invoice.status = InvoiceStatus::Received;
     match dao.insert(invoice.into()).await {
-        Ok(_) => Ok(Ack {}),
+        Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+        Err(e) => return Err(SendError::ServiceError(e.to_string())),
+        _ => (),
+    }
+
+    let dao: InvoiceEventDao = db.as_dao();
+    let event = NewInvoiceEvent {
+        invoice_id,
+        details: None,
+        event_type: EventType::Received,
+    };
+    match dao.create(event.into()).await {
         Err(DbError::Query(e)) => Err(SendError::BadRequest(e.to_string())),
         Err(e) => Err(SendError::ServiceError(e.to_string())),
+        Ok(_) => Ok(Ack {}),
     }
 }
 
@@ -221,12 +235,23 @@ async fn accept_invoice(
         }
     }
 
-    match dao
-        .update_status(invoice_id, InvoiceStatus::Accepted.into())
+    if let Err(e) = dao
+        .update_status(invoice_id.clone(), InvoiceStatus::Accepted.into())
         .await
     {
-        Ok(_) => Ok(Ack {}),
+        return Err(AcceptRejectError::ServiceError(e.to_string()));
+    }
+
+    let dao: InvoiceEventDao = db.as_dao();
+    let event = NewInvoiceEvent {
+        invoice_id,
+        details: None,
+        event_type: EventType::Accepted,
+    };
+    match dao.create(event.into()).await {
+        Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
         Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+        Ok(_) => Ok(Ack {}),
     }
 }
 

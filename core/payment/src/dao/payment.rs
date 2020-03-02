@@ -4,6 +4,7 @@ use crate::schema::pay_payment::dsl;
 use crate::schema::pay_payment_x_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_payment_x_invoice::dsl as invoice_dsl;
 use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
@@ -86,11 +87,17 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get_sent(&self, payer_id: String) -> DbResult<Vec<Payment>> {
+    pub async fn get_sent(
+        &self,
+        payer_id: String,
+        later_than: Option<NaiveDateTime>,
+    ) -> DbResult<Vec<Payment>> {
         do_with_transaction(self.pool, move |conn| {
-            let payments = dsl::pay_payment
-                .filter(dsl::payer_id.eq(payer_id.clone()))
-                .load(conn)?;
+            let query = dsl::pay_payment.filter(dsl::payer_id.eq(payer_id.clone()));
+            let payments = match later_than {
+                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
+                None => query.load(conn)?,
+            };
             let debit_notes = debit_note_dsl::pay_payment_x_debit_note
                 .inner_join(dsl::pay_payment)
                 .filter(dsl::payer_id.eq(payer_id.clone()))
@@ -110,11 +117,17 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get_received(&self, payee_id: String) -> DbResult<Vec<Payment>> {
+    pub async fn get_received(
+        &self,
+        payee_id: String,
+        later_than: Option<NaiveDateTime>,
+    ) -> DbResult<Vec<Payment>> {
         do_with_transaction(self.pool, move |conn| {
-            let payments = dsl::pay_payment
-                .filter(dsl::payee_id.eq(payee_id.clone()))
-                .load(conn)?;
+            let query = dsl::pay_payment.filter(dsl::payee_id.eq(payee_id.clone()));
+            let payments = match later_than {
+                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
+                None => query.load(conn)?,
+            };
             let debit_notes = debit_note_dsl::pay_payment_x_debit_note
                 .inner_join(dsl::pay_payment)
                 .filter(dsl::payee_id.eq(payee_id.clone()))
