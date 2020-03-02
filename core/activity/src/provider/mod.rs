@@ -2,10 +2,11 @@ use actix_web::{web, Responder};
 use futures::prelude::*;
 use std::convert::From;
 
-use ya_model::activity::provider_event::ProviderEventType;
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::models::ActivityEventType;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::common::{authorize_activity_executor, PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
@@ -38,13 +39,12 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
 
 impl From<Event> for ProviderEvent {
     fn from(value: Event) -> Self {
-        let event_type = serde_json::from_str::<ProviderEventType>(&value.name).unwrap();
-        match event_type {
-            ProviderEventType::CreateActivity => ProviderEvent::CreateActivity {
+        match value.event_type {
+            ActivityEventType::CreateActivity => ProviderEvent::CreateActivity {
                 activity_id: value.activity_natural_id,
                 agreement_id: value.agreement_natural_id,
             },
-            ProviderEventType::DestroyActivity => ProviderEvent::DestroyActivity {
+            ActivityEventType::DestroyActivity => ProviderEvent::DestroyActivity {
                 activity_id: value.activity_natural_id,
                 agreement_id: value.agreement_natural_id,
             },
@@ -103,6 +103,7 @@ async fn set_activity_state_web(
     state: web::Json<ActivityState>,
     id: Identity,
 ) -> Result<(), Error> {
+    log::debug!("set_activity_state_web {:?}", state);
     authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
 
     set_activity_state(&db, &path.activity_id, state.into_inner()).await
@@ -143,11 +144,9 @@ async fn get_events_web(
     Ok(db
         .as_dao::<EventDao>()
         .get_events_fut(query.max_count)
-        //        .timeout(query.timeout)
-        //        .map_err(Error::from)
-        //        .await?
+        .timeout(query.timeout)
         .map_err(Error::from)
-        .await?
+        .await??
         .into_iter()
         .map(ProviderEvent::from)
         .collect())

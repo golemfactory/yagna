@@ -1,19 +1,22 @@
-use crate::dao::{DaoError, NotFoundAsOption, Result};
 use chrono::Utc;
 use diesel::prelude::*;
 use diesel::sql_types::{Integer, Timestamp};
 use std::cmp::min;
 use std::time::Duration;
 use tokio::time::delay_for;
-use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
+
+use ya_persistence::executor::{do_with_connection, do_with_transaction, AsDao, PoolType};
+use ya_persistence::models::ActivityEventType;
 use ya_persistence::schema;
+
+use crate::dao::{DaoError, NotFoundAsOption, Result};
 
 pub const MAX_EVENTS: u32 = 100;
 
 #[derive(Queryable, Debug)]
 pub struct Event {
     pub id: i32,
-    pub name: String,
+    pub event_type: ActivityEventType,
     pub activity_natural_id: String,
     pub agreement_natural_id: String,
 }
@@ -29,29 +32,23 @@ impl<'a> AsDao<'a> for EventDao<'a> {
 }
 
 impl<'c> EventDao<'c> {
-    pub async fn create(&self, activity_id: &str, event_type: &str) -> Result<()> {
+    pub async fn create(&self, activity_id: &str, event_type: ActivityEventType) -> Result<()> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
-        use schema::activity_event_type::dsl as dsl_type;
 
         let now = Utc::now().naive_utc();
+        log::trace!("creating event_type: {:?}", event_type);
 
         let activity_id = activity_id.to_owned();
-        let event_type = event_type.to_owned();
         do_with_connection(self.pool, move |conn| {
             {
-                let event_type_id = dsl_type::activity_event_type
-                    .select(dsl_type::id)
-                    .filter(dsl_type::name.eq(event_type))
-                    .first::<i32>(conn)?;
-
                 diesel::insert_into(dsl_event::activity_event)
                     .values(
                         dsl::activity
                             .select((
                                 dsl::id,
                                 now.into_sql::<Timestamp>(),
-                                event_type_id.into_sql::<Integer>(),
+                                event_type.into_sql::<Integer>(),
                             ))
                             .filter(dsl::natural_id.eq(activity_id))
                             .limit(1),
@@ -72,37 +69,32 @@ impl<'c> EventDao<'c> {
     pub async fn get_events(&self, max_count: Option<u32>) -> Result<Vec<Event>> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
-        use schema::activity_event_type::dsl as dsl_type;
 
         let limit = match max_count {
             Some(val) => min(MAX_EVENTS, val),
             None => MAX_EVENTS,
         };
 
-        log::debug!("starting db query");
-        do_with_connection(self.pool, move |conn| {
-            conn.transaction::<_, diesel::result::Error, _>(move || {
-                let results: Vec<Event> = dsl_event::activity_event
-                    .inner_join(schema::activity_event_type::table)
-                    .inner_join(schema::activity::table)
-                    .select((
-                        dsl_event::id,
-                        dsl_type::name,
-                        dsl::natural_id,
-                        dsl::agreement_id,
-                    ))
-                    .order(dsl_event::event_date.asc())
-                    .limit(limit as i64)
-                    .load::<Event>(conn)?;
+        log::trace!("get_events: starting db query");
+        do_with_transaction(self.pool, move |conn| {
+            let results: Vec<Event> = dsl_event::activity_event
+                .inner_join(schema::activity::table)
+                .select((
+                    dsl_event::id,
+                    dsl_event::event_type_id,
+                    dsl::natural_id,
+                    dsl::agreement_id,
+                ))
+                .order(dsl_event::event_date.asc())
+                .limit(limit as i64)
+                .load::<Event>(conn)?;
 
-                let mut ids = Vec::new();
-                results.iter().for_each(|event| ids.push(event.id));
+            let ids = results.iter().map(|event| event.id).collect::<Vec<_>>();
+            if !ids.is_empty() {
                 diesel::delete(dsl_event::activity_event.filter(dsl_event::id.eq_any(ids)))
                     .execute(conn)?;
-
-                Ok(results)
-            })
-            .map_err(DaoError::from)
+            }
+            Ok(results)
         })
         .await
     }

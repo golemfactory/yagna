@@ -6,8 +6,6 @@ use crate::models as db_models;
 use crate::utils::*;
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
-use futures::Future;
-use std::time::Duration;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment;
 use ya_model::payment::*;
@@ -124,22 +122,6 @@ async fn get_debit_note(
     }
 }
 
-async fn with_timeout<Work: Future<Output = HttpResponse>>(
-    timeout: impl Into<u64>,
-    work: Work,
-) -> HttpResponse {
-    let timeout = timeout.into();
-
-    if timeout > 0 {
-        match tokio::time::timeout(Duration::from_secs(timeout.into()), work).await {
-            Ok(v) => v,
-            Err(_) => return HttpResponse::GatewayTimeout().finish(),
-        }
-    } else {
-        work.await
-    }
-}
-
 async fn send_debit_note(
     db: Data<DbExecutor>,
     path: Path<DebitNoteId>,
@@ -152,12 +134,11 @@ async fn send_debit_note(
         Ok(None) => return HttpResponse::NotFound().finish(),
         Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
     };
+    // TODO: Check status
     let debit_note_id = debit_note.debit_note_id.clone();
 
     let node_id = id.identity;
-    let recipient_id = debit_note.recipient_id.clone().parse::<NodeId>().unwrap();
     if Some(node_id) != debit_note.issuer_id.parse().ok() {
-        // FIXME: provider_id shouldn't be an Option
         return HttpResponse::Unauthorized().body(format!(
             "Identity {:?} is not authorized to send this debit note",
             node_id,
@@ -165,7 +146,8 @@ async fn send_debit_note(
     }
 
     with_timeout(query.timeout, async move {
-        let result = match node_id
+        let recipient_id: NodeId = debit_note.recipient_id.parse().unwrap();
+        let result = match recipient_id
             .service(payment::BUS_ID)
             .call(payment::SendDebitNote(debit_note))
             .await
@@ -286,18 +268,16 @@ async fn send_invoice(
     };
     let invoice_id = invoice.invoice_id.clone();
 
-    let node_id = id.identity.to_string();
-    let recipient_id = invoice.recipient_id.clone();
-    if node_id != invoice.issuer_id {
-        // FIXME: provider_id shouldn't be an Option
+    let node_id = id.identity;
+    if Some(node_id) != invoice.issuer_id.parse().ok() {
         return HttpResponse::Unauthorized().body(format!(
-            "Identity {} is not authorized to send this debit note",
+            "Identity {:?} is not authorized to send this debit note",
             node_id,
         ));
     }
 
+    let addr: NodeId = invoice.recipient_id.parse().unwrap();
     let msg = payment::SendInvoice(invoice);
-    let addr = recipient_id.parse::<NodeId>().unwrap();
     let timeout = if query.timeout > 0 {
         Some(query.timeout * 1000)
     } else {

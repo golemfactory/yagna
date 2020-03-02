@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ErrorMessage;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Demand {
     #[serde(rename = "properties")]
@@ -30,5 +32,13 @@ impl Demand {
             demand_id: None,
             requestor_id: None,
         }
+    }
+
+    pub fn demand_id(&self) -> Result<&String, ErrorMessage> {
+        self.demand_id.as_ref().ok_or("no demand id".into())
+    }
+
+    pub fn requestor_id(&self) -> Result<&String, ErrorMessage> {
+        self.requestor_id.as_ref().ok_or("no requestor id".into())
     }
 }

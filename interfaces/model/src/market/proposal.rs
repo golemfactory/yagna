@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ErrorMessage;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Proposal {
     #[serde(rename = "properties")]
@@ -44,8 +46,22 @@ impl Proposal {
         }
     }
 
-    pub fn id(&self) -> Result<&String, String> {
+    pub fn proposal_id(&self) -> Result<&String, ErrorMessage> {
         self.proposal_id.as_ref().ok_or("no proposal id".into())
+    }
+
+    pub fn issuer_id(&self) -> Result<&String, ErrorMessage> {
+        self.issuer_id.as_ref().ok_or("no issuer id".into())
+    }
+
+    pub fn state(&self) -> Result<&State, ErrorMessage> {
+        self.state.as_ref().ok_or("no state id".into())
+    }
+
+    pub fn prev_proposal_id(&self) -> Result<&String, ErrorMessage> {
+        self.prev_proposal_id
+            .as_ref()
+            .ok_or("no previous proposal id".into())
     }
 }
 

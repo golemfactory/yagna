@@ -2,7 +2,7 @@ use actix_web::web;
 use futures::prelude::*;
 
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
-use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState, State};
+use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandState};
 use ya_persistence::executor::DbExecutor;
 
 use crate::common::{
@@ -11,6 +11,7 @@ use crate::common::{
 use crate::dao::{ActivityStateDao, ActivityUsageDao, NotFoundAsOption};
 use crate::error::Error;
 use crate::requestor::provider_activity_service_id;
+use ya_model::activity::activity_state::StatePair;
 use ya_service_api_web::middleware::Identity;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -130,8 +131,8 @@ async fn get_persisted_state(
         .map_err(Error::from)?;
 
     if let Some(s) = maybe_state {
-        let state = serde_json::from_str(&s.name)?;
-        if state == State::Terminated {
+        let state: StatePair = serde_json::from_str(&s.name)?;
+        if !state.alive() {
             return Ok(Some(ActivityState {
                 state,
                 reason: s.reason,
@@ -172,7 +173,7 @@ trait TerminatedCheck {
 impl TerminatedCheck for Option<ActivityState> {
     fn terminated(&self) -> bool {
         if let Some(s) = &self {
-            return s.state == State::Terminated;
+            return !s.state.alive();
         }
         false
     }

@@ -9,10 +9,11 @@
  */
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Error)]
+#[error("Yagna API error: {message:?}")]
 pub struct ErrorMessage {
-    #[serde(rename = "message", skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
 
@@ -21,5 +22,11 @@ impl ErrorMessage {
         ErrorMessage {
             message: Some(message),
         }
+    }
+}
+
+impl<T: Into<String>> From<T> for ErrorMessage {
+    fn from(s: T) -> Self {
+        Self::new(s.into())
     }
 }

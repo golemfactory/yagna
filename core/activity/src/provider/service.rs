@@ -7,8 +7,9 @@ use crate::common::{
 use crate::dao::*;
 use crate::error::Error;
 use ya_core_model::activity::*;
-use ya_model::activity::{provider_event::ProviderEventType, State};
+use ya_model::activity::{activity_state::StatePair, State};
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::models::ActivityEventType;
 use ya_service_bus::timeout::*;
 
 lazy_static::lazy_static! {
@@ -48,12 +49,7 @@ async fn create_activity_gsb(
     log::debug!("activity inserted: {}", activity_id);
 
     db.as_dao::<EventDao>()
-        .create(
-            &activity_id,
-            serde_json::to_string(&ProviderEventType::CreateActivity)
-                .unwrap()
-                .as_str(),
-        )
+        .create(&activity_id, ActivityEventType::CreateActivity)
         .await
         .map_err(Error::from)?;
     log::debug!("event inserted");
@@ -80,17 +76,16 @@ async fn destroy_activity_gsb(
 
     log::info!("creating event for destroying activity");
     db.as_dao::<EventDao>()
-        .create(
-            &msg.activity_id,
-            serde_json::to_string(&ProviderEventType::DestroyActivity)
-                .unwrap()
-                .as_str(),
-        )
+        .create(&msg.activity_id, ActivityEventType::DestroyActivity)
         .await
         .map_err(Error::from)?;
 
+    log::info!(
+        "waiting {:?}ms for activity status change to Terminate",
+        msg.timeout
+    );
     db.as_dao::<ActivityStateDao>()
-        .get_future(&msg.activity_id, Some(State::Terminated))
+        .get_future(&msg.activity_id, Some(StatePair(State::Terminated, None)))
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?

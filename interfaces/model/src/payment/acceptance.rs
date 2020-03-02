@@ -5,15 +5,14 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct Acceptance {
     pub total_amount_accepted: BigDecimal,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub allocation_id: Option<String>,
+    pub allocation_id: String,
 }
 
 impl Acceptance {
-    pub fn new(total_amount_accepted: BigDecimal) -> Acceptance {
+    pub fn new(total_amount_accepted: BigDecimal, allocation_id: String) -> Acceptance {
         Acceptance {
             total_amount_accepted,
-            allocation_id: None,
+            allocation_id,
         }
     }
 }
