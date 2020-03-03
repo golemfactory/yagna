@@ -27,17 +27,8 @@ where
         .map(|_| ())
 }
 
-pub(crate) trait TryFlatten<T, E> {
-    fn try_flatten(self) -> Result<T, E>;
-}
-
-impl<T, E, F, G> TryFlatten<T, E> for Result<Result<T, F>, G>
-where
-    E: From<F> + From<G>,
-{
-    fn try_flatten(self) -> Result<T, E> {
-        self.map_err(E::from)?.map_err(E::from)
-    }
+pub trait AbortableStream<T, E>: Stream<Item = std::result::Result<T, E>> {
+    fn abort_handle(&self) -> AbortHandle;
 }
 
 #[derive(Clone, Debug)]
@@ -74,21 +65,22 @@ pub trait TransferProvider<T, E> {
 
 pub struct TransferStream<T, E> {
     rx: Receiver<Result<T, E>>,
-    pub(crate) tx: Sender<Result<T, E>>,
     pub abort_handle: AbortHandle,
-    pub(crate) abort_reg: Option<AbortRegistration>,
+}
+
+pub struct StreamHandles<T, E> {
+    pub tx: Sender<Result<T, E>>,
+    pub abort_reg: AbortRegistration,
 }
 
 impl<T, E> TransferStream<T, E> {
-    pub fn create(channel_size: usize) -> Self {
+    pub fn create(channel_size: usize) -> (Self, StreamHandles<T, E>) {
         let (tx, rx) = channel(channel_size);
         let (abort_handle, abort_reg) = AbortHandle::new_pair();
-        TransferStream {
-            rx,
-            tx,
-            abort_handle,
-            abort_reg: Some(abort_reg),
-        }
+        (
+            TransferStream { rx, abort_handle },
+            StreamHandles { tx, abort_reg },
+        )
     }
 }
 
@@ -100,23 +92,33 @@ impl<T, E> Stream for TransferStream<T, E> {
     }
 }
 
+impl<T, E> AbortableStream<T, E> for TransferStream<T, E> {
+    fn abort_handle(&self) -> AbortHandle {
+        self.abort_handle.clone()
+    }
+}
+
 pub struct TransferSink<T, E> {
     tx: Sender<Result<T, E>>,
-    pub(crate) rx: Option<Receiver<Result<T, E>>>,
-    pub(crate) res_tx: Option<oneshot::Sender<Result<(), E>>>,
-    pub(crate) res_rx: Option<oneshot::Receiver<Result<(), E>>>,
+    pub res_rx: Option<oneshot::Receiver<Result<(), E>>>,
+}
+
+pub struct SinkHandles<T, E> {
+    pub rx: Receiver<Result<T, E>>,
+    pub res_tx: oneshot::Sender<Result<(), E>>,
 }
 
 impl<T, E> TransferSink<T, E> {
-    pub fn create(channel_size: usize) -> Self {
+    pub fn create(channel_size: usize) -> (Self, SinkHandles<T, E>) {
         let (tx, rx) = channel(channel_size);
         let (res_tx, res_rx) = oneshot::channel();
-        TransferSink {
-            tx,
-            rx: Some(rx),
-            res_tx: Some(res_tx),
-            res_rx: Some(res_rx),
-        }
+        (
+            TransferSink {
+                tx,
+                res_rx: Some(res_rx),
+            },
+            SinkHandles { rx, res_tx },
+        )
     }
 }
 
@@ -144,7 +146,7 @@ pub struct HashStream<T, E, S>
 where
     S: Stream<Item = Result<T, E>>,
 {
-    stream: S,
+    inner: S,
     hasher: Box<dyn Hasher>,
     hash: Vec<u8>,
     result: Option<Vec<u8>>,
@@ -179,7 +181,7 @@ where
         };
 
         Ok(HashStream {
-            stream,
+            inner: stream,
             hasher,
             hash,
             result: None,
@@ -194,7 +196,7 @@ where
     type Item = Result<TransferData, Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let result = Stream::poll_next(Pin::new(&mut self.stream), cx);
+        let result = Stream::poll_next(Pin::new(&mut self.inner), cx);
 
         if let Poll::Ready(ref opt) = result {
             match opt {
@@ -223,5 +225,14 @@ where
         }
 
         result
+    }
+}
+
+impl<S> AbortableStream<TransferData, Error> for HashStream<TransferData, Error, S>
+where
+    S: AbortableStream<TransferData, Error> + Unpin,
+{
+    fn abort_handle(&self) -> AbortHandle {
+        self.inner.abort_handle()
     }
 }

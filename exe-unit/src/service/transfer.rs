@@ -15,9 +15,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::file::FileTransferProvider;
 use ya_transfer::http::HttpTransferProvider;
-use ya_transfer::{transfer, HashStream, TransferData, TransferProvider, TransferSink};
-
-type TransferResult<T> = std::result::Result<T, TransferError>;
+use ya_transfer::{
+    transfer, AbortableStream, HashStream, TransferData, TransferProvider, TransferSink,
+};
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
@@ -73,7 +73,7 @@ impl TransferService {
     fn source(
         &self,
         transfer_url: &TransferUrl,
-    ) -> Result<Box<dyn Stream<Item = TransferResult<TransferData>> + Unpin>> {
+    ) -> Result<Box<dyn AbortableStream<TransferData, TransferError> + Unpin>> {
         let scheme = transfer_url.url.scheme();
         let provider = self
             .providers
@@ -109,8 +109,7 @@ impl TransferService {
         let work_dir = self.work_dir.clone();
         Ok(TransferUrl::parse(from, "container")?
             .map_path(|scheme, path| match scheme {
-                "container" => Ok(ProjectedPath::container(path.into())
-                    .to_local(work_dir)
+                "container" => Ok(ProjectedPath::local(work_dir, path.into())
                     .to_path_buf()
                     .to_str()
                     .unwrap()
@@ -129,7 +128,7 @@ impl TransferService {
         Ok(TransferUrl::parse(to, "container")?
             .map_path(|scheme, path| match scheme {
                 "container" => {
-                    let projected = ProjectedPath::container(path.into()).to_local(work_dir);
+                    let projected = ProjectedPath::local(work_dir, path.into());
                     projected.create_dir_all().map_err(TransferError::from)?;
                     Ok(projected.to_path_buf().to_str().unwrap().to_owned())
                 }
@@ -169,11 +168,11 @@ impl Actor for TransferService {
     type Context = Context<Self>;
 
     fn started(&mut self, _: &mut Self::Context) {
-        log::info!("Transfer service started.");
+        log::info!("Transfer service started");
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        log::info!("Transfer service stopped.");
+        log::info!("Transfer service stopped");
     }
 }
 
@@ -194,7 +193,7 @@ macro_rules! actor_try {
 impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, PathBuf, Error>;
 
-    fn handle(&mut self, _: DeployImage, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
         let pkg_url = actor_try!(TransferService::load_package_url(&self.agreement));
         let source_url = actor_try!(TransferUrl::parse(&pkg_url, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
@@ -209,19 +208,23 @@ impl Handler<DeployImage> for TransferService {
         );
 
         let source = actor_try!(self.source(&source_url));
+        let source_abort = Abort::from(source.abort_handle());
         let destination = actor_try!(self.destination(&cache_url));
 
+        let address = ctx.address();
         let fut = async move {
             let final_path = final_path.to_path_buf();
             if final_path.exists() {
                 return Ok(final_path);
             }
 
+            address.send(AddAbortHandle(source_abort.clone())).await?;
             transfer(source, destination).await?;
-            log::debug!("Deployment from {:?} finished", source_url.url);
+            address.send(RemoveAbortHandle(source_abort)).await?;
 
             std::fs::rename(cache_path.to_path_buf(), &final_path)?;
 
+            log::info!("Deployment from {:?} finished", source_url.url);
             Ok(final_path)
         };
 
@@ -232,18 +235,24 @@ impl Handler<DeployImage> for TransferService {
 impl Handler<TransferResource> for TransferService {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: TransferResource, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: TransferResource, ctx: &mut Self::Context) -> Self::Result {
+        let address = ctx.address();
         let from = actor_try!(self.parse_from(&msg.from));
         let to = actor_try!(self.parse_to(&msg.to));
 
         log::info!("Transferring {:?} to {:?}", from.url, to.url);
 
         let source = actor_try!(self.source(&from));
+        let source_abort = Abort::from(source.abort_handle());
         let destination = actor_try!(self.destination(&to));
 
         return ActorResponse::r#async(
             async move {
+                address.send(AddAbortHandle(source_abort.clone())).await?;
                 transfer(source, destination).await?;
+                address.send(RemoveAbortHandle(source_abort)).await?;
+
+                log::info!("Transfer of {:?} to {:?} finished", from.url, to.url);
                 Ok(())
             }
             .into_actor(self),
