@@ -148,7 +148,7 @@ fn build_demand(node_name: &str) -> Demand {
             (golem.inf.mem.gib>0.5)
             (golem.inf.storage.gib>1)
         )"#
-            .to_string(),
+        .to_string(),
 
         demand_id: Default::default(),
         requestor_id: Default::default(),
