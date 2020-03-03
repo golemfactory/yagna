@@ -5,6 +5,7 @@ use crate::util::Abort;
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use futures::future::{AbortHandle, Abortable};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Output, Stdio};
@@ -16,7 +17,7 @@ pub struct RuntimeProcess {
     agreement: Option<PathBuf>,
     work_dir: Option<PathBuf>,
     cache_dir: Option<PathBuf>,
-    abort_handles: Vec<Abort>,
+    abort_handles: HashSet<Abort>,
 }
 
 impl RuntimeProcess {
@@ -26,7 +27,7 @@ impl RuntimeProcess {
             agreement: None,
             work_dir: None,
             cache_dir: None,
-            abort_handles: Vec::new(),
+            abort_handles: HashSet::new(),
         }
     }
 
@@ -144,7 +145,7 @@ impl Handler<AddChildHandle> for RuntimeProcess {
     type Result = <AddChildHandle as Message>::Result;
 
     fn handle(&mut self, msg: AddChildHandle, _: &mut Self::Context) -> Self::Result {
-        self.abort_handles.push(msg.0);
+        self.abort_handles.insert(msg.0);
     }
 }
 
@@ -152,9 +153,7 @@ impl Handler<RemoveChildHandle> for RuntimeProcess {
     type Result = <RemoveChildHandle as Message>::Result;
 
     fn handle(&mut self, msg: RemoveChildHandle, _: &mut Self::Context) -> Self::Result {
-        if let Some(idx) = self.abort_handles.iter().position(|c| c == &msg.0) {
-            self.abort_handles.remove(idx);
-        }
+        self.abort_handles.remove(&msg.0);
     }
 }
 
@@ -162,7 +161,7 @@ impl Handler<Shutdown> for RuntimeProcess {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        for handle in std::mem::replace(&mut self.abort_handles, Vec::new()).into_iter() {
+        for handle in std::mem::replace(&mut self.abort_handles, HashSet::new()).into_iter() {
             handle.abort();
         }
         ctx.stop();

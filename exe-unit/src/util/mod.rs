@@ -1,10 +1,12 @@
 use futures::future::AbortHandle;
+use std::cmp::Eq;
+use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod path;
 pub mod url;
 
-/// Allows storing of AbortHandle objects in a Vec
+/// Allows storing of AbortHandle objects in a container
 #[derive(Clone, Debug)]
 pub struct Abort {
     id: usize,
@@ -26,6 +28,14 @@ impl From<AbortHandle> for Abort {
         }
     }
 }
+
+impl Hash for Abort {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.id.to_be_bytes())
+    }
+}
+
+impl Eq for Abort {}
 
 impl PartialEq for Abort {
     fn eq(&self, other: &Self) -> bool {

@@ -5,7 +5,7 @@ use crate::util::url::TransferUrl;
 use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
 use actix::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io::BufReader;
@@ -16,7 +16,8 @@ use ya_transfer::error::Error as TransferError;
 use ya_transfer::file::FileTransferProvider;
 use ya_transfer::http::HttpTransferProvider;
 use ya_transfer::{
-    transfer, AbortableStream, HashStream, TransferData, TransferProvider, TransferSink,
+    transfer, AbortableSink, AbortableStream, HashStream, TransferData, TransferProvider,
+    TransferSink,
 };
 
 #[derive(Clone, Debug, Message)]
@@ -32,11 +33,11 @@ pub struct DeployImage;
 
 #[derive(Clone, Debug, Message)]
 #[rtype("()")]
-struct AddAbortHandle(Abort);
+struct AddAbortHandles(Vec<Abort>);
 
 #[derive(Clone, Debug, Message)]
 #[rtype("()")]
-struct RemoveAbortHandle(Abort);
+struct RemoveAbortHandles(Vec<Abort>);
 
 /// Handles resources transfers.
 pub struct TransferService {
@@ -44,7 +45,7 @@ pub struct TransferService {
     cache: Cache,
     work_dir: PathBuf,
     agreement: PathBuf,
-    abort_handles: Vec<Abort>,
+    abort_handles: HashSet<Abort>,
 }
 
 impl TransferService {
@@ -66,7 +67,7 @@ impl TransferService {
             cache: Cache::new(ctx.cache_dir.clone()),
             work_dir: ctx.work_dir,
             agreement: ctx.agreement,
-            abort_handles: Vec::new(),
+            abort_handles: HashSet::new(),
         }
     }
 
@@ -208,8 +209,11 @@ impl Handler<DeployImage> for TransferService {
         );
 
         let source = actor_try!(self.source(&source_url));
-        let source_abort = Abort::from(source.abort_handle());
-        let destination = actor_try!(self.destination(&cache_url));
+        let dest = actor_try!(self.destination(&cache_url));
+        let abort_handles = vec![
+            Abort::from(source.abort_handle()),
+            Abort::from(dest.abort_handle()),
+        ];
 
         let address = ctx.address();
         let fut = async move {
@@ -218,9 +222,9 @@ impl Handler<DeployImage> for TransferService {
                 return Ok(final_path);
             }
 
-            address.send(AddAbortHandle(source_abort.clone())).await?;
-            transfer(source, destination).await?;
-            address.send(RemoveAbortHandle(source_abort)).await?;
+            address.send(AddAbortHandles(abort_handles.clone())).await?;
+            transfer(source, dest).await?;
+            address.send(RemoveAbortHandles(abort_handles)).await?;
 
             std::fs::rename(cache_path.to_path_buf(), &final_path)?;
 
@@ -243,14 +247,17 @@ impl Handler<TransferResource> for TransferService {
         log::info!("Transferring {:?} to {:?}", from.url, to.url);
 
         let source = actor_try!(self.source(&from));
-        let source_abort = Abort::from(source.abort_handle());
-        let destination = actor_try!(self.destination(&to));
+        let dest = actor_try!(self.destination(&to));
+        let abort_handles = vec![
+            Abort::from(source.abort_handle()),
+            Abort::from(dest.abort_handle()),
+        ];
 
         return ActorResponse::r#async(
             async move {
-                address.send(AddAbortHandle(source_abort.clone())).await?;
-                transfer(source, destination).await?;
-                address.send(RemoveAbortHandle(source_abort)).await?;
+                address.send(AddAbortHandles(abort_handles.clone())).await?;
+                transfer(source, dest).await?;
+                address.send(RemoveAbortHandles(abort_handles)).await?;
 
                 log::info!("Transfer of {:?} to {:?} finished", from.url, to.url);
                 Ok(())
@@ -260,20 +267,20 @@ impl Handler<TransferResource> for TransferService {
     }
 }
 
-impl Handler<AddAbortHandle> for TransferService {
-    type Result = <AddAbortHandle as Message>::Result;
+impl Handler<AddAbortHandles> for TransferService {
+    type Result = <AddAbortHandles as Message>::Result;
 
-    fn handle(&mut self, msg: AddAbortHandle, _: &mut Self::Context) -> Self::Result {
-        self.abort_handles.push(msg.0);
+    fn handle(&mut self, msg: AddAbortHandles, _: &mut Self::Context) -> Self::Result {
+        self.abort_handles.extend(msg.0.into_iter());
     }
 }
 
-impl Handler<RemoveAbortHandle> for TransferService {
-    type Result = <RemoveAbortHandle as Message>::Result;
+impl Handler<RemoveAbortHandles> for TransferService {
+    type Result = <RemoveAbortHandles as Message>::Result;
 
-    fn handle(&mut self, msg: RemoveAbortHandle, _: &mut Self::Context) -> Self::Result {
-        if let Some(idx) = self.abort_handles.iter().position(|c| c == &msg.0) {
-            self.abort_handles.remove(idx);
+    fn handle(&mut self, msg: RemoveAbortHandles, _: &mut Self::Context) -> Self::Result {
+        for handle in msg.0.into_iter() {
+            self.abort_handles.remove(&handle);
         }
     }
 }
@@ -282,7 +289,7 @@ impl Handler<Shutdown> for TransferService {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        for handle in std::mem::replace(&mut self.abort_handles, Vec::new()).into_iter() {
+        for handle in std::mem::replace(&mut self.abort_handles, HashSet::new()).into_iter() {
             handle.abort();
         }
         ctx.stop();

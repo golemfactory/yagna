@@ -27,7 +27,13 @@ where
         .map(|_| ())
 }
 
+// Separate trait for boxing
 pub trait AbortableStream<T, E>: Stream<Item = std::result::Result<T, E>> {
+    fn abort_handle(&self) -> AbortHandle;
+}
+
+// Separate trait for boxing
+pub trait AbortableSink<T, E>: Sink<T, Error = E> {
     fn abort_handle(&self) -> AbortHandle;
 }
 
@@ -68,19 +74,11 @@ pub struct TransferStream<T, E> {
     pub abort_handle: AbortHandle,
 }
 
-pub struct StreamHandles<T, E> {
-    pub tx: Sender<Result<T, E>>,
-    pub abort_reg: AbortRegistration,
-}
-
 impl<T, E> TransferStream<T, E> {
-    pub fn create(channel_size: usize) -> (Self, StreamHandles<T, E>) {
+    pub fn create(channel_size: usize) -> (Self, Sender<Result<T, E>>, AbortRegistration) {
         let (tx, rx) = channel(channel_size);
         let (abort_handle, abort_reg) = AbortHandle::new_pair();
-        (
-            TransferStream { rx, abort_handle },
-            StreamHandles { tx, abort_reg },
-        )
+        (TransferStream { rx, abort_handle }, tx, abort_reg)
     }
 }
 
@@ -101,23 +99,30 @@ impl<T, E> AbortableStream<T, E> for TransferStream<T, E> {
 pub struct TransferSink<T, E> {
     tx: Sender<Result<T, E>>,
     pub res_rx: Option<oneshot::Receiver<Result<(), E>>>,
-}
-
-pub struct SinkHandles<T, E> {
-    pub rx: Receiver<Result<T, E>>,
-    pub res_tx: oneshot::Sender<Result<(), E>>,
+    pub abort_handle: AbortHandle,
 }
 
 impl<T, E> TransferSink<T, E> {
-    pub fn create(channel_size: usize) -> (Self, SinkHandles<T, E>) {
+    pub fn create(
+        channel_size: usize,
+    ) -> (
+        Self,
+        Receiver<Result<T, E>>,
+        oneshot::Sender<Result<(), E>>,
+        AbortRegistration,
+    ) {
         let (tx, rx) = channel(channel_size);
         let (res_tx, res_rx) = oneshot::channel();
+        let (abort_handle, abort_reg) = AbortHandle::new_pair();
         (
             TransferSink {
                 tx,
                 res_rx: Some(res_rx),
+                abort_handle,
             },
-            SinkHandles { rx, res_tx },
+            rx,
+            res_tx,
+            abort_reg,
         )
     }
 }
@@ -139,6 +144,12 @@ impl<T> Sink<T> for TransferSink<T, Error> {
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Sink::poll_close(Pin::new(&mut self.tx), cx).map_err(Error::from)
+    }
+}
+
+impl<T> AbortableSink<T, Error> for TransferSink<T, Error> {
+    fn abort_handle(&self) -> AbortHandle {
+        self.abort_handle.clone()
     }
 }
 

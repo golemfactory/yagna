@@ -4,8 +4,6 @@ use actix_rt::System;
 use bytes::BytesMut;
 use futures::future::{ready, Abortable};
 use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::thread;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -28,38 +26,32 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     fn source(&self, url: &Url) -> TransferStream<TransferData, Error> {
         let url = url.path().to_owned();
 
-        let (stream, handles) = TransferStream::<TransferData, Error>::create(1);
-        let mut tx_err = handles.tx.clone();
+        let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
+        let mut txc = tx.clone();
 
         thread::spawn(move || {
-            System::new("tx-file").block_on(
-                async move {
-                    let file = File::open(url).await?;
-                    let fut = FramedRead::new(file, BytesCodec::new())
-                        .map_ok(BytesMut::freeze)
-                        .map_err(Error::from)
-                        .into_stream()
-                        .forward(
-                            handles
-                                .tx
-                                .sink_map_err(Error::from)
-                                .with(|b| ready(Ok(Ok(TransferData::from(b))))),
-                        );
-
-                    let result: Result<_, Error> = Abortable::new(fut, handles.abort_reg)
-                        .await
-                        .map_err(Error::from)?
-                        .map_err(Error::from);
-                    Ok(result?)
+            let fut = async move {
+                let file = File::open(url).await?;
+                FramedRead::new(file, BytesCodec::new())
+                    .map_ok(BytesMut::freeze)
+                    .map_err(Error::from)
+                    .into_stream()
+                    .forward(
+                        tx.sink_map_err(Error::from)
+                            .with(|b| ready(Ok(Ok(TransferData::from(b))))),
+                    )
+                    .await
+                    .map_err(Error::from)
+            }
+            .then(|r: Result<(), Error>| async move {
+                if let Err(e) = r {
+                    let _ = txc.send(Err(e)).await;
                 }
-                .then(|r: Result<(), Error>| async move {
-                    if let Err(e) = r {
-                        let _ = tx_err.send(Err(e)).await;
-                    }
-                    tx_err.close_channel();
-                    Result::<(), Error>::Ok(())
-                }),
-            )
+                txc.close_channel();
+                Result::<(), Error>::Ok(())
+            });
+
+            System::new("tx-file").block_on(Abortable::new(fut, abort_reg))
         });
 
         stream
@@ -68,32 +60,23 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     fn destination(&self, url: &Url) -> TransferSink<TransferData, Error> {
         let url = url.path().to_owned();
 
-        let (sink, handles) = TransferSink::<TransferData, Error>::create(1);
+        let (sink, mut rx, res_tx, abort_reg) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
-            System::new("rx-file").block_on(async move {
-                let rx = Rc::new(RefCell::new(handles.rx));
-                let rxc = rx.clone();
-
+            let fut = async move {
                 let result = async move {
-                    let mut file = match File::create(url.clone()).await {
-                        Ok(file) => file,
-                        Err(e) => {
-                            log::error!("Unable to create a file: {:?} @ {:?}", e, url.clone());
-                            return Err(Error::from(e));
-                        }
-                    };
-                    while let Some(result) = rxc.borrow_mut().next().await {
+                    let mut file = File::create(url.clone()).await?;
+                    while let Some(result) = rx.next().await {
                         file.write_all(&result?.into_bytes()).await?;
                     }
-
                     Ok(())
                 }
                 .await;
 
-                let _ = handles.res_tx.send(result);
-                rx.borrow_mut().close();
-            })
+                let _ = res_tx.send(result);
+            };
+
+            System::new("rx-file").block_on(Abortable::new(fut, abort_reg))
         });
 
         sink
