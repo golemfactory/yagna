@@ -13,15 +13,10 @@ use ya_exe_unit::error::Error;
 use ya_exe_unit::service::transfer::{DeployImage, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
 
-fn random_contents_file(
-    path: &Path,
-    name: &str,
-    chunk_size: usize,
-    chunk_count: usize,
-) -> GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize> {
-    let mut path = path.to_path_buf();
-    path.push(name);
+type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
+fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -> HashOutput {
+    let path = path.join(name);
     let mut hasher = sha3::Sha3_512::default();
     let mut file_src = OpenOptions::new()
         .write(true)
@@ -43,7 +38,7 @@ fn random_contents_file(
     hasher.result()
 }
 
-fn hash_file(path: &PathBuf) -> GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize> {
+fn hash_file(path: &Path) -> HashOutput {
     let mut file_src = OpenOptions::new().read(true).open(path).expect("rnd file");
 
     let mut hasher = sha3::Sha3_512::default();
@@ -114,6 +109,12 @@ async fn transfer(addr: &Addr<TransferService>, from: &str, to: &str) -> Result<
     Ok(())
 }
 
+fn verify_hash<S: AsRef<str>>(hash: &HashOutput, path: &Path, file_name: S) {
+    let path = path.clone().join(file_name.as_ref());
+    log::info!("Verifying hash of {:?}", path);
+    assert_eq!(hash, &hash_file(&path));
+}
+
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("debug".into()));
@@ -137,13 +138,13 @@ async fn main() -> anyhow::Result<()> {
         chunk_size,
         chunk_count
     );
-    let hash = random_contents_file(temp_dir.path(), "rnd", chunk_size, chunk_count);
+    let hash = create_file(temp_dir.path(), "rnd", chunk_size, chunk_count);
 
     log::debug!("Starting HTTP servers");
-    let buf_th = temp_dir.path().to_path_buf();
+    let path = temp_dir.path().to_path_buf();
     std::thread::spawn(move || {
         let sys = System::new("http");
-        start_http(buf_th).expect("unable to start http servers");
+        start_http(path).expect("unable to start http servers");
         sys.run().expect("sys.run");
     });
 
@@ -168,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
         service_id: None,
         report_url: None,
         agreement: agreement_path,
-        work_dir,
+        work_dir: work_dir.clone(),
         cache_dir,
     };
     let transfer_service = TransferService::new(exe_ctx);
@@ -197,6 +198,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     .expect("transfer failed");
+    verify_hash(&hash, &work_dir, "rnd_container");
 
     transfer(
         &addr,
@@ -205,6 +207,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     .expect("transfer failed");
+    verify_hash(&hash, &work_dir, "rnd_container2");
 
     transfer(
         &addr,
@@ -213,6 +216,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     .expect("transfer failed");
+    verify_hash(&hash, temp_dir.path(), "rnd_upload");
 
     transfer(
         &addr,
@@ -221,6 +225,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     .expect("transfer failed");
+    verify_hash(&hash, &sub_dir, "rnd_local");
 
     transfer(
         &addr,
@@ -229,6 +234,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     .expect("transfer failed");
+    verify_hash(&hash, &sub_dir, "rnd_local2");
 
     transfer(
         &addr,
@@ -237,11 +243,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await
     .expect("transfer failed");
+    verify_hash(&hash, temp_dir.path(), "rnd_upload2");
 
-    log::info!("Verifying checksum");
-    let last_path = temp_dir.path().clone().join("rnd_upload2");
-    assert_eq!(hash, hash_file(&last_path));
-
-    log::info!("Done");
     Ok(())
 }
