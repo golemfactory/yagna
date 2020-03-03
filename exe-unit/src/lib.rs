@@ -5,6 +5,7 @@ pub mod metrics;
 pub mod runtime;
 pub mod service;
 pub mod state;
+pub mod util;
 
 use crate::error::Error;
 use crate::message::*;
@@ -195,13 +196,7 @@ impl<R: Runtime> ExeUnit<R> {
         })
         .await?;
 
-        Self::pre_exec(
-            addr.clone(),
-            exe_unit.clone(),
-            transfer_service,
-            ctx.clone(),
-        )
-        .await?;
+        Self::pre_exec(transfer_service, ctx.clone()).await?;
 
         let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exe_result.result {
@@ -231,25 +226,22 @@ impl<R: Runtime> ExeUnit<R> {
         Ok(())
     }
 
-    async fn pre_exec(
-        addr: Addr<Self>,
-        exe_unit: Addr<R>,
-        transfer_service: Addr<TransferService>,
-        ctx: ExecCtx,
-    ) -> Result<()> {
-        if let ExeScriptCommand::Transfer { from, to } = &ctx.cmd {
-            let msg = TransferResource {
-                from: from.clone(),
-                to: to.clone(),
-            };
-            return Ok(transfer_service.send(msg).await??);
-        } else if let ExeScriptCommand::Deploy {} = &ctx.cmd {
-            let msg = DeployImage {};
-            let path = transfer_service.send(msg).await??;
-            Ok(())
-        } else {
-            return Ok(());
+    async fn pre_exec(transfer_service: Addr<TransferService>, ctx: ExecCtx) -> Result<()> {
+        match &ctx.cmd {
+            ExeScriptCommand::Transfer { from, to } => {
+                let msg = TransferResource {
+                    from: from.clone(),
+                    to: to.clone(),
+                };
+                transfer_service.send(msg).await??;
+            }
+            ExeScriptCommand::Deploy {} => {
+                let msg = DeployImage {};
+                transfer_service.send(msg).await??;
+            }
+            _ => (),
         }
+        Ok(())
     }
 }
 

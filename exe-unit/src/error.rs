@@ -3,7 +3,7 @@ use crate::state::StateError;
 use serde::Serialize;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError as RpcError;
-use ya_transfer::error::Error as TransferError;
+pub use ya_transfer::error::Error as TransferError;
 
 #[derive(Error, Debug, Serialize)]
 pub enum LocalServiceError {
@@ -15,6 +15,8 @@ pub enum LocalServiceError {
         #[from]
         MetricError,
     ),
+    #[error("Transfer error: {0}")]
+    TransferError(#[from] TransferError),
 }
 
 #[derive(Error, Debug, Serialize)]
@@ -43,8 +45,6 @@ pub enum ChannelError {
         #[from]
         crossbeam_channel::RecvTimeoutError,
     ),
-    #[error("Transfer error: {0}")]
-    TransferError(#[from] TransferError),
     #[error("Send error: {0}")]
     SendError(String),
     #[error("Send error: {0}")]
@@ -107,9 +107,24 @@ pub enum Error {
     UsageLimitExceeded(String),
 }
 
+impl Error {
+    pub fn local<E>(err: E) -> Self
+    where
+        LocalServiceError: From<E>,
+    {
+        Error::from(LocalServiceError::from(err))
+    }
+}
+
 impl From<StateError> for Error {
     fn from(e: StateError) -> Self {
         Error::from(LocalServiceError::StateError(e))
+    }
+}
+
+impl From<TransferError> for Error {
+    fn from(e: TransferError) -> Self {
+        Error::from(LocalServiceError::TransferError(e))
     }
 }
 

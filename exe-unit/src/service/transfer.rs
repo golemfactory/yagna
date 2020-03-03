@@ -1,22 +1,23 @@
 use crate::error::Error;
 use crate::message::Shutdown;
+use crate::util::path::{CachePath, ProjectedPath};
+use crate::util::url::TransferUrl;
+use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
 use actix::prelude::*;
-use diesel::ExpressionMethods;
-use futures::future::AbortHandle;
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{Component, Path, PathBuf};
-use url::Url;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::file::FileTransferProvider;
 use ya_transfer::http::HttpTransferProvider;
-use ya_transfer::url::TransferLocation;
-use ya_transfer::TransferProvider;
+use ya_transfer::{transfer, HashStream, TransferData, TransferProvider, TransferSink};
 
-// =========================================== //
-// Public exposed messages
-// =========================================== //
+type TransferResult<T> = std::result::Result<T, TransferError>;
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
@@ -29,31 +30,115 @@ pub struct TransferResource {
 #[rtype(result = "Result<PathBuf>")]
 pub struct DeployImage;
 
-// =========================================== //
-// TransferService implementation
-// =========================================== //
+#[derive(Clone, Debug, Message)]
+#[rtype("()")]
+struct AddAbortHandle(Abort);
+
+#[derive(Clone, Debug, Message)]
+#[rtype("()")]
+struct RemoveAbortHandle(Abort);
 
 /// Handles resources transfers.
 pub struct TransferService {
-    providers: Vec<Box<dyn TransferProvider<TransferData, Error>>>,
+    providers: HashMap<&'static str, Rc<Box<dyn TransferProvider<TransferData, TransferError>>>>,
+    cache: Cache,
     work_dir: PathBuf,
-    cache_dir: PathBuf,
     agreement: PathBuf,
-    abort_handles: Vec<AbortHandle>,
+    abort_handles: Vec<Abort>,
 }
 
 impl TransferService {
     pub fn new(ctx: ExeUnitContext) -> TransferService {
+        let mut providers = HashMap::new();
+
+        let provider_vec: Vec<Rc<Box<dyn TransferProvider<TransferData, TransferError>>>> = vec![
+            Rc::new(Box::new(HttpTransferProvider::default())),
+            Rc::new(Box::new(FileTransferProvider::default())),
+        ];
+        for provider in provider_vec.into_iter() {
+            for scheme in provider.schemes().iter() {
+                providers.insert(*scheme, provider.clone());
+            }
+        }
+
         TransferService {
-            providers: vec![
-                Box::new(HttpTransferProvider::default()),
-                Box::new(FileTransferProvider::default()),
-            ],
+            providers,
+            cache: Cache::new(ctx.cache_dir.clone()),
             work_dir: ctx.work_dir,
-            cache_dir: ctx.cache_dir,
             agreement: ctx.agreement,
             abort_handles: Vec::new(),
         }
+    }
+
+    fn source(
+        &self,
+        transfer_url: &TransferUrl,
+    ) -> Result<Box<dyn Stream<Item = TransferResult<TransferData>> + Unpin>> {
+        let scheme = transfer_url.url.scheme();
+        let provider = self
+            .providers
+            .get(scheme)
+            .ok_or(TransferError::UnsupportedSchemeError(scheme.to_owned()))?;
+
+        let stream = provider.source(&transfer_url.url);
+        match &transfer_url.hash {
+            Some(hash) => Ok(Box::new(HashStream::try_new(
+                stream,
+                &hash.alg,
+                hash.val.clone(),
+            )?)),
+            None => Ok(Box::new(stream)),
+        }
+    }
+
+    fn destination(
+        &self,
+        transfer_url: &TransferUrl,
+    ) -> Result<TransferSink<TransferData, TransferError>> {
+        let scheme = transfer_url.url.scheme();
+
+        let provider = self
+            .providers
+            .get(scheme)
+            .ok_or(TransferError::UnsupportedSchemeError(scheme.to_owned()))?;
+
+        Ok(provider.destination(&transfer_url.url))
+    }
+
+    fn parse_from(&self, from: &str) -> Result<TransferUrl> {
+        let work_dir = self.work_dir.clone();
+        Ok(TransferUrl::parse(from, "container")?
+            .map_path(|scheme, path| match scheme {
+                "container" => Ok(ProjectedPath::container(path.into())
+                    .to_local(work_dir)
+                    .to_path_buf()
+                    .to_str()
+                    .unwrap()
+                    .to_owned()),
+                _ => Ok(path.to_owned()),
+            })?
+            .map_scheme(|scheme| match scheme {
+                "container" => "file",
+                _ => scheme,
+            })?)
+    }
+
+    fn parse_to(&self, to: &str) -> Result<TransferUrl> {
+        let work_dir = self.work_dir.clone();
+
+        Ok(TransferUrl::parse(to, "container")?
+            .map_path(|scheme, path| match scheme {
+                "container" => {
+                    let projected = ProjectedPath::container(path.into()).to_local(work_dir);
+                    projected.create_dir_all().map_err(TransferError::from)?;
+                    Ok(projected.to_path_buf().to_str().unwrap().to_owned())
+                }
+                _ => Ok(path.to_owned()),
+            })?
+            .map_scheme(|scheme| match scheme {
+                "container" => "file",
+                _ => scheme,
+            })?)
     }
 
     fn load_package_url(agreement_file: &Path) -> Result<String> {
@@ -78,53 +163,6 @@ impl TransferService {
             .to_owned();
         return Ok(package);
     }
-
-    fn deploy(&mut self, _msg: DeployImage) -> Result<PathBuf> {
-        let raw_url = TransferService::load_package_url(&self.agreement)?;
-        let from = TransferLocation::parse(&raw_url)?;
-
-        // match from {
-        //     TransferLocation::WithHash { .. } => from,
-        // }
-
-        if let TransferLocation::Plain(_) = from {
-            return Err(TransferError::InvalidUrlError("hash required in URL".into_owned()).into());
-        }
-
-        //        let image = Url::parse(&package)
-        //            .map_err(|error| Error::CommandError(format!("Can't parse package url [{}].", &package)))?;
-        let (opt_image_hash, image_url) = Transfers::extract_hash(&package)?;
-
-        match opt_image_hash {
-            Option::None => Err(Error::CommandError(format!(
-                "Image hash required in deploy command."
-            ))),
-            Option::Some(image_hash) => {
-                log::info!("Trying to find image [{}] in cache.", &image_url);
-
-                if let Some(image_path) = self.cache.find_in_cache(&image_url, &image_hash) {
-                    log::info!("Image [{}] found in cache.", &image_path.display());
-                    return Ok(image_path);
-                } else {
-                    log::info!("Image not found in cache. Downloading...");
-
-                    let to = Url::parse(&format!("file:///{}", &image_hash.digest)).unwrap();
-                    let dest_path =
-                        self.transfers
-                            .transfer(&image_url, &to, &self.cache.get_dir())?;
-
-                    //TODO: Check hash. We should remove file on invalid hash.
-                    //      Otherwise it will be loaded from cache next time.
-                    log::info!("Validating image [{}] hash...", dest_path);
-                    Transfers::validate_hash(&dest_path, &image_hash)?;
-                    log::info!("Image [{}] is valid.", dest_path);
-
-                    // If we are here, dest_path is correct.
-                    Ok(dest_path.to_file_path().unwrap())
-                }
-            }
-        }
-    }
 }
 
 impl Actor for TransferService {
@@ -139,61 +177,97 @@ impl Actor for TransferService {
     }
 }
 
+macro_rules! actor_try {
+    ($expr:expr) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => {
+                return ActorResponse::reply(Err(Error::from(err)));
+            }
+        }
+    };
+    ($expr:expr,) => {
+        $crate::actor_try!($expr)
+    };
+}
+
 impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, PathBuf, Error>;
 
-    fn handle(&mut self, msg: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let path = self
-            .deploy(msg)
-            .map_err(|error| Error::CommandError(error.to_string()));
+    fn handle(&mut self, _: DeployImage, _: &mut Self::Context) -> Self::Result {
+        let pkg_url = actor_try!(TransferService::load_package_url(&self.agreement));
+        let source_url = actor_try!(TransferUrl::parse(&pkg_url, "file"));
+        let cache_name = actor_try!(Cache::name(&source_url));
+        let cache_path = self.cache.to_cache_path(&cache_name);
+        let final_path = self.cache.to_final_path(&cache_name);
+        let cache_url = actor_try!(TransferUrl::try_from(cache_path.clone()));
 
-        return ActorResponse::reply(path);
+        log::info!(
+            "Deploying from {:?} to {:?}",
+            source_url.url,
+            final_path.to_path_buf()
+        );
+
+        let source = actor_try!(self.source(&source_url));
+        let destination = actor_try!(self.destination(&cache_url));
+
+        let fut = async move {
+            let final_path = final_path.to_path_buf();
+            if final_path.exists() {
+                return Ok(final_path);
+            }
+
+            transfer(source, destination).await?;
+            log::debug!("Deployment from {:?} finished", source_url.url);
+
+            std::fs::rename(cache_path.to_path_buf(), &final_path)?;
+
+            Ok(final_path)
+        };
+
+        return ActorResponse::r#async(fut.into_actor(self));
     }
 }
 
 impl Handler<TransferResource> for TransferService {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: TransferResource, ctx: &mut Self::Context) -> Self::Result {
-        let (from, to) = (msg.from, msg.to);
+    fn handle(&mut self, msg: TransferResource, _: &mut Self::Context) -> Self::Result {
+        let from = actor_try!(self.parse_from(&msg.from));
+        let to = actor_try!(self.parse_to(&msg.to));
 
-        log::info!("Transferring resource from [{}] to [{}].", from, to);
+        log::info!("Transferring {:?} to {:?}", from.url, to.url);
 
-        let from = Url::parse(&msg.from).map_err(|error| {
-            Error::CommandError(format!(
-                "Can't parse source URL [{}]. Error: {}",
-                &msg.from, error
-            ))
-        });
-        let to = Url::parse(&msg.to).map_err(|error| {
-            Error::CommandError(format!(
-                "Can't parse destination URL [{}]. Error: {}",
-                &msg.to, error
-            ))
-        });
+        let source = actor_try!(self.source(&from));
+        let destination = actor_try!(self.destination(&to));
 
-        if from.is_err() {
-            return ActorResponse::reply(from.map(|_| ()));
-        }
-
-        if to.is_err() {
-            return ActorResponse::reply(to.map(|_| ()));
-        }
-
-        let response = self
-            .transfers
-            .transfer(&from.unwrap(), &to.unwrap(), &self.workdir)
-            .map(|_| ())
-            .map_err(|error| Error::CommandError(error.to_string()));
-
-        log::info!("Transfer from [{}] to [{}] finished.", &msg.from, &msg.to);
-        return ActorResponse::reply(response);
+        return ActorResponse::r#async(
+            async move {
+                transfer(source, destination).await?;
+                Ok(())
+            }
+            .into_actor(self),
+        );
     }
 }
 
-// =========================================== //
-// Implement Service interface
-// =========================================== //
+impl Handler<AddAbortHandle> for TransferService {
+    type Result = <AddAbortHandle as Message>::Result;
+
+    fn handle(&mut self, msg: AddAbortHandle, _: &mut Self::Context) -> Self::Result {
+        self.abort_handles.push(msg.0);
+    }
+}
+
+impl Handler<RemoveAbortHandle> for TransferService {
+    type Result = <RemoveAbortHandle as Message>::Result;
+
+    fn handle(&mut self, msg: RemoveAbortHandle, _: &mut Self::Context) -> Self::Result {
+        if let Some(idx) = self.abort_handles.iter().position(|c| c == &msg.0) {
+            self.abort_handles.remove(idx);
+        }
+    }
+}
 
 impl Handler<Shutdown> for TransferService {
     type Result = <Shutdown as Message>::Result;
@@ -207,84 +281,70 @@ impl Handler<Shutdown> for TransferService {
     }
 }
 
-#[derive(Clone, Debug)]
-enum ProjectedPath {
-    Local { dir: PathBuf, path: PathBuf },
-    Container { path: PathBuf },
+#[derive(Debug, Clone)]
+struct Cache {
+    dir: PathBuf,
+    tmp_dir: PathBuf,
 }
 
-impl ProjectedPath {
-    fn flatten(path: PathBuf) -> PathBuf {
-        let mut components = Vec::new();
-        for component in path.components() {
-            match component {
-                Component::CurDir => continue,
-                Component::ParentDir => components.pop(),
-                _ => components.push(component),
+impl Cache {
+    fn new(dir: PathBuf) -> Self {
+        let tmp_dir = dir.clone().join("tmp");
+        std::fs::create_dir_all(&tmp_dir).unwrap();
+        Cache { dir, tmp_dir }
+    }
+
+    fn name(transfer_url: &TransferUrl) -> Result<CachePath> {
+        let hash = match &transfer_url.hash {
+            Some(hash) => hash,
+            None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
+        };
+
+        let path = transfer_url.url.path();
+        let name = match path.rfind("/") {
+            Some(idx) => {
+                if idx + 1 < path.len() - 1 {
+                    &path[idx + 1..]
+                } else {
+                    path
+                }
             }
-        }
-        components().into_iter().collect::<PathBuf>()
+            None => path,
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            .to_string();
+
+        Ok(CachePath::new(name.into(), hash.val.clone(), nonce))
     }
 
-    fn local(dir: PathBuf, path: PathBuf) -> Self {
-        ProjectedPath::Local {
-            dir,
-            path: Self::flatten(path),
-        }
+    #[inline(always)]
+    fn to_cache_path(&self, path: &CachePath) -> ProjectedPath {
+        ProjectedPath::local(self.tmp_dir.clone(), path.cache_path_buf())
     }
 
-    fn container(path: PathBuf) -> Self {
-        ProjectedPath::Container {
-            path: Self::flatten(path),
-        }
+    #[inline(always)]
+    fn to_final_path(&self, path: &CachePath) -> ProjectedPath {
+        ProjectedPath::local(self.dir.clone(), path.final_path_buf())
     }
 }
 
-impl ProjectedPath {
-    fn create_dir_all(&self) -> Result<()> {
-        if let ProjectedPath::Container { .. } = &self {
-            return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput).into());
-        }
+impl TryFrom<ProjectedPath> for TransferUrl {
+    type Error = Error;
 
-        let path = self.to_path_buf();
-        if let Err(error) = std::fs::create_dir_all(path.parent()) {
-            match &error.kind() {
-                std::io::ErrorKind::AlreadyExists => (),
-                _ => return Err(error.into()),
-            }
-        }
-
-        Ok(())
+    fn try_from(value: ProjectedPath) -> Result<Self> {
+        TransferUrl::parse(
+            value
+                .to_path_buf()
+                .to_str()
+                .ok_or(Error::local(TransferError::InvalidUrlError(
+                    "Invalid path".to_owned(),
+                )))?,
+            "file",
+        )
+        .map_err(Error::local)
     }
-
-    fn to_path_buf(&self) -> PathBuf {
-        match self {
-            ProjectedPath::Local { dir, path } => dir.clone().join(path),
-            ProjectedPath::Container { path } => path.clone(),
-        }
-    }
-
-    fn to_local(&self, dir: PathBuf) -> Self {
-        match self {
-            ProjectedPath::Local { dir: _, path } => ProjectedPath::Local {
-                dir,
-                path: path.clone(),
-            },
-            ProjectedPath::Container(path) => ProjectedPath::Local {
-                dir,
-                path: path.clone(),
-            },
-        }
-    }
-
-    fn to_container(&self) -> Self {
-        match self {
-            ProjectedPath::Local { dir: _, path } => {
-                ProjectedPath::Container { path: path.clone() }
-            }
-            ProjectedPath::Container(path) => ProjectedPath::Container { path: path.clone() },
-        }
-    }
-
-    fn file_name(&self) -> Self {}
 }

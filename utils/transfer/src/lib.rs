@@ -2,32 +2,30 @@ pub mod error;
 pub mod file;
 pub mod hash;
 pub mod http;
-pub mod url;
 
-use crate::error::Error;
+use crate::error::{ChannelError, Error};
 use crate::hash::*;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
-use futures::future::{AbortHandle, AbortRegistration, LocalBoxFuture};
+use futures::channel::oneshot;
+use futures::future::{AbortHandle, AbortRegistration};
 use futures::task::{Context, Poll};
 use futures::{Sink, Stream, StreamExt};
 use std::pin::Pin;
+use url::Url;
 
-pub async fn transfer<S, T>(
-    stream: S,
-    mut sink: TransferSink<T, Error>,
-) -> Result<Option<()>, Error>
+pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
     S: Stream<Item = Result<T, Error>>,
+    T: std::fmt::Debug,
 {
-    let sink_fut = sink.take_future();
-
+    let res_rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
-
-    match sink_fut {
-        Some(fut) => Ok(Some(fut.await?)),
-        None => Ok(None),
-    }
+    res_rx
+        .await
+        .map_err(ChannelError::from)
+        .map_err(Error::from)
+        .map(|_| ())
 }
 
 pub(crate) trait TryFlatten<T, E> {
@@ -44,7 +42,7 @@ where
 }
 
 #[derive(Clone, Debug)]
-enum TransferData {
+pub enum TransferData {
     Bytes(Bytes),
 }
 
@@ -69,26 +67,37 @@ impl From<Bytes> for TransferData {
 }
 
 pub trait TransferProvider<T, E> {
-    fn supports(scheme: &str) -> bool;
+    fn schemes(&self) -> Vec<&'static str>;
 
-    fn source(&self, url: &str) -> TransferStream<T, E>;
-    fn destination(&self, url: &str) -> TransferSink<T, E>;
+    fn source(&self, url: &Url) -> TransferStream<T, E>;
+    fn destination(&self, url: &Url) -> TransferSink<T, E>;
 }
 
 pub struct TransferStream<T, E> {
     rx: Receiver<Result<T, E>>,
+    pub(crate) tx: Sender<Result<T, E>>,
     pub abort_handle: AbortHandle,
+    pub(crate) abort_reg: Option<AbortRegistration>,
 }
 
 impl<T, E> TransferStream<T, E> {
-    pub fn create(channel_size: usize) -> (Self, Sender<Result<T, E>>, AbortRegistration) {
+    pub fn create(channel_size: usize) -> Self {
         let (tx, rx) = channel(channel_size);
-        let (abort_handle, reg) = AbortHandle::new_pair();
-        (TransferStream { rx, abort_handle }, tx, reg)
+        let (abort_handle, abort_reg) = AbortHandle::new_pair();
+        TransferStream {
+            rx,
+            tx,
+            abort_handle,
+            abort_reg: Some(abort_reg),
+        }
     }
 }
 
-impl<T, E> Stream for TransferStream<T, E> {
+impl<T, E> Stream for TransferStream<T, E>
+where
+    T: std::fmt::Debug,
+    E: std::fmt::Debug,
+{
     type Item = Result<T, E>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -98,21 +107,28 @@ impl<T, E> Stream for TransferStream<T, E> {
 
 pub struct TransferSink<T, E> {
     tx: Sender<Result<T, E>>,
-    fut: Option<LocalBoxFuture<'static, Result<(), E>>>,
+    pub(crate) rx: Option<Receiver<Result<T, E>>>,
+    pub(crate) res_tx: Option<oneshot::Sender<Result<(), E>>>,
+    pub(crate) res_rx: Option<oneshot::Receiver<Result<(), E>>>,
 }
 
 impl<T, E> TransferSink<T, E> {
-    pub fn create(channel_size: usize) -> (Self, Receiver<Result<T, E>>) {
+    pub fn create(channel_size: usize) -> Self {
         let (tx, rx) = channel(channel_size);
-        (TransferSink { tx, fut: None }, rx)
-    }
-
-    pub fn take_future(&mut self) -> Option<LocalBoxFuture<'static, Result<(), E>>> {
-        self.fut.take()
+        let (res_tx, res_rx) = oneshot::channel();
+        TransferSink {
+            tx,
+            rx: Some(rx),
+            res_tx: Some(res_tx),
+            res_rx: Some(res_rx),
+        }
     }
 }
 
-impl<T> Sink<T> for TransferSink<T, Error> {
+impl<T> Sink<T> for TransferSink<T, Error>
+where
+    T: std::fmt::Debug,
+{
     type Error = Error;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
