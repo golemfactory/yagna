@@ -9,7 +9,7 @@ pub enum CmdLine {
     Publish { files: Vec<PathBuf> },
     Download { url: Url, output_file: PathBuf },
     Upload { file: PathBuf, url: Url },
-    AwaitUpload { dir: PathBuf },
+    AwaitUpload { filepath: PathBuf },
 }
 
 #[actix_rt::main]
@@ -49,11 +49,11 @@ async fn main() -> Result<()> {
 
             info!("File uploaded.")
         }
-        CmdLine::AwaitUpload { dir } => {
-            let (exepected_file, url) = gftp::open_for_upload(&dir).await?;
+        CmdLine::AwaitUpload { filepath } => {
+            let url = gftp::open_for_upload(&filepath).await?;
             info!(
                 "Waiting for file upload [{}] on url [{}].",
-                &exepected_file.display(),
+                &filepath.display(),
                 &url
             );
 

@@ -7,20 +7,19 @@ use rand::Rng;
 use sha3::{Digest, Sha3_256};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{fs, io};
 use url::{quirks::hostname, Position, Url};
 
-use std::ops::Deref;
 use ya_core_model::gftp as model;
-use ya_core_model::gftp::GftpChunk;
 use ya_core_model::{ethaddr::NodeId, identity};
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
+
 
 // =========================================== //
 // File download - publisher side ("requestor")
@@ -157,16 +156,15 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
 // File upload - publisher side ("requestor")
 // =========================================== //
 
-pub async fn open_for_upload(directory: &Path) -> Result<(PathBuf, Url)> {
-    let filename = rand::thread_rng()
+pub async fn open_for_upload(filepath: &Path) -> Result<Url> {
+    let hash_name = rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(65)
         .collect::<String>();
 
-    let filepath = directory.join(&filename);
     let file = Arc::new(Mutex::new(create_dest_file(&filepath)?));
 
-    let gsb_address = model::file_bus_id(&filename);
+    let gsb_address = model::file_bus_id(&hash_name);
     let file_clone = file.clone();
     let _ = bus::bind(&gsb_address, move |msg: model::UploadChunk| {
         let file = file_clone.clone();
@@ -179,7 +177,7 @@ pub async fn open_for_upload(directory: &Path) -> Result<(PathBuf, Url)> {
         async move { Ok(upload_finished(file.clone(), msg).await?) }
     });
 
-    Ok((filepath, gftp_url(&filename).await?))
+    Ok(gftp_url(&hash_name).await?)
 }
 
 async fn chunk_uploaded(
