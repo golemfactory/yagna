@@ -36,6 +36,8 @@ pub enum Error {
     FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("Url parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
+    #[error("Yagna model error: {0}")]
+    ModelError(#[from] ErrorMessage),
 }
 
 impl From<SendRequestError> for Error {

@@ -131,11 +131,11 @@ paths:
           required: true
           schema:
             type: string
-        - name: timeoutMs
+        - name: timeout
           in: query
           schema:
-            type: integer
-            format: int32
+            type: number
+            format: float
         - name: maxCount
           in: query
           schema:
@@ -217,11 +217,11 @@ paths:
       summary: Fetch Requestor command events.
       operationId: CollectActivityEvents
       parameters:
-        - name: timeoutMs
+        - name: timeout
           in: query
           schema:
-            type: integer
-            format: int32
+            type: number
+            format: float
       responses:
         200:
           description: Success

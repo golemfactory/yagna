@@ -41,13 +41,13 @@ impl ActivityProviderApi {
     pub async fn get_activity_events(
         &self,
         #[allow(non_snake_case)]
-        timeoutMs: Option<i32>,
+        timeout: Option<i32>,
         #[allow(non_snake_case)]
         maxEvents: Option<i32>, // TODO: max_events
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
             "events",
-            #[query] timeoutMs,
+            #[query] timeout,
             #[query] maxEvents
         );
 

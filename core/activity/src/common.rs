@@ -15,7 +15,7 @@ use ya_model::market::Agreement;
 use ya_service_bus::typed as bus;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
-pub const DEFAULT_REQUEST_TIMEOUT: u32 = 12_000; // ms
+pub const DEFAULT_REQUEST_TIMEOUT: f32 = 12.0;
 
 #[derive(Deserialize)]
 pub struct PathActivity {
@@ -24,22 +24,22 @@ pub struct PathActivity {
 
 #[derive(Deserialize)]
 pub struct QueryTimeout {
-    #[serde(rename = "timeoutMs", default = "default_query_timeout")]
-    pub timeout_ms: Option<u32>,
+    #[serde(rename = "timeout", default = "default_query_timeout")]
+    pub timeout: Option<f32>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct QueryTimeoutMaxCount {
     /// number of milliseconds to wait
-    #[serde(rename = "timeoutMs", default = "default_query_timeout")]
-    pub timeout_ms: Option<u32>,
+    #[serde(rename = "timeout", default = "default_query_timeout")]
+    pub timeout: Option<f32>,
     /// maximum count of events to return
     #[serde(rename = "maxCount")]
     pub max_count: Option<u32>,
 }
 
 #[inline(always)]
-pub(crate) fn default_query_timeout() -> Option<u32> {
+pub(crate) fn default_query_timeout() -> Option<f32> {
     Some(DEFAULT_REQUEST_TIMEOUT)
 }
 
@@ -80,7 +80,7 @@ pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreeme
 pub(crate) async fn get_activity_agreement(
     db: &DbExecutor,
     activity_id: &str,
-    _timeout: Option<u32>,
+    _timeout: Option<f32>,
 ) -> Result<Agreement, Error> {
     let agreement_id = db
         .as_dao::<ActivityDao>()

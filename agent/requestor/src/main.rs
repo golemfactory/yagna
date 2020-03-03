@@ -61,7 +61,9 @@ async fn process_offer(
     log::info!("confirm agreement = {}", new_agreement_id);
     requestor_api.confirm_agreement(new_agreement_id).await?;
     log::info!("wait for agreement = {}", new_agreement_id);
-    requestor_api.wait_for_approval(new_agreement_id).await?;
+    requestor_api
+        .wait_for_approval(&new_agreement_id, Some(7.879))
+        .await?;
     log::info!("agreement = {} CONFIRMED!", new_agreement_id);
 
     Ok(new_agreement_id.clone())
@@ -74,7 +76,7 @@ async fn spawn_workers(
 ) -> Result<(), anyhow::Error> {
     loop {
         let events = requestor_api
-            .collect(&subscription_id, Some(120), Some(5))
+            .collect(&subscription_id, Some(12.0), Some(5))
             .await?;
 
         if !events.is_empty() {

@@ -278,7 +278,7 @@ async fn report_usage<R: Runtime>(
                 let msg = SetActivityUsage {
                     activity_id,
                     usage: ActivityUsage::from(data),
-                    timeout_ms: None,
+                    timeout: None,
                 };
                 report(report_url, msg).await;
             }

@@ -179,7 +179,7 @@ impl ProviderMarket {
         subscription_id: &str,
     ) -> Result<()> {
         let events = market_api
-            .collect(subscription_id, Some(1), Some(2))
+            .collect(subscription_id, Some(1.0), Some(2))
             .await?;
 
         log::info!("Collected {} market events. Processing...", events.len());
@@ -399,7 +399,7 @@ impl ProviderMarket {
         );
 
         market_api
-            .approve_agreement(&agreement.agreement_id)
+            .approve_agreement(&agreement.agreement_id, Some(10.0))
             .await?;
 
         // We negotiated agreement and here responsibility of ProviderMarket ends.

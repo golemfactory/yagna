@@ -32,7 +32,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                             SetActivityState {
                                 activity_id: id.clone(),
                                 state: ActivityState::from(state),
-                                timeout_ms: None,
+                                timeout: None,
                             },
                         )
                         .into_actor(self),

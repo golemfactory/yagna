@@ -144,7 +144,7 @@ async fn get_events_web(
     Ok(db
         .as_dao::<EventDao>()
         .get_events_fut(query.max_count)
-        .timeout(query.timeout_ms)
+        .timeout(query.timeout)
         .map_err(Error::from)
         .await??
         .into_iter()
