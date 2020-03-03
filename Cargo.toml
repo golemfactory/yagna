@@ -5,6 +5,7 @@ members = [
     "agent/batch-requestor",
     "agent/offer-model",
     "core/activity",
+    "core/gftp",
     "core/identity",
     "core/market",
     "core/model",
