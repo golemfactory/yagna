@@ -53,4 +53,5 @@ actix-web = "2.0.0"
 rand = "0.7.3"
 sha3 = "0.8.2"
 tempdir = "0.3.7"
+tokio = { version = "0.2.11", features = ["process", "signal", "time"] }
 

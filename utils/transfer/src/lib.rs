@@ -247,3 +247,8 @@ where
         self.inner.abort_handle()
     }
 }
+
+#[inline(always)]
+pub(crate) fn flatten_result<T, E>(r: Result<Result<T, E>, E>) -> Result<T, E> {
+    r?
+}

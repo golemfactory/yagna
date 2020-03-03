@@ -1,10 +1,10 @@
 use crate::error::{Error, HttpError};
-use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
+use crate::{flatten_result, TransferData, TransferProvider, TransferSink, TransferStream};
 use actix_http::http::Method;
 use actix_rt::System;
 use awc::SendClientRequest;
 use futures::future::{ready, Abortable};
-use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
+use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt, TryStreamExt};
 use std::thread;
 use url::Url;
 
@@ -32,7 +32,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         let mut txc = tx.clone();
 
         thread::spawn(move || {
-            let fut = async move {
+            let fut_inner = async move {
                 awc::Client::new()
                     .get(url)
                     .send()
@@ -45,16 +45,23 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                     )
                     .await
                     .map_err(Error::from)
-            }
-            .then(|r: Result<(), Error>| async move {
-                if let Err(e) = r {
-                    let _ = txc.send(Err(e)).await;
-                }
-                txc.close_channel();
-                Result::<(), Error>::Ok(())
-            });
+            };
 
-            System::new("tx-http").block_on(Abortable::new(fut, abort_reg))
+            let fut = Abortable::new(fut_inner, abort_reg)
+                .map_err(Error::from)
+                .then(|r: Result<Result<(), Error>, Error>| async move {
+                    match flatten_result(r) {
+                        Err(e) => {
+                            let _ = txc.send(Err(e)).await;
+                        }
+                        _ => (),
+                    }
+
+                    txc.close_channel();
+                    Result::<(), Error>::Ok(())
+                });
+
+            System::new("tx-http").block_on(fut)
         });
 
         stream
@@ -67,25 +74,34 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         let (sink, rx, res_tx, abort_reg) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
-            let fut = async move {
-                let result = match awc::Client::new()
+            let fut_inner = async move {
+                match awc::Client::new()
                     .request(method, url)
                     .send_stream(rx.map(|d| d.map(TransferData::into_bytes)))
                 {
-                    SendClientRequest::Fut(fut, _, _) => match fut.await {
-                        Ok(_) => Ok(()),
-                        Err(error) => Err(Error::from(error)),
-                    },
+                    SendClientRequest::Fut(fut, _, _) => {
+                        fut.await.map_err(Error::from)?;
+                        Ok(())
+                    }
                     SendClientRequest::Err(maybe) => Err(match maybe {
                         Some(error) => HttpError::from(error).into(),
                         None => HttpError::Unspecified.into(),
                     }),
-                };
-
-                let _ = res_tx.send(result);
+                }
             };
 
-            System::new("rx-http").block_on(Abortable::new(fut, abort_reg))
+            let fut = Abortable::new(fut_inner, abort_reg)
+                .map_err(Error::from)
+                .then(|r: Result<Result<(), Error>, Error>| async move {
+                    let _ = match flatten_result(r) {
+                        Err(e) => res_tx.send(Err(e)),
+                        _ => res_tx.send(Ok(())),
+                    };
+
+                    Result::<(), Error>::Ok(())
+                });
+
+            System::new("rx-http").block_on(fut)
         });
 
         sink

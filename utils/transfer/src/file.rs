@@ -1,9 +1,9 @@
 use crate::error::Error;
-use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
+use crate::{flatten_result, TransferData, TransferProvider, TransferSink, TransferStream};
 use actix_rt::System;
 use bytes::BytesMut;
 use futures::future::{ready, Abortable};
-use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
+use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt, TryStreamExt};
 use std::thread;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -30,7 +30,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         let mut txc = tx.clone();
 
         thread::spawn(move || {
-            let fut = async move {
+            let fut_inner = async move {
                 let file = File::open(url).await?;
                 FramedRead::new(file, BytesCodec::new())
                     .map_ok(BytesMut::freeze)
@@ -42,16 +42,19 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                     )
                     .await
                     .map_err(Error::from)
-            }
-            .then(|r: Result<(), Error>| async move {
-                if let Err(e) = r {
-                    let _ = txc.send(Err(e)).await;
-                }
-                txc.close_channel();
-                Result::<(), Error>::Ok(())
-            });
+            };
 
-            System::new("tx-file").block_on(Abortable::new(fut, abort_reg))
+            let fut = Abortable::new(fut_inner, abort_reg)
+                .map_err(Error::from)
+                .then(|r: Result<Result<(), Error>, Error>| async move {
+                    if let Err(e) = flatten_result(r) {
+                        let _ = txc.send(Err(e)).await;
+                    }
+                    txc.close_channel();
+                    Result::<(), Error>::Ok(())
+                });
+
+            System::new("tx-file").block_on(fut)
         });
 
         stream
@@ -63,20 +66,28 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         let (sink, mut rx, res_tx, abort_reg) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
-            let fut = async move {
-                let result = async move {
-                    let mut file = File::create(url.clone()).await?;
-                    while let Some(result) = rx.next().await {
-                        file.write_all(&result?.into_bytes()).await?;
-                    }
-                    Ok(())
+            let fut_inner = async move {
+                let mut file = File::create(url.clone()).await?;
+                while let Some(result) = rx.next().await {
+                    file.write_all(&result?.into_bytes()).await?;
                 }
-                .await;
 
-                let _ = res_tx.send(result);
-            };
+                Result::<(), Error>::Ok(())
+            }
+            .map_err(Error::from);
 
-            System::new("rx-file").block_on(Abortable::new(fut, abort_reg))
+            let fut = Abortable::new(fut_inner, abort_reg)
+                .map_err(Error::from)
+                .then(|r: Result<Result<(), Error>, Error>| async move {
+                    let _ = match flatten_result(r) {
+                        Err(e) => res_tx.send(Err(e)),
+                        _ => res_tx.send(Ok(())),
+                    };
+
+                    Result::<(), Error>::Ok(())
+                });
+
+            System::new("rx-file").block_on(fut)
         });
 
         sink

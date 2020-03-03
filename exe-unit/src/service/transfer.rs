@@ -32,6 +32,10 @@ pub struct TransferResource {
 pub struct DeployImage;
 
 #[derive(Clone, Debug, Message)]
+#[rtype(result = "()")]
+pub struct AbortTransfers;
+
+#[derive(Clone, Debug, Message)]
 #[rtype("()")]
 struct AddAbortHandles(Vec<Abort>);
 
@@ -285,13 +289,21 @@ impl Handler<RemoveAbortHandles> for TransferService {
     }
 }
 
+impl Handler<AbortTransfers> for TransferService {
+    type Result = <AbortTransfers as Message>::Result;
+
+    fn handle(&mut self, _: AbortTransfers, _: &mut Self::Context) -> Self::Result {
+        for handle in std::mem::replace(&mut self.abort_handles, HashSet::new()).into_iter() {
+            handle.abort();
+        }
+    }
+}
+
 impl Handler<Shutdown> for TransferService {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        for handle in std::mem::replace(&mut self.abort_handles, HashSet::new()).into_iter() {
-            handle.abort();
-        }
+        ctx.address().do_send(AbortTransfers {});
         ctx.stop();
         Ok(())
     }

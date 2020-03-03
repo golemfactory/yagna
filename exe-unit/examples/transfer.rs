@@ -141,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
     let hash = create_file(temp_dir.path(), "rnd", chunk_size, chunk_count);
 
     log::debug!("Starting HTTP servers");
+
     let path = temp_dir.path().to_path_buf();
     std::thread::spawn(move || {
         let sys = System::new("http");
@@ -164,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
         .as_bytes(),
     )?;
 
-    log::debug!("Creating TransferService");
+    log::debug!("Starting TransferService");
     let exe_ctx = ExeUnitContext {
         service_id: None,
         report_url: None,
@@ -173,8 +174,6 @@ async fn main() -> anyhow::Result<()> {
         cache_dir,
     };
     let transfer_service = TransferService::new(exe_ctx);
-
-    log::debug!("Starting TransferService");
     let addr = transfer_service.start();
 
     log::warn!("Deploy with transfer and hash check");
