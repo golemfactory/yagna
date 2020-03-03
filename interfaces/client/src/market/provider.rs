@@ -97,16 +97,20 @@ impl MarketProviderApi {
     /// Changes Proposal state to `Draft`. Returns created Proposal id.
     pub async fn counter_proposal(
         &self,
-        proposal: &Proposal,
+        offer_proposal: &Proposal,
         subscription_id: &str,
-        proposal_id: &str,
     ) -> Result<String> {
+        let proposal_id = offer_proposal.prev_proposal_id()?;
         let url = url_format!(
             "offers/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );
-        self.client.post(&url).send_json(&proposal).json().await
+        self.client
+            .post(&url)
+            .send_json(&offer_proposal)
+            .json()
+            .await
     }
 
     /// Approves Agreement proposed by the Reqestor.

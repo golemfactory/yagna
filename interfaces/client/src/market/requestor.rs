@@ -69,16 +69,20 @@ impl MarketRequestorApi {
     /// Responds with a bespoke Demand to received Offer.
     pub async fn counter_proposal(
         &self,
-        proposal: &Proposal,
+        demand_proposal: &Proposal,
         subscription_id: &str,
-        proposal_id: &str,
     ) -> Result<String> {
+        let proposal_id = demand_proposal.prev_proposal_id()?;
         let url = url_format!(
             "demands/{subscription_id}/proposals/{proposal_id}",
             subscription_id,
             proposal_id
         );
-        self.client.post(&url).send_json(&proposal).json().await
+        self.client
+            .post(&url)
+            .send_json(&demand_proposal)
+            .json()
+            .await
     }
 
     /// Fetches Proposal (Offer) with given id.

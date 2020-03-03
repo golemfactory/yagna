@@ -1,6 +1,6 @@
 openapi: 3.0.2
 info:
-  version: 1.5.0
+  version: 1.5.2
   title: Yagna Market API
   description: '
     ## Yagna Market
@@ -250,7 +250,7 @@ paths:
         Creates and sends a modified version of original Offer (a
         counter-proposal) adjusted to previously received Proposal (ie. Demand).
         Changes Proposal state to `Draft`. Returns created Proposal id.
-      operationId: createProposalOffer
+      operationId: counterProposalOffer
       requestBody:
         $ref: '#/components/requestBodies/Proposal'
       responses:
@@ -475,7 +475,7 @@ paths:
         Creates and sends a modified version of original Demand (a
         counter-proposal) adjusted to previously received Proposal (ie. Offer).
         Changes Proposal state to `Draft`. Returns created Proposal id.
-      operationId: createProposalDemand
+      operationId: counterProposalDemand
       requestBody:
         $ref: '#/components/requestBodies/Proposal'
       responses:
@@ -951,6 +951,7 @@ components:
               type: string
               readOnly: true
 
+    # TODO: add specified OfferProposal and DemandProposal to disabiguate API
     Proposal:
       allOf:
         - $ref: '#/components/schemas/DemandOfferBase'
