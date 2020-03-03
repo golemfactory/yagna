@@ -18,9 +18,7 @@ use ya_core_model::{ethaddr::NodeId, identity};
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-
 const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
-
 
 // =========================================== //
 // File download - publisher side ("requestor")
@@ -217,14 +215,16 @@ async fn upload_finished(
             .map_err(|error| model::Error::InternalError(error.to_string()))?;
 
         if expected_hash != real_hash {
-            warn!("Uploaded file hash {} is different than expected hash {}.", &real_hash, &expected_hash);
+            warn!(
+                "Uploaded file hash {} is different than expected hash {}.",
+                &real_hash, &expected_hash
+            );
             //TODO: We should notify publisher about not matching hash.
             //      Now we send error only for uploader.
             return Err(model::Error::IntegrityError);
         }
         info!("File hash matches expected hash {}.", &expected_hash);
-    }
-    else {
+    } else {
         info!("Upload finished. Expected file hash not provided. Omitting validation.");
     }
 
@@ -253,16 +253,16 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
             }
         })
         .buffered(3)
-        .try_for_each(|_| {
-            future::ok(())
-        })
+        .try_for_each(|_| future::ok(()))
         .await?;
 
     debug!("Computing file hash.");
     let hash = hash_file_sha256(&mut File::open(path)?)?;
 
     info!("File [{}] has hash [{}].", path.display(), &hash);
-    remote.call(model::UploadFinished{hash: Some(hash)}).await??;
+    remote
+        .call(model::UploadFinished { hash: Some(hash) })
+        .await??;
     info!("Upload finished correctly.");
     Ok(())
 }
@@ -271,15 +271,23 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
 // Utils and common functions
 // =========================================== //
 
-fn get_chunks(file_path : &Path, chunk_size : u64) -> Result<impl Iterator<Item = Result<model::GftpChunk, std::io::Error>> + 'static, std::io::Error> {
+fn get_chunks(
+    file_path: &Path,
+    chunk_size: u64,
+) -> Result<impl Iterator<Item = Result<model::GftpChunk, std::io::Error>> + 'static, std::io::Error>
+{
     let mut file = OpenOptions::new().read(true).open(file_path)?;
 
     let file_size = file.metadata()?.len();
-    let n_chunks = (file_size + chunk_size - 1)/chunk_size;
+    let n_chunks = (file_size + chunk_size - 1) / chunk_size;
 
     Ok((0..n_chunks).map(move |n| {
-        let offset = n*chunk_size;
-        let bytes_to_read = if offset + chunk_size > file_size { file_size - offset } else { chunk_size };
+        let offset = n * chunk_size;
+        let bytes_to_read = if offset + chunk_size > file_size {
+            file_size - offset
+        } else {
+            chunk_size
+        };
         let mut buffer = vec![0u8; bytes_to_read as usize];
         file.read_exact(&mut buffer)?;
         Ok(model::GftpChunk {
