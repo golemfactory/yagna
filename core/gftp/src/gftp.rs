@@ -1,7 +1,7 @@
 use anyhow::{Context, Error, Result};
 use futures::lock::Mutex;
 use futures::prelude::*;
-use log::{debug, info};
+use log::{debug, info, warn};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use sha3::{Digest, Sha3_256};
@@ -17,6 +17,7 @@ use ya_core_model::gftp as model;
 use ya_core_model::{ethaddr::NodeId, identity};
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
+
 
 const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
 
@@ -195,7 +196,7 @@ async fn chunk_uploaded(
     })?;
     file.write_all(&chunk.content[..]).map_err(|error| {
         model::Error::ReadError(format!(
-            "Can't read {} bytes at offset {}, error: {}",
+            "Can't write {} bytes at offset {}, error: {}",
             chunk.content.len(),
             chunk.offset,
             error
@@ -205,12 +206,30 @@ async fn chunk_uploaded(
 }
 
 async fn upload_finished(
-    _file: Arc<Mutex<File>>,
-    _msg: model::UploadFinished,
+    file: Arc<Mutex<File>>,
+    msg: model::UploadFinished,
 ) -> Result<(), model::Error> {
+    if let Some(expected_hash) = msg.hash {
+        info!("Upload finished. Verifying hash...");
+
+        let mut file = file.lock().await;
+        let real_hash = hash_file_sha256(&mut file)
+            .map_err(|error| model::Error::InternalError(error.to_string()))?;
+
+        if expected_hash != real_hash {
+            warn!("Uploaded file hash {} is different than expected hash {}.", &real_hash, &expected_hash);
+            //TODO: We should notify publisher about not matching hash.
+            //      Now we send error only for uploader.
+            return Err(model::Error::IntegrityError);
+        }
+        info!("File hash matches expected hash {}.", &expected_hash);
+    }
+    else {
+        info!("Upload finished. Expected file hash not provided. Omitting validation.");
+    }
+
     //TODO: unsubscribe gsb events.
-    //TODO: compare hash of disk file against expected hash from message.
-    unimplemented!();
+    Ok(())
 }
 
 // =========================================== //
@@ -239,6 +258,12 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
         })
         .await?;
 
+    debug!("Computing file hash.");
+    let hash = hash_file_sha256(&mut File::open(path)?)?;
+
+    info!("File [{}] has hash [{}].", path.display(), &hash);
+    remote.call(model::UploadFinished{hash: Some(hash)}).await??;
+    info!("Upload finished correctly.");
     Ok(())
 }
 
@@ -266,6 +291,9 @@ fn get_chunks(file_path : &Path, chunk_size : u64) -> Result<impl Iterator<Item 
 
 fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
     let mut hasher = Sha3_256::new();
+
+    file.seek(SeekFrom::Start(0))
+        .with_context(|| format!("Can't seek file at offset 0."))?;
     io::copy(&mut file, &mut hasher)?;
 
     Ok(format!("{:x}", hasher.result()))
@@ -313,6 +341,11 @@ fn create_dest_file(file_path: &Path) -> Result<File> {
             file_path.display()
         )
     })?;
-    Ok(File::create(file_path)
+    Ok(OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(file_path)
         .with_context(|| format!("Can't create destination file: [{}].", file_path.display()))?)
 }

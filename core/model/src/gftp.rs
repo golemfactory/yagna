@@ -11,6 +11,10 @@ pub fn file_bus_id(hash: &str) -> String {
 pub enum Error {
     #[error("Can't read from file. {0}")]
     ReadError(String),
+    #[error("File hash verification failed.")]
+    IntegrityError,
+    #[error("Internal error: {0}.")]
+    InternalError(String),
 }
 
 // =========================================== //
@@ -73,7 +77,7 @@ impl RpcMessage for UploadChunk {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadFinished {
-    hash: Option<String>,
+    pub hash: Option<String>,
 }
 
 impl RpcMessage for UploadFinished {

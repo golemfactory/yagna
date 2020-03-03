@@ -46,8 +46,6 @@ async fn main() -> Result<()> {
                 &url
             );
             gftp::upload_file(&file, &url).await?;
-
-            info!("File uploaded.")
         }
         CmdLine::AwaitUpload { filepath } => {
             let url = gftp::open_for_upload(&filepath).await?;
