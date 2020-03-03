@@ -17,7 +17,6 @@ use url::Url;
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
     S: Stream<Item = Result<T, Error>>,
-    T: std::fmt::Debug,
 {
     let res_rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
@@ -93,11 +92,7 @@ impl<T, E> TransferStream<T, E> {
     }
 }
 
-impl<T, E> Stream for TransferStream<T, E>
-where
-    T: std::fmt::Debug,
-    E: std::fmt::Debug,
-{
+impl<T, E> Stream for TransferStream<T, E> {
     type Item = Result<T, E>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -125,10 +120,7 @@ impl<T, E> TransferSink<T, E> {
     }
 }
 
-impl<T> Sink<T> for TransferSink<T, Error>
-where
-    T: std::fmt::Debug,
-{
+impl<T> Sink<T> for TransferSink<T, Error> {
     type Error = Error;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
