@@ -18,7 +18,7 @@ use ya_core_model::{ethaddr::NodeId, identity};
 use ya_net::RemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
+pub const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
 
 // =========================================== //
 // File download - publisher side ("requestor")
@@ -310,7 +310,7 @@ fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
 /// Returns NodeId and file hash from gftp url.
 /// Note: In case of upload, hash is not real hash of file
 /// but only cryptographically strong random string.
-fn extract_url(url: &Url) -> Result<(NodeId, String)> {
+pub fn extract_url(url: &Url) -> Result<(NodeId, String)> {
     if url.scheme() != "gftp" {
         return Err(Error::msg(format!(
             "Unsupported url scheme {}.",

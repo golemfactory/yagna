@@ -56,6 +56,7 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## OTHERS
+gftp = { path = "core/gftp" }
 ya-agent-offer-model = { path = "agent/offer-model" }
 ya-client = { path = "interfaces/client" }
 ya-core-model = { path = "core/model" }

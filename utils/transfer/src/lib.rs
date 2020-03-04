@@ -1,5 +1,6 @@
 pub mod error;
 pub mod file;
+pub mod gftp;
 pub mod hash;
 pub mod http;
 
@@ -8,9 +9,9 @@ use crate::hash::*;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
-use futures::future::{AbortHandle, AbortRegistration};
+use futures::future::{AbortHandle, AbortRegistration, Abortable, Aborted};
 use futures::task::{Context, Poll};
-use futures::{Sink, Stream, StreamExt};
+use futures::{Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt};
 use std::pin::Pin;
 use url::Url;
 
@@ -27,12 +28,10 @@ where
         .map(|_| ())
 }
 
-// Separate trait for boxing
 pub trait AbortableStream<T, E>: Stream<Item = std::result::Result<T, E>> {
     fn abort_handle(&self) -> AbortHandle;
 }
 
-// Separate trait for boxing
 pub trait AbortableSink<T, E>: Sink<T, Error = E> {
     fn abort_handle(&self) -> AbortHandle;
 }
@@ -246,6 +245,50 @@ where
     fn abort_handle(&self) -> AbortHandle {
         self.inner.abort_handle()
     }
+}
+
+fn abortable_stream<'f, T, E, F>(
+    fut: F,
+    abort_reg: AbortRegistration,
+    mut tx: Sender<Result<T, E>>,
+) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'f>>
+where
+    F: Future<Output = Result<(), E>> + 'f,
+    T: 'f,
+    E: From<Aborted> + 'f,
+{
+    Abortable::new(fut, abort_reg)
+        .map_err(E::from)
+        .then(|r: Result<Result<(), E>, E>| async move {
+            if let Err(e) = flatten_result(r) {
+                let _ = tx.send(Err(e)).await;
+            }
+            tx.close_channel();
+            Result::<(), E>::Ok(())
+        })
+        .boxed_local()
+}
+
+fn abortable_sink<'f, E, F>(
+    fut: F,
+    abort_reg: AbortRegistration,
+    res_tx: oneshot::Sender<Result<(), E>>,
+) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'f>>
+where
+    F: Future<Output = Result<(), E>> + 'f,
+    E: From<Aborted> + 'f,
+{
+    Abortable::new(fut, abort_reg)
+        .map_err(E::from)
+        .then(|r: Result<Result<(), E>, E>| async move {
+            let _ = match flatten_result(r) {
+                Err(e) => res_tx.send(Err(e)),
+                _ => res_tx.send(Ok(())),
+            };
+
+            Result::<(), E>::Ok(())
+        })
+        .boxed_local()
 }
 
 #[inline(always)]
