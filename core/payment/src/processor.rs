@@ -19,7 +19,8 @@ use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_net::RemoteEndpoint;
 use ya_payment_driver::{
-    PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentDriverError, PaymentStatus,
+    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentDriverError,
+    PaymentStatus,
 };
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -188,7 +189,6 @@ impl PaymentProcessor {
         tokio::task::spawn_local(async move {
             processor.process_payment(invoice, allocation_id).await;
         });
-        // self.process_payment(invoice, allocation_id).await;
 
         Ok(())
     }
@@ -272,5 +272,17 @@ impl PaymentProcessor {
         }
 
         Ok(())
+    }
+
+    pub async fn init(&self, addr: Address, requestor: bool, provider: bool) -> Result<(), Error> {
+        let mut mode = AccountMode::NONE;
+        if requestor {
+            mode |= AccountMode::SEND;
+        }
+        if provider {
+            mode |= AccountMode::RECV;
+        }
+
+        Ok({ self.driver.lock().await.init(mode, addr) }.await?)
     }
 }

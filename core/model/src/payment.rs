@@ -13,14 +13,13 @@ pub enum RpcMessageError {
     #[error("Cancel error: {0}")]
     Cancel(#[from] public::CancelError),
     #[error("{0}")]
-    Generic(#[from] local::GenericError)
+    Generic(#[from] local::GenericError),
 }
 
 pub mod local {
     use super::*;
     use crate::ethaddr::NodeId;
     use bigdecimal::BigDecimal;
-    use std::borrow::Cow;
     use std::fmt::Display;
 
     pub const BUS_ID: &'static str = "/local/payment";
@@ -50,11 +49,11 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     #[error("{inner}")]
     pub struct GenericError {
-        inner : String
+        inner: String,
     }
 
     impl GenericError {
-        pub fn new<T : Display>(e : &T) -> Self {
+        pub fn new<T: Display>(e: T) -> Self {
             let inner = e.to_string();
             Self { inner }
         }

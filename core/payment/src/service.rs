@@ -68,10 +68,8 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 
 mod local {
     use super::*;
-    use crate::dao::payment::PaymentDao;
-    use ethereum_types::{Address, H160};
+    use ethereum_types::H160;
     use ya_core_model::payment::local::*;
-    use ya_core_model::payment::PaymentError;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment private service to service bus");
@@ -82,7 +80,7 @@ mod local {
             processor,
         }
         .bind_with_processor(schedule_payment)
-            .bind_with_processor(on_init);
+        .bind_with_processor(on_init);
         log::debug!("Successfully bound payment private service to service bus");
     }
 
@@ -103,14 +101,14 @@ mod local {
         pp: PaymentProcessor,
         _caller: String,
         init: Init,
-    ) -> Result<(), PaymentError> {
+    ) -> Result<(), GenericError> {
         pp.init(
-            Address::from(H160(init.identity.into_array())),
+            H160(init.identity.into_array()),
             init.requestor,
             init.provider,
         )
         .await
-        .map_err(|e| PaymentError::Driver(e.to_string()))
+        .map_err(GenericError::new)
     }
 
     async fn on_status(
@@ -118,7 +116,7 @@ mod local {
         pp: PaymentProcessor,
         _caller: String,
         req: GetStatus,
-    ) -> Result<StatusResult, PaymentError> {
+    ) -> Result<StatusResult, GenericError> {
         todo!()
     }
 }
