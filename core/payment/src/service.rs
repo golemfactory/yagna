@@ -81,8 +81,21 @@ mod local {
             db,
             processor,
         }
-        .bind_with_processor(on_init);
+        .bind_with_processor(schedule_payment)
+            .bind_with_processor(on_init);
         log::debug!("Successfully bound payment private service to service bus");
+    }
+
+    async fn schedule_payment(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: SchedulePayment,
+    ) -> Result<(), ScheduleError> {
+        let invoice = msg.invoice;
+        let allocation_id = msg.allocation_id;
+        processor.schedule_payment(invoice, allocation_id).await?;
+        Ok(())
     }
 
     async fn on_init(
@@ -116,11 +129,10 @@ mod public {
     use crate::dao::debit_note::DebitNoteDao;
     use crate::dao::invoice::InvoiceDao;
     use crate::dao::invoice_event::InvoiceEventDao;
-    use crate::error::{DbError, Error};
+    use crate::error::{DbError, Error, PaymentError};
     use crate::utils::*;
 
     use ya_core_model::payment::public::*;
-    use ya_core_model::payment::PaymentError;
     use ya_model::payment::*;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {

@@ -1,7 +1,7 @@
 use crate::dao::debit_note::DebitNoteDao;
 use crate::dao::invoice::InvoiceDao;
 use crate::dao::payment::PaymentDao;
-use crate::error::Error;
+use crate::error::{Error, PaymentError, PaymentResult};
 use crate::models as db_models;
 use bigdecimal::BigDecimal;
 use ethereum_types::{Address, U256};
@@ -14,12 +14,12 @@ use std::time::Duration;
 use uint::core_::pin::Pin;
 use uuid::Uuid;
 use ya_core_model::ethaddr::NodeId;
-use ya_core_model::payment::{PaymentError, PaymentResult};
-use ya_core_model::{identity, payment};
+use ya_core_model::identity;
+use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_net::RemoteEndpoint;
 use ya_payment_driver::{
-    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentStatus,
+    PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentDriverError, PaymentStatus,
 };
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -86,12 +86,12 @@ fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output
 }
 
 impl PaymentProcessor {
-    pub fn new(
-        driver: Arc<Mutex<Box<dyn PaymentDriver + Send + Sync + 'static>>>,
-        db_executor: DbExecutor,
-    ) -> Self {
+    pub fn new<D>(driver: D, db_executor: DbExecutor) -> Self
+    where
+        D: PaymentDriver + Send + Sync + 'static,
+    {
         Self {
-            driver,
+            driver: Arc::new(Mutex::new(Box::new(driver))),
             db_executor,
         }
     }
@@ -103,12 +103,11 @@ impl PaymentProcessor {
                 .lock()
                 .await
                 .get_payment_status(&invoice_id)
-                .await
+                .await?
             {
-                Ok(PaymentStatus::Ok(confirmation)) => return Ok(confirmation),
-                Ok(PaymentStatus::NotYet) => tokio::time::delay_for(Duration::from_secs(5)).await,
-                Ok(_) => return Err(PaymentError::Driver("Insufficient funds".to_string())),
-                Err(e) => return Err(PaymentError::Driver(e.to_string())),
+                PaymentStatus::Ok(confirmation) => return Ok(confirmation),
+                PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
+                _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),
             }
         }
     }
@@ -137,11 +136,8 @@ impl PaymentProcessor {
             let payment = payment_dao.get(payment_id).await?.unwrap();
 
             let payee_id: NodeId = payment.payment.payee_id.parse().unwrap();
-            let msg = payment::public::SendPayment(payment.into());
-            payee_id
-                .service(payment::public::BUS_ID)
-                .call(msg)
-                .await??;
+            let msg = SendPayment(payment.into());
+            payee_id.service(BUS_ID).call(msg).await??;
 
             let invoice_dao: InvoiceDao = self.db_executor.as_dao();
             invoice_dao
@@ -175,8 +171,7 @@ impl PaymentProcessor {
         let sender = str_to_addr(&invoice.recipient_id)?;
         let recipient = str_to_addr(&invoice.credit_account_id)?;
         let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
-        if let Err(e) = self
-            .driver
+        self.driver
             .lock()
             .await
             .schedule_payment(
@@ -187,15 +182,13 @@ impl PaymentProcessor {
                 invoice.payment_due_date,
                 &sign_tx,
             )
-            .await
-        {
-            return Err(PaymentError::Driver(e.to_string()));
-        }
+            .await?;
 
         let processor = self.clone();
         tokio::task::spawn_local(async move {
             processor.process_payment(invoice, allocation_id).await;
         });
+        // self.process_payment(invoice, allocation_id).await;
 
         Ok(())
     }
@@ -279,17 +272,5 @@ impl PaymentProcessor {
         }
 
         Ok(())
-    }
-
-    pub async fn init(&self, addr: Address, requestor: bool, provider: bool) -> Result<(), Error> {
-        let driver_ref = self.driver.lock().await;
-        let mut mode = AccountMode::NONE;
-        if requestor {
-            mode |= AccountMode::SEND;
-        }
-        if provider {
-            mode |= AccountMode::RECV;
-        }
-        Ok(driver_ref.init(mode, addr).await?)
     }
 }

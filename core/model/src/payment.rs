@@ -3,37 +3,37 @@ use ya_model::payment::*;
 use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-pub enum PaymentError {
-    #[error("Currency conversion error")]
-    Conversion(String),
-    #[error("Invalid address: {0}")]
-    Address(String),
-    #[error("Verification error: {0}")]
-    Verification(String),
-    #[error("Payment driver error: {0}")]
-    Driver(String),
-}
-
-pub type PaymentResult<T> = Result<T, PaymentError>;
-
-impl From<uint::FromDecStrErr> for PaymentError {
-    fn from(e: uint::FromDecStrErr) -> Self {
-        Self::Conversion(format!("{:?}", e))
-    }
-}
-
-impl From<bigdecimal::ParseBigDecimalError> for PaymentError {
-    fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
-        Self::Conversion(e.to_string())
-    }
+pub enum RpcMessageError {
+    #[error("Schedule payment error: {0}")]
+    Schedule(#[from] local::ScheduleError),
+    #[error("Send error: {0}")]
+    Send(#[from] public::SendError),
+    #[error("Accept/reject error: {0}")]
+    AcceptReject(#[from] public::AcceptRejectError),
+    #[error("Cancel error: {0}")]
+    Cancel(#[from] public::CancelError),
+    #[error("{0}")]
+    Generic(#[from] local::GenericError)
 }
 
 pub mod local {
     use super::*;
     use crate::ethaddr::NodeId;
     use bigdecimal::BigDecimal;
+    use std::borrow::Cow;
+    use std::fmt::Display;
 
     pub const BUS_ID: &'static str = "/local/payment";
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ScheduleError {
+        #[error("Currency conversion error: {0}")]
+        Conversion(String),
+        #[error("Invalid address: {0}")]
+        Address(String),
+        #[error("Payment driver error: {0}")]
+        Driver(String),
+    }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct SchedulePayment {
@@ -44,7 +44,20 @@ pub mod local {
     impl RpcMessage for SchedulePayment {
         const ID: &'static str = "SchedulePayment";
         type Item = ();
-        type Error = PaymentError;
+        type Error = ScheduleError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    #[error("{inner}")]
+    pub struct GenericError {
+        inner : String
+    }
+
+    impl GenericError {
+        pub fn new<T : Display>(e : &T) -> Self {
+            let inner = e.to_string();
+            Self { inner }
+        }
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -57,7 +70,7 @@ pub mod local {
     impl RpcMessage for Init {
         const ID: &'static str = "init";
         type Item = ();
-        type Error = PaymentError;
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -84,7 +97,7 @@ pub mod local {
     impl RpcMessage for GetStatus {
         const ID: &'static str = "GetStatus";
         type Item = StatusResult;
-        type Error = PaymentError;
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -141,16 +154,6 @@ pub mod public {
         Forbidden,
         #[error("Conflict")]
         Conflict,
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-    pub enum RpcMessageError {
-        #[error("Send error: {0}")]
-        Send(#[from] SendError),
-        #[error("Accept/reject error: {0}")]
-        AcceptReject(#[from] AcceptRejectError),
-        #[error("Cancel error: {0}")]
-        Cancel(#[from] CancelError),
     }
 
     // ************************** DEBIT NOTE **************************

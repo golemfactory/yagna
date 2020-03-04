@@ -1,8 +1,6 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
-use futures::lock::Mutex;
 use std::str::FromStr;
-use std::sync::Arc;
 use structopt::StructOpt;
 use ya_core_model::ethaddr::NodeId;
 use ya_model::market;
@@ -44,13 +42,14 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", "debug");
     env_logger::init();
 
-    let db = DbExecutor::new(":memory:")?;
-    migrations::run_with_output(&db.conn()?, &mut std::io::stdout())?;
+    let database_url = format!("file:{}?mode=memory&cache=shared", &node_id);
+    let db = DbExecutor::new(database_url)?;
+    db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
     let driver = DummyDriver::new();
-    let processor = PaymentProcessor::new(Arc::new(Mutex::new(Box::new(driver))), db.clone());
-    ya_payment::service::bind_service(&db, processor.clone());
+    let processor = PaymentProcessor::new(driver, db.clone());
+    ya_payment::service::bind_service(&db, processor);
 
     let net_host = ya_net::resolve_default()?;
     ya_net::bind_remote(&net_host, &node_id).await?;
@@ -89,10 +88,7 @@ async fn main() -> anyhow::Result<()> {
             Command::Provider => ya_payment::api::provider_scope(),
             Command::Requestor => ya_payment::api::requestor_scope(),
         };
-        let payment_service = Scope::new(PAYMENT_API_PATH)
-            .data(db.clone())
-            .data(processor.clone())
-            .service(scope);
+        let payment_service = Scope::new(PAYMENT_API_PATH).data(db.clone()).service(scope);
         App::new()
             .wrap(middleware::Logger::default())
             .wrap(DummyAuth::new(identity.clone()))
