@@ -14,13 +14,15 @@ use std::time::Duration;
 use uint::core_::pin::Pin;
 use uuid::Uuid;
 use ya_core_model::ethaddr::NodeId;
+use ya_core_model::payment::{PaymentError, PaymentResult};
 use ya_core_model::{identity, payment};
 use ya_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_net::RemoteEndpoint;
-use ya_payment_driver::{PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentStatus};
+use ya_payment_driver::{
+    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentStatus,
+};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
-use ya_core_model::payment::{PaymentResult, PaymentError};
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 const GAS_LIMIT: u64 = 1_000_000_000_000_000_000; // TODO: Handle gas limits otherwise
@@ -136,7 +138,10 @@ impl PaymentProcessor {
 
             let payee_id: NodeId = payment.payment.payee_id.parse().unwrap();
             let msg = payment::public::SendPayment(payment.into());
-            payee_id.service(payment::public::BUS_ID).call(msg).await??;
+            payee_id
+                .service(payment::public::BUS_ID)
+                .call(msg)
+                .await??;
 
             let invoice_dao: InvoiceDao = self.db_executor.as_dao();
             invoice_dao
@@ -170,7 +175,8 @@ impl PaymentProcessor {
         let sender = str_to_addr(&invoice.recipient_id)?;
         let recipient = str_to_addr(&invoice.credit_account_id)?;
         let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
-        if let Err(e) = self.driver
+        if let Err(e) = self
+            .driver
             .lock()
             .await
             .schedule_payment(
@@ -181,8 +187,9 @@ impl PaymentProcessor {
                 invoice.payment_due_date,
                 &sign_tx,
             )
-            .await {
-            return Err(PaymentError::Driver(e.to_string()))
+            .await
+        {
+            return Err(PaymentError::Driver(e.to_string()));
         }
 
         let processor = self.clone();
@@ -272,5 +279,17 @@ impl PaymentProcessor {
         }
 
         Ok(())
+    }
+
+    pub async fn init(&self, addr: Address, requestor: bool, provider: bool) -> Result<(), Error> {
+        let driver_ref = self.driver.lock().await;
+        let mut mode = AccountMode::NONE;
+        if requestor {
+            mode |= AccountMode::SEND;
+        }
+        if provider {
+            mode |= AccountMode::RECV;
+        }
+        Ok(driver_ref.init(mode, addr).await?)
     }
 }

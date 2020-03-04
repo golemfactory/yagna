@@ -91,4 +91,8 @@ impl<'c> DebitNoteDao<'c> {
         })
         .await
     }
+
+    pub async fn get_status(&self) -> DbResult<()> {
+        do_with_transaction(self.pool, |conn| todo!()).await
+    }
 }

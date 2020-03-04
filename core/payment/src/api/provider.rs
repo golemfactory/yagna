@@ -284,9 +284,9 @@ async fn send_invoice(
     .await
     {
         Err(Error::Timeout(_)) => return response::timeout(),
-        Err(Error::Rpc(payment::public::RpcMessageError::Send(payment::public::SendError::BadRequest(e)))) => {
-            return response::bad_request(&e)
-        }
+        Err(Error::Rpc(payment::public::RpcMessageError::Send(
+            payment::public::SendError::BadRequest(e),
+        ))) => return response::bad_request(&e),
         Err(e) => return { response::server_error(&e) },
         _ => {}
     }

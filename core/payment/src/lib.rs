@@ -11,6 +11,7 @@ use ya_service_api_interfaces::*;
 extern crate diesel;
 
 pub mod api;
+mod cli;
 pub mod dao;
 pub mod error;
 pub mod models;
@@ -36,7 +37,7 @@ lazy_static::lazy_static! {
 pub struct PaymentService;
 
 impl Service for PaymentService {
-    type Cli = ();
+    type Cli = cli::PaymentCli;
 }
 
 impl PaymentService {

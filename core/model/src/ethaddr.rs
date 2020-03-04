@@ -38,6 +38,11 @@ impl NodeId {
         let hex_str = unsafe { str::from_utf8_unchecked(&hex_str) };
         f(hex_str)
     }
+
+    #[inline]
+    pub fn into_array(self) -> [u8; 20] {
+        self.inner
+    }
 }
 
 impl Default for NodeId {

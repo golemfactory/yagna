@@ -17,6 +17,7 @@ pub mod payment;
 pub mod schema;
 
 pub use account::{AccountBalance, Balance, Chain, Currency};
+use bitflags::bitflags;
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
 use futures::Future;
@@ -28,8 +29,19 @@ pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
 
 pub type SignTx<'a> = &'a (dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>);
 
+bitflags! {
+    pub struct AccountMode : usize {
+        const NONE = 0b000;
+        const RECV = 0b001;
+        const SEND = 0b010;
+        const ALL = Self::RECV.bits | Self::SEND.bits;
+    }
+}
+
 #[async_trait(?Send)]
 pub trait PaymentDriver {
+    async fn init(&self, mode: AccountMode, address: Address) -> PaymentDriverResult<()>;
+
     /// Returns account balance
     async fn get_account_balance(&self, address: Address) -> PaymentDriverResult<AccountBalance>;
 

@@ -25,7 +25,7 @@ use crate::error::{DbResult, PaymentDriverError};
 use crate::ethereum::EthereumClient;
 use crate::models::{PaymentEntity, TransactionEntity};
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
-use crate::{PaymentDriver, PaymentDriverResult, SignTx};
+use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
 
 const GNT_TRANSFER_GAS: u32 = 55000;
 const GNT_FAUCET_GAS: u32 = 90000;
@@ -133,7 +133,9 @@ impl GntDriver {
     }
 
     pub async fn get_gnt_logs(&self) -> PaymentDriverResult<Vec<Log>> {
-        let filter = self.ethereum_client.prepare_filter(self.gnt_contract.address());
+        let filter = self
+            .ethereum_client
+            .prepare_filter(self.gnt_contract.address());
         let logs = self.ethereum_client.get_eth_logs(filter)?;
         Ok(logs)
     }
@@ -347,6 +349,10 @@ impl GntDriver {
 
 #[async_trait(?Send)]
 impl PaymentDriver for GntDriver {
+    async fn init(&self, _mode: AccountMode, _address: Address) -> Result<(), PaymentDriverError> {
+        todo!("wallet init")
+    }
+
     /// Returns account balance
     async fn get_account_balance(&self, address: Address) -> PaymentDriverResult<AccountBalance> {
         let gnt_balance = self.get_gnt_balance(address)?;

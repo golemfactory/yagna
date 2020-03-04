@@ -1,6 +1,6 @@
 use crate::{
-    AccountBalance, Balance, Currency, PaymentAmount, PaymentConfirmation, PaymentDetails,
-    PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
+    AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
+    PaymentDetails, PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -24,6 +24,10 @@ impl DummyDriver {
 
 #[async_trait(?Send)]
 impl PaymentDriver for DummyDriver {
+    async fn init(&self, _mode: AccountMode, _address: Address) -> Result<(), PaymentDriverError> {
+        Ok(())
+    }
+
     async fn get_account_balance(
         &self,
         _address: Address,

@@ -30,6 +30,8 @@ impl From<bigdecimal::ParseBigDecimalError> for PaymentError {
 
 pub mod local {
     use super::*;
+    use crate::ethaddr::NodeId;
+    use bigdecimal::BigDecimal;
 
     pub const BUS_ID: &'static str = "/local/payment";
 
@@ -45,6 +47,60 @@ pub mod local {
         type Error = PaymentError;
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct Init {
+        pub identity: NodeId,
+        pub provider: bool,
+        pub requestor: bool,
+    }
+
+    impl RpcMessage for Init {
+        const ID: &'static str = "init";
+        type Item = ();
+        type Error = PaymentError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetStatus(NodeId);
+
+    impl From<NodeId> for GetStatus {
+        fn from(id: NodeId) -> Self {
+            GetStatus(id)
+        }
+    }
+
+    impl AsRef<NodeId> for GetStatus {
+        fn as_ref(&self) -> &NodeId {
+            &self.0
+        }
+    }
+
+    impl GetStatus {
+        pub fn identity(&self) -> NodeId {
+            self.0
+        }
+    }
+
+    impl RpcMessage for GetStatus {
+        const ID: &'static str = "GetStatus";
+        type Item = StatusResult;
+        type Error = PaymentError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct StatusResult {
+        pub amount: BigDecimal,
+        pub reserved: BigDecimal,
+        pub outgoing: StatusNotes,
+        pub incoming: StatusNotes,
+    }
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct StatusNotes {
+        pub requested: BigDecimal,
+        pub accepted: BigDecimal,
+        pub confirmed: BigDecimal,
+        pub rejected: BigDecimal,
+    }
 }
 
 pub mod public {
@@ -202,5 +258,4 @@ pub mod public {
         type Item = Ack;
         type Error = SendError;
     }
-
 }

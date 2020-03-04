@@ -37,10 +37,11 @@ thiserror = "1.0"
 tokio = "0.2"
 uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
+structopt = "0.3"
 
 [dev-dependencies]
 ya-net = {version = "0.1", features=["service"]}
 ya-sb-router = "0.1"
 actix-rt = "1.0"
-structopt = "0.3"
+
 

@@ -68,7 +68,10 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 
 mod local {
     use super::*;
+    use crate::dao::payment::PaymentDao;
+    use ethereum_types::{Address, H160};
     use ya_core_model::payment::local::*;
+    use ya_core_model::payment::PaymentError;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment private service to service bus");
@@ -77,8 +80,33 @@ mod local {
             addr: BUS_ID,
             db,
             processor,
-        };
+        }
+        .bind_with_processor(on_init);
         log::debug!("Successfully bound payment private service to service bus");
+    }
+
+    async fn on_init(
+        _db: DbExecutor,
+        pp: PaymentProcessor,
+        _caller: String,
+        init: Init,
+    ) -> Result<(), PaymentError> {
+        pp.init(
+            Address::from(H160(init.identity.into_array())),
+            init.requestor,
+            init.provider,
+        )
+        .await
+        .map_err(|e| PaymentError::Driver(e.to_string()))
+    }
+
+    async fn on_status(
+        db: DbExecutor,
+        pp: PaymentProcessor,
+        _caller: String,
+        req: GetStatus,
+    ) -> Result<StatusResult, PaymentError> {
+        todo!()
     }
 }
 
@@ -92,8 +120,8 @@ mod public {
     use crate::utils::*;
 
     use ya_core_model::payment::public::*;
-    use ya_model::payment::*;
     use ya_core_model::payment::PaymentError;
+    use ya_model::payment::*;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment public service to service bus");
@@ -178,7 +206,11 @@ mod public {
 
     // *************************** INVOICE ****************************
 
-    async fn send_invoice(db: DbExecutor, sender: String, msg: SendInvoice) -> Result<Ack, SendError> {
+    async fn send_invoice(
+        db: DbExecutor,
+        sender: String,
+        msg: SendInvoice,
+    ) -> Result<Ack, SendError> {
         let mut invoice = msg.0;
         let invoice_id = invoice.invoice_id.clone();
         let agreement = match get_agreement(invoice.agreement_id.clone()).await {
@@ -326,5 +358,4 @@ mod public {
 
         Ok(Ack {})
     }
-
 }

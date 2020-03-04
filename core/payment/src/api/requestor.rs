@@ -200,7 +200,10 @@ async fn accept_invoice(
             acceptance,
         };
         match async move {
-            issuer_id.service(payment::public::BUS_ID).call(msg).await??;
+            issuer_id
+                .service(payment::public::BUS_ID)
+                .call(msg)
+                .await??;
             Ok(())
         }
         .await
