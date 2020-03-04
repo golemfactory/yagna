@@ -133,7 +133,9 @@ impl GntDriver {
     }
 
     pub async fn get_gnt_logs(&self) -> PaymentDriverResult<Vec<Log>> {
-        let filter = self.ethereum_client.prepare_filter(self.gnt_contract.address());
+        let filter = self
+            .ethereum_client
+            .prepare_filter(self.gnt_contract.address());
         let logs = self.ethereum_client.get_eth_logs(filter)?;
         Ok(logs)
     }

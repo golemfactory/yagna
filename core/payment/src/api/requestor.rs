@@ -6,17 +6,19 @@ use crate::dao::invoice_event::InvoiceEventDao;
 use crate::dao::payment::PaymentDao;
 use crate::error::{DbError, Error};
 use crate::models as db_models;
-use crate::processor::PaymentProcessor;
 use crate::utils::{listen_for_events, response, with_timeout};
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_core_model::ethaddr::NodeId;
-use ya_core_model::payment;
+use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
+use ya_core_model::payment::public::{AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE};
+use ya_core_model::payment::RpcMessageError;
 use ya_model::payment::*;
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -140,7 +142,6 @@ async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>, id: Identity) 
 
 async fn accept_invoice(
     db: Data<DbExecutor>,
-    processor: Data<PaymentProcessor>,
     path: Path<InvoiceId>,
     query: Query<Timeout>,
     body: Json<Acceptance>,
@@ -195,24 +196,28 @@ async fn accept_invoice(
 
     with_timeout(query.timeout, async move {
         let issuer_id: NodeId = invoice.issuer_id.parse().unwrap();
-        let msg = payment::public::AcceptInvoice {
+        let msg = AcceptInvoice {
             invoice_id: invoice_id.clone(),
             acceptance,
         };
         match async move {
-            issuer_id.service(payment::public::BUS_ID).call(msg).await??;
+            issuer_id.service(PUBLIC_SERVICE).call(msg).await??;
             Ok(())
         }
         .await
         {
-            Err(Error::Rpc(payment::public::RpcMessageError::AcceptReject(
-                payment::public::AcceptRejectError::BadRequest(e),
-            ))) => return response::bad_request(&e),
+            Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(e)))) => {
+                return response::bad_request(&e)
+            }
             Err(e) => return response::server_error(&e),
             _ => (),
         }
 
-        if let Err(e) = processor.schedule_payment(invoice, allocation_id).await {
+        let msg = SchedulePayment {
+            invoice,
+            allocation_id,
+        };
+        if let Err(e) = bus::service(LOCAL_SERVICE).send(msg).await {
             return response::server_error(&e);
         }
 

@@ -3,35 +3,31 @@ use ya_model::payment::*;
 use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-pub enum PaymentError {
-    #[error("Currency conversion error")]
-    Conversion(String),
-    #[error("Invalid address: {0}")]
-    Address(String),
-    #[error("Verification error: {0}")]
-    Verification(String),
-    #[error("Payment driver error: {0}")]
-    Driver(String),
-}
-
-pub type PaymentResult<T> = Result<T, PaymentError>;
-
-impl From<uint::FromDecStrErr> for PaymentError {
-    fn from(e: uint::FromDecStrErr) -> Self {
-        Self::Conversion(format!("{:?}", e))
-    }
-}
-
-impl From<bigdecimal::ParseBigDecimalError> for PaymentError {
-    fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
-        Self::Conversion(e.to_string())
-    }
+pub enum RpcMessageError {
+    #[error("Schedule payment error: {0}")]
+    Schedule(#[from] local::ScheduleError),
+    #[error("Send error: {0}")]
+    Send(#[from] public::SendError),
+    #[error("Accept/reject error: {0}")]
+    AcceptReject(#[from] public::AcceptRejectError),
+    #[error("Cancel error: {0}")]
+    Cancel(#[from] public::CancelError),
 }
 
 pub mod local {
     use super::*;
 
     pub const BUS_ID: &'static str = "/local/payment";
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ScheduleError {
+        #[error("Currency conversion error: {0}")]
+        Conversion(String),
+        #[error("Invalid address: {0}")]
+        Address(String),
+        #[error("Payment driver error: {0}")]
+        Driver(String),
+    }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct SchedulePayment {
@@ -42,9 +38,8 @@ pub mod local {
     impl RpcMessage for SchedulePayment {
         const ID: &'static str = "SchedulePayment";
         type Item = ();
-        type Error = PaymentError;
+        type Error = ScheduleError;
     }
-
 }
 
 pub mod public {
@@ -85,16 +80,6 @@ pub mod public {
         Forbidden,
         #[error("Conflict")]
         Conflict,
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-    pub enum RpcMessageError {
-        #[error("Send error: {0}")]
-        Send(#[from] SendError),
-        #[error("Accept/reject error: {0}")]
-        AcceptReject(#[from] AcceptRejectError),
-        #[error("Cancel error: {0}")]
-        Cancel(#[from] CancelError),
     }
 
     // ************************** DEBIT NOTE **************************
@@ -202,5 +187,4 @@ pub mod public {
         type Item = Ack;
         type Error = SendError;
     }
-
 }

@@ -77,8 +77,21 @@ mod local {
             addr: BUS_ID,
             db,
             processor,
-        };
+        }
+        .bind_with_processor(schedule_payment);
         log::debug!("Successfully bound payment private service to service bus");
+    }
+
+    async fn schedule_payment(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: SchedulePayment,
+    ) -> Result<(), ScheduleError> {
+        let invoice = msg.invoice;
+        let allocation_id = msg.allocation_id;
+        processor.schedule_payment(invoice, allocation_id).await?;
+        Ok(())
     }
 }
 
@@ -88,12 +101,11 @@ mod public {
     use crate::dao::debit_note::DebitNoteDao;
     use crate::dao::invoice::InvoiceDao;
     use crate::dao::invoice_event::InvoiceEventDao;
-    use crate::error::{DbError, Error};
+    use crate::error::{DbError, Error, PaymentError};
     use crate::utils::*;
 
     use ya_core_model::payment::public::*;
     use ya_model::payment::*;
-    use ya_core_model::payment::PaymentError;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment public service to service bus");
@@ -178,7 +190,11 @@ mod public {
 
     // *************************** INVOICE ****************************
 
-    async fn send_invoice(db: DbExecutor, sender: String, msg: SendInvoice) -> Result<Ack, SendError> {
+    async fn send_invoice(
+        db: DbExecutor,
+        sender: String,
+        msg: SendInvoice,
+    ) -> Result<Ack, SendError> {
         let mut invoice = msg.0;
         let invoice_id = invoice.invoice_id.clone();
         let agreement = match get_agreement(invoice.agreement_id.clone()).await {
@@ -326,5 +342,4 @@ mod public {
 
         Ok(Ack {})
     }
-
 }

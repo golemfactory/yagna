@@ -20,9 +20,7 @@ with-diesel=['diesel']
 ya-model = "0.1"
 ya-service-bus = "0.2"
 
-bigdecimal = "0.1.0"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }
 diesel = { version = "1.4", optional = true }
 thiserror = "1.0.9"
-uint = "0.7"

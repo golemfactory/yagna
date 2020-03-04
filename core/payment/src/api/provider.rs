@@ -10,7 +10,8 @@ use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_core_model::ethaddr::NodeId;
-use ya_core_model::payment;
+use ya_core_model::payment::public::{SendDebitNote, SendError, SendInvoice, BUS_ID};
+use ya_core_model::payment::RpcMessageError;
 use ya_model::payment::*;
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
@@ -147,8 +148,8 @@ async fn send_debit_note(
     with_timeout(query.timeout, async move {
         let recipient_id: NodeId = debit_note.recipient_id.parse().unwrap();
         let result = match recipient_id
-            .service(payment::public::BUS_ID)
-            .call(payment::public::SendDebitNote(debit_note))
+            .service(BUS_ID)
+            .call(SendDebitNote(debit_note))
             .await
         {
             Ok(v) => v,
@@ -157,7 +158,7 @@ async fn send_debit_note(
 
         match result {
             Ok(_) => (),
-            Err(payment::public::SendError::BadRequest(e)) => return response::bad_request(&e),
+            Err(SendError::BadRequest(e)) => return response::bad_request(&e),
             Err(e) => return response::server_error(&e),
         }
         match dao
@@ -268,23 +269,20 @@ async fn send_invoice(
     }
 
     let addr: NodeId = invoice.recipient_id.parse().unwrap();
-    let msg = payment::public::SendInvoice(invoice);
+    let msg = SendInvoice(invoice);
     let timeout = if query.timeout > 0 {
         Some(query.timeout * 1000)
     } else {
         None
     };
     match async move {
-        addr.service(payment::public::BUS_ID)
-            .send(msg)
-            .timeout(timeout)
-            .await???;
+        addr.service(BUS_ID).send(msg).timeout(timeout).await???;
         Ok(())
     }
     .await
     {
         Err(Error::Timeout(_)) => return response::timeout(),
-        Err(Error::Rpc(payment::public::RpcMessageError::Send(payment::public::SendError::BadRequest(e)))) => {
+        Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e)))) => {
             return response::bad_request(&e)
         }
         Err(e) => return { response::server_error(&e) },
