@@ -4,9 +4,10 @@ use ya_utils_actix::actix_signal::Subscribe;
 
 use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
 use crate::market::{CreateOffer, ProviderMarket};
+use crate::payments::Payments;
 use crate::startup_config::StartupConfig;
-
 use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
+
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,7 @@ use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
+    payments: Addr<Payments>,
     node_info: NodeInfo,
     service_info: ServiceInfo,
     exe_unit_path: String,
@@ -26,6 +28,7 @@ impl ProviderAgent {
     pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
         let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
         let runner = TaskRunner::new(config.activity_client()?).start();
+        let payments = Payments::new(config.activity_client()?, config.payment_client()?).start();
 
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();
@@ -49,6 +52,7 @@ impl ProviderAgent {
         let mut provider = ProviderAgent {
             market,
             runner,
+            payments,
             node_info,
             service_info,
             exe_unit_path,
@@ -59,8 +63,11 @@ impl ProviderAgent {
     }
 
     pub fn initialize(&mut self) {
-        // Forward AgreementSigned event to TaskRunner actor.
+        // Forward AgreementSigned event to TaskRunner and Payment actor.
         let msg = Subscribe::<AgreementSigned>(self.runner.clone().recipient());
+        send_message(self.market.clone(), msg);
+
+        let msg = Subscribe::<AgreementSigned>(self.payments.clone().recipient());
         send_message(self.market.clone(), msg);
 
         // Load ExeUnits descriptors from file.

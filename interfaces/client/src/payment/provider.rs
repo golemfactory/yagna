@@ -2,8 +2,9 @@ use chrono::{DateTime, TimeZone};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::{web::WebClient, Result};
+use crate::{web::WebClient, web::WebInterface, Result};
 use ya_model::payment::*;
+
 
 #[derive(Default)]
 pub struct ProviderApiConfig {
@@ -19,6 +20,16 @@ pub struct ProviderApiConfig {
 pub struct ProviderApi {
     client: Arc<WebClient>,
     config: ProviderApiConfig,
+}
+
+impl WebInterface for ProviderApi {
+    const API_URL_ENV_VAR: &'static str = crate::payment::PAYMENT_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = PAYMENT_API_PATH;
+
+    fn from(client: WebClient) -> Self {
+        let config = ProviderApiConfig::default();
+        ProviderApi::new(&Arc::new(client), config)
+    }
 }
 
 impl ProviderApi {

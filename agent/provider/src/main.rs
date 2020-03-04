@@ -1,5 +1,6 @@
 mod execution;
 mod market;
+mod payments;
 pub mod provider_agent;
 mod startup_config;
 
