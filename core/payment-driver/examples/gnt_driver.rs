@@ -15,7 +15,7 @@ use std::pin::Pin;
 use ya_payment_driver::account::{AccountBalance, Chain};
 use ya_payment_driver::ethereum::EthereumClient;
 use ya_payment_driver::gnt::GntDriver;
-use ya_payment_driver::payment::PaymentAmount;
+use ya_payment_driver::payment::{PaymentAmount, PaymentConfirmation};
 use ya_payment_driver::PaymentDriver;
 
 use ya_persistence::executor::DbExecutor;
@@ -133,6 +133,12 @@ async fn main() -> anyhow::Result<()> {
 
     let payment_status = gnt_driver.get_payment_status(invoice_id).await?;
     println!("Payment status: {:?}", payment_status);
+
+    let tx_hash: Vec<u8> =
+        hex::decode("9e3264d7a4a71934ee67e5abd520e1523f901b4a3f0316c905088e99d075737f").unwrap();
+    let confirmation = PaymentConfirmation::from(&tx_hash);
+    let details = gnt_driver.verify_payment(&confirmation).await?;
+    println!("{:?}", details);
 
     Ok(())
 }

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use chrono::{DateTime, Utc};
 
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, H160, H256, U256, U64};
 
 use ethereum_tx_sign::RawTransaction;
 
@@ -14,7 +14,7 @@ use web3::contract::tokens::Tokenize;
 use web3::contract::{Contract, Options};
 use web3::futures::Future;
 use web3::transports::Http;
-use web3::types::Log;
+use web3::types::{Bytes, Log, TransactionReceipt};
 
 use ya_persistence::executor::DbExecutor;
 
@@ -34,6 +34,13 @@ const MAX_ETH_FAUCET_REQUESTS: u32 = 10;
 const ETH_FAUCET_SLEEP_SECONDS: u64 = 1;
 
 const MAX_TESTNET_BALANCE: &str = "10000000000000";
+
+const ETH_TX_SUCCESS: u64 = 1;
+const TRANSFER_LOGS_LENGTH: usize = 1;
+const TX_LOG_DATA_LENGTH: usize = 32;
+const TX_LOG_TOPICS_LENGTH: usize = 3;
+const TRANSFER_CANONICAL_SIGNATURE: &str =
+    "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 pub struct GntDriver {
     ethereum_client: EthereumClient,
@@ -132,14 +139,6 @@ impl GntDriver {
             )
     }
 
-    pub async fn get_gnt_logs(&self) -> PaymentDriverResult<Vec<Log>> {
-        let filter = self
-            .ethereum_client
-            .prepare_filter(self.gnt_contract.address());
-        let logs = self.ethereum_client.get_eth_logs(filter)?;
-        Ok(logs)
-    }
-
     /// Returns ether balance
     pub fn get_eth_balance(&self, address: Address) -> PaymentDriverResult<Balance> {
         let block_number = None;
@@ -158,7 +157,7 @@ impl GntDriver {
         let sleep_time = time::Duration::from_secs(ETH_FAUCET_SLEEP_SECONDS);
         let mut counter = 0;
         while counter < MAX_ETH_FAUCET_REQUESTS {
-            if self.request_eth(address, faucet_address).is_ok() {
+            if self.request_eth(address, faucet_address).await.is_ok() {
                 break;
             } else {
                 println!("Failed to request Eth from Faucet...");
@@ -176,13 +175,20 @@ impl GntDriver {
         }
     }
 
-    fn request_eth(&self, address: Address, faucet_address: &str) -> Result<(), reqwest::Error> {
+    async fn request_eth(
+        &self,
+        address: Address,
+        faucet_address: &str,
+    ) -> Result<(), reqwest::Error> {
         let mut uri: String = faucet_address.into();
         uri.push('/');
         let addr: String = format!("{:x?}", address);
         uri.push_str(&addr.as_str()[2..]);
         println!("HTTP GET {:?}", uri);
-        let _body = reqwest::blocking::get(uri.as_str())?.json::<HashMap<String, String>>()?;
+        let _body = reqwest::get(uri.as_str())
+            .await?
+            .json::<HashMap<String, String>>()
+            .await?;
         Ok(())
     }
 
@@ -345,6 +351,100 @@ impl GntDriver {
         let dao: PaymentDao = self.db.as_dao();
         dao.get(invoice_id).await
     }
+
+    fn verify_gnt_tx(&self, receipt: &TransactionReceipt) -> PaymentDriverResult<()> {
+        self.verify_gnt_tx_logs(&receipt.logs)?;
+        self.verify_gnt_tx_status(&receipt.status)?;
+        Ok(())
+    }
+
+    fn verify_gnt_tx_status(&self, status: &Option<U64>) -> PaymentDriverResult<()> {
+        match status {
+            None => Err(PaymentDriverError::UnknownTransaction),
+            Some(status) => {
+                if *status == U64::from(ETH_TX_SUCCESS) {
+                    Ok(())
+                } else {
+                    Err(PaymentDriverError::FailedTransaction)
+                }
+            }
+        }
+    }
+
+    fn verify_gnt_tx_logs(&self, logs: &Vec<Log>) -> PaymentDriverResult<()> {
+        if logs.len() != TRANSFER_LOGS_LENGTH {
+            return Err(PaymentDriverError::UnknownTransaction);
+        }
+        self.verify_gnt_tx_log(&logs[0])?;
+        Ok(())
+    }
+
+    fn verify_gnt_tx_log(&self, log: &Log) -> PaymentDriverResult<()> {
+        self.verify_gnt_tx_log_contract_address(&log.address)?;
+        self.verify_gnt_tx_log_topics(&log.topics)?;
+        self.verify_gnt_tx_log_data(&log.data)?;
+        Ok(())
+    }
+
+    fn verify_gnt_tx_log_contract_address(
+        &self,
+        contract_address: &Address,
+    ) -> PaymentDriverResult<()> {
+        if *contract_address != self.gnt_contract.address() {
+            return Err(PaymentDriverError::UnknownTransaction);
+        }
+        Ok(())
+    }
+
+    fn verify_gnt_tx_log_topics(&self, topics: &Vec<H256>) -> PaymentDriverResult<()> {
+        if topics.len() != TX_LOG_TOPICS_LENGTH {
+            return Err(PaymentDriverError::UnknownTransaction);
+        }
+        // topics[0] is the keccak-256 of the Transfer(address,address,uint256) canonical signature
+        self.verify_gnt_tx_log_canonical_signature(&topics[0])?;
+        Ok(())
+    }
+
+    fn verify_gnt_tx_log_canonical_signature(
+        &self,
+        canonical_signature: &H256,
+    ) -> PaymentDriverResult<()> {
+        if *canonical_signature
+            != H256::from_slice(&hex::decode(TRANSFER_CANONICAL_SIGNATURE).unwrap())
+        {
+            return Err(PaymentDriverError::UnknownTransaction);
+        }
+        Ok(())
+    }
+
+    fn verify_gnt_tx_log_data(&self, data: &Bytes) -> PaymentDriverResult<()> {
+        if data.0.len() != TX_LOG_DATA_LENGTH {
+            return Err(PaymentDriverError::UnknownTransaction);
+        }
+        Ok(())
+    }
+
+    fn build_payment_details(&self, receipt: &TransactionReceipt) -> PaymentDetails {
+        // topics[1] is the value of the _from address as H256
+        let sender = GntDriver::topic_to_address(&receipt.logs[0].topics[1]);
+        // topics[2] is the value of the _to address as H256
+        let recipient = GntDriver::topic_to_address(&receipt.logs[0].topics[2]);
+        // The data field from the returned Log struct contains the transferred token amount value
+        let amount: U256 = U256::from_big_endian(&receipt.logs[0].data.0);
+        // Do not have any info about date in receipt
+        let date = None;
+
+        PaymentDetails {
+            recipient,
+            sender,
+            amount,
+            date,
+        }
+    }
+
+    fn topic_to_address(topic: &H256) -> Address {
+        H160::from_slice(&topic.as_bytes()[12..])
+    }
 }
 
 #[async_trait(?Send)]
@@ -379,7 +479,6 @@ impl PaymentDriver for GntDriver {
     }
 
     /// Returns payment status
-    #[allow(unused)]
     async fn get_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus> {
         let payment = match self.get_payment_from_db(invoice_id.into()).await? {
             None => {
@@ -391,12 +490,18 @@ impl PaymentDriver for GntDriver {
     }
 
     /// Verifies payment
-    #[allow(unused)]
     async fn verify_payment(
         &self,
         confirmation: &PaymentConfirmation,
     ) -> PaymentDriverResult<PaymentDetails> {
-        unimplemented!();
+        let tx_hash: H256 = H256::from_slice(&confirmation.confirmation);
+        match self.ethereum_client.get_transaction_receipt(tx_hash)? {
+            None => Err(PaymentDriverError::NotFound),
+            Some(receipt) => {
+                self.verify_gnt_tx(&receipt)?;
+                Ok(self.build_payment_details(&receipt))
+            }
+        }
     }
 
     /// Returns sum of transactions from given address

@@ -16,6 +16,10 @@ pub enum PaymentDriverError {
     LibraryError(String),
     #[error("Database error")]
     DatabaseError(String),
+    #[error("Unknown transaction")]
+    UnknownTransaction,
+    #[error("Transaction failed")]
+    FailedTransaction,
 }
 
 impl From<secp256k1::Error> for PaymentDriverError {
