@@ -24,7 +24,12 @@ impl DummyDriver {
 
 #[async_trait(?Send)]
 impl PaymentDriver for DummyDriver {
-    async fn init(&self, _mode: AccountMode, _address: Address) -> Result<(), PaymentDriverError> {
+    async fn init(
+        &self,
+        _mode: AccountMode,
+        _address: Address,
+        _sign_tx: SignTx<'_>,
+    ) -> Result<(), PaymentDriverError> {
         Ok(())
     }
 
