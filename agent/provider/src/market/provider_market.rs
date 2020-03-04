@@ -22,11 +22,10 @@ use ya_agent_offer_model::OfferDefinition;
 
 /// This event is emmited, when agreement is already signed
 /// and provider can go to activity stage and task creation.
-/// TODO: We should pass whole agreement here with negotiated offers.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct AgreementSigned {
-    pub agreement_id: String,
+    pub agreement: Agreement,
 }
 
 /// Sends offer to market.
@@ -71,7 +70,7 @@ pub struct GotAgreement {
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct OnAgreementSigned {
-    pub agreement_id: String,
+    pub agreement: Agreement,
 }
 
 /// Send when subscribing to market will be finished.
@@ -314,7 +313,7 @@ impl ProviderMarket {
     fn on_agreement_signed(&mut self, msg: OnAgreementSigned) -> Result<()> {
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(AgreementSigned {
-            agreement_id: msg.agreement_id,
+            agreement: msg.agreement,
         })
     }
 
@@ -397,7 +396,7 @@ impl ProviderMarket {
         // We negotiated agreement and here responsibility of ProviderMarket ends.
         // Notify outside world about agreement for further processing.
         let message = OnAgreementSigned {
-            agreement_id: agreement.agreement_id.to_string(),
+            agreement: agreement.clone(),
         };
 
         let _ = addr.send(message).await?;

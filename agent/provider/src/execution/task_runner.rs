@@ -232,11 +232,11 @@ impl TaskRunner {
     pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
         info!(
             "TaskRunner got signed agreement [{}] for processing.",
-            &msg.agreement_id
+            &msg.agreement.agreement_id
         );
 
         // Agreement waits for create activity.
-        self.waiting_agreements.insert(msg.agreement_id);
+        self.waiting_agreements.insert(msg.agreement.agreement_id);
         Ok(())
     }
 
