@@ -97,12 +97,15 @@ async fn main() -> anyhow::Result<()> {
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
 
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
-    let mut gnt_driver = GntDriver::new(ethereum_client, gnt_contract_address, db)?;
+    let mut gnt_driver = GntDriver::new(
+        ethereum_client,
+        gnt_contract_address,
+        ETH_FAUCET_ADDRESS,
+        gnt_faucet_address,
+        db,
+    )?;
 
-    gnt_driver
-        .init_funds(address, ETH_FAUCET_ADDRESS, gnt_faucet_address, &sign_tx)
-        .await
-        .unwrap();
+    gnt_driver.init_funds(address, &sign_tx).await.unwrap();
 
     wait_for_confirmations();
     show_balance(&gnt_driver, address).await;

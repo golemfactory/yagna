@@ -45,6 +45,8 @@ const TRANSFER_CANONICAL_SIGNATURE: &str =
 pub struct GntDriver {
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
+    eth_faucet_address: String,
+    gnt_faucet_address: Address,
     db: DbExecutor,
 }
 
@@ -53,6 +55,8 @@ impl GntDriver {
     pub fn new(
         ethereum_client: EthereumClient,
         gnt_contract_address: Address,
+        eth_faucet_address: impl Into<String>,
+        gnt_faucet_address: Address,
         db: DbExecutor,
     ) -> PaymentDriverResult<GntDriver> {
         let gnt_contract = GntDriver::prepare_contract(
@@ -61,10 +65,13 @@ impl GntDriver {
             include_bytes!("./contracts/gnt.json"),
         )?;
 
+        let eth_faucet_address = eth_faucet_address.into();
         Ok(GntDriver {
-            ethereum_client: ethereum_client,
-            gnt_contract: gnt_contract,
-            db: db,
+            ethereum_client,
+            gnt_contract,
+            eth_faucet_address,
+            gnt_faucet_address,
+            db,
         })
     }
 
@@ -72,16 +79,13 @@ impl GntDriver {
     pub async fn init_funds(
         &self,
         address: Address,
-        eth_faucet_address: &str,
-        gnt_faucet_address: Address,
         sign_tx: SignTx<'_>,
     ) -> PaymentDriverResult<()> {
         let max_testnet_balance = U256::from_dec_str(MAX_TESTNET_BALANCE).unwrap();
 
         if self.get_eth_balance(address)?.amount < max_testnet_balance {
             println!("Requesting Eth from Faucet...");
-            self.request_eth_from_faucet(address, eth_faucet_address)
-                .await?;
+            self.request_eth_from_faucet(address).await?;
         } else {
             println!("To much Eth...");
         }
@@ -90,8 +94,7 @@ impl GntDriver {
         // blocked by Faucet contract
         if self.get_gnt_balance(address)?.amount < max_testnet_balance {
             println!("Requesting Gnt from Faucet...");
-            self.request_gnt_from_faucet(address, gnt_faucet_address, sign_tx)
-                .await?;
+            self.request_gnt_from_faucet(address, sign_tx).await?;
         } else {
             println!("To much Gnt...");
         }
@@ -149,15 +152,11 @@ impl GntDriver {
     }
 
     /// Requests Eth from Faucet
-    async fn request_eth_from_faucet(
-        &self,
-        address: Address,
-        faucet_address: &str,
-    ) -> PaymentDriverResult<()> {
+    async fn request_eth_from_faucet(&self, address: Address) -> PaymentDriverResult<()> {
         let sleep_time = time::Duration::from_secs(ETH_FAUCET_SLEEP_SECONDS);
         let mut counter = 0;
         while counter < MAX_ETH_FAUCET_REQUESTS {
-            if self.request_eth(address, faucet_address).await.is_ok() {
+            if self.request_eth(address).await.is_ok() {
                 break;
             } else {
                 println!("Failed to request Eth from Faucet...");
@@ -175,12 +174,8 @@ impl GntDriver {
         }
     }
 
-    async fn request_eth(
-        &self,
-        address: Address,
-        faucet_address: &str,
-    ) -> Result<(), reqwest::Error> {
-        let mut uri: String = faucet_address.into();
+    async fn request_eth(&self, address: Address) -> Result<(), reqwest::Error> {
+        let mut uri = self.eth_faucet_address.clone();
         uri.push('/');
         let addr: String = format!("{:x?}", address);
         uri.push_str(&addr.as_str()[2..]);
@@ -196,12 +191,11 @@ impl GntDriver {
     async fn request_gnt_from_faucet(
         &self,
         address: Address,
-        faucet_contract_address: Address,
         sign_tx: SignTx<'_>,
     ) -> PaymentDriverResult<()> {
         let contract = GntDriver::prepare_contract(
             &self.ethereum_client,
-            faucet_contract_address,
+            self.gnt_faucet_address.clone(),
             include_bytes!("./contracts/faucet.json"),
         )?;
 
@@ -451,11 +445,14 @@ impl GntDriver {
 impl PaymentDriver for GntDriver {
     async fn init(
         &self,
-        _mode: AccountMode,
-        _address: Address,
-        _sign_tx: SignTx<'_>,
+        mode: AccountMode,
+        address: Address,
+        sign_tx: SignTx<'_>,
     ) -> Result<(), PaymentDriverError> {
-        todo!("wallet init")
+        if mode.contains(AccountMode::SEND) {
+            self.init_funds(address, sign_tx).await?;
+        }
+        Ok(())
     }
 
     /// Returns account balance
@@ -516,7 +513,11 @@ impl PaymentDriver for GntDriver {
         payer: Address,
         payee: Address,
     ) -> PaymentDriverResult<Balance> {
-        unimplemented!();
+        // TODO: Get real transaction balance
+        Ok(Balance {
+            currency: Currency::Gnt,
+            amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
+        })
     }
 }
 
@@ -533,6 +534,9 @@ mod tests {
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
     const GNT_CONTRACT_ADDRESS: &str = "924442A66cFd812308791872C4B242440c108E19";
 
+    const ETH_FAUCET_ADDRESS: &str = "http://188.165.227.180:4000/donate";
+    const GNT_FAUCET_ADDRESS: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
+
     fn to_address(address: &str) -> Address {
         address.parse().unwrap()
     }
@@ -544,7 +548,9 @@ mod tests {
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),
-            DbExecutor::new(":memory:")?,
+            ETH_FAUCET_ADDRESS,
+            to_address(GNT_FAUCET_ADDRESS),
+            DbExecutor::new(":memory:").unwrap(),
         );
         assert!(driver.is_ok());
         Ok(())
@@ -557,6 +563,8 @@ mod tests {
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),
+            ETH_FAUCET_ADDRESS,
+            to_address(GNT_FAUCET_ADDRESS),
             DbExecutor::new(":memory:")?,
         )
         .unwrap();
@@ -575,6 +583,8 @@ mod tests {
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),
+            ETH_FAUCET_ADDRESS,
+            to_address(GNT_FAUCET_ADDRESS),
             DbExecutor::new(":memory:")?,
         )
         .unwrap();
@@ -593,6 +603,8 @@ mod tests {
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),
+            ETH_FAUCET_ADDRESS,
+            to_address(GNT_FAUCET_ADDRESS),
             DbExecutor::new(":memory:")?,
         )
         .unwrap();

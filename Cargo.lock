@@ -4960,6 +4960,7 @@ dependencies = [
  "tokio 0.2.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "web3 0.8.0 (git+https://github.com/bidzyyys/rust-web3)",
  "ya-core-model 0.1.0",
  "ya-model 0.1.0",
  "ya-net 0.1.1",

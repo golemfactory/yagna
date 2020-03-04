@@ -4,6 +4,11 @@ version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+default = ["gnt-driver"]
+gnt-driver = ["web3"]
+dummy-driver = []
+
 [dependencies]
 ya-core-model = { version = "0.1", features = ["payment", "market", "identity"] }
 ya-model = "0.1"
@@ -38,6 +43,7 @@ tokio = "0.2"
 uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 structopt = "0.3"
+web3 = { git = "https://github.com/bidzyyys/rust-web3", optional = true }
 
 [dev-dependencies]
 ya-net = {version = "0.1", features=["service"]}
