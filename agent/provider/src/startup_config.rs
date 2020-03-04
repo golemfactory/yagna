@@ -20,7 +20,7 @@ pub struct StartupConfig {
     activity_url: Option<Url>,
     ///
     #[structopt(long = "payment-url", env = ProviderApi::API_URL_ENV_VAR)]
-    payment_url: Url,
+    payment_url: Option<Url>,
     ///
     #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]
     pub exe_unit_path: Option<String>,
@@ -42,6 +42,10 @@ impl StartupConfig {
 
     pub fn payment_client(&self) -> Result<ProviderApi> {
         let client = WebClient::with_token(&self.auth)?;
-        Ok(client.interface_at(self.payment_url.clone()))
+        if let Some(url) = &self.payment_url {
+            Ok(client.interface_at(url.clone()))
+        } else {
+            Ok(client.interface()?)
+        }
     }
 }

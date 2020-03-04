@@ -423,8 +423,7 @@ impl ProviderMarket {
     // =========================================== //
 
     pub fn on_subscribe(&mut self, msg: Subscribe<AgreementSigned>) -> Result<()> {
-        self.agreement_signed_signal.on_subscribe(msg);
-        Ok(())
+        Ok(self.agreement_signed_signal.on_subscribe(msg))
     }
 
     pub fn list_subscriptions(&self) -> Vec<String> {

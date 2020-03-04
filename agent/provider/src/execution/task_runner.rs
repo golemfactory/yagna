@@ -9,6 +9,7 @@ use ya_model::activity::{
 };
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
+use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 
 use actix::prelude::*;
 
@@ -34,6 +35,29 @@ pub struct UpdateActivity;
 #[rtype(result = "Result<()>")]
 pub struct InitializeExeUnits {
     pub file: PathBuf,
+}
+
+// =========================================== //
+// Public signals sent by TaskRunner
+// =========================================== //
+
+/// Signal emitted when TaskRunner finished processing
+/// of CreateActivity event. That means, that ExeUnit is already created.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct ActivityCreated {
+    pub agreement_id: String,
+}
+
+/// Signal emitted when TaskRunner destroys activity.
+/// It can happen in several situations:
+/// - Requestor sends terminate command to ExeUnit
+/// - Requestor sends DestroyActivity event
+/// - Task is finished because of timeout
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct ActivityDestroyed {
+    pub agreement_id: String,
 }
 
 // =========================================== //
@@ -67,6 +91,10 @@ pub struct TaskRunner {
     tasks: Vec<Task>,
     /// Agreements, that wait for CreateActivity event.
     waiting_agreements: HashSet<String>,
+
+    /// External actors can listen on these signals.
+    pub activity_created: SignalSlot<ActivityCreated>,
+    pub activity_destroyed: SignalSlot<ActivityDestroyed>,
 }
 
 impl TaskRunner {
@@ -76,6 +104,8 @@ impl TaskRunner {
             registry: ExeUnitsRegistry::new(),
             tasks: vec![],
             waiting_agreements: HashSet::new(),
+            activity_created: SignalSlot::<ActivityCreated>::new(),
+            activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
         }
     }
 
@@ -180,6 +210,8 @@ impl TaskRunner {
                     "Created activity [{}] for agreement [{}]. Spawned [{}] exeunit.",
                     activity_id, agreement_id, exeunit_name
                 );
+
+                let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: agreement_id.clone()});
                 Ok(())
             }
             Err(error) => return Err(Error::msg(format!("Can't create activity. {}", error))),
@@ -207,6 +239,8 @@ impl TaskRunner {
                 let task = self.tasks.swap_remove(task_position);
                 TaskRunner::destroy_task(task);
 
+                let _ = self.activity_destroyed.send_signal(ActivityDestroyed{agreement_id: agreement_id.to_string()});
+
                 // TODO: remove this
                 let client = self.api.clone();
                 Arbiter::spawn(async move {
@@ -223,7 +257,7 @@ impl TaskRunner {
                             &msg.activity_id, err
                         );
                     }
-                })
+                });
             }
         }
         Ok(())
@@ -276,6 +310,14 @@ impl TaskRunner {
         // Here we could cleanup resources, directories and everything.
         task.exeunit.kill();
     }
+
+    pub fn on_subscribe_activity_created(&mut self, msg: Subscribe<ActivityCreated>) -> Result<()> {
+        Ok(self.activity_created.on_subscribe(msg))
+    }
+
+    pub fn on_subscribe_activity_destroyed(&mut self, msg: Subscribe<ActivityDestroyed>) -> Result<()> {
+        Ok(self.activity_destroyed.on_subscribe(msg))
+    }
 }
 
 // =========================================== //
@@ -290,6 +332,10 @@ forward_actix_handler!(TaskRunner, AgreementSigned, on_signed_agreement);
 forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
+
+forward_actix_handler!(TaskRunner, Subscribe<ActivityCreated>, on_subscribe_activity_created);
+forward_actix_handler!(TaskRunner, Subscribe<ActivityDestroyed>, on_subscribe_activity_destroyed);
+
 
 impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;

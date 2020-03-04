@@ -2,7 +2,7 @@ use ya_client::Result;
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_actix::actix_signal::Subscribe;
 
-use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
+use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity, ActivityCreated, ActivityDestroyed};
 use crate::market::{CreateOffer, ProviderMarket};
 use crate::payments::Payments;
 use crate::startup_config::StartupConfig;
@@ -69,6 +69,13 @@ impl ProviderAgent {
 
         let msg = Subscribe::<AgreementSigned>(self.payments.clone().recipient());
         send_message(self.market.clone(), msg);
+
+        //
+        let msg = Subscribe::<ActivityCreated>(self.payments.clone().recipient());
+        send_message(self.runner.clone(), msg);
+
+        let msg = Subscribe::<ActivityDestroyed>(self.payments.clone().recipient());
+        send_message(self.runner.clone(), msg);
 
         // Load ExeUnits descriptors from file.
         // TODO: Hardcoded exeunits file. How should we handle this in future?
