@@ -28,3 +28,4 @@ secp256k1 = "0.15"
 tokio = { version = "0.2", features = ["macros"] }
 actix-rt = "1.0"
 bitflags="1.2"
+uuid = "0.8"

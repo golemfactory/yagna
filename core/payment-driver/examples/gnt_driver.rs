@@ -11,11 +11,15 @@ use ethkey::prelude::*;
 use std::{thread, time};
 
 use futures::{future, Future};
+
 use std::pin::Pin;
+
+use uuid::Uuid;
+
 use ya_payment_driver::account::{AccountBalance, Chain};
 use ya_payment_driver::ethereum::EthereumClient;
 use ya_payment_driver::gnt::GntDriver;
-use ya_payment_driver::payment::{PaymentAmount, PaymentConfirmation};
+use ya_payment_driver::payment::{PaymentAmount, PaymentStatus};
 use ya_payment_driver::PaymentDriver;
 
 use ya_persistence::executor::DbExecutor;
@@ -110,7 +114,8 @@ async fn main() -> anyhow::Result<()> {
     wait_for_confirmations();
     show_balance(&gnt_driver, address).await;
 
-    let invoice_id = "invoice_1234";
+    let uuid = Uuid::new_v4().to_hyphenated().to_string();
+    let invoice_id = uuid.as_str();
     let payment_amount = PaymentAmount {
         base_currency_amount: U256::from(10000),
         gas_amount: None,
@@ -134,14 +139,13 @@ async fn main() -> anyhow::Result<()> {
     wait_for_confirmations();
     show_balance(&gnt_driver, address).await;
 
-    let payment_status = gnt_driver.get_payment_status(invoice_id).await?;
-    println!("Payment status: {:?}", payment_status);
-
-    let tx_hash: Vec<u8> =
-        hex::decode("9e3264d7a4a71934ee67e5abd520e1523f901b4a3f0316c905088e99d075737f").unwrap();
-    let confirmation = PaymentConfirmation::from(&tx_hash);
-    let details = gnt_driver.verify_payment(&confirmation).await?;
-    println!("{:?}", details);
+    match gnt_driver.get_payment_status(invoice_id).await? {
+        PaymentStatus::Ok(confirmation) => {
+            let details = gnt_driver.verify_payment(&confirmation).await?;
+            println!("{:?}", details);
+        }
+        _status => println!("{:?}", _status),
+    }
 
     Ok(())
 }

@@ -105,7 +105,7 @@ impl GntDriver {
     /// Transfers Gnt
     pub async fn transfer_gnt(
         &self,
-        amount: PaymentAmount,
+        amount: &PaymentAmount,
         sender: Address,
         recipient: Address,
         sign_tx: SignTx<'_>,
@@ -288,7 +288,7 @@ impl GntDriver {
         Ok(gas_price)
     }
 
-    fn prepare_payment_amounts(&self, amount: PaymentAmount) -> (U256, U256) {
+    fn prepare_payment_amounts(&self, amount: &PaymentAmount) -> (U256, U256) {
         let gas_amount = if amount.gas_amount.is_some() {
             amount.gas_amount.unwrap()
         } else {
@@ -309,9 +309,7 @@ impl GntDriver {
         // chain id always below i32 max value
         let chain_id = self.get_chain_id();
 
-        let mut nonce_bytes = [0u8; 32];
-        raw_tx.nonce.to_little_endian(&mut nonce_bytes);
-        let nonce = hex::encode(nonce_bytes);
+        let nonce = GntDriver::to_big_endian_hex(raw_tx.nonce);
 
         TransactionEntity {
             tx_hash: hex::encode(raw_tx.hash(chain_id)),
@@ -322,25 +320,56 @@ impl GntDriver {
         }
     }
 
-    #[allow(unused)]
-    async fn update_payment_status(
+    async fn add_payment<S>(
         &self,
-        invoice_id: String,
-        status: PaymentStatus,
-        tx_hash: Option<H256>,
-    ) -> DbResult<()> {
-        let tx_hash = match tx_hash {
-            Some(hash) => Some(hex::encode(hash)),
-            None => None,
+        invoice_id: S,
+        amount: &PaymentAmount,
+        due_date: DateTime<Utc>,
+        recipient: Address,
+    ) -> PaymentDriverResult<()>
+    where
+        S: Into<String>,
+    {
+        let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount);
+
+        let payment = PaymentEntity {
+            amount: GntDriver::to_big_endian_hex(gnt_amount),
+            gas: GntDriver::to_big_endian_hex(gas_amount),
+            invoice_id: invoice_id.into(),
+            payment_due_date: due_date.naive_utc(),
+            recipient: hex::encode(recipient),
+            status: PaymentStatus::NotYet.to_i32(),
+            tx_hash: None,
         };
 
         let dao: PaymentDao = self.db.as_dao();
-        dao.update_status(invoice_id, status.to_i32(), tx_hash)
-            .await?;
+        dao.insert(payment).await?;
         Ok(())
     }
 
+    fn to_big_endian_hex(value: U256) -> String {
+        let mut bytes = [0u8; 32];
+        value.to_big_endian(&mut bytes);
+        hex::encode(&bytes)
+    }
+
     #[allow(unused)]
+    async fn update_payment_status<S>(&self, invoice_id: S, status: PaymentStatus) -> DbResult<()>
+    where
+        S: Into<String>,
+    {
+        let tx_hash = match &status {
+            PaymentStatus::Ok(confirmation) => Some(hex::encode(&confirmation.confirmation)),
+            _ => None,
+        };
+
+        let dao: PaymentDao = self.db.as_dao();
+        dao.update_status(invoice_id.into(), status.to_i32(), tx_hash)
+            .await?;
+
+        Ok(())
+    }
+
     async fn get_payment_from_db(&self, invoice_id: String) -> DbResult<Option<PaymentEntity>> {
         let dao: PaymentDao = self.db.as_dao();
         dao.get(invoice_id).await
@@ -466,16 +495,29 @@ impl PaymentDriver for GntDriver {
     /// Schedules payment
     async fn schedule_payment(
         &mut self,
-        _invoice_id: &str,
+        invoice_id: &str,
         amount: PaymentAmount,
         sender: Address,
         recipient: Address,
-        _due_date: DateTime<Utc>,
+        due_date: DateTime<Utc>,
         sign_tx: SignTx<'_>,
     ) -> PaymentDriverResult<()> {
-        let tx_hash = self
-            .transfer_gnt(amount, sender, recipient, sign_tx)
+        // schedule payment
+        self.add_payment(invoice_id, &amount, due_date, recipient)
             .await?;
+
+        let tx_hash = self
+            .transfer_gnt(&amount, sender, recipient, sign_tx)
+            .await?;
+
+        // update payment status
+        // TODO uncomment after tx persistence
+        // self.update_payment_status(
+        //     invoice_id,
+        //     PaymentStatus::Ok(PaymentConfirmation::from(tx_hash.as_bytes())),
+        // )
+        // .await?;
+
         println!("Tx hash: {:?}", tx_hash);
         Ok(())
     }

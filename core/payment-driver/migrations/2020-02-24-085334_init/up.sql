@@ -13,16 +13,16 @@ CREATE TABLE "gnt_driver_transaction"(
 	"tx_hash" VARCHAR(64) NOT NULL PRIMARY KEY,
 	"sender" VARCHAR(40) NOT NULL,
 	"chain" INTEGER NOT NULL,
-    -- U256 in little endian hex
+    -- U256 in big endian hex
 	"nonce" VARCHAR(64) NOT NULL,
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE "gnt_driver_payment"(
 	"invoice_id" VARCHAR(50) NOT NULL PRIMARY KEY,
-	-- U256 in little endian hex
+	-- U256 in big endian hex
 	"amount" VARCHAR(64) NOT NULL,
-	-- U256 in little endian hex
+	-- U256 in big endian hex
 	"gas" VARCHAR(64) NOT NULL,
 	"recipient" VARCHAR(40) NOT NULL,
 	"payment_due_date" DATETIME NOT NULL,
