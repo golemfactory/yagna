@@ -18,7 +18,7 @@ use web3::types::{Bytes, Log, TransactionReceipt};
 
 use ya_persistence::executor::DbExecutor;
 
-use crate::account::{AccountBalance, Balance, Currency};
+use crate::account::{AccountBalance, Balance, Chain, Currency};
 use crate::dao::payment::PaymentDao;
 use crate::dao::transaction::TransactionDao;
 use crate::error::{DbResult, PaymentDriverError};
@@ -53,12 +53,15 @@ pub struct GntDriver {
 impl GntDriver {
     /// Creates new driver
     pub fn new(
-        ethereum_client: EthereumClient,
+        chain: Chain,
+        geth_address: &str,
         gnt_contract_address: Address,
         eth_faucet_address: impl Into<String>,
         gnt_faucet_address: Address,
         db: DbExecutor,
     ) -> PaymentDriverResult<GntDriver> {
+        let ethereum_client = EthereumClient::new(chain, geth_address)?;
+
         let gnt_contract = GntDriver::prepare_contract(
             &ethereum_client,
             gnt_contract_address,
@@ -602,9 +605,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_driver() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
         let driver = GntDriver::new(
-            ethereum_client,
+            Chain::Rinkeby,
+            GETH_ADDRESS,
             to_address(GNT_CONTRACT_ADDRESS),
             ETH_FAUCET_ADDRESS,
             to_address(GNT_FAUCET_ADDRESS),
@@ -616,9 +619,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_eth_balance() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
         let driver = GntDriver::new(
-            ethereum_client,
+            Chain::Rinkeby,
+            GETH_ADDRESS,
             to_address(GNT_CONTRACT_ADDRESS),
             ETH_FAUCET_ADDRESS,
             to_address(GNT_FAUCET_ADDRESS),
@@ -635,9 +638,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
         let driver = GntDriver::new(
-            ethereum_client,
+            Chain::Rinkeby,
+            GETH_ADDRESS,
             to_address(GNT_CONTRACT_ADDRESS),
             ETH_FAUCET_ADDRESS,
             to_address(GNT_FAUCET_ADDRESS),
@@ -654,9 +657,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_account_balance() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
         let driver = GntDriver::new(
-            ethereum_client,
+            Chain::Rinkeby,
+            GETH_ADDRESS,
             to_address(GNT_CONTRACT_ADDRESS),
             ETH_FAUCET_ADDRESS,
             to_address(GNT_FAUCET_ADDRESS),

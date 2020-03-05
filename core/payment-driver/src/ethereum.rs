@@ -45,32 +45,22 @@ impl EthereumClient {
         address: Address,
         block_number: Option<BlockNumber>,
     ) -> EthereumClientResult<U256> {
-        self.web3
-            .eth()
-            .balance(address, block_number)
-            .wait()
-            .map_or_else(
-                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
-                |balance| Ok(balance),
-            )
+        let balance = self.web3.eth().balance(address, block_number).wait()?;
+        Ok(balance)
     }
 
     pub fn get_gas_price(&self) -> EthereumClientResult<U256> {
-        self.web3.eth().gas_price().wait().map_or_else(
-            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
-            |gas_price| Ok(gas_price),
-        )
+        let gas_price = self.web3.eth().gas_price().wait()?;
+        Ok(gas_price)
     }
 
     pub fn send_tx(&self, signed_tx: Vec<u8>) -> EthereumClientResult<H256> {
-        self.web3
+        let tx_hash = self
+            .web3
             .eth()
             .send_raw_transaction(Bytes::from(signed_tx))
-            .wait()
-            .map_or_else(
-                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
-                |tx_hash| Ok(tx_hash),
-            )
+            .wait()?;
+        Ok(tx_hash)
     }
 
     pub fn get_chain_id(&self) -> u64 {
@@ -81,28 +71,20 @@ impl EthereumClient {
     }
 
     pub fn get_next_nonce(&self, eth_address: Address) -> EthereumClientResult<U256> {
-        self.web3
+        let nonce = self
+            .web3
             .eth()
             .transaction_count(eth_address, None)
-            .wait()
-            .map_or_else(
-                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
-                |nonce| Ok(nonce),
-            )
+            .wait()?;
+        Ok(nonce)
     }
 
     pub fn get_transaction_receipt(
         &self,
         tx_hash: H256,
     ) -> EthereumClientResult<Option<TransactionReceipt>> {
-        self.web3
-            .eth()
-            .transaction_receipt(tx_hash)
-            .wait()
-            .map_or_else(
-                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
-                |tx_receipt| Ok(tx_receipt),
-            )
+        let tx_receipt = self.web3.eth().transaction_receipt(tx_hash).wait()?;
+        Ok(tx_receipt)
     }
 }
 

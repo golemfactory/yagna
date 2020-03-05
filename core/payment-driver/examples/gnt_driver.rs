@@ -17,7 +17,6 @@ use std::pin::Pin;
 use uuid::Uuid;
 
 use ya_payment_driver::account::{AccountBalance, Chain};
-use ya_payment_driver::ethereum::EthereumClient;
 use ya_payment_driver::gnt::GntDriver;
 use ya_payment_driver::payment::{PaymentAmount, PaymentStatus};
 use ya_payment_driver::PaymentDriver;
@@ -93,8 +92,6 @@ async fn main() -> anyhow::Result<()> {
     let address = get_address(key);
     println!("Address: {:?}", address);
 
-    let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
-
     let address: ethereum_types::Address = address.parse().unwrap();
     let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
@@ -103,7 +100,8 @@ async fn main() -> anyhow::Result<()> {
     ya_payment_driver::dao::init(&db).await?;
 
     let mut gnt_driver = GntDriver::new(
-        ethereum_client,
+        Chain::Rinkeby,
+        GETH_ADDRESS,
         gnt_contract_address,
         ETH_FAUCET_ADDRESS,
         gnt_faucet_address,

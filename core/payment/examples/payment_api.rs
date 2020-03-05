@@ -15,7 +15,6 @@ use ya_model::payment::PAYMENT_API_PATH;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
-use ya_payment_driver::ethereum::EthereumClient;
 use ya_payment_driver::{AccountMode, Chain, DummyDriver, GntDriver, PaymentDriver, SignTx};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR};
@@ -94,9 +93,9 @@ async fn get_gnt_driver(
     sign_tx: SignTx<'_>,
     command: Command,
 ) -> anyhow::Result<GntDriver> {
-    let ethereum_client = EthereumClient::new(Chain::Rinkeby, &*GETH_ADDR)?;
     let driver = GntDriver::new(
-        ethereum_client,
+        Chain::Rinkeby,
+        &*GETH_ADDR,
         *GNT_CONTRACT_ADDR,
         (*ETH_FAUCET_ADDR).to_string(),
         *GNT_FAUCET_ADDR,

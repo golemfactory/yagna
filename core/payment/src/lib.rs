@@ -38,16 +38,14 @@ fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver>
 
 #[cfg(feature = "gnt-driver")]
 fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    use ya_payment_driver::ethereum::EthereumClient;
     use ya_payment_driver::{Chain, GntDriver};
-
-    let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
 
     let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
 
     Ok(GntDriver::new(
-        ethereum_client,
+        Chain::Rinkeby,
+        GETH_ADDRESS,
         gnt_contract_address,
         ETH_FAUCET_ADDRESS,
         gnt_faucet_address,
