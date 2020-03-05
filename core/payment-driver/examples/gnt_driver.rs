@@ -101,6 +101,8 @@ async fn main() -> anyhow::Result<()> {
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
 
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
+    ya_payment_driver::dao::init(&db).await?;
+
     let mut gnt_driver = GntDriver::new(
         ethereum_client,
         gnt_contract_address,

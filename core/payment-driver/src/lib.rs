@@ -38,6 +38,11 @@ bitflags! {
     }
 }
 
+pub mod migrations {
+    #[derive(diesel_migrations::EmbedMigrations)]
+    struct _Dummy;
+}
+
 #[async_trait(?Send)]
 pub trait PaymentDriver {
     async fn init(
