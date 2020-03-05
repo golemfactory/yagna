@@ -14,6 +14,8 @@ pub enum PaymentDriverError {
     ConnectionRefused,
     #[error("Library error")]
     LibraryError(String),
+    #[error("Ethereum client error: {0}")]
+    EthereumClientError(#[from] web3::Error),
     #[error("Database error")]
     DatabaseError(String),
     #[error("Unknown transaction")]

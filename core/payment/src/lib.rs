@@ -41,8 +41,7 @@ fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver>
     use ya_payment_driver::ethereum::EthereumClient;
     use ya_payment_driver::{Chain, GntDriver};
 
-    let (eloop, transport) = web3::transports::Http::new(GETH_ADDRESS)?;
-    let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
+    let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
 
     let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;

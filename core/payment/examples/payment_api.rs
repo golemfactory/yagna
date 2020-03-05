@@ -94,8 +94,7 @@ async fn get_gnt_driver(
     sign_tx: SignTx<'_>,
     command: Command,
 ) -> anyhow::Result<GntDriver> {
-    let (eloop, transport) = web3::transports::Http::new(&*GETH_ADDR)?;
-    let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
+    let ethereum_client = EthereumClient::new(Chain::Rinkeby, &*GETH_ADDR)?;
     let driver = GntDriver::new(
         ethereum_client,
         *GNT_CONTRACT_ADDR,
