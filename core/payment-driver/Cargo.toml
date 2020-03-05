@@ -20,7 +20,7 @@ web3 = { git = "https://github.com/bidzyyys/rust-web3" }
 futures = "0.3"
 ethereum-tx-sign = { git = "https://github.com/bidzyyys/ethereum-tx-sign" }
 ethsign = "0.7"
-reqwest = { version = "0.10", features = ["blocking", "json"] }
+reqwest = { version = "0.10", features = ["json"] }
 ethkey = "0.3.1"
 hex = "0.4"
 r2d2 = "0.8"
@@ -28,4 +28,4 @@ secp256k1 = "0.15"
 tokio = { version = "0.2", features = ["macros"] }
 actix-rt = "1.0"
 bitflags="1.2"
-uuid = "0.8"
+uuid = { version = "0.8", features = ["v4"] }

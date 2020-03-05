@@ -124,7 +124,7 @@ impl GntDriver {
             (recipient, gnt_amount),
         )?;
 
-        let tx_hash = self.send_raw_transaction(&tx, sign_tx).await?;
+        let tx_hash = self.send_and_save_raw_tx(&tx, sender, sign_tx).await?;
         Ok(tx_hash)
     }
 
@@ -202,10 +202,23 @@ impl GntDriver {
         let tx =
             self.prepare_raw_tx(address, U256::from(GNT_FAUCET_GAS), &contract, "create", ())?;
 
-        let tx_hash = self.send_raw_transaction(&tx, sign_tx).await?;
+        let tx_hash = self.send_and_save_raw_tx(&tx, address, sign_tx).await?;
 
         println!("Tx hash: {:?}", tx_hash);
         Ok(())
+    }
+
+    async fn send_and_save_raw_tx(
+        &self,
+        raw_tx: &RawTransaction,
+        sender: Address,
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<H256> {
+        let tx_hash = self.send_raw_transaction(raw_tx, sign_tx).await?;
+        // for some reason hash returned from ethereum is different than raw_tx.hash()
+        // need to find the answer
+        self.save_transaction(raw_tx, sender, tx_hash).await?;
+        Ok(tx_hash)
     }
 
     async fn send_raw_transaction(
@@ -217,7 +230,6 @@ impl GntDriver {
         let signature = sign_tx(raw_tx.hash(chain_id)).await;
         let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
 
-        // TODO persistence
         let tx_hash = self.send_transaction(signed_tx)?;
         Ok(tx_hash)
     }
@@ -297,24 +309,33 @@ impl GntDriver {
         (amount.base_currency_amount, gas_amount)
     }
 
-    #[allow(unused)]
-    async fn save_transaction(&self, raw_tx: &RawTransaction, sender: Address) -> DbResult<()> {
-        let entity = self.raw_tx_to_entity(raw_tx, sender);
+    async fn save_transaction(
+        &self,
+        raw_tx: &RawTransaction,
+        sender: Address,
+        tx_hash: H256,
+    ) -> DbResult<()> {
+        let entity = self.raw_tx_to_entity(raw_tx, sender, tx_hash);
         let dao: TransactionDao = self.db.as_dao();
+        dao.insert(entity).await?;
         Ok(())
     }
 
-    #[allow(unused)]
-    fn raw_tx_to_entity(&self, raw_tx: &RawTransaction, sender: Address) -> TransactionEntity {
+    fn raw_tx_to_entity(
+        &self,
+        raw_tx: &RawTransaction,
+        sender: Address,
+        tx_hash: H256,
+    ) -> TransactionEntity {
         // chain id always below i32 max value
-        let chain_id = self.get_chain_id();
+        let chain_id = self.get_chain_id() as i32;
 
         let nonce = GntDriver::to_big_endian_hex(raw_tx.nonce);
 
         TransactionEntity {
-            tx_hash: hex::encode(raw_tx.hash(chain_id)),
+            tx_hash: hex::encode(tx_hash.as_bytes()),
             sender: hex::encode(sender),
-            chain: chain_id as i32,
+            chain: chain_id,
             nonce: nonce,
             timestamp: Utc::now().naive_utc(),
         }
@@ -353,7 +374,6 @@ impl GntDriver {
         hex::encode(&bytes)
     }
 
-    #[allow(unused)]
     async fn update_payment_status<S>(&self, invoice_id: S, status: PaymentStatus) -> DbResult<()>
     where
         S: Into<String>,
@@ -511,12 +531,11 @@ impl PaymentDriver for GntDriver {
             .await?;
 
         // update payment status
-        // TODO uncomment after tx persistence
-        // self.update_payment_status(
-        //     invoice_id,
-        //     PaymentStatus::Ok(PaymentConfirmation::from(tx_hash.as_bytes())),
-        // )
-        // .await?;
+        self.update_payment_status(
+            invoice_id,
+            PaymentStatus::Ok(PaymentConfirmation::from(tx_hash.as_bytes())),
+        )
+        .await?;
 
         println!("Tx hash: {:?}", tx_hash);
         Ok(())
