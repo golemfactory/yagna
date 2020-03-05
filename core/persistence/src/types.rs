@@ -7,7 +7,7 @@ use std::io::Write;
 use std::ops::Add;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, AsExpression, FromSqlRow, Default)]
 #[sql_type = "Text"]
 pub struct BigDecimalField(pub BigDecimal);
 

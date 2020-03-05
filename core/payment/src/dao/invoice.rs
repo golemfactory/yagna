@@ -4,14 +4,14 @@ use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
 use bigdecimal::BigDecimal;
-use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use std::collections::HashMap;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType, ConnType};
-use ya_persistence::types::{BigDecimalField, Summable};
-use ya_core_model::ethaddr::NodeId;
-use ya_core_model::payment::local::StatusNotes;
 use diesel::sql_types::Text;
 use diesel::QueryableByName;
+use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use std::collections::HashMap;
+use ya_core_model::ethaddr::NodeId;
+use ya_core_model::payment::local::StatusNotes;
+use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
+use ya_persistence::types::{BigDecimalField, Summable};
 
 pub struct InvoiceDao<'c> {
     pool: &'c PoolType,
@@ -175,44 +175,70 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    pub async fn status_report(&self, identity : NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
-
-        #[derive(QueryableByName)]
+    pub async fn status_report(&self, identity: NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
+        #[derive(QueryableByName, Default)]
         struct SettledAmount {
             #[sql_type = "Text"]
-            total_amount_due : BigDecimalField
+            total_amount_due: BigDecimalField,
         }
 
-        fn find_settled_amount(c : &ConnType, identity : NodeId, agreement_id : &str) -> diesel::QueryResult<BigDecimal> {
-            let f = diesel::sql_query(r#"
+        fn find_settled_amount(
+            c: &ConnType,
+            identity: NodeId,
+            agreement_id: &str,
+        ) -> diesel::QueryResult<BigDecimal> {
+            let f = diesel::sql_query(
+                r#"
             SELECT total_amount_due
                 FROM pay_debit_note as n
             WHERE status = 'SETTLED'
             AND (issuer_id = ? or recipient_id=?)
             AND NOT EXISTS (SELECT 1 FROM pay_debit_note
             where previous_debit_note_id = n.id and status = 'SETTLED')
-            "#).bind::<Text, _>(identity)
-                .bind::<Text, _>(identity)
-                .bind::<Text, _>(agreement_id)
-                .get_result::<SettledAmount>(c).optional()?;
+            "#,
+            )
+            .bind::<Text, _>(identity)
+            .bind::<Text, _>(identity)
+            .bind::<Text, _>(agreement_id)
+            .get_result::<SettledAmount>(c)
+            .optional()?;
 
-            todo!()
+            Ok(f.unwrap_or_default().total_amount_due.into())
         }
 
         do_with_transaction(self.pool, move |c| {
-            let invoices : Vec<BareInvoice> = diesel::sql_query(r#"
+            let invoices: Vec<BareInvoice> = diesel::sql_query(
+                r#"
                     SELECT *
                     FROM pay_invoice
                     WHERE status in ('RECEIVED', 'ACCEPTED','REJECTED')
-                    AND issuer_id = ? or recipient_id = ?"#)
-                .bind(identity)
-                .bind(identity)
-                .get_results(c)?;
+                    AND issuer_id = ? or recipient_id = ?"#,
+            )
+            .bind(identity)
+            .bind(identity)
+            .get_results(c)?;
+            let mut incoming = StatusNotes::default();
+            let mut outgoing = StatusNotes::default();
+            let me = identity.to_string();
             for invoice in invoices {
+                let s = if invoice.issuer_id == me {
+                    &mut incoming
+                } else {
+                    &mut outgoing
+                };
+                let settled = find_settled_amount(c, identity, invoice.agreement_id.as_str())?;
 
+                let pending_amount = invoice.amount.0 - settled;
+                match invoice.status.as_str() {
+                    "RECEIVED" => s.requested += pending_amount,
+                    "ACCEPTED" => s.accepted += pending_amount,
+                    "REJECTED" => s.rejected += pending_amount,
+                    _ => (),
+                }
             }
-            todo!()
-        }).await
+            Ok((incoming, outgoing))
+        })
+        .await
     }
 }
 

@@ -5,6 +5,7 @@ use crate::schema::pay_payment::dsl as payment_dsl;
 use bigdecimal::{BigDecimal, Zero};
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
+use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::types::{BigDecimalField, Summable};
 
@@ -91,6 +92,31 @@ impl<'c> AllocationDao<'c> {
         do_with_transaction(self.pool, move |conn| {
             diesel::delete(dsl::pay_allocation.filter(dsl::id.eq(allocation_id))).execute(conn)?;
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn total_allocation(&self, identity: NodeId) -> DbResult<BigDecimal> {
+        do_with_transaction(self.pool, move |conn| {
+            let me = identity.to_string();
+            // TODO: Allocation owner
+            let total_allocations = dsl::pay_allocation
+                .select(dsl::total_amount)
+                .get_results::<BigDecimalField>(conn)?
+                .into_iter()
+                .map(Into::into)
+                .fold(BigDecimal::default(), |acc, v: BigDecimal| acc + v);
+
+            let total_payments = payment_dsl::pay_payment
+                .select(payment_dsl::amount)
+                .filter(payment_dsl::payer_id.eq(me))
+                .filter(payment_dsl::allocation_id.is_not_null())
+                .get_results::<BigDecimalField>(conn)?
+                .into_iter()
+                .map(Into::into)
+                .fold(BigDecimal::default(), |acc, v: BigDecimal| acc + v);
+
+            Ok(total_allocations - total_payments)
         })
         .await
     }

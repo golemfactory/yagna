@@ -19,8 +19,8 @@ use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_net::RemoteEndpoint;
 use ya_payment_driver::{
-    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver, PaymentDriverError,
-    PaymentStatus,
+    AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
+    PaymentDriverError, PaymentStatus,
 };
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -285,5 +285,12 @@ impl PaymentProcessor {
         let node_id = addr_to_str(addr).parse().unwrap();
         let sign_tx = get_sign_tx(node_id);
         Ok({ self.driver.lock().await.init(mode, addr, &sign_tx) }.await?)
+    }
+
+    pub async fn get_status(&self, addr: Address) -> PaymentResult<BigDecimal> {
+        let balance: AccountBalance =
+            { self.driver.lock().await.get_account_balance(addr) }.await?;
+
+        Ok(u256_to_big_dec(balance.base_currency.amount)?)
     }
 }

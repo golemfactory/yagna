@@ -4,10 +4,6 @@ pub mod invoice;
 pub mod invoice_event;
 pub mod payment;
 
-
 pub use self::{
-    debit_note::DebitNoteDao,
-    invoice::InvoiceDao,
-    allocation::AllocationDao,
-    payment::PaymentDao
+    allocation::AllocationDao, debit_note::DebitNoteDao, invoice::InvoiceDao, payment::PaymentDao,
 };

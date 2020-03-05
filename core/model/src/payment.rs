@@ -21,7 +21,6 @@ pub mod local {
     use crate::ethaddr::NodeId;
     use bigdecimal::BigDecimal;
     use std::fmt::Display;
-    use std::ops::Add;
 
     pub const BUS_ID: &'static str = "/local/payment";
 
@@ -123,7 +122,7 @@ pub mod local {
                 requested: self.requested + rhs.requested,
                 accepted: self.accepted + rhs.accepted,
                 confirmed: self.confirmed + rhs.confirmed,
-                rejected: self.rejected + rhs.rejected
+                rejected: self.rejected + rhs.rejected,
             }
         }
     }
