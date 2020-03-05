@@ -3,18 +3,15 @@ use crate::dao::invoice::InvoiceDao;
 use crate::dao::payment::PaymentDao;
 use crate::error::{Error, PaymentError, PaymentResult};
 use crate::models as db_models;
+use crate::utils::get_sign_tx;
 use bigdecimal::BigDecimal;
 use ethereum_types::{Address, U256};
 use futures::lock::Mutex;
-use futures::FutureExt;
 use num_bigint::ToBigInt;
-use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
-use uint::core_::pin::Pin;
 use uuid::Uuid;
 use ya_core_model::ethaddr::NodeId;
-use ya_core_model::identity;
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_net::RemoteEndpoint;
@@ -23,7 +20,6 @@ use ya_payment_driver::{
     PaymentDriverError, PaymentStatus,
 };
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 const GAS_LIMIT: u64 = 1_000_000_000_000_000_000; // TODO: Handle gas limits otherwise
@@ -74,15 +70,6 @@ mod tests {
         let addr_str = "0xd39a168f0480b8502c2531b2ffd8588c592d713a";
         let addr = str_to_addr(addr_str).unwrap();
         assert_eq!(addr_str, addr_to_str(addr));
-    }
-}
-
-fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    move |payload| {
-        let fut = bus::service(identity::BUS_ID)
-            .send(identity::Sign { node_id, payload })
-            .map(|x| x.unwrap().unwrap());
-        Box::pin(fut)
     }
 }
 
