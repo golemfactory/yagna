@@ -604,8 +604,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_driver() -> anyhow::Result<()> {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),
@@ -619,8 +619,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_eth_balance() -> anyhow::Result<()> {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),
@@ -639,8 +639,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),
@@ -659,8 +659,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_account_balance() -> anyhow::Result<()> {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         let driver = GntDriver::new(
             ethereum_client,
             to_address(GNT_CONTRACT_ADDRESS),

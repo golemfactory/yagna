@@ -93,8 +93,8 @@ async fn main() -> anyhow::Result<()> {
     let address = get_address(key);
     println!("Address: {:?}", address);
 
-    let (_eloop, transport) = web3::transports::Http::new(GETH_ADDRESS)?;
-    let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+    let (eloop, transport) = web3::transports::Http::new(GETH_ADDRESS)?;
+    let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
 
     let address: ethereum_types::Address = address.parse().unwrap();
     let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;

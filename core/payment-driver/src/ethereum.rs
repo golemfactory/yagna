@@ -2,6 +2,7 @@ use ethereum_types::{Address, H256, U256};
 
 use web3::contract::Contract;
 use web3::futures::Future;
+use web3::transports::EventLoopHandle;
 use web3::transports::Http;
 use web3::types::{BlockNumber, Bytes, TransactionReceipt};
 use web3::Web3;
@@ -12,15 +13,17 @@ use crate::error::PaymentDriverError;
 type EthereumClientResult<T> = Result<T, PaymentDriverError>;
 
 pub struct EthereumClient {
-    web3: Web3<Http>,
     chain: Chain,
+    _eloop: EventLoopHandle,
+    web3: Web3<Http>,
 }
 
 impl EthereumClient {
-    pub fn new(transport: Http, chain: Chain) -> EthereumClient {
+    pub fn new(chain: Chain, eloop: EventLoopHandle, transport: Http) -> EthereumClient {
         EthereumClient {
-            web3: Web3::new(transport),
             chain: chain,
+            _eloop: eloop,
+            web3: Web3::new(transport),
         }
     }
 
@@ -121,22 +124,22 @@ mod tests {
 
     #[test]
     fn test_get_mainnet_chain_id() {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Mainnet);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Mainnet, eloop, transport);
         assert_eq!(ethereum_client.get_chain_id(), 1)
     }
 
     #[test]
     fn test_get_rinkeby_chain_id() {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         assert_eq!(ethereum_client.get_chain_id(), 4)
     }
 
     #[test]
     fn test_get_eth_balance() {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         let address = to_address(ETH_ADDRESS);
         let balance: U256 = ethereum_client.get_eth_balance(address, None).unwrap();
         assert!(balance >= U256::from(0));
@@ -144,16 +147,16 @@ mod tests {
 
     #[test]
     fn test_gas_price() {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         let gas_price: U256 = ethereum_client.get_gas_price().unwrap();
         assert!(gas_price >= U256::from(0));
     }
 
     #[test]
     fn test_get_contract() {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         assert!(ethereum_client
             .get_contract(
                 to_address(GNT_CONTRACT_ADDRESS),
@@ -164,8 +167,8 @@ mod tests {
 
     #[test]
     fn test_get_contract_invalid_abi() {
-        let (_eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
-        let ethereum_client = EthereumClient::new(transport, Chain::Rinkeby);
+        let (eloop, transport) = Http::new(GETH_ADDRESS).unwrap();
+        let ethereum_client = EthereumClient::new(Chain::Rinkeby, eloop, transport);
         assert!(ethereum_client
             .get_contract(to_address(ETH_ADDRESS), &[0])
             .is_err());
