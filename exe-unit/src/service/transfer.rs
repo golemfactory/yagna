@@ -14,6 +14,7 @@ use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::file::FileTransferProvider;
+use ya_transfer::gftp::GftpTransferProvider;
 use ya_transfer::http::HttpTransferProvider;
 use ya_transfer::{
     transfer, AbortableSink, AbortableStream, HashStream, TransferData, TransferProvider,
@@ -57,6 +58,7 @@ impl TransferService {
         let mut providers = HashMap::new();
 
         let provider_vec: Vec<Rc<Box<dyn TransferProvider<TransferData, TransferError>>>> = vec![
+            Rc::new(Box::new(GftpTransferProvider::default())),
             Rc::new(Box::new(HttpTransferProvider::default())),
             Rc::new(Box::new(FileTransferProvider::default())),
         ];
