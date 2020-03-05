@@ -18,23 +18,12 @@ pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Resu
 where
     S: Stream<Item = Result<T, Error>>,
 {
-    let res_rx = sink.res_rx.take().unwrap();
+    let rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
-    res_rx
-        .await
+    rx.await
         .map_err(ChannelError::from)
         .map_err(Error::from)
         .map(|_| ())
-}
-
-// Separate trait for boxing
-pub trait AbortableStream<T, E>: Stream<Item = std::result::Result<T, E>> {
-    fn abort_handle(&self) -> AbortHandle;
-}
-
-// Separate trait for boxing
-pub trait AbortableSink<T, E>: Sink<T, Error = E> {
-    fn abort_handle(&self) -> AbortHandle;
 }
 
 #[derive(Clone, Debug)]
@@ -90,9 +79,9 @@ impl<T, E> Stream for TransferStream<T, E> {
     }
 }
 
-impl<T, E> AbortableStream<T, E> for TransferStream<T, E> {
-    fn abort_handle(&self) -> AbortHandle {
-        self.abort_handle.clone()
+impl<T, E> Drop for TransferStream<T, E> {
+    fn drop(&mut self) {
+        self.abort_handle.abort();
     }
 }
 
@@ -144,12 +133,6 @@ impl<T> Sink<T> for TransferSink<T, Error> {
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Sink::poll_close(Pin::new(&mut self.tx), cx).map_err(Error::from)
-    }
-}
-
-impl<T> AbortableSink<T, Error> for TransferSink<T, Error> {
-    fn abort_handle(&self) -> AbortHandle {
-        self.abort_handle.clone()
     }
 }
 
@@ -236,15 +219,6 @@ where
         }
 
         result
-    }
-}
-
-impl<S> AbortableStream<TransferData, Error> for HashStream<TransferData, Error, S>
-where
-    S: AbortableStream<TransferData, Error> + Unpin,
-{
-    fn abort_handle(&self) -> AbortHandle {
-        self.inner.abort_handle()
     }
 }
 

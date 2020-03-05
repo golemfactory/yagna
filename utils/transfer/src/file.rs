@@ -71,6 +71,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                 while let Some(result) = rx.next().await {
                     file.write_all(&result?.into_bytes()).await?;
                 }
+                file.flush().await?;
 
                 Result::<(), Error>::Ok(())
             }
