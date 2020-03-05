@@ -6,8 +6,12 @@ use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
 use bigdecimal::BigDecimal;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, AsDao, PoolType, ConnType};
 use ya_persistence::types::{BigDecimalField, Summable};
+use ya_core_model::ethaddr::NodeId;
+use ya_core_model::payment::local::StatusNotes;
+use diesel::sql_types::Text;
+use diesel::QueryableByName;
 
 pub struct InvoiceDao<'c> {
     pool: &'c PoolType,
@@ -169,6 +173,46 @@ impl<'c> InvoiceDao<'c> {
             Ok(account_ids)
         })
         .await
+    }
+
+    pub async fn status_report(&self, identity : NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
+
+        #[derive(QueryableByName)]
+        struct SettledAmount {
+            #[sql_type = "Text"]
+            total_amount_due : BigDecimalField
+        }
+
+        fn find_settled_amount(c : &ConnType, identity : NodeId, agreement_id : &str) -> diesel::QueryResult<BigDecimal> {
+            let f = diesel::sql_query(r#"
+            SELECT total_amount_due
+                FROM pay_debit_note as n
+            WHERE status = 'SETTLED'
+            AND (issuer_id = ? or recipient_id=?)
+            AND NOT EXISTS (SELECT 1 FROM pay_debit_note
+            where previous_debit_note_id = n.id and status = 'SETTLED')
+            "#).bind::<Text, _>(identity)
+                .bind::<Text, _>(identity)
+                .bind::<Text, _>(agreement_id)
+                .get_result::<SettledAmount>(c).optional()?;
+
+            todo!()
+        }
+
+        do_with_transaction(self.pool, move |c| {
+            let invoices : Vec<BareInvoice> = diesel::sql_query(r#"
+                    SELECT *
+                    FROM pay_invoice
+                    WHERE status in ('RECEIVED', 'ACCEPTED','REJECTED')
+                    AND issuer_id = ? or recipient_id = ?"#)
+                .bind(identity)
+                .bind(identity)
+                .get_results(c)?;
+            for invoice in invoices {
+
+            }
+            todo!()
+        }).await
     }
 }
 

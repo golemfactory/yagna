@@ -68,8 +68,10 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 
 mod local {
     use super::*;
+    use crate::dao;
     use ethereum_types::H160;
     use ya_core_model::payment::local::*;
+    use crate::error::DbError;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment private service to service bus");
@@ -117,6 +119,12 @@ mod local {
         _caller: String,
         req: GetStatus,
     ) -> Result<StatusResult, GenericError> {
+        let db_stats = async {
+            let (incoming1, outgoing1) = db.as_dao::<dao::DebitNoteDao>().status_report(req.identity()).await?;
+            let (incoming2, outgoing2) = db.as_dao::<dao::InvoiceDao>().status_report(req.identity()).await?;
+            Ok((incoming1+incoming2, outgoing1+outgoing2))
+        }.map_err(|e : DbError| GenericError::new(e)).await?;
+
         todo!()
     }
 }

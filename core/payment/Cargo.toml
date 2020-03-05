@@ -20,7 +20,7 @@ anyhow = "1.0.26"
 base64 = "0.11"
 bigdecimal = "0.1.0"
 chrono = { version = "0.4", features = ["serde"]}
-diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
+diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono", "bigdecimal"] }
 diesel_migrations = "1.4"
 env_logger = "0.7"
 ethereum-types = "0.6"

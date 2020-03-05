@@ -21,6 +21,7 @@ pub mod local {
     use crate::ethaddr::NodeId;
     use bigdecimal::BigDecimal;
     use std::fmt::Display;
+    use std::ops::Add;
 
     pub const BUS_ID: &'static str = "/local/payment";
 
@@ -106,12 +107,25 @@ pub mod local {
         pub outgoing: StatusNotes,
         pub incoming: StatusNotes,
     }
-    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct StatusNotes {
         pub requested: BigDecimal,
         pub accepted: BigDecimal,
         pub confirmed: BigDecimal,
         pub rejected: BigDecimal,
+    }
+
+    impl std::ops::Add for StatusNotes {
+        type Output = Self;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            Self {
+                requested: self.requested + rhs.requested,
+                accepted: self.accepted + rhs.accepted,
+                confirmed: self.confirmed + rhs.confirmed,
+                rejected: self.rejected + rhs.rejected
+            }
+        }
     }
 }
 

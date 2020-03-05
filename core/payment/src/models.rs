@@ -57,7 +57,7 @@ impl From<Allocation> for api_model::Allocation {
     }
 }
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, QueryableByName, Debug, Identifiable, Insertable)]
 #[table_name = "pay_debit_note"]
 pub struct DebitNote {
     pub id: String,
@@ -171,7 +171,7 @@ pub struct DebitNoteEvent {
     pub details: Option<String>,
 }
 
-#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[derive(Queryable, QueryableByName, Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice"]
 pub struct BareInvoice {
     pub id: String,
