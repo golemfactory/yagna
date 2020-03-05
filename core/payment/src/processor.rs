@@ -274,7 +274,7 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn init(&self, addr: Address, requestor: bool, provider: bool) -> Result<(), Error> {
+    pub async fn init(&self, addr: Address, requestor: bool, provider: bool) -> PaymentResult<()> {
         let mut mode = AccountMode::NONE;
         if requestor {
             mode |= AccountMode::SEND;
@@ -282,7 +282,8 @@ impl PaymentProcessor {
         if provider {
             mode |= AccountMode::RECV;
         }
-
-        Ok({ self.driver.lock().await.init(mode, addr) }.await?)
+        let node_id = addr_to_str(addr).parse().unwrap();
+        let sign_tx = get_sign_tx(node_id);
+        Ok({ self.driver.lock().await.init(mode, addr, &sign_tx) }.await?)
     }
 }

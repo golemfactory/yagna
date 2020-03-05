@@ -3,7 +3,7 @@ use ethereum_types::{Address, H256, U256};
 use web3::contract::Contract;
 use web3::futures::Future;
 use web3::transports::Http;
-use web3::types::{BlockNumber, Bytes, Filter, FilterBuilder, Log};
+use web3::types::{BlockNumber, Bytes, TransactionReceipt};
 use web3::Web3;
 
 use crate::account::Chain;
@@ -86,19 +86,18 @@ impl EthereumClient {
             )
     }
 
-    pub fn get_eth_logs(&self, filter: Filter) -> EthereumClientResult<Vec<Log>> {
-        self.web3.eth().logs(filter).wait().map_or_else(
-            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
-            |logs| Ok(logs),
-        )
-    }
-
-    pub fn prepare_filter(&self, address: Address) -> Filter {
-        FilterBuilder::default()
-            .from_block(BlockNumber::Earliest)
-            .to_block(BlockNumber::Latest)
-            .address(vec![address])
-            .build()
+    pub fn get_transaction_receipt(
+        &self,
+        tx_hash: H256,
+    ) -> EthereumClientResult<Option<TransactionReceipt>> {
+        self.web3
+            .eth()
+            .transaction_receipt(tx_hash)
+            .wait()
+            .map_or_else(
+                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
+                |tx_receipt| Ok(tx_receipt),
+            )
     }
 }
 

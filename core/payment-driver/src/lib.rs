@@ -40,7 +40,12 @@ bitflags! {
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
-    async fn init(&self, mode: AccountMode, address: Address) -> PaymentDriverResult<()>;
+    async fn init(
+        &self,
+        mode: AccountMode,
+        address: Address,
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<()>;
 
     /// Returns account balance
     async fn get_account_balance(&self, address: Address) -> PaymentDriverResult<AccountBalance>;

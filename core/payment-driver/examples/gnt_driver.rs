@@ -11,11 +11,15 @@ use ethkey::prelude::*;
 use std::{thread, time};
 
 use futures::{future, Future};
+
 use std::pin::Pin;
+
+use uuid::Uuid;
+
 use ya_payment_driver::account::{AccountBalance, Chain};
 use ya_payment_driver::ethereum::EthereumClient;
 use ya_payment_driver::gnt::GntDriver;
-use ya_payment_driver::payment::PaymentAmount;
+use ya_payment_driver::payment::{PaymentAmount, PaymentStatus};
 use ya_payment_driver::PaymentDriver;
 
 use ya_persistence::executor::DbExecutor;
@@ -97,17 +101,21 @@ async fn main() -> anyhow::Result<()> {
     let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
 
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
-    let mut gnt_driver = GntDriver::new(ethereum_client, gnt_contract_address, db)?;
+    let mut gnt_driver = GntDriver::new(
+        ethereum_client,
+        gnt_contract_address,
+        ETH_FAUCET_ADDRESS,
+        gnt_faucet_address,
+        db,
+    )?;
 
-    gnt_driver
-        .init_funds(address, ETH_FAUCET_ADDRESS, gnt_faucet_address, &sign_tx)
-        .await
-        .unwrap();
+    gnt_driver.init_funds(address, &sign_tx).await.unwrap();
 
     wait_for_confirmations();
     show_balance(&gnt_driver, address).await;
 
-    let invoice_id = "invoice_1234";
+    let uuid = Uuid::new_v4().to_hyphenated().to_string();
+    let invoice_id = uuid.as_str();
     let payment_amount = PaymentAmount {
         base_currency_amount: U256::from(10000),
         gas_amount: None,
@@ -131,8 +139,13 @@ async fn main() -> anyhow::Result<()> {
     wait_for_confirmations();
     show_balance(&gnt_driver, address).await;
 
-    let payment_status = gnt_driver.get_payment_status(invoice_id).await?;
-    println!("Payment status: {:?}", payment_status);
+    match gnt_driver.get_payment_status(invoice_id).await? {
+        PaymentStatus::Ok(confirmation) => {
+            let details = gnt_driver.verify_payment(&confirmation).await?;
+            println!("{:?}", details);
+        }
+        _status => println!("{:?}", _status),
+    }
 
     Ok(())
 }
