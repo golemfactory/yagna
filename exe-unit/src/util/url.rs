@@ -59,15 +59,15 @@ impl TransferUrl {
 
 fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), TransferError> {
     lazy_static::lazy_static! {
-        static ref RE: Regex = Regex::new(r"(?i)hash:([^:]+):(0x)?([a-f0-9]+):(.+)").unwrap();
+        static ref RE: Regex = Regex::new(r"(?i)hash:(//)?([^:]+):(0x)?([a-f0-9]+):(.+)").unwrap();
     }
     match RE.captures(url) {
         Some(captures) => {
             let hash = TransferHash {
-                alg: captures.get(1).unwrap().as_str().to_owned(),
-                val: hex::decode(captures.get(3).unwrap().as_str())?,
+                alg: captures.get(2).unwrap().as_str().to_owned(),
+                val: hex::decode(captures.get(4).unwrap().as_str())?,
             };
-            let url = captures.get(4).unwrap().as_str();
+            let url = captures.get(5).unwrap().as_str();
             Ok((Some(hash), url))
         }
         None => {
@@ -107,9 +107,12 @@ mod test {
         should_fail!("");
 
         should_fail!("hash:");
+        should_fail!("hash://");
         should_fail!("hash::");
         should_fail!("hash::val");
+        should_fail!("hash://:val");
         should_fail!("hash::http://addr.com");
+        should_fail!("hash://:http://addr.com");
         should_fail!("hash:alg");
         should_fail!("hash:alg:");
         should_fail!("hash:alg:val");
@@ -141,6 +144,9 @@ mod test {
 
         should_succeed!("hash:alg:ff00ff00:http://location.com");
         should_succeed!("hash:alg:0xff00ff00:http://location.com");
+        should_succeed!("hash://alg:ff00ff00:http://location.com");
+        should_succeed!("hash://alg:0xff00ff00:http://location.com");
+        should_succeed!("HASH://alg:0xFF00FF00:http://location.com");
 
         should_succeed!("http://location.com");
         should_succeed!("http:location.com");
