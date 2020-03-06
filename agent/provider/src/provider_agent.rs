@@ -97,7 +97,11 @@ impl ProviderAgent {
         ServiceInfo::Wasm { inf, wasi_version }
     }
 
-    pub async fn ctrl_c(&self) -> anyhow::Result<()> {
+    pub async fn wait_for_ctrl_c(self) -> anyhow::Result<()> {
+        let market = self.market.clone();
+
+        self.start();
+
         let _ = tokio::signal::ctrl_c().await;
         println!();
         log::info!(
@@ -105,7 +109,7 @@ impl ProviderAgent {
             structopt::clap::crate_name!()
         );
 
-        self.market.send(OnShutdown {}).await?
+        market.send(OnShutdown {}).await?
     }
 }
 

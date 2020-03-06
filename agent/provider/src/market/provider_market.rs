@@ -138,7 +138,7 @@ impl ProviderMarket {
     fn offer_subscribed(&mut self, msg: OnOfferSubscribed) -> Result<()> {
         let subscription_id = &msg.offer_subscription.subscription_id;
         log::info!(
-            "Subscribed offer: {:#?}\n subscription_id: {}",
+            "Subscribed offer: {:#?}\nsubscription_id: {}",
             msg.offer_subscription.offer,
             subscription_id
         );
