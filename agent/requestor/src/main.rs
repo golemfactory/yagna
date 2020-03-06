@@ -93,7 +93,7 @@ async fn spawn_workers(
 ) -> Result<(), anyhow::Error> {
     loop {
         let events = requestor_api
-            .collect(&subscription_id, Some(12.0), Some(5))
+            .collect(&subscription_id, Some(2.0), Some(5))
             .await?;
 
         if !events.is_empty() {
@@ -202,8 +202,7 @@ async fn main() -> anyhow::Result<()> {
     let requestor_api = market_api.clone();
     let activity_api = settings.activity_api()?;
 
-    let (tx, mut rx): (mpsc::Sender<String>, mpsc::Receiver<String>) =
-        futures::channel::mpsc::channel(1);
+    let (tx, mut rx) = mpsc::channel::<String>(1);
     Arbiter::spawn(async move {
         while let Some(id) = rx.next().await {
             if let Err(e) = process_agreement(&activity_api, id.clone()).await {
@@ -212,8 +211,5 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
-    spawn_workers(requestor_api.clone(), &subscription_id, &my_demand, tx).await?;
-
-    market_api.unsubscribe(&subscription_id).await?;
-    Ok(())
+    spawn_workers(requestor_api.clone(), &subscription_id, &my_demand, tx).await
 }
