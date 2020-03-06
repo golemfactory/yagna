@@ -21,7 +21,6 @@ members = [
     "exe-unit",
     "exe-unit/wasm-mozjs",
     "exe-unit/wasmtime",
-    "exe-unit/exe-unit-tools",
     "interfaces/client",
     "interfaces/model",
     "service-bus/bus",
