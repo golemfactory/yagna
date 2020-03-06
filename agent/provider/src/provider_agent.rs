@@ -1,18 +1,17 @@
-use ya_client::Result;
-use ya_utils_actix::actix_handler::send_message;
-use ya_utils_actix::actix_signal::Subscribe;
-
-use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
-use crate::market::{CreateOffer, ProviderMarket};
-use crate::startup_config::StartupConfig;
-
-use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
+use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
+
+use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
+use crate::market::{
+    provider_market::{AgreementSigned, OnShutdown, UpdateMarket},
+    CreateOffer, ProviderMarket,
+};
+use crate::startup_config::StartupConfig;
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -23,7 +22,7 @@ pub struct ProviderAgent {
 }
 
 impl ProviderAgent {
-    pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
+    pub async fn new(config: StartupConfig) -> anyhow::Result<ProviderAgent> {
         let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
         let runner = TaskRunner::new(config.activity_client()?).start();
 
@@ -53,12 +52,12 @@ impl ProviderAgent {
             service_info,
             exe_unit_path,
         };
-        provider.initialize();
+        provider.initialize().await?;
 
         Ok(provider)
     }
 
-    pub fn initialize(&mut self) {
+    pub async fn initialize(&mut self) -> anyhow::Result<()> {
         // Forward AgreementSigned event to TaskRunner actor.
         let msg = Subscribe::<AgreementSigned>(self.runner.clone().recipient());
         send_message(self.market.clone(), msg);
@@ -79,7 +78,7 @@ impl ProviderAgent {
             service: self.service_info.clone(),
             com_info: Default::default(),
         });
-        send_message(self.market.clone(), create_offer_message);
+        Ok(self.market.clone().send(create_offer_message).await??)
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {

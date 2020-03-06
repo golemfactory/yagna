@@ -7,9 +7,8 @@ use anyhow::Result;
 #[allow(dead_code)]
 pub enum ProposalResponse {
     CounterProposal {
-        proposal: Proposal,
+        offer: Proposal,
     },
-    AcceptProposal,
     RejectProposal,
     ///< Don't send any message to requestor. Could be useful to wait for other offers.
     IgnoreProposal,
@@ -25,7 +24,6 @@ pub enum AgreementResponse {
 pub trait Negotiator {
     //TODO: We should add some parameters for offer creation.
     fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<Offer>;
-
-    fn react_to_proposal(&mut self, proposal: &Proposal) -> Result<ProposalResponse>;
+    fn react_to_proposal(&mut self, demand: &Proposal, offer: &Offer) -> Result<ProposalResponse>;
     fn react_to_agreement(&mut self, agreement: &Agreement) -> Result<AgreementResponse>;
 }

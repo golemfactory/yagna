@@ -14,7 +14,7 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
+    get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
@@ -133,7 +133,7 @@ async fn exec(
 async fn get_batch_results(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
-    query: web::Query<QueryTimeoutMaxCount>,
+    query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> Result<Vec<ExeScriptCommandResult>, Error> {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
