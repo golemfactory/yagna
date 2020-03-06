@@ -1,6 +1,6 @@
 pub mod error;
-pub mod file;
-pub mod http;
+mod file;
+mod http;
 
 use crate::error::{ChannelError, Error};
 use bytes::Bytes;
@@ -13,6 +13,9 @@ use sha3::digest::DynDigest;
 use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use std::pin::Pin;
 use url::Url;
+
+pub use file::FileTransferProvider;
+pub use http::HttpTransferProvider;
 
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
