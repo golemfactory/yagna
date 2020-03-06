@@ -29,3 +29,4 @@ tokio = { version = "0.2", features = ["macros"] }
 actix-rt = "1.0"
 bitflags="1.2"
 uuid = { version = "0.8", features = ["v4"] }
+log="0.4.8"

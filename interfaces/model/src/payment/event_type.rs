@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
@@ -9,9 +10,25 @@ pub enum EventType {
     Cancelled,
 }
 
-impl From<String> for EventType {
-    fn from(value: String) -> Self {
-        serde_json::from_str(&format!("\"{}\"", value)).unwrap()
+#[derive(Debug, thiserror::Error)]
+#[error("invalid {} EventType option: \"{0}\"")]
+pub struct InvalidOption(String);
+
+impl TryFrom<String> for EventType {
+    type Error = InvalidOption;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if let Some(v) = match value.as_str() {
+            "RECEIVED" => Some(EventType::Received),
+            "ACCEPTED" => Some(EventType::Accepted),
+            "REJECTED" => Some(EventType::Rejected),
+            "CANCELLED" => Some(EventType::Cancelled),
+            _ => None,
+        } {
+            return Ok(v);
+        }
+
+        Err(InvalidOption(value))
     }
 }
 

@@ -121,15 +121,18 @@ mod local {
         _caller: String,
         req: GetStatus,
     ) -> Result<StatusResult, GenericError> {
+        log::info!("get status: {:?}", req);
         let db_stats_fut = async {
             let (incoming1, outgoing1) = db
                 .as_dao::<dao::DebitNoteDao>()
                 .status_report(req.identity())
                 .await?;
+            log::info!("!!!! s2");
             let (incoming2, outgoing2) = db
                 .as_dao::<dao::InvoiceDao>()
                 .status_report(req.identity())
                 .await?;
+            log::info!("!!!! s3");
             Ok((incoming1 + incoming2, outgoing1 + outgoing2))
         }
         .map_err(|e: DbError| GenericError::new(e));
@@ -137,6 +140,10 @@ mod local {
             db.as_dao::<AllocationDao>()
                 .total_allocation(req.identity())
                 .await
+                .map_err(|e| {
+                    log::error!("allocation status error: {}", e);
+                    e
+                })
         }
         .map_err(GenericError::new);
 

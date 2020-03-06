@@ -11,6 +11,7 @@ use diesel::backend::Backend;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::sql_types::Integer;
 use serde::Serialize;
+use std::convert::TryInto;
 use uuid::Uuid;
 use ya_model::payment as api_model;
 use ya_persistence::types::BigDecimalField;
@@ -307,7 +308,7 @@ impl From<InvoiceEvent> for api_model::InvoiceEvent {
             invoice_id: event.invoice_id,
             timestamp: Utc.from_utc_datetime(&event.timestamp),
             details: event.details.map(|s| serde_json::from_str(&s).unwrap()),
-            event_type: event.event_type.into(),
+            event_type: event.event_type.try_into().unwrap(),
         }
     }
 }

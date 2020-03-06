@@ -98,7 +98,8 @@ impl<'c> DebitNoteDao<'c> {
     }
 
     pub async fn status_report(&self, idenity: NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
-        do_with_transaction(self.pool, move |conn| {
+        log::info!("enter {}", "status_report");
+        let r = do_with_transaction(self.pool, move |conn| {
             let notes: Vec<DebitNote> = sql_query(
                 r#"
             SELECT *
@@ -115,7 +116,11 @@ impl<'c> DebitNoteDao<'c> {
             )
             .bind::<Text, _>(&idenity)
             .bind::<Text, _>(&idenity)
-            .load(conn)?;
+            .load(conn)
+            .map_err(|e| {
+                log::error!("{}: select SETTLED from pay_debit_note", e);
+                e
+            })?;
 
             let mut incoming_settled: HashMap<String, BigDecimal> = Default::default();
             let mut outgoing_settled: HashMap<String, BigDecimal> = Default::default();
@@ -182,6 +187,8 @@ impl<'c> DebitNoteDao<'c> {
 
             Ok((incoming, outgoing))
         })
-        .await
+        .await;
+        log::info!("exit {}", "status_report");
+        r
     }
 }

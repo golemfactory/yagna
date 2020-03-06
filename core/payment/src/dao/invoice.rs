@@ -193,6 +193,7 @@ impl<'c> InvoiceDao<'c> {
                 FROM pay_debit_note as n
             WHERE status = 'SETTLED'
             AND (issuer_id = ? or recipient_id=?)
+            AND agreement_id = ?
             AND NOT EXISTS (SELECT 1 FROM pay_debit_note
             where previous_debit_note_id = n.id and status = 'SETTLED')
             "#,
@@ -201,7 +202,11 @@ impl<'c> InvoiceDao<'c> {
             .bind::<Text, _>(identity)
             .bind::<Text, _>(agreement_id)
             .get_result::<SettledAmount>(c)
-            .optional()?;
+            .optional()
+            .map_err(|e| {
+                log::error!("get pay_debit_note for invoice: {}", e);
+                e
+            })?;
 
             Ok(f.unwrap_or_default().total_amount_due.into())
         }
@@ -216,7 +221,11 @@ impl<'c> InvoiceDao<'c> {
             )
             .bind(identity)
             .bind(identity)
-            .get_results(c)?;
+            .get_results(c)
+            .map_err(|e| {
+                log::error!("get BareInvoice: {}", e);
+                e
+            })?;
             let mut incoming = StatusNotes::default();
             let mut outgoing = StatusNotes::default();
             let me = identity.to_string();

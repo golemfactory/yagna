@@ -25,6 +25,7 @@ use crate::ethereum::EthereumClient;
 use crate::models::{PaymentEntity, TransactionEntity};
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
+use actix_rt::Arbiter;
 use futures3::compat::*;
 
 const GNT_TRANSFER_GAS: u32 = 55000;
@@ -60,6 +61,14 @@ impl GntDriver {
         gnt_faucet_address: Address,
         db: DbExecutor,
     ) -> PaymentDriverResult<GntDriver> {
+        // TODO
+        let migrate_db = db.clone();
+        Arbiter::spawn(async move {
+            if let Err(e) = crate::dao::init(&migrate_db).await {
+                log::error!("gnt migration error: {}", e);
+            }
+        });
+
         let ethereum_client = EthereumClient::new(chain, geth_address)?;
 
         let gnt_contract = GntDriver::prepare_contract(
@@ -87,10 +96,10 @@ impl GntDriver {
         let max_testnet_balance = U256::from_dec_str(MAX_TESTNET_BALANCE).unwrap();
 
         if self.get_eth_balance(address).await?.amount < max_testnet_balance {
-            println!("Requesting Eth from Faucet...");
+            log::info!("Requesting Eth from Faucet...");
             self.request_eth_from_faucet(address).await?;
         } else {
-            println!("To much Eth...");
+            log::info!("To much Eth...");
         }
 
         // cannot have more than "10000000000000" Gnt
