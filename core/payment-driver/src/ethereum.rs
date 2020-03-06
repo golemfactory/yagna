@@ -9,6 +9,11 @@ use web3::Web3;
 
 use crate::account::Chain;
 use crate::error::PaymentDriverError;
+use std::time::Duration;
+
+const REQUIRED_CONFIRMATIONS: usize = 5;
+const POLL_INTERVAL_SECS: u64 = 1;
+const POLL_INTERVAL_NANOS: u32 = 0;
 
 type EthereumClientResult<T> = Result<T, PaymentDriverError>;
 
@@ -60,13 +65,16 @@ impl EthereumClient {
     }
 
     pub async fn send_tx(&self, signed_tx: Vec<u8>) -> EthereumClientResult<H256> {
-        let tx_hash = self
-            .web3
-            .eth()
-            .send_raw_transaction(Bytes::from(signed_tx))
-            .compat()
-            .await?;
-        Ok(tx_hash)
+        let confirmation = web3::confirm::send_raw_transaction_with_confirmation(
+            &self.web3.transport(),
+            Bytes::from(signed_tx),
+            Duration::new(POLL_INTERVAL_SECS, POLL_INTERVAL_NANOS),
+            REQUIRED_CONFIRMATIONS,
+        )
+        .compat()
+        .await?;
+
+        Ok(confirmation.transaction_hash)
     }
 
     pub fn get_chain_id(&self) -> u64 {

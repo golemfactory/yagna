@@ -210,9 +210,8 @@ impl GntDriver {
             .prepare_raw_tx(address, U256::from(GNT_FAUCET_GAS), &contract, "create", ())
             .await?;
 
-        let tx_hash = self.send_and_save_raw_tx(&tx, address, sign_tx).await?;
+        let _tx_hash = self.send_and_save_raw_tx(&tx, address, sign_tx).await?;
 
-        println!("Tx hash: {:?}", tx_hash);
         Ok(())
     }
 
@@ -545,7 +544,6 @@ impl PaymentDriver for GntDriver {
         )
         .await?;
 
-        println!("Tx hash: {:?}", tx_hash);
         Ok(())
     }
 

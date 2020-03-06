@@ -8,8 +8,6 @@ use ethsign::{KeyFile, Protected};
 
 use ethkey::prelude::*;
 
-use std::{thread, time};
-
 use futures3::future;
 use std::future::Future;
 
@@ -32,8 +30,6 @@ const GNT_FAUCET_CONTRACT: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
 
 const KEYSTORE: &str = "/tmp/keystore.json";
 const PASSWORD: &str = "";
-
-const SLEEP_TIME: u64 = 60;
 
 fn sign_tx(bytes: Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
     let secret = get_secret_key(KEYSTORE, PASSWORD);
@@ -73,12 +69,6 @@ fn get_address(key: KeyFile) -> String {
     hex::encode(address)
 }
 
-fn wait_for_confirmations() {
-    let sleep_time = time::Duration::from_secs(SLEEP_TIME);
-    println!("Waiting {:?} seconds for confirmations...", SLEEP_TIME);
-    thread::sleep(sleep_time);
-}
-
 async fn show_balance(gnt_driver: &GntDriver, address: ethereum_types::Address) {
     let balance_result = gnt_driver.get_account_balance(address).await;
     let balance: AccountBalance = balance_result.unwrap();
@@ -111,7 +101,6 @@ async fn main() -> anyhow::Result<()> {
 
     gnt_driver.init_funds(address, &sign_tx).await.unwrap();
 
-    wait_for_confirmations();
     show_balance(&gnt_driver, address).await;
 
     let uuid = Uuid::new_v4().to_hyphenated().to_string();
@@ -121,6 +110,8 @@ async fn main() -> anyhow::Result<()> {
         gas_amount: None,
     };
     let due_date = Utc::now() + Duration::days(1i64);
+
+    println!("Scheduling payment...");
 
     gnt_driver
         .schedule_payment(
@@ -136,7 +127,6 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Gnt transferred!");
 
-    wait_for_confirmations();
     show_balance(&gnt_driver, address).await;
 
     match gnt_driver.get_payment_status(invoice_id).await? {
