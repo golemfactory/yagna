@@ -14,10 +14,10 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ya_transfer::error::Error as TransferError;
-use ya_transfer::file::FileTransferProvider;
-use ya_transfer::gftp::GftpTransferProvider;
-use ya_transfer::http::HttpTransferProvider;
-use ya_transfer::{transfer, HashStream, TransferData, TransferProvider, TransferSink};
+use ya_transfer::{
+    transfer, FileTransferProvider, GftpTransferProvider, HashStream, HttpTransferProvider,
+    TransferData, TransferProvider, TransferSink,
+};
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]

@@ -1,19 +1,23 @@
 pub mod error;
-pub mod file;
-pub mod gftp;
-pub mod hash;
-pub mod http;
+mod file;
+mod gftp;
+mod http;
 
 use crate::error::{ChannelError, Error};
-use crate::hash::*;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
 use futures::future::{AbortHandle, AbortRegistration, Abortable, Aborted};
 use futures::task::{Context, Poll};
 use futures::{Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt};
+use sha3::digest::DynDigest;
+use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use std::pin::Pin;
 use url::Url;
+
+pub use crate::file::FileTransferProvider;
+pub use crate::gftp::GftpTransferProvider;
+pub use crate::http::HttpTransferProvider;
 
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
@@ -139,7 +143,7 @@ where
     S: Stream<Item = Result<T, E>>,
 {
     inner: S,
-    hasher: Box<dyn Hasher>,
+    hasher: Box<dyn DynDigest>,
     hash: Vec<u8>,
     result: Option<Vec<u8>>,
 }
@@ -149,7 +153,7 @@ where
     S: Stream<Item = Result<T, Error>> + Unpin,
 {
     pub fn try_new(stream: S, alg: &str, hash: Vec<u8>) -> Result<Self, Error> {
-        let hasher: Box<dyn Hasher> = match alg {
+        let hasher: Box<dyn DynDigest> = match alg {
             "sha3" => match hash.len() * 8 {
                 224 => Box::new(Sha3_224::default()),
                 256 => Box::new(Sha3_256::default()),
@@ -201,7 +205,7 @@ where
                     let result = match &self.result {
                         Some(r) => r,
                         None => {
-                            self.result = Some(self.hasher.result());
+                            self.result = Some(self.hasher.result_reset().to_vec());
                             self.result.as_ref().unwrap()
                         }
                     };

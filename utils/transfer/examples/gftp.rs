@@ -11,9 +11,7 @@ use std::{env, thread};
 use tempdir::TempDir;
 use url::Url;
 use ya_transfer::error::Error;
-use ya_transfer::file::FileTransferProvider;
-use ya_transfer::gftp::GftpTransferProvider;
-use ya_transfer::{transfer, TransferProvider};
+use ya_transfer::{transfer, FileTransferProvider, GftpTransferProvider, TransferProvider};
 
 type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
