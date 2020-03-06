@@ -254,9 +254,19 @@ impl ProviderMarket {
         subscription_id: &str,
         demand: &Proposal,
     ) -> Result<()> {
-        let response = addr.send(GotProposal::new(subscription_id, demand)).await?;
-        match response {
+        match addr.send(GotProposal::new(subscription_id, demand)).await? {
             Ok(action) => match action {
+                ProposalResponse::AcceptProposal { offer } => match offer {
+                    None => anyhow::bail!(
+                        "empty counter proposal upon proposal acceptance: {:?}",
+                        demand
+                    ),
+                    Some(offer) => {
+                        log::info!("Accepting proposal: {}", demand.proposal_id()?);
+                        ProviderMarket::counter_proposal(market_api, subscription_id, &offer)
+                            .await?
+                    }
+                },
                 ProposalResponse::CounterProposal { offer } => {
                     ProviderMarket::counter_proposal(market_api, subscription_id, &offer).await?
                 }
@@ -310,12 +320,19 @@ impl ProviderMarket {
     // =========================================== //
 
     fn on_proposal(&mut self, msg: GotProposal) -> Result<ProposalResponse> {
-        let offer = match self.offer_subscriptions.get(&msg.subscription_id) {
-            Some(offer_subscription) => &offer_subscription.offer,
-            None => anyhow::bail!("no such subscription: {}", msg.subscription_id),
-        };
+        match self.negotiator.react_to_proposal(&msg.proposal) {
+            Ok(ProposalResponse::AcceptProposal { offer: None }) => {
+                let offer = match self.offer_subscriptions.get(&msg.subscription_id) {
+                    Some(offer_subscription) => &offer_subscription.offer,
+                    None => anyhow::bail!("No such subscription: {}", msg.subscription_id),
+                };
 
-        self.negotiator.react_to_proposal(&msg.proposal, offer)
+                Ok(ProposalResponse::AcceptProposal {
+                    offer: Some(msg.proposal.counter_offer(&offer)?),
+                })
+            }
+            other => other,
+        }
     }
 
     fn on_agreement(&mut self, msg: GotAgreement) -> Result<AgreementResponse> {

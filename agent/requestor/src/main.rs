@@ -61,7 +61,7 @@ async fn process_offer(
         if offer.prev_proposal_id.is_some() {
             anyhow::bail!("Proposal in Initial state but with prev id: {:#?}", offer)
         }
-        let bespoke_proposal = Proposal::from_demand(&offer, &my_demand);
+        let bespoke_proposal = offer.counter_demand(&my_demand)?;
         let new_proposal_id = requestor_api
             .counter_proposal(&bespoke_proposal, subscription_id)
             .await?;
