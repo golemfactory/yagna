@@ -37,17 +37,27 @@ impl ActivityProviderApi {
     }
 
     /// Fetch Requestor command events.
-    pub async fn get_activity_events(&self, timeout: Option<i32>) -> Result<Vec<ProviderEvent>> {
+    #[rustfmt::skip]
+    pub async fn get_activity_events(
+        &self,
+        #[allow(non_snake_case)]
+        timeout: Option<i32>,
+        #[allow(non_snake_case)]
+        maxEvents: Option<i32>, // TODO: max_events
+    ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
             "events",
-            #[query]
-            timeout
+            #[query] timeout,
+            #[query] maxEvents
         );
 
         match self.client.get(&url).send().json().await {
             Ok(v) => Ok(v),
             Err(e) => match e {
-                Error::TimeoutError { .. } => Ok(Vec::new()),
+                Error::TimeoutError { msg, url,.. } => {
+                    log::trace!("timeout getting url {}: {}", url, msg);
+                    Ok(Vec::new())
+                },
                 _ => Err(e),
             },
         }

@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Result};
 use log::info;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -27,10 +27,10 @@ impl ExeUnitInstance {
             .current_dir(working_dir)
             .spawn() // FIXME -- this is not returning
             .map_err(|error| {
-                Error::msg(format!(
+                anyhow!(
                     "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
                     name, binary_path.display(), working_dir.display(), error
-                ))
+                )
             })?;
         info!("exeunit spawned, pid: {}", child.id());
 

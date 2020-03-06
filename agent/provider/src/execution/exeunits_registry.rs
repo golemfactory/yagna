@@ -1,13 +1,14 @@
-use super::exeunit_instance::ExeUnitInstance;
-
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::BufReader;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+};
+
+use super::exeunit_instance::ExeUnitInstance;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -48,20 +49,20 @@ impl ExeUnitsRegistry {
 
     pub fn register_exeunits_from_file(&mut self, path: &Path) -> Result<()> {
         let file = File::open(path).map_err(|error| {
-            Error::msg(format!(
+            anyhow!(
                 "Can't load ExeUnits to registry from file {}, error: {}.",
                 path.display(),
                 error
-            ))
+            )
         })?;
 
         let reader = BufReader::new(file);
         let descs: Vec<ExeUnitDesc> = serde_json::from_reader(reader).map_err(|error| {
-            Error::msg(format!(
+            anyhow!(
                 "Can't deserialize ExeUnits descriptors from file {}, error: {}.",
                 path.display(),
                 error
-            ))
+            )
         })?;
 
         for desc in descs.into_iter() {
@@ -74,10 +75,7 @@ impl ExeUnitsRegistry {
         Ok(self
             .descriptors
             .get(name)
-            .ok_or(Error::msg(format!(
-                "ExeUnit [{}] doesn't exist in registry.",
-                name
-            )))?
+            .ok_or(anyhow!("ExeUnit [{}] doesn't exist in registry.", name))?
             .clone())
     }
 }

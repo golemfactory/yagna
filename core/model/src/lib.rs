@@ -18,3 +18,6 @@ pub mod net;
 
 #[cfg(feature = "payment")]
 pub mod payment;
+
+#[cfg(feature = "gftp")]
+pub mod gftp;

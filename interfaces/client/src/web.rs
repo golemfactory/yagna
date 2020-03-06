@@ -129,7 +129,7 @@ where
     if response.status().is_success() {
         Ok(response)
     } else {
-        Err((response.status(), url, response.json().await?).into())
+        Err((response.status(), url, response.json().await).into())
     }
 }
 
@@ -267,5 +267,122 @@ impl<'a> QueryParamsBuilder<'a> {
 
     pub fn build(mut self) -> String {
         self.serializer.finish()
+    }
+}
+
+/// Macro to facilitate URL formatting for REST API async bindings
+macro_rules! url_format {
+    {
+        $path:expr $(,$var:ident)* $(,#[query] $varq:ident)* $(,)?
+    } => {{
+        let mut url = format!( $path $(, $var=$var)* );
+        let query = crate::web::QueryParamsBuilder::new()
+            $( .put( stringify!($varq), $varq ) )*
+            .build();
+        if query.len() > 1 {
+            url = format!("{}?{}", url, query)
+        }
+        url
+    }};
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn static_url() {
+        assert_eq!(url_format!("foo"), "foo");
+    }
+
+    #[test]
+    fn single_placeholder_url() {
+        let bar = "qux";
+        assert_eq!(url_format!("foo/{}", bar), "foo/qux");
+    }
+
+    #[test]
+    fn single_var_url() {
+        let bar = "qux";
+        assert_eq!(url_format!("foo/{bar}", bar), "foo/qux");
+    }
+
+    // compilation erro when wrong var name given
+    //    #[test]
+    //    fn wrong_single_var_url() {
+    //        let bar="qux";
+    //        assert_eq!(url_format!("foo/{baz}", bar), "foo/{}");
+    //    }
+
+    #[test]
+    fn multi_var_url() {
+        let bar = "qux";
+        let baz = "quz";
+        assert_eq!(
+            url_format!("foo/{bar}/fuu/{baz}", bar, baz),
+            "foo/qux/fuu/quz"
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn empty_query_url() {
+        let bar = Option::<String>::None;
+        assert_eq!(url_format!("foo", #[query] bar), "foo?bar=");
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn single_query_url() {
+        let bar= Some("qux");
+        assert_eq!(url_format!("foo", #[query] bar), "foo?bar=qux");
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn mix_query_url() {
+        let bar = Option::<String>::None;
+        let baz = Some("quz");
+        assert_eq!(
+            url_format!(
+                "foo",
+                #[query] bar,
+                #[query] baz
+            ),
+            "foo?bar=&baz=quz"
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn multi_query_url() {
+        let bar = Some("qux");
+        let baz = Some("quz");
+        assert_eq!(
+            url_format!(
+                "foo",
+                #[query] bar,
+                #[query] baz
+            ),
+            "foo?bar=qux&baz=quz"
+        );
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn multi_var_and_query_url() {
+        let bar = "baara";
+        let baz = 0;
+        let qar = Some(true);
+        let qaz = Some(3);
+        assert_eq!(
+            url_format!(
+                "foo/{bar}/fuu/{baz}",
+                bar,
+                baz,
+                #[query] qar,
+                #[query] qaz
+            ),
+            "foo/baara/fuu/0?qar=true&qaz=3"
+        );
     }
 }
