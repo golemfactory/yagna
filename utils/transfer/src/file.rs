@@ -55,7 +55,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     fn destination(&self, url: &Url) -> TransferSink<TransferData, Error> {
         let url = url.path().to_owned();
 
-        let (sink, mut rx, res_tx, abort_reg) = TransferSink::<TransferData, Error>::create(1);
+        let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
             let fut = async move {
@@ -63,12 +63,13 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                 while let Some(result) = rx.next().await {
                     file.write_all(&result?.into_bytes()).await?;
                 }
+                file.flush().await?;
 
                 Result::<(), Error>::Ok(())
             }
             .map_err(Error::from);
 
-            System::new("rx-file").block_on(abortable_sink(fut, abort_reg, res_tx))
+            System::new("rx-file").block_on(abortable_sink(fut, res_tx))
         });
 
         sink

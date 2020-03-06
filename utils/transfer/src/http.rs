@@ -59,7 +59,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         let method = self.upload_method.clone();
         let url = url.to_string();
 
-        let (sink, rx, res_tx, abort_reg) = TransferSink::<TransferData, Error>::create(1);
+        let (sink, rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
             let fut = async move {
@@ -78,7 +78,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                 }
             };
 
-            System::new("rx-http").block_on(abortable_sink(fut, abort_reg, res_tx))
+            System::new("rx-http").block_on(abortable_sink(fut, res_tx))
         });
 
         sink

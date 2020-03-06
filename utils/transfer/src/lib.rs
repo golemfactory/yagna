@@ -19,21 +19,12 @@ pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Resu
 where
     S: Stream<Item = Result<T, Error>>,
 {
-    let res_rx = sink.res_rx.take().unwrap();
+    let rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
-    res_rx
-        .await
+    rx.await
         .map_err(ChannelError::from)
         .map_err(Error::from)
         .map(|_| ())
-}
-
-pub trait AbortableStream<T, E>: Stream<Item = std::result::Result<T, E>> {
-    fn abort_handle(&self) -> AbortHandle;
-}
-
-pub trait AbortableSink<T, E>: Sink<T, Error = E> {
-    fn abort_handle(&self) -> AbortHandle;
 }
 
 #[derive(Clone, Debug)]
@@ -89,39 +80,30 @@ impl<T, E> Stream for TransferStream<T, E> {
     }
 }
 
-impl<T, E> AbortableStream<T, E> for TransferStream<T, E> {
-    fn abort_handle(&self) -> AbortHandle {
-        self.abort_handle.clone()
+impl<T, E> Drop for TransferStream<T, E> {
+    fn drop(&mut self) {
+        self.abort_handle.abort();
     }
 }
 
 pub struct TransferSink<T, E> {
     tx: Sender<Result<T, E>>,
     pub res_rx: Option<oneshot::Receiver<Result<(), E>>>,
-    pub abort_handle: AbortHandle,
 }
 
 impl<T, E> TransferSink<T, E> {
     pub fn create(
         channel_size: usize,
-    ) -> (
-        Self,
-        Receiver<Result<T, E>>,
-        oneshot::Sender<Result<(), E>>,
-        AbortRegistration,
-    ) {
+    ) -> (Self, Receiver<Result<T, E>>, oneshot::Sender<Result<(), E>>) {
         let (tx, rx) = channel(channel_size);
         let (res_tx, res_rx) = oneshot::channel();
-        let (abort_handle, abort_reg) = AbortHandle::new_pair();
         (
             TransferSink {
                 tx,
                 res_rx: Some(res_rx),
-                abort_handle,
             },
             rx,
             res_tx,
-            abort_reg,
         )
     }
 }
@@ -146,9 +128,9 @@ impl<T> Sink<T> for TransferSink<T, Error> {
     }
 }
 
-impl<T> AbortableSink<T, Error> for TransferSink<T, Error> {
-    fn abort_handle(&self) -> AbortHandle {
-        self.abort_handle.clone()
+impl<T, E> Drop for TransferSink<T, E> {
+    fn drop(&mut self) {
+        self.tx.close_channel();
     }
 }
 
@@ -238,15 +220,6 @@ where
     }
 }
 
-impl<S> AbortableStream<TransferData, Error> for HashStream<TransferData, Error, S>
-where
-    S: AbortableStream<TransferData, Error> + Unpin,
-{
-    fn abort_handle(&self) -> AbortHandle {
-        self.inner.abort_handle()
-    }
-}
-
 fn abortable_stream<'f, T, E, F>(
     fut: F,
     abort_reg: AbortRegistration,
@@ -271,24 +244,21 @@ where
 
 fn abortable_sink<'f, E, F>(
     fut: F,
-    abort_reg: AbortRegistration,
     res_tx: oneshot::Sender<Result<(), E>>,
 ) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'f>>
 where
     F: Future<Output = Result<(), E>> + 'f,
     E: From<Aborted> + 'f,
 {
-    Abortable::new(fut, abort_reg)
-        .map_err(E::from)
-        .then(|r: Result<Result<(), E>, E>| async move {
-            let _ = match flatten_result(r) {
-                Err(e) => res_tx.send(Err(e)),
-                _ => res_tx.send(Ok(())),
-            };
+    fut.then(|r: Result<(), E>| async move {
+        let _ = match r {
+            Err(e) => res_tx.send(Err(e)),
+            _ => res_tx.send(Ok(())),
+        };
 
-            Result::<(), E>::Ok(())
-        })
-        .boxed_local()
+        Result::<(), E>::Ok(())
+    })
+    .boxed_local()
 }
 
 #[inline(always)]

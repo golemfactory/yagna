@@ -79,7 +79,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
         let url = url.clone();
         let chunk_size = DEFAULT_CHUNK_SIZE as usize;
 
-        let (sink, mut rx, res_tx, abort_reg) = TransferSink::<TransferData, Error>::create(1);
+        let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
             let fut = async move {
@@ -112,7 +112,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
             }
             .map_err(Error::from);
 
-            System::new("rx-gftp").block_on(abortable_sink(fut, abort_reg, res_tx))
+            System::new("rx-gftp").block_on(abortable_sink(fut, res_tx))
         });
 
         sink

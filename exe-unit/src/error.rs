@@ -1,50 +1,33 @@
 use crate::metrics::error::MetricError;
 use crate::state::StateError;
-use serde::Serialize;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError as RpcError;
 pub use ya_transfer::error::Error as TransferError;
 
-#[derive(Error, Debug, Serialize)]
+#[derive(Error, Debug)]
 pub enum LocalServiceError {
     #[error("State error: {0}")]
     StateError(#[from] StateError),
     #[error("Metric error: {0}")]
-    MetricError(
-        #[serde(skip)]
-        #[from]
-        MetricError,
-    ),
+    MetricError(#[from] MetricError),
     #[error("Transfer error: {0}")]
     TransferError(#[from] TransferError),
 }
 
-#[derive(Error, Debug, Serialize)]
+#[derive(Error, Debug)]
 pub enum SignalError {
     #[error("Unsupported signal: {0}")]
     Unsupported(i32),
 }
 
-#[derive(Error, Debug, Serialize)]
+#[derive(Error, Debug)]
 pub enum ChannelError {
     #[error("Receive error: {0}")]
-    ReceiveError(
-        #[serde(skip)]
-        #[from]
-        crossbeam_channel::RecvError,
-    ),
+    ReceiveError(#[from] crossbeam_channel::RecvError),
     #[error("Receive error: {0}")]
-    TryReceiveError(
-        #[serde(skip)]
-        #[from]
-        crossbeam_channel::TryRecvError,
-    ),
+    TryReceiveError(#[from] crossbeam_channel::TryRecvError),
     #[error("Receive timeout error: {0}")]
-    ReceiveTimeoutError(
-        #[serde(skip)]
-        #[from]
-        crossbeam_channel::RecvTimeoutError,
-    ),
+    ReceiveTimeoutError(#[from] crossbeam_channel::RecvTimeoutError),
     #[error("Send error: {0}")]
     SendError(String),
     #[error("Send error: {0}")]
@@ -71,30 +54,18 @@ impl<T> From<crossbeam_channel::SendTimeoutError<T>> for ChannelError {
     }
 }
 
-#[derive(Error, Debug, Serialize)]
+#[derive(Error, Debug)]
 pub enum Error {
     #[error("Signal error: {0}")]
     SignalError(#[from] SignalError),
     #[error("IO error: {0}")]
-    IoError(
-        #[serde(skip)]
-        #[from]
-        std::io::Error,
-    ),
+    IoError(#[from] std::io::Error),
     #[error("Mailbox error: {0}")]
-    MailboxError(
-        #[serde(skip)]
-        #[from]
-        actix::prelude::MailboxError,
-    ),
+    MailboxError(#[from] actix::prelude::MailboxError),
     #[error("Channel error: {0}")]
     ChannelError(#[from] ChannelError),
     #[error("Deserialization failed: {0}")]
-    JsonError(
-        #[serde(skip)]
-        #[from]
-        serde_json::Error,
-    ),
+    JsonError(#[from] serde_json::Error),
     #[error("Gsb error: {0}")]
     GsbError(String),
     #[error("{0}")]

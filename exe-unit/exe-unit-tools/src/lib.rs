@@ -1,4 +1,4 @@
-use anyhow::{Context, Error, Result};
+use anyhow::{bail, Context, Result};
 use crypto::digest::Digest;
 use crypto::sha3::{Sha3, Sha3Mode};
 use reqwest;
@@ -23,16 +23,13 @@ pub fn download_image_http(url: &str, cachedir: &Path) -> Result<PathBuf> {
         })?;
         Ok(image_file_path)
     } else if response.status().is_server_error() {
-        Err(Error::msg(format!(
-            "Can't download image from url {}. Server error.",
-            url
-        )))
+        bail!("Can't download image from url {}. Server error.", url)
     } else {
-        Err(Error::msg(format!(
+        bail!(
             "Can't download image from url {}. Server error, status {}.",
             url,
             response.status()
-        )))
+        )
     }
 }
 

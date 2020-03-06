@@ -53,7 +53,7 @@ enum Command {
 }
 
 fn map_err<E: std::fmt::Debug>(e: E) -> anyhow::Error {
-    anyhow::Error::msg(format!("{:?}", e))
+    anyhow::anyhow!("{:?}", e)
 }
 
 #[actix_rt::main]

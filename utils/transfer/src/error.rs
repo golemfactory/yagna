@@ -4,21 +4,20 @@ use actix_http::ResponseError;
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
 use futures::future::Aborted;
-use serde::Serialize;
 
-#[derive(thiserror::Error, Debug, Serialize)]
+#[derive(thiserror::Error, Debug)]
 pub enum HttpError {
     #[error("payload error: {0}")]
-    PayloadError(#[serde(skip)] PayloadError),
+    PayloadError(PayloadError),
     #[error("send request error: {0}")]
-    SendRequestError(#[serde(skip)] SendRequestError),
+    SendRequestError(SendRequestError),
     #[error("unspecified")]
     Unspecified,
 }
 
 unsafe impl Send for HttpError {}
 
-#[derive(thiserror::Error, Debug, Serialize)]
+#[derive(thiserror::Error, Debug)]
 pub enum ChannelError {
     #[error("cancelled")]
     Cancelled,
@@ -44,34 +43,22 @@ impl From<SendRequestError> for HttpError {
     }
 }
 
-#[derive(thiserror::Error, Debug, Serialize)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("HTTP error: {0}")]
     HttpError(#[from] HttpError),
     #[error("IO error: {0}")]
-    IoError(
-        #[from]
-        #[serde(skip)]
-        std::io::Error,
-    ),
+    IoError(#[from] std::io::Error),
     #[error("Channel error: {0}")]
     ChannelError(#[from] ChannelError),
     #[error("Send error: {0}")]
-    SendError(
-        #[from]
-        #[serde(skip)]
-        SendError,
-    ),
+    SendError(#[from] SendError),
     #[error("GSB error: {0}")]
     Gsb(String),
     #[error("gftp error: {0}")]
     Gftp(#[from] ya_core_model::gftp::Error),
     #[error("URL parse error: {0}")]
-    UrlParseError(
-        #[from]
-        #[serde(skip)]
-        url::ParseError,
-    ),
+    UrlParseError(#[from] url::ParseError),
     #[error("Invalid url: {0}")]
     InvalidUrlError(String),
     #[error("Unsupported scheme: {0}")]
@@ -81,11 +68,7 @@ pub enum Error {
     #[error("Invalid digest: {hash}, expected {expected}")]
     InvalidHashError { hash: String, expected: String },
     #[error("Hex error: {0}")]
-    HexError(
-        #[from]
-        #[serde(skip)]
-        hex::FromHexError,
-    ),
+    HexError(#[from] hex::FromHexError),
     #[error("Interrupted: {0}")]
     Interrupted(String),
 }
