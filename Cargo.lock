@@ -1556,7 +1556,7 @@ dependencies = [
  "ya-service-api 0.1.1",
  "ya-service-api-derive 0.1.0",
  "ya-service-api-interfaces 0.1.0",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -4728,7 +4728,7 @@ dependencies = [
 
 [[package]]
 name = "ya-activity"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "actix-rt 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4755,7 +4755,7 @@ dependencies = [
  "ya-service-api 0.1.1",
  "ya-service-api-interfaces 0.1.0",
  "ya-service-api-web 0.1.1",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -4768,7 +4768,7 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix-rt 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "awc 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4797,7 +4797,7 @@ dependencies = [
  "serde_bytes 0.11.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-model 0.1.0",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -4826,7 +4826,7 @@ dependencies = [
  "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-core-model 0.1.0",
  "ya-model 0.1.0",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -4864,7 +4864,7 @@ dependencies = [
  "ya-service-api 0.1.1",
  "ya-service-api-derive 0.1.0",
  "ya-service-api-interfaces 0.1.0",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -4888,13 +4888,13 @@ dependencies = [
  "thiserror 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-client 0.1.0",
+ "ya-client 0.1.1",
  "ya-core-model 0.1.0",
  "ya-model 0.1.0",
  "ya-persistence 0.2.0",
  "ya-service-api 0.1.1",
  "ya-service-api-interfaces 0.1.0",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -4923,7 +4923,7 @@ dependencies = [
  "ya-sb-router 0.1.0",
  "ya-service-api 0.1.1",
  "ya-service-api-interfaces 0.1.0",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -4956,7 +4956,7 @@ dependencies = [
  "ya-service-api 0.1.1",
  "ya-service-api-interfaces 0.1.0",
  "ya-service-api-web 0.1.1",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
@@ -5012,7 +5012,7 @@ dependencies = [
  "tokio 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-agent-offer-model 0.1.0",
- "ya-client 0.1.0",
+ "ya-client 0.1.1",
  "ya-model 0.1.0",
  "ya-utils-actix 0.1.0",
 ]
@@ -5033,7 +5033,7 @@ dependencies = [
  "tokio 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-client 0.1.0",
+ "ya-client 0.1.1",
  "ya-model 0.1.0",
 ]
 
@@ -5158,12 +5158,12 @@ dependencies = [
  "ya-service-api-cache 0.1.0",
  "ya-service-api-derive 0.1.0",
  "ya-service-api-interfaces 0.1.0",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
 name = "ya-service-bus"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "actix 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-rt 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5218,7 +5218,7 @@ dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "url 2.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ya-activity 0.2.0",
+ "ya-activity 0.2.1",
  "ya-core-model 0.1.0",
  "ya-identity 0.2.0",
  "ya-market 0.1.0",
@@ -5230,7 +5230,7 @@ dependencies = [
  "ya-service-api-derive 0.1.0",
  "ya-service-api-interfaces 0.1.0",
  "ya-service-api-web 0.1.1",
- "ya-service-bus 0.2.1",
+ "ya-service-bus 0.2.2",
 ]
 
 [[package]]
