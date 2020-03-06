@@ -153,7 +153,7 @@ impl PaymentProcessor {
         let invoice_id = invoice.invoice_id.clone();
         let amount = PaymentAmount {
             base_currency_amount: big_dec_to_u256(invoice.amount.clone())?,
-            gas_amount: Some(GAS_LIMIT.into()),
+            gas_amount: None,
         };
         // TODO: Allow signing transactions with different key than node ID
         let sender = str_to_addr(&invoice.recipient_id)?;
