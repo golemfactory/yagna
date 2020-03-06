@@ -110,13 +110,15 @@ impl CachePath {
         let hash = hex::encode(&self.hash);
 
         let mut file_name = stem.to_os_string();
-        file_name.push("_");
-        file_name.push(hash);
 
         if with_nonce {
+            file_name.push("_");
+            file_name.push(hash);
+            file_name.push("_");
             file_name.push(&self.nonce);
         }
         if let Some(ext) = extension {
+            file_name.push(".");
             file_name.push(ext);
         }
 
