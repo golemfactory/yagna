@@ -1282,7 +1282,8 @@ components:
           items:
             type: string
         details:
-          type: object
+          type: string
+          format: byte
       required:
         - paymentId
         - payerId

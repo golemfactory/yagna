@@ -134,7 +134,7 @@ enum Services {
     Activity(ya_activity::service::Activity),
     #[enable(gsb)]
     Market(ya_market::service::MarketService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Payment(ya_payment::PaymentService),
 }
 

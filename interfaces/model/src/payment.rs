@@ -20,6 +20,7 @@ pub use self::event_type::EventType;
 pub use self::invoice::Invoice;
 pub use self::invoice::NewInvoice;
 pub use self::invoice_event::InvoiceEvent;
+pub use self::invoice_event::NewInvoiceEvent;
 pub use self::invoice_status::InvoiceStatus;
 pub use self::payment::Payment;
 pub use self::rejection::Rejection;

@@ -1,7 +1,12 @@
 use crate::error::DbResult;
 use crate::models::*;
 use crate::schema::pay_debit_note::dsl;
-use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use bigdecimal::BigDecimal;
+use diesel::sql_types::Text;
+use diesel::{self, sql_query, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use std::collections::HashMap;
+use ya_core_model::ethaddr::NodeId;
+use ya_core_model::payment::local::StatusNotes;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 pub struct DebitNoteDao<'c> {
@@ -90,5 +95,100 @@ impl<'c> DebitNoteDao<'c> {
             Ok(())
         })
         .await
+    }
+
+    pub async fn status_report(&self, idenity: NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
+        log::info!("enter {}", "status_report");
+        let r = do_with_transaction(self.pool, move |conn| {
+            let notes: Vec<DebitNote> = sql_query(
+                r#"
+            SELECT *
+            FROM pay_debit_note as n
+            WHERE status = 'SETTLED'
+            AND (issuer_id = ? or recipient_id=?)
+            AND NOT EXISTS (SELECT 1 FROM pay_debit_note
+            where previous_debit_note_id = n.id and status = 'SETTLED')
+            AND NOT EXISTS (SELECT 1
+                FROM pay_invoice
+                WHERE recipient_id = n.recipient_id
+                AND agreement_id = n.agreement_id)
+            "#,
+            )
+            .bind::<Text, _>(&idenity)
+            .bind::<Text, _>(&idenity)
+            .load(conn)
+            .map_err(|e| {
+                log::error!("{}: select SETTLED from pay_debit_note", e);
+                e
+            })?;
+
+            let mut incoming_settled: HashMap<String, BigDecimal> = Default::default();
+            let mut outgoing_settled: HashMap<String, BigDecimal> = Default::default();
+            let me = idenity.to_string();
+
+            // Phase 1: Collect settled amount
+            for note in notes {
+                if note.issuer_id == me {
+                    incoming_settled.insert(note.agreement_id, note.total_amount_due.0);
+                } else if note.recipient_id == me {
+                    outgoing_settled.insert(note.agreement_id, note.total_amount_due.0);
+                } else {
+                    unreachable!()
+                }
+            }
+
+            let notes: Vec<DebitNote> = sql_query(
+                r#"
+            SELECT *
+            FROM pay_debit_note as n
+            WHERE status in ('RECEIVED', 'ACCEPTED','REJECTED')
+            AND (issuer_id = ? or recipient_id=?)
+            AND NOT EXISTS (
+                SELECT 1 FROM pay_debit_note
+                WHERE previous_debit_note_id = n.id)
+            AND NOT EXISTS (
+                SELECT 1 FROM pay_invoice
+                WHERE recipient_id = n.recipient_id
+                AND agreement_id = n.agreement_id)
+            "#,
+            )
+            .bind::<Text, _>(&idenity)
+            .bind::<Text, _>(&idenity)
+            .get_results(conn)?;
+
+            let mut incoming = StatusNotes::default();
+            let mut outgoing = StatusNotes::default();
+            for note in notes {
+                let s = if note.issuer_id == me {
+                    &mut incoming
+                } else {
+                    &mut outgoing
+                };
+                let settled = if note.issuer_id == me {
+                    incoming_settled
+                        .get(&note.agreement_id)
+                        .cloned()
+                        .unwrap_or_default()
+                } else {
+                    outgoing_settled
+                        .get(&note.agreement_id)
+                        .cloned()
+                        .unwrap_or_default()
+                };
+
+                let pending_amount = note.total_amount_due.0 - settled;
+                match note.status.as_str() {
+                    "RECEIVED" => s.requested += pending_amount,
+                    "ACCEPTED" => s.accepted += pending_amount,
+                    "REJECTED" => s.rejected += pending_amount,
+                    _ => (),
+                }
+            }
+
+            Ok((incoming, outgoing))
+        })
+        .await;
+        log::info!("exit {}", "status_report");
+        r
     }
 }
