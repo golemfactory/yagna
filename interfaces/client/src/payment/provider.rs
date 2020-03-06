@@ -40,7 +40,7 @@ impl ProviderApi {
         }
     }
 
-    pub async fn issue_debit_note(&self, debit_note: &DebitNote) -> Result<DebitNote> {
+    pub async fn issue_debit_note(&self, debit_note: &NewDebitNote) -> Result<DebitNote> {
         self.client
             .post("provider/debitNotes")
             .send_json(debit_note)

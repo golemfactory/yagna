@@ -47,6 +47,7 @@ pub struct InitializeExeUnits {
 #[rtype(result = "Result<()>")]
 pub struct ActivityCreated {
     pub agreement_id: String,
+    pub activity_id: String,
 }
 
 /// Signal emitted when TaskRunner destroys activity.
@@ -211,7 +212,7 @@ impl TaskRunner {
                     activity_id, agreement_id, exeunit_name
                 );
 
-                let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: agreement_id.clone()});
+                let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: agreement_id.clone(), activity_id: activity_id.clone()});
                 Ok(())
             }
             Err(error) => return Err(Error::msg(format!("Can't create activity. {}", error))),

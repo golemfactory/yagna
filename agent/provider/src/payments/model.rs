@@ -14,7 +14,7 @@ pub struct PaymentDescription {
 /// Implementation of payment model which knows, how to compute amount
 /// of money, that requestor should pay for computations.
 pub trait PaymentModel {
-    fn compute_cost(self, usage: Vec<f64>) -> Result<BigDecimal>;
+    fn compute_cost(&self, usage: &Vec<f64>) -> Result<BigDecimal>;
 }
 
 impl PaymentDescription {
