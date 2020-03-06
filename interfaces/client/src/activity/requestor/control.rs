@@ -46,6 +46,7 @@ impl ActivityRequestorControlApi {
         &self,
         activity_id: &str,
         batch_id: &str,
+        #[allow(non_snake_case)]
         timeout: Option<i32>,
         #[allow(non_snake_case)]
         maxCount: Option<i32>,

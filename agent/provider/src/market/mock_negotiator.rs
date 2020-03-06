@@ -13,8 +13,11 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(Offer::new(offer.clone().into_json(), "()".into()))
     }
 
-    fn react_to_proposal(&mut self, _proposal: &Proposal) -> Result<ProposalResponse> {
-        Ok(ProposalResponse::AcceptProposal)
+    fn react_to_proposal(&mut self, demand: &Proposal, offer: &Offer) -> Result<ProposalResponse> {
+        log::info!("Accepting proposal: {}", demand.proposal_id()?);
+        Ok(ProposalResponse::CounterProposal {
+            offer: Proposal::from_offer(demand, offer),
+        })
     }
 
     fn react_to_agreement(&mut self, _agreement: &Agreement) -> Result<AgreementResponse> {

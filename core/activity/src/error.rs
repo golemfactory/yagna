@@ -45,7 +45,7 @@ macro_rules! internal_error_http_response {
 
 impl From<ya_persistence::executor::Error> for Error {
     fn from(e: ya_persistence::executor::Error) -> Self {
-        log::debug!("ya_persistence::executor::Error: {:?}", e);
+        log::trace!("ya_persistence::executor::Error: {:?}", e);
         match e {
             ya_persistence::executor::Error::Diesel(e) => Error::from(DaoError::from(e)),
             ya_persistence::executor::Error::Pool(e) => Error::from(e),
@@ -62,21 +62,21 @@ impl Into<actix_web::HttpResponse> for Error {
 
 impl From<ya_service_bus::error::Error> for Error {
     fn from(e: ya_service_bus::error::Error) -> Self {
-        log::debug!("ya_service_bus::error::Error: {:?}", e);
+        log::trace!("ya_service_bus::error::Error: {:?}", e);
         Error::Gsb(e)
     }
 }
 
 impl From<tokio::time::Elapsed> for Error {
     fn from(_: tokio::time::Elapsed) -> Self {
-        log::debug!("tokio::time::Elapsed");
+        log::trace!("tokio::time::Elapsed");
         Error::Timeout
     }
 }
 
 impl From<RpcMessageError> for Error {
     fn from(e: RpcMessageError) -> Self {
-        log::debug!("RpcMessageError: {:?}", e);
+        log::trace!("RpcMessageError: {:?}", e);
         match e {
             RpcMessageError::Activity(err) => Error::Service(err),
             RpcMessageError::Service(err) => Error::Service(err),
@@ -91,7 +91,7 @@ impl From<RpcMessageError> for Error {
 
 impl From<MarketRpcMessageError> for Error {
     fn from(e: MarketRpcMessageError) -> Self {
-        log::debug!("MarketRpcMessageError: {:?}", e);
+        log::trace!("MarketRpcMessageError: {:?}", e);
         match e {
             MarketRpcMessageError::Market(err) => Error::Service(err),
             MarketRpcMessageError::Service(err) => Error::Service(err),
@@ -105,7 +105,7 @@ impl From<MarketRpcMessageError> for Error {
 
 impl From<Error> for RpcMessageError {
     fn from(e: Error) -> Self {
-        log::debug!("for RpcMessageError: {:?}", e);
+        log::trace!("for RpcMessageError: {:?}", e);
         match e {
             Error::Db(err) => service_error!(err),
             Error::Dao(err) => service_error!(err),
@@ -123,7 +123,7 @@ impl From<Error> for RpcMessageError {
 
 impl actix_web::error::ResponseError for Error {
     fn error_response(&self) -> actix_web::HttpResponse {
-        log::debug!("actix_web::error::ResponseError: {:?}", self);
+        log::trace!("actix_web::error::ResponseError: {:?}", self);
         match self {
             Error::Db(err) => internal_error_http_response!(err),
             Error::Dao(err) => internal_error_http_response!(err),
