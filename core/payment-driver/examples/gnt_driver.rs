@@ -10,7 +10,8 @@ use ethkey::prelude::*;
 
 use std::{thread, time};
 
-use futures::{future, Future};
+use futures3::future;
+use std::future::Future;
 
 use std::pin::Pin;
 

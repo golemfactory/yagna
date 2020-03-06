@@ -1,7 +1,7 @@
 use ethereum_types::{Address, H256, U256};
 
+use futures3::compat::*;
 use web3::contract::Contract;
-use web3::futures::Future;
 use web3::transports::EventLoopHandle;
 use web3::transports::Http;
 use web3::types::{BlockNumber, Bytes, TransactionReceipt};
@@ -40,26 +40,32 @@ impl EthereumClient {
         )
     }
 
-    pub fn get_eth_balance(
+    pub async fn get_eth_balance(
         &self,
         address: Address,
         block_number: Option<BlockNumber>,
     ) -> EthereumClientResult<U256> {
-        let balance = self.web3.eth().balance(address, block_number).wait()?;
+        let balance = self
+            .web3
+            .eth()
+            .balance(address, block_number)
+            .compat()
+            .await?;
         Ok(balance)
     }
 
-    pub fn get_gas_price(&self) -> EthereumClientResult<U256> {
-        let gas_price = self.web3.eth().gas_price().wait()?;
+    pub async fn get_gas_price(&self) -> EthereumClientResult<U256> {
+        let gas_price = self.web3.eth().gas_price().compat().await?;
         Ok(gas_price)
     }
 
-    pub fn send_tx(&self, signed_tx: Vec<u8>) -> EthereumClientResult<H256> {
+    pub async fn send_tx(&self, signed_tx: Vec<u8>) -> EthereumClientResult<H256> {
         let tx_hash = self
             .web3
             .eth()
             .send_raw_transaction(Bytes::from(signed_tx))
-            .wait()?;
+            .compat()
+            .await?;
         Ok(tx_hash)
     }
 
@@ -70,20 +76,26 @@ impl EthereumClient {
         }
     }
 
-    pub fn get_next_nonce(&self, eth_address: Address) -> EthereumClientResult<U256> {
+    pub async fn get_next_nonce(&self, eth_address: Address) -> EthereumClientResult<U256> {
         let nonce = self
             .web3
             .eth()
             .transaction_count(eth_address, None)
-            .wait()?;
+            .compat()
+            .await?;
         Ok(nonce)
     }
 
-    pub fn get_transaction_receipt(
+    pub async fn get_transaction_receipt(
         &self,
         tx_hash: H256,
     ) -> EthereumClientResult<Option<TransactionReceipt>> {
-        let tx_receipt = self.web3.eth().transaction_receipt(tx_hash).wait()?;
+        let tx_receipt = self
+            .web3
+            .eth()
+            .transaction_receipt(tx_hash)
+            .compat()
+            .await?;
         Ok(tx_receipt)
     }
 }
@@ -118,19 +130,19 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_get_eth_balance() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_get_eth_balance() -> anyhow::Result<()> {
         let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
         let address = to_address(ETH_ADDRESS);
-        let balance: U256 = ethereum_client.get_eth_balance(address, None).unwrap();
+        let balance: U256 = ethereum_client.get_eth_balance(address, None).await?;
         assert!(balance >= U256::from(0));
         Ok(())
     }
 
-    #[test]
-    fn test_gas_price() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_gas_price() -> anyhow::Result<()> {
         let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
-        let gas_price: U256 = ethereum_client.get_gas_price().unwrap();
+        let gas_price: U256 = ethereum_client.get_gas_price().await?;
         assert!(gas_price >= U256::from(0));
         Ok(())
     }
