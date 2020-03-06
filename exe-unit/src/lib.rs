@@ -196,6 +196,8 @@ impl<R: Runtime> ExeUnit<R> {
         })
         .await?;
 
+        log::info!("Executing command: {:?}", ctx.cmd);
+
         Self::pre_exec(transfer_service, ctx.clone()).await?;
 
         let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;

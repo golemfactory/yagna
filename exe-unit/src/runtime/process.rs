@@ -58,11 +58,11 @@ impl Actor for RuntimeProcess {
     type Context = Context<Self>;
 
     fn started(&mut self, _: &mut Self::Context) {
-        log::debug!("Runtime handler started");
+        log::info!("Runtime handler started");
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        log::debug!("Runtime handler stopped");
+        log::info!("Runtime handler stopped");
     }
 }
 
@@ -103,7 +103,7 @@ impl Handler<ExecCmd> for RuntimeProcess {
                 let args = self.args(cmd_args);
                 let binary = self.binary.clone();
 
-                log::debug!("Executing {:?} with {:?}", binary, args);
+                log::info!("Executing {:?} with {:?}", binary, args);
                 let fut = async move {
                     let child = Command::new(binary)
                         .args(args)

@@ -208,7 +208,9 @@ where
                         }
                     };
 
-                    if &self.hash != result {
+                    if &self.hash == result {
+                        log::info!("Hash verified successfully: {:?}", hex::encode(result));
+                    } else {
                         return Poll::Ready(Some(Err(Error::InvalidHashError {
                             expected: hex::encode(&self.hash),
                             hash: hex::encode(&result),
