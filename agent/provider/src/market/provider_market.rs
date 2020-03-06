@@ -137,7 +137,11 @@ impl ProviderMarket {
 
     fn offer_subscribed(&mut self, msg: OnOfferSubscribed) -> Result<()> {
         let subscription_id = &msg.offer_subscription.subscription_id;
-        log::info!("Subscribed to events for offer [{}].", subscription_id);
+        log::info!(
+            "Subscribed offer: {:#?}\n subscription_id: {}",
+            msg.offer_subscription.offer,
+            subscription_id
+        );
         self.offer_subscriptions
             .insert(subscription_id.clone(), msg.offer_subscription);
         Ok(())
@@ -147,12 +151,13 @@ impl ProviderMarket {
         market_api: Arc<MarketProviderApi>,
         subscriptions: Vec<String>,
     ) -> Result<()> {
-        log::info!("Unsubscribing events");
+        log::info!("Unsubscribing all active offers");
 
         for subscription_id in subscriptions.iter() {
+            log::info!("Unsubscribing: {}", subscription_id);
             market_api.unsubscribe(subscription_id).await?;
         }
-        log::info!("Unsubscribing events finished.");
+        log::info!("All Offers unsubscribed successfully.");
         Ok(())
     }
 

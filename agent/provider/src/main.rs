@@ -1,4 +1,3 @@
-use actix::prelude::*;
 use structopt::StructOpt;
 
 mod execution;
@@ -17,9 +16,5 @@ async fn main() -> anyhow::Result<()> {
 
     let args = StartupConfig::from_args();
 
-    ProviderAgent::new(args).await?.start();
-    tokio::signal::ctrl_c().await?;
-    println!();
-    log::info!("SIGINT received, exiting");
-    Ok(())
+    ProviderAgent::new(args).await?.ctrl_c().await
 }

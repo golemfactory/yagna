@@ -97,18 +97,15 @@ impl ProviderAgent {
         ServiceInfo::Wasm { inf, wasi_version }
     }
 
-    pub fn spawn_shutdown_handler(&mut self, context: &mut Context<ProviderAgent>) {
-        let market = self.market.clone();
-        let _ = context.spawn(
-            async move {
-                let _ = tokio::signal::ctrl_c().await;
-                log::info!("Shutting down system.");
-
-                let _ = market.send(OnShutdown {}).await;
-                System::current().stop();
-            }
-            .into_actor(self),
+    pub async fn ctrl_c(&self) -> anyhow::Result<()> {
+        let _ = tokio::signal::ctrl_c().await;
+        println!();
+        log::info!(
+            "SIGINT received, Shutting down {}...",
+            structopt::clap::crate_name!()
         );
+
+        self.market.send(OnShutdown {}).await?
     }
 }
 
@@ -119,7 +116,5 @@ impl Actor for ProviderAgent {
         IntervalFunc::new(Duration::from_secs(4), Self::schedule_jobs)
             .finish()
             .spawn(context);
-
-        self.spawn_shutdown_handler(context);
     }
 }
