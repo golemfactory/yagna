@@ -12,7 +12,6 @@ use std::{thread, time};
 
 use web3::contract::tokens::Tokenize;
 use web3::contract::{Contract, Options};
-use web3::futures::Future;
 use web3::transports::Http;
 use web3::types::{Bytes, Log, TransactionReceipt};
 
@@ -26,6 +25,7 @@ use crate::ethereum::EthereumClient;
 use crate::models::{PaymentEntity, TransactionEntity};
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
+use futures3::compat::*;
 
 const GNT_TRANSFER_GAS: u32 = 55000;
 const GNT_FAUCET_GAS: u32 = 90000;
@@ -95,7 +95,7 @@ impl GntDriver {
 
         // cannot have more than "10000000000000" Gnt
         // blocked by Faucet contract
-        if self.get_gnt_balance(address)?.amount < max_testnet_balance {
+        if self.get_gnt_balance(address).await?.amount < max_testnet_balance {
             println!("Requesting Gnt from Faucet...");
             self.request_gnt_from_faucet(address, sign_tx).await?;
         } else {
@@ -115,7 +115,7 @@ impl GntDriver {
     ) -> PaymentDriverResult<H256> {
         let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount);
 
-        if gnt_amount > self.get_gnt_balance(sender)?.amount {
+        if gnt_amount > self.get_gnt_balance(sender).await?.amount {
             return Err(PaymentDriverError::InsufficientFunds);
         }
 
@@ -132,13 +132,14 @@ impl GntDriver {
     }
 
     /// Returns Gnt balance
-    pub fn get_gnt_balance(
+    pub async fn get_gnt_balance(
         &self,
         address: ethereum_types::Address,
     ) -> PaymentDriverResult<Balance> {
         self.gnt_contract
             .query("balanceOf", (address,), None, Options::default(), None)
-            .wait()
+            .compat()
+            .await
             .map_or_else(
                 |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
                 |balance| Ok(Balance::new(balance, Currency::Gnt {})),
@@ -509,7 +510,7 @@ impl PaymentDriver for GntDriver {
 
     /// Returns account balance
     async fn get_account_balance(&self, address: Address) -> PaymentDriverResult<AccountBalance> {
-        let gnt_balance = self.get_gnt_balance(address)?;
+        let gnt_balance = self.get_gnt_balance(address).await?;
         let eth_balance = self.get_eth_balance(address)?;
 
         Ok(AccountBalance::new(gnt_balance, Some(eth_balance)))

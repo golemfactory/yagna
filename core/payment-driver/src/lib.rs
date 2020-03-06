@@ -20,9 +20,9 @@ pub use account::{AccountBalance, Balance, Chain, Currency};
 use bitflags::bitflags;
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
-use futures::Future;
 pub use gnt::GntDriver;
 pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
+use std::future::Future;
 use std::pin::Pin;
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;

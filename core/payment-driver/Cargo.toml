@@ -17,7 +17,7 @@ serde = { version = "^1.0", features = ["derive"] }
 serde_json = "^1.0"
 thiserror = "1.0"
 web3 = { git = "https://github.com/bidzyyys/rust-web3" }
-futures = "0.3"
+futures3 = { version = "0.3", features=["compat"], package = "futures" }
 ethereum-tx-sign = { git = "https://github.com/bidzyyys/ethereum-tx-sign" }
 ethsign = "0.7"
 reqwest = { version = "0.10", features = ["json"] }
