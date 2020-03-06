@@ -88,30 +88,21 @@ impl<T, E> Drop for TransferStream<T, E> {
 pub struct TransferSink<T, E> {
     tx: Sender<Result<T, E>>,
     pub res_rx: Option<oneshot::Receiver<Result<(), E>>>,
-    pub abort_handle: AbortHandle,
 }
 
 impl<T, E> TransferSink<T, E> {
     pub fn create(
         channel_size: usize,
-    ) -> (
-        Self,
-        Receiver<Result<T, E>>,
-        oneshot::Sender<Result<(), E>>,
-        AbortRegistration,
-    ) {
+    ) -> (Self, Receiver<Result<T, E>>, oneshot::Sender<Result<(), E>>) {
         let (tx, rx) = channel(channel_size);
         let (res_tx, res_rx) = oneshot::channel();
-        let (abort_handle, abort_reg) = AbortHandle::new_pair();
         (
             TransferSink {
                 tx,
                 res_rx: Some(res_rx),
-                abort_handle,
             },
             rx,
             res_tx,
-            abort_reg,
         )
     }
 }
@@ -133,6 +124,12 @@ impl<T> Sink<T> for TransferSink<T, Error> {
 
     fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Sink::poll_close(Pin::new(&mut self.tx), cx).map_err(Error::from)
+    }
+}
+
+impl<T, E> Drop for TransferSink<T, E> {
+    fn drop(&mut self) {
+        self.tx.close_channel();
     }
 }
 

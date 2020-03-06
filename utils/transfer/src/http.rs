@@ -71,7 +71,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         let method = self.upload_method.clone();
         let url = url.to_string();
 
-        let (sink, rx, res_tx, abort_reg) = TransferSink::<TransferData, Error>::create(1);
+        let (sink, rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
             let fut_inner = async move {
@@ -90,16 +90,14 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                 }
             };
 
-            let fut = Abortable::new(fut_inner, abort_reg)
-                .map_err(Error::from)
-                .then(|r: Result<Result<(), Error>, Error>| async move {
-                    let _ = match flatten_result(r) {
-                        Err(e) => res_tx.send(Err(e)),
-                        _ => res_tx.send(Ok(())),
-                    };
+            let fut = fut_inner.then(|r: Result<(), Error>| async move {
+                let _ = match r {
+                    Err(e) => res_tx.send(Err(e)),
+                    _ => res_tx.send(Ok(())),
+                };
 
-                    Result::<(), Error>::Ok(())
-                });
+                Result::<(), Error>::Ok(())
+            });
 
             System::new("rx-http").block_on(fut)
         });
