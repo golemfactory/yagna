@@ -8,7 +8,7 @@ use ya_client::{
     activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
 };
 //use ya_model::market::proposal::State;
-use ya_model::market::{AgreementProposal, Demand, Proposal, RequestorEvent};
+use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -44,41 +44,60 @@ impl AppSettings {
     }
 }
 
+enum ProcessOfferResult {
+    ProposalId(String),
+    AgreementId(String),
+}
+
 async fn process_offer(
     requestor_api: MarketRequestorApi,
     offer: Proposal,
-) -> Result<String, anyhow::Error> {
-    //    if offer.state.is_none() {
-    //        requestor_api.counter_proposal(offer)
-    //    }
+    subscription_id: &str,
+    my_demand: Demand,
+) -> Result<ProcessOfferResult, anyhow::Error> {
+    let proposal_id = offer.proposal_id()?.clone();
 
-    let new_agreement_id = offer.proposal_id()?;
+    if offer.state.unwrap_or(State::Initial) == State::Initial {
+        if offer.prev_proposal_id.is_some() {
+            anyhow::bail!("Proposal in Initial state but with prev id: {:#?}", offer)
+        }
+        let bespoke_proposal = Proposal::from_demand(&offer, &my_demand);
+        let new_proposal_id = requestor_api
+            .counter_proposal(&bespoke_proposal, subscription_id)
+            .await?;
+        return Ok(ProcessOfferResult::ProposalId(new_proposal_id));
+    }
+
+    let new_agreement_id = proposal_id;
     let new_agreement = AgreementProposal::new(
         new_agreement_id.clone(),
         "2021-01-01T18:54:16.655397Z".parse()?,
     );
     let _ack = requestor_api.create_agreement(&new_agreement).await?;
     log::info!("confirm agreement = {}", new_agreement_id);
-    requestor_api.confirm_agreement(new_agreement_id).await?;
+    requestor_api.confirm_agreement(&new_agreement_id).await?;
     log::info!("wait for agreement = {}", new_agreement_id);
-    requestor_api.wait_for_approval(new_agreement_id).await?;
+    requestor_api
+        .wait_for_approval(&new_agreement_id, Some(7.879))
+        .await?;
     log::info!("agreement = {} CONFIRMED!", new_agreement_id);
 
-    Ok(new_agreement_id.clone())
+    Ok(ProcessOfferResult::AgreementId(new_agreement_id))
 }
 
 async fn spawn_workers(
     requestor_api: MarketRequestorApi,
     subscription_id: &str,
+    my_demand: &Demand,
     tx: futures::channel::mpsc::Sender<String>,
 ) -> Result<(), anyhow::Error> {
     loop {
         let events = requestor_api
-            .collect(&subscription_id, Some(120), Some(5))
+            .collect(&subscription_id, Some(12.0), Some(5))
             .await?;
 
         if !events.is_empty() {
-            log::debug!("events={:?}", events);
+            log::debug!("market events={:#?}", events);
         } else {
             tokio::time::delay_for(Duration::from_millis(3000)).await;
         }
@@ -90,15 +109,19 @@ async fn spawn_workers(
                 } => {
                     let mut tx = tx.clone();
                     let requestor_api = requestor_api.clone();
+                    let my_subs_id = subscription_id.to_string();
+                    let my_demand = my_demand.clone();
                     Arbiter::spawn(async move {
-                        let agreement_id = match process_offer(requestor_api, proposal).await {
-                            Ok(id) => id,
+                        match process_offer(requestor_api, proposal, &my_subs_id, my_demand).await {
+                            Ok(ProcessOfferResult::ProposalId(id)) => {
+                                log::info!("responded with counter proposal (id: {})", id)
+                            }
+                            Ok(ProcessOfferResult::AgreementId(id)) => tx.send(id).await.unwrap(),
                             Err(e) => {
                                 log::error!("unable to process offer: {}", e);
                                 return;
                             }
-                        };
-                        tx.send(agreement_id.clone()).await.unwrap();
+                        }
                     });
                 }
                 _ => {
@@ -152,7 +175,7 @@ async fn process_agreement(
 }
 
 #[actix_rt::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
 
@@ -160,13 +183,13 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let node_name = "test1";
 
-    let demand = build_demand(node_name);
+    let my_demand = build_demand(node_name);
     //(golem.runtime.wasm.wasi.version@v=*)
 
     log::error!("Market API URL: {}", settings.market_url);
 
     let market_api = settings.market_api()?;
-    let subscription_id = market_api.subscribe(&demand).await?;
+    let subscription_id = market_api.subscribe(&my_demand).await?;
 
     log::error!("sub_id={}", subscription_id);
 
@@ -191,7 +214,7 @@ async fn main() -> Result<(), anyhow::Error> {
             }
         }
     });
-    spawn_workers(requestor_api.clone(), &subscription_id, tx).await?;
+    spawn_workers(requestor_api.clone(), &subscription_id, &my_demand, tx).await?;
 
     market_api.unsubscribe(&subscription_id).await?;
     Ok(())

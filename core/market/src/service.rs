@@ -1,7 +1,7 @@
+use anyhow::anyhow;
 use std::rc::Rc;
 use url::Url;
 
-use crate::Error;
 use ya_client::{
     market::MarketProviderApi,
     web::{WebClient, WebInterface},
@@ -9,6 +9,8 @@ use ya_client::{
 use ya_core_model::{appkey, market};
 use ya_service_api_interfaces::Service;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+
+use crate::Error;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
@@ -67,10 +69,10 @@ async fn tmp_send_keys() -> anyhow::Result<()> {
         .post(url.to_string())
         .send_json(&ids)
         .await
-        .map_err(|e| anyhow::Error::msg(e.to_string()))?
+        .map_err(|e| anyhow!("posting to: {:?} error: {}", url, e.to_string()))?
         .json()
         .await
-        .map_err(|e| anyhow::Error::msg(e.to_string()))?;
+        .map_err(|e| anyhow!("key export response decoding error: {}", e.to_string()))?;
     log::info!("done. number of keys exported: {}", resp);
 
     Ok(())

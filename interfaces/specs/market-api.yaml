@@ -1,6 +1,6 @@
 openapi: 3.0.2
 info:
-  version: 1.5.0
+  version: 1.5.2
   title: Yagna Market API
   description: '
     ## Yagna Market
@@ -250,7 +250,7 @@ paths:
         Creates and sends a modified version of original Offer (a
         counter-proposal) adjusted to previously received Proposal (ie. Demand).
         Changes Proposal state to `Draft`. Returns created Proposal id.
-      operationId: createProposalOffer
+      operationId: counterProposalOffer
       requestBody:
         $ref: '#/components/requestBodies/Proposal'
       responses:
@@ -475,7 +475,7 @@ paths:
         Creates and sends a modified version of original Demand (a
         counter-proposal) adjusted to previously received Proposal (ie. Offer).
         Changes Proposal state to `Draft`. Returns created Proposal id.
-      operationId: createProposalDemand
+      operationId: counterProposalDemand
       requestBody:
         $ref: '#/components/requestBodies/Proposal'
       responses:
@@ -658,13 +658,15 @@ paths:
   /agreements/{agreementId}/approve:
     parameters:
       - $ref: '#/components/parameters/agreementId'
+      - $ref: '#/components/parameters/timeout'
     post:
       tags:
         - provider
       summary: Approves Agreement proposed by the Reqestor.
       description: >
-        This is a blocking operation.
-
+        This is a blocking operation. The call may be aborted by Provider caller
+        code. After the call is aborted or timed out, another `approveAgreement`
+        call can be raised on the same `agreementId`.
 
         It returns one of the following options:
 
@@ -801,8 +803,8 @@ components:
       name: timeout
       in: query
       schema:
-        type: integer
-        format: int32
+        type: number
+        format: float
 
     maxEvents:
       name: maxEvents
@@ -949,6 +951,7 @@ components:
               type: string
               readOnly: true
 
+    # TODO: add specified OfferProposal and DemandProposal to disabiguate API
     Proposal:
       allOf:
         - $ref: '#/components/schemas/DemandOfferBase'
