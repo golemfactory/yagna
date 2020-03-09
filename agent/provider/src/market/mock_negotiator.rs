@@ -6,6 +6,7 @@ use crate::market::negotiator::{AgreementResponse, ProposalResponse};
 
 use anyhow::Result;
 
+#[derive(Debug)]
 pub struct AcceptAllNegotiator;
 
 impl Negotiator for AcceptAllNegotiator {
@@ -13,15 +14,15 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(Offer::new(offer.clone().into_json(), "()".into()))
     }
 
-    fn react_to_proposal(&mut self, offer: &Offer, demand: &Proposal) -> Result<ProposalResponse> {
-        log::info!("Accepting proposal: {}", demand.proposal_id()?);
-        Ok(ProposalResponse::CounterProposal {
-            offer: demand.counter_offer(offer)?,
-        })
+    fn react_to_proposal(
+        &mut self,
+        _offer: &Offer,
+        _demand: &Proposal,
+    ) -> Result<ProposalResponse> {
+        Ok(ProposalResponse::AcceptProposal)
     }
 
-    fn react_to_agreement(&mut self, agreement: &Agreement) -> Result<AgreementResponse> {
-        log::info!("Accepting agreement: {}", agreement.agreement_id);
+    fn react_to_agreement(&mut self, _agreement: &Agreement) -> Result<AgreementResponse> {
         Ok(AgreementResponse::ApproveAgreement)
     }
 }

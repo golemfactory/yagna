@@ -96,7 +96,7 @@ async fn provider_interact(client: MarketProviderApi, host_port: &String) -> Res
                     cmp_proposals(&demand_proposal, proposal);
 
                     println!("  <=PROVIDER | Huha! Got Demand Proposal. Accepting...");
-                    let bespoke_proposal = proposal.counter_offer(&offer)?;
+                    let bespoke_proposal = proposal.counter_offer(offer.clone())?;
                     let new_prop_id = client
                         .counter_proposal(&bespoke_proposal, &provider_subscription_id)
                         .await?;
@@ -192,7 +192,7 @@ async fn requestor_interact(client: MarketRequestorApi, host_port: &String) -> R
                                 log::error!("Initial Proposal but with prev id: {:#?}", proposal);
                             }
                             println!("REQUESTOR=>  | Negotiating proposal...");
-                            let bespoke_proposal = proposal.counter_demand(&demand)?;
+                            let bespoke_proposal = proposal.counter_demand(demand.clone())?;
                             let new_proposal_id = client
                                 .counter_proposal(&bespoke_proposal, &requestor_subscription_id)
                                 .await?;

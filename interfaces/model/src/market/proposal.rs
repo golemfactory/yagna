@@ -47,10 +47,10 @@ impl Proposal {
         }
     }
 
-    pub fn counter_demand(&self, demand: &Demand) -> Result<Proposal, ErrorMessage> {
+    pub fn counter_demand(&self, demand: Demand) -> Result<Proposal, ErrorMessage> {
         Ok(Proposal {
-            properties: demand.properties.clone(),
-            constraints: demand.constraints.clone(),
+            properties: demand.properties,
+            constraints: demand.constraints,
             proposal_id: None,
             issuer_id: None,
             state: None,
@@ -58,10 +58,10 @@ impl Proposal {
         })
     }
 
-    pub fn counter_offer(&self, offer: &Offer) -> Result<Proposal, ErrorMessage> {
+    pub fn counter_offer(&self, offer: Offer) -> Result<Proposal, ErrorMessage> {
         Ok(Proposal {
-            properties: offer.properties.clone(),
-            constraints: offer.constraints.clone(),
+            properties: offer.properties,
+            constraints: offer.constraints,
             proposal_id: None,
             issuer_id: None,
             state: None,
