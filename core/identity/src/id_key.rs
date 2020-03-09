@@ -49,6 +49,7 @@ impl IdentityKey {
         Ok(true)
     }
 
+    /// Sign given 32-byte message with the key.
     pub fn sign(&self, data: &[u8]) -> Option<Vec<u8>> {
         let s = match &self.secret {
             Some(secret) => secret,

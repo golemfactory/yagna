@@ -67,7 +67,7 @@ CREATE TABLE "pay_payment"(
 	"amount" VARCHAR(32) NOT NULL,
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	"allocation_id" VARCHAR(50) NULL,
-	"details" TEXT NOT NULL,
+	"details" BLOB NOT NULL,
 	FOREIGN KEY("allocation_id") REFERENCES "pay_allocation" ("id")
 );
 

@@ -134,8 +134,8 @@ paths:
         - name: timeout
           in: query
           schema:
-            type: integer
-            format: int32
+            type: number
+            format: float
         - name: maxCount
           in: query
           schema:
@@ -220,8 +220,8 @@ paths:
         - name: timeout
           in: query
           schema:
-            type: integer
-            format: int32
+            type: number
+            format: float
       responses:
         200:
           description: Success

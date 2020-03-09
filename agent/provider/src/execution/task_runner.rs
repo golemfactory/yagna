@@ -1,6 +1,10 @@
-use super::exeunits_registry::ExeUnitsRegistry;
-use super::task::Task;
-use crate::market::provider_market::AgreementSigned;
+use actix::prelude::*;
+use anyhow::{anyhow, bail, Error, Result};
+use log::{debug, error, info, warn};
+use std::collections::HashSet;
+use std::env;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use ya_client::activity::ActivityProviderApi;
 use ya_model::activity::{
@@ -11,14 +15,9 @@ use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 
-use actix::prelude::*;
-
-use anyhow::{Error, Result};
-use log::{debug, error, info, warn};
-use std::collections::HashSet;
-use std::env;
-use std::path::PathBuf;
-use std::sync::Arc;
+use super::exeunits_registry::ExeUnitsRegistry;
+use super::task::Task;
+use crate::market::provider_market::AgreementSigned;
 
 // =========================================== //
 // Public exposed messages
@@ -172,7 +171,7 @@ impl TaskRunner {
     }
 
     async fn query_events(client: Arc<ActivityProviderApi>) -> Result<Vec<ProviderEvent>> {
-        Ok(client.get_activity_events(Some(3)).await?)
+        Ok(client.get_activity_events(Some(3), None).await?)
     }
 
     // =========================================== //
@@ -215,7 +214,7 @@ impl TaskRunner {
                 let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: agreement_id.clone(), activity_id: activity_id.clone()});
                 Ok(())
             }
-            Err(error) => return Err(Error::msg(format!("Can't create activity. {}", error))),
+            Err(error) => bail!("Can't create activity. {}", error),
         }
     }
 
@@ -287,10 +286,11 @@ impl TaskRunner {
             .registry
             .spawn_exeunit(exeunit_name, &exeunit_working_dir)
             .map_err(|error| {
-                Error::msg(format!(
+                anyhow!(
                     "Spawning ExeUnit failed for agreement [{}] with error: {}",
-                    agreement_id, error
-                ))
+                    agreement_id,
+                    error
+                )
             })?;
 
         Ok(Task::new(exeunit_instance, agreement_id, activity_id))
