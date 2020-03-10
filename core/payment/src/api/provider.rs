@@ -271,7 +271,7 @@ async fn send_invoice(
     let addr: NodeId = invoice.recipient_id.parse().unwrap();
     let msg = SendInvoice(invoice);
     let timeout = if query.timeout > 0 {
-        Some(query.timeout * 1000)
+        Some(query.timeout)
     } else {
         None
     };
