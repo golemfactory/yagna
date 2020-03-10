@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
-use log::{debug, error, info, warn};
+use log_derive::{logfn, logfn_inputs};
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
-use crate::market::provider_market::AgreementSigned;
+use crate::market::provider_market::AgreementApproved;
 
 // =========================================== //
 // Public exposed messages
@@ -30,7 +30,7 @@ use crate::market::provider_market::AgreementSigned;
 pub struct UpdateActivity;
 
 /// Loads ExeUnits descriptors from file.
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "Result<()>")]
 pub struct InitializeExeUnits {
     pub file: PathBuf,
@@ -65,7 +65,7 @@ pub struct ActivityDestroyed {
 // =========================================== //
 
 /// Called when we got createActivity event.
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "Result<()>")]
 struct CreateActivity {
     pub activity_id: String,
@@ -73,7 +73,7 @@ struct CreateActivity {
 }
 
 /// Called when we got destroyActivity event.
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "Result<()>")]
 struct DestroyActivity {
     pub activity_id: String,
@@ -90,11 +90,18 @@ pub struct TaskRunner {
     /// Spawned tasks.
     tasks: Vec<Task>,
     /// Agreements, that wait for CreateActivity event.
-    waiting_agreements: HashSet<String>,
+    active_agreements: HashSet<String>,
 
     /// External actors can listen on these signals.
     pub activity_created: SignalSlot<ActivityCreated>,
     pub activity_destroyed: SignalSlot<ActivityDestroyed>,
+}
+
+// outputing empty string for logfn macro purposes
+impl std::fmt::Display for TaskRunner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "")
+    }
 }
 
 impl TaskRunner {
@@ -103,28 +110,26 @@ impl TaskRunner {
             api: Arc::new(client),
             registry: ExeUnitsRegistry::new(),
             tasks: vec![],
-            waiting_agreements: HashSet::new(),
+            active_agreements: HashSet::new(),
             activity_created: SignalSlot::<ActivityCreated>::new(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
         }
     }
 
+    #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?}")]
+    #[logfn(ok = "INFO", err = "ERROR", fmt = "ExeUnits initialized: {:?}")]
     pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits) -> Result<()> {
-        if let Err(error) = self.registry.register_exeunits_from_file(&msg.file) {
-            error!("Can't initialize ExeUnits. {}", error);
-            return Err(error);
-        }
-        info!("ExeUnits initialized from file {}.", msg.file.display());
-        Ok(())
+        self.registry
+            .register_exeunits_from_file(&msg.file)
+            .map(|_| ())
     }
 
     pub async fn collect_events(
         client: Arc<ActivityProviderApi>,
         addr: Addr<TaskRunner>,
     ) -> Result<()> {
-        let result = TaskRunner::query_events(client).await;
-        match result {
-            Err(error) => error!("Can't query activity events. Error: {:?}", error),
+        match TaskRunner::query_events(client).await {
+            Err(error) => log::error!("Can't query activity events. Error: {:?}", error),
             Ok(activity_events) => {
                 TaskRunner::dispatch_events(&activity_events, addr).await;
             }
@@ -138,8 +143,7 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunner>) {
-        info!("Collected {} activity events. Processing...", events.len());
-        debug!("those events are: {:?}", events);
+        log::info!("Collected {} activity events. Processing...", events.len());
 
         // FIXME: Create activity arrives together with destroy, and destroy is being processed first
         for event in events.iter() {
@@ -152,7 +156,7 @@ impl TaskRunner {
                         .send(CreateActivity::new(activity_id, agreement_id))
                         .await
                     {
-                        warn!("{}", error);
+                        log::warn!("{}", error);
                     }
                 }
                 ProviderEvent::DestroyActivity {
@@ -163,7 +167,7 @@ impl TaskRunner {
                         .send(DestroyActivity::new(activity_id, agreement_id))
                         .await
                     {
-                        warn!("{}", error);
+                        log::warn!("{}", error);
                     }
                 }
             }
@@ -178,84 +182,51 @@ impl TaskRunner {
     // TaskRunner internals - activity reactions
     // =========================================== //
 
+    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
+    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity created: {:?}")]
     fn on_create_activity(&mut self, msg: CreateActivity) -> Result<()> {
-        let activity_id = &msg.activity_id;
-        let agreement_id = &msg.agreement_id;
-
-        if !self.waiting_agreements.contains(agreement_id) {
-            let msg = format!(
-                "Trying to create activity [{}] for not my agreement [{}].",
-                activity_id, agreement_id
-            );
-            return Err(Error::msg(msg));
+        if !self.active_agreements.contains(&msg.agreement_id) {
+            bail!("Can't create activity for not my agreement [{:?}].", msg);
         }
 
-        if self.find_activity(activity_id, agreement_id).is_some() {
-            let msg = format!(
-                "Trying to create activity [{}] for the same agreeement [{}].",
-                activity_id, agreement_id
-            );
-            return Err(Error::msg(msg));
-        }
-
-        info!("Creating activity: {}", activity_id);
         // TODO: Get ExeUnit name from agreement.
         let exeunit_name = "wasmtime";
-        match self.create_task(exeunit_name, activity_id, agreement_id) {
+        match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
             Ok(task) => {
-                self.waiting_agreements.remove(agreement_id);
                 self.tasks.push(task);
-
-                info!(
-                    "Created activity [{}] for agreement [{}]. Spawned [{}] exeunit.",
-                    activity_id, agreement_id, exeunit_name
-                );
-
-                let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: agreement_id.clone(), activity_id: activity_id.clone()});
+                let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: msg.agreement_id.clone(), activity_id: msg.activity_id.clone()});
                 Ok(())
             }
-            Err(error) => bail!("Can't create activity. {}", error),
+            Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
         }
     }
 
+    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
+    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity destroyed: {:?}")]
     fn on_destroy_activity(&mut self, msg: DestroyActivity) -> Result<()> {
-        let activity_id: &str = &msg.activity_id;
-        let agreement_id: &str = &msg.agreement_id;
-
-        match self
-            .tasks
-            .iter()
-            .position(|task| task.agreement_id == agreement_id && task.activity_id == activity_id)
-        {
-            None => {
-                warn!(
-                    "Trying to destroy not existing activity [{}]. Agreement [{}].",
-                    activity_id, agreement_id
-                );
-                return Ok(());
-            }
+        match self.tasks.iter().position(|task| {
+            task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
+        }) {
+            None => bail!("Can't destroy not existing activity [{:?}]", msg),
             Some(task_position) => {
                 // Remove task from list and destroy everything related with it.
                 let task = self.tasks.swap_remove(task_position);
                 TaskRunner::destroy_task(task);
 
-                let _ = self.activity_destroyed.send_signal(ActivityDestroyed{agreement_id: agreement_id.to_string()});
+                let _ = self.activity_destroyed.send_signal(ActivityDestroyed{agreement_id: msg.agreement_id.to_string()});
 
                 // TODO: remove this
                 let client = self.api.clone();
                 Arbiter::spawn(async move {
-                    debug!("changing activity state to: Terminated");
-                    if let Err(err) = client
+                    log::debug!("changing activity state to: Terminated");
+                    if let Err(e) = client
                         .set_activity_state(
                             &msg.activity_id,
                             &ActivityState::from(StatePair::from(State::Terminated)),
                         )
                         .await
                     {
-                        error!(
-                            "Failed to set state for activity [{}]. Error: {}",
-                            &msg.activity_id, err
-                        );
+                        log::error!("Setting state for activity [{:?}], error: {}", msg, e);
                     }
                 });
             }
@@ -263,24 +234,22 @@ impl TaskRunner {
         Ok(())
     }
 
-    pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
-        info!(
-            "TaskRunner got signed agreement [{}] for processing.",
-            &msg.agreement.agreement_id
-        );
-
-        // Agreement waits for create activity.
-        self.waiting_agreements.insert(msg.agreement.agreement_id);
+    #[logfn_inputs(Info, fmt = "{}Got {:?}")]
+    pub fn on_agreement_approved(&mut self, msg: AgreementApproved) -> Result<()> {
+        // Agreement waits for first create activity.
+        // FIXME: clean-up agreements upon TTL or maybe payments
+        self.active_agreements.insert(msg.agreement.agreement_id);
         Ok(())
     }
 
+    #[logfn_inputs(Info, fmt = "{}Creating task: {}, act id: {}, agrmnt id: {}")]
+    #[logfn(Debug, fmt = "Task created: {:?}")]
     fn create_task(
         &self,
         exeunit_name: &str,
         activity_id: &str,
         agreement_id: &str,
     ) -> Result<Task> {
-        info!("creating task: {}, act id: {}", exeunit_name, activity_id);
         let exeunit_working_dir = env::current_dir()?;
         let exeunit_instance = self
             .registry
@@ -296,18 +265,9 @@ impl TaskRunner {
         Ok(Task::new(exeunit_instance, agreement_id, activity_id))
     }
 
-    fn find_activity(&self, activity_id: &str, agreement_id: &str) -> Option<&Task> {
-        self.tasks
-            .iter()
-            .find(|task| task.agreement_id == agreement_id && task.activity_id == activity_id)
-    }
-
+    #[logfn_inputs(Info, fmt = "Destroying task: {:?}")]
+    #[logfn(Debug, fmt = "Task destroyed: {:?}")]
     fn destroy_task(mut task: Task) {
-        info!(
-            "Destroying task related to agreement [{}] and activity {}.",
-            &task.agreement_id, &task.activity_id
-        );
-
         // Here we could cleanup resources, directories and everything.
         task.exeunit.kill();
     }
@@ -329,7 +289,7 @@ impl Actor for TaskRunner {
     type Context = Context<Self>;
 }
 
-forward_actix_handler!(TaskRunner, AgreementSigned, on_signed_agreement);
+forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);

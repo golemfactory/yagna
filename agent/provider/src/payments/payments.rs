@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use futures_util::FutureExt;
 
-use crate::market::provider_market::AgreementSigned;
+use crate::market::provider_market::AgreementApproved;
 use crate::execution::{ActivityCreated, ActivityDestroyed};
 use super::model::{PaymentModel, PaymentDescription};
 use crate::payments::factory::PaymentModelFactory;
@@ -70,7 +70,7 @@ impl Payments {
         }
     }
 
-    pub fn on_signed_agreement(&mut self, msg: AgreementSigned) -> Result<()> {
+    pub fn on_signed_agreement(&mut self, msg: AgreementApproved) -> Result<()> {
         log::info!(
             "Payments got signed agreement [{}].",
             &msg.agreement.agreement_id
@@ -128,7 +128,7 @@ impl Payments {
     }
 }
 
-forward_actix_handler!(Payments, AgreementSigned, on_signed_agreement);
+forward_actix_handler!(Payments, AgreementApproved, on_signed_agreement);
 
 impl Handler<ActivityCreated> for Payments {
     type Result = ActorResponse<Self, (), Error>;
