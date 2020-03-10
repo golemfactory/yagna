@@ -61,7 +61,7 @@ async fn process_offer(
         if offer.prev_proposal_id.is_some() {
             anyhow::bail!("Proposal in Initial state but with prev id: {:#?}", offer)
         }
-        let bespoke_proposal = Proposal::from_demand(&offer, &my_demand);
+        let bespoke_proposal = offer.counter_demand(my_demand)?;
         let new_proposal_id = requestor_api
             .counter_proposal(&bespoke_proposal, subscription_id)
             .await?;
@@ -93,7 +93,7 @@ async fn spawn_workers(
 ) -> Result<(), anyhow::Error> {
     loop {
         let events = requestor_api
-            .collect(&subscription_id, Some(12.0), Some(5))
+            .collect(&subscription_id, Some(2.0), Some(5))
             .await?;
 
         if !events.is_empty() {
@@ -193,29 +193,28 @@ async fn main() -> anyhow::Result<()> {
 
     log::error!("sub_id={}", subscription_id);
 
-    {
-        let requestor_api = market_api.clone();
-        let subscription_id = subscription_id.clone();
-        Arbiter::spawn(async move {
-            tokio::signal::ctrl_c().await.unwrap();
-            requestor_api.unsubscribe(&subscription_id).await.unwrap();
-        })
-    }
-    let requestor_api = market_api.clone();
-    let activity_api = settings.activity_api()?;
-
-    let (tx, mut rx): (mpsc::Sender<String>, mpsc::Receiver<String>) =
-        futures::channel::mpsc::channel(1);
+    let mkt_api = market_api.clone();
+    let sub_id = subscription_id.clone();
     Arbiter::spawn(async move {
-        while let Some(id) = rx.next().await {
-            if let Err(e) = process_agreement(&activity_api, id.clone()).await {
-                log::error!("processing agreement id {} error: {}", id, e);
-                return;
-            }
+        tokio::signal::ctrl_c().await.unwrap();
+        mkt_api.unsubscribe(&sub_id).await.unwrap();
+    });
+
+    let mkt_api = market_api.clone();
+    let sub_id = subscription_id.clone();
+    let (tx, mut rx) = mpsc::channel::<String>(1);
+    Arbiter::spawn(async move {
+        if let Err(e) = spawn_workers(mkt_api, &sub_id, &my_demand, tx).await {
+            log::error!("spawning workers for {} error: {}", sub_id, e);
         }
     });
-    spawn_workers(requestor_api.clone(), &subscription_id, &my_demand, tx).await?;
 
+    let activity_api = settings.activity_api()?;
+    if let Some(id) = rx.next().await {
+        if let Err(e) = process_agreement(&activity_api, id.clone()).await {
+            log::error!("processing agreement id {} error: {}", id, e);
+        }
+    }
     market_api.unsubscribe(&subscription_id).await?;
     Ok(())
 }
