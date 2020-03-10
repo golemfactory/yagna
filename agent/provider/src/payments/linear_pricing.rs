@@ -24,7 +24,15 @@ impl PaymentModel for LinearPricing {
 
 impl LinearPricing {
     pub fn new(commercials: PaymentDescription) -> Result<LinearPricing> {
-        Ok(LinearPricing{usage_coeffs: commercials.usage_coeffs})
+        let coeffs_addr = "golem.com.pricing.model.linear.coeffs";
+        let usage_vec_str = commercials.commercial_agreement.get(coeffs_addr)
+            .ok_or(anyhow!("Can't find usage coefficients in agreement ('{}').", coeffs_addr))?;
+
+        log::info!("Usage coefficients vector: {}.", usage_vec_str);
+        let usage: Vec<f64> = serde_json::from_str(&usage_vec_str)
+            .map_err(|error|anyhow!("Can't parse usage vector."))?;
+
+        Ok(LinearPricing{usage_coeffs: usage})
     }
 }
 

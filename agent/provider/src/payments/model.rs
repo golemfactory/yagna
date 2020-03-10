@@ -1,14 +1,14 @@
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
 use serde_json::Value;
+use std::collections::HashMap;
 
 use ya_model::market::Agreement;
 
 
 /// Commercial part of agreement.
 pub struct PaymentDescription {
-    pub commercial_agreement: Value,
-    pub usage_coeffs: Vec<f64>,
+    pub commercial_agreement: HashMap<String, String>,
 }
 
 /// Implementation of payment model which knows, how to compute amount
@@ -20,19 +20,17 @@ pub trait PaymentModel {
 impl PaymentDescription {
     pub fn new(agreement: &Agreement) -> Result<PaymentDescription> {
         let properties = &agreement.offer.properties;
-        log::debug!("{}", properties);
+        log::info!("{}", serde_json::to_string_pretty(&properties)?);
 
-        let commercial = properties.pointer("golem.com")
-            .ok_or(anyhow!("Can't find commercial part of agreement ('golem.com')."))?;
+        let commercial = properties.as_object()
+            .ok_or(anyhow!("Agreement properties has unexpected format."))?
+            .iter()
+            .filter(|(key, _)| { key.starts_with("golem.com.") })
+            .filter(|(_, value)| { value.is_string() })
+            .map(|(key, value)| {
+                (key.clone(), value.as_str().unwrap().to_string())
+            }).collect::<HashMap<String, String>>();
 
-        let usage_vec_str = properties.pointer("golem.com.usage.vector")
-            .ok_or(anyhow!("Can't find usage vector in agreement ('golem.com.usage.vector')."))?
-            .as_str()
-            .ok_or(anyhow!("Usage vector from agreement is not a string ('golem.com.usage.vector')."))?;
-
-        let usage: Vec<f64> = serde_json::from_str(usage_vec_str)
-            .map_err(|error|anyhow!("Can't parse usage vector."))?;
-
-        Ok(PaymentDescription{commercial_agreement: commercial.clone(), usage_coeffs: usage})
+        Ok(PaymentDescription{commercial_agreement: commercial.clone()})
     }
 }

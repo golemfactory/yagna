@@ -135,7 +135,7 @@ impl Handler<ActivityCreated> for Payments {
 
     fn handle(&mut self, msg: ActivityCreated, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(activity) = self.agreements.get_mut(&msg.agreement_id) {
-            log::info!("Payments - activity {} created. Start computing costs.", &msg.agreement_id);
+            log::info!("Payments - activity {} created. Start computing costs.", &msg.activity_id);
 
             activity.activity_created(&msg.activity_id);
             ActorResponse::reply(Ok(()))
