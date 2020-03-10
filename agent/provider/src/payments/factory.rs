@@ -1,5 +1,5 @@
 use super::model::{PaymentModel, PaymentDescription};
-use super::model::LinearPricing;
+use super::linear_pricing::LinearPricing;
 
 use anyhow::Result;
 use std::sync::Arc;

@@ -111,6 +111,10 @@ impl ProviderAgent {
         ServiceInfo::Wasm { inf, wasi_version }
     }
 
+    fn create_payments_info() -> () {
+
+    }
+
     pub fn spawn_shutdown_handler(&mut self, context: &mut Context<ProviderAgent>) {
         let market = self.market.clone();
         let _ = context.spawn(

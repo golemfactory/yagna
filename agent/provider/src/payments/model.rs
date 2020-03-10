@@ -7,8 +7,8 @@ use ya_model::market::Agreement;
 
 /// Commercial part of agreement.
 pub struct PaymentDescription {
-    commercial_agreement: Value,
-    usage_coeffs: Vec<f64>,
+    pub commercial_agreement: Value,
+    pub usage_coeffs: Vec<f64>,
 }
 
 /// Implementation of payment model which knows, how to compute amount
@@ -36,28 +36,3 @@ impl PaymentDescription {
         Ok(PaymentDescription{commercial_agreement: commercial.clone(), usage_coeffs: usage})
     }
 }
-
-// =========================================== //
-// Payment models implementation
-// =========================================== //
-
-pub struct LinearPricing {
-    usage_coeffs: Vec<f64>,
-}
-
-impl PaymentModel for LinearPricing {
-    fn compute_cost(&self, usage: &Vec<f64>) -> Result<BigDecimal> {
-        let cost: f64 = usage.iter()
-            .zip(self.usage_coeffs.iter())
-            .map(|(coeff, usage_value)| coeff * usage_value)
-            .sum();
-        Ok(BigDecimal::from(cost))
-    }
-}
-
-impl LinearPricing {
-    pub fn new(commercials: PaymentDescription) -> Result<LinearPricing> {
-        Ok(LinearPricing{usage_coeffs: commercials.usage_coeffs})
-    }
-}
-
