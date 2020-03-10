@@ -5678,6 +5678,7 @@ dependencies = [
  "url 2.1.1",
  "ya-agent-offer-model",
  "ya-client",
+ "ya-core-model",
  "ya-model",
  "ya-utils-actix",
 ]

@@ -1,14 +1,13 @@
 [
     {
         "name": "wasmtime",
-        "path": "target/debug/exe-unit",
+        "path": "../target/debug/exe-unit",
         "args": [
-            "-a", "exe-unit/examples/agreement.json",
-            "-b", "target/debug/wasmtime-exeunit",
-            "-c", "ya-prov/exe-unit/cache/",
-            "-w", "ya-prov/exe-unit/work/",
-            "from-file",
-            "exe-unit/examples/commands.json"
+            "-b", "../target/debug/wasmtime-exeunit",
+            "-c", "exe-unit-wd/cache/",
+            "-w", "exe-unit-wd/work/",
+            "-a", "../exe-unit/examples/agreement.json",
+            "service-bus"
         ]
     }
 ]
