@@ -138,6 +138,13 @@ fn build_demand(node_name: &str) -> Demand {
                         "name": node_name
                     },
                     "ala": 1
+                },
+                "srv": {
+                    "comp":{
+                        "wasm": {
+                            "task_package": "http://localhost:8000/rust-wasi-tutorial.zip"
+                        }
+                    }
                 }
             }
         }),
