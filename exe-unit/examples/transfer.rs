@@ -2,13 +2,16 @@ use actix::{Actor, Addr, System};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures::StreamExt;
 use rand::Rng;
+use serde_json::Value;
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
+use std::collections::HashMap;
 use std::env;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tempdir::TempDir;
+use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::error::Error;
 use ya_exe_unit::service::transfer::{DeployImage, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
@@ -149,31 +152,25 @@ async fn main() -> anyhow::Result<()> {
         sys.run().expect("sys.run");
     });
 
-    log::debug!("Creating agreement.json (hash = {})", hex::encode(hash));
-
-    let agreement_path = temp_dir.path().clone().join("agreement.json");
-    let mut agreement = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(agreement_path.clone())?;
-
-    agreement.write(
-        format!(
-            "{{ \"golem.srv.comp.wasm.task_package\": \"hash:sha3:{}:http://127.0.0.1:8001/rnd\" }}",
+    let agreement = Agreement {
+        json: Value::Null,
+        image: format!(
+            "hash://sha3:{}:http://127.0.0.1:8001/rnd",
             hex::encode(hash)
-        )
-        .as_bytes(),
-    )?;
+        ),
+        usage_vector: Vec::new(),
+        usage_limits: HashMap::new(),
+    };
 
     log::debug!("Starting TransferService");
     let exe_ctx = ExeUnitContext {
         service_id: None,
         report_url: None,
-        agreement: agreement_path,
+        agreement,
         work_dir: work_dir.clone(),
         cache_dir,
     };
-    let transfer_service = TransferService::new(exe_ctx);
+    let transfer_service = TransferService::new(&exe_ctx);
     let addr = transfer_service.start();
 
     log::warn!("Deploy with transfer and hash check");

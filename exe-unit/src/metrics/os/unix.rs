@@ -11,21 +11,22 @@ pub fn cpu_time() -> Result<Duration> {
     Ok(process + children)
 }
 
-pub fn mem_rss() -> Result<i64> {
-    Err(MetricError::Unsupported)
+pub fn mem_rss() -> Result<f64> {
+    Err(MetricError::Unsupported("mem".to_owned()))
 }
 
-pub fn mem_peak_rss() -> Result<i64> {
+pub fn mem_peak_rss() -> Result<f64> {
     let children = getrusage(Resource::Children)?;
     let process = getrusage(Resource::Process)?;
-    Ok(process.ru_maxrss
+    let total = process.ru_maxrss
         + process.ru_ixrss
         + process.ru_idrss
         + process.ru_isrss
         + children.ru_maxrss
         + children.ru_ixrss
         + children.ru_idrss
-        + children.ru_isrss)
+        + children.ru_isrss;
+    Ok((total as f64) / (1024_f64 * 1024_f64)) // kiB to giB
 }
 
 #[repr(i32)]

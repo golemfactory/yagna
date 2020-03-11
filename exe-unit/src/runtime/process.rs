@@ -14,45 +14,34 @@ use ya_model::activity::{CommandResult, ExeScriptCommand};
 
 pub struct RuntimeProcess {
     binary: PathBuf,
-    agreement: Option<PathBuf>,
-    work_dir: Option<PathBuf>,
-    cache_dir: Option<PathBuf>,
+    image: String,
+    work_dir: PathBuf,
     abort_handles: HashSet<Abort>,
 }
 
 impl RuntimeProcess {
-    pub fn new(binary: PathBuf) -> Self {
+    pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
             binary,
-            agreement: None,
-            work_dir: None,
-            cache_dir: None,
+            image: ctx.agreement.image.clone(),
+            work_dir: ctx.work_dir.clone(),
             abort_handles: HashSet::new(),
         }
     }
 
     fn args(&self, cmd_args: Vec<OsString>) -> Vec<OsString> {
         let mut args = vec![
-            OsString::from("--agreement"),
-            self.agreement.clone().unwrap().into_os_string(),
-            OsString::from("--cachedir"),
-            self.cache_dir.clone().unwrap().into_os_string(),
             OsString::from("--workdir"),
-            self.work_dir.clone().unwrap().into_os_string(),
+            self.work_dir.clone().into_os_string(),
+            OsString::from("--image"),
+            OsString::from(self.image.clone()),
         ];
         args.extend(cmd_args);
         args
     }
 }
 
-impl Runtime for RuntimeProcess {
-    fn with_context(mut self, ctx: ExeUnitContext) -> Self {
-        self.agreement = Some(ctx.agreement);
-        self.work_dir = Some(ctx.work_dir);
-        self.cache_dir = Some(ctx.cache_dir);
-        self
-    }
-}
+impl Runtime for RuntimeProcess {}
 
 impl Actor for RuntimeProcess {
     type Context = Context<Self>;

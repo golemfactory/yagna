@@ -1,3 +1,4 @@
+use crate::agreement;
 use crate::metrics::error::MetricError;
 use crate::state::StateError;
 use thiserror::Error;
@@ -76,6 +77,8 @@ pub enum Error {
     RemoteServiceError(String),
     #[error("Usage limit exceeded: {0}")]
     UsageLimitExceeded(String),
+    #[error("Agreement error: {0}")]
+    AgreementError(#[from] agreement::Error),
 }
 
 impl Error {
@@ -84,6 +87,12 @@ impl Error {
         LocalServiceError: From<E>,
     {
         Error::from(LocalServiceError::from(err))
+    }
+}
+
+impl From<MetricError> for Error {
+    fn from(e: MetricError) -> Self {
+        Error::from(LocalServiceError::MetricError(e))
     }
 }
 
@@ -114,6 +123,7 @@ impl From<Error> for RpcError {
             Error::ChannelError(e) => RpcError::Activity(e.to_string()),
             Error::JsonError(e) => RpcError::Activity(e.to_string()),
             Error::LocalServiceError(e) => RpcError::Activity(e.to_string()),
+            Error::AgreementError(e) => RpcError::Service(e.to_string()),
             Error::CommandError(e) => RpcError::Service(e),
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),

@@ -8,9 +8,7 @@ use actix::prelude::*;
 use futures::future::{AbortHandle, Abortable};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ya_transfer::error::Error as TransferError;
@@ -47,12 +45,12 @@ pub struct TransferService {
     providers: HashMap<&'static str, Rc<Box<dyn TransferProvider<TransferData, TransferError>>>>,
     cache: Cache,
     work_dir: PathBuf,
-    agreement: PathBuf,
+    image: String,
     abort_handles: HashSet<Abort>,
 }
 
 impl TransferService {
-    pub fn new(ctx: ExeUnitContext) -> TransferService {
+    pub fn new(ctx: &ExeUnitContext) -> TransferService {
         let mut providers = HashMap::new();
 
         let provider_vec: Vec<Rc<Box<dyn TransferProvider<TransferData, TransferError>>>> = vec![
@@ -68,8 +66,8 @@ impl TransferService {
         TransferService {
             providers,
             cache: Cache::new(ctx.cache_dir.clone()),
-            work_dir: ctx.work_dir,
-            agreement: ctx.agreement,
+            work_dir: ctx.work_dir.clone(),
+            image: ctx.agreement.image.clone(),
             abort_handles: HashSet::new(),
         }
     }
@@ -144,29 +142,6 @@ impl TransferService {
                 _ => scheme,
             })?)
     }
-
-    fn load_package_url(agreement_file: &Path) -> Result<String> {
-        let reader = BufReader::new(File::open(agreement_file)?);
-
-        let json: serde_json::Value = serde_json::from_reader(reader)?;
-
-        let package_field = "/golem.srv.comp.wasm.task_package";
-        let package_value = json
-            .pointer(package_field)
-            .ok_or(Error::CommandError(format!(
-                "Agreement field '{}' doesn't exist.",
-                package_field
-            )))?;
-
-        let package = package_value
-            .as_str()
-            .ok_or(Error::CommandError(format!(
-                "Agreement field '{}' is not string type.",
-                package_field
-            )))?
-            .to_owned();
-        return Ok(package);
-    }
 }
 
 impl Actor for TransferService {
@@ -199,8 +174,7 @@ impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, PathBuf, Error>;
 
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let pkg_url = actor_try!(TransferService::load_package_url(&self.agreement));
-        let source_url = actor_try!(TransferUrl::parse(&pkg_url, "file"));
+        let source_url = actor_try!(TransferUrl::parse(&self.image, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
         let cache_path = self.cache.to_cache_path(&cache_name);
         let final_path = self.cache.to_final_path(&cache_name);
