@@ -14,10 +14,12 @@ pub struct LinearPricing {
 
 impl PaymentModel for LinearPricing {
     fn compute_cost(&self, usage: &Vec<f64>) -> Result<BigDecimal> {
-        let cost: f64 = usage.iter()
-            .zip(self.usage_coeffs.iter())
+        // Note: first element of usage_coeffs contains constant initial cost
+        // of computing task, so we don't multiply it.
+        let cost: f64 = self.usage_coeffs[0] + self.usage_coeffs[1..].iter()
+            .zip(usage.iter())
             .map(|(coeff, usage_value)| coeff * usage_value)
-            .sum();
+            .sum::<f64>();
         Ok(BigDecimal::from(cost))
     }
 }

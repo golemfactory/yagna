@@ -201,6 +201,8 @@ impl ProviderMarket {
         market_api: Arc<MarketProviderApi>,
         subscription: OfferSubscription,
     ) {
+        if events.len() == 0 { return };
+
         log::info!("Collected {} market events. Processing...", events.len());
 
         let dispatch_futures = events

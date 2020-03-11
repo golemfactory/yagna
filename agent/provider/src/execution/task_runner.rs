@@ -143,6 +143,8 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunner>) {
+        if events.len() == 0 { return };
+
         log::info!("Collected {} activity events. Processing...", events.len());
 
         // FIXME: Create activity arrives together with destroy, and destroy is being processed first

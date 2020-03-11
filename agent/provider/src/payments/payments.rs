@@ -105,25 +105,33 @@ impl Payments {
         activity_api: Arc<ActivityProviderApi>,
         payment_api: Arc<ProviderApi>,
         activity_id: String,
+        agreement_id: String,
     ) -> Result<()> {
-        let usage = activity_api.get_activity_usage(&activity_id).await?
-            .current_usage
-            .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
+        // let usage = activity_api.get_activity_usage(&activity_id).await?
+        //     .current_usage
+        //     .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
+        let usage = vec![1.0, 1.0];
 
         let cost = payment_model.compute_cost(&usage)?;
 
+        log::info!("Current cost for activity [{}]: {}.", &activity_id, &cost);
+
         let debit_note = NewDebitNote {
-            agreement_id: "".to_string(),
-            activity_id: Some(activity_id),
+            agreement_id,
+            activity_id: Some(activity_id.clone()),
             total_amount_due: cost,
             usage_counter_vector: Some(json!(usage)),
-            credit_account_id: "".to_string(),
+            credit_account_id: "0xa74476443119A942dE498590Fe1f2454d7D4aC0d".to_string(),
             payment_platform: None,
             payment_due_date: None
         };
 
-        let debit_note = payment_api.issue_debit_note(&debit_note).await?;
-        payment_api.send_debit_note(&debit_note.debit_note_id).await?;
+        log::debug!("Sending debit note {}.", serde_json::to_string(&debit_note)?);
+
+        let debit_note = payment_api.issue_debit_note(&debit_note).await
+            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &activity_id, error))?;
+        payment_api.send_debit_note(&debit_note.debit_note_id).await
+            .map_err(|error| anyhow!("Failed to send debit note for activity [{}]. {}", &activity_id, error))?;
         Ok(())
     }
 }
@@ -180,9 +188,10 @@ impl Handler<UpdateCost> for Payments {
             let activity_api = self.activity_api.clone();
             let payment_api = self.payment_api.clone();
             let activity_id = activity_id.clone();
+            let agreement_id = activity.agreement_id.clone();
 
             let future= async move {
-                Self::send_debit_note(payment_model, activity_api, payment_api, activity_id).await
+                Self::send_debit_note(payment_model, activity_api, payment_api, activity_id, agreement_id).await
             }.into_actor(self).map(|result, _, _|{
                 if let Err(error) = result {
                     log::error!("{}", error);
