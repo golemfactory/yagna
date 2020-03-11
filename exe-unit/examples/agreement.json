@@ -1,3 +1,47 @@
 {
-  "golem.srv.comp.wasm.task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://localhost:8000/rust-wasi-tutorial.zip"
+  "properties": {
+    "golem": {
+      "inf": {
+        "mem.gib": 0.5,
+        "storage.gib": 5
+      },
+      "node": {
+        "id.name": "dany"
+      },
+      "runtime.wasm": {
+        "wasi.version@v": "0.0.0",
+        "task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://localhost:8000/rust-wasi-tutorial.zip"
+      },
+      "activity.caps": {
+        "transfer.protocol": [
+          "http",
+          "https",
+          "container"
+        ]
+      },
+      "com": {
+        "scheme": "payu",
+        "scheme.payu": {
+          "interval_sec": 60
+        },
+        "pricing": {
+          "model": "linear",
+          "model.linear": {
+            "coeffs": [
+              0,
+              0.01,
+              0.0016
+            ]
+          }
+        },
+        "usage": {
+          "vector": [
+            "golem.usage.duration_sec",
+            "golem.usage.cpu_sec"
+          ]
+        }
+      }
+    }
+  },
+  "constraints": "()\n"
 }
