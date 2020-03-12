@@ -51,6 +51,7 @@ pub struct GetRunningCommand {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetActivityState {
+    pub agreement_id: String,
     pub activity_id: String,
     pub timeout: Option<f32>,
 }
@@ -67,6 +68,7 @@ pub struct SetActivityState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetActivityUsage {
+    pub agreement_id: String,
     pub activity_id: String,
     pub timeout: Option<f32>,
 }
