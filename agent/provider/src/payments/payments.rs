@@ -16,7 +16,8 @@ use ya_client::payment::provider::ProviderApi;
 use ya_utils_actix::actix_handler::{ResultTypeGetter};
 use ya_utils_actix::forward_actix_handler;
 use ya_model::market::Agreement;
-use ya_model::payment::NewDebitNote;
+use ya_model::payment::{NewDebitNote, NewInvoice};
+use bigdecimal::BigDecimal;
 
 
 const UPDATE_COST_INTERVAL_MILLIS: u64 = 10000;
@@ -107,21 +108,29 @@ impl Payments {
         }
     }
 
+    async fn compute_cost(
+        payment_model: Arc<Box<dyn PaymentModel>>,
+        provider_context: Arc<ProviderCtx>,
+        activity_id: String
+    ) -> Result<(BigDecimal, Vec<f64>)> {
+        let activity_api = provider_context.activity_api.clone();
+
+        // let usage = activity_api.get_activity_usage(&activity_id).await?
+        //     .current_usage
+        //     .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
+        let usage = vec![1.0, 1.0];
+        let cost = payment_model.compute_cost(&usage)?;
+
+        Ok((cost, usage))
+    }
+
     async fn send_debit_note(
         payment_model: Arc<Box<dyn PaymentModel>>,
         provider_context: Arc<ProviderCtx>,
         activity_id: String,
         agreement_id: String,
     ) -> Result<()> {
-        let activity_api = provider_context.activity_api.clone();
-        let payment_api = provider_context.payment_api.clone();
-
-        // let usage = activity_api.get_activity_usage(&activity_id).await?
-        //     .current_usage
-        //     .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
-        let usage = vec![1.0, 1.0];
-
-        let cost = payment_model.compute_cost(&usage)?;
+        let (cost, usage) = Self::compute_cost(payment_model.clone(), provider_context.clone(), activity_id.clone()).await?;
 
         log::info!("Current cost for activity [{}]: {}.", &activity_id, &cost);
 
@@ -137,6 +146,7 @@ impl Payments {
 
         log::debug!("Creating debit note {}.", serde_json::to_string(&debit_note)?);
 
+        let payment_api = provider_context.payment_api.clone();
         let debit_note = payment_api.issue_debit_note(&debit_note).await
             .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &activity_id, error))?;
 
@@ -146,6 +156,30 @@ impl Payments {
 
         log::info!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &activity_id);
         Ok(())
+    }
+
+    async fn send_invoice(
+        payment_model: Arc<Box<dyn PaymentModel>>,
+        provider_context: Arc<ProviderCtx>,
+        activities: Vec<String>,
+        agreement_id: String,
+    ) -> Result<()> {
+        let (cost, usage) = Self::compute_cost(payment_model.clone(), provider_context.clone(), activity_id.clone()).await?;
+
+        log::info!("Final cost for agreement [{}]: {}.", &agreement_id, &cost);
+
+        let invoice = NewInvoice {
+            agreement_id,
+            activity_ids: Some(activities),
+            total_amount_due: cost,
+            usage_counter_vector: Some(json!(usage)),
+            credit_account_id: provider_context.creadit_account.clone(),
+            payment_platform: None,
+        };
+
+        let payment_api = provider_context.payment_api.clone();
+        let debit_note = payment_api.issue_debit_note(&debit_note).await
+            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &activity_id, error))?;
     }
 }
 

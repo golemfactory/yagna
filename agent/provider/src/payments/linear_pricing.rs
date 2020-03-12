@@ -30,10 +30,10 @@ impl LinearPricing {
         let usage_vec_str = commercials.commercial_agreement.get(coeffs_addr)
             .ok_or(anyhow!("Can't find usage coefficients in agreement ('{}').", coeffs_addr))?;
 
-        log::info!("Usage coefficients vector: {}.", usage_vec_str);
         let usage: Vec<f64> = serde_json::from_str(&usage_vec_str)
             .map_err(|error|anyhow!("Can't parse usage vector."))?;
 
+        log::info!("Creating LinearPricing payment model. Usage coefficients vector: {}.", usage_vec_str);
         Ok(LinearPricing{usage_coeffs: usage})
     }
 }
