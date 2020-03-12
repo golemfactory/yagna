@@ -141,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
 
     let agreement = Agreement {
         json: serde_json::Value::Null,
+        agreement_id: String::new(),
         image: "".to_string(),
         usage_vector: Vec::new(),
         usage_limits: HashMap::new(),

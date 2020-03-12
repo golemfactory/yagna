@@ -12,6 +12,7 @@ const DEFAULT_FORMAT: &str = "json";
 #[derive(Clone, Debug)]
 pub struct Agreement {
     pub json: Value,
+    pub agreement_id: String,
     pub image: String,
     pub usage_vector: Vec<String>,
     pub usage_limits: HashMap<String, f64>,
@@ -27,19 +28,22 @@ impl TryFrom<Value> for Agreement {
     type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let image = value
-            .pointer("/properties/golem/runtime/wasm/task_package")
+        let agreement_id = value
+            .pointer("/agreementId")
             .as_typed(Value::as_str)?
             .to_owned();
-
+        let image = value
+            .pointer("/demand/properties/golem/runtime/wasm/task_package")
+            .as_typed(Value::as_str)?
+            .to_owned();
         let usage_vector = value
-            .pointer("/properties/golem/com/usage/vector")
+            .pointer("/demand/properties/golem/com/usage/vector")
             .as_typed_array(|v| v.as_str().map(|s| s.to_owned()))?;
 
         let limits = vec![(
             MemMetric::ID.to_owned(),
             value
-                .pointer("/properties/golem/inf/mem/gib")
+                .pointer("/offer/properties/golem/inf/mem/gib")
                 .as_typed(Value::as_f64)?,
         )]
         .into_iter()
@@ -47,6 +51,7 @@ impl TryFrom<Value> for Agreement {
 
         Ok(Agreement {
             json: value,
+            agreement_id,
             image,
             usage_vector,
             usage_limits: limits,
@@ -292,69 +297,69 @@ constraints: |
 }
 "#;
 
-    fn check_values(a: &serde_json::Value) {
+    fn check_values(o: &serde_json::Value) {
         assert_eq!(
-            a.pointer("/properties/golem/inf/mem/gib")
+            o.pointer("/properties/golem/inf/mem/gib")
                 .as_typed(Value::as_f64)
                 .unwrap(),
             0.5f64
         );
         assert_eq!(
-            a.pointer("/properties/golem/inf/storage/gib")
+            o.pointer("/properties/golem/inf/storage/gib")
                 .as_typed(Value::as_f64)
                 .unwrap(),
             5f64
         );
         assert_eq!(
-            a.pointer("/properties/golem/node/id/name")
+            o.pointer("/properties/golem/node/id/name")
                 .as_typed(Value::as_str)
                 .unwrap(),
             "dany"
         );
         assert_eq!(
-            a.pointer("/properties/golem/runtime/wasm/wasi/version@v")
+            o.pointer("/properties/golem/runtime/wasm/wasi/version@v")
                 .as_typed(Value::as_str)
                 .unwrap(),
             "0.0.0"
         );
         assert_eq!(
-            a.pointer("/properties/golem/runtime/wasm/task_package")
+            o.pointer("/properties/golem/runtime/wasm/task_package")
                 .as_typed(Value::as_str)
                 .unwrap(),
             "https://ya.cdn.com/mandelbrot.zip"
         );
         assert_eq!(
-            a.pointer("/properties/golem/activity/caps/transfer/protocol")
+            o.pointer("/properties/golem/activity/caps/transfer/protocol")
                 .as_typed_array(Value::as_str)
                 .unwrap(),
             vec!["http", "https", "container",]
         );
         assert_eq!(
-            a.pointer(&format!("/properties/golem/com/scheme/{}", *PROPERTY_TAG))
+            o.pointer(&format!("/properties/golem/com/scheme/{}", *PROPERTY_TAG))
                 .as_typed(Value::as_str)
                 .unwrap(),
             "payu"
         );
         assert_eq!(
-            a.pointer("/properties/golem/com/scheme/payu/interval_sec")
+            o.pointer("/properties/golem/com/scheme/payu/interval_sec")
                 .as_typed(Value::as_i64)
                 .unwrap(),
             60i64
         );
         assert_eq!(
-            a.pointer("/properties/golem/com/scheme/payu/interval_sec")
+            o.pointer("/properties/golem/com/scheme/payu/interval_sec")
                 .as_typed(Value::as_f64)
                 .unwrap(),
             60f64
         );
         assert_eq!(
-            a.pointer("/properties/golem/com/pricing/model/linear/coeffs")
+            o.pointer("/properties/golem/com/pricing/model/linear/coeffs")
                 .as_typed_array(Value::as_f64)
                 .unwrap(),
             vec![0f64, 0.01f64, 0.0016f64]
         );
         assert_eq!(
-            a.pointer("/properties/golem/com/usage/vector")
+            o.pointer("/properties/golem/com/usage/vector")
                 .as_typed_array(Value::as_str)
                 .unwrap(),
             vec!["golem.usage.duration_sec", "golem.usage.cpu_sec",]
@@ -362,15 +367,22 @@ constraints: |
     }
 
     #[test]
+    fn example_agreement() {
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("examples/agreement.json");
+        Agreement::try_from(&path).unwrap();
+    }
+
+    #[test]
     fn json() {
-        let agreement = try_from_json(AGREEMENT_JSON).unwrap();
-        check_values(&agreement);
+        let offer = try_from_json(AGREEMENT_JSON).unwrap();
+        check_values(&offer);
     }
 
     #[test]
     fn yaml() {
-        let agreement = try_from_yaml(AGREEMENT_YAML).unwrap();
-        check_values(&agreement);
+        let offer = try_from_yaml(AGREEMENT_YAML).unwrap();
+        check_values(&offer);
     }
 
     #[test]

@@ -30,6 +30,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                         report(
                             self.ctx.report_url.clone().unwrap(),
                             SetActivityState {
+                                agreement_id: self.ctx.agreement.agreement_id.clone(),
                                 activity_id: id.clone(),
                                 state: ActivityState::from(state),
                                 timeout: None,

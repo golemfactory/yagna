@@ -67,6 +67,7 @@ impl<R: Runtime> ExeUnit<R> {
         if let Some(activity_id) = &self.ctx.service_id {
             let fut = report_usage(
                 self.ctx.report_url.clone().unwrap(),
+                self.ctx.agreement.agreement_id.clone(),
                 activity_id.clone(),
                 context.address(),
                 self.metrics.clone(),
@@ -315,6 +316,7 @@ pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: String, msg: M)
 
 async fn report_usage<R: Runtime>(
     report_url: String,
+    agreement_id: String,
     activity_id: String,
     exe_unit: Addr<ExeUnit<R>>,
     metrics: Addr<MetricsService>,
@@ -323,6 +325,7 @@ async fn report_usage<R: Runtime>(
         Ok(resp) => match resp {
             Ok(data) => {
                 let msg = SetActivityUsage {
+                    agreement_id,
                     activity_id,
                     usage: ActivityUsage::from(data),
                     timeout: None,

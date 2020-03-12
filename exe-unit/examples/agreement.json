@@ -1,47 +1,106 @@
 {
-  "properties": {
-    "golem": {
-      "inf": {
-        "mem.gib": 0.5,
-        "storage.gib": 5
-      },
-      "node": {
-        "id.name": "dany"
-      },
-      "runtime.wasm": {
-        "wasi.version@v": "0.0.0",
-        "task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://localhost:8000/rust-wasi-tutorial.zip"
-      },
-      "activity.caps": {
-        "transfer.protocol": [
-          "http",
-          "https",
-          "container"
-        ]
-      },
-      "com": {
-        "scheme": "payu",
-        "scheme.payu": {
-          "interval_sec": 60
+  "agreementId": "0a88ff65-b6d4-48e4-8de3-aba9f06f54dd",
+  "demand": {
+    "demandId": "3c2c8a48-93a6-4108-851f-6b1eefe1b881",
+    "requestorId": "0x0fdf0b80418329d155dfd0f08e3bb19900226e7a",
+    "properties": {
+      "golem": {
+        "inf": {
+          "mem.gib": 0.5,
+          "storage.gib": 5
         },
-        "pricing": {
-          "model": "linear",
-          "model.linear": {
-            "coeffs": [
-              0,
-              0.01,
-              0.0016
+        "node": {
+          "id.name": "dany"
+        },
+        "runtime.wasm": {
+          "wasi.version@v": "0.0.0",
+          "task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://localhost:8000/rust-wasi-tutorial.zip"
+        },
+        "activity.caps": {
+          "transfer.protocol": [
+            "http",
+            "https",
+            "container"
+          ]
+        },
+        "com": {
+          "scheme": "payu",
+          "scheme.payu": {
+            "interval_sec": 60
+          },
+          "pricing": {
+            "model": "linear",
+            "model.linear": {
+              "coeffs": [
+                0,
+                0.01,
+                0.0016
+              ]
+            }
+          },
+          "usage": {
+            "vector": [
+              "golem.usage.duration_sec",
+              "golem.usage.cpu_sec"
             ]
           }
+        }
+      }
+    },
+    "constraints": "(&\n            (golem.inf.mem.gib>0.5)\n            (golem.inf.storage.gib>1)\n        )"
+  },
+  "offer": {
+    "offerId": "0a88ff65-b6d4-48e4-8de3-aba9f06f54dd",
+    "providerId": "0xee1dbafa491577c55fd2892073340d0f3967acca",
+    "properties": {
+      "golem": {
+        "inf": {
+          "mem.gib": 0.5,
+          "storage.gib": 5
         },
-        "usage": {
-          "vector": [
-            "golem.usage.duration_sec",
-            "golem.usage.cpu_sec"
+        "node": {
+          "id.name": "dany"
+        },
+        "runtime.wasm": {
+          "wasi.version@v": "0.0.0",
+          "task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://localhost:8000/rust-wasi-tutorial.zip"
+        },
+        "activity.caps": {
+          "transfer.protocol": [
+            "http",
+            "https",
+            "container"
           ]
+        },
+        "com": {
+          "scheme": "payu",
+          "scheme.payu": {
+            "interval_sec": 60
+          },
+          "pricing": {
+            "model": "linear",
+            "model.linear": {
+              "coeffs": [
+                0,
+                0.01,
+                0.0016
+              ]
+            }
+          },
+          "usage": {
+            "vector": [
+              "golem.usage.duration_sec",
+              "golem.usage.cpu_sec"
+            ]
+          }
         }
       }
     }
   },
-  "constraints": "()\n"
+  "validTo": "2021-01-01T18:54:16.655397Z",
+  "approvedDate": null,
+  "state": "Pending",
+  "proposedSignature": null,
+  "approvedSignature": null,
+  "committedSignature": null
 }
