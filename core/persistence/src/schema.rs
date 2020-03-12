@@ -3,6 +3,7 @@ table! {
         id -> Integer,
         natural_id -> Text,
         agreement_id -> Text,
+        identity_id -> Text,
         state_id -> Integer,
         usage_id -> Integer,
     }
@@ -12,6 +13,7 @@ table! {
     activity_event (id) {
         id -> Integer,
         activity_id -> Integer,
+        identity_id -> Text,
         event_date -> Timestamp,
         event_type_id -> Integer,
     }

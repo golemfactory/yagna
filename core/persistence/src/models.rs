@@ -16,6 +16,7 @@ pub struct Activity {
     pub id: i32,
     pub natural_id: String,
     pub agreement_id: String,
+    pub identity_id: String,
     pub state_id: i32,
     pub usage_id: i32,
 }
@@ -25,6 +26,7 @@ pub struct Activity {
 pub struct ActivityEvent {
     pub id: i32,
     pub activity_id: i32,
+    pub identity_id: String,
     pub event_date: NaiveDateTime,
     pub event_type_id: ActivityEventType,
 }
