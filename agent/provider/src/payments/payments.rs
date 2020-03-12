@@ -126,12 +126,16 @@ impl Payments {
             payment_due_date: None
         };
 
-        log::debug!("Sending debit note {}.", serde_json::to_string(&debit_note)?);
+        log::debug!("Creating debit note {}.", serde_json::to_string(&debit_note)?);
 
         let debit_note = payment_api.issue_debit_note(&debit_note).await
             .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &activity_id, error))?;
+
+        log::debug!("Sending debit note [{}] for activity [{}].", &debit_note.debit_note_id, &activity_id);
         payment_api.send_debit_note(&debit_note.debit_note_id).await
-            .map_err(|error| anyhow!("Failed to send debit note for activity [{}]. {}", &activity_id, error))?;
+            .map_err(|error| anyhow!("Failed to send debit note [{}] for activity [{}]. {}", &debit_note.debit_note_id, &activity_id, error))?;
+
+        log::debug!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &activity_id);
         Ok(())
     }
 }
