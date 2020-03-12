@@ -10,6 +10,7 @@ use std::{
 use structopt::{clap, StructOpt};
 use url::Url;
 
+use ya_core_model::net;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
@@ -46,7 +47,7 @@ struct CliArgs {
     )]
     api_url: Url,
 
-    #[structopt(long = "net-addr", env = "ya_net::NET_ENV_VAR")]
+    #[structopt(long = "net-addr", env = "net::ENV_VAR")]
     net_addr: Option<SocketAddr>,
 
     /// Return results in JSON format
@@ -232,7 +233,7 @@ async fn main() -> Result<()> {
 
     // TODO: fix this hack
     if let Some(net_addr) = args.net_addr {
-        std::env::set_var(ya_net::NET_ENV_VAR, net_addr.to_string());
+        std::env::set_var(net::ENV_VAR, net_addr.to_string());
     }
 
     args.run_command().await

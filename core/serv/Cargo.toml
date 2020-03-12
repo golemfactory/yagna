@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 ya-activity = "0.2"
-ya-core-model = "0.1"
+ya-core-model = { version = "0.1", features=["net"] }
 ya-identity = "0.2"
 ya-market = "0.1"
 ya-net = { version = "0.1", features = ["service"] }

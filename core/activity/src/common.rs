@@ -1,18 +1,13 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ya_core_model::market;
-
+use ya_core_model::{market, net};
+use ya_model::market::Agreement;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::constants::NET_SERVICE_ID;
-use ya_service_bus::{RpcEndpoint, RpcMessage};
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use crate::dao::ActivityDao;
 use crate::error::Error;
-
-use ya_model::market::Agreement;
-
-use ya_service_bus::typed as bus;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: f32 = 12.0;
@@ -133,7 +128,7 @@ pub(crate) async fn authorize_agreement_executor(
 #[inline(always)]
 pub(crate) fn authorize_caller(caller: impl ToString, authorized: String) -> Result<(), Error> {
     // FIXME: impl a proper caller struct / parser
-    let pat = format!("{}/", NET_SERVICE_ID);
+    let pat = format!("{}/", net::SERVICE_ID);
     let caller = caller.to_string().replacen(&pat, "", 1);
     log::debug!("checking caller: {} vs expected: {}", caller, authorized);
     match caller == authorized {

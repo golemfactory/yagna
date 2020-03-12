@@ -1,5 +1,4 @@
-use super::PUBLIC_PREFIX;
-use ya_core_model::ethaddr::NodeId;
+use ya_core_model::{ethaddr::NodeId, net::PUBLIC_PREFIX};
 use ya_service_bus::typed as bus;
 use ya_service_bus::typed::Endpoint;
 
