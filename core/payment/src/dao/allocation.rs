@@ -5,9 +5,9 @@ use crate::schema::pay_payment::dsl as payment_dsl;
 use bigdecimal::{BigDecimal, Zero};
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
-use std::ops::Add;
+use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::types::BigDecimalField;
+use ya_persistence::types::{BigDecimalField, Summable};
 
 pub struct AllocationDao<'c> {
     pool: &'c PoolType,
@@ -42,10 +42,7 @@ impl<'c> AllocationDao<'c> {
                         .select(payment_dsl::amount)
                         .filter(payment_dsl::allocation_id.eq(allocation_id))
                         .load(conn)?;
-                    let spent_amount = payments
-                        .into_iter()
-                        .map(Into::into)
-                        .fold(BigDecimal::zero(), <BigDecimal as Add<BigDecimal>>::add);
+                    let spent_amount = payments.sum();
                     let remaining_amount = &allocation.total_amount.0 - &spent_amount;
                     Ok(Some(Allocation {
                         allocation,
@@ -62,14 +59,13 @@ impl<'c> AllocationDao<'c> {
     pub async fn get_all(&self) -> DbResult<Vec<Allocation>> {
         do_with_transaction(self.pool, move |conn| {
             let allocations: Vec<NewAllocation> = dsl::pay_allocation.load(conn)?;
-            let payments: Vec<Payment> = payment_dsl::pay_payment.load(conn)?;
+            let payments: Vec<BarePayment> = payment_dsl::pay_payment.load(conn)?;
             let mut payments_map = payments
                 .into_iter()
                 .fold(HashMap::new(), |mut map, payment| {
                     if let Some(allocation_id) = payment.allocation_id.clone() {
-                        map.entry(allocation_id)
-                            .and_modify(|v| *v += Into::<BigDecimal>::into(payment.amount))
-                            .or_insert_with(BigDecimal::zero);
+                        let x = map.entry(allocation_id).or_insert_with(BigDecimal::zero);
+                        *x += Into::<BigDecimal>::into(payment.amount);
                     }
                     map
                 });
@@ -96,6 +92,31 @@ impl<'c> AllocationDao<'c> {
         do_with_transaction(self.pool, move |conn| {
             diesel::delete(dsl::pay_allocation.filter(dsl::id.eq(allocation_id))).execute(conn)?;
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn total_allocation(&self, identity: NodeId) -> DbResult<BigDecimal> {
+        do_with_transaction(self.pool, move |conn| {
+            let me = identity.to_string();
+            // TODO: Allocation owner
+            let total_allocations = dsl::pay_allocation
+                .select(dsl::total_amount)
+                .get_results::<BigDecimalField>(conn)?
+                .into_iter()
+                .map(Into::into)
+                .fold(BigDecimal::default(), |acc, v: BigDecimal| acc + v);
+
+            let total_payments = payment_dsl::pay_payment
+                .select(payment_dsl::amount)
+                .filter(payment_dsl::payer_id.eq(me))
+                .filter(payment_dsl::allocation_id.is_not_null())
+                .get_results::<BigDecimalField>(conn)?
+                .into_iter()
+                .map(Into::into)
+                .fold(BigDecimal::default(), |acc, v: BigDecimal| acc + v);
+
+            Ok(total_allocations - total_payments)
         })
         .await
     }

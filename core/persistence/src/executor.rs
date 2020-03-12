@@ -40,7 +40,7 @@ impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for ConnectionIn
     }
 
     fn on_release(&self, _conn: SqliteConnection) {
-        log::debug!("on_release connection");
+        log::trace!("on_release connection");
     }
 }
 

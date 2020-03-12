@@ -1,5 +1,4 @@
-use actix::prelude::*;
-use structopt::StructOpt;
+use structopt::{clap, StructOpt};
 
 mod execution;
 mod market;
@@ -13,13 +12,10 @@ use startup_config::StartupConfig;
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
-    log::info!("Running Provider Agent.");
+
+    let app_name = clap::crate_name!();
+    log::info!("Starting {}...", app_name);
 
     let args = StartupConfig::from_args();
-
-    ProviderAgent::new(args).await?.start();
-    tokio::signal::ctrl_c().await?;
-    println!();
-    log::info!("SIGINT received, exiting");
-    Ok(())
+    ProviderAgent::new(args).await?.wait_for_ctrl_c().await
 }

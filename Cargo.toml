@@ -61,6 +61,7 @@ ya-client = { path = "interfaces/client" }
 ya-core-model = { path = "core/model" }
 ya-exe-unit = { path = "exe-unit" }
 ya-model = { path = "interfaces/model" }
+ya-payment-driver = { path = "core/payment-driver" }
 ya-persistence = { path = "core/persistence" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
