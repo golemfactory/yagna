@@ -13,3 +13,12 @@ fn provider_activity_service_id(agreement: &Agreement) -> Result<String, Error> 
         activity::SERVICE_ID,
     ))
 }
+
+#[inline(always)]
+fn remote_exeunit_service_id(agreement: &Agreement, activity_id: &str) -> Result<String, Error> {
+    Ok(format!(
+        "{}/{}",
+        ya_net::remote_service(agreement.provider_id()?, activity::EXEUNIT_SERVICE_ID),
+        activity_id
+    ))
+}

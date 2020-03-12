@@ -18,7 +18,7 @@ use crate::common::{
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
-use crate::requestor::provider_activity_service_id;
+use crate::requestor::{provider_activity_service_id, remote_exeunit_service_id};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -116,7 +116,7 @@ async fn exec(
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
+    let uri = remote_exeunit_service_id(&agreement, &path.activity_id)?;
     gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
 
     Ok::<_, Error>(web::Json(batch_id))
@@ -139,7 +139,7 @@ async fn get_batch_results(
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
+    let uri = remote_exeunit_service_id(&agreement, &path.activity_id)?;
     let results = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
 
     Ok::<_, Error>(web::Json(results))

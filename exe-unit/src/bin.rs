@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
     let cli: Cli = Cli::from_args();
     let mut commands = None;
     let mut ctx = ExeUnitContext {
-        service_id: None,
+        activity_id: None,
         report_url: None,
         agreement: Agreement::try_from(&cli.agreement)?,
         work_dir: create_path(&cli.work_dir)?,
@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
             service_id,
             report_url,
         } => {
-            ctx.service_id = Some(service_id);
+            ctx.activity_id = Some(service_id);
             ctx.report_url = Some(report_url);
         }
     }

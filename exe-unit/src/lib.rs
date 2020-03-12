@@ -25,7 +25,7 @@ use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::{
     ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
 };
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage, PUBLIC_PREFIX};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -64,7 +64,7 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
-        if let Some(activity_id) = &self.ctx.service_id {
+        if let Some(activity_id) = &self.ctx.activity_id {
             let fut = report_usage(
                 self.ctx.report_url.clone().unwrap(),
                 activity_id.clone(),
@@ -260,12 +260,13 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     fn started(&mut self, ctx: &mut Self::Context) {
         let addr = ctx.address();
 
-        if let Some(s) = &self.ctx.service_id {
-            actix_rpc::bind::<Exec>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityState>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityUsage>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetRunningCommand>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetExecBatchResults>(&s, addr.clone().recipient());
+        if let Some(activity_id) = &self.ctx.activity_id {
+            let srv_id = format!("{}{}/{}", PUBLIC_PREFIX, EXEUNIT_SERVICE_ID, activity_id);
+            actix_rpc::bind::<Exec>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<GetActivityState>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<GetActivityUsage>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<GetRunningCommand>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<GetExecBatchResults>(&srv_id, addr.clone().recipient());
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
@@ -285,7 +286,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
-    pub service_id: Option<String>,
+    pub activity_id: Option<String>,
     pub report_url: Option<String>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
@@ -293,13 +294,13 @@ pub struct ExeUnitContext {
 }
 
 impl ExeUnitContext {
-    pub fn match_service(&self, service_id: &str) -> Result<()> {
-        match &self.service_id {
-            Some(sid) => match sid == service_id {
+    pub fn verify_activity_id(&self, activity_id: &str) -> Result<()> {
+        match &self.activity_id {
+            Some(act_id) => match act_id == activity_id {
                 true => Ok(()),
                 false => Err(Error::RemoteServiceError(format!(
-                    "Invalid destination service address: {}",
-                    service_id
+                    "Forbidden! Invalid activity id: {}",
+                    activity_id
                 ))),
             },
             None => Ok(()),

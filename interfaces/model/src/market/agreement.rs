@@ -11,6 +11,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::ErrorMessage;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Agreement {
     #[serde(rename = "agreementId")]
@@ -55,6 +57,14 @@ impl Agreement {
             approved_signature: None,
             committed_signature: None,
         }
+    }
+
+    pub fn provider_id(&self) -> Result<&String, ErrorMessage> {
+        self.offer.provider_id()
+    }
+
+    pub fn requestor_id(&self) -> Result<&String, ErrorMessage> {
+        self.demand.requestor_id()
     }
 }
 
