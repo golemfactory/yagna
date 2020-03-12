@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 use bigdecimal::BigDecimal;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use ya_agent_offer_model::ComInfo;
 
@@ -48,7 +48,7 @@ pub struct LinearPricingOffer {
 impl LinearPricingOffer {
     pub fn new() -> LinearPricingOffer {
         // Initialize first constant coefficient to 0.
-        LinearPricingOffer{usage_coeffs: vec![0.0], usage_params: vec![], interval: 60.0}
+        LinearPricingOffer{usage_coeffs: vec![0.0], usage_params: vec![], interval: 6.0}
     }
 
     pub fn add_coefficient(&mut self, coeff_name: &str, value: f64) -> &mut LinearPricingOffer {

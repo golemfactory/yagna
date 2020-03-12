@@ -5,7 +5,6 @@ use serde_json::json;
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::time::Duration;
-use futures_util::FutureExt;
 
 use crate::market::provider_market::AgreementApproved;
 use crate::execution::{ActivityCreated, ActivityDestroyed};
@@ -28,10 +27,11 @@ const UPDATE_COST_INTERVAL_MILLIS: u64 = 10000;
 
 /// Checks activity usage counters and updates service
 /// cost. Sends debit note to requestor.
-#[derive(Message)]
+#[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateCost {
     pub agreement_id: String,
+    pub activity_id: String,
 }
 
 // =========================================== //
@@ -39,44 +39,61 @@ pub struct UpdateCost {
 // =========================================== //
 
 #[derive(PartialEq)]
-enum ActivityState {
-    AgreementSigned,
+enum ActivityPayment {
     Running {
         activity_id: String,
     },
+    Destroyed {
+        activity_id: String,
+    }
 }
 
-struct ActivityPayment {
+/// Payment information related to single agreement.
+/// Note that we can have multiple activities during duration of agreement.
+/// We must wait until agreement will be closed, before we send invoice.
+struct AgreementPayment {
     agreement_id: String,
+    update_interval: Duration,
     payment_model: Arc<Box<dyn PaymentModel>>,
-    state: ActivityState,
+    activities: HashMap<String, ActivityPayment>,
+}
+
+/// Payments information about provider and yagna APIs
+struct ProviderCtx {
+    activity_api: Arc<ActivityProviderApi>,
+    payment_api: Arc<ProviderApi>,
+
+    creadit_account: String,
 }
 
 /// Computes charges for tasks execution.
 /// Sends payments events to requestor through payment API.
 pub struct Payments {
-    activity_api: Arc<ActivityProviderApi>,
-    payment_api: Arc<ProviderApi>,
-
-    agreements: HashMap<String, ActivityPayment>,
+    context: Arc<ProviderCtx>,
+    agreements: HashMap<String, AgreementPayment>,
 }
 
 impl Payments {
     pub fn new(activity_api: ActivityProviderApi, payment_api: ProviderApi) -> Payments {
-        Payments{
+        let provider_ctx = ProviderCtx{
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
+            creadit_account: "0xa74476443119A942dE498590Fe1f2454d7D4aC0d".to_string()
+        };
+
+        Payments{
             agreements: HashMap::new(),
+            context: Arc::new(provider_ctx),
         }
     }
 
     pub fn on_signed_agreement(&mut self, msg: AgreementApproved) -> Result<()> {
         log::info!(
-            "Payments got signed agreement [{}].",
+            "Payments got signed agreement [{}]. Waiting for activities creation...",
             &msg.agreement.agreement_id
         );
 
-        match ActivityPayment::new(&msg.agreement) {
+        match AgreementPayment::new(&msg.agreement) {
             Ok(activity) => {
                 self.agreements.insert(msg.agreement.agreement_id.clone(), activity);
                 Ok(())
@@ -90,23 +107,15 @@ impl Payments {
         }
     }
 
-    fn update_all_costs(&mut self, ctx: &mut Context<Self>) {
-        for (id, activity) in self.agreements.iter_mut() {
-            // Update costs only for agreements, that has created activity.
-            if let ActivityState::Running{..} = activity.state {
-                let msg = UpdateCost{agreement_id: activity.agreement_id.clone()};
-                ctx.address().do_send(msg);
-            }
-        }
-    }
-
     async fn send_debit_note(
         payment_model: Arc<Box<dyn PaymentModel>>,
-        activity_api: Arc<ActivityProviderApi>,
-        payment_api: Arc<ProviderApi>,
+        provider_context: Arc<ProviderCtx>,
         activity_id: String,
         agreement_id: String,
     ) -> Result<()> {
+        let activity_api = provider_context.activity_api.clone();
+        let payment_api = provider_context.payment_api.clone();
+
         // let usage = activity_api.get_activity_usage(&activity_id).await?
         //     .current_usage
         //     .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
@@ -121,7 +130,7 @@ impl Payments {
             activity_id: Some(activity_id.clone()),
             total_amount_due: cost,
             usage_counter_vector: Some(json!(usage)),
-            credit_account_id: "0xa74476443119A942dE498590Fe1f2454d7D4aC0d".to_string(),
+            credit_account_id: provider_context.creadit_account.clone(),
             payment_platform: None,
             payment_due_date: None
         };
@@ -135,7 +144,7 @@ impl Payments {
         payment_api.send_debit_note(&debit_note.debit_note_id).await
             .map_err(|error| anyhow!("Failed to send debit note [{}] for activity [{}]. {}", &debit_note.debit_note_id, &activity_id, error))?;
 
-        log::debug!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &activity_id);
+        log::info!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &activity_id);
         Ok(())
     }
 }
@@ -146,10 +155,18 @@ impl Handler<ActivityCreated> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: ActivityCreated, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(activity) = self.agreements.get_mut(&msg.agreement_id) {
+        if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
             log::info!("Payments - activity {} created. Start computing costs.", &msg.activity_id);
 
-            activity.activity_created(&msg.activity_id);
+            let msg = UpdateCost{
+                agreement_id: msg.agreement_id.clone(),
+                activity_id: msg.activity_id.clone(),
+            };
+
+            // Add activity to list and send debit note after update_interval.
+            agreement.activity_created(&msg.activity_id);
+            ctx.notify_later(msg, agreement.update_interval);
+
             ActorResponse::reply(Ok(()))
         }
         else {
@@ -179,64 +196,63 @@ impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: UpdateCost, ctx: &mut Context<Self>) -> Self::Result {
-        let activity = match self.agreements.get(&msg.agreement_id) {
-            Some(activity) => activity,
+        let agreement = match self.agreements.get(&msg.agreement_id) {
+            Some(agreement) => agreement,
             None => {
                 log::warn!("Not my activity - agreement [{}].", &msg.agreement_id);
                 return ActorResponse::reply(Err(anyhow!("")))
             }
         };
 
-        if let ActivityState::Running {activity_id} = &activity.state {
-            let payment_model = activity.payment_model.clone();
-            let activity_api = self.activity_api.clone();
-            let payment_api = self.payment_api.clone();
-            let activity_id = activity_id.clone();
-            let agreement_id = activity.agreement_id.clone();
+        if let Some(activity) = agreement.activities.get(&msg.activity_id) {
+            if let ActivityPayment::Running {..} = activity {
+                let payment_model = agreement.payment_model.clone();
+                let context= self.context.clone();
+                let activity_id = msg.activity_id.clone();
+                let agreement_id = msg.agreement_id.clone();
 
-            let future= async move {
-                Self::send_debit_note(payment_model, activity_api, payment_api, activity_id, agreement_id).await
-            }.into_actor(self).map(|result, _, _|{
-                if let Err(error) = result {
-                    log::error!("{}", error);
-                    return Err(error);
-                };
-                Ok(())
-            });
+                let future= async move {
+                    Self::send_debit_note(payment_model, context, activity_id, agreement_id).await
+                }.into_actor(self).map(|result, _, _|{
+                    if let Err(error) = result {
+                        log::error!("{}", error);
+                        return Err(error);
+                    };
+                    Ok(())
+                });
 
-            ActorResponse::r#async(future)
+                ctx.notify_later(msg, agreement.update_interval);
+                return ActorResponse::r#async(future)
+            }
+            else {
+                // Note: we don't send here new UpdateCost message, what stops further updates.
+                log::info!("Stopped sending debit notes, because for activity {} was destroyed.", &msg.activity_id);
+                return ActorResponse::reply(Ok(()))
+            }
         }
-        else {
-            log::error!("Code error: ActivityState is not 'Running' in UpdateCost function.");
-            return ActorResponse::reply(Err(anyhow!("")))
-        }
+        return ActorResponse::reply(Err(anyhow!("We shouldn't be here. Activity [{}], not found.", &msg.activity_id)))
     }
 }
 
 impl Actor for Payments {
     type Context = Context<Self>;
-
-    /// Starts cost updater functions.
-    fn started(&mut self, context: &mut Context<Self>) {
-        IntervalFunc::new(Duration::from_secs(4), Self::update_all_costs)
-            .finish()
-            .spawn(context);
-    }
 }
 
-impl ActivityPayment {
-    pub fn new(agreement: &Agreement) -> Result<ActivityPayment> {
+impl AgreementPayment {
+    pub fn new(agreement: &Agreement) -> Result<AgreementPayment> {
         let payment_description = PaymentDescription::new(agreement)?;
+        let update_interval = payment_description.get_update_interval()?;
         let payment_model = PaymentModelFactory::create(payment_description)?;
 
-        Ok(ActivityPayment {
+        Ok(AgreementPayment {
             agreement_id: agreement.agreement_id.clone(),
-            state: ActivityState::AgreementSigned,
-            payment_model
+            activities: HashMap::new(),
+            payment_model,
+            update_interval,
         })
     }
 
     pub fn activity_created(&mut self, activity_id: &str) {
-        self.state = ActivityState::Running{activity_id: activity_id.to_string() };
+        self.activities.insert(activity_id.to_string(), ActivityPayment::Running{activity_id: activity_id.to_string() });
     }
 }

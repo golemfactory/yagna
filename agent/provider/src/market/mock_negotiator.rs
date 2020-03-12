@@ -16,7 +16,7 @@ impl Negotiator for AcceptAllNegotiator {
             .add_coefficient("golem.usage.duration_sec", 0.01)
             .add_coefficient("golem.usage.cpu_sec", 0.016)
             .initial_cost(0.02)
-            .interval(60.0)
+            .interval(6.0)
             .build();
 
         let mut offer = offer.clone();

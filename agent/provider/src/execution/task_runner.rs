@@ -236,7 +236,7 @@ impl TaskRunner {
         Ok(())
     }
 
-    #[logfn_inputs(Info, fmt = "{}Got {:?}")]
+    #[logfn_inputs(Debug, fmt = "{}Got {:?}")]
     pub fn on_agreement_approved(&mut self, msg: AgreementApproved) -> Result<()> {
         // Agreement waits for first create activity.
         // FIXME: clean-up agreements upon TTL or maybe payments
