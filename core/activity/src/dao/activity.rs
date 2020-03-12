@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use serde_json;
 
 use ya_model::activity::State;
-use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::schema;
 
 use crate::dao::{last_insert_rowid, DaoError, Result};
@@ -19,23 +19,34 @@ impl<'a> AsDao<'a> for ActivityDao<'a> {
 }
 
 impl<'c> ActivityDao<'c> {
-    pub async fn get_agreement_id(&self, activity_id: &str) -> Result<String> {
+    pub async fn get_agreement_id(
+        &self,
+        activity_id: &str,
+        identity_id: &str,
+    ) -> Result<Option<String>> {
         use schema::activity::dsl;
 
         let activity_id = activity_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
-            let agreement: String = dsl::activity
+        let identity_id = identity_id.to_owned();
+
+        do_with_transaction(self.pool, move |conn| {
+            dsl::activity
                 .select(dsl::agreement_id)
                 .filter(dsl::natural_id.eq(activity_id))
+                .filter(dsl::identity_id.eq(identity_id))
                 .first(conn)
-                .map_err(DaoError::from)?;
-
-            Ok(agreement)
+                .optional()
+                .map_err(DaoError::from)
         })
         .await
     }
 
-    pub async fn create(&self, activity_id: &str, agreement_id: &str) -> Result<()> {
+    pub async fn create(
+        &self,
+        activity_id: &str,
+        identity_id: &str,
+        agreement_id: &str,
+    ) -> Result<()> {
         use schema::activity::dsl;
         use schema::activity_state::dsl as dsl_state;
         use schema::activity_usage::dsl as dsl_usage;
@@ -47,42 +58,43 @@ impl<'c> ActivityDao<'c> {
         let now = Utc::now().naive_utc();
 
         let activity_id = activity_id.to_owned();
+        let identity_id = identity_id.to_owned();
         let agreement_id = agreement_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
-            conn.transaction(move || {
-                {
-                    diesel::insert_into(dsl_state::activity_state)
-                        .values((
-                            dsl_state::name.eq(&state),
-                            dsl_state::reason.eq(reason),
-                            dsl_state::error_message.eq(error_message),
-                            dsl_state::updated_date.eq(now),
-                        ))
-                        .execute(conn)?;
 
-                    let state_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
+        do_with_transaction(self.pool, move |conn| {
+            {
+                diesel::insert_into(dsl_state::activity_state)
+                    .values((
+                        dsl_state::name.eq(&state),
+                        dsl_state::reason.eq(reason),
+                        dsl_state::error_message.eq(error_message),
+                        dsl_state::updated_date.eq(now),
+                    ))
+                    .execute(conn)?;
 
-                    diesel::insert_into(dsl_usage::activity_usage)
-                        .values((
-                            dsl_usage::vector_json.eq(vector_json),
-                            dsl_usage::updated_date.eq(now),
-                        ))
-                        .execute(conn)?;
+                let state_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
 
-                    let usage_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
+                diesel::insert_into(dsl_usage::activity_usage)
+                    .values((
+                        dsl_usage::vector_json.eq(vector_json),
+                        dsl_usage::updated_date.eq(now),
+                    ))
+                    .execute(conn)?;
 
-                    diesel::insert_into(dsl::activity)
-                        .values((
-                            dsl::natural_id.eq(activity_id),
-                            dsl::agreement_id.eq(agreement_id),
-                            dsl::state_id.eq(state_id),
-                            dsl::usage_id.eq(usage_id),
-                        ))
-                        .execute(conn)
-                        .map(|_| ())
-                }
-                .map_err(DaoError::from)
-            })
+                let usage_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
+
+                diesel::insert_into(dsl::activity)
+                    .values((
+                        dsl::natural_id.eq(activity_id),
+                        dsl::agreement_id.eq(agreement_id),
+                        dsl::identity_id.eq(identity_id),
+                        dsl::state_id.eq(state_id),
+                        dsl::usage_id.eq(usage_id),
+                    ))
+                    .execute(conn)
+                    .map(|_| ())
+            }
+            .map_err(DaoError::from)
         })
         .await
     }

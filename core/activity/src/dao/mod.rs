@@ -33,19 +33,3 @@ impl From<diesel::result::Error> for DaoError {
         }
     }
 }
-
-pub trait NotFoundAsOption<T> {
-    fn not_found_as_option(self) -> Result<Option<T>>;
-}
-
-impl<T> NotFoundAsOption<T> for Result<T> {
-    fn not_found_as_option(self) -> Result<Option<T>> {
-        match self {
-            Ok(t) => Ok(Some(t)),
-            Err(e) => match e {
-                DaoError::NotFound => Ok(None),
-                _ => Err(e),
-            },
-        }
-    }
-}
