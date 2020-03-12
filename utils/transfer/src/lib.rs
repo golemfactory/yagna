@@ -1,21 +1,23 @@
 pub mod error;
 mod file;
+mod gftp;
 mod http;
 
 use crate::error::{ChannelError, Error};
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
-use futures::future::{AbortHandle, AbortRegistration};
+use futures::future::{AbortHandle, AbortRegistration, Abortable, Aborted};
 use futures::task::{Context, Poll};
-use futures::{Sink, Stream, StreamExt};
+use futures::{Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt};
 use sha3::digest::DynDigest;
 use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use std::pin::Pin;
 use url::Url;
 
-pub use file::FileTransferProvider;
-pub use http::HttpTransferProvider;
+pub use crate::file::FileTransferProvider;
+pub use crate::gftp::GftpTransferProvider;
+pub use crate::http::HttpTransferProvider;
 
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
@@ -222,6 +224,47 @@ where
 
         result
     }
+}
+
+fn abortable_stream<'f, T, E, F>(
+    fut: F,
+    abort_reg: AbortRegistration,
+    mut tx: Sender<Result<T, E>>,
+) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'f>>
+where
+    F: Future<Output = Result<(), E>> + 'f,
+    T: 'f,
+    E: From<Aborted> + 'f,
+{
+    Abortable::new(fut, abort_reg)
+        .map_err(E::from)
+        .then(|r: Result<Result<(), E>, E>| async move {
+            if let Err(e) = flatten_result(r) {
+                let _ = tx.send(Err(e)).await;
+            }
+            tx.close_channel();
+            Result::<(), E>::Ok(())
+        })
+        .boxed_local()
+}
+
+fn abortable_sink<'f, E, F>(
+    fut: F,
+    res_tx: oneshot::Sender<Result<(), E>>,
+) -> Pin<Box<dyn Future<Output = Result<(), E>> + 'f>>
+where
+    F: Future<Output = Result<(), E>> + 'f,
+    E: From<Aborted> + 'f,
+{
+    fut.then(|r: Result<(), E>| async move {
+        let _ = match r {
+            Err(e) => res_tx.send(Err(e)),
+            _ => res_tx.send(Ok(())),
+        };
+
+        Result::<(), E>::Ok(())
+    })
+    .boxed_local()
 }
 
 #[inline(always)]

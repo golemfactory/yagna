@@ -6,14 +6,10 @@ use url::Url;
 
 #[derive(StructOpt)]
 pub enum CmdLine {
-    Publish {
-        #[structopt(short = "f", long = "file", help = "File to publish")]
-        path: PathBuf,
-    },
-    Download {
-        url: Url,
-        output_file: PathBuf,
-    },
+    Publish { files: Vec<PathBuf> },
+    Download { url: Url, output_file: PathBuf },
+    Upload { file: PathBuf, url: Url },
+    AwaitUpload { filepath: PathBuf },
 }
 
 #[actix_rt::main]
@@ -23,15 +19,12 @@ async fn main() -> Result<()> {
 
     let cmd_args = CmdLine::from_args();
 
-    let config = gftp::Config {
-        chunk_size: 40 * 1024,
-    };
-
     match cmd_args {
-        CmdLine::Publish { path } => {
-            let url = config.publish(&path).await?;
-
-            info!("Published file [{}] as {}.", &path.display(), url,);
+        CmdLine::Publish { files } => {
+            for path in files {
+                let url = gftp::publish(&path).await?;
+                info!("Published file [{}] as {}.", &path.display(), url);
+            }
 
             actix_rt::signal::ctrl_c().await?;
             info!("Received ctrl-c signal. Shutting down.")
@@ -45,6 +38,25 @@ async fn main() -> Result<()> {
 
             gftp::download_from_url(&url, &output_file).await?;
             info!("File downloaded.")
+        }
+        CmdLine::Upload { file, url } => {
+            info!(
+                "Uploading file [{}] to address [{}].",
+                &file.display(),
+                &url
+            );
+            gftp::upload_file(&file, &url).await?;
+        }
+        CmdLine::AwaitUpload { filepath } => {
+            let url = gftp::open_for_upload(&filepath).await?;
+            info!(
+                "Waiting for file upload [{}] on url [{}].",
+                &filepath.display(),
+                &url
+            );
+
+            actix_rt::signal::ctrl_c().await?;
+            info!("Received ctrl-c signal. Shutting down.")
         }
     }
     Ok(())

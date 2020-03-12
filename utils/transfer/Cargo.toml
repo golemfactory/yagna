@@ -6,6 +6,11 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-core-model = "0.1"
+ya-net = "0.1"
+ya-service-bus = "0.2"
+gftp = "0.1"
+
 actix-http = "1.0.1"
 actix-rt = "1.0.0"
 awc = "1.0.1"
@@ -24,6 +29,7 @@ url = "2.1.1"
 [dev-dependencies]
 actix-files = "0.2.1"
 actix-web = "2.0.0"
+env_logger = "0.7"
 rand = "0.7.3"
 sha2 = "0.8.1"
 tempdir = "0.3.7"
