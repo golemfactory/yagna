@@ -98,8 +98,8 @@ impl ProviderAgent {
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
-        send_message(self.market.clone(), UpdateMarket);
         send_message(self.runner.clone(), UpdateActivity);
+        send_message(self.market.clone(), UpdateMarket);
     }
 
     fn create_node_info() -> NodeInfo {

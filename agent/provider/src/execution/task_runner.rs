@@ -54,10 +54,11 @@ pub struct ActivityCreated {
 /// - Requestor sends terminate command to ExeUnit
 /// - Requestor sends DestroyActivity event
 /// - Task is finished because of timeout
-#[derive(Message, Clone)]
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "Result<()>")]
 pub struct ActivityDestroyed {
     pub agreement_id: String,
+    pub activity_id: String,
 }
 
 // =========================================== //
@@ -214,7 +215,11 @@ impl TaskRunner {
                 let task = self.tasks.swap_remove(task_position);
                 TaskRunner::destroy_task(task);
 
-                let _ = self.activity_destroyed.send_signal(ActivityDestroyed{agreement_id: msg.agreement_id.to_string()});
+                let msg = ActivityDestroyed{
+                    agreement_id: msg.agreement_id.to_string(),
+                    activity_id: msg.activity_id.clone(),
+                };
+                let _ = self.activity_destroyed.send_signal(msg.clone());
 
                 // TODO: remove this
                 let client = self.api.clone();
