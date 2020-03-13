@@ -121,7 +121,6 @@ impl TaskRunner {
     pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits) -> Result<()> {
         self.registry
             .register_exeunits_from_file(&msg.file)
-            .map(|_| ())
     }
 
     pub async fn collect_events(

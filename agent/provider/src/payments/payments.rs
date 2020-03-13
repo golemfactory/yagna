@@ -158,29 +158,29 @@ impl Payments {
         Ok(())
     }
 
-    async fn send_invoice(
-        payment_model: Arc<Box<dyn PaymentModel>>,
-        provider_context: Arc<ProviderCtx>,
-        activities: Vec<String>,
-        agreement_id: String,
-    ) -> Result<()> {
-        let (cost, usage) = Self::compute_cost(payment_model.clone(), provider_context.clone(), activity_id.clone()).await?;
-
-        log::info!("Final cost for agreement [{}]: {}.", &agreement_id, &cost);
-
-        let invoice = NewInvoice {
-            agreement_id,
-            activity_ids: Some(activities),
-            total_amount_due: cost,
-            usage_counter_vector: Some(json!(usage)),
-            credit_account_id: provider_context.creadit_account.clone(),
-            payment_platform: None,
-        };
-
-        let payment_api = provider_context.payment_api.clone();
-        let debit_note = payment_api.issue_debit_note(&debit_note).await
-            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &activity_id, error))?;
-    }
+//    async fn send_invoice(
+//        payment_model: Arc<Box<dyn PaymentModel>>,
+//        provider_context: Arc<ProviderCtx>,
+//        activities: Vec<String>,
+//        agreement_id: String,
+//    ) -> Result<()> {
+//        let (cost, usage) = Self::compute_cost(payment_model.clone(), provider_context.clone(), activity_id.clone()).await?;
+//
+//        log::info!("Final cost for agreement [{}]: {}.", &agreement_id, &cost);
+//
+//        let invoice = NewInvoice {
+//            agreement_id,
+//            activity_ids: Some(activities),
+//            total_amount_due: cost,
+//            usage_counter_vector: Some(json!(usage)),
+//            credit_account_id: provider_context.creadit_account.clone(),
+//            payment_platform: None,
+//        };
+//
+//        let payment_api = provider_context.payment_api.clone();
+//        let debit_note = payment_api.issue_debit_note(&debit_note).await
+//            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &activity_id, error))?;
+//    }
 }
 
 forward_actix_handler!(Payments, AgreementApproved, on_signed_agreement);

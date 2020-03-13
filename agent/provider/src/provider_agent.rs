@@ -64,17 +64,17 @@ impl ProviderAgent {
     pub async fn initialize(&mut self) -> anyhow::Result<()> {
         // Forward AgreementApproved event to TaskRunner actor.
         let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
-        send_message(self.market.clone(), msg);
+        self.market.send(msg).await??;
 
         let msg = Subscribe::<AgreementApproved>(self.payments.clone().recipient());
-        send_message(self.market.clone(), msg);
+        self.market.send(msg).await??;
 
         //
         let msg = Subscribe::<ActivityCreated>(self.payments.clone().recipient());
-        send_message(self.runner.clone(), msg);
+        self.runner.send(msg).await??;
 
         let msg = Subscribe::<ActivityDestroyed>(self.payments.clone().recipient());
-        send_message(self.runner.clone(), msg);
+        self.runner.send(msg).await??;
 
         // Load ExeUnits descriptors from file.
         // TODO: Hardcoded exeunits file. How should we handle this in future?
@@ -84,7 +84,7 @@ impl ProviderAgent {
         let msg = InitializeExeUnits {
             file: exeunits_file,
         };
-        send_message(self.runner.clone(), msg);
+        self.runner.send(msg).await??;
 
         // Create simple offer on market.
         let create_offer_message = CreateOffer {
@@ -94,7 +94,7 @@ impl ProviderAgent {
                 com_info: Default::default(),
             },
         };
-        Ok(self.market.clone().send(create_offer_message).await??)
+        Ok(self.market.send(create_offer_message).await??)
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
