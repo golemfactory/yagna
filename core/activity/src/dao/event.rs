@@ -95,7 +95,7 @@ impl<'c> EventDao<'c> {
         do_with_transaction(self.pool, move |conn| {
             let results: Option<Vec<Event>> = dsl_event::activity_event
                 .inner_join(schema::activity::table)
-                .filter(dsl::identity_id.eq(identity_id))
+                .filter(dsl_event::identity_id.eq(identity_id))
                 .select((
                     dsl_event::id,
                     dsl_event::event_type_id,
