@@ -5329,7 +5329,7 @@ dependencies = [
 
 [[package]]
 name = "ya-activity"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -5351,6 +5351,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-core-model",
  "ya-model",
+ "ya-net",
  "ya-persistence",
  "ya-sb-router",
  "ya-service-api",
@@ -5390,7 +5391,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5523,7 +5524,7 @@ dependencies = [
 
 [[package]]
 name = "ya-net"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -5804,7 +5805,7 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "actix",
  "actix-rt",
@@ -5890,7 +5891,6 @@ dependencies = [
  "structopt",
  "url 2.1.1",
  "ya-activity",
- "ya-core-model",
  "ya-identity",
  "ya-market",
  "ya-net",

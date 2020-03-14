@@ -13,9 +13,10 @@ macro_rules! gsb_send {
     ($caller:expr, $msg:expr, $uri:expr, $timeout:expr) => {{
         use ya_service_bus::actix_rpc;
         use ya_service_bus::timeout::*;
+        log::debug!("sending: {:?}, uri: {}, caller: {:?}", $msg, $uri, $caller);
 
         actix_rpc::service($uri)
-            .send($caller, $msg)
+            .send($caller.map(|c| c.to_string()), $msg) // TODO: introduce send with automatic caller support
             .timeout($timeout)
             .map_err(Error::from)
             .await?

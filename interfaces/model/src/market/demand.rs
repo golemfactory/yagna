@@ -19,7 +19,7 @@ pub struct Demand {
     #[serde(rename = "constraints")]
     pub constraints: String,
     #[serde(rename = "demandId", skip_serializing_if = "Option::is_none")]
-    pub demand_id: Option<String>,
+    pub demand_id: Option<String>, // TODO: use NodeId
     #[serde(rename = "requestorId", skip_serializing_if = "Option::is_none")]
     pub requestor_id: Option<String>,
 }

@@ -6,7 +6,6 @@ use ya_model::activity::{
 use ya_service_bus::RpcMessage;
 
 pub const SERVICE_ID: &str = "/activity";
-pub const BUS_ID: &str = "/private/activity";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

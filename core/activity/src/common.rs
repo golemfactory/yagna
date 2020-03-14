@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ya_core_model::{market, net};
+use ya_core_model::market;
 use ya_model::market::Agreement;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
@@ -127,11 +127,7 @@ pub(crate) async fn authorize_agreement_executor(
 
 #[inline(always)]
 pub(crate) fn authorize_caller(caller: impl ToString, authorized: String) -> Result<(), Error> {
-    // FIXME: impl a proper caller struct / parser
-    let pat = format!("{}/", net::SERVICE_ID);
-    let caller = caller.to_string().replacen(&pat, "", 1);
-    log::debug!("checking caller: {} vs expected: {}", caller, authorized);
-    match caller == authorized {
+    match ya_net::authorize_caller(caller, authorized) {
         true => Ok(()),
         false => Err(Error::Forbidden),
     }

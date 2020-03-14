@@ -166,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor);
     fake_sign_tx(Box::new(sign_tx));
 
-    let net_host = ya_net::net_host_addr()?;
+    let net_host = ya_net::central_net_addr()?;
     ya_net::bind_remote(&net_host, &node_id).await?;
 
     let agreement = market::Agreement {

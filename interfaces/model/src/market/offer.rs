@@ -21,7 +21,7 @@ pub struct Offer {
     #[serde(rename = "offerId", skip_serializing_if = "Option::is_none")]
     pub offer_id: Option<String>,
     #[serde(rename = "providerId", skip_serializing_if = "Option::is_none")]
-    pub provider_id: Option<String>,
+    pub provider_id: Option<String>, // TODO: use NodeId
 }
 
 impl Offer {

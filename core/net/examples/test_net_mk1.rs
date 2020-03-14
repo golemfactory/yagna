@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use structopt::StructOpt;
 
-use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage, PUBLIC_PREFIX};
 
 #[derive(Serialize, Deserialize)]
 struct Test(String);
@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
 
     match options.side {
         Side::Listener => {
-            let _ = bus::bind("/public", |p: Test| async move {
+            let _ = bus::bind(PUBLIC_PREFIX, |p: Test| async move {
                 log::info!("test called!!");
                 Ok(format!("pong {}", p.0))
             });

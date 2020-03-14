@@ -49,11 +49,9 @@ async fn create_activity(
         timeout: query.timeout.clone(),
     };
 
-    let caller = Some(format!("/net/{:?}", id.identity));
     let uri = provider_activity_service_id(&agreement)?;
 
-    log::debug!("creating activity at: {}, caller: {:?}", uri, caller);
-    let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
+    let activity_id = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
 
     log::debug!("activity created: {}, inserting", activity_id);
     db.as_dao::<ActivityDao>()
@@ -82,7 +80,7 @@ async fn destroy_activity(
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    let _ = gsb_send!(None, msg, &uri, query.timeout)?;
+    let _ = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
     db.as_dao::<ActivityStateDao>()
         .set(
             &path.activity_id,
@@ -119,7 +117,7 @@ async fn exec(
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    gsb_send!(None, msg, &uri, query.timeout)?;
+    gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
 
     Ok::<_, Error>(web::Json(batch_id))
 }
@@ -142,7 +140,7 @@ async fn get_batch_results(
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    let results = gsb_send!(None, msg, &uri, query.timeout)?;
+    let results = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
 
     Ok::<_, Error>(web::Json(results))
 }

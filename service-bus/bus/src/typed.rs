@@ -45,19 +45,6 @@ pub fn bind_stream<T: RpcStreamMessage>(
     router().lock().unwrap().bind_stream(addr, endpoint)
 }
 
-#[doc(hidden)]
-#[deprecated(note = "use bind instead")]
-pub fn bind_private<T: RpcMessage>(addr: &str, endpoint: impl RpcHandler<T> + 'static) -> Handle {
-    let addr = format!("/private{}", addr);
-    router().lock().unwrap().bind(&addr, endpoint)
-}
-#[doc(hidden)]
-#[deprecated(note = "use bind instead")]
-pub fn bind_public<T: RpcMessage>(addr: &str, endpoint: impl RpcHandler<T> + 'static) -> Handle {
-    let addr = format!("/public{}", addr);
-    router().lock().unwrap().bind(&addr, endpoint)
-}
-
 #[inline]
 pub fn bind_with_caller<T: RpcMessage, Output, F>(addr: &str, f: F) -> Handle
 where

@@ -11,11 +11,11 @@ use ya_core_model::activity::*;
 use ya_model::activity::{activity_state::StatePair, State};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
-use ya_service_bus::timeout::*;
+use ya_service_bus::{timeout::*, PRIVATE_PREFIX, PUBLIC_PREFIX};
 
 lazy_static::lazy_static! {
-    static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
-    static ref PUBLIC_ID: String = format!("/public{}", SERVICE_ID);
+    static ref PRIVATE_ID: String = format!("{}{}", PRIVATE_PREFIX, SERVICE_ID);
+    static ref PUBLIC_ID: String = format!("{}{}", PUBLIC_PREFIX, SERVICE_ID);
 }
 
 pub fn bind_gsb(db: &DbExecutor) {
