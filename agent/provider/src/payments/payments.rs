@@ -35,6 +35,22 @@ pub struct UpdateCost {
     pub invoice_info: InvoiceInfo,
 }
 
+/// Changes activity state to Finalized and stores final cost.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct FinalizeActivity {
+    pub debit_info: InvoiceInfo,
+    pub cost_info: CostInfo,
+}
+
+/// TODO: We should get this message from external world.
+/// Computes costs for all activities and send invoice to requestor.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct AgreementClosed {
+    pub agreement_id: String,
+}
+
 // =========================================== //
 // Payments implementation
 // =========================================== //
@@ -46,7 +62,8 @@ pub struct InvoiceInfo {
     pub last_debit_note: Option<String>,
 }
 
-struct CostInfo {
+#[derive(Clone, PartialEq)]
+pub struct CostInfo {
     pub usage: Vec<f64>,
     pub cost: BigDecimal,
 }
@@ -67,9 +84,8 @@ enum ActivityPayment {
     /// never change from this moment.
     Finalized {
         activity_id: String,
-        last_debit_note: String,
-        final_usage: Vec<f64>,
-        cost: BigDecimal,
+        last_debit_note: Option<String>,    /// Option in case we didn't sent any debit notes.
+        cost_info: CostInfo,
     }
 }
 
@@ -267,6 +283,7 @@ impl Handler<ActivityDestroyed> for Payments {
             if let Some(ActivityPayment::Destroyed { last_debit_note, .. }) = agreement.activities.get(&msg.activity_id) {
                 let payment_model = agreement.payment_model.clone();
                 let provider_context = self.context.clone();
+                let address = ctx.address();
                 let invoice_info = InvoiceInfo {
                     activity_id: msg.activity_id.clone(),
                     agreement_id: msg.agreement_id.clone(),
@@ -282,11 +299,17 @@ impl Handler<ActivityDestroyed> for Payments {
 
                     log::info!("Final cost for activity [{}]: {}.", &msg.activity_id, &cost_info.cost);
 
-                    Self::send_debit_note(payment_model, provider_context, invoice_info, cost_info).await;
+                    Self::send_debit_note(payment_model, provider_context, invoice_info.clone(), cost_info.clone()).await?;
 
+                    let msg = FinalizeActivity {
+                        cost_info,
+                        debit_info: invoice_info
+                    };
+
+                    address.send(msg).await??;
                     Ok(())
                 }
-                    .into_actor(self);
+                .into_actor(self);
 
                 return ActorResponse::r#async(future);
             } else {
@@ -360,6 +383,30 @@ impl Handler<UpdateCost> for Payments {
     }
 }
 
+impl Handler<FinalizeActivity> for Payments {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: FinalizeActivity, ctx: &mut Context<Self>) -> Self::Result {
+        if let Some(agreement) = self.agreements.get_mut( & msg.debit_info.agreement_id) {
+            log::info!("Activity {} finished.", &msg.debit_info.activity_id);
+            return ActorResponse::reply(
+                agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_info))
+        }
+        else {
+            log::warn!("Not my activity - agreement [{}].", & msg.debit_info.agreement_id);
+            return ActorResponse::reply(Err(anyhow ! ("")));
+        }
+    }
+}
+
+impl Handler<AgreementClosed> for Payments {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
+        return ActorResponse::reply(Ok(()))
+    }
+}
+
 impl Actor for Payments {
     type Context = Context<Self>;
 }
@@ -388,7 +435,21 @@ impl AgreementPayment {
             if let ActivityPayment::Running {activity_id, last_debit_note} = activity {
                 return Ok(*activity = ActivityPayment::Destroyed {
                     activity_id: activity_id.clone(),
-                    last_debit_note: last_debit_note.clone()})
+                    last_debit_note: last_debit_note.clone()
+                })
+            }
+        }
+        Err(anyhow!("Activity [{}] didn't exist before.", activity_id))
+    }
+
+    pub fn finish_activity(&mut self, activity_id: &str, cost_info: CostInfo) -> Result<()> {
+        if let Some(activity) = self.activities.get_mut(activity_id) {
+            if let ActivityPayment::Destroyed {activity_id, last_debit_note} = activity {
+                return Ok(*activity = ActivityPayment::Finalized {
+                    activity_id: activity_id.clone(),
+                    last_debit_note: last_debit_note.clone(),
+                    cost_info
+                })
             }
         }
         Err(anyhow!("Activity [{}] didn't exist before.", activity_id))
