@@ -6,7 +6,7 @@ use ya_model::activity::State;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::schema;
 
-use crate::dao::{last_insert_rowid, DaoError, Result};
+use crate::dao::{last_insert_rowid, Result};
 use diesel::dsl::exists;
 
 pub struct ActivityDao<'c> {
@@ -26,12 +26,11 @@ impl<'c> ActivityDao<'c> {
         let activity_id = activity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            dsl::activity
+            Ok(dsl::activity
                 .select(dsl::agreement_id)
                 .filter(dsl::natural_id.eq(activity_id))
                 .first(conn)
-                .optional()
-                .map_err(DaoError::from)
+                .optional()?)
         })
         .await
     }
@@ -43,13 +42,12 @@ impl<'c> ActivityDao<'c> {
         let agreement_id = agreement_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            diesel::select(exists(
+            Ok(diesel::select(exists(
                 dsl::activity
                     .filter(dsl::natural_id.eq(activity_id))
                     .filter(dsl::agreement_id.eq(agreement_id)),
             ))
-            .get_result(conn)
-            .map_err(DaoError::from)
+            .get_result(conn)?)
         })
         .await
     }
@@ -69,38 +67,36 @@ impl<'c> ActivityDao<'c> {
         let agreement_id = agreement_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            {
-                diesel::insert_into(dsl_state::activity_state)
-                    .values((
-                        dsl_state::name.eq(&state),
-                        dsl_state::reason.eq(reason),
-                        dsl_state::error_message.eq(error_message),
-                        dsl_state::updated_date.eq(now),
-                    ))
-                    .execute(conn)?;
+            diesel::insert_into(dsl_state::activity_state)
+                .values((
+                    dsl_state::name.eq(&state),
+                    dsl_state::reason.eq(reason),
+                    dsl_state::error_message.eq(error_message),
+                    dsl_state::updated_date.eq(now),
+                ))
+                .execute(conn)?;
 
-                let state_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
+            let state_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
 
-                diesel::insert_into(dsl_usage::activity_usage)
-                    .values((
-                        dsl_usage::vector_json.eq(vector_json),
-                        dsl_usage::updated_date.eq(now),
-                    ))
-                    .execute(conn)?;
+            diesel::insert_into(dsl_usage::activity_usage)
+                .values((
+                    dsl_usage::vector_json.eq(vector_json),
+                    dsl_usage::updated_date.eq(now),
+                ))
+                .execute(conn)?;
 
-                let usage_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
+            let usage_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
 
-                diesel::insert_into(dsl::activity)
-                    .values((
-                        dsl::natural_id.eq(activity_id),
-                        dsl::agreement_id.eq(agreement_id),
-                        dsl::state_id.eq(state_id),
-                        dsl::usage_id.eq(usage_id),
-                    ))
-                    .execute(conn)
-                    .map(|_| ())
-            }
-            .map_err(DaoError::from)
+            diesel::insert_into(dsl::activity)
+                .values((
+                    dsl::natural_id.eq(activity_id),
+                    dsl::agreement_id.eq(agreement_id),
+                    dsl::state_id.eq(state_id),
+                    dsl::usage_id.eq(usage_id),
+                ))
+                .execute(conn)?;
+
+            Ok(())
         })
         .await
     }

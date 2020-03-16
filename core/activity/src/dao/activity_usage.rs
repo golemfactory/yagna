@@ -1,4 +1,4 @@
-use crate::dao::{DaoError, Result};
+use crate::dao::Result;
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
@@ -25,13 +25,12 @@ impl<'c> ActivityUsageDao<'c> {
         let activity_id = activity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            dsl::activity
+            Ok(dsl::activity
                 .inner_join(dsl_usage::activity_usage)
                 .select(schema::activity_usage::all_columns)
                 .filter(dsl::natural_id.eq(activity_id))
                 .first(conn)
-                .optional()
-                .map_err(DaoError::from)
+                .optional()?)
         })
         .await
     }
@@ -57,8 +56,7 @@ impl<'c> ActivityUsageDao<'c> {
                 dsl_usage::vector_json.eq(&vector),
                 dsl_usage::updated_date.eq(now),
             ))
-            .execute(conn)
-            .map_err(DaoError::from)?;
+            .execute(conn)?;
 
             Ok(())
         })

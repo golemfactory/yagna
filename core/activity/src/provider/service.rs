@@ -70,7 +70,6 @@ async fn create_activity_gsb(
         )
         .await
         .map_err(Error::from)?;
-    log::debug!("event inserted");
 
     let state = db
         .as_dao::<ActivityStateDao>()
@@ -97,7 +96,6 @@ async fn destroy_activity_gsb(
         .provider_id
         .ok_or(Error::BadRequest("Invalid agreement".to_owned()))?;
 
-    log::info!("creating event for destroying activity");
     db.as_dao::<EventDao>()
         .create(
             &msg.activity_id,
@@ -107,7 +105,7 @@ async fn destroy_activity_gsb(
         .await
         .map_err(Error::from)?;
 
-    log::info!(
+    log::debug!(
         "waiting {:?}ms for activity status change to Terminate",
         msg.timeout
     );

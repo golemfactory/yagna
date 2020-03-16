@@ -1,4 +1,4 @@
-use crate::dao::{DaoError, Result};
+use crate::dao::Result;
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
@@ -28,13 +28,12 @@ impl<'c> ActivityStateDao<'c> {
         let activity_id = activity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            dsl::activity
+            Ok(dsl::activity
                 .inner_join(schema::activity_state::table)
                 .select(schema::activity_state::all_columns)
                 .filter(dsl::natural_id.eq(activity_id))
                 .first(conn)
-                .optional()
-                .map_err(DaoError::from)
+                .optional()?)
         })
         .await
     }
@@ -82,29 +81,26 @@ impl<'c> ActivityStateDao<'c> {
         let activity_id = activity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            {
-                let num_updates = diesel::update(
-                    dsl_state::activity_state.filter(exists(
-                        dsl::activity
-                            .filter(dsl::natural_id.eq(activity_id))
-                            .filter(dsl::state_id.eq(dsl_state::id)),
-                    )),
-                )
-                .set((
-                    dsl_state::name.eq(&state),
-                    dsl_state::reason.eq(reason),
-                    dsl_state::error_message.eq(error_message),
-                    dsl_state::updated_date.eq(now),
-                ))
-                .execute(conn)?;
+            let num_updates = diesel::update(
+                dsl_state::activity_state.filter(exists(
+                    dsl::activity
+                        .filter(dsl::natural_id.eq(activity_id))
+                        .filter(dsl::state_id.eq(dsl_state::id)),
+                )),
+            )
+            .set((
+                dsl_state::name.eq(&state),
+                dsl_state::reason.eq(reason),
+                dsl_state::error_message.eq(error_message),
+                dsl_state::updated_date.eq(now),
+            ))
+            .execute(conn)?;
 
-                match num_updates {
-                    0 => Err(diesel::result::Error::NotFound),
-                    1 => Ok(()),
-                    _ => Err(diesel::result::Error::RollbackTransaction),
-                }
-            }
-            .map_err(DaoError::from)
+            Ok(match num_updates {
+                0 => Err(diesel::result::Error::NotFound),
+                1 => Ok(()),
+                _ => Err(diesel::result::Error::RollbackTransaction),
+            }?)
         })
         .await
     }

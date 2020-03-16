@@ -9,7 +9,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::models::ActivityEventType;
 use ya_persistence::schema;
 
-use crate::dao::{DaoError, Result};
+use crate::dao::Result;
 
 pub const MAX_EVENTS: u32 = 100;
 
@@ -37,7 +37,7 @@ impl<'c> EventDao<'c> {
         activity_id: &str,
         identity_id: &str,
         event_type: ActivityEventType,
-    ) -> Result<()> {
+    ) -> Result<i32> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
 
@@ -48,29 +48,30 @@ impl<'c> EventDao<'c> {
         let identity_id = identity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            {
-                diesel::insert_into(dsl_event::activity_event)
-                    .values(
-                        dsl::activity
-                            .select((
-                                dsl::id,
-                                identity_id.clone().into_sql::<Text>(),
-                                now.into_sql::<Timestamp>(),
-                                event_type.into_sql::<Integer>(),
-                            ))
-                            .filter(dsl::natural_id.eq(activity_id))
-                            .limit(1),
-                    )
-                    .into_columns((
-                        dsl_event::activity_id,
-                        dsl_event::identity_id,
-                        dsl_event::event_date,
-                        dsl_event::event_type_id,
-                    ))
-                    .execute(conn)
-                    .map(|_| ())
-            }
-            .map_err(DaoError::from)
+            diesel::insert_into(dsl_event::activity_event)
+                .values(
+                    dsl::activity
+                        .select((
+                            dsl::id,
+                            identity_id.clone().into_sql::<Text>(),
+                            now.into_sql::<Timestamp>(),
+                            event_type.into_sql::<Integer>(),
+                        ))
+                        .filter(dsl::natural_id.eq(activity_id))
+                        .limit(1),
+                )
+                .into_columns((
+                    dsl_event::activity_id,
+                    dsl_event::identity_id,
+                    dsl_event::event_date,
+                    dsl_event::event_type_id,
+                ))
+                .execute(conn)?;
+
+            let event_id = diesel::select(super::last_insert_rowid).first(conn)?;
+            log::trace!("event inserted: {}", event_id);
+
+            Ok(event_id)
         })
         .await
     }
