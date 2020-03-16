@@ -109,7 +109,7 @@ impl ProviderApi {
         self.client.get(&url).send().json().await
     }
 
-    pub async fn issue_invoice(&self, invoice: &Invoice) -> Result<Invoice> {
+    pub async fn issue_invoice(&self, invoice: &NewInvoice) -> Result<Invoice> {
         self.client
             .post("provider/invoices")
             .send_json(invoice)
@@ -133,7 +133,7 @@ impl ProviderApi {
 
     #[allow(non_snake_case)]
     #[rustfmt::skip]
-    pub async fn send_invoice(&self, invoice_id: &str) -> Result<String> {
+    pub async fn send_invoice(&self, invoice_id: &str) -> Result<()> {
         let ackTimeout = self.config.send_invoice_timeout;
         let url = url_format!(
             "provider/invoices/{invoice_id}/send",

@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use anyhow::{Result, anyhow, Error};
 use bigdecimal::BigDecimal;
+use chrono::Utc;
 use log;
 use serde_json::json;
 use std::sync::Arc;
@@ -14,11 +15,11 @@ use crate::payments::factory::PaymentModelFactory;
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::payment::provider::ProviderApi;
-use ya_utils_actix::actix_handler::{ResultTypeGetter};
+use ya_utils_actix::actix_handler::{ResultTypeGetter, send_message};
 use ya_utils_actix::forward_actix_handler;
 use ya_model::market::Agreement;
-use ya_model::payment::{NewDebitNote, NewInvoice, DebitNote};
-
+use ya_model::payment::{NewDebitNote, NewInvoice, DebitNote, Invoice};
+use std::path::Iter;
 
 
 const UPDATE_COST_INTERVAL_MILLIS: u64 = 10000;
@@ -116,13 +117,13 @@ pub struct Payments {
 
 impl Payments {
     pub fn new(activity_api: ActivityProviderApi, payment_api: ProviderApi) -> Payments {
-        let provider_ctx = ProviderCtx{
+        let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
             creadit_account: "0xa74476443119A942dE498590Fe1f2454d7D4aC0d".to_string()
         };
 
-        Payments{
+        Payments {
             agreements: HashMap::new(),
             context: Arc::new(provider_ctx),
         }
@@ -156,90 +157,99 @@ impl Payments {
             .get_mut(activity_id)
             .ok_or(anyhow!("Can't find activity [{}] for agreement [{}].", activity_id, agreement_id))?;
 
-        if let ActivityPayment::Running {..} = activity {
+        if let ActivityPayment::Running { .. } = activity {
             let new_activity = ActivityPayment::Running {
                 last_debit_note: debit_note_id,
                 activity_id: activity_id.to_string()
             };
             *activity = new_activity;
             Ok(())
-        }
-        else {
+        } else {
             Err(anyhow!("Can't update debit note id for finalized activity."))
         }
     }
+}
 
-    async fn compute_cost(
-        payment_model: Arc<Box<dyn PaymentModel>>,
-        provider_context: Arc<ProviderCtx>,
-        activity_id: String
-    ) -> Result<CostInfo> {
-        let activity_api = provider_context.activity_api.clone();
+async fn compute_cost(
+    payment_model: Arc<Box<dyn PaymentModel>>,
+    provider_context: Arc<ProviderCtx>,
+    activity_id: String
+) -> Result<CostInfo> {
+    let activity_api = provider_context.activity_api.clone();
 
-        // let usage = activity_api.get_activity_usage(&activity_id).await?
-        //     .current_usage
-        //     .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
-        let usage = vec![1.0, 1.0];
-        let cost = payment_model.compute_cost(&usage)?;
+    // let usage = activity_api.get_activity_usage(&activity_id).await?
+    //     .current_usage
+    //     .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
+    let usage = vec![1.0, 1.0];
+    let cost = payment_model.compute_cost(&usage)?;
 
-        Ok(CostInfo{cost, usage})
-    }
+    Ok(CostInfo { cost, usage })
+}
 
-    async fn send_debit_note(
-        payment_model: Arc<Box<dyn PaymentModel>>,
-        provider_context: Arc<ProviderCtx>,
-        invoice_info: InvoiceInfo,
-        cost_info: CostInfo,
-    ) -> Result<DebitNote> {
-        let debit_note = NewDebitNote {
-            agreement_id: invoice_info.agreement_id.clone(),
-            activity_id: Some(invoice_info.activity_id.clone()),
-            previous_debit_note_id: invoice_info.last_debit_note.clone(),
-            total_amount_due: cost_info.cost,
-            usage_counter_vector: Some(json!(cost_info.usage)),
-            credit_account_id: provider_context.creadit_account.clone(),
-            payment_platform: None,
-            payment_due_date: None
-        };
+async fn send_debit_note(
+    payment_model: Arc<Box<dyn PaymentModel>>,
+    provider_context: Arc<ProviderCtx>,
+    invoice_info: InvoiceInfo,
+    cost_info: CostInfo,
+) -> Result<DebitNote> {
+    let debit_note = NewDebitNote {
+        agreement_id: invoice_info.agreement_id.clone(),
+        activity_id: Some(invoice_info.activity_id.clone()),
+        previous_debit_note_id: invoice_info.last_debit_note.clone(),
+        total_amount_due: cost_info.cost,
+        usage_counter_vector: Some(json!(cost_info.usage)),
+        credit_account_id: provider_context.creadit_account.clone(),
+        payment_platform: None,
+        payment_due_date: None
+    };
 
-        log::debug!("Creating debit note {}.", serde_json::to_string(&debit_note)?);
+    log::debug!("Creating debit note {}.", serde_json::to_string(&debit_note)?);
 
-        let payment_api = provider_context.payment_api.clone();
-        let debit_note = payment_api.issue_debit_note(&debit_note).await
-            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &invoice_info.activity_id, error))?;
+    let payment_api = provider_context.payment_api.clone();
+    let debit_note = payment_api.issue_debit_note(&debit_note).await
+        .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &invoice_info.activity_id, error))?;
 
-        log::debug!("Sending debit note [{}] for activity [{}].", &debit_note.debit_note_id, &invoice_info.activity_id);
-        payment_api.send_debit_note(&debit_note.debit_note_id).await
-            .map_err(|error| anyhow!("Failed to send debit note [{}] for activity [{}]. {}", &debit_note.debit_note_id, &invoice_info.activity_id, error))?;
+    log::debug!("Sending debit note [{}] for activity [{}].", &debit_note.debit_note_id, &invoice_info.activity_id);
+    payment_api.send_debit_note(&debit_note.debit_note_id).await
+        .map_err(|error| anyhow!("Failed to send debit note [{}] for activity [{}]. {}", &debit_note.debit_note_id, &invoice_info.activity_id, error))?;
 
-        log::info!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &invoice_info.activity_id);
+    log::info!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &invoice_info.activity_id);
 
-        Ok(debit_note)
-    }
+    Ok(debit_note)
+}
 
-//    async fn send_invoice(
-//        payment_model: Arc<Box<dyn PaymentModel>>,
-//        provider_context: Arc<ProviderCtx>,
-//        activities: Vec<String>,
-//        agreement_id: String,
-//    ) -> Result<()> {
-//        let (cost, usage) = Self::compute_cost(payment_model.clone(), provider_context.clone(), activity_id.clone()).await?;
-//
-//        log::info!("Final cost for agreement [{}]: {}.", &agreement_id, &cost);
-//
-//        let invoice = NewInvoice {
-//            agreement_id,
-//            activity_ids: Some(activities),
-//            total_amount_due: cost,
-//            usage_counter_vector: Some(json!(usage)),
-//            credit_account_id: provider_context.creadit_account.clone(),
-//            payment_platform: None,
-//        };
-//
-//        let payment_api = provider_context.payment_api.clone();
-//        let debit_note = payment_api.issue_debit_note(&debit_note).await
-//            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &activity_id, error))?;
-//    }
+async fn send_invoice(
+    payment_model: Arc<Box<dyn PaymentModel>>,
+    provider_context: Arc<ProviderCtx>,
+    invoice_info: InvoiceInfo,
+    cost_info: CostInfo,
+    activities: Vec<String>,
+) -> Result<Invoice> {
+    log::info!("Final cost for agreement [{}]: {}.", &invoice_info.agreement_id, &cost_info.cost);
+
+    let invoice = NewInvoice {
+        agreement_id: invoice_info.agreement_id.clone(),
+        activity_ids: Some(activities),
+        amount: cost_info.cost,
+        usage_counter_vector: Some(json!(cost_info.usage)),
+        credit_account_id: provider_context.creadit_account.clone(),
+        payment_platform: None,
+        payment_due_date: Utc::now(),
+    };
+
+    log::debug!("Creating invoice {}.", serde_json::to_string(&invoice)?);
+
+    let payment_api = provider_context.payment_api.clone();
+    let invoice = payment_api.issue_invoice(&invoice).await
+        .map_err(|error| anyhow!("Failed to issue debit note for agreement [{}]. {}", &invoice_info.agreement_id, error))?;
+
+    log::debug!("Sending invoice [{}] for agreement [{}].", &invoice.invoice_id, &invoice_info.agreement_id);
+    payment_api.send_invoice(&invoice.invoice_id).await
+        .map_err(|error| anyhow!("Failed to send invoice [{}] for agreement [{}]. {}", &invoice.invoice_id, &invoice_info.agreement_id, error))?;
+
+    log::info!("Invoice [{}] for agreement [{}] sent.", &invoice.invoice_id, &invoice_info.agreement_id);
+
+    Ok(invoice)
 }
 
 forward_actix_handler!(Payments, AgreementApproved, on_signed_agreement);
@@ -291,7 +301,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 };
 
                 let future = async move {
-                    let cost_info = Self::compute_cost(
+                    let cost_info = compute_cost(
                         payment_model.clone(),
                         provider_context.clone(),
                         msg.activity_id.clone()
@@ -299,7 +309,7 @@ impl Handler<ActivityDestroyed> for Payments {
 
                     log::info!("Final cost for activity [{}]: {}.", &msg.activity_id, &cost_info.cost);
 
-                    Self::send_debit_note(payment_model, provider_context, invoice_info.clone(), cost_info.clone()).await?;
+                    send_debit_note(payment_model, provider_context, invoice_info.clone(), cost_info.clone()).await?;
 
                     let msg = FinalizeActivity {
                         cost_info,
@@ -342,11 +352,11 @@ impl Handler<UpdateCost> for Payments {
                 let update_interval= agreement.update_interval;
 
                 return ActorResponse::r#async(async move {
-                    let cost_info = Self::compute_cost(payment_model.clone(), context.clone(), msg.invoice_info.activity_id.clone()).await?;
+                    let cost_info = compute_cost(payment_model.clone(), context.clone(), msg.invoice_info.activity_id.clone()).await?;
 
                     log::info!("Updating cost for activity [{}]: {}.", &msg.invoice_info.activity_id, &cost_info.cost);
 
-                    Self::send_debit_note(payment_model.clone(), context.clone(), msg.invoice_info, cost_info).await
+                    send_debit_note(payment_model.clone(), context.clone(), msg.invoice_info, cost_info).await
                 }
                 .into_actor(self)
                 .map(move |result, sself, ctx| {
@@ -387,10 +397,15 @@ impl Handler<FinalizeActivity> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: FinalizeActivity, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(agreement) = self.agreements.get_mut( & msg.debit_info.agreement_id) {
+        if let Some(agreement) = self.agreements.get_mut( &msg.debit_info.agreement_id) {
             log::info!("Activity {} finished.", &msg.debit_info.activity_id);
-            return ActorResponse::reply(
-                agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_info))
+
+            let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_info);
+
+            // Temporary. Requestor should close agreement.
+            send_message(ctx.address(), AgreementClosed{agreement_id: msg.debit_info.agreement_id.clone()});
+
+            return ActorResponse::reply(result);
         }
         else {
             log::warn!("Not my activity - agreement [{}].", & msg.debit_info.agreement_id);
@@ -403,7 +418,31 @@ impl Handler<AgreementClosed> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
-        return ActorResponse::reply(Ok(()))
+        if let Some(agreement) = self.agreements.get_mut( &msg.agreement_id) {
+            let cost_summary = agreement.cost_summary();
+            let activities = agreement.list_activities();
+            let payment_model = agreement.payment_model.clone();
+            let provider_context = self.context.clone();
+
+            let invoice_info = InvoiceInfo {
+                activity_id: "".to_string(),
+                agreement_id: msg.agreement_id.clone(),
+                last_debit_note: None,
+            };
+
+            let future = async move {
+                let result = send_invoice(payment_model, provider_context, invoice_info, cost_summary, activities).await;
+                match result {
+                    Err(error) => log::error!("{}", error),
+                    _ => ()
+                }
+                Ok(())
+            }.into_actor(self);
+
+            return ActorResponse::r#async(future)
+        }
+
+        return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)))
     }
 }
 
@@ -453,5 +492,30 @@ impl AgreementPayment {
             }
         }
         Err(anyhow!("Activity [{}] didn't exist before.", activity_id))
+    }
+
+    pub fn cost_summary(&self) -> CostInfo {
+//        let (cost_iter, usage_iter): (impl Iterator<Type=BigDecimal>, impl Iterator<Type=Vec<f64>>) = self.activities
+//            .iter()
+//            .filter_map(|(_,activity)| match activity {
+//                // Take into account only finalized activities.
+//                ActivityPayment::Finalized {cost_info, ..} => Some((&cost_info.cost, &cost_info.usage)),
+//                _ => None
+//            })
+//            .unzip();
+//
+//        let cost: BigDecimal = cost_iter.sum();
+
+        CostInfo {
+            cost: BigDecimal::from(0.0),
+            usage: vec![0.0; 3]
+        }
+    }
+
+    pub fn list_activities(&self) -> Vec<String> {
+        self.activities
+            .iter()
+            .map(|(activity_id, _)| activity_id.clone())
+            .collect()
     }
 }
