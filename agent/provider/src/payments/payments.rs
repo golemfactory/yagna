@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use anyhow::{Result, anyhow, Error};
+use bigdecimal::BigDecimal;
 use log;
 use serde_json::json;
 use std::sync::Arc;
@@ -16,8 +17,8 @@ use ya_client::payment::provider::ProviderApi;
 use ya_utils_actix::actix_handler::{ResultTypeGetter};
 use ya_utils_actix::forward_actix_handler;
 use ya_model::market::Agreement;
-use ya_model::payment::{NewDebitNote, NewInvoice};
-use bigdecimal::BigDecimal;
+use ya_model::payment::{NewDebitNote, NewInvoice, DebitNote};
+
 
 
 const UPDATE_COST_INTERVAL_MILLIS: u64 = 10000;
@@ -31,25 +32,44 @@ const UPDATE_COST_INTERVAL_MILLIS: u64 = 10000;
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateCost {
-    pub agreement_id: String,
-    pub activity_id: String,
-    pub last_debit_note: Option<String>,
+    pub invoice_info: InvoiceInfo,
 }
 
 // =========================================== //
 // Payments implementation
 // =========================================== //
 
+#[derive(Clone)]
+pub struct InvoiceInfo {
+    pub agreement_id: String,
+    pub activity_id: String,
+    pub last_debit_note: Option<String>,
+}
+
+struct CostInfo {
+    pub usage: Vec<f64>,
+    pub cost: BigDecimal,
+}
+
 #[derive(PartialEq)]
 enum ActivityPayment {
+    /// We got activity created event.
     Running {
         activity_id: String,
         last_debit_note: Option<String>,
     },
+    /// We got activity destroyed event, but cost still isn't computed.
     Destroyed {
+        activity_id: String,
+        last_debit_note: Option<String>,
+    },
+    /// We computed cost and sent last debit note. Activity should
+    /// never change from this moment.
+    Finalized {
         activity_id: String,
         last_debit_note: String,
         final_usage: Vec<f64>,
+        cost: BigDecimal,
     }
 }
 
@@ -112,8 +132,7 @@ impl Payments {
         }
     }
 
-
-    fn update_debit_note(&mut self, agreement_id: &str, activity_id: &str, debit_note_id: &Option<String>) -> Result<()> {
+    fn update_debit_note(&mut self, agreement_id: &str, activity_id: &str, debit_note_id: Option<String>) -> Result<()> {
         let mut activity = self.agreements
             .get_mut(agreement_id)
             .ok_or(anyhow!("Can't find agreement [{}].", agreement_id))?
@@ -122,7 +141,10 @@ impl Payments {
             .ok_or(anyhow!("Can't find activity [{}] for agreement [{}].", activity_id, agreement_id))?;
 
         if let ActivityPayment::Running {..} = activity {
-            let new_activity = ActivityPayment::Running{last_debit_note: debit_note_id.clone(), activity_id: activity_id.to_string() };
+            let new_activity = ActivityPayment::Running {
+                last_debit_note: debit_note_id,
+                activity_id: activity_id.to_string()
+            };
             *activity = new_activity;
             Ok(())
         }
@@ -135,7 +157,7 @@ impl Payments {
         payment_model: Arc<Box<dyn PaymentModel>>,
         provider_context: Arc<ProviderCtx>,
         activity_id: String
-    ) -> Result<(BigDecimal, Vec<f64>)> {
+    ) -> Result<CostInfo> {
         let activity_api = provider_context.activity_api.clone();
 
         // let usage = activity_api.get_activity_usage(&activity_id).await?
@@ -144,27 +166,21 @@ impl Payments {
         let usage = vec![1.0, 1.0];
         let cost = payment_model.compute_cost(&usage)?;
 
-        Ok((cost, usage))
+        Ok(CostInfo{cost, usage})
     }
 
     async fn send_debit_note(
         payment_model: Arc<Box<dyn PaymentModel>>,
         provider_context: Arc<ProviderCtx>,
-        mut msg: UpdateCost,
-    ) -> Result<UpdateCost> {
-        let (cost, usage) = Self::compute_cost(
-            payment_model.clone(),
-            provider_context.clone(),
-            msg.activity_id.clone()
-        ).await?;
-
-        log::info!("Current cost for activity [{}]: {}.", &msg.activity_id, &cost);
-
+        invoice_info: InvoiceInfo,
+        cost_info: CostInfo,
+    ) -> Result<DebitNote> {
         let debit_note = NewDebitNote {
-            agreement_id: msg.agreement_id.clone(),
-            activity_id: Some(msg.activity_id.clone()),
-            total_amount_due: cost,
-            usage_counter_vector: Some(json!(usage)),
+            agreement_id: invoice_info.agreement_id.clone(),
+            activity_id: Some(invoice_info.activity_id.clone()),
+            previous_debit_note_id: invoice_info.last_debit_note.clone(),
+            total_amount_due: cost_info.cost,
+            usage_counter_vector: Some(json!(cost_info.usage)),
             credit_account_id: provider_context.creadit_account.clone(),
             payment_platform: None,
             payment_due_date: None
@@ -174,16 +190,15 @@ impl Payments {
 
         let payment_api = provider_context.payment_api.clone();
         let debit_note = payment_api.issue_debit_note(&debit_note).await
-            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &msg.activity_id, error))?;
+            .map_err(|error| anyhow!("Failed to issue debit note for activity [{}]. {}", &invoice_info.activity_id, error))?;
 
-        log::debug!("Sending debit note [{}] for activity [{}].", &debit_note.debit_note_id, &msg.activity_id);
+        log::debug!("Sending debit note [{}] for activity [{}].", &debit_note.debit_note_id, &invoice_info.activity_id);
         payment_api.send_debit_note(&debit_note.debit_note_id).await
-            .map_err(|error| anyhow!("Failed to send debit note [{}] for activity [{}]. {}", &debit_note.debit_note_id, &msg.activity_id, error))?;
+            .map_err(|error| anyhow!("Failed to send debit note [{}] for activity [{}]. {}", &debit_note.debit_note_id, &invoice_info.activity_id, error))?;
 
-        log::info!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &msg.activity_id);
+        log::info!("Debit note [{}] for activity [{}] sent.", &debit_note.debit_note_id, &invoice_info.activity_id);
 
-        msg.last_debit_note = Some(debit_note.debit_note_id);
-        Ok(msg)
+        Ok(debit_note)
     }
 
 //    async fn send_invoice(
@@ -220,14 +235,18 @@ impl Handler<ActivityCreated> for Payments {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
             log::info!("Payments - activity {} created. Start computing costs.", &msg.activity_id);
 
-            let msg = UpdateCost{
-                agreement_id: msg.agreement_id.clone(),
-                activity_id: msg.activity_id.clone(),
-                last_debit_note: None,
+            // Sending UpdateCost with last_debit_note: None will start new
+            // DebitNotes chain for this activity.
+            let msg = UpdateCost {
+                invoice_info: InvoiceInfo {
+                    agreement_id: msg.agreement_id.clone(),
+                    activity_id: msg.activity_id.clone(),
+                    last_debit_note: None,
+                }
             };
 
             // Add activity to list and send debit note after update_interval.
-            agreement.activity_created(&msg.activity_id);
+            agreement.activity_created(&msg.invoice_info.activity_id);
             ctx.notify_later(msg, agreement.update_interval);
 
             ActorResponse::reply(Ok(()))
@@ -243,23 +262,40 @@ impl Handler<ActivityDestroyed> for Payments {
 
     fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
-            if let Some(activity) = agreement.activities.get_mut(&msg.activity_id) {
-                if let ActivityPayment::Running {..} = activity {
+            agreement.activity_destroyed(&msg.activity_id).unwrap();
 
-                    //TODO: Send invoice
+            if let Some(ActivityPayment::Destroyed { last_debit_note, .. }) = agreement.activities.get(&msg.activity_id) {
+                let payment_model = agreement.payment_model.clone();
+                let provider_context = self.context.clone();
+                let invoice_info = InvoiceInfo {
+                    activity_id: msg.activity_id.clone(),
+                    agreement_id: msg.agreement_id.clone(),
+                    last_debit_note: last_debit_note.clone()
+                };
 
-                    log::info!("Payments - activity {} destroyed.", &msg.agreement_id);
-                    return ActorResponse::reply(Ok(()))
+                let future = async move {
+                    let cost_info = Self::compute_cost(
+                        payment_model.clone(),
+                        provider_context.clone(),
+                        msg.activity_id.clone()
+                    ).await?;
+
+                    log::info!("Final cost for activity [{}]: {}.", &msg.activity_id, &cost_info.cost);
+
+                    Self::send_debit_note(payment_model, provider_context, invoice_info, cost_info).await;
+
+                    Ok(())
                 }
-                else {
-                    log::warn!("Trying to destroy already destroyed activity [{}] for agreement [{}].", &msg.activity_id, &msg.agreement_id);
-                    return ActorResponse::reply(Err(anyhow!("")))
-                }
+                    .into_actor(self);
+
+                return ActorResponse::r#async(future);
+            } else {
+                log::error!("Shouldn't happen.");
             }
         }
 
         log::warn!("Can't find activity [{}] and agreement [{}].", &msg.activity_id, &msg.agreement_id);
-        ActorResponse::reply(Err(anyhow!("")))
+        return ActorResponse::reply(Err(anyhow!("")));
     }
 }
 
@@ -267,15 +303,15 @@ impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: UpdateCost, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement = match self.agreements.get(&msg.agreement_id) {
+        let agreement = match self.agreements.get(&msg.invoice_info.agreement_id) {
             Some(agreement) => agreement,
             None => {
-                log::warn!("Not my activity - agreement [{}].", &msg.agreement_id);
+                log::warn!("Not my activity - agreement [{}].", &msg.invoice_info.agreement_id);
                 return ActorResponse::reply(Err(anyhow!("")))
             }
         };
 
-        if let Some(activity) = agreement.activities.get(&msg.activity_id) {
+        if let Some(activity) = agreement.activities.get(&msg.invoice_info.activity_id) {
             if let ActivityPayment::Running {..} = activity {
                 let payment_model = agreement.payment_model.clone();
                 let context= self.context.clone();
@@ -283,14 +319,27 @@ impl Handler<UpdateCost> for Payments {
                 let update_interval= agreement.update_interval;
 
                 return ActorResponse::r#async(async move {
-                    Self::send_debit_note(payment_model, context, msg).await
+                    let cost_info = Self::compute_cost(payment_model.clone(), context.clone(), msg.invoice_info.activity_id.clone()).await?;
+
+                    log::info!("Updating cost for activity [{}]: {}.", &msg.invoice_info.activity_id, &cost_info.cost);
+
+                    Self::send_debit_note(payment_model.clone(), context.clone(), msg.invoice_info, cost_info).await
                 }
                 .into_actor(self)
                 .map(move |result, sself, ctx| {
                     match result {
-                        Ok(msg) => {
+                        Ok(debit_note) => {
                             // msg contains updated debit_note_id.
-                            sself.update_debit_note(&msg.agreement_id, &msg.activity_id, &msg.last_debit_note)?;
+                            let activity_id = debit_note.activity_id.unwrap();
+                            sself.update_debit_note(&debit_note.agreement_id, &activity_id, debit_note.previous_debit_note_id.clone())?;
+
+                            let msg = UpdateCost {
+                                invoice_info: InvoiceInfo {
+                                    agreement_id: debit_note.agreement_id.clone(),
+                                    activity_id,
+                                    last_debit_note: debit_note.previous_debit_note_id.clone()
+                                }
+                            };
                             ctx.notify_later(msg, update_interval);
                             Ok(())
                         },
@@ -303,11 +352,11 @@ impl Handler<UpdateCost> for Payments {
             }
             else {
                 // Note: we don't send here new UpdateCost message, what stops further updates.
-                log::info!("Stopped sending debit notes, because activity {} was destroyed.", &msg.activity_id);
+                log::info!("Stopped sending debit notes, because activity {} was destroyed.", &msg.invoice_info.activity_id);
                 return ActorResponse::reply(Ok(()))
             }
         }
-        return ActorResponse::reply(Err(anyhow!("We shouldn't be here. Activity [{}], not found.", &msg.activity_id)))
+        return ActorResponse::reply(Err(anyhow!("We shouldn't be here. Activity [{}], not found.", &msg.invoice_info.activity_id)))
     }
 }
 
@@ -332,5 +381,16 @@ impl AgreementPayment {
     pub fn activity_created(&mut self, activity_id: &str) {
         let activity = ActivityPayment::Running{activity_id: activity_id.to_string(), last_debit_note: None};
         self.activities.insert(activity_id.to_string(), activity);
+    }
+
+    pub fn activity_destroyed(&mut self, activity_id: &str) -> Result<()> {
+        if let Some(activity) = self.activities.get_mut(activity_id) {
+            if let ActivityPayment::Running {activity_id, last_debit_note} = activity {
+                return Ok(*activity = ActivityPayment::Destroyed {
+                    activity_id: activity_id.clone(),
+                    last_debit_note: last_debit_note.clone()})
+            }
+        }
+        Err(anyhow!("Activity [{}] didn't exist before.", activity_id))
     }
 }
