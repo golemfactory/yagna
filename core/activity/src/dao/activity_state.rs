@@ -38,7 +38,7 @@ impl<'c> ActivityStateDao<'c> {
         .await
     }
 
-    pub async fn get_future(
+    pub async fn get_wait(
         &self,
         activity_id: &str,
         state: Option<StatePair>,

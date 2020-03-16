@@ -45,20 +45,10 @@ async fn create_activity_gsb(
         .provider_id
         .ok_or(Error::BadRequest("Invalid agreement".to_owned()))?;
 
-    if let Err(e) = db
-        .as_dao::<ActivityDao>()
-        .create(&activity_id, &msg.agreement_id)
+    db.as_dao::<ActivityDao>()
+        .create_if_not_exists(&activity_id, &msg.agreement_id)
         .await
-    {
-        if !db
-            .as_dao::<ActivityDao>()
-            .exists(&activity_id, &msg.agreement_id)
-            .await
-            .map_err(Error::from)?
-        {
-            return Err(Error::from(e).into());
-        }
-    }
+        .map_err(Error::from)?;
 
     log::debug!("activity inserted: {}", activity_id);
 
@@ -73,7 +63,7 @@ async fn create_activity_gsb(
 
     let state = db
         .as_dao::<ActivityStateDao>()
-        .get_future(&activity_id, None)
+        .get_wait(&activity_id, None)
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?
@@ -110,7 +100,7 @@ async fn destroy_activity_gsb(
         msg.timeout
     );
     db.as_dao::<ActivityStateDao>()
-        .get_future(&msg.activity_id, Some(StatePair(State::Terminated, None)))
+        .get_wait(&msg.activity_id, Some(StatePair(State::Terminated, None)))
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?

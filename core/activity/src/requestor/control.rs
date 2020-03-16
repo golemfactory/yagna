@@ -56,20 +56,10 @@ async fn create_activity(
     let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
 
     log::debug!("activity created: {}, inserting", activity_id);
-    if let Err(e) = db
-        .as_dao::<ActivityDao>()
-        .create(&activity_id, &agreement_id)
+    db.as_dao::<ActivityDao>()
+        .create_if_not_exists(&activity_id, &agreement_id)
         .await
-    {
-        if !db
-            .as_dao::<ActivityDao>()
-            .exists(&activity_id, &agreement_id)
-            .await
-            .map_err(Error::from)?
-        {
-            return Err(Error::from(e).into());
-        }
-    }
+        .map_err(Error::from)?;
 
     Ok::<_, Error>(web::Json(activity_id))
 }

@@ -133,7 +133,7 @@ async fn get_events_web(
     log::trace!("getting events {:?}", query);
     let events = db
         .as_dao::<EventDao>()
-        .get_events_fut(&id.identity.to_string(), query.max_count)
+        .get_events_wait(id.identity, query.max_count)
         .timeout(query.timeout)
         .map_err(Error::from)
         .await??

@@ -35,23 +35,6 @@ impl<'c> ActivityDao<'c> {
         .await
     }
 
-    pub async fn exists(&self, activity_id: &str, agreement_id: &str) -> Result<bool> {
-        use schema::activity::dsl;
-
-        let activity_id = activity_id.to_owned();
-        let agreement_id = agreement_id.to_owned();
-
-        do_with_transaction(self.pool, move |conn| {
-            Ok(diesel::select(exists(
-                dsl::activity
-                    .filter(dsl::natural_id.eq(activity_id))
-                    .filter(dsl::agreement_id.eq(agreement_id)),
-            ))
-            .get_result(conn)?)
-        })
-        .await
-    }
-
     pub async fn create(&self, activity_id: &str, agreement_id: &str) -> Result<()> {
         use schema::activity::dsl;
         use schema::activity_state::dsl as dsl_state;
@@ -97,6 +80,32 @@ impl<'c> ActivityDao<'c> {
                 .execute(conn)?;
 
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn create_if_not_exists(&self, activity_id: &str, agreement_id: &str) -> Result<()> {
+        if let Err(e) = self.create(&activity_id, &agreement_id).await {
+            if !self.exists(activity_id, agreement_id).await? {
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
+
+    async fn exists(&self, activity_id: &str, agreement_id: &str) -> Result<bool> {
+        use schema::activity::dsl;
+
+        let activity_id = activity_id.to_owned();
+        let agreement_id = agreement_id.to_owned();
+
+        do_with_transaction(self.pool, move |conn| {
+            Ok(diesel::select(exists(
+                dsl::activity
+                    .filter(dsl::natural_id.eq(activity_id))
+                    .filter(dsl::agreement_id.eq(agreement_id)),
+            ))
+            .get_result(conn)?)
         })
         .await
     }

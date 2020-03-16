@@ -120,15 +120,16 @@ impl<'c> EventDao<'c> {
         .await
     }
 
-    pub async fn get_events_fut(
+    pub async fn get_events_wait(
         &self,
-        identity_id: &str,
+        identity_id: impl ToString,
         max_count: Option<u32>,
     ) -> Result<Vec<Event>> {
         let duration = Duration::from_millis(750);
+        let identity_id = identity_id.to_string();
 
         loop {
-            let result = self.get_events(identity_id, max_count).await?;
+            let result = self.get_events(&identity_id, max_count).await?;
             if let Some(events) = result {
                 if events.len() > 0 {
                     return Ok(events);
