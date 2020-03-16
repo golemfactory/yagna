@@ -16,11 +16,7 @@ macro_rules! gsb_send {
         log::debug!("sending: {:?}, uri: {}, caller: {:?}", $msg, $uri, $caller);
 
         actix_rpc::service($uri)
-            .send($caller.map(|c| c.to_string()), $msg) // TODO: introduce send with automatic caller support
-            .timeout($timeout)
-            .map_err(Error::from)
-            .await?
-            .map_err(Error::from)?
-            .map_err(Error::from)
+            .send(Some($caller.to_string()), $msg) // TODO: introduce automatic caller support
+            .timeout($timeout).await??
     }};
 }

@@ -5,7 +5,6 @@ use crate::dao::{ActivityStateDao, ActivityUsageDao};
 use crate::error::Error;
 use crate::requestor::provider_activity_service_id;
 use actix_web::{web, Responder};
-use futures::prelude::*;
 use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
 use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::{ActivityState, ActivityUsage};
@@ -43,7 +42,7 @@ async fn get_activity_state(
 
     // Retrieve and persist activity state
     let uri = provider_activity_service_id(&agreement)?;
-    let activity_state = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
+    let activity_state = gsb_send!(id.identity, msg, &uri, query.timeout)?;
 
     db.as_dao::<ActivityStateDao>()
         .set(
@@ -84,7 +83,7 @@ async fn get_activity_usage(
 
     // Retrieve and persist activity usage
     let uri = provider_activity_service_id(&agreement)?;
-    let activity_usage = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
+    let activity_usage = gsb_send!(id.identity, msg, &uri, query.timeout)?;
     db.as_dao::<ActivityUsageDao>()
         .set(&path.activity_id, &activity_usage.current_usage)
         .await?;
@@ -109,7 +108,7 @@ async fn get_running_command(
     };
 
     let uri = provider_activity_service_id(&agreement)?;
-    let cmd = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
+    let cmd = gsb_send!(id.identity, msg, &uri, query.timeout)?;
 
     Ok::<_, Error>(web::Json(cmd))
 }

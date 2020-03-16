@@ -32,12 +32,12 @@ pub fn net_node_id(node_id: impl ToString) -> String {
 
 /// caller might start with net prefix, but not have to
 #[inline(always)]
-pub fn authorize_caller(caller: impl ToString, authorized: String) -> bool {
+pub fn authorize_caller(caller: impl ToString, authorized: &String) -> bool {
     // FIXME: impl a proper caller struct / parser
     let net_prefix = format!("{}/", net::SERVICE_ID);
     let caller = caller.to_string().replacen(&net_prefix, "", 1);
     log::debug!("checking caller: {} vs authorized: {}", caller, authorized);
-    caller == authorized
+    &caller == authorized
 }
 
 #[cfg(test)]

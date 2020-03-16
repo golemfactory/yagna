@@ -104,10 +104,7 @@ pub(crate) async fn authorize_agreement_initiator(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let initiator_id = agreement
-        .demand
-        .requestor_id
-        .ok_or(Error::BadRequest("no requestor id".into()))?;
+    let initiator_id = agreement.demand.requestor_id()?;
 
     authorize_caller(caller, initiator_id)
 }
@@ -117,16 +114,13 @@ pub(crate) async fn authorize_agreement_executor(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let executor_id = agreement
-        .offer
-        .provider_id
-        .ok_or(Error::BadRequest("no provider id".into()))?;
+    let executor_id = agreement.offer.provider_id()?;
 
     authorize_caller(caller, executor_id)
 }
 
 #[inline(always)]
-pub(crate) fn authorize_caller(caller: impl ToString, authorized: String) -> Result<(), Error> {
+pub(crate) fn authorize_caller(caller: impl ToString, authorized: &String) -> Result<(), Error> {
     match ya_net::authorize_caller(caller, authorized) {
         true => Ok(()),
         false => Err(Error::Forbidden),
