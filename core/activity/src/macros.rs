@@ -17,6 +17,7 @@ macro_rules! gsb_send {
 
         actix_rpc::service($uri)
             .send(Some($caller.to_string()), $msg) // TODO: introduce automatic caller support
-            .timeout($timeout).await??
+            .timeout($timeout)
+            .await??
     }};
 }
