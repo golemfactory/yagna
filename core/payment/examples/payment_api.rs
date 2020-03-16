@@ -155,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
     let db = DbExecutor::new(database_url)?;
     db.apply_migration(migrations::run_with_output)?;
 
-    ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
+    ya_sb_router::bind_tcp_router(*YAGNA_BUS_ADDR).await?;
     let processor = match &args.driver {
         Driver::Dummy => PaymentProcessor::new(DummyDriver::new(), db.clone()),
         Driver::Gnt => PaymentProcessor::new(
