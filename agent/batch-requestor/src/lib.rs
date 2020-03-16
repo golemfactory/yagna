@@ -1,6 +1,12 @@
 use actix::prelude::*;
+use futures::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
+use url::Url;
+use ya_client::{
+    activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
+};
+use ya_model::market::{AgreementProposal, Demand, Proposal, RequestorEvent};
 
 pub enum WasmRuntime {
     Wasi(i32), /* Wasi version */
@@ -83,9 +89,6 @@ impl TaskSession {
         }
     }
     pub fn run(self) -> Addr<TaskSession> {
-        /* TODO 1. download image spec (demand.spec)
-        2. market api -> subscribe
-        3. activity_api -> */
         self.start()
     }
 }
@@ -133,11 +136,64 @@ impl Actor for TaskSession {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
+        /* TODO 1. app key 2. URLs from env */
+        let app_key = "TODO app key";
+        let market_url = Url::from_str("http://34.244.4.185:8080/market-api/v1/").unwrap();
+        let activity_url = Url::from_str("http://127.0.0.1:7465/activity-api/v1/").unwrap();
+        let market_api: MarketRequestorApi = WebClient::with_token(app_key)
+            .unwrap()
+            .interface_at(market_url);
+        let activity_api: ActivityRequestorControlApi = WebClient::with_token(app_key)
+            .unwrap()
+            .interface_at(activity_url);
+
+        let demand = Demand {
+            properties: serde_json::json!({
+                "golem": {
+                    "node": {
+                        "id": {
+                            "name": "xyz"
+                        },
+                        "ala": 1
+                    }
+                }
+            }),
+            constraints: r#"(&
+                (golem.inf.mem.gib>0.5)
+                (golem.inf.storage.gib>1)
+            )"#
+            .to_string(),
+            demand_id: Default::default(),
+            requestor_id: Default::default(),
+        };
+        /* TODO 1. download image spec (demand.spec) 2. market api -> subscribe 3. activity_api */
+
         eprintln!(
-            "BatchRequestor started. Timeout: {:?}. Demand: {:?}.",
-            self.timeout,
-            self.demand.is_some()
+            "Actor started. Demand: {}",
+            serde_json::to_string(&demand).unwrap()
         );
+        ctx.spawn(
+            async move {
+                /* TODO */
+                eprintln!("subscribing");
+                let r = market_api.subscribe(&demand).await;
+                eprintln!("subscription result: {:?}", r);
+                let r2 = r.unwrap();
+                loop {
+                    eprintln!("waiting");
+                    let events = market_api.collect(&r2, Some(120), Some(5)).await?;
+                    eprintln!("received {:?}", events);
+                    tokio::time::delay_for(Duration::from_millis(1000)).await;
+                }
+                Ok::<(), ya_client::error::Error>(())
+            }
+            .into_actor(self)
+            .then(|result, ctx, _| {
+                eprintln!("Received result {:?}", result);
+                fut::ready(())
+            }),
+        );
+        eprintln!("done",);
     }
 }
 
@@ -163,11 +219,11 @@ pub async fn tui_progress_monitor(task_session: Addr<TaskSession>) -> Result<(),
             .progress_chars("=> ")
             .template("{elapsed_precise} [{bar:40}] {msg}"),
     );
-    progress_bar.set_message("Running tasks");
+    //progress_bar.set_message("Running tasks");
     for _ in 0..100 {
-        progress_bar.inc(1);
-        std::thread::sleep(Duration::from_millis(55));
+        //progress_bar.inc(1);
+        tokio::time::delay_for(Duration::from_millis(50)).await;
     }
-    progress_bar.finish();
+    //progress_bar.finish();
     Ok(())
 }
