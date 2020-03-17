@@ -24,6 +24,9 @@ pub struct StartupConfig {
     ///
     #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]
     pub exe_unit_path: Option<String>,
+    ///
+    #[structopt(long = "credit-address", env = "CREDIT_ADDRESS")]
+    pub credit_address: String,
 }
 
 impl StartupConfig {

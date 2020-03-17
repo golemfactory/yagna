@@ -30,7 +30,7 @@ impl PaymentDescription {
                 (key.clone(), value.as_str().unwrap().to_string())
             }).collect::<HashMap<String, String>>();
 
-        log::info!("Commercial properties:\n{:#?}", &commercial);
+        log::debug!("Commercial properties:\n{:#?}", &commercial);
 
         Ok(PaymentDescription{commercial_agreement: commercial.clone()})
     }

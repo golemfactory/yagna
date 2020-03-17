@@ -105,7 +105,7 @@ struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
     payment_api: Arc<ProviderApi>,
 
-    creadit_account: String,
+    credit_account: String,
 }
 
 /// Computes charges for tasks execution.
@@ -116,11 +116,13 @@ pub struct Payments {
 }
 
 impl Payments {
-    pub fn new(activity_api: ActivityProviderApi, payment_api: ProviderApi) -> Payments {
+    pub fn new(activity_api: ActivityProviderApi, payment_api: ProviderApi, credit_address: &str) -> Payments {
+        log::info!("Payments will be sent to account address {}.", credit_address);
+
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
-            creadit_account: "0xa74476443119A942dE498590Fe1f2454d7D4aC0d".to_string()
+            credit_account: credit_address.to_string()
         };
 
         Payments {
@@ -198,7 +200,7 @@ async fn send_debit_note(
         previous_debit_note_id: invoice_info.last_debit_note.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        credit_account_id: provider_context.creadit_account.clone(),
+        credit_account_id: provider_context.credit_account.clone(),
         payment_platform: None,
         payment_due_date: None
     };
@@ -232,7 +234,7 @@ async fn send_invoice(
         activity_ids: Some(activities),
         amount: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        credit_account_id: provider_context.creadit_account.clone(),
+        credit_account_id: provider_context.credit_account.clone(),
         payment_platform: None,
         payment_due_date: Utc::now(),
     };
