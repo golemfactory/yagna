@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use log::info;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 //TODO: use tokio::process::{Child, Command};
@@ -20,7 +19,7 @@ impl ExeUnitInstance {
         working_dir: &Path,
         args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
-        info!("spawning exeunit instance : {}", name);
+        log::info!("Spawning exeunit instance : {}", name);
         //        let child = Command::new(binary_path)
         let child = Command::new("echo")
             .args(args)
@@ -32,22 +31,22 @@ impl ExeUnitInstance {
                     name, binary_path.display(), working_dir.display(), error
                 )
             })?;
-        info!("exeunit spawned, pid: {}", child.id());
+        log::info!("Exeunit process spawned, pid: {}", child.id());
 
         let instance = ExeUnitInstance {
             name: name.to_string(),
             process: child,
             working_dir: working_dir.to_path_buf(),
         };
-        info!("exeunit instance spawned: {:?}", instance);
+        log::info!("Exeunit instance [{}] spawned in workdir {}", &instance.name, &instance.working_dir.display());
 
         Ok(instance)
     }
 
     pub fn kill(&mut self) {
-        info!("Killing ExeUnit [{}]...", &self.name);
+        log::info!("Killing ExeUnit [{}]...", &self.name);
         if let Err(_error) = self.process.kill() {
-            info!("Process wasn't running.");
+            log::info!("Process wasn't running.");
         }
     }
 }

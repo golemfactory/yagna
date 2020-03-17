@@ -19,10 +19,7 @@ use ya_utils_actix::actix_handler::{ResultTypeGetter, send_message};
 use ya_utils_actix::forward_actix_handler;
 use ya_model::market::Agreement;
 use ya_model::payment::{NewDebitNote, NewInvoice, DebitNote, Invoice};
-use std::path::Iter;
 
-
-const UPDATE_COST_INTERVAL_MILLIS: u64 = 10000;
 
 // =========================================== //
 // Internal messages
@@ -152,7 +149,7 @@ impl Payments {
     }
 
     fn update_debit_note(&mut self, agreement_id: &str, activity_id: &str, debit_note_id: Option<String>) -> Result<()> {
-        let mut activity = self.agreements
+        let activity = self.agreements
             .get_mut(agreement_id)
             .ok_or(anyhow!("Can't find agreement [{}].", agreement_id))?
             .activities
@@ -177,7 +174,7 @@ async fn compute_cost(
     provider_context: Arc<ProviderCtx>,
     activity_id: String
 ) -> Result<CostInfo> {
-    let activity_api = provider_context.activity_api.clone();
+//    let activity_api = provider_context.activity_api.clone();
 
     // let usage = activity_api.get_activity_usage(&activity_id).await?
     //     .current_usage
@@ -227,7 +224,7 @@ async fn send_invoice(
     cost_info: CostInfo,
     activities: Vec<String>,
 ) -> Result<Invoice> {
-    log::info!("Final cost for agreement [{}]: {}.", &invoice_info.agreement_id, &cost_info.cost);
+    log::info!("Final cost for agreement [{}]: {}, usage {:?}.", &invoice_info.agreement_id, &cost_info.cost, &cost_info.usage);
 
     let invoice = NewInvoice {
         agreement_id: invoice_info.agreement_id.clone(),
@@ -261,7 +258,7 @@ impl Handler<ActivityCreated> for Payments {
 
     fn handle(&mut self, msg: ActivityCreated, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
-            log::info!("Payments - activity {} created. Start computing costs.", &msg.activity_id);
+            log::info!("Payments - activity [{}] created. Start computing costs.", &msg.activity_id);
 
             // Sending UpdateCost with last_debit_note: None will start new
             // DebitNotes chain for this activity.
@@ -337,7 +334,7 @@ impl Handler<ActivityDestroyed> for Payments {
 impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: UpdateCost, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
         let agreement = match self.agreements.get(&msg.invoice_info.agreement_id) {
             Some(agreement) => agreement,
             None => {
@@ -387,7 +384,7 @@ impl Handler<UpdateCost> for Payments {
             }
             else {
                 // Note: we don't send here new UpdateCost message, what stops further updates.
-                log::info!("Stopped sending debit notes, because activity {} was destroyed.", &msg.invoice_info.activity_id);
+                log::info!("Stopped sending debit notes, because activity [{}] was destroyed.", &msg.invoice_info.activity_id);
                 return ActorResponse::reply(Ok(()))
             }
         }
@@ -419,8 +416,10 @@ impl Handler<FinalizeActivity> for Payments {
 impl Handler<AgreementClosed> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: AgreementClosed, _ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut( &msg.agreement_id) {
+            log::info!("Payments - agreement [{}] closed. Computing cost summary...", &msg.agreement_id);
+
             let cost_summary = agreement.cost_summary();
             let activities = agreement.list_activities();
             let payment_model = agreement.payment_model.clone();
@@ -497,21 +496,37 @@ impl AgreementPayment {
     }
 
     pub fn cost_summary(&self) -> CostInfo {
-//        let (cost_iter, usage_iter): (impl Iterator<Type=BigDecimal>, impl Iterator<Type=Vec<f64>>) = self.activities
-//            .iter()
-//            .filter_map(|(_,activity)| match activity {
-//                // Take into account only finalized activities.
-//                ActivityPayment::Finalized {cost_info, ..} => Some((&cost_info.cost, &cost_info.usage)),
-//                _ => None
-//            })
-//            .unzip();
-//
-//        let cost: BigDecimal = cost_iter.sum();
+        // Take into account only finalized activities.
+        let filtered_activities = self.activities
+            .iter()
+            .filter_map(|(_,activity)| match activity {
+                ActivityPayment::Finalized {cost_info, ..} => Some((&cost_info.cost, &cost_info.usage)),
+                _ => None
+            });
 
-        CostInfo {
-            cost: BigDecimal::from(0.0),
-            usage: vec![0.0; 3]
-        }
+        let cost: BigDecimal = filtered_activities
+            .clone()
+            .map(|(cost, _)| cost)
+            .sum();
+
+        let empty_vec = vec![];
+        let usage_len = filtered_activities
+            .clone()
+            .map(|(_, usage)| usage)
+            .next()
+            .unwrap_or_else(|| &empty_vec)
+            .len();
+
+        let usage: Vec<f64> = filtered_activities
+            .map(|(_, usage)| usage)
+            .fold(vec![0.0; usage_len], |accumulator, usage| {
+                accumulator.iter()
+                    .zip(usage.iter())
+                    .map(|(acc, usage)| acc + usage)
+                    .collect()
+            });
+
+        CostInfo { cost, usage }
     }
 
     pub fn list_activities(&self) -> Vec<String> {
