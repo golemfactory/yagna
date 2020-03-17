@@ -22,11 +22,12 @@ pub enum Commands {
 }
 
 #[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 pub struct CmdArgs {
-    #[structopt(short = "w", long = "workdir")]
+    #[structopt(short = "w", long)]
     workdir: PathBuf,
-    #[structopt(short = "i", long = "image")]
-    image: PathBuf,
+    #[structopt(short = "t", long)]
+    task_package: PathBuf,
     #[structopt(subcommand)]
     command: Commands,
 }
@@ -49,7 +50,7 @@ impl ExeUnitMain {
             Commands::Run { entrypoint, args } => {
                 ExeUnitMain::run(&cmdline.workdir, &entrypoint, args)
             }
-            Commands::Deploy {} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.image),
+            Commands::Deploy {} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.task_package),
             Commands::Start {} => ExeUnitMain::start(&cmdline.workdir),
         }
     }

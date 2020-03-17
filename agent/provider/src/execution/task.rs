@@ -15,3 +15,12 @@ impl Task {
         }
     }
 }
+
+impl std::fmt::Debug for Task {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Task")
+            .field("agreement_id", &self.agreement_id)
+            .field("activity_id", &self.activity_id)
+            .finish()
+    }
+}

@@ -3,6 +3,7 @@ use awc::error::{JsonPayloadError, PayloadError, SendRequestError};
 use awc::http::StatusCode;
 use backtrace::Backtrace as Trace; // needed b/c of thiserror magic
 use thiserror::Error;
+
 use ya_model::ErrorMessage;
 
 #[derive(Error, Debug)]
@@ -48,7 +49,7 @@ impl From<SendRequestError> for Error {
 
 impl From<(SendRequestError, String)> for Error {
     fn from((e, url): (SendRequestError, String)) -> Self {
-        let msg = format!("{}", e);
+        let msg = e.to_string();
         let bt = Trace::new();
         match e {
             SendRequestError::Timeout => Error::TimeoutError { msg, url, bt },

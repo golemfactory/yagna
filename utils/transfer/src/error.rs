@@ -10,12 +10,10 @@ pub enum HttpError {
     #[error("payload error: {0}")]
     PayloadError(PayloadError),
     #[error("send request error: {0}")]
-    SendRequestError(SendRequestError),
+    SendRequestError(String),
     #[error("unspecified")]
     Unspecified,
 }
-
-unsafe impl Send for HttpError {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ChannelError {
@@ -29,8 +27,6 @@ impl From<Canceled> for ChannelError {
     }
 }
 
-unsafe impl Send for ChannelError {}
-
 impl From<PayloadError> for HttpError {
     fn from(error: PayloadError) -> Self {
         HttpError::PayloadError(error)
@@ -39,7 +35,7 @@ impl From<PayloadError> for HttpError {
 
 impl From<SendRequestError> for HttpError {
     fn from(error: SendRequestError) -> Self {
-        HttpError::SendRequestError(error)
+        HttpError::SendRequestError(error.to_string())
     }
 }
 
@@ -53,6 +49,10 @@ pub enum Error {
     ChannelError(#[from] ChannelError),
     #[error("Send error: {0}")]
     SendError(#[from] SendError),
+    #[error("GSB error: {0}")]
+    Gsb(String),
+    #[error("gftp error: {0}")]
+    Gftp(#[from] ya_core_model::gftp::Error),
     #[error("URL parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
     #[error("Invalid url: {0}")]
@@ -68,8 +68,6 @@ pub enum Error {
     #[error("Interrupted: {0}")]
     Interrupted(String),
 }
-
-unsafe impl Send for Error {}
 
 impl ResponseError for Error {}
 
@@ -88,5 +86,12 @@ impl From<PayloadError> for Error {
 impl From<SendRequestError> for Error {
     fn from(error: SendRequestError) -> Self {
         Error::HttpError(HttpError::from(error))
+    }
+}
+
+impl From<ya_service_bus::error::Error> for Error {
+    fn from(e: ya_service_bus::error::Error) -> Self {
+        log::debug!("ya_service_bus::error::Error: {:?}", e);
+        Error::Gsb(e.to_string())
     }
 }

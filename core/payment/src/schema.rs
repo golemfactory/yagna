@@ -87,7 +87,7 @@ table! {
         amount -> Text,
         timestamp -> Timestamp,
         allocation_id -> Nullable<Text>,
-        details -> Text,
+        details -> Binary,
     }
 }
 
