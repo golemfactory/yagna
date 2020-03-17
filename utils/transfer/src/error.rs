@@ -53,6 +53,10 @@ pub enum Error {
     ChannelError(#[from] ChannelError),
     #[error("Send error: {0}")]
     SendError(#[from] SendError),
+    #[error("GSB error: {0}")]
+    Gsb(String),
+    #[error("gftp error: {0}")]
+    Gftp(#[from] ya_core_model::gftp::Error),
     #[error("URL parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
     #[error("Invalid url: {0}")]
@@ -88,5 +92,12 @@ impl From<PayloadError> for Error {
 impl From<SendRequestError> for Error {
     fn from(error: SendRequestError) -> Self {
         Error::HttpError(HttpError::from(error))
+    }
+}
+
+impl From<ya_service_bus::error::Error> for Error {
+    fn from(e: ya_service_bus::error::Error) -> Self {
+        log::debug!("ya_service_bus::error::Error: {:?}", e);
+        Error::Gsb(e.to_string())
     }
 }
