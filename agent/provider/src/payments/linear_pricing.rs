@@ -22,6 +22,10 @@ impl PaymentModel for LinearPricing {
             .sum::<f64>();
         Ok(BigDecimal::from(cost))
     }
+
+    fn expected_usage_len(&self) -> usize {
+        self.usage_coeffs.len() - 1
+    }
 }
 
 impl LinearPricing {

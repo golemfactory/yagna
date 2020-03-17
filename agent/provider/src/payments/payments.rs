@@ -483,6 +483,10 @@ impl AgreementPayment {
     }
 
     pub fn finish_activity(&mut self, activity_id: &str, cost_info: CostInfo) -> Result<()> {
+        if cost_info.usage.len() != self.payment_model.expected_usage_len() {
+            return Err(anyhow!("Usage vector has length {} but expected {}.", cost_info.usage.len(), self.payment_model.expected_usage_len()))
+        }
+
         if let Some(activity) = self.activities.get_mut(activity_id) {
             if let ActivityPayment::Destroyed {activity_id, last_debit_note} = activity {
                 return Ok(*activity = ActivityPayment::Finalized {
@@ -509,14 +513,7 @@ impl AgreementPayment {
             .map(|(cost, _)| cost)
             .sum();
 
-        let empty_vec = vec![];
-        let usage_len = filtered_activities
-            .clone()
-            .map(|(_, usage)| usage)
-            .next()
-            .unwrap_or_else(|| &empty_vec)
-            .len();
-
+        let usage_len = self.payment_model.expected_usage_len();
         let usage: Vec<f64> = filtered_activities
             .map(|(_, usage)| usage)
             .fold(vec![0.0; usage_len], |accumulator, usage| {
