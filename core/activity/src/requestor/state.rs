@@ -31,7 +31,6 @@ async fn get_activity_state(
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityState {
-        agreement_id: agreement.agreement_id.clone(),
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
@@ -70,7 +69,6 @@ async fn get_activity_usage(
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let msg = GetActivityUsage {
-        agreement_id: agreement.agreement_id.clone(),
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
