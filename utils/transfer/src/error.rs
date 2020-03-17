@@ -10,12 +10,10 @@ pub enum HttpError {
     #[error("payload error: {0}")]
     PayloadError(PayloadError),
     #[error("send request error: {0}")]
-    SendRequestError(SendRequestError),
+    SendRequestError(String),
     #[error("unspecified")]
     Unspecified,
 }
-
-unsafe impl Send for HttpError {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ChannelError {
@@ -29,8 +27,6 @@ impl From<Canceled> for ChannelError {
     }
 }
 
-unsafe impl Send for ChannelError {}
-
 impl From<PayloadError> for HttpError {
     fn from(error: PayloadError) -> Self {
         HttpError::PayloadError(error)
@@ -39,7 +35,7 @@ impl From<PayloadError> for HttpError {
 
 impl From<SendRequestError> for HttpError {
     fn from(error: SendRequestError) -> Self {
-        HttpError::SendRequestError(error)
+        HttpError::SendRequestError(error.to_string())
     }
 }
 
@@ -72,8 +68,6 @@ pub enum Error {
     #[error("Interrupted: {0}")]
     Interrupted(String),
 }
-
-unsafe impl Send for Error {}
 
 impl ResponseError for Error {}
 
