@@ -4,16 +4,28 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
-lazy_static::lazy_static! {
-    pub static ref PROPERTY_TAG: String = "@tag".to_string();
-}
+pub const PROPERTY_TAG: &str = "@tag";
 const DEFAULT_FORMAT: &str = "json";
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("I/O error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Invalid JSON: {0}")]
+    InvalidJson(#[from] serde_json::Error),
+    #[error("Invalid YAML: {0}")]
+    InvalidYaml(#[from] serde_yaml::Error),
+    #[error("Unsupported format: {0}")]
+    UnsupportedFormat(String),
+    #[error("Invalid value: {0}")]
+    InvalidValue(String),
+}
 
 #[derive(Clone, Debug)]
 pub struct Agreement {
     pub json: Value,
     pub agreement_id: String,
-    pub image: String,
+    pub task_package: String,
     pub usage_vector: Vec<String>,
     pub usage_limits: HashMap<String, f64>,
 }
@@ -32,8 +44,8 @@ impl TryFrom<Value> for Agreement {
             .pointer("/agreementId")
             .as_typed(Value::as_str)?
             .to_owned();
-        let image = value
-            .pointer("/demand/properties/golem/runtime/wasm/task_package")
+        let task_package = value
+            .pointer("/demand/properties/golem/srv/comp/wasm/task_package")
             .as_typed(Value::as_str)?
             .to_owned();
         let usage_vector = value
@@ -52,7 +64,7 @@ impl TryFrom<Value> for Agreement {
         Ok(Agreement {
             json: value,
             agreement_id,
-            image,
+            task_package,
             usage_vector,
             usage_limits: limits,
         })
@@ -117,7 +129,7 @@ fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
     match ext.to_lowercase().as_str() {
         "json" => try_from_json(&contents),
         "yaml" => try_from_yaml(&contents),
-        _ => Err(Error::UnknownFormatError(ext.to_string())),
+        _ => Err(Error::UnsupportedFormat(ext.to_string())),
     }
 }
 
@@ -177,38 +189,10 @@ fn merge_obj(a: &mut Value, b: Value) {
             }
         }
         (a, Value::Object(mut b)) => {
-            b.insert((*PROPERTY_TAG).clone(), a.clone());
+            b.insert(PROPERTY_TAG.to_string(), a.clone());
             *a = Value::Object(b);
         }
         (a, b) => *a = b,
-    }
-}
-
-#[derive(thiserror::Error, Clone, Debug)]
-pub enum Error {
-    #[error("File error: {0}")]
-    UnknownFormatError(String),
-    #[error("Invalid format: {0}")]
-    InvalidFormat(String),
-    #[error("Invalid value: {0}")]
-    InvalidValue(String),
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(e: serde_json::Error) -> Self {
-        Error::InvalidFormat(format!("{:?}", e))
-    }
-}
-
-impl From<serde_yaml::Error> for Error {
-    fn from(e: serde_yaml::Error) -> Self {
-        Error::InvalidFormat(format!("{:?}", e))
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::UnknownFormatError(format!("{:?}", e))
     }
 }
 
@@ -217,7 +201,7 @@ mod tests {
     use super::TypedPointer;
     use super::*;
 
-    const AGREEMENT_YAML: &str = r#"
+    const YAML: &str = r#"
 properties:
   golem:
     inf:
@@ -225,9 +209,6 @@ properties:
       storage.gib: 5.0
     node:
       id.name: dany
-    runtime.wasm:
-      wasi.version@v: '0.0.0'
-      task_package: 'https://ya.cdn.com/mandelbrot.zip'
     activity.caps:
         transfer.protocol:
           - http
@@ -247,7 +228,7 @@ constraints: |
   ()
 "#;
 
-    const AGREEMENT_JSON: &str = r#"
+    const JSON: &str = r#"
 {
 	"properties": {
 		"golem": {
@@ -257,10 +238,6 @@ constraints: |
 			},
 			"node": {
 				"id.name": "dany"
-			},
-			"runtime.wasm": {
-				"wasi.version@v": "0.0.0",
-				"task_package": "https://ya.cdn.com/mandelbrot.zip"
 			},
 			"activity.caps": {
 				"transfer.protocol": [
@@ -317,25 +294,13 @@ constraints: |
             "dany"
         );
         assert_eq!(
-            o.pointer("/properties/golem/runtime/wasm/wasi/version@v")
-                .as_typed(Value::as_str)
-                .unwrap(),
-            "0.0.0"
-        );
-        assert_eq!(
-            o.pointer("/properties/golem/runtime/wasm/task_package")
-                .as_typed(Value::as_str)
-                .unwrap(),
-            "https://ya.cdn.com/mandelbrot.zip"
-        );
-        assert_eq!(
             o.pointer("/properties/golem/activity/caps/transfer/protocol")
                 .as_typed_array(Value::as_str)
                 .unwrap(),
             vec!["http", "https", "container",]
         );
         assert_eq!(
-            o.pointer(&format!("/properties/golem/com/scheme/{}", *PROPERTY_TAG))
+            o.pointer(&format!("/properties/golem/com/scheme/{}", PROPERTY_TAG))
                 .as_typed(Value::as_str)
                 .unwrap(),
             "payu"
@@ -375,13 +340,13 @@ constraints: |
 
     #[test]
     fn json() {
-        let offer = try_from_json(AGREEMENT_JSON).unwrap();
+        let offer = try_from_json(JSON).unwrap();
         check_values(&offer);
     }
 
     #[test]
     fn yaml() {
-        let offer = try_from_yaml(AGREEMENT_YAML).unwrap();
+        let offer = try_from_yaml(YAML).unwrap();
         check_values(&offer);
     }
 

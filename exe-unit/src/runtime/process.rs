@@ -14,7 +14,7 @@ use ya_model::activity::{CommandResult, ExeScriptCommand};
 
 pub struct RuntimeProcess {
     binary: PathBuf,
-    image: String,
+    task_package: String,
     work_dir: PathBuf,
     abort_handles: HashSet<Abort>,
 }
@@ -23,7 +23,7 @@ impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
             binary,
-            image: ctx.agreement.image.clone(),
+            task_package: ctx.agreement.task_package.clone(),
             work_dir: ctx.work_dir.clone(),
             abort_handles: HashSet::new(),
         }
@@ -33,8 +33,8 @@ impl RuntimeProcess {
         let mut args = vec![
             OsString::from("--workdir"),
             self.work_dir.clone().into_os_string(),
-            OsString::from("--image"),
-            OsString::from(self.image.clone()),
+            OsString::from("--task-package"),
+            OsString::from(self.task_package.clone()),
         ];
         args.extend(cmd_args);
         args

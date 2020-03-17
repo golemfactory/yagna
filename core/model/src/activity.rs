@@ -58,7 +58,6 @@ pub struct GetActivityState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetActivityState {
-    pub agreement_id: String,
     pub activity_id: String,
     pub state: ActivityState,
     pub timeout: Option<f32>,
@@ -74,7 +73,6 @@ pub struct GetActivityUsage {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetActivityUsage {
-    pub agreement_id: String,
     pub activity_id: String,
     pub usage: ActivityUsage,
     pub timeout: Option<f32>,

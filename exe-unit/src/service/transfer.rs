@@ -45,7 +45,7 @@ pub struct TransferService {
     providers: HashMap<&'static str, Rc<Box<dyn TransferProvider<TransferData, TransferError>>>>,
     cache: Cache,
     work_dir: PathBuf,
-    image: String,
+    task_package: String,
     abort_handles: HashSet<Abort>,
 }
 
@@ -68,7 +68,7 @@ impl TransferService {
             providers,
             cache: Cache::new(ctx.cache_dir.clone()),
             work_dir: ctx.work_dir.clone(),
-            image: ctx.agreement.image.clone(),
+            task_package: ctx.agreement.task_package.clone(),
             abort_handles: HashSet::new(),
         }
     }
@@ -175,7 +175,7 @@ impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, PathBuf, Error>;
 
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let source_url = actor_try!(TransferUrl::parse(&self.image, "file"));
+        let source_url = actor_try!(TransferUrl::parse(&self.task_package, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
         let cache_path = self.cache.to_cache_path(&cache_name);
         let final_path = self.cache.to_final_path(&cache_name);

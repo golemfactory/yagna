@@ -155,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
     let agreement = Agreement {
         json: Value::Null,
         agreement_id: String::new(),
-        image: format!(
+        task_package: format!(
             "hash://sha3:{}:http://127.0.0.1:8001/rnd",
             hex::encode(hash)
         ),
