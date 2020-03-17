@@ -192,6 +192,10 @@ fn merge_obj(a: &mut Value, b: Value) {
             b.insert(PROPERTY_TAG.to_string(), a.clone());
             *a = Value::Object(b);
         }
+        (a @ &mut Value::Object(_), b) => {
+            let a = a.as_object_mut().unwrap();
+            a.insert(PROPERTY_TAG.to_string(), b.clone());
+        }
         (a, b) => *a = b,
     }
 }
@@ -394,7 +398,10 @@ constraints: |
          },
          "also": 1
       },
-      "other": 3
+      "other": {
+        "@tag": 3,
+        "nested": 2
+      }
    }
 }"#,
         )
@@ -402,5 +409,37 @@ constraints: |
 
         merge_obj(&mut f, s);
         assert_eq!(f, e);
+    }
+
+    #[test]
+    fn expand_json_error() {
+        let actual = try_from_json(
+            r#"
+            {
+                "a": { "b.c": 1 },
+                "a.b": 2
+            }"#,
+        )
+        .unwrap();
+        let expected = serde_json::json!({
+            "a": { "b": { "c": 1, &*PROPERTY_TAG: 2 } },
+        });
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn expand_json_good() {
+        let actual = try_from_json(
+            r#"
+            {
+                "a.b": { "c": 1 },
+                "a": { "b": 2 }
+            }"#,
+        )
+        .unwrap();
+        let expected = serde_json::json!({
+            "a": { "b": { "c": 1, &*PROPERTY_TAG: 2 } },
+        });
+        assert_eq!(actual, expected);
     }
 }
