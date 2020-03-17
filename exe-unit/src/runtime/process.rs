@@ -1,9 +1,11 @@
 use crate::error::Error;
 use crate::message::{ExecCmd, ExecCmdResult, Shutdown};
 use crate::runtime::Runtime;
+use crate::util::Abort;
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use futures::future::{AbortHandle, Abortable};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Output, Stdio};
@@ -15,7 +17,7 @@ pub struct RuntimeProcess {
     agreement: Option<PathBuf>,
     work_dir: Option<PathBuf>,
     cache_dir: Option<PathBuf>,
-    child_handle: Option<AbortHandle>,
+    abort_handles: HashSet<Abort>,
 }
 
 impl RuntimeProcess {
@@ -25,7 +27,7 @@ impl RuntimeProcess {
             agreement: None,
             work_dir: None,
             cache_dir: None,
-            child_handle: None,
+            abort_handles: HashSet::new(),
         }
     }
 
@@ -56,41 +58,27 @@ impl Actor for RuntimeProcess {
     type Context = Context<Self>;
 
     fn started(&mut self, _: &mut Self::Context) {
-        log::debug!("Runtime handler started");
+        log::info!("Runtime handler started");
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        log::debug!("Runtime handler stopped");
-    }
-}
-
-trait Transform<T, E>
-where
-    Self: Sized,
-{
-    fn transform<F: FnOnce(Self) -> Result<T, E>>(self, f: F) -> Result<T, E>;
-}
-
-impl<T, E, Tm, Em> Transform<Tm, Em> for Result<T, E>
-where
-    Self: Sized,
-{
-    fn transform<F: FnOnce(Self) -> Result<Tm, Em>>(self, f: F) -> Result<Tm, Em> {
-        f(self)
+        log::info!("Runtime handler stopped");
     }
 }
 
 #[derive(Debug, Message)]
 #[rtype("()")]
-struct SetChildHandle(Option<AbortHandle>);
+struct AddChildHandle(Abort);
+
+#[derive(Debug, Message)]
+#[rtype("()")]
+struct RemoveChildHandle(Abort);
 
 impl Handler<ExecCmd> for RuntimeProcess {
     type Result = ActorResponse<Self, ExecCmdResult, Error>;
 
     fn handle(&mut self, msg: ExecCmd, ctx: &mut Self::Context) -> Self::Result {
         let cmd_args = match msg.0.clone() {
-            ExeScriptCommand::Transfer { .. } => None,
-            ExeScriptCommand::Terminate {} => None,
             ExeScriptCommand::Deploy {} => Some(vec![OsString::from("deploy")]),
             ExeScriptCommand::Start { args } => {
                 let mut result = vec![OsString::from("start")];
@@ -106,6 +94,7 @@ impl Handler<ExecCmd> for RuntimeProcess {
                 result.extend(args.into_iter().map(OsString::from));
                 Some(result)
             }
+            _ => None,
         };
 
         let address = ctx.address();
@@ -114,7 +103,7 @@ impl Handler<ExecCmd> for RuntimeProcess {
                 let args = self.args(cmd_args);
                 let binary = self.binary.clone();
 
-                log::debug!("Executing {:?} with {:?}", binary, args);
+                log::info!("Executing {:?} with {:?}", binary, args);
                 let fut = async move {
                     let child = Command::new(binary)
                         .args(args)
@@ -123,18 +112,12 @@ impl Handler<ExecCmd> for RuntimeProcess {
                         .spawn()?;
 
                     let (handle, reg) = AbortHandle::new_pair();
-                    address.do_send(SetChildHandle(Some(handle)));
-
-                    let output = Abortable::new(child.wait_with_output(), reg)
-                        .await
-                        .transform(|r| {
-                            address.do_send(SetChildHandle(None));
-                            r.map_err(|_| Error::CommandError("Process aborted".to_owned()))
-                        })?
-                        .transform(|r| {
-                            address.do_send(SetChildHandle(None));
-                            r
-                        })?;
+                    let abort = Abort::from(handle);
+                    address.do_send(AddChildHandle(abort.clone()));
+                    let result = Abortable::new(child.wait_with_output(), reg).await;
+                    address.do_send(RemoveChildHandle(abort));
+                    let output =
+                        result.map_err(|_| Error::CommandError("aborted".to_owned()))??;
 
                     Ok(ExecCmdResult {
                         result: output_to_result(&output),
@@ -158,11 +141,19 @@ impl Handler<ExecCmd> for RuntimeProcess {
     }
 }
 
-impl Handler<SetChildHandle> for RuntimeProcess {
-    type Result = <SetChildHandle as Message>::Result;
+impl Handler<AddChildHandle> for RuntimeProcess {
+    type Result = <AddChildHandle as Message>::Result;
 
-    fn handle(&mut self, msg: SetChildHandle, _: &mut Self::Context) -> Self::Result {
-        self.child_handle = msg.0;
+    fn handle(&mut self, msg: AddChildHandle, _: &mut Self::Context) -> Self::Result {
+        self.abort_handles.insert(msg.0);
+    }
+}
+
+impl Handler<RemoveChildHandle> for RuntimeProcess {
+    type Result = <RemoveChildHandle as Message>::Result;
+
+    fn handle(&mut self, msg: RemoveChildHandle, _: &mut Self::Context) -> Self::Result {
+        self.abort_handles.remove(&msg.0);
     }
 }
 
@@ -170,7 +161,7 @@ impl Handler<Shutdown> for RuntimeProcess {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        if let Some(handle) = &self.child_handle {
+        for handle in std::mem::replace(&mut self.abort_handles, HashSet::new()).into_iter() {
             handle.abort();
         }
         ctx.stop();

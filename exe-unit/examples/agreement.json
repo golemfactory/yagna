@@ -1,3 +1,3 @@
 {
-  "golem.srv.comp.wasm.task_package": "http://localhost:8000/rust-wasi-tutorial.zip"
+  "golem.srv.comp.wasm.task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://localhost:8000/rust-wasi-tutorial.zip"
 }
