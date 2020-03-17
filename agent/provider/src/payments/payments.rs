@@ -174,12 +174,12 @@ async fn compute_cost(
     provider_context: Arc<ProviderCtx>,
     activity_id: String
 ) -> Result<CostInfo> {
-//    let activity_api = provider_context.activity_api.clone();
+    let activity_api = provider_context.activity_api.clone();
+    let usage = activity_api.get_activity_usage(&activity_id).await
+        .map_err(|error| anyhow!("Can't query usage for activity [{}]. Error: {}", &activity_id, error))?
+        .current_usage
+        .ok_or(anyhow!("Empty usage vector for activity [{}].", &activity_id))?;
 
-    // let usage = activity_api.get_activity_usage(&activity_id).await?
-    //     .current_usage
-    //     .ok_or(anyhow!("Can't query usage for activity [{}].", &activity_id))?;
-    let usage = vec![1.0, 1.0];
     let cost = payment_model.compute_cost(&usage)?;
 
     Ok(CostInfo { cost, usage })
