@@ -1,8 +1,8 @@
 use actix::{Actor, System};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-
 use futures::StreamExt;
 use rand::Rng;
+use std::collections::HashMap;
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tempdir::TempDir;
 use tokio::time::delay_for;
+use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::service::transfer::{AbortTransfers, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
@@ -84,7 +85,7 @@ async fn interrupted_transfer(
     dest: &str,
     exe_ctx: &ExeUnitContext,
 ) -> anyhow::Result<()> {
-    let transfer_service = TransferService::new(exe_ctx.clone());
+    let transfer_service = TransferService::new(&exe_ctx);
     let addr = transfer_service.start();
     let addr_thread = addr.clone();
 
@@ -138,11 +139,19 @@ async fn main() -> anyhow::Result<()> {
     create_file(&src_file);
     let src_size = std::fs::metadata(&src_file)?.len();
 
+    let agreement = Agreement {
+        json: serde_json::Value::Null,
+        agreement_id: String::new(),
+        task_package: "".to_string(),
+        usage_vector: Vec::new(),
+        usage_limits: HashMap::new(),
+    };
+
     let exe_ctx = ExeUnitContext {
         service_id: None,
         report_url: None,
-        agreement: temp_dir.path().join("agreement.json"),
-        work_dir: work_dir.clone(),
+        agreement,
+        work_dir,
         cache_dir,
     };
 

@@ -1,3 +1,4 @@
+pub mod agreement;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -7,6 +8,7 @@ pub mod service;
 pub mod state;
 pub mod util;
 
+use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
@@ -41,15 +43,15 @@ pub struct ExeUnit<R: Runtime> {
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    pub fn new(ctx: ExeUnitContext, runtime: R) -> Self {
-        let state = ExeUnitState::default();
-        let metrics = MetricsService::default().start();
-        let transfers = TransferService::new(ctx.clone()).start();
-        let runtime = runtime.with_context(ctx.clone()).start();
-
+    pub fn new(
+        ctx: ExeUnitContext,
+        metrics: Addr<MetricsService>,
+        transfers: Addr<TransferService>,
+        runtime: Addr<R>,
+    ) -> Self {
         ExeUnit {
             ctx,
-            state,
+            state: ExeUnitState::default(),
             runtime: runtime.clone(),
             metrics: metrics.clone(),
             transfers: transfers.clone(),
@@ -106,8 +108,8 @@ struct ExecCtx {
 impl<R: Runtime> ExeUnit<R> {
     async fn exec(
         addr: Addr<Self>,
-        exe_unit: Addr<R>,
-        transfer_service: Addr<TransferService>,
+        runtime: Addr<R>,
+        transfers: Addr<TransferService>,
         exec: Exec,
     ) {
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
@@ -119,8 +121,8 @@ impl<R: Runtime> ExeUnit<R> {
 
             if let Err(error) = Self::exec_cmd(
                 addr.clone(),
-                exe_unit.clone(),
-                transfer_service.clone(),
+                runtime.clone(),
+                transfers.clone(),
                 ctx.clone(),
             )
             .await
@@ -157,7 +159,7 @@ impl<R: Runtime> ExeUnit<R> {
 
     async fn exec_cmd(
         addr: Addr<Self>,
-        exe_unit: Addr<R>,
+        runtime: Addr<R>,
         transfer_service: Addr<TransferService>,
         ctx: ExecCtx,
     ) -> Result<()> {
@@ -198,9 +200,9 @@ impl<R: Runtime> ExeUnit<R> {
 
         log::info!("Executing command: {:?}", ctx.cmd);
 
-        Self::pre_exec(transfer_service, ctx.clone()).await?;
+        Self::pre_exec(transfer_service, runtime.clone(), ctx.clone()).await?;
 
-        let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
+        let exe_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exe_result.result {
             return Err(Error::CommandError(format!(
                 "{:?} command error: {}",
@@ -228,7 +230,11 @@ impl<R: Runtime> ExeUnit<R> {
         Ok(())
     }
 
-    async fn pre_exec(transfer_service: Addr<TransferService>, ctx: ExecCtx) -> Result<()> {
+    async fn pre_exec(
+        transfer_service: Addr<TransferService>,
+        runtime: Addr<R>,
+        ctx: ExecCtx,
+    ) -> Result<()> {
         match &ctx.cmd {
             ExeScriptCommand::Transfer { from, to } => {
                 let msg = TransferResource {
@@ -239,7 +245,8 @@ impl<R: Runtime> ExeUnit<R> {
             }
             ExeScriptCommand::Deploy {} => {
                 let msg = DeployImage {};
-                transfer_service.send(msg).await??;
+                let path = transfer_service.send(msg).await??;
+                runtime.send(SetTaskPackagePath(path)).await?;
             }
             _ => (),
         }
@@ -280,7 +287,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 pub struct ExeUnitContext {
     pub service_id: Option<String>,
     pub report_url: Option<String>,
-    pub agreement: PathBuf,
+    pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
 }

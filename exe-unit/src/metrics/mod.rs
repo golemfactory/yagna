@@ -1,44 +1,38 @@
 use std::fmt::Debug;
-use std::time::Duration;
+use std::time::SystemTime;
 
 pub mod error;
 mod os;
 
 pub type Result<T> = std::result::Result<T, error::MetricError>;
+pub type MetricData = f64;
 
 #[derive(Clone, Debug)]
-pub enum MetricReport<M: Metric> {
-    Frame(<M as Metric>::Data),
+pub enum MetricReport {
+    Frame(MetricData),
+    LimitExceeded(MetricData),
     Error(error::MetricError),
-    LimitExceeded(<M as Metric>::Data),
 }
 
-pub trait MetricData: Clone + Debug + PartialOrd + Unpin + Send {
-    fn as_f64(&self) -> f64;
+pub trait Metric {
+    fn frame(&mut self) -> Result<MetricData>;
+    fn peak(&mut self) -> Result<MetricData>;
 }
 
-pub trait Metric: Clone + Send {
-    const ID: &'static str;
-    type Data: MetricData;
-
-    fn frame(&mut self) -> Result<Self::Data>;
-    fn peak(&mut self) -> Result<Self::Data>;
-}
-
-#[derive(Clone, Debug)]
 pub struct CpuMetric;
 
-impl Metric for CpuMetric {
-    const ID: &'static str = "CPU";
-    type Data = Duration;
+impl CpuMetric {
+    pub const ID: &'static str = "golem.usage.cpu_sec";
+}
 
+impl Metric for CpuMetric {
     #[inline]
-    fn frame(&mut self) -> Result<Self::Data> {
-        os::cpu_time()
+    fn frame(&mut self) -> Result<MetricData> {
+        os::cpu_time().map(|d| d.as_secs_f64())
     }
 
     #[inline]
-    fn peak(&mut self) -> Result<Self::Data> {
+    fn peak(&mut self) -> Result<MetricData> {
         self.frame()
     }
 }
@@ -49,19 +43,14 @@ impl Default for CpuMetric {
     }
 }
 
-impl MetricData for Duration {
-    fn as_f64(&self) -> f64 {
-        self.as_secs_f64()
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct MemMetric {
-    peak: <Self as Metric>::Data,
+    peak: MetricData,
 }
 
 impl MemMetric {
-    fn update_peak(&mut self, val: <Self as Metric>::Data) -> <Self as Metric>::Data {
+    pub const ID: &'static str = "golem.usage.gib";
+
+    fn update_peak(&mut self, val: MetricData) -> MetricData {
         if val > self.peak {
             self.peak = val;
         }
@@ -70,36 +59,58 @@ impl MemMetric {
 }
 
 impl Metric for MemMetric {
-    const ID: &'static str = "RAM";
-    type Data = i64;
-
-    fn frame(&mut self) -> Result<Self::Data> {
+    fn frame(&mut self) -> Result<MetricData> {
         match os::mem_rss() {
             Ok(data) => {
+                let data = data as MetricData;
                 self.update_peak(data);
                 Ok(data)
             }
             Err(err) => match &err {
-                error::MetricError::Unsupported => self.peak(),
+                error::MetricError::Unsupported(_) => self.peak(),
                 _ => Err(err),
             },
         }
     }
 
-    fn peak(&mut self) -> Result<Self::Data> {
-        let peak = os::mem_peak_rss()?;
+    fn peak(&mut self) -> Result<MetricData> {
+        let peak = os::mem_peak_rss()? as MetricData;
         Ok(self.update_peak(peak))
     }
 }
 
 impl Default for MemMetric {
     fn default() -> Self {
-        MemMetric { peak: 0i64 }
+        MemMetric {
+            peak: 0 as MetricData,
+        }
     }
 }
 
-impl MetricData for i64 {
-    fn as_f64(&self) -> f64 {
-        *self as f64
+pub struct TimeMetric {
+    started: SystemTime,
+}
+
+impl TimeMetric {
+    pub const ID: &'static str = "golem.usage.duration_sec";
+}
+
+impl Default for TimeMetric {
+    fn default() -> Self {
+        TimeMetric {
+            started: SystemTime::now(),
+        }
+    }
+}
+
+impl Metric for TimeMetric {
+    fn frame(&mut self) -> Result<MetricData> {
+        Ok(SystemTime::now()
+            .duration_since(self.started)?
+            .as_secs_f64())
+    }
+
+    fn peak(&mut self) -> Result<MetricData> {
+        self.frame()
     }
 }

@@ -65,15 +65,6 @@ impl ProjectedPath {
             },
         }
     }
-
-    pub fn to_container(&self) -> Self {
-        match self {
-            ProjectedPath::Local { dir: _, path } => {
-                ProjectedPath::Container { path: path.clone() }
-            }
-            ProjectedPath::Container { path } => ProjectedPath::Container { path: path.clone() },
-        }
-    }
 }
 
 impl From<CachePath> for PathBuf {

@@ -5426,6 +5426,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "serde_yaml",
  "sha3",
  "signal-hook",
  "structopt",

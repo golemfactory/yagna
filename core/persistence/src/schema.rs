@@ -12,6 +12,7 @@ table! {
     activity_event (id) {
         id -> Integer,
         activity_id -> Integer,
+        identity_id -> Text,
         event_date -> Timestamp,
         event_type_id -> Integer,
     }

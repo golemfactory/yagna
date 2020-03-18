@@ -44,13 +44,13 @@ pub fn cpu_time() -> Result<Duration> {
     Ok(user_time + kernel_time)
 }
 
-pub fn mem_rss() -> Result<i64> {
-    Err(MetricError::Unsupported)
+pub fn mem_rss() -> Result<f64> {
+    Err(MetricError::Unsupported("mem".to_owned()))
 }
 
-pub fn mem_peak_rss() -> Result<i64> {
+pub fn mem_peak_rss() -> Result<f64> {
     let info = JOB_OBJECT.lock().map_err(SystemError::from)?.limits()?;
-    Ok(info.PeakJobMemoryUsed as i64)
+    Ok((info.PeakJobMemoryUsed as f64) / (1024_f64 * 1024_f64)) // kiB to giB
 }
 
 struct JobObject {

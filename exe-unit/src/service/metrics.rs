@@ -1,31 +1,69 @@
-use crate::error::{Error, LocalServiceError};
+use crate::error::Error;
 use crate::message::{GetMetrics, Shutdown};
-use crate::metrics::{CpuMetric, MemMetric, Metric, MetricData, MetricReport};
+use crate::metrics::error::MetricError;
+use crate::metrics::{CpuMetric, MemMetric, Metric, MetricData, MetricReport, TimeMetric};
+use crate::ExeUnitContext;
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 pub struct MetricsService {
-    cpu: MetricService<CpuMetric>,
-    mem: MetricService<MemMetric>,
+    usage_vector: Vec<String>,
+    metrics: HashMap<String, MetricProvider>,
 }
 
 impl MetricsService {
-    pub fn new(
+    pub fn try_new(
+        ctx: &ExeUnitContext,
         backlog_limit: Option<usize>,
-        cpu_usage_limit: Option<<CpuMetric as Metric>::Data>,
-        mem_usage_limit: Option<<MemMetric as Metric>::Data>,
-    ) -> Self {
-        let cpu = MetricService::new(CpuMetric::default(), backlog_limit.clone(), cpu_usage_limit);
-        let mem = MetricService::new(MemMetric::default(), backlog_limit, mem_usage_limit);
-        MetricsService { cpu, mem }
-    }
-}
+    ) -> Result<Self, MetricError> {
+        let metrics: HashMap<String, MetricProvider> = vec![
+            (
+                CpuMetric::ID.to_string(),
+                MetricProvider::new(
+                    CpuMetric::default(),
+                    backlog_limit.clone(),
+                    ctx.agreement.usage_limits.get(CpuMetric::ID).cloned(),
+                ),
+            ),
+            (
+                MemMetric::ID.to_string(),
+                MetricProvider::new(
+                    MemMetric::default(),
+                    backlog_limit.clone(),
+                    ctx.agreement.usage_limits.get(MemMetric::ID).cloned(),
+                ),
+            ),
+            (
+                TimeMetric::ID.to_string(),
+                MetricProvider::new(
+                    TimeMetric::default(),
+                    Some(1),
+                    ctx.agreement.usage_limits.get(TimeMetric::ID).cloned(),
+                ),
+            ),
+        ]
+        .into_iter()
+        .collect();
 
-impl Default for MetricsService {
-    fn default() -> Self {
-        MetricsService::new(None, None, None)
+        if let Some(e) = ctx
+            .agreement
+            .usage_vector
+            .iter()
+            .find(|e| !metrics.contains_key(*e))
+        {
+            return Err(MetricError::Unsupported(e.to_string()));
+        }
+
+        Ok(MetricsService {
+            usage_vector: ctx.agreement.usage_vector.clone(),
+            metrics,
+        })
+    }
+
+    pub fn metrics() -> Vec<&'static str> {
+        vec![CpuMetric::ID, MemMetric::ID, TimeMetric::ID]
     }
 }
 
@@ -42,57 +80,52 @@ impl Handler<Shutdown> for MetricsService {
     }
 }
 
-macro_rules! parse_report {
-    ($metric:expr, $report:expr) => {
-        match $report {
-            MetricReport::Frame(data) => Ok(data.as_f64()),
-            MetricReport::Error(error) => Err(LocalServiceError::MetricError(error).into()),
-            MetricReport::LimitExceeded(data) => {
-                let msg = format!("{:?} usage exceeded: {:?}", $metric, data.as_f64());
-                Err(Error::UsageLimitExceeded(msg))
-            }
-        }
-    };
-}
-
 impl Handler<GetMetrics> for MetricsService {
     type Result = <GetMetrics as Message>::Result;
 
     fn handle(&mut self, _: GetMetrics, _: &mut Self::Context) -> Self::Result {
-        let cpu_report = self.cpu.report();
-        self.cpu.log_report(cpu_report.clone());
-        let cpu_data: f64 = parse_report!(CpuMetric::ID, cpu_report)?;
+        let mut metrics = Vec::with_capacity(self.usage_vector.len());
 
-        let mem_report = self.mem.report();
-        self.mem.log_report(mem_report.clone());
-        let mem_data: f64 = parse_report!(MemMetric::ID, mem_report)?;
+        for name in self.usage_vector.iter() {
+            let metric = self
+                .metrics
+                .get_mut(name)
+                .ok_or(MetricError::Unsupported(name.to_string()))?;
 
-        Ok(vec![cpu_data, mem_data])
+            let report = metric.report();
+            metric.log_report(report.clone());
+
+            match report {
+                MetricReport::Frame(data) => metrics.push(data),
+                MetricReport::Error(error) => return Err(error.into()),
+                MetricReport::LimitExceeded(data) => {
+                    return Err(Error::UsageLimitExceeded(format!(
+                        "{:?} exceeded the value of {:?}",
+                        name, data
+                    )))
+                }
+            }
+        }
+
+        Ok(metrics)
     }
 }
 
-#[derive(Clone)]
-struct MetricService<M: Metric + 'static> {
-    metric: M,
-    backlog: Arc<Mutex<VecDeque<(DateTime<Utc>, MetricReport<M>)>>>,
+struct MetricProvider {
+    metric: Box<dyn Metric>,
+    backlog: Arc<Mutex<VecDeque<(DateTime<Utc>, MetricReport)>>>,
     backlog_limit: Option<usize>,
-    usage_limit: Option<<M as Metric>::Data>,
+    usage_limit: Option<MetricData>,
 }
 
-impl<M: Metric + 'static> From<M> for MetricService<M> {
-    fn from(metric: M) -> Self {
-        MetricService::new(metric, None, None)
-    }
-}
-
-impl<M: Metric + 'static> MetricService<M> {
-    pub fn new(
+impl MetricProvider {
+    pub fn new<M: Metric + 'static>(
         metric: M,
         backlog_limit: Option<usize>,
-        usage_limit: Option<<M as Metric>::Data>,
+        usage_limit: Option<MetricData>,
     ) -> Self {
-        MetricService {
-            metric,
+        MetricProvider {
+            metric: Box::new(metric),
             backlog: Arc::new(Mutex::new(VecDeque::new())),
             backlog_limit,
             usage_limit,
@@ -100,11 +133,11 @@ impl<M: Metric + 'static> MetricService<M> {
     }
 }
 
-impl<M: Metric> MetricService<M> {
-    pub fn report(&mut self) -> MetricReport<M> {
+impl MetricProvider {
+    fn report(&mut self) -> MetricReport {
         if let Ok(data) = self.metric.peak() {
             if let Some(limit) = &self.usage_limit {
-                if &data > limit {
+                if data > *limit {
                     return MetricReport::LimitExceeded(data);
                 }
             }
@@ -116,7 +149,7 @@ impl<M: Metric> MetricService<M> {
         }
     }
 
-    pub fn log_report(&mut self, report: MetricReport<M>) {
+    fn log_report(&mut self, report: MetricReport) {
         let mut backlog = self.backlog.lock().unwrap();
         if let Some(limit) = self.backlog_limit {
             if backlog.len() == limit {
