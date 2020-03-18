@@ -11,30 +11,15 @@ use ya_service_bus::timeout::IntoTimeoutFuture;
 use crate::common::{authorize_activity_executor, PathActivity, QueryTimeoutMaxCount};
 use crate::dao::*;
 use crate::error::Error;
-use crate::impl_restful_handler;
 
 pub mod service;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
-        .route(
-            "/events",
-            web::get().to(impl_restful_handler!(get_events_web, query)),
-        )
+        .service(get_events_web)
         .service(get_activity_state_web)
-        .route(
-            "/activity/{activity_id}/state",
-            web::put().to(impl_restful_handler!(
-                set_activity_state_web,
-                path,
-                state,
-                id
-            )),
-        )
-        .route(
-            "/activity/{activity_id}/usage",
-            web::get().to(impl_restful_handler!(get_activity_usage_web, path, id)),
-        )
+        .service(set_activity_state_web)
+        .service(get_activity_usage_web)
 }
 
 impl From<Event> for ProviderEvent {
@@ -57,7 +42,6 @@ async fn get_activity_state(db: &DbExecutor, activity_id: &str) -> Result<Activi
     db.as_dao::<ActivityStateDao>()
         .get(activity_id)
         .await
-        .not_found_as_option()
         .map_err(Error::from)?
         .map(|state| ActivityState {
             state: serde_json::from_str(&state.name).unwrap(),
@@ -88,7 +72,7 @@ async fn set_activity_state(
 ) -> Result<(), Error> {
     db.as_dao::<ActivityStateDao>()
         .set(
-            &activity_id,
+            activity_id,
             activity_state.state.clone(),
             activity_state.reason.clone(),
             activity_state.error_message.clone(),
@@ -97,16 +81,19 @@ async fn set_activity_state(
         .map_err(|e| Error::from(e).into())
 }
 
+#[actix_web::put("/activity/{activity_id}/state")]
 async fn set_activity_state_web(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     state: web::Json<ActivityState>,
     id: Identity,
-) -> Result<(), Error> {
+) -> impl Responder {
     log::debug!("set_activity_state_web {:?}", state);
     authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
 
-    set_activity_state(&db, &path.activity_id, state.into_inner()).await
+    set_activity_state(&db, &path.activity_id, state.into_inner())
+        .await
+        .map(web::Json)
 }
 
 /// Get usage of specified Activity.
@@ -114,7 +101,6 @@ async fn get_activity_usage(db: &DbExecutor, activity_id: &str) -> Result<Activi
     db.as_dao::<ActivityUsageDao>()
         .get(activity_id)
         .await
-        .not_found_as_option()
         .map_err(Error::from)?
         .map(|usage| ActivityUsage {
             current_usage: usage
@@ -124,30 +110,36 @@ async fn get_activity_usage(db: &DbExecutor, activity_id: &str) -> Result<Activi
         .ok_or(Error::NotFound)
 }
 
+#[actix_web::get("/activity/{activity_id}/usage")]
 async fn get_activity_usage_web(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivity>,
     id: Identity,
-) -> Result<ActivityUsage, Error> {
+) -> impl Responder {
     authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
 
-    get_activity_usage(&db, &path.activity_id).await
+    get_activity_usage(&db, &path.activity_id)
+        .await
+        .map(web::Json)
 }
 
 /// Fetch Requestor command events.
+#[actix_web::get("/events")]
 async fn get_events_web(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeoutMaxCount>,
-) -> Result<Vec<ProviderEvent>, Error> {
+    id: Identity,
+) -> impl Responder {
     log::trace!("getting events {:?}", query);
-
-    Ok(db
+    let events = db
         .as_dao::<EventDao>()
-        .get_events_fut(query.max_count)
+        .get_events_wait(id.identity, query.max_count)
         .timeout(query.timeout)
         .map_err(Error::from)
         .await??
         .into_iter()
         .map(ProviderEvent::from)
-        .collect())
+        .collect::<Vec<ProviderEvent>>();
+
+    Ok::<_, Error>(web::Json(events))
 }
