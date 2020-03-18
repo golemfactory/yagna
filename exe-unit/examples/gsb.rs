@@ -72,6 +72,17 @@ impl Handler<RpcEnvelope<SetActivityUsage>> for Activity {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    println!(
+        r#"
+
+    >> YO! YAGNA DEV <<
+
+    Before running this example you should also start:
+      cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
+    and
+      cargo run --example ya_sb_router -- -l 127.0.0.1:7464
+    "#
+    );
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
     env_logger::init();
 

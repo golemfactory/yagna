@@ -422,7 +422,7 @@ constraints: |
         )
         .unwrap();
         let expected = serde_json::json!({
-            "a": { "b": { "c": 1, &*PROPERTY_TAG: 2 } },
+            "a": { "b": { "c": 1, PROPERTY_TAG: 2 } },
         });
         assert_eq!(actual, expected);
     }
@@ -438,7 +438,7 @@ constraints: |
         )
         .unwrap();
         let expected = serde_json::json!({
-            "a": { "b": { "c": 1, &*PROPERTY_TAG: 2 } },
+            "a": { "b": { "c": 1, PROPERTY_TAG: 2 } },
         });
         assert_eq!(actual, expected);
     }
