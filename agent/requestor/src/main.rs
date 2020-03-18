@@ -9,6 +9,8 @@ use ya_client::{
 };
 //use ya_model::market::proposal::State;
 use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
+use chrono::Utc;
+use ya_model::activity::ExeScriptRequest;
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -71,7 +73,7 @@ async fn process_offer(
     let new_agreement_id = proposal_id;
     let new_agreement = AgreementProposal::new(
         new_agreement_id.clone(),
-        "2021-01-01T18:54:16.655397Z".parse()?,
+        Utc::now() + chrono::Duration::hours(2)
     );
     let _ack = requestor_api.create_agreement(&new_agreement).await?;
     log::info!("confirm agreement = {}", new_agreement_id);
@@ -170,7 +172,7 @@ async fn process_agreement(
     activity_api.destroy_activity(&act_id).await?;
     log::info!("I'M DONE FOR NOW");
 
-    //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
+    activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
     Ok(())
 }
 
@@ -212,6 +214,7 @@ async fn main() -> anyhow::Result<()> {
         if let Err(e) = process_agreement(&activity_api, id.clone()).await {
             log::error!("processing agreement id {} error: {}", id, e);
         }
+        market_api.cl
     }
     market_api.unsubscribe(&subscription_id).await?;
     Ok(())
