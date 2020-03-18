@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::message::{ExecCmd, ExecCmdResult, Shutdown};
+use crate::message::{ExecCmd, ExecCmdResult, SetTaskPackagePath, Shutdown};
 use crate::runtime::Runtime;
 use crate::util::Abort;
 use crate::ExeUnitContext;
@@ -14,8 +14,8 @@ use ya_model::activity::{CommandResult, ExeScriptCommand};
 
 pub struct RuntimeProcess {
     binary: PathBuf,
-    task_package: String,
     work_dir: PathBuf,
+    task_package_path: Option<PathBuf>,
     abort_handles: HashSet<Abort>,
 }
 
@@ -23,21 +23,25 @@ impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
             binary,
-            task_package: ctx.agreement.task_package.clone(),
             work_dir: ctx.work_dir.clone(),
+            task_package_path: None,
             abort_handles: HashSet::new(),
         }
     }
 
-    fn args(&self, cmd_args: Vec<OsString>) -> Vec<OsString> {
+    fn args(&self, cmd_args: Vec<OsString>) -> Result<Vec<OsString>, Error> {
+        let pkg_path = self
+            .task_package_path
+            .clone()
+            .ok_or(Error::RuntimeError("Task package path missing".to_owned()))?;
         let mut args = vec![
             OsString::from("--workdir"),
             self.work_dir.clone().into_os_string(),
             OsString::from("--task-package"),
-            OsString::from(self.task_package.clone()),
+            OsString::from(pkg_path),
         ];
         args.extend(cmd_args);
-        args
+        Ok(args)
     }
 }
 
@@ -89,13 +93,13 @@ impl Handler<ExecCmd> for RuntimeProcess {
         let address = ctx.address();
         match cmd_args {
             Some(cmd_args) => {
-                let args = self.args(cmd_args);
                 let binary = self.binary.clone();
-
+                let args = self.args(cmd_args);
                 log::info!("Executing {:?} with {:?}", binary, args);
+
                 let fut = async move {
                     let child = Command::new(binary)
-                        .args(args)
+                        .args(args?)
                         .stdout(Stdio::piped())
                         .stderr(Stdio::piped())
                         .spawn()?;
@@ -127,6 +131,14 @@ impl Handler<ExecCmd> for RuntimeProcess {
                 ActorResponse::r#async(fut.into_actor(self))
             }
         }
+    }
+}
+
+impl Handler<SetTaskPackagePath> for RuntimeProcess {
+    type Result = <SetTaskPackagePath as Message>::Result;
+
+    fn handle(&mut self, msg: SetTaskPackagePath, _: &mut Self::Context) -> Self::Result {
+        self.task_package_path = Some(msg.0);
     }
 }
 

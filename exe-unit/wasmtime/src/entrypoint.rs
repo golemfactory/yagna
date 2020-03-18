@@ -55,9 +55,9 @@ impl ExeUnitMain {
         }
     }
 
-    fn deploy(workdir: &Path, image_path: &Path) -> Result<()> {
-        let image = WasmImage::new(&image_path)
-            .with_context(|| format!("Can't read image file {}.", image_path.display()))?;
+    fn deploy(workdir: &Path, path: &Path) -> Result<()> {
+        let image = WasmImage::new(&path)
+            .with_context(|| format!("Can't read image file {}.", path.display()))?;
         write_deploy_file(workdir, &image)?;
 
         Ok(info!("Deploy completed."))
