@@ -24,9 +24,9 @@ pub enum Commands {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub struct CmdArgs {
-    #[structopt(short = "w", long)]
+    #[structopt(short, long)]
     workdir: PathBuf,
-    #[structopt(short = "t", long)]
+    #[structopt(short, long)]
     task_package: PathBuf,
     #[structopt(subcommand)]
     command: Commands,
