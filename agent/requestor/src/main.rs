@@ -149,6 +149,7 @@ fn build_demand(node_name: &str) -> Demand {
         constraints: r#"(&
             (golem.inf.mem.gib>0.5)
             (golem.inf.storage.gib>1)
+            (golem.com.pricing.model=linear)
         )"#
         .to_string(),
 
@@ -166,7 +167,7 @@ async fn process_agreement(
     let act_id = activity_api.create_activity(&agreement_id).await?;
     log::info!("GOT new activity = (({})); YAY!", act_id);
 
-    tokio::time::delay_for(Duration::from_millis(7000)).await;
+    tokio::time::delay_for(Duration::from_secs(30)).await;
 
     log::info!("destroying activity = (({})); AGRRR!", act_id);
     activity_api.destroy_activity(&act_id).await?;

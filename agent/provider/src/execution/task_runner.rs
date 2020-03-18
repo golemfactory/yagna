@@ -13,6 +13,7 @@ use ya_model::activity::{
 };
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
+use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
@@ -33,6 +34,31 @@ pub struct UpdateActivity;
 #[rtype(result = "Result<()>")]
 pub struct InitializeExeUnits {
     pub file: PathBuf,
+}
+
+// =========================================== //
+// Public signals sent by TaskRunner
+// =========================================== //
+
+/// Signal emitted when TaskRunner finished processing
+/// of CreateActivity event. That means, that ExeUnit is already created.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct ActivityCreated {
+    pub agreement_id: String,
+    pub activity_id: String,
+}
+
+/// Signal emitted when TaskRunner destroys activity.
+/// It can happen in several situations:
+/// - Requestor sends terminate command to ExeUnit
+/// - Requestor sends DestroyActivity event
+/// - Task is finished because of timeout
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "Result<()>")]
+pub struct ActivityDestroyed {
+    pub agreement_id: String,
+    pub activity_id: String,
 }
 
 // =========================================== //
@@ -64,8 +90,12 @@ pub struct TaskRunner {
     registry: ExeUnitsRegistry,
     /// Spawned tasks.
     tasks: Vec<Task>,
-    /// Agreements, that allow for CreateActivity event.
+    /// Agreements, that wait for CreateActivity event.
     active_agreements: HashSet<String>,
+
+    /// External actors can listen on these signals.
+    pub activity_created: SignalSlot<ActivityCreated>,
+    pub activity_destroyed: SignalSlot<ActivityDestroyed>,
 }
 
 // outputing empty string for logfn macro purposes
@@ -82,6 +112,8 @@ impl TaskRunner {
             registry: ExeUnitsRegistry::new(),
             tasks: vec![],
             active_agreements: HashSet::new(),
+            activity_created: SignalSlot::<ActivityCreated>::new(),
+            activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
         }
     }
 
@@ -90,7 +122,6 @@ impl TaskRunner {
     pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits) -> Result<()> {
         self.registry
             .register_exeunits_from_file(&msg.file)
-            .map(|_| ())
     }
 
     pub async fn collect_events(
@@ -112,6 +143,8 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunner>) {
+        if events.len() == 0 { return };
+
         log::info!("Collected {} activity events. Processing...", events.len());
 
         // FIXME: Create activity arrives together with destroy, and destroy is being processed first
@@ -163,6 +196,7 @@ impl TaskRunner {
         match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
             Ok(task) => {
                 self.tasks.push(task);
+                let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: msg.agreement_id.clone(), activity_id: msg.activity_id.clone()});
                 Ok(())
             }
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
@@ -181,6 +215,12 @@ impl TaskRunner {
                 let task = self.tasks.swap_remove(task_position);
                 TaskRunner::destroy_task(task);
 
+                let msg = ActivityDestroyed{
+                    agreement_id: msg.agreement_id.to_string(),
+                    activity_id: msg.activity_id.clone(),
+                };
+                let _ = self.activity_destroyed.send_signal(msg.clone());
+
                 // TODO: remove this
                 let client = self.api.clone();
                 Arbiter::spawn(async move {
@@ -194,17 +234,17 @@ impl TaskRunner {
                     {
                         log::error!("Setting state for activity [{:?}], error: {}", msg, e);
                     }
-                })
+                });
             }
         }
         Ok(())
     }
 
-    #[logfn_inputs(Info, fmt = "{}Got {:?}")]
+    #[logfn_inputs(Debug, fmt = "{}Got {:?}")]
     pub fn on_agreement_approved(&mut self, msg: AgreementApproved) -> Result<()> {
         // Agreement waits for first create activity.
         // FIXME: clean-up agreements upon TTL or maybe payments
-        self.active_agreements.insert(msg.agreement_id);
+        self.active_agreements.insert(msg.agreement.agreement_id);
         Ok(())
     }
 
@@ -237,6 +277,14 @@ impl TaskRunner {
         // Here we could cleanup resources, directories and everything.
         task.exeunit.kill();
     }
+
+    pub fn on_subscribe_activity_created(&mut self, msg: Subscribe<ActivityCreated>) -> Result<()> {
+        Ok(self.activity_created.on_subscribe(msg))
+    }
+
+    pub fn on_subscribe_activity_destroyed(&mut self, msg: Subscribe<ActivityDestroyed>) -> Result<()> {
+        Ok(self.activity_destroyed.on_subscribe(msg))
+    }
 }
 
 // =========================================== //
@@ -251,6 +299,10 @@ forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
+
+forward_actix_handler!(TaskRunner, Subscribe<ActivityCreated>, on_subscribe_activity_created);
+forward_actix_handler!(TaskRunner, Subscribe<ActivityDestroyed>, on_subscribe_activity_destroyed);
+
 
 impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;

@@ -31,6 +31,8 @@ pub struct NewDebitNote {
     pub agreement_id: String,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub activity_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub previous_debit_note_id: Option<String>,
     pub total_amount_due: BigDecimal,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub usage_counter_vector: Option<serde_json::Value>,

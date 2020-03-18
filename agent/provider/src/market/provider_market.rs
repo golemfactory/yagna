@@ -90,7 +90,7 @@ impl GotAgreement {
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct AgreementApproved {
-    pub agreement_id: String,
+    pub agreement: Agreement,
 }
 
 // =========================================== //
@@ -145,6 +145,8 @@ impl ProviderMarket {
 
     #[logfn_inputs(Debug, fmt = "{}Subscribed offer: {:?}")]
     fn on_offer_subscribed(&mut self, msg: OfferSubscription) -> Result<()> {
+        log::info!("Subscribed offer. Subscription id [{}].", &msg.subscription_id);
+
         self.offer_subscriptions
             .insert(msg.subscription_id.clone(), msg);
         Ok(())
@@ -201,7 +203,9 @@ impl ProviderMarket {
         market_api: Arc<MarketProviderApi>,
         subscription: OfferSubscription,
     ) {
-        log::info!("Collected {} market events. Processing...", events.len());
+        if events.len() == 0 { return };
+
+        log::info!("Collected {} market events for subscription [{}]. Processing...", events.len(), &subscription.subscription_id);
 
         let dispatch_futures = events
             .iter()
@@ -310,7 +314,7 @@ impl ProviderMarket {
                     // We negotiated agreement and here responsibility of ProviderMarket ends.
                     // Notify outside world about agreement for further processing.
                     let message = AgreementApproved {
-                        agreement_id: agreement.agreement_id.to_string(),
+                        agreement: agreement.clone(),
                     };
 
                     let _ = addr.send(message).await?;
@@ -349,7 +353,7 @@ impl ProviderMarket {
     fn on_agreement_approved(&mut self, msg: AgreementApproved) -> Result<()> {
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(AgreementApproved {
-            agreement_id: msg.agreement_id,
+            agreement: msg.agreement,
         })
     }
 
