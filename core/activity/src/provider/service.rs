@@ -2,7 +2,8 @@ use futures::prelude::*;
 use std::convert::From;
 
 use crate::common::{
-    authorize_activity_initiator, authorize_agreement_initiator, generate_id, RpcMessageResult,
+    authorize_activity_initiator, authorize_agreement_initiator, generate_id, get_agreement,
+    RpcMessageResult,
 };
 use crate::dao::*;
 use crate::error::Error;
@@ -35,28 +36,34 @@ async fn create_activity_gsb(
     caller: String,
     msg: CreateActivity,
 ) -> RpcMessageResult<CreateActivity> {
+    authorize_agreement_initiator(caller, &msg.agreement_id).await?;
+
     let activity_id = generate_id();
-
-    authorize_agreement_initiator(caller, msg.agreement_id.clone()).await?;
-
-    let activity_id = activity_id.clone();
-    let agreement_id = msg.agreement_id.clone();
+    let provider_id = get_agreement(&msg.agreement_id)
+        .await?
+        .offer
+        .provider_id
+        .ok_or(Error::BadRequest("Invalid agreement".to_owned()))?;
 
     db.as_dao::<ActivityDao>()
-        .create(&activity_id, &agreement_id)
+        .create_if_not_exists(&activity_id, &msg.agreement_id)
         .await
         .map_err(Error::from)?;
+
     log::debug!("activity inserted: {}", activity_id);
 
     db.as_dao::<EventDao>()
-        .create(&activity_id, ActivityEventType::CreateActivity)
+        .create(
+            &activity_id,
+            &provider_id,
+            ActivityEventType::CreateActivity,
+        )
         .await
         .map_err(Error::from)?;
-    log::debug!("event inserted");
 
     let state = db
         .as_dao::<ActivityStateDao>()
-        .get_future(&activity_id, None)
+        .get_state_wait(&activity_id, None)
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?
@@ -73,19 +80,27 @@ async fn destroy_activity_gsb(
     msg: DestroyActivity,
 ) -> RpcMessageResult<DestroyActivity> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+    let provider_id = get_agreement(&msg.agreement_id)
+        .await?
+        .offer
+        .provider_id
+        .ok_or(Error::BadRequest("Invalid agreement".to_owned()))?;
 
-    log::info!("creating event for destroying activity");
     db.as_dao::<EventDao>()
-        .create(&msg.activity_id, ActivityEventType::DestroyActivity)
+        .create(
+            &msg.activity_id,
+            &provider_id,
+            ActivityEventType::DestroyActivity,
+        )
         .await
         .map_err(Error::from)?;
 
-    log::info!(
+    log::debug!(
         "waiting {:?}ms for activity status change to Terminate",
         msg.timeout
     );
     db.as_dao::<ActivityStateDao>()
-        .get_future(&msg.activity_id, Some(StatePair(State::Terminated, None)))
+        .get_state_wait(&msg.activity_id, Some(StatePair(State::Terminated, None)))
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?

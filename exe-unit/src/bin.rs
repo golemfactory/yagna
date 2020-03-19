@@ -1,10 +1,14 @@
 use actix::{Actor, System};
+use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use ya_core_model::activity::Exec;
+use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
+use ya_exe_unit::service::metrics::MetricsService;
 use ya_exe_unit::service::signal::SignalMonitor;
+use ya_exe_unit::service::transfer::TransferService;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
 use ya_service_bus::RpcEnvelope;
 
@@ -52,12 +56,11 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let cli: Cli = Cli::from_args();
-    let binary = cli.binary.clone();
     let mut commands = None;
     let mut ctx = ExeUnitContext {
         service_id: None,
         report_url: None,
-        agreement: create_path(&cli.agreement)?,
+        agreement: Agreement::try_from(&cli.agreement)?,
         work_dir: create_path(&cli.work_dir)?,
         cache_dir: create_path(&cli.cache_dir)?,
     };
@@ -77,7 +80,11 @@ fn main() -> anyhow::Result<()> {
     }
 
     let sys = System::new("exe-unit");
-    let exe_unit = ExeUnit::new(ctx, RuntimeProcess::new(binary)).start();
+
+    let metrics = MetricsService::try_new(&ctx, Some(10000))?.start();
+    let transfers = TransferService::new(&ctx).start();
+    let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
+    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
     exe_unit.do_send(Register(signals));
 

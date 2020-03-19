@@ -1,9 +1,9 @@
-use crate::dao::{DaoError, Result};
+use crate::dao::Result;
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
 use serde_json;
-use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::models::ActivityUsage;
 use ya_persistence::schema;
 
@@ -18,20 +18,19 @@ impl<'a> AsDao<'a> for ActivityUsageDao<'a> {
 }
 
 impl<'c> ActivityUsageDao<'c> {
-    pub async fn get(&self, activity_id: &str) -> Result<ActivityUsage> {
+    pub async fn get(&self, activity_id: &str) -> Result<Option<ActivityUsage>> {
         use schema::activity::dsl;
         use schema::activity_usage::dsl as dsl_usage;
 
         let activity_id = activity_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
-            let usage: ActivityUsage = dsl::activity
+
+        do_with_transaction(self.pool, move |conn| {
+            Ok(dsl::activity
                 .inner_join(dsl_usage::activity_usage)
                 .select(schema::activity_usage::all_columns)
                 .filter(dsl::natural_id.eq(activity_id))
                 .first(conn)
-                .map_err(DaoError::from)?;
-
-            Ok(usage)
+                .optional()?)
         })
         .await
     }
@@ -44,7 +43,8 @@ impl<'c> ActivityUsageDao<'c> {
         let now = Utc::now().naive_utc();
 
         let activity_id = activity_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
+
+        do_with_transaction(self.pool, move |conn| {
             diesel::update(
                 dsl_usage::activity_usage.filter(exists(
                     dsl::activity
@@ -56,8 +56,7 @@ impl<'c> ActivityUsageDao<'c> {
                 dsl_usage::vector_json.eq(&vector),
                 dsl_usage::updated_date.eq(now),
             ))
-            .execute(conn)
-            .map_err(DaoError::from)?;
+            .execute(conn)?;
 
             Ok(())
         })

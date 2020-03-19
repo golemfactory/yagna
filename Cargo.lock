@@ -60,6 +60,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-files"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "301482841d3d74483a446ead63cb7d362e187d2c8b603f13d91995621ea53c46"
+dependencies = [
+ "actix-http",
+ "actix-service",
+ "actix-web",
+ "bitflags 1.2.1",
+ "bytes 0.5.4",
+ "derive_more 0.99.3",
+ "futures 0.3.4",
+ "log 0.4.8",
+ "mime 0.3.16",
+ "mime_guess",
+ "percent-encoding 2.1.0",
+ "v_htmlescape",
+]
+
+[[package]]
 name = "actix-http"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1464,15 +1484,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "exe-unit-tools"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "reqwest",
- "rust-crypto",
-]
-
-[[package]]
 name = "faerie"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1781,6 +1792,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.4",
  "log 0.4.8",
+ "rand 0.7.3",
  "sha3",
  "structopt",
  "url 2.1.1",
@@ -2562,6 +2574,16 @@ name = "nodrop"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72ef4a56884ca558e5ddb05a1d1e7e1bfd9a68d9ed024c21704cc98872dae1bb"
+
+[[package]]
+name = "nom"
+version = "4.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ad2a91a8e869eeb30b9cb3119ae87773a8f4ae617f41b1eb9c154b2905f7bd6"
+dependencies = [
+ "memchr",
+ "version_check 0.1.5",
+]
 
 [[package]]
 name = "num"
@@ -3545,19 +3567,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-crypto"
-version = "0.2.36"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f76d05d3993fd5f4af9434e8e436db163a12a9d40e1a58a726f27a01dfd12a2a"
-dependencies = [
- "gcc",
- "libc",
- "rand 0.3.23",
- "rustc-serialize",
- "time",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3568,12 +3577,6 @@ name = "rustc-hex"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e75f6a532d0fd9f7f13144f392b6ad56a32696bfcd9c78f797f16bbb6f072d6"
-
-[[package]]
-name = "rustc-serialize"
-version = "0.3.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf128d1287d2ea9d80910b5f1120d0b8eede3fbf1abe91c40d39ea7d51e6fda"
 
 [[package]]
 name = "rustc_version"
@@ -4114,6 +4117,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f4c118a7a38378f305a9e111fcb2f7f838c0be324bfb31a77ea04f7f6e684b4"
 
 [[package]]
+name = "tempdir"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15f2b5fb00ccdf689e0149d1b1b3c03fead81c2b37735d812fa8bddbbf41b6d8"
+dependencies = [
+ "rand 0.4.6",
+ "remove_dir_all",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4254,7 +4267,6 @@ dependencies = [
  "mio",
  "mio-named-pipes",
  "mio-uds",
- "num_cpus",
  "pin-project-lite",
  "signal-hook-registry",
  "slab 0.4.2",
@@ -4727,6 +4739,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "v_escape"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "660b101c07b5d0863deb9e7fb3138777e858d6d2a79f9e6049a27d1cc77c6da6"
+dependencies = [
+ "v_escape_derive",
+]
+
+[[package]]
+name = "v_escape_derive"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2ca2a14bc3fc5b64d188b087a7d3a927df87b152e941ccfbc66672e20c467ae"
+dependencies = [
+ "nom",
+ "proc-macro2 1.0.9",
+ "quote 1.0.3",
+ "syn 1.0.16",
+]
+
+[[package]]
+name = "v_htmlescape"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e33e939c0d8cf047514fb6ba7d5aac78bc56677a6938b2ee67000b91f2e97e41"
+dependencies = [
+ "cfg-if",
+ "v_escape",
+]
+
+[[package]]
 name = "vcpkg"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5010,7 +5053,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "env_logger 0.7.1",
- "exe-unit-tools",
  "log 0.4.8",
  "pretty_env_logger",
  "reqwest",
@@ -5365,6 +5407,9 @@ name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-files",
+ "actix-rt",
+ "actix-web",
  "anyhow",
  "async-trait",
  "chrono",
@@ -5372,21 +5417,29 @@ dependencies = [
  "dotenv 0.15.0",
  "env_logger 0.7.1",
  "futures 0.3.4",
+ "hex",
  "lazy_static",
  "log 0.4.8",
  "nix 0.17.0",
  "pretty_env_logger",
+ "rand 0.7.3",
+ "regex",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "sha3",
  "signal-hook",
  "structopt",
+ "tempdir",
  "thiserror",
  "tokio 0.2.13",
  "tokio-util",
+ "url 2.1.1",
  "winapi 0.3.8",
  "ya-core-model",
  "ya-model",
  "ya-service-bus",
+ "ya-transfer",
 ]
 
 [[package]]
@@ -5773,6 +5826,36 @@ dependencies = [
  "url 2.1.1",
  "ya-sb-proto",
  "ya-sb-util",
+]
+
+[[package]]
+name = "ya-transfer"
+version = "0.1.0"
+dependencies = [
+ "actix-files",
+ "actix-http",
+ "actix-rt",
+ "actix-web",
+ "awc",
+ "bytes 0.5.4",
+ "env_logger 0.7.1",
+ "futures 0.3.4",
+ "gftp",
+ "hex",
+ "lazy_static",
+ "log 0.4.8",
+ "rand 0.7.3",
+ "serde",
+ "sha2 0.8.1",
+ "sha3",
+ "tempdir",
+ "thiserror",
+ "tokio 0.2.13",
+ "tokio-util",
+ "url 2.1.1",
+ "ya-core-model",
+ "ya-net",
+ "ya-service-bus",
 ]
 
 [[package]]

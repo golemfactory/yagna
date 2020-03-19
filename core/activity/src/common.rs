@@ -7,7 +7,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api::constants::NET_SERVICE_ID;
 use ya_service_bus::{RpcEndpoint, RpcMessage};
 
-use crate::dao::{ActivityDao, NotFoundAsOption};
+use crate::dao::ActivityDao;
 use crate::error::Error;
 
 use ya_model::market::Agreement;
@@ -49,26 +49,6 @@ pub(crate) fn generate_id() -> String {
     Uuid::new_v4().to_simple().to_string()
 }
 
-pub(crate) fn into_json_response<T>(
-    result: std::result::Result<T, Error>,
-) -> actix_web::HttpResponse
-where
-    T: serde::Serialize,
-{
-    let result = match result {
-        Ok(value) => serde_json::to_string(&value).map_err(Error::from),
-        Err(e) => Err(e),
-    };
-
-    match result {
-        Ok(value) => actix_web::HttpResponse::Ok()
-            .content_type("application/json")
-            .body(value)
-            .into(),
-        Err(e) => e.into(),
-    }
-}
-
 pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreement, Error> {
     Ok(bus::service(market::BUS_ID)
         .send(market::GetAgreement {
@@ -86,7 +66,6 @@ pub(crate) async fn get_activity_agreement(
         .as_dao::<ActivityDao>()
         .get_agreement_id(activity_id)
         .await
-        .not_found_as_option()
         .map_err(Error::from)?
         .ok_or(Error::NotFound)?;
 
@@ -106,8 +85,9 @@ pub(crate) async fn authorize_activity_initiator(
         .as_dao::<ActivityDao>()
         .get_agreement_id(&activity_id)
         .await
-        .map_err(Error::from)?;
-    authorize_agreement_initiator(caller, agreement_id).await
+        .map_err(Error::from)?
+        .ok_or(Error::NotFound)?;
+    authorize_agreement_initiator(caller, &agreement_id).await
 }
 
 pub(crate) async fn authorize_activity_executor(
@@ -119,13 +99,14 @@ pub(crate) async fn authorize_activity_executor(
         .as_dao::<ActivityDao>()
         .get_agreement_id(&activity_id)
         .await
-        .map_err(Error::from)?;
-    authorize_agreement_executor(caller, agreement_id).await
+        .map_err(Error::from)?
+        .ok_or(Error::NotFound)?;
+    authorize_agreement_executor(caller, &agreement_id).await
 }
 
 pub(crate) async fn authorize_agreement_initiator(
     caller: impl ToString,
-    agreement_id: String,
+    agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
     let initiator_id = agreement
@@ -138,7 +119,7 @@ pub(crate) async fn authorize_agreement_initiator(
 
 pub(crate) async fn authorize_agreement_executor(
     caller: impl ToString,
-    agreement_id: String,
+    agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
     let executor_id = agreement

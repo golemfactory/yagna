@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -9,8 +9,6 @@ use crate::manifest::{MountPoint, WasmImage};
 use crate::wasmtime_unit::Wasmtime;
 use std::fs::File;
 use std::io::BufReader;
-
-use exe_unit_tools::download_image_http;
 
 #[derive(StructOpt)]
 pub enum Commands {
@@ -24,13 +22,12 @@ pub enum Commands {
 }
 
 #[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 pub struct CmdArgs {
-    #[structopt(short = "w", long = "workdir")]
+    #[structopt(short, long)]
     workdir: PathBuf,
-    #[structopt(short = "c", long = "cachedir")]
-    cachedir: PathBuf,
-    #[structopt(short = "a", long = "agreement")]
-    agreement_path: PathBuf,
+    #[structopt(short, long)]
+    task_package: PathBuf,
     #[structopt(subcommand)]
     command: Commands,
 }
@@ -51,32 +48,22 @@ impl ExeUnitMain {
     pub fn entrypoint(cmdline: CmdArgs) -> Result<()> {
         match cmdline.command {
             Commands::Run { entrypoint, args } => {
-                ExeUnitMain::run(&cmdline.workdir, &cmdline.cachedir, &entrypoint, args)
+                ExeUnitMain::run(&cmdline.workdir, &entrypoint, args)
             }
-            Commands::Deploy {} => {
-                ExeUnitMain::deploy(&cmdline.workdir, &cmdline.cachedir, &cmdline.agreement_path)
-            }
-            Commands::Start {} => ExeUnitMain::start(&cmdline.workdir, &cmdline.cachedir),
+            Commands::Deploy {} => ExeUnitMain::deploy(&cmdline.workdir, &cmdline.task_package),
+            Commands::Start {} => ExeUnitMain::start(&cmdline.workdir),
         }
     }
 
-    fn deploy(workdir: &Path, cachedir: &Path, agreement_path: &Path) -> Result<()> {
-        let image_url = load_package_url(workdir, agreement_path).with_context(|| {
-            format!(
-                "Failed to parse agreement file [{}].",
-                agreement_path.display()
-            )
-        })?;
-
-        info!("Downloading image: {}", image_url);
-
-        let image = download_image(&image_url, cachedir)?;
+    fn deploy(workdir: &Path, path: &Path) -> Result<()> {
+        let image = WasmImage::new(&path)
+            .with_context(|| format!("Can't read image file {}.", path.display()))?;
         write_deploy_file(workdir, &image)?;
 
-        Ok(info!("Downloading completed."))
+        Ok(info!("Deploy completed."))
     }
 
-    fn start(workdir: &Path, _cachedir: &Path) -> Result<()> {
+    fn start(workdir: &Path) -> Result<()> {
         info!(
             "Loading deploy file: {}",
             get_deploy_path(workdir).display()
@@ -102,7 +89,7 @@ impl ExeUnitMain {
         Ok(info!("Validation completed."))
     }
 
-    fn run(workdir: &Path, _cachedir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
+    fn run(workdir: &Path, entrypoint: &str, args: Vec<String>) -> Result<()> {
         info!(
             "Loading deploy file: {}",
             get_deploy_path(workdir).display()
@@ -136,14 +123,6 @@ impl ExeUnitMain {
         create_mount_points(&mounts)?;
         Ok(Wasmtime::new(mounts))
     }
-}
-
-fn download_image(url: &str, cachedir: &Path) -> Result<WasmImage> {
-    let image_path = download_image_http(url, cachedir)?;
-    let image = WasmImage::new(&image_path)
-        .with_context(|| format!("Can't read image file {}.", image_path.display()))?;
-
-    Ok(image)
 }
 
 fn create_mount_points(mounts: &Vec<DirectoryMount>) -> Result<()> {
@@ -210,27 +189,6 @@ fn read_deploy_file(workdir: &Path) -> Result<DeployFile> {
 
 fn get_deploy_path(workdir: &Path) -> PathBuf {
     workdir.join("deploy.json")
-}
-
-fn load_package_url(workdir: &Path, agreement_path: &Path) -> Result<String> {
-    let agreement_file = workdir.join(agreement_path);
-    let reader = BufReader::new(File::open(agreement_file)?);
-
-    let json: serde_json::Value = serde_json::from_reader(reader)?;
-
-    let package_value = json
-        .pointer("/golem.srv.comp.wasm.task_package")
-        .ok_or(anyhow!(
-            "Agreement field 'golem.srv.comp.wasm.task_package' doesn't exist."
-        ))?;
-
-    let package = package_value
-        .as_str()
-        .ok_or(anyhow!(
-            "Agreement field 'golem.srv.comp.wasm.task_package' is not string type."
-        ))?
-        .to_owned();
-    return Ok(package);
 }
 
 #[cfg(test)]
