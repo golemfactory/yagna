@@ -12,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
     let db = DbExecutor::new(":memory:")?;
     migrations::run_with_output(&db.conn()?, &mut std::io::stdout())?;
 
-    ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
+    ya_sb_router::bind_tcp_router(*YAGNA_BUS_ADDR).await?;
     ya_activity::provider::service::bind_gsb(&db);
 
     HttpServer::new(move || {
