@@ -38,7 +38,11 @@ impl ExeUnitInstance {
             process: child,
             working_dir: working_dir.to_path_buf(),
         };
-        log::info!("Exeunit instance [{}] spawned in workdir {}", &instance.name, &instance.working_dir.display());
+        log::info!(
+            "Exeunit instance [{}] spawned in workdir {}",
+            &instance.name,
+            &instance.working_dir.display()
+        );
 
         Ok(instance)
     }

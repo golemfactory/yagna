@@ -12,8 +12,8 @@ use ya_model::activity::{
     ActivityState, ProviderEvent,
 };
 use ya_utils_actix::actix_handler::ResultTypeGetter;
-use ya_utils_actix::forward_actix_handler;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
+use ya_utils_actix::forward_actix_handler;
 
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
@@ -120,8 +120,7 @@ impl TaskRunner {
     #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?}")]
     #[logfn(ok = "INFO", err = "ERROR", fmt = "ExeUnits initialized: {:?}")]
     pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits) -> Result<()> {
-        self.registry
-            .register_exeunits_from_file(&msg.file)
+        self.registry.register_exeunits_from_file(&msg.file)
     }
 
     pub async fn collect_events(
@@ -143,7 +142,9 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunner>) {
-        if events.len() == 0 { return };
+        if events.len() == 0 {
+            return;
+        };
 
         log::info!("Collected {} activity events. Processing...", events.len());
 
@@ -196,7 +197,10 @@ impl TaskRunner {
         match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
             Ok(task) => {
                 self.tasks.push(task);
-                let _ = self.activity_created.send_signal(ActivityCreated{agreement_id: msg.agreement_id.clone(), activity_id: msg.activity_id.clone()});
+                let _ = self.activity_created.send_signal(ActivityCreated {
+                    agreement_id: msg.agreement_id.clone(),
+                    activity_id: msg.activity_id.clone(),
+                });
                 Ok(())
             }
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
@@ -215,7 +219,7 @@ impl TaskRunner {
                 let task = self.tasks.swap_remove(task_position);
                 TaskRunner::destroy_task(task);
 
-                let msg = ActivityDestroyed{
+                let msg = ActivityDestroyed {
                     agreement_id: msg.agreement_id.to_string(),
                     activity_id: msg.activity_id.clone(),
                 };
@@ -282,7 +286,10 @@ impl TaskRunner {
         Ok(self.activity_created.on_subscribe(msg))
     }
 
-    pub fn on_subscribe_activity_destroyed(&mut self, msg: Subscribe<ActivityDestroyed>) -> Result<()> {
+    pub fn on_subscribe_activity_destroyed(
+        &mut self,
+        msg: Subscribe<ActivityDestroyed>,
+    ) -> Result<()> {
         Ok(self.activity_destroyed.on_subscribe(msg))
     }
 }
@@ -300,9 +307,16 @@ forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 
-forward_actix_handler!(TaskRunner, Subscribe<ActivityCreated>, on_subscribe_activity_created);
-forward_actix_handler!(TaskRunner, Subscribe<ActivityDestroyed>, on_subscribe_activity_destroyed);
-
+forward_actix_handler!(
+    TaskRunner,
+    Subscribe<ActivityCreated>,
+    on_subscribe_activity_created
+);
+forward_actix_handler!(
+    TaskRunner,
+    Subscribe<ActivityDestroyed>,
+    on_subscribe_activity_destroyed
+);
 
 impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;

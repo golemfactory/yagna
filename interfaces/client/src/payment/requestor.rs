@@ -2,6 +2,7 @@ use chrono::{DateTime, TimeZone};
 use std::fmt::Display;
 use std::sync::Arc;
 
+use crate::web::WebInterface;
 use crate::{web::WebClient, Result};
 use ya_model::payment::*;
 
@@ -16,17 +17,29 @@ pub struct RequestorApiConfig {
     payment_event_timeout: Option<u32>,
 }
 
+#[derive(Clone)]
 pub struct RequestorApi {
-    client: Arc<WebClient>,
-    config: RequestorApiConfig,
+    client: WebClient,
+    config: Arc<RequestorApiConfig>,
+}
+
+impl WebInterface for RequestorApi {
+    const API_URL_ENV_VAR: &'static str = "YAGNA_PAYMENT_URL";
+    const API_SUFFIX: &'static str = ya_model::payment::PAYMENT_API_PATH;
+
+    fn from(client: WebClient) -> Self {
+        let mut config = RequestorApiConfig::default();
+        config.invoice_event_timeout = Some(5000);
+        let config = Arc::new(config);
+        Self { client, config }
+    }
 }
 
 impl RequestorApi {
-    pub fn new(client: &Arc<WebClient>, config: RequestorApiConfig) -> Self {
-        Self {
-            client: client.clone(),
-            config,
-        }
+    pub fn new(client: &WebClient, config: RequestorApiConfig) -> Self {
+        let config = config.into();
+        let client = client.clone();
+        Self { client, config }
     }
 
     pub async fn get_debit_notes(&self) -> Result<Vec<DebitNote>> {

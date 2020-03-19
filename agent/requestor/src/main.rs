@@ -1,14 +1,20 @@
 use actix_rt::Arbiter;
 use futures::{channel::mpsc, prelude::*};
+use std::ops::Not;
 use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
 
 use ya_client::{
-    activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
+    activity::ActivityRequestorControlApi, market::MarketRequestorApi,
+    payment::requestor::RequestorApi as PaymentApi, web::WebClient,
 };
 //use ya_model::market::proposal::State;
+use chrono::Utc;
+use std::collections::HashSet;
+use ya_model::activity::ExeScriptRequest;
 use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
+use ya_model::payment::{Acceptance, Allocation, EventType};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -27,6 +33,9 @@ struct AppSettings {
     ///
     #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
     activity_url: Option<Url>,
+
+    #[structopt(long = "payment-url", env = "YAGNA_PAYMENT_URL")]
+    payment_url: Option<Url>,
 }
 
 impl AppSettings {
@@ -37,6 +46,15 @@ impl AppSettings {
     fn activity_api(&self) -> Result<ActivityRequestorControlApi, anyhow::Error> {
         let client = WebClient::with_token(&self.app_key)?;
         if let Some(url) = &self.activity_url {
+            Ok(client.interface_at(url.clone()))
+        } else {
+            Ok(client.interface()?)
+        }
+    }
+
+    fn payment_api(&self) -> Result<PaymentApi, anyhow::Error> {
+        let client = WebClient::with_token(&self.app_key)?;
+        if let Some(url) = &self.payment_url {
             Ok(client.interface_at(url.clone()))
         } else {
             Ok(client.interface()?)
@@ -71,7 +89,7 @@ async fn process_offer(
     let new_agreement_id = proposal_id;
     let new_agreement = AgreementProposal::new(
         new_agreement_id.clone(),
-        "2021-01-01T18:54:16.655397Z".parse()?,
+        Utc::now() + chrono::Duration::hours(2),
     );
     let _ack = requestor_api.create_agreement(&new_agreement).await?;
     log::info!("confirm agreement = {}", new_agreement_id);
@@ -171,7 +189,10 @@ async fn process_agreement(
     activity_api.destroy_activity(&act_id).await?;
     log::info!("I'M DONE FOR NOW");
 
-    //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
+    activity_api
+        .exec(ExeScriptRequest::new("".to_string()), &act_id)
+        .await
+        .unwrap();
     Ok(())
 }
 
@@ -179,13 +200,25 @@ async fn process_agreement(
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
-
+    let started_at = Utc::now();
     let settings = AppSettings::from_args();
+
+    let payment_api = settings.payment_api()?;
 
     let node_name = "test1";
 
     let my_demand = build_demand(node_name);
     //(golem.runtime.wasm.wasi.version@v=*)
+
+    let allocation = Allocation {
+        allocation_id: "".to_string(),
+        total_amount: 10.into(),
+        spent_amount: Default::default(),
+        remaining_amount: Default::default(),
+        timeout: None,
+        make_deposit: false,
+    };
+    let new_allocation = payment_api.create_allocation(&allocation).await.unwrap();
 
     let market_api = settings.market_api()?;
     let subscription_id = market_api.subscribe(&my_demand).await?;
@@ -208,12 +241,70 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // log incoming debit notes
+    {
+        let payment_api = payment_api.clone();
+        let mut ts = started_at.clone();
+        Arbiter::spawn(async move {
+            loop {
+                let next_ts = Utc::now();
+                let events = match payment_api.get_debit_note_events(Some(&ts)).await {
+                    Err(e) => {
+                        log::error!("fail get debit notes events: {}", e);
+                        break;
+                    }
+                    Ok(events) => events,
+                };
+
+                for event in events {
+                    log::info!("got debit note event {:?}", event);
+                }
+                ts = next_ts;
+            }
+        })
+    }
+
     let activity_api = settings.activity_api()?;
+    let mut agreements_to_pay = HashSet::new();
     if let Some(id) = rx.next().await {
         if let Err(e) = process_agreement(&activity_api, id.clone()).await {
             log::error!("processing agreement id {} error: {}", id, e);
         }
+        let terminate_result = market_api.terminate_agreement(&id).await;
+        log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
+        agreements_to_pay.insert(id);
     }
+
+    let mut ts = started_at;
+
+    while agreements_to_pay.is_empty().not() {
+        let next_ts = Utc::now();
+
+        let events = payment_api.get_invoice_events(Some(&ts)).await.unwrap();
+        // TODO: timeout on get_invoice_events does not work
+        if events.is_empty() {
+            tokio::time::delay_for(Duration::from_millis(5000)).await;
+        }
+
+        for event in events {
+            match event.event_type {
+                EventType::Received => {
+                    let invoice = payment_api.get_invoice(&event.invoice_id).await.unwrap();
+                    let acceptance = Acceptance {
+                        total_amount_accepted: invoice.amount,
+                        allocation_id: new_allocation.allocation_id.clone(),
+                    };
+                    let result = payment_api
+                        .accept_invoice(&event.invoice_id, &acceptance)
+                        .await;
+                    log::info!("payment acceptance result: {:?}", result);
+                }
+                _ => (),
+            }
+            ts = next_ts;
+        }
+    }
+
     market_api.unsubscribe(&subscription_id).await?;
     Ok(())
 }

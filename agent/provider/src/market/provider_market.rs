@@ -145,7 +145,10 @@ impl ProviderMarket {
 
     #[logfn_inputs(Debug, fmt = "{}Subscribed offer: {:?}")]
     fn on_offer_subscribed(&mut self, msg: OfferSubscription) -> Result<()> {
-        log::info!("Subscribed offer. Subscription id [{}].", &msg.subscription_id);
+        log::info!(
+            "Subscribed offer. Subscription id [{}].",
+            &msg.subscription_id
+        );
 
         self.offer_subscriptions
             .insert(msg.subscription_id.clone(), msg);
@@ -203,9 +206,15 @@ impl ProviderMarket {
         market_api: Arc<MarketProviderApi>,
         subscription: OfferSubscription,
     ) {
-        if events.len() == 0 { return };
+        if events.len() == 0 {
+            return;
+        };
 
-        log::info!("Collected {} market events for subscription [{}]. Processing...", events.len(), &subscription.subscription_id);
+        log::info!(
+            "Collected {} market events for subscription [{}]. Processing...",
+            events.len(),
+            &subscription.subscription_id
+        );
 
         let dispatch_futures = events
             .iter()
