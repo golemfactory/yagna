@@ -1,3 +1,4 @@
+pub mod agreement;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -5,11 +6,14 @@ pub mod metrics;
 pub mod runtime;
 pub mod service;
 pub mod state;
+pub mod util;
 
+use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
+use crate::service::transfer::{DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 use actix::prelude::*;
@@ -34,22 +38,26 @@ pub struct ExeUnit<R: Runtime> {
     state: ExeUnitState,
     runtime: Addr<R>,
     metrics: Addr<MetricsService>,
+    transfers: Addr<TransferService>,
     services: Vec<Box<dyn ServiceControl>>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    pub fn new(ctx: ExeUnitContext, runtime: R) -> Self {
-        let state = ExeUnitState::default();
-        let runtime = runtime.with_context(ctx.clone()).start();
-        let metrics = MetricsService::default().start();
-
+    pub fn new(
+        ctx: ExeUnitContext,
+        metrics: Addr<MetricsService>,
+        transfers: Addr<TransferService>,
+        runtime: Addr<R>,
+    ) -> Self {
         ExeUnit {
             ctx,
-            state,
+            state: ExeUnitState::default(),
             runtime: runtime.clone(),
             metrics: metrics.clone(),
+            transfers: transfers.clone(),
             services: vec![
                 Box::new(ServiceAddr::new(metrics)),
+                Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
         }
@@ -98,7 +106,12 @@ struct ExecCtx {
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    async fn exec(addr: Addr<Self>, exe_unit: Addr<R>, exec: Exec) {
+    async fn exec(
+        addr: Addr<Self>,
+        runtime: Addr<R>,
+        transfers: Addr<TransferService>,
+        exec: Exec,
+    ) {
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
                 batch_id: exec.batch_id.clone(),
@@ -106,7 +119,14 @@ impl<R: Runtime> ExeUnit<R> {
                 cmd,
             };
 
-            if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), ctx.clone()).await {
+            if let Err(error) = Self::exec_cmd(
+                addr.clone(),
+                runtime.clone(),
+                transfers.clone(),
+                ctx.clone(),
+            )
+            .await
+            {
                 let cmd_result = ExeScriptCommandResult {
                     index: ctx.idx as u32,
                     result: Some(ya_model::activity::CommandResult::Error),
@@ -137,7 +157,12 @@ impl<R: Runtime> ExeUnit<R> {
         }
     }
 
-    async fn exec_cmd(addr: Addr<Self>, exe_unit: Addr<R>, ctx: ExecCtx) -> Result<()> {
+    async fn exec_cmd(
+        addr: Addr<Self>,
+        runtime: Addr<R>,
+        transfer_service: Addr<TransferService>,
+        ctx: ExecCtx,
+    ) -> Result<()> {
         let state = addr.send(GetState {}).await?.0;
         let before_state = match (&state.0, &state.1) {
             (_, Some(_)) => {
@@ -173,7 +198,11 @@ impl<R: Runtime> ExeUnit<R> {
         })
         .await?;
 
-        let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
+        log::info!("Executing command: {:?}", ctx.cmd);
+
+        Self::pre_exec(transfer_service, runtime.clone(), ctx.clone()).await?;
+
+        let exe_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exe_result.result {
             return Err(Error::CommandError(format!(
                 "{:?} command error: {}",
@@ -198,6 +227,29 @@ impl<R: Runtime> ExeUnit<R> {
         })
         .await?;
 
+        Ok(())
+    }
+
+    async fn pre_exec(
+        transfer_service: Addr<TransferService>,
+        runtime: Addr<R>,
+        ctx: ExecCtx,
+    ) -> Result<()> {
+        match &ctx.cmd {
+            ExeScriptCommand::Transfer { from, to } => {
+                let msg = TransferResource {
+                    from: from.clone(),
+                    to: to.clone(),
+                };
+                transfer_service.send(msg).await??;
+            }
+            ExeScriptCommand::Deploy {} => {
+                let msg = DeployImage {};
+                let path = transfer_service.send(msg).await??;
+                runtime.send(SetTaskPackagePath(path)).await?;
+            }
+            _ => (),
+        }
         Ok(())
     }
 }
@@ -235,7 +287,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 pub struct ExeUnitContext {
     pub service_id: Option<String>,
     pub report_url: Option<String>,
-    pub agreement: PathBuf,
+    pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
 }

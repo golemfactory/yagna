@@ -1,18 +1,17 @@
-use ya_client::Result;
-use ya_utils_actix::actix_handler::send_message;
-use ya_utils_actix::actix_signal::Subscribe;
-
-use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
-use crate::market::{CreateOffer, ProviderMarket};
-use crate::startup_config::StartupConfig;
-
-use crate::market::provider_market::{AgreementSigned, OnShutdown, UpdateMarket};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
+use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
+
+use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity};
+use crate::market::{
+    provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
+    CreateOffer, ProviderMarket,
+};
+use crate::startup_config::StartupConfig;
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -23,7 +22,7 @@ pub struct ProviderAgent {
 }
 
 impl ProviderAgent {
-    pub fn new(config: StartupConfig) -> Result<ProviderAgent> {
+    pub async fn new(config: StartupConfig) -> anyhow::Result<ProviderAgent> {
         let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
         let runner = TaskRunner::new(config.activity_client()?).start();
 
@@ -53,14 +52,14 @@ impl ProviderAgent {
             service_info,
             exe_unit_path,
         };
-        provider.initialize();
+        provider.initialize().await?;
 
         Ok(provider)
     }
 
-    pub fn initialize(&mut self) {
-        // Forward AgreementSigned event to TaskRunner actor.
-        let msg = Subscribe::<AgreementSigned>(self.runner.clone().recipient());
+    pub async fn initialize(&mut self) -> anyhow::Result<()> {
+        // Forward AgreementApproved event to TaskRunner actor.
+        let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
         send_message(self.market.clone(), msg);
 
         // Load ExeUnits descriptors from file.
@@ -74,12 +73,14 @@ impl ProviderAgent {
         send_message(self.runner.clone(), msg);
 
         // Create simple offer on market.
-        let create_offer_message = CreateOffer::new(OfferDefinition {
-            node_info: self.node_info.clone(),
-            service: self.service_info.clone(),
-            com_info: Default::default(),
-        });
-        send_message(self.market.clone(), create_offer_message);
+        let create_offer_message = CreateOffer {
+            offer_definition: OfferDefinition {
+                node_info: self.node_info.clone(),
+                service: self.service_info.clone(),
+                com_info: Default::default(),
+            },
+        };
+        Ok(self.market.clone().send(create_offer_message).await??)
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
@@ -98,18 +99,19 @@ impl ProviderAgent {
         ServiceInfo::Wasm { inf, wasi_version }
     }
 
-    pub fn spawn_shutdown_handler(&mut self, context: &mut Context<ProviderAgent>) {
+    pub async fn wait_for_ctrl_c(self) -> anyhow::Result<()> {
         let market = self.market.clone();
-        let _ = context.spawn(
-            async move {
-                let _ = tokio::signal::ctrl_c().await;
-                log::info!("Shutting down system.");
 
-                let _ = market.send(OnShutdown {}).await;
-                System::current().stop();
-            }
-            .into_actor(self),
+        self.start();
+
+        let _ = tokio::signal::ctrl_c().await;
+        println!();
+        log::info!(
+            "SIGINT received, Shutting down {}...",
+            structopt::clap::crate_name!()
         );
+
+        market.send(OnShutdown {}).await?
     }
 }
 
@@ -120,7 +122,5 @@ impl Actor for ProviderAgent {
         IntervalFunc::new(Duration::from_secs(4), Self::schedule_jobs)
             .finish()
             .spawn(context);
-
-        self.spawn_shutdown_handler(context);
     }
 }

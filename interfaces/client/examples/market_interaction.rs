@@ -9,7 +9,9 @@ use ya_client::{
     web::WebClient,
     Error, Result,
 };
-use ya_model::market::{AgreementProposal, Demand, Offer, Proposal, ProviderEvent, RequestorEvent};
+use ya_model::market::{
+    proposal::State, AgreementProposal, Demand, Offer, Proposal, ProviderEvent, RequestorEvent,
+};
 
 #[derive(StructOpt)]
 #[structopt(name = "Router", about = "Service Bus Router")]
@@ -32,6 +34,19 @@ async fn query_market_stats(host_port: &String) -> Result<serde_json::Value> {
         .await
 }
 
+/// compares to given proposals
+fn cmp_proposals(p1: &Proposal, p2: &Proposal) {
+    if p1 == p2 {
+        println!("  <=     =>  | Fetched Offer proposal. Equals this from event");
+    } else {
+        log::error!(
+            "fetched proposal does not equal event {:#?} != {:#?}",
+            p1,
+            p2
+        );
+    }
+}
+
 //////////////
 // PROVIDER //
 //////////////
@@ -40,81 +55,76 @@ async fn provider_interact(client: MarketProviderApi, host_port: &String) -> Res
     let offer = Offer::new(serde_json::json!({"zima":"już"}), "(&(lato=nie))".into());
     let provider_subscription_id = client.subscribe(&offer).await?;
     println!(
-        "  <=PROVIDER | subscription id: {} for\n\t {:#?}",
-        provider_subscription_id, &offer
+        "  <=PROVIDER | subscription id: {}",
+        provider_subscription_id
     );
 
     let provider_subscriptions = client.get_offers().await?;
 
     println!(
-        "PROVIDER=>  | {} active subscriptions\n\t {:#?}",
+        "  <=PROVIDER | {} active subscriptions\n\t {:#?}",
         provider_subscriptions.len(),
         provider_subscriptions
     );
 
     // provider - get events
-    let mut provider_events = vec![];
-
-    while provider_events.is_empty() {
-        provider_events = client
-            .collect(&provider_subscription_id, Some(1), Some(2))
-            .await?;
-        println!("  <=PROVIDER | waiting for events");
-        thread::sleep(Duration::from_millis(3000))
-    }
-    println!(
-        "  <=PROVIDER | Got {} event(s). Yay!",
-        provider_events.len()
-    );
-
-    // provider - support first event
-    println!(
-        "  <=PROVIDER | First come first served event: {:#?}",
-        &provider_events[0]
-    );
-
-    match &provider_events[0] {
-        // TODO: UNTESTED YET
-        // provider - demand proposal received --> respond with an counter offer
-        ProviderEvent::ProposalEvent { proposal, .. } => {
-            println!(
-                "SHOULD NOT HAPPEND!   <=PROVIDER | Got demand event: {:#?}.",
-                proposal
-            );
-            let proposal_id = proposal.proposal_id.as_ref().unwrap();
-            // THIS CALL WAS NOT TESTED
-            let agreement_proposal = client
-                .get_proposal(&provider_subscription_id, &proposal_id)
+    'prov_events: loop {
+        let mut provider_events = vec![];
+        while provider_events.is_empty() {
+            provider_events = client
+                .collect(&provider_subscription_id, Some(1.0), Some(2))
                 .await?;
-            println!(
-                "  <=PROVIDER | Wooha! Got Agreement Proposal: {:#?}. Approving...",
-                agreement_proposal
-            );
-
-            let counter_proposal = Proposal::new(
-                serde_json::json!({"wiosna":"kiedy?"}),
-                "(&(jesień=stop))".into(),
-            );
-            let res = client
-                .counter_proposal(&counter_proposal, &provider_subscription_id, &proposal_id)
-                .await?;
-            println!("  <=PROVIDER | counter proposal created: {}", res)
+            println!("  <=PROVIDER | waiting for events");
+            thread::sleep(Duration::from_millis(3000))
         }
-        // provider - agreement proposal received --> approve it
-        ProviderEvent::AgreementEvent { agreement, .. } => {
-            let agreement_id = &agreement.agreement_id;
-            println!(
-                "  <=PROVIDER | Wooha! Got new Agreement event {}. Approving...",
-                agreement_id
-            );
+        println!("  <=PROVIDER | Yay! Got event(s): {:#?}", provider_events);
 
-            let res = client.approve_agreement(agreement_id).await?;
-            //let res = client.reject_agreement(agreement_id).await?;
-            // TODO: this should return _before_ requestor.wait_for_approval
-            println!("  <=PROVIDER | Agreement approved: {}", res);
-        }
-        ProviderEvent::PropertyQueryEvent { .. } => {
-            println!("Unsupported PropertyQueryEvent.");
+        for event in &provider_events {
+            match &event {
+                // demand proposal received --> respond with an counter offer
+                ProviderEvent::ProposalEvent { proposal, .. } => {
+                    if proposal.prev_proposal_id.is_none() && proposal.state()? == &State::Draft {
+                        log::error!("Draft Proposal but wo prev id: {:#?}", proposal)
+                    }
+
+                    let proposal_id = proposal.proposal_id()?;
+
+                    // this is not needed in regular flow; just to illustrate possibility
+                    let demand_proposal = client
+                        .get_proposal(&provider_subscription_id, &proposal_id)
+                        .await?;
+                    cmp_proposals(&demand_proposal, proposal);
+
+                    println!("  <=PROVIDER | Huha! Got Demand Proposal. Accepting...");
+                    let bespoke_proposal = proposal.counter_offer(offer.clone())?;
+                    let new_prop_id = client
+                        .counter_proposal(&bespoke_proposal, &provider_subscription_id)
+                        .await?;
+                    println!(
+                        "  <=PROVIDER | Responded with Counter proposal: {}",
+                        new_prop_id
+                    );
+                }
+                // provider - agreement proposal received --> approve it
+                ProviderEvent::AgreementEvent { agreement, .. } => {
+                    let agreement_id = &agreement.agreement_id;
+                    println!(
+                        "  <=PROVIDER | Wooha! Got new Agreement event {}. Approving...",
+                        agreement_id
+                    );
+
+                    let status = client.approve_agreement(agreement_id, None).await?;
+                    // one can also call:
+                    // let res = client.reject_agreement(agreement_id).await?;
+                    println!("  <=PROVIDER | Agreement {} by Requestor!", status);
+
+                    println!("  <=PROVIDER | I'm done for now! Bye...");
+                    break 'prov_events;
+                }
+                ProviderEvent::PropertyQueryEvent { .. } => {
+                    println!("Unsupported PropertyQueryEvent.");
+                }
+            }
         }
     }
 
@@ -140,8 +150,8 @@ async fn requestor_interact(client: MarketRequestorApi, host_port: &String) -> R
     let demand = Demand::new(serde_json::json!({"lato":"nie"}), "(&(zima=już))".into());
     let requestor_subscription_id = client.subscribe(&demand).await?;
     println!(
-        "REQUESTOR=>  | subscription id: {} for\n\t {:#?}",
-        requestor_subscription_id, &demand
+        "REQUESTOR=>  | subscription id: {}",
+        requestor_subscription_id
     );
 
     let requestor_subscriptions = client.get_demands().await?;
@@ -153,67 +163,85 @@ async fn requestor_interact(client: MarketRequestorApi, host_port: &String) -> R
     );
 
     // requestor - get events
-    let mut requestor_events = vec![];
-
-    while requestor_events.is_empty() {
-        requestor_events = client
-            .collect(&requestor_subscription_id, Some(1), Some(2))
-            .await?;
-        println!("REQUESTOR=>  | waiting for events");
-        thread::sleep(Duration::from_millis(3000))
-    }
-    println!(
-        "REQUESTOR=>  | Got {} event(s). Yay!",
-        requestor_events.len()
-    );
-
-    // requestor - support first event
-    println!(
-        "REQUESTOR=>  | First come first served event: {:#?}",
-        &requestor_events[0]
-    );
-
-    match &requestor_events[0] {
-        RequestorEvent::ProposalEvent { proposal, .. } => {
-            let offer_id = proposal.proposal_id.as_ref().unwrap();
-
-            // this is not needed in regular flow; just to illustrate possibility
-            let proposal = client
-                .get_proposal(&requestor_subscription_id, &offer_id)
+    'req_events: loop {
+        let mut requestor_events = vec![];
+        while requestor_events.is_empty() {
+            requestor_events = client
+                .collect(&requestor_subscription_id, Some(1.0), Some(2))
                 .await?;
-            println!(
-                "REQUESTOR=>  | Fetched first agreement proposal: {:#?}",
-                proposal
-            );
-
-            println!("REQUESTOR=>  | Creating agreement...");
-            let agreement = AgreementProposal::new(offer_id.clone(), chrono::Utc::now());
-            let res = client.create_agreement(&agreement).await?;
-            println!(
-                "REQUESTOR=>  | agreement created {}: {:#?} Confirming...",
-                res, &agreement
-            );
-            let res = client.confirm_agreement(&agreement.proposal_id).await?;
-            println!(
-                "REQUESTOR=>  | agreement {} confirmed: {}",
-                &agreement.proposal_id, res
-            );
-
-            println!("REQUESTOR=>  | Waiting for Agreement approval...");
-            match client.wait_for_approval(&agreement.proposal_id).await {
-                Err(Error::TimeoutError { .. }) => {
-                    println!("REQUESTOR=>  | Timeout waiting for Agreement approval...");
-                    Ok("".into())
-                }
-                Ok(r) => {
-                    println!("REQUESTOR=>  | OK! Agreement approved by Provider!: {}", r);
-                    Ok(r)
-                }
-                e => e,
-            }?;
+            println!("REQUESTOR=>  | waiting for events");
+            thread::sleep(Duration::from_millis(3000))
         }
-        RequestorEvent::PropertyQueryEvent { .. } => {
-            println!("Unsupported PropertyQueryEvent.");
+        println!("REQUESTOR=>  | Yay! Got event(s): {:#?}", requestor_events);
+
+        // requestor - support first event
+        for event in &requestor_events {
+            match &event {
+                RequestorEvent::ProposalEvent { proposal, .. } => {
+                    let proposal_id = proposal.proposal_id()?;
+
+                    // this is not needed in regular flow; just to illustrate possibility
+                    let offer_proposal = client
+                        .get_proposal(&requestor_subscription_id, proposal.proposal_id()?)
+                        .await?;
+                    cmp_proposals(&offer_proposal, proposal);
+
+                    match proposal.state()? {
+                        State::Initial => {
+                            if proposal.prev_proposal_id.is_some() {
+                                log::error!("Initial Proposal but with prev id: {:#?}", proposal);
+                            }
+                            println!("REQUESTOR=>  | Negotiating proposal...");
+                            let bespoke_proposal = proposal.counter_demand(demand.clone())?;
+                            let new_proposal_id = client
+                                .counter_proposal(&bespoke_proposal, &requestor_subscription_id)
+                                .await?;
+                            println!(
+                                "REQUESTOR=>  | Responded with counter proposal (id: {})",
+                                new_proposal_id
+                            );
+                        }
+                        State::Draft => {
+                            println!("REQUESTOR=>  | Got draft proposal. Creating agreement...");
+                            let new_agreement_id = proposal_id.clone();
+                            let agreement =
+                                AgreementProposal::new(new_agreement_id, chrono::Utc::now());
+                            let id = client.create_agreement(&agreement).await?;
+                            println!(
+                                "REQUESTOR=>  | agreement created {}: \n{:#?}\nConfirming...",
+                                id, &agreement
+                            );
+                            let res = client.confirm_agreement(&agreement.proposal_id).await?;
+                            println!(
+                                "REQUESTOR=>  | agreement {} confirmed: {}",
+                                &agreement.proposal_id, res
+                            );
+
+                            println!("REQUESTOR=>  | Waiting for Agreement approval...");
+                            match client.wait_for_approval(&agreement.proposal_id, None).await {
+                                Err(Error::TimeoutError { .. }) => {
+                                    println!(
+                                        "REQUESTOR=>  | Timeout waiting for Agreement approval..."
+                                    );
+                                    Ok("".into())
+                                }
+                                Ok(status) => {
+                                    println!("REQUESTOR=>  | Agreement {} by Provider!", status);
+                                    Ok(status)
+                                }
+                                e => e,
+                            }?;
+
+                            println!("REQUESTOR=>  | I'm done for now! Bye...");
+                            break 'req_events;
+                        }
+                        _ => log::error!("unsupported offer proposal state: {:#?}", proposal),
+                    }
+                }
+                RequestorEvent::PropertyQueryEvent { .. } => {
+                    log::error!("Unsupported PropertyQueryEvent.");
+                }
+            }
         }
     }
 

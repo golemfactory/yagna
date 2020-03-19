@@ -11,7 +11,7 @@ async fn query_events(
     let mut requestor_events = vec![];
 
     while requestor_events.is_empty() {
-        requestor_events = client.collect(&subscription_id, Some(1), Some(2)).await?;
+        requestor_events = client.collect(&subscription_id, Some(1.0), Some(2)).await?;
 
         println!("Waiting for events");
         thread::sleep(Duration::from_millis(3000));
@@ -25,7 +25,7 @@ async fn wait_for_approval(client: &MarketRequestorApi, proposal_id: &str) {
     loop {
         println!("Waiting for Agreement approval...");
 
-        let _ = match client.wait_for_approval(proposal_id).await {
+        let _ = match client.wait_for_approval(proposal_id, None).await {
             Err(Error::TimeoutError { .. }) => {
                 println!("Timeout waiting for Agreement approval...");
                 Ok("".into())

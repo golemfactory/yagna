@@ -22,12 +22,12 @@ Payload:
 {
   "agreementId": "agreement_id",
   "activityId": "activity_id",
-  "totalAmountDue": "1000.123456789012345678",
+  "totalAmountDue": "1.123456789012345678",
   "usageCounterVector": {
     "comment": "This field can contain anything",
     "values": [1.222, 2.333, 4.555]
   },
-  "creditAccountId": "0xdeadbeef",
+  "creditAccountId": "0xd39a168f0480b8502c2531b2ffd8588c592d713a",
   "paymentPlatform": "GNT",
   "paymentDueDate": "2020-02-05T15:07:45.956Z"
 }
@@ -53,12 +53,12 @@ Payload:
 {
   "agreementId": "agreement_id",
   "activityIds": ["activity_id1", "activity_id2"],
-  "amount": "10000.123456789012345678",
+  "amount": "10.123456789012345678",
   "usageCounterVector": {
     "comment": "This field can contain anything",
     "values": [1.222, 2.333, 4.555]
   },
-  "creditAccountId": "0xdeadbeef",
+  "creditAccountId": "0xd39a168f0480b8502c2531b2ffd8588c592d713a",
   "paymentPlatform": "GNT",
   "paymentDueDate": "2020-02-05T15:07:45.956Z"
 }
@@ -80,10 +80,16 @@ To accept an invoice:
 Payload:
 ```json
 {
-  "totalAmountAccepted": "10000.123456789012345678",
+  "totalAmountAccepted": "10.123456789012345678",
   "allocationId": "<allocationId>"
 }
 ```
+
+To listen for requestor's invoice events:
+`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/invoiceEvents?timeout=<seconds>`
+
+To listen for provider's invoice events:
+`GET` `http://127.0.0.1:8465/payment-api/v1/provider/invoiceEvents?timeout=<seconds>`
 
 #### Allocations
 
@@ -93,7 +99,7 @@ To create an allocation:
 Payload:
 ```json
 {
-  "totalAmount": "10000.123456789012345678",
+  "totalAmount": "100.123456789012345678",
   "timeout": "2020-02-17T11:42:56.739Z",
   "makeDeposit": false
 }
@@ -105,3 +111,13 @@ To see all created allocations:
 
 To release an allocation:
 `DELETE` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations/<allocationId>`
+
+#### Payments
+
+To see requestor's (sent) payments:
+`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/payments`
+
+To see provider's (received) payments:
+`GET` `http://127.0.0.1:7465/payment-api/v1/provider/payments`
+
+One can also listen for payments by adding `?timeout=<seconds>` parameter.

@@ -7,17 +7,31 @@ pub trait IntoDuration {
     fn into_duration(self) -> Duration;
 }
 
-impl IntoDuration for u64 {
-    #[inline(always)]
-    fn into_duration(self) -> Duration {
-        Duration::from_millis(self)
-    }
-}
-
 impl IntoDuration for Duration {
     #[inline(always)]
     fn into_duration(self) -> Duration {
         self
+    }
+}
+
+impl IntoDuration for f32 {
+    #[inline(always)]
+    fn into_duration(self) -> Duration {
+        Duration::from_secs_f32(self)
+    }
+}
+
+impl IntoDuration for f64 {
+    #[inline(always)]
+    fn into_duration(self) -> Duration {
+        Duration::from_secs_f64(self)
+    }
+}
+
+impl IntoDuration for u64 {
+    #[inline(always)]
+    fn into_duration(self) -> Duration {
+        Duration::from_secs(self)
     }
 }
 
@@ -42,10 +56,6 @@ impl_into_duration!(u16);
 impl_into_duration!(i32);
 impl_into_duration!(u32);
 impl_into_duration!(i64);
-impl_into_duration!(i128);
-impl_into_duration!(u128);
-impl_into_duration!(f32);
-impl_into_duration!(f64);
 
 type MapType<F> = Map<F, fn(<F as Future>::Output) -> Result<<F as Future>::Output, Elapsed>>;
 

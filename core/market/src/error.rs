@@ -58,9 +58,9 @@ impl From<ya_persistence::executor::Error> for Error {
     }
 }
 
-impl Into<actix_web::HttpResponse> for Error {
-    fn into(self) -> actix_web::HttpResponse {
-        self.error_response()
+impl From<Error> for actix_web::HttpResponse {
+    fn from(e: Error) -> Self {
+        e.error_response()
     }
 }
 

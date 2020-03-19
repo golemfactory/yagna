@@ -14,7 +14,12 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
         self.ctx.match_service(&msg.activity_id)?;
 
         let batch_id = msg.batch_id.clone();
-        let fut = Self::exec(ctx.address(), self.runtime.clone(), msg.into_inner());
+        let fut = Self::exec(
+            ctx.address(),
+            self.runtime.clone(),
+            self.transfers.clone(),
+            msg.into_inner(),
+        );
         ctx.spawn(fut.into_actor(self));
 
         Ok(batch_id)

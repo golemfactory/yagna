@@ -10,6 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::market::{Demand, Offer};
 use crate::ErrorMessage;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -44,6 +45,28 @@ impl Proposal {
             state: None,
             prev_proposal_id: None,
         }
+    }
+
+    pub fn counter_demand(&self, demand: Demand) -> Result<Proposal, ErrorMessage> {
+        Ok(Proposal {
+            properties: demand.properties,
+            constraints: demand.constraints,
+            proposal_id: None,
+            issuer_id: None,
+            state: None,
+            prev_proposal_id: Some(self.proposal_id()?.clone()),
+        })
+    }
+
+    pub fn counter_offer(&self, offer: Offer) -> Result<Proposal, ErrorMessage> {
+        Ok(Proposal {
+            properties: offer.properties,
+            constraints: offer.constraints,
+            proposal_id: None,
+            issuer_id: None,
+            state: None,
+            prev_proposal_id: Some(self.proposal_id()?.clone()),
+        })
     }
 
     pub fn proposal_id(&self) -> Result<&String, ErrorMessage> {
