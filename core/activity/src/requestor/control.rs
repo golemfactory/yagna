@@ -42,9 +42,11 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id).await?;
     log::trace!("agreement: {:#?}", agreement);
 
-    // TODO: fix this
-    let provider_id = NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap())
-        .map_err(|error| Error::Service(format!("Invalid node id: {}", error)))?;
+    // Note: empty string will be invalid id in NodeId::from_str function.
+    // FIXME: Should provider_id be optional? Or we can take this id from somewhere else?
+    let node_id = agreement.offer.provider_id.clone().unwrap_or("".to_string());
+    let provider_id = NodeId::from_str(&node_id)
+        .map_err(|error| Error::Service(format!("Invalid node id [{}]: {}", &node_id, error)))?;
 
     let msg = CreateActivity {
         provider_id,
