@@ -42,9 +42,12 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id).await?;
     log::trace!("agreement: {:#?}", agreement);
 
+    // TODO: fix this
+    let provider_id = NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap())
+        .map_err(|error| Error::Service(format!("Invalid node id: {}", error)))?;
+
     let msg = CreateActivity {
-        // TODO: fix this
-        provider_id: NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap()).unwrap(),
+        provider_id,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
