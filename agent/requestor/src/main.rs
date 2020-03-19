@@ -183,16 +183,17 @@ async fn process_agreement(
     let act_id = activity_api.create_activity(&agreement_id).await?;
     log::info!("GOT new activity = (({})); YAY!", act_id);
 
+    // activity_api
+    //     .exec(ExeScriptRequest::new("[]".to_string()), &act_id)
+    //     .await
+    //     .unwrap();
+
     tokio::time::delay_for(Duration::from_secs(30)).await;
 
     log::info!("destroying activity = (({})); AGRRR!", act_id);
     activity_api.destroy_activity(&act_id).await?;
-    log::info!("I'M DONE FOR NOW");
 
-    activity_api
-        .exec(ExeScriptRequest::new("".to_string()), &act_id)
-        .await
-        .unwrap();
+    log::info!("I'M DONE FOR NOW");
     Ok(())
 }
 
@@ -265,46 +266,50 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let activity_api = settings.activity_api()?;
-    let mut agreements_to_pay = HashSet::new();
-    if let Some(id) = rx.next().await {
-        if let Err(e) = process_agreement(&activity_api, id.clone()).await {
-            log::error!("processing agreement id {} error: {}", id, e);
-        }
-        let terminate_result = market_api.terminate_agreement(&id).await;
-        log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
-        agreements_to_pay.insert(id);
-    }
 
-    let mut ts = started_at;
-
-    while agreements_to_pay.is_empty().not() {
-        let next_ts = Utc::now();
-
-        let events = payment_api.get_invoice_events(Some(&ts)).await.unwrap();
-        // TODO: timeout on get_invoice_events does not work
-        if events.is_empty() {
-            tokio::time::delay_for(Duration::from_millis(5000)).await;
-        }
-
-        for event in events {
-            match event.event_type {
-                EventType::Received => {
-                    let invoice = payment_api.get_invoice(&event.invoice_id).await.unwrap();
-                    let acceptance = Acceptance {
-                        total_amount_accepted: invoice.amount,
-                        allocation_id: new_allocation.allocation_id.clone(),
-                    };
-                    let result = payment_api
-                        .accept_invoice(&event.invoice_id, &acceptance)
-                        .await;
-                    log::info!("payment acceptance result: {:?}", result);
-                }
-                _ => (),
+    Arbiter::spawn(async move {
+        let mut agreements_to_pay = HashSet::new();
+        if let Some(id) = rx.next().await {
+            if let Err(e) = process_agreement(&activity_api, id.clone()).await {
+                log::error!("processing agreement id {} error: {}", id, e);
             }
-            ts = next_ts;
+            let terminate_result = market_api.terminate_agreement(&id).await;
+            log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
+            agreements_to_pay.insert(id);
         }
-    }
 
-    market_api.unsubscribe(&subscription_id).await?;
+        let mut ts = started_at;
+
+        while agreements_to_pay.is_empty().not() {
+            let next_ts = Utc::now();
+
+            let events = payment_api.get_invoice_events(Some(&ts)).await.unwrap();
+            // TODO: timeout on get_invoice_events does not work
+            if events.is_empty() {
+                tokio::time::delay_for(Duration::from_millis(5000)).await;
+            }
+
+            for event in events {
+                match event.event_type {
+                    EventType::Received => {
+                        let invoice = payment_api.get_invoice(&event.invoice_id).await.unwrap();
+                        let acceptance = Acceptance {
+                            total_amount_accepted: invoice.amount,
+                            allocation_id: new_allocation.allocation_id.clone(),
+                        };
+                        let result = payment_api
+                            .accept_invoice(&event.invoice_id, &acceptance)
+                            .await;
+                        log::info!("payment acceptance result: {:?}", result);
+                    }
+                    _ => (),
+                }
+                ts = next_ts;
+            }
+        }
+    });
+
+    tokio::signal::ctrl_c().await?;
+    settings.market_api()?.unsubscribe(&subscription_id).await?;
     Ok(())
 }
