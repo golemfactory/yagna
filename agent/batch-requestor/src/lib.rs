@@ -181,7 +181,7 @@ impl Actor for TaskSession {
                 let r2 = r.unwrap();
                 loop {
                     eprintln!("waiting");
-                    let events = market_api.collect(&r2, Some(120), Some(5)).await?;
+                    let events = market_api.collect(&r2, Some(120.0), Some(5)).await?;
                     eprintln!("received {:?}", events);
                     tokio::time::delay_for(Duration::from_millis(1000)).await;
                 }
