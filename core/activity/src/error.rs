@@ -27,8 +27,6 @@ pub enum Error {
     Timeout,
     #[error("task: {0}")]
     RuntimeError(#[from] tokio::task::JoinError),
-    #[error("{0}")]
-    ApiError(#[from] ErrorMessage),
 }
 
 macro_rules! service_error {
@@ -105,6 +103,12 @@ impl From<MarketRpcMessageError> for Error {
     }
 }
 
+impl From<ErrorMessage> for Error {
+    fn from(err: ErrorMessage) -> Self {
+        Error::BadRequest(err.to_string())
+    }
+}
+
 impl From<Error> for RpcMessageError {
     fn from(e: Error) -> Self {
         log::trace!("for RpcMessageError: {:?}", e);
@@ -119,7 +123,6 @@ impl From<Error> for RpcMessageError {
             Error::Forbidden => RpcMessageError::Forbidden,
             Error::NotFound => RpcMessageError::NotFound,
             Error::Timeout => RpcMessageError::Timeout,
-            Error::ApiError(err) => RpcMessageError::BadRequest(err.to_string()),
         }
     }
 }
@@ -141,7 +144,6 @@ impl actix_web::error::ResponseError for Error {
                 .json(ErrorMessage::new("Invalid credentials".to_string())),
             Error::NotFound => actix_web::HttpResponse::NotFound().finish(),
             Error::Timeout => actix_web::HttpResponse::RequestTimeout().finish(),
-            Error::ApiError(err) => actix_web::HttpResponse::BadRequest().json(err),
         }
     }
 }
