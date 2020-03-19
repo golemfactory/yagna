@@ -1,10 +1,8 @@
-use super::model::{PaymentModel, PaymentDescription};
 use super::linear_pricing::LinearPricing;
+use super::model::{PaymentDescription, PaymentModel};
 
 use anyhow::Result;
 use std::sync::Arc;
-
-
 
 pub struct PaymentModelFactory;
 

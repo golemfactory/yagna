@@ -6,7 +6,9 @@ use std::time::Duration;
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
-use crate::execution::{InitializeExeUnits, TaskRunner, UpdateActivity, ActivityCreated, ActivityDestroyed};
+use crate::execution::{
+    ActivityCreated, ActivityDestroyed, InitializeExeUnits, TaskRunner, UpdateActivity,
+};
 use crate::market::{
     provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
     CreateOffer, ProviderMarket,
@@ -27,7 +29,12 @@ impl ProviderAgent {
     pub async fn new(config: StartupConfig) -> anyhow::Result<ProviderAgent> {
         let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
         let runner = TaskRunner::new(config.activity_client()?).start();
-        let payments = Payments::new(config.activity_client()?, config.payment_client()?, &config.credit_address).start();
+        let payments = Payments::new(
+            config.activity_client()?,
+            config.payment_client()?,
+            &config.credit_address,
+        )
+        .start();
 
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();

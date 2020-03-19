@@ -2,11 +2,9 @@ use structopt::StructOpt;
 use url::Url;
 
 use ya_client::{
-    activity::ActivityProviderApi, market::MarketProviderApi, web::WebClient, web::WebInterface,
-    Result,
-    payment::provider::ProviderApi,
+    activity::ActivityProviderApi, market::MarketProviderApi, payment::provider::ProviderApi,
+    web::WebClient, web::WebInterface, Result,
 };
-
 
 #[derive(StructOpt)]
 pub struct StartupConfig {

@@ -5,7 +5,6 @@ use std::sync::Arc;
 use crate::{web::WebClient, web::WebInterface, Result};
 use ya_model::payment::*;
 
-
 #[derive(Default)]
 pub struct ProviderApiConfig {
     send_debit_note_timeout: Option<u32>, // all timeouts are in seconds
