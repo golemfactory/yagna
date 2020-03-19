@@ -1,6 +1,5 @@
 use actix_rt::Arbiter;
 use futures::{channel::mpsc, prelude::*};
-use std::ops::Not;
 use std::time::Duration;
 use structopt::StructOpt;
 use url::Url;
@@ -11,7 +10,6 @@ use ya_client::{
 };
 //use ya_model::market::proposal::State;
 use chrono::Utc;
-use std::collections::HashSet;
 use ya_model::activity::ExeScriptRequest;
 use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
 use ya_model::payment::{Acceptance, Allocation, EventType};
@@ -266,21 +264,24 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let activity_api = settings.activity_api()?;
+    let (mut pay_sender, mut pay_receiver) = mpsc::channel::<String>(1);
 
     Arbiter::spawn(async move {
-        let mut agreements_to_pay = HashSet::new();
-        if let Some(id) = rx.next().await {
+        while let Some(id) = rx.next().await {
             if let Err(e) = process_agreement(&activity_api, id.clone()).await {
                 log::error!("processing agreement id {} error: {}", id, e);
             }
             let terminate_result = market_api.terminate_agreement(&id).await;
             log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
-            agreements_to_pay.insert(id);
-        }
 
+            pay_sender.send(id).await.unwrap();
+        }
+    });
+
+    Arbiter::spawn(async move {
         let mut ts = started_at;
 
-        while agreements_to_pay.is_empty().not() {
+        while let Some(_agreement_id) = pay_receiver.next().await {
             let next_ts = Utc::now();
 
             let events = payment_api.get_invoice_events(Some(&ts)).await.unwrap();
