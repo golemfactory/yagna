@@ -6,18 +6,18 @@ use std::str::FromStr;
 use crate::net_node_id;
 use ya_core_model::{identity, net};
 use ya_service_bus::{
-    connection, typed as bus, untyped as local_bus, ResponseChunk, RpcEndpoint, PRIVATE_PREFIX,
-    PUBLIC_PREFIX,
+    connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint,
+    PRIVATE_PREFIX, PUBLIC_PREFIX,
 };
 
 pub const ENV_VAR: &str = "CENTRAL_NET_HOST";
-pub const DEFAULT_HOST: &str = "34.244.4.185:7464";
+const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
 
 pub fn central_net_host() -> String {
     if let Some(addr_str) = std::env::var(ENV_VAR).ok() {
         addr_str
     } else {
-        DEFAULT_HOST.into()
+        DEFAULT_CENTRAL_ADDR.into()
     }
 }
 
@@ -44,8 +44,14 @@ pub async fn bind_remote(
     let central_bus = connection::connect_with_handler(
         conn,
         move |request_id: String, caller: String, addr: String, data: Vec<u8>| {
+            if !addr.starts_with(&own_net_node_id) {
+                return stream::once(future::err(Error::GsbBadRequest(format!(
+                    "wrong routing: {} vs {}",
+                    addr, own_net_node_id
+                ))))
+                .left_stream();
+            }
             // replaces  /net/<my_id>/test/1 --> ?/test/1
-            assert!(addr.starts_with(&own_net_node_id));
             let local_addr: String = addr.replacen(&own_net_node_id, PUBLIC_PREFIX, 1);
             log::debug!(
                 "Incoming msg from = {}, to = {}, fwd to local addr = {}, request_id: {}",
@@ -59,6 +65,7 @@ pub async fn bind_remote(
                 local_bus::send(&local_addr, &caller, &data)
                     .and_then(|r| future::ok(ResponseChunk::Full(r))),
             )
+            .right_stream()
         },
     );
 
