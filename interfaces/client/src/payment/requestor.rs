@@ -131,7 +131,7 @@ impl RequestorApi {
         &self,
         invoice_id: &str,
         acceptance: &Acceptance,
-    ) -> Result<String> {
+    ) -> Result<()> {
         let ackTimeout = self.config.accept_invoice_timeout;
         let url = url_format!(
             "requestor/invoices/{invoice_id}/accept",
