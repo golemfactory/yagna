@@ -1,10 +1,9 @@
-use std::convert::TryFrom;
-use std::mem::size_of;
+use std::{convert::TryFrom, mem::size_of, net::SocketAddr};
+use url::Url;
 
 use crate::codec::ProtocolError;
+
 pub use gsb_api::*;
-use std::borrow::Cow;
-use std::net::SocketAddr;
 
 mod gsb_api {
     include!(concat!(env!("OUT_DIR"), "/gsb_api.rs"));
@@ -88,25 +87,88 @@ impl TryFrom<i32> for CallReplyType {
     }
 }
 
+pub const GSB_URL_ENV_VAR: &str = "GSB_URL";
 pub const DEFAULT_GSB_URL: &str = "tcp://127.0.0.1:7464";
 
-pub fn gsb_url() -> Cow<'static, str> {
-    if let Some(gsb_url) = std::env::var("GSB_URL").ok() {
-        Cow::Owned(gsb_url)
-    } else {
-        Cow::Borrowed(DEFAULT_GSB_URL)
-    }
-}
+pub fn gsb_addr(gsb_url: Option<Url>) -> SocketAddr {
+    let gsb_url = gsb_url.unwrap_or_else(|| {
+        let default_url = std::env::var(GSB_URL_ENV_VAR).unwrap_or(DEFAULT_GSB_URL.into());
+        Url::parse(&default_url).expect("provide GSB URL in format tcp://<ip:port>")
+    });
 
-pub fn gsb_addr() -> SocketAddr {
-    let gsb_url = gsb_url();
-    let url = url::Url::parse(&gsb_url).unwrap();
-    if url.scheme() != "tcp" {
-        panic!("unimplemented protocol: {}", url.scheme());
+    if gsb_url.scheme() != "tcp" {
+        panic!("unimplemented protocol for GSB URL: {}", gsb_url.scheme());
     }
+    let ip_addr = gsb_url
+        .host_str()
+        .expect("need IP address for GSB URL")
+        .parse()
+        .expect("only IP address supported for GSB URL");
 
     SocketAddr::new(
-        url.host_str().unwrap().parse().unwrap(),
-        url.port().unwrap_or(7464),
+        ip_addr,
+        gsb_url
+            .port()
+            .unwrap_or_else(|| Url::parse(DEFAULT_GSB_URL).unwrap().port().unwrap()),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    #[test]
+    pub fn check_default_gsb_url() {
+        let addr = gsb_addr(None);
+        assert!(addr.ip().is_loopback());
+        assert_eq!(addr.port(), 7464)
+    }
+
+    #[test]
+    pub fn check_ip_port_gsb_url() {
+        let addr = gsb_addr(Some("tcp://10.9.8.7:2345".parse().unwrap()));
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(10, 9, 8, 7)));
+        assert_eq!(addr.port(), 2345)
+    }
+
+    #[test]
+    pub fn check_ip_gsb_url() {
+        let addr = gsb_addr(Some("tcp://10.9.8.7".parse().unwrap()));
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(10, 9, 8, 7)));
+        assert_eq!(addr.port(), 7464)
+    }
+
+    #[test]
+    #[should_panic(expected = "unimplemented protocol for GSB URL: http")]
+    pub fn panic_http_gsb_url() {
+        gsb_addr(Some("http://10.9.8.7".parse().unwrap()));
+    }
+
+    #[test]
+    #[should_panic(expected = "only IP address supported for GSB URL: AddrParseError(())")]
+    pub fn panic_domain_gsb_url() {
+        gsb_addr(Some("tcp://zima".parse().unwrap()));
+    }
+
+    #[test]
+    #[should_panic(expected = "need IP address for GSB URL")]
+    pub fn panic_no_host_gsb_url() {
+        gsb_addr(Some("tcp:".parse().unwrap()));
+    }
+
+    #[test]
+    pub fn check_env_var() {
+        std::env::set_var(GSB_URL_ENV_VAR, "tcp://10.9.8.7:2345");
+        let addr = gsb_addr(None);
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(10, 9, 8, 7)));
+        assert_eq!(addr.port(), 2345)
+    }
+
+    #[test]
+    #[should_panic(expected = "unimplemented protocol for GSB URL: http")]
+    pub fn panic_env_var() {
+        std::env::set_var(GSB_URL_ENV_VAR, "http://10.9.8.7:2345");
+        gsb_addr(None);
+    }
 }

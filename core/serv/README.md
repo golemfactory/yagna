@@ -10,11 +10,10 @@ TODO: place crate dependency diagram here?
 
 | Setting | CLI Option | Environment variable | Default | Description |
 |---------|------------|----------------------|---------|-------------|
-| Host URL | -a, --address <address> (not implemented) | YAGNA_HOST | 127.0.0.1 | |
-| GSB port | --router-port <router-port>  (not implemented) | YAGNA_BUS_PORT | 7464 | Local TCP port number, on which the Daemon's GSB is published. |
-| HTTP port (used for REST API) | -p, --http-port <http-port>  (not implemented) | YAGNA_HTTP_PORT | 7465 | TCP port on which the APIs are published. |
-| Data folder | -d, --datadir <data-dir> | (n/a) | | The folder in which the Daemon's SQL storage file is to be located | 
-| Net Mk1 hub URL | (n/a) | CENTRAL_NET_HOST | 10.30.10.202:7477 | The URL to the implementation of Net Mk1 central routing hub |
+| Data folder | -d, --datadir <data-dir> | YAGNA_DATADIR | | The folder in which the Daemon's SQL storage file is to be located | 
+| Host URL | -a, --api-url <api-url> | YAGNA_API_URL | http://127.0.0.1:7465 | |
+| GSB URL | -g, --gsb-url <tcp:://url> | YAGNA_BUS_PORT | 7464 | Local TCP port number, on which the Daemon's GSB is published. |
+| Net Mk1 hub addr | --net-addr <host_port> | CENTRAL_NET_ADDR | 34.244.4.185:7464 | Centralized (Mk1 phase) Yagna network server address |
 
 ## Yagna CLI
 

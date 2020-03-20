@@ -15,6 +15,7 @@ ya-service-bus = "0.2"
 
 anyhow = "1.0"
 log = "0.4"
+thiserror = "1.0"
 
 [dependencies.futures]
 package = "futures"

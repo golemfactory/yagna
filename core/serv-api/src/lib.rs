@@ -9,6 +9,7 @@ pub mod constants;
 pub struct CliCtx {
     pub data_dir: PathBuf,
     pub http_address: (String, u16),
+    pub gsb_url: Option<url::Url>,
     pub json_output: bool,
     pub interactive: bool,
 }

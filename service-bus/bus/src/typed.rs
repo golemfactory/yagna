@@ -65,7 +65,7 @@ impl Endpoint {
         &self,
         msg: T,
     ) -> impl Future<Output = Result<Result<T::Item, T::Error>, Error>> + Unpin {
-        self.router.lock().unwrap().forward(&self.addr, None, msg)
+        self.router.lock().unwrap().forward(&self.addr, msg)
     }
 
     pub fn call_streaming<T: RpcStreamMessage>(

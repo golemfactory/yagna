@@ -21,10 +21,6 @@ pub mod timeout;
 
 mod serialization;
 
-// TODO: replace with dedicated endpoint/service descriptor with enum for visibility
-pub const PUBLIC_PREFIX: &str = "/public";
-pub const PRIVATE_PREFIX: &str = "/private";
-
 pub trait RpcMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
     const ID: &'static str;
     type Item: Serialize + DeserializeOwned + 'static + Sync + Send;

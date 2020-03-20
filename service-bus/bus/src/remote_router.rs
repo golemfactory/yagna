@@ -32,7 +32,8 @@ impl Actor for RemoteRouter {
 
 impl RemoteRouter {
     fn try_connect(&mut self, ctx: &mut <Self as Actor>::Context) {
-        let addr = ya_sb_proto::gsb_addr();
+        let addr = ya_sb_proto::gsb_addr(None); //FIXME
+        log::info!("trying to connect to: {}", addr);
         let connect_fut = connection::tcp(addr)
             .map_err(move |e| Error::BusConnectionFail(addr, e))
             .into_actor(self)

@@ -7,35 +7,60 @@ use crate::common::{
 };
 use crate::dao::*;
 use crate::error::Error;
-use ya_core_model::activity::*;
+use ya_core_model::activity;
 use ya_model::activity::{activity_state::StatePair, State};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
-use ya_service_bus::{timeout::*, PRIVATE_PREFIX, PUBLIC_PREFIX};
+use ya_service_bus::{timeout::*, typed as bus, RpcMessage};
 
-lazy_static::lazy_static! {
-    static ref PRIVATE_ID: String = format!("{}{}", PRIVATE_PREFIX, SERVICE_ID);
-    static ref PUBLIC_ID: String = format!("{}{}", PUBLIC_PREFIX, SERVICE_ID);
+struct ServiceBinder<'a, 'b> {
+    bus_addr: &'b str,
+    db: &'a DbExecutor,
+}
+
+impl<'a, 'b> ServiceBinder<'a, 'b> {
+    fn bind<F: 'static, Msg: RpcMessage, Output: 'static>(self, f: F) -> Self
+    where
+        F: Fn(DbExecutor, String, Msg) -> Output,
+        Output: Future<Output = std::result::Result<Msg::Item, Msg::Error>>,
+        Msg::Error: std::fmt::Debug,
+    {
+        let db = self.db.clone();
+        let _ = bus::bind_with_caller(self.bus_addr, move |addr, msg| {
+            log::debug!("Received call to {}", Msg::ID);
+            let fut = f(db.clone(), addr, msg);
+            fut.map(|res| {
+                match &res {
+                    Ok(_) => log::debug!("Call to {} successful", Msg::ID),
+                    Err(e) => log::debug!("Call to {} failed: {:?}", Msg::ID, e),
+                }
+                res
+            })
+        });
+        self
+    }
 }
 
 pub fn bind_gsb(db: &DbExecutor) {
     // public for remote requestors interactions
-    bind_gsb_method!(&PUBLIC_ID, db, create_activity_gsb);
-    bind_gsb_method!(&PUBLIC_ID, db, destroy_activity_gsb);
-    bind_gsb_method!(&PUBLIC_ID, db, get_activity_state_gsb);
-    bind_gsb_method!(&PUBLIC_ID, db, get_activity_usage_gsb);
+    let _ = ServiceBinder {
+        bus_addr: activity::BUS_ID,
+        db,
+    }
+    .bind(create_activity_gsb)
+    .bind(destroy_activity_gsb)
+    .bind(get_activity_state_gsb)
+    .bind(get_activity_usage_gsb);
 
-    // local for ExeUnit interactions
-    bind_gsb_method!(&PRIVATE_ID, db, set_activity_state_gsb);
-    bind_gsb_method!(&PRIVATE_ID, db, set_activity_usage_gsb);
+    local::bind_gsb(db);
 }
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity_gsb(
     db: DbExecutor,
     caller: String,
-    msg: CreateActivity,
-) -> RpcMessageResult<CreateActivity> {
+    msg: activity::Create,
+) -> RpcMessageResult<activity::Create> {
     authorize_agreement_initiator(caller, &msg.agreement_id).await?;
 
     let activity_id = generate_id();
@@ -77,8 +102,8 @@ async fn create_activity_gsb(
 async fn destroy_activity_gsb(
     db: DbExecutor,
     caller: String,
-    msg: DestroyActivity,
-) -> RpcMessageResult<DestroyActivity> {
+    msg: activity::Destroy,
+) -> RpcMessageResult<activity::Destroy> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
     let provider_id = get_agreement(&msg.agreement_id)
         .await?
@@ -112,8 +137,8 @@ async fn destroy_activity_gsb(
 async fn get_activity_state_gsb(
     db: DbExecutor,
     caller: String,
-    msg: GetActivityState,
-) -> RpcMessageResult<GetActivityState> {
+    msg: activity::GetState,
+) -> RpcMessageResult<activity::GetState> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     super::get_activity_state(&db, &msg.activity_id)
@@ -121,25 +146,11 @@ async fn get_activity_state_gsb(
         .map_err(Into::into)
 }
 
-/// Pass activity state (which may include error details).
-/// Called by ExeUnits.
-async fn set_activity_state_gsb(
-    db: DbExecutor,
-    caller: String,
-    msg: SetActivityState,
-) -> RpcMessageResult<SetActivityState> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
-
-    super::set_activity_state(&db, &msg.activity_id, msg.state)
-        .map_err(Into::into)
-        .await
-}
-
 async fn get_activity_usage_gsb(
     db: DbExecutor,
     caller: String,
-    msg: GetActivityUsage,
-) -> RpcMessageResult<GetActivityUsage> {
+    msg: activity::GetUsage,
+) -> RpcMessageResult<activity::GetUsage> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     super::get_activity_usage(&db, &msg.activity_id)
@@ -147,17 +158,45 @@ async fn get_activity_usage_gsb(
         .map_err(Error::into)
 }
 
-/// Pass current activity usage (which may include error details).
-/// Called by ExeUnits.
-async fn set_activity_usage_gsb(
-    db: DbExecutor,
-    caller: String,
-    msg: SetActivityUsage,
-) -> RpcMessageResult<SetActivityUsage> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+mod local {
+    use super::*;
 
-    db.as_dao::<ActivityUsageDao>()
-        .set(&msg.activity_id, &msg.usage.current_usage)
-        .await
-        .map_err(|e| Error::from(e).into())
+    pub fn bind_gsb(db: &DbExecutor) {
+        // local for ExeUnit interactions
+        let _ = ServiceBinder {
+            bus_addr: activity::local::BUS_ID,
+            db,
+        }
+        .bind(set_activity_state_gsb)
+        .bind(set_activity_usage_gsb);
+    }
+
+    /// Pass activity state (which may include error details).
+    /// Called by ExeUnits.
+    async fn set_activity_state_gsb(
+        db: DbExecutor,
+        caller: String,
+        msg: activity::local::SetState,
+    ) -> RpcMessageResult<activity::local::SetState> {
+        authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+
+        super::super::set_activity_state(&db, &msg.activity_id, msg.state)
+            .map_err(Into::into)
+            .await
+    }
+
+    /// Pass current activity usage (which may include error details).
+    /// Called by ExeUnits.
+    async fn set_activity_usage_gsb(
+        db: DbExecutor,
+        caller: String,
+        msg: activity::local::SetUsage,
+    ) -> RpcMessageResult<activity::local::SetUsage> {
+        authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+
+        db.as_dao::<ActivityUsageDao>()
+            .set(&msg.activity_id, &msg.usage.current_usage)
+            .await
+            .map_err(|e| Error::from(e).into())
+    }
 }

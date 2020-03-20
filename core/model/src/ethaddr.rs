@@ -3,9 +3,8 @@ use std::borrow::Cow;
 use std::mem::MaybeUninit;
 use std::str::FromStr;
 use std::{fmt, str};
-use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 pub struct ParseError(&'static str);
 
@@ -78,12 +77,6 @@ impl<'a> From<Cow<'a, [u8]>> for NodeId {
     }
 }
 
-impl ToString for NodeId {
-    fn to_string(&self) -> String {
-        self.with_hex(|str| str.into())
-    }
-}
-
 #[inline]
 fn hex_to_dec(hex: u8) -> Result<u8, ParseError> {
     match hex {
@@ -137,6 +130,12 @@ impl Serialize for NodeId {
 }
 
 impl fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for NodeId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.with_hex(|hex_str| write!(f, "{}", hex_str))
     }

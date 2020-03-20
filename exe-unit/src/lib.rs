@@ -20,7 +20,7 @@ use actix::prelude::*;
 use futures::TryFutureExt;
 use std::path::PathBuf;
 use std::time::Duration;
-use ya_core_model::activity::*;
+use ya_core_model::activity;
 use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::{
     ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
@@ -110,7 +110,7 @@ impl<R: Runtime> ExeUnit<R> {
         addr: Addr<Self>,
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
-        exec: Exec,
+        exec: activity::Exec,
     ) {
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
@@ -261,11 +261,11 @@ impl<R: Runtime> Actor for ExeUnit<R> {
         let addr = ctx.address();
 
         if let Some(s) = &self.ctx.service_id {
-            actix_rpc::bind::<Exec>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityState>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityUsage>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetRunningCommand>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetExecBatchResults>(&s, addr.clone().recipient());
+            actix_rpc::bind::<activity::Exec>(&s, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetState>(&s, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetUsage>(&s, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetRunningCommand>(&s, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetExecBatchResults>(&s, addr.clone().recipient());
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
@@ -327,7 +327,7 @@ async fn report_usage<R: Runtime>(
     match metrics.send(GetMetrics).await {
         Ok(resp) => match resp {
             Ok(data) => {
-                let msg = SetActivityUsage {
+                let msg = activity::local::SetUsage {
                     activity_id,
                     usage: ActivityUsage::from(data),
                     timeout: None,

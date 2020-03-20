@@ -5,22 +5,60 @@ use ya_model::activity::{
 };
 use ya_service_bus::RpcMessage;
 
-pub const SERVICE_ID: &str = "/activity";
+pub const BUS_ID: &str = "/public/activity";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateActivity {
+pub struct Create {
     pub provider_id: NodeId,
     pub agreement_id: String,
     pub timeout: Option<f32>,
 }
 
+impl RpcMessage for Create {
+    const ID: &'static str = "CreateActivity";
+    type Item = String;
+    type Error = RpcMessageError;
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DestroyActivity {
+pub struct Destroy {
     pub agreement_id: String,
     pub activity_id: String,
     pub timeout: Option<f32>,
+}
+
+impl RpcMessage for Destroy {
+    const ID: &'static str = "DestroyActivity";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetState {
+    pub activity_id: String,
+    pub timeout: Option<f32>,
+}
+
+impl RpcMessage for GetState {
+    const ID: &'static str = "GetState";
+    type Item = ActivityState;
+    type Error = RpcMessageError;
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetUsage {
+    pub activity_id: String,
+    pub timeout: Option<f32>,
+}
+
+impl RpcMessage for GetUsage {
+    const ID: &'static str = "GetUsage";
+    type Item = ActivityUsage;
+    type Error = RpcMessageError;
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -32,12 +70,24 @@ pub struct Exec {
     pub timeout: Option<f32>,
 }
 
+impl RpcMessage for Exec {
+    const ID: &'static str = "Exec";
+    type Item = String;
+    type Error = RpcMessageError;
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
     pub timeout: Option<f32>,
+}
+
+impl RpcMessage for GetExecBatchResults {
+    const ID: &'static str = "GetExecBatchResults";
+    type Item = Vec<ExeScriptCommandResult>;
+    type Error = RpcMessageError;
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -47,34 +97,44 @@ pub struct GetRunningCommand {
     pub timeout: Option<f32>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GetActivityState {
-    pub activity_id: String,
-    pub timeout: Option<f32>,
+impl RpcMessage for GetRunningCommand {
+    const ID: &'static str = "GetRunningCommand";
+    type Item = ExeScriptCommandState;
+    type Error = RpcMessageError;
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetActivityState {
-    pub activity_id: String,
-    pub state: ActivityState,
-    pub timeout: Option<f32>,
-}
+pub mod local {
+    use super::*;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GetActivityUsage {
-    pub activity_id: String,
-    pub timeout: Option<f32>,
-}
+    pub const BUS_ID: &str = "/local/activity";
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetActivityUsage {
-    pub activity_id: String,
-    pub usage: ActivityUsage,
-    pub timeout: Option<f32>,
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SetState {
+        pub activity_id: String,
+        pub state: ActivityState,
+        pub timeout: Option<f32>,
+    }
+
+    impl RpcMessage for SetState {
+        const ID: &'static str = "SetState";
+        type Item = ();
+        type Error = RpcMessageError;
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SetUsage {
+        pub activity_id: String,
+        pub usage: ActivityUsage,
+        pub timeout: Option<f32>,
+    }
+
+    impl RpcMessage for SetUsage {
+        const ID: &'static str = "SetUsage";
+        type Item = ();
+        type Error = RpcMessageError;
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -87,58 +147,4 @@ pub enum RpcMessageError {
     NotFound,
     Forbidden,
     Timeout,
-}
-
-impl RpcMessage for CreateActivity {
-    const ID: &'static str = "CreateActivity";
-    type Item = String;
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for DestroyActivity {
-    const ID: &'static str = "DestroyActivity";
-    type Item = ();
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for Exec {
-    const ID: &'static str = "Exec";
-    type Item = String;
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for GetExecBatchResults {
-    const ID: &'static str = "GetExecBatchResults";
-    type Item = Vec<ExeScriptCommandResult>;
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for GetRunningCommand {
-    const ID: &'static str = "GetRunningCommand";
-    type Item = ExeScriptCommandState;
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for GetActivityState {
-    const ID: &'static str = "GetState";
-    type Item = ActivityState;
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for SetActivityState {
-    const ID: &'static str = "SetState";
-    type Item = ();
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for GetActivityUsage {
-    const ID: &'static str = "GetUsage";
-    type Item = ActivityUsage;
-    type Error = RpcMessageError;
-}
-
-impl RpcMessage for SetActivityUsage {
-    const ID: &'static str = "SetUsage";
-    type Item = ();
-    type Error = RpcMessageError;
 }

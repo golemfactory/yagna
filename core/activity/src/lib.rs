@@ -6,8 +6,6 @@ extern crate ya_service_bus;
 
 pub(crate) mod common;
 pub(crate) mod dao;
-#[macro_use]
-pub(crate) mod macros;
 
 pub mod api;
 pub mod error;

@@ -387,14 +387,13 @@ impl Router {
     pub fn forward<T: RpcMessage + Unpin>(
         &mut self,
         addr: &str,
-        caller: Option<String>,
         msg: T,
     ) -> impl Future<Output = Result<Result<T::Item, T::Error>, Error>> + Unpin {
-        let caller = caller.unwrap_or("local".into());
+        let caller = "local".to_string();
         let addr = format!("{}/{}", addr, T::ID);
         if let Some(slot) = self.handlers.get_mut(&addr) {
             (if let Some(h) = slot.recipient() {
-                h.send(RpcEnvelope::with_caller(caller, msg))
+                h.send(RpcEnvelope::local(msg))
                     .map_err(Error::from)
                     .left_future()
             } else {

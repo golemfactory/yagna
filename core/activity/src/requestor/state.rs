@@ -1,16 +1,18 @@
+use actix_web::{web, Responder};
+
+use ya_core_model::activity;
+use ya_model::activity::activity_state::StatePair;
+use ya_model::activity::{ActivityState, ActivityUsage};
+use ya_net::TryRemoteEndpoint;
+use ya_persistence::executor::DbExecutor;
+use ya_service_api_web::middleware::Identity;
+use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
+
 use crate::common::{
     authorize_activity_initiator, get_activity_agreement, PathActivity, QueryTimeout,
 };
 use crate::dao::{ActivityStateDao, ActivityUsageDao};
 use crate::error::Error;
-use crate::requestor::provider_activity_service_id;
-use actix_web::{web, Responder};
-use futures::prelude::*;
-use ya_core_model::activity::{GetActivityState, GetActivityUsage, GetRunningCommand};
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{ActivityState, ActivityUsage};
-use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::Identity;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -30,7 +32,7 @@ async fn get_activity_state(
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = GetActivityState {
+    let msg = activity::GetState {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
@@ -42,8 +44,12 @@ async fn get_activity_state(
     }
 
     // Retrieve and persist activity state
-    let uri = provider_activity_service_id(&agreement)?;
-    let activity_state = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
+    let activity_state = agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
     db.as_dao::<ActivityStateDao>()
         .set(
@@ -67,12 +73,6 @@ async fn get_activity_usage(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = GetActivityUsage {
-        activity_id: path.activity_id.to_string(),
-        timeout: query.timeout.clone(),
-    };
-
     // Return locally persisted usage if activity has been terminated
     let persisted_state = get_persisted_state(&db, &path.activity_id).await?;
     if persisted_state.terminated() {
@@ -82,9 +82,20 @@ async fn get_activity_usage(
         }
     }
 
+    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let msg = activity::GetUsage {
+        activity_id: path.activity_id.to_string(),
+        timeout: query.timeout.clone(),
+    };
+
     // Retrieve and persist activity usage
-    let uri = provider_activity_service_id(&agreement)?;
-    let activity_usage = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
+    let activity_usage = agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
+
     db.as_dao::<ActivityUsageDao>()
         .set(&path.activity_id, &activity_usage.current_usage)
         .await?;
@@ -103,13 +114,17 @@ async fn get_running_command(
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = GetRunningCommand {
+    let msg = activity::GetRunningCommand {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
-    let cmd = gsb_send!(Some(id.identity), msg, &uri, query.timeout)?;
+    let cmd = agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
     Ok::<_, Error>(web::Json(cmd))
 }

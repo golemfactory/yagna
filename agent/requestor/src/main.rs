@@ -6,6 +6,7 @@ use url::Url;
 
 use ya_client::{
     activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
+    web::WebInterface,
 };
 //use ya_model::market::proposal::State;
 use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
@@ -16,16 +17,12 @@ struct AppSettings {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
     app_key: String,
 
-    ///
-    #[structopt(
-        long = "market-url",
-        env = "YAGNA_MARKET_URL",
-        default_value = "http://10.30.10.202:5001/market-api/v1/"
-    )]
+    /// Market API URL
+    #[structopt(long = "market-url", env = MarketRequestorApi::API_URL_ENV_VAR)]
     market_url: Url,
 
-    ///
-    #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
+    /// Activity API URL
+    #[structopt(long = "activity-url", env = ActivityRequestorControlApi::API_URL_ENV_VAR)]
     activity_url: Option<Url>,
 }
 

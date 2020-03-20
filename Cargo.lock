@@ -5533,6 +5533,7 @@ dependencies = [
  "log 0.4.8",
  "serde",
  "structopt",
+ "thiserror",
  "ya-core-model",
  "ya-sb-router",
  "ya-service-api",
@@ -5711,6 +5712,7 @@ dependencies = [
  "structopt",
  "tokio 0.2.13",
  "tokio-util",
+ "url 2.1.1",
  "uuid 0.8.1",
  "ya-sb-proto",
  "ya-sb-util",
@@ -5738,6 +5740,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "url 2.1.1",
 ]
 
 [[package]]
@@ -5896,6 +5899,7 @@ dependencies = [
  "ya-net",
  "ya-payment",
  "ya-persistence",
+ "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",

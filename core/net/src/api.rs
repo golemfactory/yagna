@@ -1,66 +1,81 @@
-use ya_core_model::{ethaddr::NodeId, net};
-use ya_service_bus::{typed as bus, PRIVATE_PREFIX, PUBLIC_PREFIX};
+use ya_core_model::{
+    ethaddr::{NodeId, ParseError},
+    net,
+};
+use ya_service_bus::typed as bus;
 
-pub trait RemoteEndpoint {
-    fn service(&self, addr: &str) -> bus::Endpoint;
+#[derive(thiserror::Error, Debug)]
+pub enum NetApiError {
+    #[error("service bus address should have {} prefix: {0}", net::PUBLIC_PREFIX)]
+    PublicPrefixNeeded(String),
+    #[error("NodeId parse error: {0}")]
+    NodeIdParseError(#[from] ParseError),
 }
 
-impl RemoteEndpoint for NodeId {
-    fn service(&self, addr: &str) -> bus::Endpoint {
-        assert!(addr.starts_with(PUBLIC_PREFIX));
-        let exported_part = &addr[PUBLIC_PREFIX.len()..];
-        let addr = format!("/net/{:?}/{}", self, exported_part);
-        bus::service(&addr)
+pub trait TryRemoteEndpoint {
+    fn try_service(&self, bus_addr: &str) -> Result<bus::Endpoint, NetApiError>;
+}
+
+impl TryRemoteEndpoint for NodeId {
+    fn try_service(&self, bus_addr: &str) -> Result<bus::Endpoint, NetApiError> {
+        if !bus_addr.starts_with(net::PUBLIC_PREFIX) {
+            return Err(NetApiError::PublicPrefixNeeded(bus_addr.into()));
+        }
+        let exported_part = &bus_addr[net::PUBLIC_PREFIX.len()..];
+        let net_bus_addr = format!("{}/{:?}/{}", net::SERVICE_ID, self, exported_part);
+        Ok(bus::service(&net_bus_addr))
     }
 }
 
-pub fn remote_service(node_id: impl ToString, service_id: &str) -> String {
-    // FIXME: use NodeId
-    assert!(service_id.starts_with("/"));
-    format!(
-        "{}{}/{}{}",
-        PRIVATE_PREFIX,
-        net::SERVICE_ID,
-        node_id.to_string(),
-        service_id
-    )
+impl TryRemoteEndpoint for &str {
+    fn try_service(&self, bus_addr: &str) -> Result<bus::Endpoint, NetApiError> {
+        self.parse::<NodeId>()?.try_service(bus_addr)
+    }
 }
 
-pub fn net_node_id(node_id: impl ToString) -> String {
-    format!("{}/{}", net::SERVICE_ID, node_id.to_string())
-}
-
-/// caller might start with net prefix, but not have to
-#[inline(always)]
-pub fn authorize_caller(caller: impl ToString, authorized: String) -> bool {
-    // FIXME: impl a proper caller struct / parser
-    let net_prefix = format!("{}/", net::SERVICE_ID);
-    let caller = caller.to_string().replacen(&net_prefix, "", 1);
-    log::debug!("checking caller: {} vs authorized: {}", caller, authorized);
-    caller == authorized
+pub fn net_node_id(node_id: &NodeId) -> String {
+    format!("{}/{:?}", net::SERVICE_ID, node_id)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::remote_service;
+    use super::*;
 
     #[test]
-    fn remote_service_empty() {
-        assert_eq!(remote_service("", "/"), "/private/net//")
+    fn ok_try_service_on_public() {
+        "0xbabe000000000000000000000000000000000000"
+            .try_service("/public/x")
+            .unwrap();
     }
 
     #[test]
-    fn remote_service_node_only() {
-        assert_eq!(remote_service("node", "/"), "/private/net/node/")
+    fn err_try_service_on_non_public() {
+        let result = "0xbabe000000000000000000000000000000000000".try_service("/zima/x");
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            "service bus address should have /public prefix: /zima/x".to_string()
+        )
     }
 
     #[test]
-    fn remote_service_service_only() {
-        assert_eq!(remote_service("", "/srv"), "/private/net//srv")
+    fn err_try_service_on_non_node_id() {
+        assert!("lato".try_service("/zima/x").is_err());
     }
 
     #[test]
-    fn remote_service_both() {
-        assert_eq!(remote_service("node", "/srv"), "/private/net/node/srv")
+    fn ok_try_service_on_node_id() {
+        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        node_id.try_service("/public/x").unwrap();
+    }
+
+    #[test]
+    fn err_try_service_on_node_id_and_non_public() {
+        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        assert!(node_id.try_service("/zima/x").is_err());
     }
 }
