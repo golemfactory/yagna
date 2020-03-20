@@ -328,6 +328,12 @@ where
                     ctx.stop();
                 }
             }
+            GsbMessage::Ping => {
+                if let Err(e) = self.writer.write(GsbMessage::Pong) {
+                    log::error!("error sending pong: {}", e);
+                    ctx.stop();
+                }
+            }
             m => {
                 log::error!("unexpected gsb message: {:?}", m);
                 ctx.stop();
