@@ -14,7 +14,10 @@ use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
 use ya_service_api_interfaces::Provider;
-use ya_service_api_web::middleware::{auth, Identity};
+use ya_service_api_web::{
+    middleware::{auth, Identity},
+    DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
+};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -33,7 +36,8 @@ struct CliArgs {
         long = "datadir",
         set = clap::ArgSettings::Global,
         env = "YAGNA_DATADIR",
-        default_value
+        default_value,
+        hide_env_values = true,
     )]
     data_dir: DataDir,
 
@@ -41,8 +45,8 @@ struct CliArgs {
     #[structopt(
         short,
         long,
-        env = "YAGNA_API_URL",
-        default_value = "http://127.0.0.1:7465"
+        env = YAGNA_API_URL_ENV_VAR,
+        default_value = DEFAULT_YAGNA_API_URL
     )]
     api_url: Url,
 

@@ -2,8 +2,7 @@ use actix_web::{middleware, App, HttpServer};
 use ya_activity::requestor;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::migrations;
-use ya_service_api::constants::YAGNA_HTTP_ADDR;
-use ya_service_api_web::scope::ExtendableScope;
+use ya_service_api_web::{rest_api_addr, scope::ExtendableScope};
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
             .wrap(middleware::Logger::default())
             .service(activity)
     })
-    .bind(*YAGNA_HTTP_ADDR)?
+    .bind(rest_api_addr())?
     .run()
     .await?;
 

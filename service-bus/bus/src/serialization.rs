@@ -6,7 +6,6 @@ pub use rmp_serde::{
 #[cfg(feature = "json")]
 mod json {
     use serde_json::Error;
-    use std::fmt;
 
     #[derive(Debug, thiserror::Error)]
     #[error("{0}")]

@@ -1,9 +1,11 @@
-use crate::ethaddr::NodeId;
 use serde::{Deserialize, Serialize};
+
 use ya_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 use ya_service_bus::RpcMessage;
+
+use crate::ethaddr::NodeId;
 
 pub const BUS_ID: &str = "/public/activity";
 
@@ -43,7 +45,7 @@ pub struct GetState {
 }
 
 impl RpcMessage for GetState {
-    const ID: &'static str = "GetState";
+    const ID: &'static str = "GetActivityState";
     type Item = ActivityState;
     type Error = RpcMessageError;
 }
@@ -56,7 +58,7 @@ pub struct GetUsage {
 }
 
 impl RpcMessage for GetUsage {
-    const ID: &'static str = "GetUsage";
+    const ID: &'static str = "GetActivityUsage";
     type Item = ActivityUsage;
     type Error = RpcMessageError;
 }
@@ -117,7 +119,7 @@ pub mod local {
     }
 
     impl RpcMessage for SetState {
-        const ID: &'static str = "SetState";
+        const ID: &'static str = "SetActivityState";
         type Item = ();
         type Error = RpcMessageError;
     }
@@ -131,7 +133,7 @@ pub mod local {
     }
 
     impl RpcMessage for SetUsage {
-        const ID: &'static str = "SetUsage";
+        const ID: &'static str = "SetActivityUsage";
         type Item = ();
         type Error = RpcMessageError;
     }

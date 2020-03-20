@@ -5329,7 +5329,7 @@ dependencies = [
 
 [[package]]
 name = "ya-activity"
-version = "0.2.2"
+version = "0.2.1"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -5391,7 +5391,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.1.1"
+version = "0.1.0"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5524,7 +5524,7 @@ dependencies = [
 
 [[package]]
 name = "ya-net"
-version = "0.1.2"
+version = "0.1.1"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -5716,7 +5716,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-sb-proto",
  "ya-sb-util",
- "ya-service-api",
+ "ya-service-api-web",
 ]
 
 [[package]]
@@ -5808,7 +5808,7 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.2.3"
+version = "0.2.2"
 dependencies = [
  "actix",
  "actix-rt",

@@ -78,4 +78,15 @@ mod tests {
             .unwrap();
         assert!(node_id.try_service("/zima/x").is_err());
     }
+
+    #[test]
+    fn ok_net_node_id() {
+        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            net_node_id(&node_id),
+            "/net/0xbabe000000000000000000000000000000000000".to_string()
+        );
+    }
 }

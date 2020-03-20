@@ -63,10 +63,9 @@ async fn main() -> Result<()> {
     );
     env_logger::init();
 
-    let local_bus_addr = *ya_service_api::constants::YAGNA_BUS_ADDR;
-    ya_sb_router::bind_router(local_bus_addr)
+    ya_sb_router::bind_gsb_router(None)
         .await
-        .context(format!("Error binding local router to {}", local_bus_addr))?;
+        .context(format!("Error binding local router"))?;
 
     std::env::set_var(ya_net::CENTRAL_ADDR_ENV_VAR, &options.hub_addr);
     ya_net::bind_remote(&options.my_id())

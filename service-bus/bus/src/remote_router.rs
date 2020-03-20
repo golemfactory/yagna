@@ -1,11 +1,11 @@
-use crate::connection::{self, ConnectionRef, LocalRouterHandler, TcpTransport};
-use crate::error::Error;
-use crate::error::Error::GsbFailure;
-use crate::{Handle, RpcRawCall, RpcRawStreamCall};
 use actix::{prelude::*, WrapFuture};
-use futures::{channel::oneshot, prelude::*, FutureExt, SinkExt, StreamExt};
-use std::collections::HashSet;
-use std::time::Duration;
+use futures::{channel::oneshot, prelude::*, SinkExt};
+use std::{collections::HashSet, time::Duration};
+
+use crate::{
+    connection::{self, ConnectionRef, LocalRouterHandler, TcpTransport},
+    Error, RpcRawCall, RpcRawStreamCall,
+};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 

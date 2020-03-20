@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     Before running this example you should also start:
       cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
     and
-      cargo run --example ya_sb_router -- -l 127.0.0.1:7464
+      cargo run --example ya_sb_router -- -l tcp://127.0.0.1:7464
     "#
     );
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));

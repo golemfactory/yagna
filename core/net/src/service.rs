@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Context};
 use futures::prelude::*;
-use std::net::SocketAddr;
-use std::str::FromStr;
+use std::{net::SocketAddr, str::FromStr};
 
 use ya_core_model::{ethaddr::NodeId, identity, net};
 use ya_service_bus::{
@@ -46,7 +45,7 @@ pub async fn bind_remote(source_node_id: &NodeId) -> Result<(), NetServiceError>
             }
             // replaces  /net/<src_node_id>/test/1 --> /public/test/1
             let local_addr: String = addr.replacen(&own_net_node_id, net::PUBLIC_PREFIX, 1);
-            log::trace!(
+            log::debug!(
                 "Incoming msg from = {}, to = {}, fwd to local addr = {}, request_id: {}",
                 caller,
                 addr,

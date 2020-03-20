@@ -2,7 +2,7 @@ use structopt::StructOpt;
 
 use ya_identity::cli::{AppKeyCommand, IdentityCommand};
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::{constants::YAGNA_BUS_ADDR, CliCtx, CommandOutput};
+use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
 
 #[derive(StructOpt)]
@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     match args {
         Args::Server => {
             let db = DbExecutor::new(":memory:")?;
-            ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
+            ya_sb_router::bind_gsb_router(None).await?;
             Service::gsb(&db).await?;
 
             actix_rt::signal::ctrl_c().await?;
