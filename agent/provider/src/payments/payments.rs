@@ -538,11 +538,12 @@ impl Handler<FinalizeActivity> for Payments {
 
     fn handle(&mut self, msg: FinalizeActivity, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.debit_info.agreement_id) {
-            log::info!("Activity {} finished.", &msg.debit_info.activity_id);
+            log::info!("Activity [{}] finished.", &msg.debit_info.activity_id);
 
             let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_info);
 
-            // Temporary. Requestor should close agreement.
+            // Temporary. Requestor should close agreement, but for now we
+            // treat destroying activity as closing agreement.
             send_message(
                 ctx.address(),
                 AgreementClosed {

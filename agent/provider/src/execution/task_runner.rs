@@ -90,6 +90,14 @@ struct DestroyActivity {
 struct ExeUnitProcessFinished {
     pub activity_id: String,
     pub agreement_id: String,
+    pub status: ExeUnitExitStatus,
+}
+
+#[derive(Debug)]
+enum ExeUnitExitStatus {
+    Aborted,
+    Finished(std::process::ExitStatus),
+    Error(std::io::Error),
 }
 
 // =========================================== //
@@ -221,14 +229,22 @@ impl TaskRunner {
         // We need to discover that ExeUnit process finished.
         // We can't be sure that Requestor will send DestroyActivity.
         let self_addr = ctx.address();
-        let exeunit_finished_msg = ExeUnitProcessFinished {
-            activity_id: msg.activity_id.clone(),
-            agreement_id: msg.agreement_id.clone(),
-        };
+        let activity_id = msg.activity_id.clone();
+        let agreement_id = msg.agreement_id.clone();
 
         Arbiter::spawn(async move {
-            let status = process.await;
-            self_addr.do_send(exeunit_finished_msg);
+            let status = match process.await {
+                Err(_aborted) => ExeUnitExitStatus::Aborted,
+                Ok(result) => {
+                    match result {
+                        Ok(status) => ExeUnitExitStatus::Finished(status),
+                        Err(error) => ExeUnitExitStatus::Error(error),
+                    }
+                }
+            };
+            let msg = ExeUnitProcessFinished{activity_id, agreement_id, status};
+
+            self_addr.do_send(msg);
         });
 
         Ok(())
@@ -252,7 +268,7 @@ impl TaskRunner {
     }
 
     fn on_exeunit_exited(&mut self, msg: ExeUnitProcessFinished, _ctx: &mut Context<Self>) -> Result<()> {
-        log::info!("ExeUnit process for agreement [{}] and activity [{}] finished", msg.agreement_id, msg.agreement_id);
+        log::info!("ExeUnit process exited with status {:?}, agreement [{}] and activity [{}] finished.", msg.status, msg.agreement_id, msg.agreement_id);
 
         let msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),

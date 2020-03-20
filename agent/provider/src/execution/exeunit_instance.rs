@@ -1,9 +1,7 @@
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
-//use std::process::{Child, Command};
 use tokio::process::{Child, Command};
 use futures::future::{AbortHandle, Abortable};
-use futures::lock::Mutex;
 
 /// Working ExeUnit instance representation.
 #[derive(Debug)]
@@ -66,6 +64,6 @@ impl ExeUnitInstance {
     }
 
     pub fn take_process_handle(&mut self) -> Result<Abortable<Child>> {
-        self.process.take().ok_or(anyhow!("Already used."))
+        self.process.take().ok_or(anyhow!("Process handle already taken."))
     }
 }
