@@ -10,10 +10,10 @@ TODO: place crate dependency diagram here?
 
 | Setting | CLI Option | Environment variable | Default | Description |
 |---------|------------|----------------------|---------|-------------|
-| Data folder | -d, --datadir <data-dir> | YAGNA_DATADIR | platform specific | The folder in which the Daemon's SQL storage file is to be located | 
-| Host URL | -a, --api-url <api-url> | YAGNA_API_URL | http://127.0.0.1:7465 | |
-| GSB URL | -g, --gsb-url <tcp:://url> | GSB_URL | 7464 | Local TCP port number, on which the Daemon's GSB is published. |
-| Net Mk1 hub addr | --net-addr <host_port> | CENTRAL_NET_ADDR | 34.244.4.185:7464 | Centralized (Mk1 phase) Yagna network server address |
+| Data folder | `-d, --datadir <path>` | `YAGNA_DATADIR` | platform specific (see `--help`) | The folder in which the Daemon's SQL storage file is to be located | 
+| REST API URL | `-a, --api-url <url>` | `YAGNA_API_URL` | `http://127.0.0.1:7465` | Yagna REST API endpoints base URL |
+| GSB URL | `-g, --gsb-url <url>` | `GSB_URL` | `tcp://127.0.0.1:7464` | Service Bus URL |
+| Net Mk1 hub addr | N/A | `CENTRAL_NET_ADDR` | `34.244.4.185:7464` | Centralized (Mk1 phase) Yagna network server address |
 
 ## Yagna CLI
 

@@ -46,12 +46,19 @@ struct CliArgs {
         short,
         long,
         env = YAGNA_API_URL_ENV_VAR,
-        default_value = DEFAULT_YAGNA_API_URL
+        default_value = DEFAULT_YAGNA_API_URL,
+        hide_env_values = true,
     )]
     api_url: Url,
 
-    /// Centralized (Mk1 phase) Yagna network server address
-    #[structopt(short, long, env = GSB_URL_ENV_VAR, default_value = DEFAULT_GSB_URL)]
+    /// Service Bus (aka GSB) URL
+    #[structopt(
+        short,
+        long,
+        env = GSB_URL_ENV_VAR,
+        default_value = DEFAULT_GSB_URL,
+        hide_env_values = true
+    )]
     gsb_url: Url,
 
     /// Return results in JSON format
