@@ -22,7 +22,7 @@ impl TryRemoteEndpoint for NodeId {
             return Err(NetApiError::PublicPrefixNeeded(bus_addr.into()));
         }
         let exported_part = &bus_addr[net::PUBLIC_PREFIX.len()..];
-        let net_bus_addr = format!("{}/{:?}/{}", net::SERVICE_ID, self, exported_part);
+        let net_bus_addr = format!("{}/{:?}{}", net::SERVICE_ID, self, exported_part);
         Ok(bus::service(&net_bus_addr))
     }
 }
