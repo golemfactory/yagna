@@ -135,7 +135,7 @@ impl Payments {
         }
     }
 
-    pub fn on_signed_agreement(&mut self, msg: AgreementApproved) -> Result<()> {
+    pub fn on_signed_agreement(&mut self, msg: AgreementApproved, _ctx: &mut Context<Self>) -> Result<()> {
         log::info!(
             "Payments got signed agreement [{}]. Waiting for activities creation...",
             &msg.agreement.agreement_id

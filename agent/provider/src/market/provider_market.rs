@@ -143,8 +143,8 @@ impl ProviderMarket {
         Ok(())
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Subscribed offer: {:?}")]
-    fn on_offer_subscribed(&mut self, msg: OfferSubscription) -> Result<()> {
+    #[logfn_inputs(Debug, fmt = "{}Subscribed offer: {:?} {:?}")]
+    fn on_offer_subscribed(&mut self, msg: OfferSubscription, _ctx: &mut Context<Self>) -> Result<()> {
         log::info!(
             "Subscribed offer. Subscription id [{}].",
             &msg.subscription_id
@@ -345,21 +345,21 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
+    #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
     #[logfn(Debug, fmt = "decided to: {:?}")]
-    fn on_proposal(&mut self, msg: GotProposal) -> Result<ProposalResponse> {
+    fn on_proposal(&mut self, msg: GotProposal, _ctx: &mut Context<Self>) -> Result<ProposalResponse> {
         self.negotiator
             .react_to_proposal(&msg.subscription.offer, &msg.proposal)
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
+    #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
     #[logfn(Debug, fmt = "decided to: {:?}")]
-    fn on_agreement(&mut self, msg: GotAgreement) -> Result<AgreementResponse> {
+    fn on_agreement(&mut self, msg: GotAgreement, _ctx: &mut Context<Self>) -> Result<AgreementResponse> {
         self.negotiator.react_to_agreement(&msg.agreement)
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Got {:?}")]
-    fn on_agreement_approved(&mut self, msg: AgreementApproved) -> Result<()> {
+    #[logfn_inputs(Debug, fmt = "{}Got {:?} {:?}")]
+    fn on_agreement_approved(&mut self, msg: AgreementApproved, _ctx: &mut Context<Self>) -> Result<()> {
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(AgreementApproved {
             agreement: msg.agreement,
@@ -370,7 +370,7 @@ impl ProviderMarket {
     // Market internals - event subscription
     // =========================================== //
 
-    pub fn on_subscribe(&mut self, msg: Subscribe<AgreementApproved>) -> Result<()> {
+    pub fn on_subscribe(&mut self, msg: Subscribe<AgreementApproved>, _ctx: &mut Context<Self>) -> Result<()> {
         self.agreement_signed_signal.on_subscribe(msg);
         Ok(())
     }

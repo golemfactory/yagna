@@ -1,15 +1,19 @@
 use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
-//TODO: use tokio::process::{Child, Command};
+//use std::process::{Child, Command};
+use tokio::process::{Child, Command};
+use futures::future::{AbortHandle, Abortable};
+use futures::lock::Mutex;
 
 /// Working ExeUnit instance representation.
 #[derive(Debug)]
 pub struct ExeUnitInstance {
     name: String,
-    process: Child,
     #[allow(dead_code)]
     working_dir: PathBuf,
+
+    abort_handle: AbortHandle,
+    process: Option<Abortable<Child>>,
 }
 
 impl ExeUnitInstance {
@@ -24,6 +28,7 @@ impl ExeUnitInstance {
         let child = Command::new("echo")
             .args(args)
             .current_dir(working_dir)
+            .kill_on_drop(true)
             .spawn() // FIXME -- this is not returning
             .map_err(|error| {
                 anyhow!(
@@ -33,9 +38,13 @@ impl ExeUnitInstance {
             })?;
         log::info!("Exeunit process spawned, pid: {}", child.id());
 
+        let (abort_handle, reg) = AbortHandle::new_pair();
+        let process = Abortable::new(child, reg);
+
         let instance = ExeUnitInstance {
             name: name.to_string(),
-            process: child,
+            process: Some(process),
+            abort_handle,
             working_dir: working_dir.to_path_buf(),
         };
         log::info!(
@@ -47,10 +56,16 @@ impl ExeUnitInstance {
         Ok(instance)
     }
 
-    pub fn kill(&mut self) {
+    pub fn kill(&self) {
         log::info!("Killing ExeUnit [{}]...", &self.name);
-        if let Err(_error) = self.process.kill() {
-            log::info!("Process wasn't running.");
-        }
+
+        // It requires kill_on_drop(true) to really kill process.
+        // We don't call kill explicit, but process handle will be dropped
+        // and so all references to this process.
+        self.abort_handle.abort();
+    }
+
+    pub fn take_process_handle(&mut self) -> Result<Abortable<Child>> {
+        self.process.take().ok_or(anyhow!("Already used."))
     }
 }

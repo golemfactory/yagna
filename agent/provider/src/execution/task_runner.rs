@@ -49,7 +49,7 @@ pub struct ActivityCreated {
     pub activity_id: String,
 }
 
-/// Signal emitted when TaskRunner destroys activity.
+/// Signal emitted when TaskRunner destroys activity and ExeUnit process exited.
 /// It can happen in several situations:
 /// - Requestor sends terminate command to ExeUnit
 /// - Requestor sends DestroyActivity event
@@ -77,6 +77,17 @@ struct CreateActivity {
 #[derive(Message, Debug)]
 #[rtype(result = "Result<()>")]
 struct DestroyActivity {
+    pub activity_id: String,
+    pub agreement_id: String,
+}
+
+/// Called when process exited. There are 3 reasons for process to exit:
+/// - We got DestroyActivity event and killed process.
+/// - Requestor sent Terminate command to ExeUnit.
+/// - ExeUnit crashed.
+#[derive(Message, Debug)]
+#[rtype(result = "Result<()>")]
+struct ExeUnitProcessFinished {
     pub activity_id: String,
     pub agreement_id: String,
 }
@@ -117,9 +128,9 @@ impl TaskRunner {
         }
     }
 
-    #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?}")]
+    #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?} {:?}")]
     #[logfn(ok = "INFO", err = "ERROR", fmt = "ExeUnits initialized: {:?}")]
-    pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits) -> Result<()> {
+    pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits, _ctx: &mut Context<Self>) -> Result<()> {
         self.registry.register_exeunits_from_file(&msg.file)
     }
 
@@ -185,67 +196,89 @@ impl TaskRunner {
     // TaskRunner internals - activity reactions
     // =========================================== //
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
+    #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
     #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity created: {:?}")]
-    fn on_create_activity(&mut self, msg: CreateActivity) -> Result<()> {
+    fn on_create_activity(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Result<()> {
         if !self.active_agreements.contains(&msg.agreement_id) {
             bail!("Can't create activity for not my agreement [{:?}].", msg);
         }
 
         // TODO: Get ExeUnit name from agreement.
         let exeunit_name = "wasmtime";
-        match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
-            Ok(task) => {
-                self.tasks.push(task);
-                let _ = self.activity_created.send_signal(ActivityCreated {
-                    agreement_id: msg.agreement_id.clone(),
-                    activity_id: msg.activity_id.clone(),
-                });
-                Ok(())
-            }
+        let mut task = match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
+            Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
-        }
-    }
+        };
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity destroyed: {:?}")]
-    fn on_destroy_activity(&mut self, msg: DestroyActivity) -> Result<()> {
-        match self.tasks.iter().position(|task| {
-            task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
-        }) {
-            None => bail!("Can't destroy not existing activity [{:?}]", msg),
-            Some(task_position) => {
-                // Remove task from list and destroy everything related with it.
-                let task = self.tasks.swap_remove(task_position);
-                TaskRunner::destroy_task(task);
+        let process = task.exeunit.take_process_handle()?;
+        self.tasks.push(task);
 
-                let msg = ActivityDestroyed {
-                    agreement_id: msg.agreement_id.to_string(),
-                    activity_id: msg.activity_id.clone(),
-                };
-                let _ = self.activity_destroyed.send_signal(msg.clone());
+        let _ = self.activity_created.send_signal(ActivityCreated {
+            agreement_id: msg.agreement_id.clone(),
+            activity_id: msg.activity_id.clone(),
+        });
 
-                // TODO: remove this
-                let client = self.api.clone();
-                Arbiter::spawn(async move {
-                    log::debug!("changing activity state to: Terminated");
-                    if let Err(e) = client
-                        .set_activity_state(
-                            &msg.activity_id,
-                            &ActivityState::from(StatePair::from(State::Terminated)),
-                        )
-                        .await
-                    {
-                        log::error!("Setting state for activity [{:?}], error: {}", msg, e);
-                    }
-                });
-            }
-        }
+        // We need to discover that ExeUnit process finished.
+        // We can't be sure that Requestor will send DestroyActivity.
+        let self_addr = ctx.address();
+        let exeunit_finished_msg = ExeUnitProcessFinished {
+            activity_id: msg.activity_id.clone(),
+            agreement_id: msg.agreement_id.clone(),
+        };
+
+        Arbiter::spawn(async move {
+            let status = process.await;
+            self_addr.do_send(exeunit_finished_msg);
+        });
+
         Ok(())
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Got {:?}")]
-    pub fn on_agreement_approved(&mut self, msg: AgreementApproved) -> Result<()> {
+    #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
+    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity destroyed: {:?}")]
+    fn on_destroy_activity(&mut self, msg: DestroyActivity, _ctx: &mut Context<Self>) -> Result<()> {
+        let task_position = match self.tasks.iter().position(|task| {
+            task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
+        }) {
+            None => bail!("Can't destroy not existing activity [{:?}]", msg),
+            Some(task_position) => task_position
+        };
+
+        // Remove task from list and destroy everything related with it.
+        let task = self.tasks.swap_remove(task_position);
+        task.exeunit.kill();
+
+        Ok(())
+    }
+
+    fn on_exeunit_exited(&mut self, msg: ExeUnitProcessFinished, _ctx: &mut Context<Self>) -> Result<()> {
+        log::info!("ExeUnit process for agreement [{}] and activity [{}] finished", msg.agreement_id, msg.agreement_id);
+
+        let msg = ActivityDestroyed {
+            agreement_id: msg.agreement_id.to_string(),
+            activity_id: msg.activity_id.clone(),
+        };
+        let _ = self.activity_destroyed.send_signal(msg.clone());
+
+        // TODO: remove this
+        let client = self.api.clone();
+        Arbiter::spawn(async move {
+            log::debug!("changing activity state to: Terminated");
+            if let Err(e) = client
+                .set_activity_state(
+                    &msg.activity_id,
+                    &ActivityState::from(StatePair::from(State::Terminated)),
+                )
+                .await
+            {
+                log::error!("Setting state for activity [{:?}], error: {}", msg, e);
+            }
+        });
+        Ok(())
+    }
+
+    #[logfn_inputs(Debug, fmt = "{}Got {:?} {:?}")]
+    pub fn on_agreement_approved(&mut self, msg: AgreementApproved, _ctx: &mut Context<Self>) -> Result<()> {
         // Agreement waits for first create activity.
         // FIXME: clean-up agreements upon TTL or maybe payments
         self.active_agreements.insert(msg.agreement.agreement_id);
@@ -275,20 +308,14 @@ impl TaskRunner {
         Ok(Task::new(exeunit_instance, agreement_id, activity_id))
     }
 
-    #[logfn_inputs(Info, fmt = "Destroying task: {:?}")]
-    #[logfn(Debug, fmt = "Task destroyed: {:?}")]
-    fn destroy_task(mut task: Task) {
-        // Here we could cleanup resources, directories and everything.
-        task.exeunit.kill();
-    }
-
-    pub fn on_subscribe_activity_created(&mut self, msg: Subscribe<ActivityCreated>) -> Result<()> {
+    pub fn on_subscribe_activity_created(&mut self, msg: Subscribe<ActivityCreated>, _ctx: &mut Context<Self>) -> Result<()> {
         Ok(self.activity_created.on_subscribe(msg))
     }
 
     pub fn on_subscribe_activity_destroyed(
         &mut self,
         msg: Subscribe<ActivityDestroyed>,
+        _ctx: &mut Context<Self>,
     ) -> Result<()> {
         Ok(self.activity_destroyed.on_subscribe(msg))
     }
@@ -306,6 +333,7 @@ forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
+forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 
 forward_actix_handler!(
     TaskRunner,
@@ -352,3 +380,4 @@ impl DestroyActivity {
         }
     }
 }
+

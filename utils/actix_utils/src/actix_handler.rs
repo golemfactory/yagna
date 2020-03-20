@@ -29,9 +29,9 @@ macro_rules! forward_actix_handler {
             fn handle(
                 &mut self,
                 msg: $MessageType,
-                _ctx: &mut <Self as Actor>::Context,
+                ctx: &mut <Self as Actor>::Context,
             ) -> Self::Result {
-                ActorResponse::reply(self.$ForwardFun(msg))
+                ActorResponse::reply(self.$ForwardFun(msg, ctx))
             }
         }
     };

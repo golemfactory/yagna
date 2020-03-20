@@ -1,3 +1,6 @@
+use anyhow::Result;
+use std::process::ExitStatus;
+
 use super::exeunit_instance::ExeUnitInstance;
 
 pub struct Task {
