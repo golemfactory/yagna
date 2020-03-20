@@ -1,10 +1,12 @@
 use anyhow::{anyhow, Result};
+use derive_more::Display;
 use std::path::{Path, PathBuf};
 use tokio::process::{Child, Command};
 use futures::future::{AbortHandle, Abortable};
 
 /// Working ExeUnit instance representation.
-#[derive(Debug)]
+#[derive(Display)]
+#[display(fmt = "ExeUnit: name [{}]", name)]
 pub struct ExeUnitInstance {
     name: String,
     #[allow(dead_code)]

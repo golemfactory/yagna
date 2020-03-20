@@ -3606,9 +3606,9 @@ checksum = "ef703b7cb59335eae2eb93ceb664c0eb7ea6bf567079d843e09420219668e072"
 
 [[package]]
 name = "schannel"
-version = "0.1.17"
+version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "507a9e6e8ffe0a4e0ebb9a10293e62fdf7657c06f1b8bb07a8fcf697d2abf295"
+checksum = "039c25b130bd8c1321ee2d7de7fde2659fa9c2744e4bb29711cfc852ea53cd19"
 dependencies = [
  "lazy_static",
  "winapi 0.3.8",
@@ -5634,6 +5634,7 @@ dependencies = [
  "anyhow",
  "bigdecimal",
  "chrono",
+ "derive_more 0.99.3",
  "dotenv 0.15.0",
  "env_logger 0.7.1",
  "futures 0.3.4",

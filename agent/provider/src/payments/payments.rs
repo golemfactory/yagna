@@ -93,7 +93,7 @@ enum ActivityPayment {
 struct AgreementPayment {
     agreement_id: String,
     update_interval: Duration,
-    payment_model: Arc<Box<dyn PaymentModel>>,
+    payment_model: Arc<dyn PaymentModel>,
     activities: HashMap<String, ActivityPayment>,
 }
 
@@ -192,7 +192,7 @@ impl Payments {
 }
 
 async fn compute_cost(
-    payment_model: Arc<Box<dyn PaymentModel>>,
+    payment_model: Arc<dyn PaymentModel>,
     provider_context: Arc<ProviderCtx>,
     activity_id: String,
 ) -> Result<CostInfo> {
@@ -220,7 +220,7 @@ async fn compute_cost(
 }
 
 async fn send_debit_note(
-    payment_model: Arc<Box<dyn PaymentModel>>,
+    payment_model: Arc<dyn PaymentModel>,
     provider_context: Arc<ProviderCtx>,
     invoice_info: InvoiceInfo,
     cost_info: CostInfo,
@@ -280,7 +280,7 @@ async fn send_debit_note(
 }
 
 async fn send_invoice(
-    payment_model: Arc<Box<dyn PaymentModel>>,
+    payment_model: Arc<dyn PaymentModel>,
     provider_context: Arc<ProviderCtx>,
     invoice_info: InvoiceInfo,
     cost_info: CostInfo,

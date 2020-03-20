@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
+use derive_more::Display;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashSet;
 use std::env;
@@ -85,7 +86,7 @@ struct DestroyActivity {
 /// - We got DestroyActivity event and killed process.
 /// - Requestor sent Terminate command to ExeUnit.
 /// - ExeUnit crashed.
-#[derive(Message, Debug)]
+#[derive(Message)]
 #[rtype(result = "Result<()>")]
 struct ExeUnitProcessFinished {
     pub activity_id: String,
@@ -93,10 +94,13 @@ struct ExeUnitProcessFinished {
     pub status: ExeUnitExitStatus,
 }
 
-#[derive(Debug)]
+#[derive(Display)]
 enum ExeUnitExitStatus {
+    #[display(fmt = "Aborted")]
     Aborted,
+    #[display(fmt = "Finished - {}", _0)]
     Finished(std::process::ExitStatus),
+    #[display(fmt = "Error - {}", _0)]
     Error(std::io::Error),
 }
 
@@ -104,6 +108,9 @@ enum ExeUnitExitStatus {
 // TaskRunner declaration
 // =========================================== //
 
+// Outputing empty string for logfn macro purposes
+#[derive(Display)]
+#[display(fmt = "")]
 pub struct TaskRunner {
     api: Arc<ActivityProviderApi>,
     registry: ExeUnitsRegistry,
@@ -117,12 +124,6 @@ pub struct TaskRunner {
     pub activity_destroyed: SignalSlot<ActivityDestroyed>,
 }
 
-// outputing empty string for logfn macro purposes
-impl std::fmt::Display for TaskRunner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "")
-    }
-}
 
 impl TaskRunner {
     pub fn new(client: ActivityProviderApi) -> TaskRunner {
@@ -268,7 +269,7 @@ impl TaskRunner {
     }
 
     fn on_exeunit_exited(&mut self, msg: ExeUnitProcessFinished, _ctx: &mut Context<Self>) -> Result<()> {
-        log::info!("ExeUnit process exited with status {:?}, agreement [{}] and activity [{}] finished.", msg.status, msg.agreement_id, msg.agreement_id);
+        log::info!("ExeUnit process exited with status {}, agreement [{}], activity [{}].", msg.status, msg.agreement_id, msg.agreement_id);
 
         let msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
@@ -279,7 +280,7 @@ impl TaskRunner {
         // TODO: remove this
         let client = self.api.clone();
         Arbiter::spawn(async move {
-            log::debug!("changing activity state to: Terminated");
+            log::debug!("Changing activity state to: Terminated");
             if let Err(e) = client
                 .set_activity_state(
                     &msg.activity_id,
@@ -301,8 +302,8 @@ impl TaskRunner {
         Ok(())
     }
 
-    #[logfn_inputs(Info, fmt = "{}Creating task: {}, act id: {}, agrmnt id: {}")]
-    #[logfn(Debug, fmt = "Task created: {:?}")]
+    #[logfn_inputs(Info, fmt = "{}Creating task: {}, activity id: {}, agreement id: {}")]
+    #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
         exeunit_name: &str,

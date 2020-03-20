@@ -1,6 +1,5 @@
 use actix::prelude::*;
 use anyhow::{Result, anyhow};
-use crate::actix_handler::ResultTypeGetter;
 
 /// Subscribe to process signals.
 #[derive(Message)]
