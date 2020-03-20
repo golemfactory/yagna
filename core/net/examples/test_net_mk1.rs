@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let local_bus_addr = *ya_service_api::constants::YAGNA_BUS_ADDR;
-    ya_sb_router::bind_router(local_bus_addr)
+    ya_sb_router::bind_tcp_router(local_bus_addr)
         .await
         .context(format!("Error binding local router to {}", local_bus_addr))?;
 
