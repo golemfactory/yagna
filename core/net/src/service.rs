@@ -13,7 +13,9 @@ pub const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
 pub fn central_net_addr() -> std::io::Result<SocketAddr> {
     Ok(std::env::var(CENTRAL_ADDR_ENV_VAR)
         .unwrap_or(DEFAULT_CENTRAL_ADDR.into())
-        .to_socket_addrs()?.next().expect("central net hub addr needed"))
+        .to_socket_addrs()?
+        .next()
+        .expect("central net hub addr needed"))
 }
 
 /// Initialize net module on a hub.
