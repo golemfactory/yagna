@@ -117,13 +117,12 @@ pub fn gsb_addr(gsb_url: Option<Url>) -> SocketAddr {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use std::net::{IpAddr, Ipv4Addr};
 
     use super::*;
 
     #[test]
-    #[serial]
+    #[serial_test::serial]
     pub fn check_default_gsb_url() {
         std::env::remove_var(GSB_URL_ENV_VAR);
         let addr = gsb_addr(None);
@@ -164,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial]
     pub fn check_env_var() {
         std::env::set_var(GSB_URL_ENV_VAR, "tcp://10.9.8.7:2345");
         let addr = gsb_addr(None);
@@ -173,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial]
     #[should_panic(expected = "unimplemented protocol for GSB URL: http")]
     pub fn panic_env_var() {
         std::env::set_var(GSB_URL_ENV_VAR, "http://10.9.8.7:2345");
