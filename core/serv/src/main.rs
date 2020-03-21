@@ -243,5 +243,7 @@ async fn main() -> Result<()> {
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
 
+    std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
+
     args.run_command().await
 }
