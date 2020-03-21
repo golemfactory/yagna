@@ -122,6 +122,7 @@ mod tests {
 
     #[test]
     pub fn check_default_gsb_url() {
+        std::env::remove_var(GSB_URL_ENV_VAR);
         let addr = gsb_addr(None);
         assert!(addr.ip().is_loopback());
         assert_eq!(addr.port(), 7464)
@@ -165,7 +166,6 @@ mod tests {
         let addr = gsb_addr(None);
         assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(10, 9, 8, 7)));
         assert_eq!(addr.port(), 2345);
-        std::env::remove_var(GSB_URL_ENV_VAR);
     }
 
     #[test]
