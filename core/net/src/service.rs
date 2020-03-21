@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context};
 use futures::prelude::*;
-use std::{net::SocketAddr, str::FromStr};
+use std::net::{SocketAddr, ToSocketAddrs};
 
 use ya_core_model::{ethaddr::NodeId, identity, net};
 use ya_service_bus::{
@@ -10,22 +10,14 @@ use ya_service_bus::{
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_ADDR";
 pub const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
 
-#[derive(thiserror::Error, Debug)]
-pub enum NetServiceError {
-    #[error("Central net connecting error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("Central net addr parse error: {0}")]
-    AddrParseError(#[from] std::net::AddrParseError),
-}
-
-pub fn central_net_addr() -> Result<SocketAddr, <SocketAddr as FromStr>::Err> {
-    std::env::var(CENTRAL_ADDR_ENV_VAR)
+pub fn central_net_addr() -> std::io::Result<SocketAddr> {
+    Ok(std::env::var(CENTRAL_ADDR_ENV_VAR)
         .unwrap_or(DEFAULT_CENTRAL_ADDR.into())
-        .parse()
+        .to_socket_addrs()?.next().expect("central net hub addr needed"))
 }
 
 /// Initialize net module on a hub.
-pub async fn bind_remote(source_node_id: &NodeId) -> Result<(), NetServiceError> {
+pub async fn bind_remote(source_node_id: &NodeId) -> std::io::Result<()> {
     let hub_addr = central_net_addr()?;
     log::info!("connecting Central Net (Mk1) hub at: {}", hub_addr);
     let conn = connection::tcp(hub_addr).await?;
