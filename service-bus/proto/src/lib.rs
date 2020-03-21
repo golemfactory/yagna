@@ -123,7 +123,7 @@ mod tests {
     #[test]
     pub fn check_default_gsb_url() {
         let addr = gsb_addr(None);
-        assert!(addr.ip().is_loopback());
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
         assert_eq!(addr.port(), 7464)
     }
 
