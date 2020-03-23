@@ -12,7 +12,7 @@ use ya_client::{
 use chrono::Utc;
 use ya_model::activity::ExeScriptRequest;
 use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
-use ya_model::payment::{Acceptance, Allocation, EventType};
+use ya_model::payment::{Acceptance, EventType, NewAllocation};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -209,11 +209,8 @@ async fn main() -> anyhow::Result<()> {
     let my_demand = build_demand(node_name);
     //(golem.runtime.wasm.wasi.version@v=*)
 
-    let allocation = Allocation {
-        allocation_id: "".to_string(),
+    let allocation = NewAllocation {
         total_amount: 10.into(),
-        spent_amount: Default::default(),
-        remaining_amount: Default::default(),
         timeout: None,
         make_deposit: false,
     };

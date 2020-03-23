@@ -173,7 +173,7 @@ impl RequestorApi {
         self.client.get(&url).send().json().await
     }
 
-    pub async fn create_allocation(&self, allocation: &Allocation) -> Result<Allocation> {
+    pub async fn create_allocation(&self, allocation: &NewAllocation) -> Result<Allocation> {
         self.client
             .post("requestor/allocations")
             .send_json(allocation)
