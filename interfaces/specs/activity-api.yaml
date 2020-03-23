@@ -222,6 +222,11 @@ paths:
           schema:
             type: number
             format: float
+        - name: maxCount
+          in: query
+          schema:
+            type: integer
+            format: int32
       responses:
         200:
           description: Success

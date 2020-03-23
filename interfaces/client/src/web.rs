@@ -255,13 +255,14 @@ impl<'a> QueryParamsBuilder<'a> {
     }
 
     pub fn put<N: ToString, V: ToString>(mut self, name: N, value: Option<V>) -> Self {
-        let value = match value {
-            Some(v) => v.to_string(),
-            None => String::new(),
+        match value {
+            Some(v) => {
+                self.serializer
+                    .append_pair(name.to_string().as_str(), v.to_string().as_str());
+            }
+            None => (),
         };
 
-        self.serializer
-            .append_pair(name.to_string().as_str(), value.as_str());
         self
     }
 

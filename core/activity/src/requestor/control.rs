@@ -11,7 +11,7 @@ use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
+    get_activity_agreement, get_agreement, PathActivity, QueryTimeout, QueryTimeoutMaxCount,
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
@@ -134,7 +134,7 @@ async fn exec(
 async fn get_batch_results(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
-    query: web::Query<QueryTimeout>,
+    query: web::Query<QueryTimeoutMaxCount>,
     id: Identity,
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
@@ -144,6 +144,7 @@ async fn get_batch_results(
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
         timeout: query.timeout.clone(),
+        // TODO: introduce field for query.max_count
     };
 
     let results = agreement

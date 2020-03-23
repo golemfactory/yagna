@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use serde_with::rust::string_empty_as_none;
 use uuid::Uuid;
 
 use ya_core_model::market;
@@ -29,7 +30,7 @@ pub struct QueryTimeoutMaxCount {
     #[serde(rename = "timeout", default = "default_query_timeout")]
     pub timeout: Option<f32>,
     /// maximum count of events to return
-    #[serde(rename = "maxCount")]
+    #[serde(rename = "maxCount", with = "string_empty_as_none", default)]
     pub max_count: Option<u32>,
 }
 
