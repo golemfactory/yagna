@@ -25,13 +25,13 @@ pub struct QueryTimeout {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct QueryTimeoutMaxCount {
+pub struct QueryTimeoutMaxEvents {
     /// number of milliseconds to wait
     #[serde(rename = "timeout", default = "default_query_timeout")]
     pub timeout: Option<f32>,
     /// maximum count of events to return
-    #[serde(rename = "maxCount", with = "string_empty_as_none", default)]
-    pub max_count: Option<u32>,
+    #[serde(rename = "maxEvents", with = "string_empty_as_none", default)]
+    pub max_events: Option<u32>,
 }
 
 #[inline(always)]

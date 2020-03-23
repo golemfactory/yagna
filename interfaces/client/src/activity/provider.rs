@@ -43,12 +43,12 @@ impl ActivityProviderApi {
         #[allow(non_snake_case)]
         timeout: Option<i32>,
         #[allow(non_snake_case)]
-        maxCount: Option<i32>,
+        maxEvents: Option<i32>,
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
             "events",
             #[query] timeout,
-            #[query] maxCount
+            #[query] maxEvents
         );
 
         match self.client.get(&url).send().json().await {

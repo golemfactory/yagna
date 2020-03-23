@@ -192,7 +192,7 @@ async fn process_agreement(
 
     loop {
         let results = activity_api
-            .get_exec_batch_results(&act_id, &batch_id, Some(7), None)
+            .get_exec_batch_results(&act_id, &batch_id, Some(7))
             .await?;
 
         log::info!("batch results {:?}", results);

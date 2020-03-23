@@ -79,12 +79,12 @@ impl<'c> EventDao<'c> {
     pub async fn get_events(
         &self,
         identity_id: &str,
-        max_count: Option<u32>,
+        max_events: Option<u32>,
     ) -> Result<Option<Vec<Event>>> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
 
-        let limit = match max_count {
+        let limit = match max_events {
             Some(val) => min(MAX_EVENTS, val),
             None => MAX_EVENTS,
         };
@@ -123,13 +123,13 @@ impl<'c> EventDao<'c> {
     pub async fn get_events_wait(
         &self,
         identity_id: impl ToString,
-        max_count: Option<u32>,
+        max_events: Option<u32>,
     ) -> Result<Vec<Event>> {
         let duration = Duration::from_millis(750);
         let identity_id = identity_id.to_string();
 
         loop {
-            let result = self.get_events(&identity_id, max_count).await?;
+            let result = self.get_events(&identity_id, max_events).await?;
             if let Some(events) = result {
                 if events.len() > 0 {
                     return Ok(events);
