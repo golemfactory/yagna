@@ -2,14 +2,13 @@ use actix_web::{web, Responder};
 use serde::Deserialize;
 use std::str::FromStr;
 
-use ya_core_model::{
-    activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults},
-    ethaddr::NodeId,
-};
+use ya_core_model::{activity, ethaddr::NodeId};
 use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::{ExeScriptCommand, ExeScriptRequest, State};
+use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
@@ -41,16 +40,19 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id).await?;
     log::trace!("agreement: {:#?}", agreement);
 
-    let msg = CreateActivity {
+    let msg = activity::Create {
         // TODO: fix this
         provider_id: NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap()).unwrap(),
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
-
-    let activity_id = gsb_send!(id.identity, msg, &uri, query.timeout)?;
+    let activity_id = agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
     log::debug!("activity created: {}, inserting", activity_id);
     db.as_dao::<ActivityDao>()
@@ -72,14 +74,19 @@ async fn destroy_activity(
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = DestroyActivity {
+    let msg = activity::Destroy {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
-    let _ = gsb_send!(id.identity, msg, &uri, query.timeout)?;
+    agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
+
     db.as_dao::<ActivityStateDao>()
         .set(
             &path.activity_id,
@@ -108,15 +115,19 @@ async fn exec(
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
     let batch_id = generate_id();
-    let msg = Exec {
+    let msg = activity::Exec {
         activity_id: path.activity_id.clone(),
         batch_id: batch_id.clone(),
         exe_script: commands,
         timeout: query.timeout.clone(),
     };
 
-    let uri = remote_exeunit_service_id(&agreement, &path.activity_id)?;
-    gsb_send!(id.identity, msg, &uri, query.timeout)?;
+    agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
     Ok::<_, Error>(web::Json(batch_id))
 }
@@ -132,14 +143,18 @@ async fn get_batch_results(
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = GetExecBatchResults {
+    let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
         timeout: query.timeout.clone(),
     };
 
-    let uri = remote_exeunit_service_id(&agreement, &path.activity_id)?;
-    let results = gsb_send!(id.identity, msg, &uri, query.timeout)?;
+    let results = agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
     Ok::<_, Error>(web::Json(results))
 }

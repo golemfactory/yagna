@@ -34,11 +34,17 @@ impl Offer {
         }
     }
 
-    pub fn offer_id(&self) -> Result<&String, ErrorMessage> {
-        self.offer_id.as_ref().ok_or("no offer id".into())
+    pub fn offer_id(&self) -> Result<&str, ErrorMessage> {
+        self.offer_id
+            .as_ref()
+            .map(AsRef::as_ref)
+            .ok_or("no offer id".into())
     }
 
-    pub fn provider_id(&self) -> Result<&String, ErrorMessage> {
-        self.provider_id.as_ref().ok_or("no provider id".into())
+    pub fn provider_id(&self) -> Result<&str, ErrorMessage> {
+        self.provider_id
+            .as_ref()
+            .map(AsRef::as_ref)
+            .ok_or("no provider id".into())
     }
 }

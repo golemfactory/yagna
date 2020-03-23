@@ -1,6 +1,6 @@
 [package]
 name = "ya-net"
-version = "0.1.2"
+version = "0.1.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -15,6 +15,7 @@ ya-service-bus = "0.2"
 
 anyhow = "1.0"
 log = "0.4"
+thiserror = "1.0"
 
 [dependencies.futures]
 package = "futures"

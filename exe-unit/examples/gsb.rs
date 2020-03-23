@@ -5,7 +5,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::process::Command;
-use ya_core_model::activity::{Exec, SetActivityState, SetActivityUsage};
+use ya_core_model::activity::{
+    local::{SetState, SetUsage},
+    Exec,
+};
 use ya_service_bus::{actix_rpc, RpcEnvelope};
 
 const ACTIVITY_BUS_ID: &str = "activity";
@@ -39,32 +42,24 @@ impl Actor for Activity {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         let addr = ctx.address();
-        actix_rpc::bind::<SetActivityState>(&ACTIVITY_BUS_ID, addr.clone().recipient());
-        actix_rpc::bind::<SetActivityUsage>(&ACTIVITY_BUS_ID, addr.clone().recipient());
+        actix_rpc::bind::<SetState>(&ACTIVITY_BUS_ID, addr.clone().recipient());
+        actix_rpc::bind::<SetUsage>(&ACTIVITY_BUS_ID, addr.clone().recipient());
     }
 }
 
-impl Handler<RpcEnvelope<SetActivityState>> for Activity {
-    type Result = <RpcEnvelope<SetActivityState> as Message>::Result;
+impl Handler<RpcEnvelope<SetState>> for Activity {
+    type Result = <RpcEnvelope<SetState> as Message>::Result;
 
-    fn handle(
-        &mut self,
-        msg: RpcEnvelope<SetActivityState>,
-        _: &mut Self::Context,
-    ) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<SetState>, _: &mut Self::Context) -> Self::Result {
         log::info!("STATE update: {:?}", msg.into_inner());
         Ok(())
     }
 }
 
-impl Handler<RpcEnvelope<SetActivityUsage>> for Activity {
-    type Result = <RpcEnvelope<SetActivityUsage> as Message>::Result;
+impl Handler<RpcEnvelope<SetUsage>> for Activity {
+    type Result = <RpcEnvelope<SetUsage> as Message>::Result;
 
-    fn handle(
-        &mut self,
-        msg: RpcEnvelope<SetActivityUsage>,
-        _: &mut Self::Context,
-    ) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<SetUsage>, _: &mut Self::Context) -> Self::Result {
         log::info!("USAGE update: {:?}", msg.into_inner());
         Ok(())
     }
@@ -80,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     Before running this example you should also start:
       cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
     and
-      cargo run --example ya_sb_router -- -l 127.0.0.1:7464
+      cargo run --example ya_sb_router -- -l tcp://127.0.0.1:7464
     "#
     );
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
@@ -112,15 +107,12 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::delay_for(Duration::from_secs(2)).await;
 
     let _ = actix_rpc::service(ACTIVITY_ID)
-        .send(
-            Some(ACTIVITY_BUS_ID.to_owned()),
-            Exec {
-                activity_id: ACTIVITY_ID.to_owned(),
-                batch_id: String::new(),
-                exe_script,
-                timeout: None,
-            },
-        )
+        .send(Exec {
+            activity_id: ACTIVITY_ID.to_owned(),
+            batch_id: String::new(),
+            exe_script,
+            timeout: None,
+        })
         .await?;
 
     child.wait_with_output().await?;

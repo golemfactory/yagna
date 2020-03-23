@@ -59,11 +59,11 @@ impl Agreement {
         }
     }
 
-    pub fn provider_id(&self) -> Result<&String, ErrorMessage> {
+    pub fn provider_id(&self) -> Result<&str, ErrorMessage> {
         self.offer.provider_id()
     }
 
-    pub fn requestor_id(&self) -> Result<&String, ErrorMessage> {
+    pub fn requestor_id(&self) -> Result<&str, ErrorMessage> {
         self.demand.requestor_id()
     }
 }

@@ -15,7 +15,7 @@ use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE};
 use ya_core_model::payment::RpcMessageError;
 use ya_model::payment::*;
-use ya_net::RemoteEndpoint;
+use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -201,7 +201,11 @@ async fn accept_invoice(
             acceptance,
         };
         match async move {
-            issuer_id.service(PUBLIC_SERVICE).call(msg).await??;
+            issuer_id
+                .try_service(PUBLIC_SERVICE)
+                .unwrap() // FIXME
+                .call(msg)
+                .await??;
             Ok(())
         }
         .await

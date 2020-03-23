@@ -15,6 +15,7 @@ ya-market = "0.1"
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = { version = "0.1", features = ["gnt-driver"] }
 ya-persistence = "0.2"
+ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.1"

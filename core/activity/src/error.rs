@@ -1,11 +1,12 @@
-use crate::dao::DaoError;
 use actix_web::error::ResponseError;
-use thiserror::Error;
+
 use ya_core_model::activity::RpcMessageError;
 use ya_core_model::market::RpcMessageError as MarketRpcMessageError;
 use ya_model::ErrorMessage;
 
-#[derive(Error, Debug)]
+use crate::dao::DaoError;
+
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("DB connection error: {0}")]
     Db(#[from] r2d2::Error),
@@ -105,6 +106,12 @@ impl From<MarketRpcMessageError> for Error {
 
 impl From<ErrorMessage> for Error {
     fn from(err: ErrorMessage) -> Self {
+        Error::BadRequest(err.to_string())
+    }
+}
+
+impl From<ya_net::NetApiError> for Error {
+    fn from(err: ya_net::NetApiError) -> Self {
         Error::BadRequest(err.to_string())
     }
 }

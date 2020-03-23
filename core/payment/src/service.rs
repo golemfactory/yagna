@@ -199,7 +199,7 @@ mod public {
 
     async fn send_debit_note(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: SendDebitNote,
     ) -> Result<Ack, SendError> {
         let mut debit_note = msg.0;
@@ -215,7 +215,6 @@ mod public {
             }
             Ok(Some(agreement)) => agreement,
         };
-        let sender_id = sender.trim_start_matches("/net/");
         let offeror_id = agreement.offer.provider_id.unwrap(); // FIXME: provider_id shouldn't be an Option
         let issuer_id = debit_note.issuer_id.clone();
         if sender_id != offeror_id || sender_id != issuer_id {
@@ -259,7 +258,7 @@ mod public {
 
     async fn send_invoice(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: SendInvoice,
     ) -> Result<Ack, SendError> {
         let mut invoice = msg.0;
@@ -276,7 +275,6 @@ mod public {
             }
             Ok(Some(agreement)) => agreement,
         };
-        let sender_id = sender.trim_start_matches("/net/");
         let offeror_id = agreement.offer.provider_id.unwrap(); // FIXME: provider_id shouldn't be an Option
         let issuer_id = invoice.issuer_id.clone();
         if sender_id != offeror_id || sender_id != issuer_id {
@@ -306,7 +304,7 @@ mod public {
 
     async fn accept_invoice(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: AcceptInvoice,
     ) -> Result<Ack, AcceptRejectError> {
         let invoice_id = msg.invoice_id;
@@ -318,7 +316,6 @@ mod public {
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
 
-        let sender_id = sender.trim_start_matches("/net/");
         if sender_id != invoice.recipient_id {
             return Err(AcceptRejectError::Forbidden);
         }
@@ -390,11 +387,10 @@ mod public {
     async fn send_payment(
         db: DbExecutor,
         processor: PaymentProcessor,
-        sender: String,
+        sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
         let payment = msg.0;
-        let sender_id = sender.trim_start_matches("/net/");
         if sender_id != payment.payer_id {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }

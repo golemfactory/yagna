@@ -7,10 +7,9 @@ use structopt::StructOpt;
 
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR, YAGNA_HTTP_ADDR_STR};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
-use ya_service_api_web::middleware::auth;
+use ya_service_api_web::{middleware::auth, rest_api_addr, rest_api_url};
 use ya_service_bus::RpcEndpoint;
 
 #[services(DbExecutor)]
@@ -21,7 +20,7 @@ enum Service {
 
 async fn server() -> anyhow::Result<()> {
     let db = DbExecutor::new(":memory:")?;
-    ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
+    ya_sb_router::bind_gsb_router(None).await?;
     Service::gsb(&db).await?;
 
     HttpServer::new(move || {
@@ -33,7 +32,7 @@ async fn server() -> anyhow::Result<()> {
                 HttpResponse::Ok().body(body)
             })))
     })
-    .bind(*YAGNA_HTTP_ADDR)?
+    .bind(rest_api_addr())?
     .run()
     .await?;
 
@@ -92,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ClientCommand::Request { key } => {
                     let mut resp = Client::default()
-                        .get(format!("http://{}", *YAGNA_HTTP_ADDR_STR))
+                        .get(rest_api_url())
                         .header(header::AUTHORIZATION, key)
                         .send()
                         .map_err(map_err)

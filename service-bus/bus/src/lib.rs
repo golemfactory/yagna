@@ -1,29 +1,19 @@
-#![allow(unused_imports)]
-#![allow(dead_code)]
 use actix::Message;
 use futures::prelude::Stream;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-use std::future::Future;
+use std::{fmt::Debug, future::Future};
 
 pub mod actix_rpc;
 pub mod connection;
 pub mod error;
 mod local_router;
 mod remote_router;
+mod serialization;
+pub mod timeout;
 pub mod typed;
 pub mod untyped;
 
 pub use error::Error;
-use futures::TryStream;
-
-pub mod timeout;
-
-mod serialization;
-
-// TODO: replace with dedicated endpoint/service descriptor with enum for visibility
-pub const PUBLIC_PREFIX: &str = "/public";
-pub const PRIVATE_PREFIX: &str = "/private";
 
 pub trait RpcMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
     const ID: &'static str;

@@ -26,14 +26,10 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     }
 }
 
-impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
-    type Result = <RpcEnvelope<GetActivityState> as Message>::Result;
+impl<R: Runtime> Handler<RpcEnvelope<GetState>> for ExeUnit<R> {
+    type Result = <RpcEnvelope<GetState> as Message>::Result;
 
-    fn handle(
-        &mut self,
-        msg: RpcEnvelope<GetActivityState>,
-        _: &mut Self::Context,
-    ) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<GetState>, _: &mut Self::Context) -> Self::Result {
         self.ctx.verify_activity_id(&msg.activity_id)?;
 
         Ok(ActivityState {
@@ -44,14 +40,10 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
     }
 }
 
-impl<R: Runtime> Handler<RpcEnvelope<GetActivityUsage>> for ExeUnit<R> {
+impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
     type Result = ActorResponse<Self, ActivityUsage, RpcMessageError>;
 
-    fn handle(
-        &mut self,
-        msg: RpcEnvelope<GetActivityUsage>,
-        _: &mut Self::Context,
-    ) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<GetUsage>, _: &mut Self::Context) -> Self::Result {
         if let Err(e) = self.ctx.verify_activity_id(&msg.activity_id) {
             return ActorResponse::r#async(futures::future::err(e.into()).into_actor(self));
         }

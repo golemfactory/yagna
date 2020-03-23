@@ -1,6 +1,6 @@
 [package]
 name = "ya-activity"
-version = "0.2.2"
+version = "0.2.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
