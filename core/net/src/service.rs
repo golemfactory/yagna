@@ -7,7 +7,7 @@ use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint,
 };
 
-pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_ADDR";
+pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 pub const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
 
 pub fn central_net_addr() -> std::io::Result<SocketAddr> {
