@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use anyhow::{Error, Result};
+use derive_more::Display;
 use futures::future::join_all;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -17,7 +18,6 @@ use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 
 // Temporrary
-use serde::export::Formatter;
 use ya_agent_offer_model::OfferDefinition;
 
 // =========================================== //
@@ -98,6 +98,9 @@ pub struct AgreementApproved {
 // =========================================== //
 
 /// Manages market api communication and forwards proposal to implementation of market strategy.
+// Outputing empty string for logfn macro purposes
+#[derive(Display)]
+#[display(fmt = "")]
 pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
     market_api: Arc<MarketProviderApi>,
@@ -105,13 +108,6 @@ pub struct ProviderMarket {
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<AgreementApproved>,
-}
-
-// outputing empty string for logfn macro purposes
-impl std::fmt::Display for ProviderMarket {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "")
-    }
 }
 
 impl ProviderMarket {

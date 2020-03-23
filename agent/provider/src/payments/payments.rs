@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use bigdecimal::BigDecimal;
-use chrono::Utc;
+use chrono::{Utc, DateTime};
 use log;
 use serde_json::json;
 use std::collections::HashMap;
@@ -16,9 +16,10 @@ use crate::payments::factory::PaymentModelFactory;
 use ya_client::activity::ActivityProviderApi;
 use ya_client::payment::provider::ProviderApi;
 use ya_model::market::Agreement;
-use ya_model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
+use ya_model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice, Payment};
 use ya_utils_actix::actix_handler::{send_message, ResultTypeGetter};
 use ya_utils_actix::forward_actix_handler;
+
 
 // =========================================== //
 // Internal messages
@@ -46,6 +47,21 @@ pub struct FinalizeActivity {
 #[rtype(result = "Result<()>")]
 pub struct AgreementClosed {
     pub agreement_id: String,
+}
+
+/// Message for checking if new payments were made by requestor.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+struct CheckInvoicePayments {
+    pub since: DateTime<Utc>,
+}
+
+/// Message sent when we got payment confirmation for Invoice.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+struct InvoicesPaid {
+    pub invoices: Vec<String>,
+    pub payment: Payment,
 }
 
 // =========================================== //
@@ -103,6 +119,7 @@ struct ProviderCtx {
     payment_api: Arc<ProviderApi>,
 
     credit_account: String,
+    payments_check_interval: Duration,
 }
 
 /// Computes charges for tasks execution.
@@ -110,6 +127,9 @@ struct ProviderCtx {
 pub struct Payments {
     context: Arc<ProviderCtx>,
     agreements: HashMap<String, AgreementPayment>,
+
+    invoices_to_pay: Vec<Invoice>,
+    earnings: BigDecimal,
 }
 
 impl Payments {
@@ -127,11 +147,14 @@ impl Payments {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
             credit_account: credit_address.to_string(),
+            payments_check_interval: Duration::from_secs(10),
         };
 
         Payments {
             agreements: HashMap::new(),
             context: Arc::new(provider_ctx),
+            invoices_to_pay: vec![],
+            earnings: BigDecimal::from(0.0),
         }
     }
 
@@ -142,12 +165,13 @@ impl Payments {
         );
 
         match AgreementPayment::new(&msg.agreement) {
-            Ok(activity) => {
+            Ok(agreement) => {
                 self.agreements
-                    .insert(msg.agreement.agreement_id.clone(), activity);
+                    .insert(msg.agreement.agreement_id.clone(), agreement);
                 Ok(())
             }
             Err(error) => {
+                //TODO: What should we do? Maybe terminate agreement?
                 log::error!(
                     "Failed to create payment model for agreement [{}]. Error: {}",
                     &msg.agreement.agreement_id,
@@ -390,7 +414,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 let payment_model = agreement.payment_model.clone();
                 let provider_context = self.context.clone();
                 let address = ctx.address();
-                let invoice_info = InvoiceInfo {
+                let mut invoice_info = InvoiceInfo {
                     activity_id: msg.activity_id.clone(),
                     agreement_id: msg.agreement_id.clone(),
                     last_debit_note: last_debit_note.clone(),
@@ -410,7 +434,7 @@ impl Handler<ActivityDestroyed> for Payments {
                         &cost_info.cost
                     );
 
-                    send_debit_note(
+                    let debit_note = send_debit_note(
                         payment_model,
                         provider_context,
                         invoice_info.clone(),
@@ -418,6 +442,7 @@ impl Handler<ActivityDestroyed> for Payments {
                     )
                     .await?;
 
+                    invoice_info.last_debit_note = Some(debit_note.debit_note_id);
                     let msg = FinalizeActivity {
                         cost_info,
                         debit_info: invoice_info,
@@ -489,12 +514,12 @@ impl Handler<UpdateCost> for Payments {
                         .await
                     }
                     .into_actor(self)
-                    .map(move |result, sself, ctx| {
+                    .map(move |result, myself, ctx| {
                         match result {
                             Ok(debit_note) => {
                                 // msg contains updated debit_note_id.
                                 let activity_id = debit_note.activity_id.unwrap();
-                                sself.update_debit_note(
+                                myself.update_debit_note(
                                     &debit_note.agreement_id,
                                     &activity_id,
                                     debit_note.previous_debit_note_id.clone(),
@@ -607,8 +632,77 @@ impl Handler<AgreementClosed> for Payments {
     }
 }
 
+impl Handler<CheckInvoicePayments> for Payments {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: CheckInvoicePayments, ctx: &mut Context<Self>) -> Self::Result {
+        let pay_ctx = self.context.clone();
+        let self_addr = ctx.address();
+
+        let future = async move {
+            let payments = match pay_ctx.payment_api.get_payments(Some(&msg.since)).await {
+                Ok(payments) => payments,
+                Err(error) => {
+                    log::error!("Can't query payments. Error: {}", error);
+                    vec![]
+                }
+            };
+
+            payments.into_iter()
+                .for_each(|payment| {
+                    if let Some(invoices) = payment.invoice_ids.clone() {
+                        let paid_message = InvoicesPaid{payment, invoices};
+                        self_addr.do_send(paid_message);
+                    } else {
+                        // What does it mean? Payment for debit notes? It seems that something
+                        // has gone wrong, so better warn about this.
+                        log::warn!("Payment [{}] has no invoices listed.", &payment.payment_id)
+                    }
+                });
+            Ok(())
+        };
+
+        ctx.notify_later(CheckInvoicePayments{since: Utc::now()}, self.context.payments_check_interval);
+        return ActorResponse::r#async(future.into_actor(self));
+    }
+}
+
+impl Handler<InvoicesPaid> for Payments {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: InvoicesPaid, _ctx: &mut Context<Self>) -> Self::Result {
+        log::info!("Got payment {} confirmation, details: {}.", msg.payment.payment_id, msg.payment.details);
+
+        let paid_agreements = self.invoices_to_pay
+            .iter()
+            .filter(|element| { !msg.invoices.contains(&element.invoice_id) })
+            .map(|invoice| {
+                log::info!("Invoice [{}] for agreement [{}] was paid. Amount: {}.", invoice.invoice_id, invoice.agreement_id, invoice.amount);
+                invoice.agreement_id.clone()
+            })
+            .collect::<Vec<String>>();
+
+        self.earnings += &msg.payment.amount;
+
+        log::info!("Our current earnings: {}.", self.earnings);
+
+        self.invoices_to_pay.retain(|invoice| !msg.invoices.contains(&invoice.invoice_id));
+        self.agreements.retain(|agreement_id, _| !paid_agreements.contains(agreement_id));
+
+        return ActorResponse::reply(Ok(()));
+    }
+}
+
+
+
 impl Actor for Payments {
     type Context = Context<Self>;
+
+    fn started(&mut self, context: &mut Context<Self>) {
+        // Start checking incoming payments.
+        let msg = CheckInvoicePayments{since: Utc::now()};
+        context.notify_later(msg, self.context.payments_check_interval);
+    }
 }
 
 impl AgreementPayment {
