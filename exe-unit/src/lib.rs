@@ -8,7 +8,7 @@ use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::{
     ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
 };
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage, PUBLIC_PREFIX};
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::agreement::Agreement;
 use crate::error::Error;
@@ -265,8 +265,8 @@ impl<R: Runtime> Actor for ExeUnit<R> {
         if let Some(activity_id) = &self.ctx.activity_id {
             let srv_id = format!("{}/{}", activity::EXEUNIT_BUS_ID, activity_id);
             actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetActivityState>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetActivityUsage>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
         }

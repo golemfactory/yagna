@@ -116,6 +116,12 @@ impl From<ya_net::NetApiError> for Error {
     }
 }
 
+impl From<ya_core_model::ethaddr::ParseError> for Error {
+    fn from(err: ya_core_model::ethaddr::ParseError) -> Self {
+        Error::BadRequest(err.to_string())
+    }
+}
+
 impl From<Error> for RpcMessageError {
     fn from(e: Error) -> Self {
         log::trace!("for RpcMessageError: {:?}", e);

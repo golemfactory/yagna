@@ -120,8 +120,8 @@ pub(crate) async fn authorize_agreement_executor(
 }
 
 #[inline(always)]
-pub(crate) fn authorize_caller(caller: impl ToString, authorized: String) -> Result<(), Error> {
-    match caller.to_string() == authorized {
+pub(crate) fn authorize_caller(caller: impl ToString, authorized: &str) -> Result<(), Error> {
+    match caller.to_string() == authorized.to_string() {
         true => Ok(()),
         false => Err(Error::Forbidden),
     }

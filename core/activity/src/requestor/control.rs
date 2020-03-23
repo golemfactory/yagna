@@ -16,7 +16,6 @@ use crate::common::{
 };
 use crate::dao::{ActivityDao, ActivityStateDao};
 use crate::error::Error;
-use crate::requestor::{provider_activity_service_id, remote_exeunit_service_id};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
