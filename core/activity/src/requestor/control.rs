@@ -41,8 +41,7 @@ async fn create_activity(
     log::trace!("agreement: {:#?}", agreement);
 
     let msg = activity::Create {
-        // TODO: fix this
-        provider_id: NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap()).unwrap(),
+        provider_id: NodeId::from_str(agreement.provider_id()?)?,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };

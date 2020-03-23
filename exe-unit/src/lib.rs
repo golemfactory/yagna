@@ -1,12 +1,14 @@
-pub mod agreement;
-pub mod error;
-mod handlers;
-pub mod message;
-pub mod metrics;
-pub mod runtime;
-pub mod service;
-pub mod state;
-pub mod util;
+use actix::prelude::*;
+use futures::TryFutureExt;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use ya_core_model::activity;
+use ya_model::activity::activity_state::StatePair;
+use ya_model::activity::{
+    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
+};
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage, PUBLIC_PREFIX};
 
 use crate::agreement::Agreement;
 use crate::error::Error;
@@ -16,16 +18,16 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
-use actix::prelude::*;
-use futures::TryFutureExt;
-use std::path::PathBuf;
-use std::time::Duration;
-use ya_core_model::activity;
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{
-    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
-};
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage, PUBLIC_PREFIX};
+
+pub mod agreement;
+pub mod error;
+mod handlers;
+pub mod message;
+pub mod metrics;
+pub mod runtime;
+pub mod service;
+pub mod state;
+pub mod util;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -261,12 +263,13 @@ impl<R: Runtime> Actor for ExeUnit<R> {
         let addr = ctx.address();
 
         if let Some(activity_id) = &self.ctx.activity_id {
-            let srv_id = format!("{}/{}", EXEUNIT_SERVICE_ID, activity_id);
-            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient()); // TODO:
+            let srv_id = format!("{}/{}", activity::EXEUNIT_BUS_ID, activity_id);
+            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetActivityState>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetActivityUsage>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
+        }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
             .finish()

@@ -8,7 +8,7 @@ use ya_service_bus::RpcMessage;
 use crate::ethaddr::NodeId;
 
 pub const BUS_ID: &str = "/public/activity";
-pub const EXEUNIT_SERVICE_ID: &str = "/public/exeunit"; // TODO: rename
+pub const EXEUNIT_BUS_ID: &str = "/public/exeunit";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
