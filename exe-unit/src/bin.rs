@@ -2,7 +2,7 @@ use actix::{Actor, System};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use ya_core_model::activity::Exec;
+use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
@@ -89,9 +89,9 @@ fn main() -> anyhow::Result<()> {
     exe_unit.do_send(Register(signals));
 
     if let Some(exe_script) = commands {
-        let msg = Exec {
+        let msg = activity::Exec {
             activity_id: String::new(),
-            batch_id: String::new(),
+            batch_id: "fake_batch_id".into(),
             exe_script,
             timeout: None,
         };

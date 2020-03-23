@@ -263,7 +263,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
         let addr = ctx.address();
 
         if let Some(activity_id) = &self.ctx.activity_id {
-            let srv_id = format!("{}/{}", activity::EXEUNIT_BUS_ID, activity_id);
+            let srv_id = activity::exeunit::bus_id(activity_id);
             actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());

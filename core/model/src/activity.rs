@@ -1,3 +1,7 @@
+//! Activity service bus API.
+//!
+//! Top level objects constitutes public activity API.
+//! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
 
 use ya_model::activity::{
@@ -7,9 +11,22 @@ use ya_service_bus::RpcMessage;
 
 use crate::ethaddr::NodeId;
 
+/// Public activity bus address.
+///
+/// # See also
+///  * [`local::BUS_ID`](local/constant.BUS_ID.html)
+///  * [`exeunit::bus_id`](exeunit/fn.bus_id.html)
 pub const BUS_ID: &str = "/public/activity";
-pub const EXEUNIT_BUS_ID: &str = "/public/exeunit";
 
+/// Public Exe Unit service bus API.
+pub mod exeunit {
+    /// Public exeunit bus address for given `activity_id`.
+    pub fn bus_id(activity_id: &str) -> String {
+        format!("/public/exeunit/{}", activity_id)
+    }
+}
+
+/// Create activity. Returns `activity_id`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
@@ -24,6 +41,7 @@ impl RpcMessage for Create {
     type Error = RpcMessageError;
 }
 
+/// Destroy activity.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Destroy {
@@ -38,6 +56,7 @@ impl RpcMessage for Destroy {
     type Error = RpcMessageError;
 }
 
+/// Get state of the activity.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetState {
@@ -51,6 +70,7 @@ impl RpcMessage for GetState {
     type Error = RpcMessageError;
 }
 
+/// Get the activity usage counters.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetUsage {
@@ -64,6 +84,9 @@ impl RpcMessage for GetUsage {
     type Error = RpcMessageError;
 }
 
+/// Execute a script within the activity. Returns `batch_id`.
+///
+/// Commands are executed sequentially.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Exec {
@@ -79,6 +102,10 @@ impl RpcMessage for Exec {
     type Error = RpcMessageError;
 }
 
+/// Get script execution results.
+///
+/// Returns vector of results: one for every **already executed** script command.
+/// Results are populated upon consecutive exe script commands finish.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetExecBatchResults {
@@ -93,6 +120,7 @@ impl RpcMessage for GetExecBatchResults {
     type Error = RpcMessageError;
 }
 
+/// Get currently running command and its state.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetRunningCommand {
@@ -106,11 +134,16 @@ impl RpcMessage for GetRunningCommand {
     type Error = RpcMessageError;
 }
 
+/// Local activity bus API (used by ExeUnit).
+///
+/// Should be accessible only from local service bus (not via net ie. from remote hosts).
 pub mod local {
     use super::*;
 
+    /// Local activity bus address.
     pub const BUS_ID: &str = "/local/activity";
 
+    /// Set state of the activity.
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct SetState {
@@ -125,6 +158,7 @@ pub mod local {
         type Error = RpcMessageError;
     }
 
+    /// Set usage counters for the activity.
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct SetUsage {
@@ -140,6 +174,7 @@ pub mod local {
     }
 }
 
+/// Error message for activity messages.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcMessageError {

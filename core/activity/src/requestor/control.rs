@@ -3,8 +3,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 
 use ya_core_model::{activity, ethaddr::NodeId};
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{ExeScriptCommand, ExeScriptRequest, State};
+use ya_model::activity::{activity_state::StatePair, ExeScriptCommand, ExeScriptRequest, State};
 use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -122,7 +121,7 @@ async fn exec(
 
     agreement
         .provider_id()?
-        .try_service(activity::EXEUNIT_BUS_ID)?
+        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
         .send(msg)
         .timeout(query.timeout)
         .await???;
@@ -149,7 +148,7 @@ async fn get_batch_results(
 
     let results = agreement
         .provider_id()?
-        .try_service(activity::EXEUNIT_BUS_ID)?
+        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
         .send(msg)
         .timeout(query.timeout)
         .await???;
