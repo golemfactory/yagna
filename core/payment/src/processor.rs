@@ -215,11 +215,15 @@ impl PaymentProcessor {
             return Err(PaymentError::Verification(msg).into());
         }
 
+        // Translate account ids to lower case, because recipient will be address without checksum.
         let recipient = addr_to_str(details.recipient);
-        let account_ids = invoice_dao.get_accounts_ids(invoice_ids.clone()).await?;
+        let account_ids = invoice_dao.get_accounts_ids(invoice_ids.clone()).await?
+            .iter()
+            .map(|account| account.to_lowercase())
+            .collect::<Vec<String>>();
         log::debug!("Recipient: {}, account_ids: {:?}", recipient, account_ids);
-        if account_ids != [recipient] {
-            return Err(PaymentError::Verification("Invalid account ID".to_string()).into());
+        if account_ids != [recipient.clone()] {
+            return Err(PaymentError::Verification(format!("Invalid account ID: {}", recipient)).into());
         }
 
         // TODO: Check debit notes as well
