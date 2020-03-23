@@ -1,6 +1,6 @@
 use actix_rt::Arbiter;
 use futures::{channel::mpsc, prelude::*};
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use url::Url;
 
@@ -8,8 +8,10 @@ use ya_client::{
     activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
     web::WebInterface,
 };
-//use ya_model::market::proposal::State;
-use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
+use ya_model::{
+    activity::ExeScriptRequest,
+    market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent},
+};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -24,6 +26,9 @@ struct AppSettings {
     /// Activity API URL
     #[structopt(long = "activity-url", env = ActivityRequestorControlApi::API_URL_ENV_VAR)]
     activity_url: Option<Url>,
+
+    #[structopt(long)]
+    exe_script: PathBuf,
 }
 
 impl AppSettings {
@@ -162,6 +167,7 @@ fn build_demand(node_name: &str) -> Demand {
 async fn process_agreement(
     activity_api: &ActivityRequestorControlApi,
     agreement_id: String,
+    exe_script: &PathBuf,
 ) -> Result<(), anyhow::Error> {
     log::info!("GOT new agreement = {}", agreement_id);
 
@@ -170,11 +176,40 @@ async fn process_agreement(
 
     tokio::time::delay_for(Duration::from_millis(7000)).await;
 
+    let contents = std::fs::read_to_string(&exe_script)?;
+    let commands_cnt = match serde_json::from_str(&contents)? {
+        serde_json::Value::Array(arr) => {
+            log::info!("script commands cnt: {}", arr.len());
+            arr.len()
+        }
+        _ => 0,
+    };
+
+    let batch_id = activity_api
+        .exec(ExeScriptRequest::new(contents), &act_id)
+        .await?;
+    log::info!("got batch_id={}", batch_id);
+
+    loop {
+        let results = activity_api
+            .get_exec_batch_results(&act_id, &batch_id, Some(7), Some(10))
+            .await?;
+
+        log::info!("batch results {:?}", results);
+
+        if results.len() >= commands_cnt {
+            break;
+        }
+
+        tokio::time::delay_for(Duration::from_millis(2000)).await;
+    }
+
+    tokio::time::delay_for(Duration::from_millis(7000)).await;
+
     log::info!("destroying activity = (({})); AGRRR!", act_id);
     activity_api.destroy_activity(&act_id).await?;
     log::info!("I'M DONE FOR NOW");
 
-    //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
     Ok(())
 }
 
@@ -213,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
 
     let activity_api = settings.activity_api()?;
     if let Some(id) = rx.next().await {
-        if let Err(e) = process_agreement(&activity_api, id.clone()).await {
+        if let Err(e) = process_agreement(&activity_api, id.clone(), &settings.exe_script).await {
             log::error!("processing agreement id {} error: {}", id, e);
         }
     }
