@@ -1,5 +1,23 @@
 # Provider Agent
 
+## Configuration:
+
+Provider agent can be used with .env file. Here is list of additional
+environment variables that can be set:
+* YAGNA_APPKEY - authorization token
+* CREDIT_ADDRESS - ETH address where payments will be sent
+
+### Command line parameters:
+
+
+| Parameter      | Description   
+| -------------- |------------------------------------------------|
+| app-key        | Authorization token. Overrides `YAGNA_APPKEY`
+| market-url     | Market api address
+| activity-url   | Activity api address
+| payment-url    | Payment api address
+| credit-address | Ethereum account for payments. Overrides `CREDIT_ADDRESS`
+
 ## Creating token
 
 Run yagna:
@@ -18,34 +36,38 @@ Run yagna:
 cargo run --bin yagna -- service run
 ```
 
-Run market api test bed from repository: https://github.com/stranger80/golem-client-mock
-
-```
-dotnet build
-dotnet publish
-./start_api.sh
-```
-
-Send authorization key to market api test bed:
-```
-./app-key-token send-keys
-```
-
 List keys:
 
 ```
 cargo run --bin yagna -- app-key list
 ```
 
-Copy key field as `authorization_token` parameter:
+Pass key field as `authorization_token` parameter from command line
+or add to .env file as `YAGNA_APPKEY`:
 ```
-RUST_LOG=info cargo run --bin ya-provider {authorization_token}
+cargo run --bin ya-provider --app-key {authorization_token}
+# or with .env
+cargo run --bin ya-provider
 ```
 
-You can specify which market and activity api hosts to connect to:
+### Running with mock requestor
+
+Run `ya-requestor` app to mock negotiations and activity.
+
+Note: You need to run separate yagna service with different identity,
+if you want to run requestor on the same machine. The best wait is to create
+separate directory with new .env file for Requestor.
 ```
-RUST_LOG=info cargo run --bin ya-provider {authorization_token} --market-host 127.0.0.1:5001 --activity-host 127.0.0.1:7465
-```
+# Get some ETH and GNT from faucet on testnet. This can last a little bit long!
+cargo run --bin yagna payment init -r
+
+# Check if you got creadit on your account:
+cargo run --bin yagna payment status
+
+# Run requestor:
+cargo run --bin ya-requestor
+``` 
+
 
 ## ExeUnits
 
