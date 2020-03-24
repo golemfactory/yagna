@@ -8,6 +8,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ya_core_model::activity;
+
 use super::exeunit_instance::ExeUnitInstance;
 //use ya_model::market::Agreement;
 
@@ -44,7 +46,7 @@ impl ExeUnitsRegistry {
         let mut args = exeunit_desc.args.clone();
         // TODO: pass also agreement or its part with task_package
         args.push(activity_id.into());
-        args.push(ya_core_model::activity::BUS_ID.into());
+        args.push(activity::local::BUS_ID.into());
         ExeUnitInstance::new(name, &exeunit_desc.path, &working_dir, &args)
     }
 

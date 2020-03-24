@@ -51,6 +51,7 @@ async fn get_activity_state(db: &DbExecutor, activity_id: &str) -> Result<Activi
         .ok_or(Error::NotFound.into())
 }
 
+//FIXME
 #[actix_web::get("/activity/{activity_id}/state")]
 async fn get_activity_state_web(
     db: web::Data<DbExecutor>,

@@ -173,27 +173,29 @@ mod local {
 
     /// Pass activity state (which may include error details).
     /// Called by ExeUnits.
+    ///
+    /// Security consideration: we assume activity_id as a cryptographically strong, so every1
+    /// who knows it is authorized to call this endpoint
     async fn set_activity_state_gsb(
         db: DbExecutor,
-        caller: String,
+        _caller: String,
         msg: activity::local::SetState,
     ) -> RpcMessageResult<activity::local::SetState> {
-        authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
-
-        super::super::set_activity_state(&db, &msg.activity_id, msg.state)
+        crate::provider::set_activity_state(&db, &msg.activity_id, msg.state)
             .map_err(Into::into)
             .await
     }
 
     /// Pass current activity usage (which may include error details).
     /// Called by ExeUnits.
+    ///
+    /// Security consideration: we assume activity_id as a cryptographically strong, so every1
+    /// who knows it is authorized to call this endpoint
     async fn set_activity_usage_gsb(
         db: DbExecutor,
-        caller: String,
+        _caller: String,
         msg: activity::local::SetUsage,
     ) -> RpcMessageResult<activity::local::SetUsage> {
-        authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
-
         db.as_dao::<ActivityUsageDao>()
             .set(&msg.activity_id, &msg.usage.current_usage)
             .await
