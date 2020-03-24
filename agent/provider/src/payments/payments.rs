@@ -30,30 +30,25 @@ use ya_utils_actix::forward_actix_handler;
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateCost {
-    pub invoice_info: InvoiceInfo,
+    pub invoice_info: DebitNoteInfo,
 }
 
-/// Changes activity state to Finalized and stores final cost.
+/// Changes activity state to Finalized and computes final cost.
+/// Sent by ActivityDestroyed handler after last debit note was sent to Requestor.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct FinalizeActivity {
-    pub debit_info: InvoiceInfo,
-    pub cost_info: CostInfo,
+    pub debit_info: DebitNoteInfo,
+    pub cost_summary: CostInfo,
 }
 
 /// TODO: We should get this message from external world.
-/// Computes costs for all activities and send invoice to requestor.
+///       Current code assumes, that we have only one activity per agreement.
+/// Computes costs for all activities and sends invoice to Requestor.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct AgreementClosed {
     pub agreement_id: String,
-}
-
-/// Message for checking if new payments were made by requestor.
-#[derive(Message, Clone)]
-#[rtype(result = "Result<()>")]
-struct CheckInvoicePayments {
-    pub since: DateTime<Utc>,
 }
 
 /// Checks if requestor accepted Invoice.
@@ -61,6 +56,14 @@ struct CheckInvoicePayments {
 #[rtype(result = "Result<()>")]
 struct CheckInvoiceAcceptance {
     pub invoice_id: String,
+}
+
+/// Message for checking if new payments were made by Requestor.
+/// Handler will send InvoicesPaid in response for all Payment objects.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+struct CheckInvoicePayments {
+    pub since: DateTime<Utc>,
 }
 
 /// Message sent when we got payment confirmation for Invoice.
@@ -76,7 +79,7 @@ struct InvoicesPaid {
 // =========================================== //
 
 #[derive(Clone)]
-pub struct InvoiceInfo {
+pub struct DebitNoteInfo {
     pub agreement_id: String,
     pub activity_id: String,
     pub last_debit_note: Option<String>,
@@ -128,6 +131,7 @@ struct ProviderCtx {
     credit_account: String,
     payments_check_interval: Duration,
     invoice_accept_check_interval: Duration,
+    invoice_resend_interval: Duration,
 }
 
 /// Computes charges for tasks execution.
@@ -157,6 +161,7 @@ impl Payments {
             credit_account: credit_address.to_string(),
             payments_check_interval: Duration::from_secs(10),
             invoice_accept_check_interval: Duration::from_secs(10),
+            invoice_resend_interval: Duration::from_secs(50),
         };
 
         Payments {
@@ -254,7 +259,7 @@ async fn compute_cost(
 
 async fn send_debit_note(
     provider_context: Arc<ProviderCtx>,
-    invoice_info: InvoiceInfo,
+    invoice_info: DebitNoteInfo,
     cost_info: CostInfo,
 ) -> Result<DebitNote> {
     let debit_note = NewDebitNote {
@@ -312,23 +317,23 @@ async fn send_debit_note(
 }
 
 async fn send_invoice(
-    provider_context: Arc<ProviderCtx>,
-    invoice_info: InvoiceInfo,
-    cost_info: CostInfo,
-    activities: Vec<String>,
+    provider_context: &Arc<ProviderCtx>,
+    invoice_info: &DebitNoteInfo,
+    cost_summary: &CostInfo,
+    activities: &Vec<String>,
 ) -> Result<Invoice> {
     log::info!(
         "Final cost for agreement [{}]: {}, usage {:?}.",
         &invoice_info.agreement_id,
-        &cost_info.cost,
-        &cost_info.usage
+        &cost_summary.cost,
+        &cost_summary.usage
     );
 
     let invoice = NewInvoice {
         agreement_id: invoice_info.agreement_id.clone(),
-        activity_ids: Some(activities),
-        amount: cost_info.cost,
-        usage_counter_vector: Some(json!(cost_info.usage)),
+        activity_ids: Some(activities.clone()),
+        amount: cost_summary.clone().cost,
+        usage_counter_vector: Some(json!(cost_summary.usage)),
         credit_account_id: provider_context.credit_account.clone(),
         payment_platform: None,
         payment_due_date: Utc::now(),
@@ -386,7 +391,7 @@ impl Handler<ActivityCreated> for Payments {
             // Sending UpdateCost with last_debit_note: None will start new
             // DebitNotes chain for this activity.
             let msg = UpdateCost {
-                invoice_info: InvoiceInfo {
+                invoice_info: DebitNoteInfo {
                     agreement_id: msg.agreement_id.clone(),
                     activity_id: msg.activity_id.clone(),
                     last_debit_note: None,
@@ -421,7 +426,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 let payment_model = agreement.payment_model.clone();
                 let provider_context = self.context.clone();
                 let address = ctx.address();
-                let mut invoice_info = InvoiceInfo {
+                let mut invoice_info = DebitNoteInfo {
                     activity_id: msg.activity_id.clone(),
                     agreement_id: msg.agreement_id.clone(),
                     last_debit_note: last_debit_note.clone(),
@@ -450,7 +455,7 @@ impl Handler<ActivityDestroyed> for Payments {
 
                     invoice_info.last_debit_note = Some(debit_note.debit_note_id);
                     let msg = FinalizeActivity {
-                        cost_info,
+                        cost_summary: cost_info,
                         debit_info: invoice_info,
                     };
 
@@ -536,7 +541,7 @@ impl Handler<UpdateCost> for Payments {
                                 )?;
 
                                 let msg = UpdateCost {
-                                    invoice_info: InvoiceInfo {
+                                    invoice_info: DebitNoteInfo {
                                         agreement_id: debit_note.agreement_id.clone(),
                                         activity_id,
                                         last_debit_note: debit_note.previous_debit_note_id.clone(),
@@ -575,7 +580,7 @@ impl Handler<FinalizeActivity> for Payments {
         if let Some(agreement) = self.agreements.get_mut(&msg.debit_info.agreement_id) {
             log::info!("Activity [{}] finished.", &msg.debit_info.activity_id);
 
-            let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_info);
+            let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_summary);
 
             // Temporary. Requestor should close agreement, but for now we
             // treat destroying activity as closing agreement.
@@ -611,35 +616,38 @@ impl Handler<AgreementClosed> for Payments {
             let activities = agreement.list_activities();
             let provider_context = self.context.clone();
 
-            let invoice_info = InvoiceInfo {
+            let invoice_info = DebitNoteInfo {
                 activity_id: "".to_string(),
                 agreement_id: msg.agreement_id.clone(),
                 last_debit_note: None,
             };
 
             let future = async move {
-                send_invoice(
-                    provider_context,
-                    invoice_info,
-                    cost_summary,
-                    activities,
-                ).await
-            }
-            .into_actor(self)
-            .map(|result, myself, context| {
-                match result {
-                    Err(error) => {
-                        log::error!("{}", error);
-                        //TODO: Resend invoice after some interval.
-                    },
-                    Ok(invoice) => {
-                        let msg = CheckInvoiceAcceptance{invoice_id: invoice.invoice_id.clone()};
-                        context.notify_later(msg, myself.context.invoice_accept_check_interval);
+                // Resend invoice until it will reach provider.
+                // Note: that we don't remove invoices that were issued but not sent.
+                loop {
+                    match send_invoice(
+                        &provider_context,
+                        &invoice_info,
+                        &cost_summary,
+                        &activities,
+                    ).await {
+                        Ok(invoice) => return invoice,
+                        Err(error) => {
+                            log::error!("{}", error);
+                            tokio::time::delay_for(provider_context.invoice_resend_interval).await
+                        }
                     }
                 }
+            }
+            .into_actor(self)
+            .map(|invoice, myself, context| {
+                let msg = CheckInvoiceAcceptance{invoice_id: invoice.invoice_id.clone()};
+                context.notify_later(msg, myself.context.invoice_accept_check_interval);
+                Ok(())
             });
 
-            return ActorResponse::r#async(future.map(|_, _, _| Ok(())));
+            return ActorResponse::r#async(future);
         }
 
         return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
@@ -682,7 +690,7 @@ impl Handler<CheckInvoiceAcceptance> for Payments {
                 }
             };
 
-            // Check acceptance later if state didn't change.
+            // Check invoice acceptance later, if state didn't change.
             context.notify_later(msg, myself.context.invoice_accept_check_interval);
             return Ok(());
         });
@@ -748,7 +756,7 @@ impl Handler<InvoicesPaid> for Payments {
         self.agreements.retain(|agreement_id, _| !paid_agreements.contains(agreement_id));
 
         let left_to_pay: Vec<String> = self.invoices_to_pay.iter().map(|invoice| invoice.invoice_id.clone()).collect();
-        log::info!("Invoices still to be paid: {:#?}", left_to_pay);
+        log::info!("Invoices waiting for payment: {:#?}", left_to_pay);
 
         return ActorResponse::reply(Ok(()));
     }
