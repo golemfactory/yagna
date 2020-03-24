@@ -729,11 +729,11 @@ impl Handler<InvoicesPaid> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: InvoicesPaid, _ctx: &mut Context<Self>) -> Self::Result {
-        log::info!("Got payment {} confirmation, details: {}.", msg.payment.payment_id, msg.payment.details);
+        log::info!("Got payment [{}] confirmation, details: {}", msg.payment.payment_id, msg.payment.details);
 
         let paid_agreements = self.invoices_to_pay
             .iter()
-            .filter(|element| { !msg.invoices.contains(&element.invoice_id) })
+            .filter(|element| { msg.invoices.contains(&element.invoice_id) })
             .map(|invoice| {
                 log::info!("Invoice [{}] for agreement [{}] was paid. Amount: {}.", invoice.invoice_id, invoice.agreement_id, invoice.amount);
                 invoice.agreement_id.clone()
@@ -746,6 +746,9 @@ impl Handler<InvoicesPaid> for Payments {
 
         self.invoices_to_pay.retain(|invoice| !msg.invoices.contains(&invoice.invoice_id));
         self.agreements.retain(|agreement_id, _| !paid_agreements.contains(agreement_id));
+
+        let left_to_pay: Vec<String> = self.invoices_to_pay.iter().map(|invoice| invoice.invoice_id.clone()).collect();
+        log::info!("Invoices still to be paid: {:#?}", left_to_pay);
 
         return ActorResponse::reply(Ok(()));
     }
