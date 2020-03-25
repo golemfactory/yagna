@@ -2,6 +2,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde_json;
 
+use ya_model::activity::activity_state::StatePair;
 use ya_model::activity::State;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::schema;
@@ -43,7 +44,7 @@ impl<'c> ActivityDao<'c> {
         let reason: Option<String> = None;
         let error_message: Option<String> = None;
         let vector_json: Option<String> = None;
-        let state = serde_json::to_string(&State::New).unwrap();
+        let state = serde_json::to_string(&StatePair(State::New, None)).unwrap();
         let now = Utc::now().naive_utc();
 
         let activity_id = activity_id.to_owned();
