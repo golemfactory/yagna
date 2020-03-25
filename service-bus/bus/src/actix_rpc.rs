@@ -42,6 +42,7 @@ pub struct Endpoint {
 impl Endpoint {
     pub fn send<M: RpcMessage + Serialize + DeserializeOwned + Sync + Send + Unpin>(
         &self,
+        // TODO: add caller
         msg: M,
     ) -> impl Future<Output = Result<<RpcEnvelope<M> as Message>::Result, BusError>> + Unpin + 'static
     {
@@ -51,6 +52,7 @@ impl Endpoint {
 
     pub fn call_stream<M: RpcStreamMessage>(
         &self,
+        // TODO: add caller
         msg: M,
     ) -> impl Stream<Item = Result<Result<M::Item, M::Error>, BusError>> {
         self.router

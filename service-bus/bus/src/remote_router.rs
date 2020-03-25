@@ -32,7 +32,9 @@ impl Actor for RemoteRouter {
 
 impl RemoteRouter {
     fn try_connect(&mut self, ctx: &mut <Self as Actor>::Context) {
-        let addr = ya_sb_proto::gsb_addr(None); //FIXME
+        // FIXME: this is `SystemService` and as such cannot get input being initialized
+        // FIXME: but we need to pass gsb_url from yagnad CLI
+        let addr = ya_sb_proto::gsb_addr(None);
         log::info!("trying to connect to: {}", addr);
         let connect_fut = connection::tcp(addr)
             .map_err(move |e| Error::BusConnectionFail(addr, e))
