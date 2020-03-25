@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use bigdecimal::BigDecimal;
 use serde_json::json;
 
@@ -31,21 +31,11 @@ impl PaymentModel for LinearPricing {
 
 impl LinearPricing {
     pub fn new(commercials: PaymentDescription) -> Result<LinearPricing> {
-        let coeffs_addr = "golem.com.pricing.model.linear.coeffs";
-        let usage_vec_str = commercials
-            .commercial_agreement
-            .get(coeffs_addr)
-            .ok_or(anyhow!(
-                "Can't find usage coefficients in agreement ('{}').",
-                coeffs_addr
-            ))?;
-
-        let usage: Vec<f64> = serde_json::from_str(&usage_vec_str)
-            .map_err(|error| anyhow!("Can't parse usage vector. Error: {}", error))?;
+        let usage: Vec<f64> = commercials.get_usage_coefficients()?;
 
         log::info!(
-            "Creating LinearPricing payment model. Usage coefficients vector: {}.",
-            usage_vec_str
+            "Creating LinearPricing payment model. Usage coefficients vector: {:?}.",
+            usage
         );
         Ok(LinearPricing {
             usage_coeffs: usage,
