@@ -278,6 +278,33 @@ async fn send_invoice(
     Ok(invoice)
 }
 
+async fn compute_cost_and_send_debit_note(
+    provider_context: Arc<ProviderCtx>,
+    payment_model: Arc<dyn PaymentModel>,
+    invoice_info: &DebitNoteInfo,
+) -> Result<(DebitNote, CostInfo)> {
+    let cost_info = compute_cost(
+        payment_model.clone(),
+        provider_context.activity_api.clone(),
+        invoice_info.activity_id.clone(),
+    )
+    .await?;
+
+    log::info!(
+        "Updating cost for activity [{}]: {}.",
+        &invoice_info.activity_id,
+        &cost_info.cost
+    );
+
+    let debit_note = send_debit_note(
+        provider_context,
+        invoice_info.clone(),
+        cost_info.clone(),
+    )
+    .await?;
+    Ok((debit_note, cost_info))
+}
+
 forward_actix_handler!(Payments, AgreementApproved, on_signed_agreement);
 
 impl Handler<ActivityCreated> for Payments {
@@ -321,9 +348,8 @@ impl Handler<ActivityDestroyed> for Payments {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
             agreement.activity_destroyed(&msg.activity_id).unwrap();
 
-            if let Some(ActivityPayment::Destroyed {
-                last_debit_note, ..
-            }) = agreement.activities.get(&msg.activity_id)
+            if let Some(ActivityPayment::Destroyed { last_debit_note, .. }) =
+                agreement.activities.get(&msg.activity_id)
             {
                 let payment_model = agreement.payment_model.clone();
                 let provider_context = self.context.clone();
@@ -335,25 +361,29 @@ impl Handler<ActivityDestroyed> for Payments {
                 };
 
                 let future = async move {
-                    let cost_info = compute_cost(
-                        payment_model.clone(),
-                        provider_context.activity_api.clone(),
-                        msg.activity_id.clone(),
-                    )
-                    .await?;
+                    // Computing last DebitNote can't fail, so we must repeat it until
+                    // it reaches Requestor. DebitNote itself is not important so much, but
+                    // we must ensure that we send FinalizeActivity and Invoice in consequence.
+                    let (debit_note, cost_info) = loop {
+                        match compute_cost_and_send_debit_note(
+                            provider_context.clone(),
+                            payment_model.clone(),
+                            &invoice_info).await {
+                            Ok(debit_note) => break debit_note,
+                            Err(error) => {
+                                let interval = provider_context.invoice_resend_interval;
+
+                                log::error!("{} Final debit note will be resent after {:#?}.", error, interval);
+                                tokio::time::delay_for(interval).await
+                            }
+                        }
+                    };
 
                     log::info!(
                         "Final cost for activity [{}]: {}.",
-                        &msg.activity_id,
-                        &cost_info.cost
+                        &invoice_info.activity_id,
+                        &debit_note.total_amount_due
                     );
-
-                    let debit_note = send_debit_note(
-                        provider_context,
-                        invoice_info.clone(),
-                        cost_info.clone(),
-                    )
-                    .await?;
 
                     invoice_info.last_debit_note = Some(debit_note.debit_note_id);
                     let msg = FinalizeActivity {
@@ -361,18 +391,11 @@ impl Handler<ActivityDestroyed> for Payments {
                         debit_info: invoice_info,
                     };
 
-                    address.send(msg).await??;
-                    Ok(())
+                    address.do_send(msg);
                 }
-                .into_actor(self)
-                .map(|result: Result<(), anyhow::Error>, _, _| {
-                    if let Err(error) = result {
-                        log::error!("{}", error);
-                    }
-                    Ok(())
-                });
+                .into_actor(self);
 
-                return ActorResponse::r#async(future);
+                return ActorResponse::r#async(future.map(|_,_,_| { Ok(()) }));
             } else {
                 log::error!("Shouldn't happen.");
             }
