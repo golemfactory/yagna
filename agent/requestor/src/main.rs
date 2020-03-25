@@ -10,7 +10,6 @@ use ya_client::{
 };
 //use ya_model::market::proposal::State;
 use chrono::Utc;
-use ya_model::activity::ExeScriptRequest;
 use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
 use ya_model::payment::{Acceptance, EventType, NewAllocation};
 
@@ -216,6 +215,8 @@ async fn main() -> anyhow::Result<()> {
     };
     let new_allocation = payment_api.create_allocation(&allocation).await.unwrap();
 
+    log::info!("Allocated {} GNT.", &allocation.total_amount);
+
     let market_api = settings.market_api()?;
     let subscription_id = market_api.subscribe(&my_demand).await?;
 
@@ -261,8 +262,6 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let activity_api = settings.activity_api()?;
-    let (mut pay_sender, mut pay_receiver) = mpsc::channel::<String>(1);
-
     Arbiter::spawn(async move {
         while let Some(id) = rx.next().await {
             if let Err(e) = process_agreement(&activity_api, id.clone()).await {
@@ -270,21 +269,19 @@ async fn main() -> anyhow::Result<()> {
             }
             let terminate_result = market_api.terminate_agreement(&id).await;
             log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
-
-            pay_sender.send(id).await.unwrap();
         }
     });
 
     Arbiter::spawn(async move {
         let mut ts = started_at;
 
-        while let Some(_agreement_id) = pay_receiver.next().await {
+        loop {
             let next_ts = Utc::now();
 
             let events = payment_api.get_invoice_events(Some(&ts)).await.unwrap();
             // TODO: timeout on get_invoice_events does not work
             if events.is_empty() {
-                tokio::time::delay_for(Duration::from_millis(5000)).await;
+                tokio::time::delay_for(Duration::from_secs(10)).await;
             }
 
             for event in events {
