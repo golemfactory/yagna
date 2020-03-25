@@ -1,4 +1,28 @@
 table! {
+    pay_activity (id) {
+        id -> Text,
+        agreement_id -> Text,
+        total_amount_due -> Text,
+        total_amount_accepted -> Text,
+        total_amount_paid -> Text,
+    }
+}
+
+table! {
+    pay_agreement (id) {
+        id -> Text,
+        provider_id -> Text,
+        requestor_id -> Text,
+        payee_addr -> Text,
+        payer_addr -> Text,
+        payment_platform -> Nullable<Text>,
+        total_amount_due -> Text,
+        total_amount_accepted -> Text,
+        total_amount_paid -> Text,
+    }
+}
+
+table! {
     pay_allocation (id) {
         id -> Text,
         total_amount -> Text,
@@ -13,14 +37,11 @@ table! {
         issuer_id -> Text,
         recipient_id -> Text,
         previous_debit_note_id -> Nullable<Text>,
-        agreement_id -> Text,
-        activity_id -> Nullable<Text>,
+        activity_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
         total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
-        credit_account_id -> Text,
-        payment_platform -> Nullable<Text>,
         payment_due_date -> Nullable<Timestamp>,
     }
 }
@@ -39,14 +60,10 @@ table! {
         id -> Text,
         issuer_id -> Text,
         recipient_id -> Text,
-        last_debit_note_id -> Nullable<Text>,
         agreement_id -> Text,
         status -> Text,
         timestamp -> Timestamp,
         amount -> Text,
-        usage_counter_vector -> Nullable<Binary>,
-        credit_account_id -> Text,
-        payment_platform -> Nullable<Text>,
         payment_due_date -> Timestamp,
     }
 }
@@ -105,13 +122,16 @@ table! {
     }
 }
 
+joinable!(pay_activity -> pay_agreement (agreement_id));
+joinable!(pay_debit_note -> pay_activity (activity_id));
 joinable!(pay_debit_note -> pay_invoice_status (status));
 joinable!(pay_debit_note_event -> pay_debit_note (debit_note_id));
 joinable!(pay_debit_note_event -> pay_invoice_event_type (event_type));
-joinable!(pay_invoice -> pay_debit_note (last_debit_note_id));
+joinable!(pay_invoice -> pay_agreement (agreement_id));
 joinable!(pay_invoice -> pay_invoice_status (status));
 joinable!(pay_invoice_event -> pay_invoice (invoice_id));
 joinable!(pay_invoice_event -> pay_invoice_event_type (event_type));
+joinable!(pay_invoice_x_activity -> pay_activity (activity_id));
 joinable!(pay_invoice_x_activity -> pay_invoice (invoice_id));
 joinable!(pay_payment -> pay_allocation (allocation_id));
 joinable!(pay_payment_x_debit_note -> pay_debit_note (debit_note_id));
@@ -120,6 +140,8 @@ joinable!(pay_payment_x_invoice -> pay_invoice (invoice_id));
 joinable!(pay_payment_x_invoice -> pay_payment (payment_id));
 
 allow_tables_to_appear_in_same_query!(
+    pay_activity,
+    pay_agreement,
     pay_allocation,
     pay_debit_note,
     pay_debit_note_event,
