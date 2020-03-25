@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ya_core_model::market;
+use ya_core_model::{ethaddr::NodeId, market};
 use ya_model::market::Agreement;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
@@ -52,23 +52,21 @@ pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreeme
         .await??)
 }
 
+async fn get_agreement_id(db: &DbExecutor, activity_id: &str) -> Result<String, Error> {
+    db.as_dao::<ActivityDao>()
+        .get_agreement_id(activity_id)
+        .await?
+        .ok_or(Error::NotFound(format!(
+            "agreement for activity id: {}",
+            activity_id
+        )))
+}
+
 pub(crate) async fn get_activity_agreement(
     db: &DbExecutor,
     activity_id: &str,
-    _timeout: Option<f32>,
 ) -> Result<Agreement, Error> {
-    let agreement_id = db
-        .as_dao::<ActivityDao>()
-        .get_agreement_id(activity_id)
-        .await
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
-
-    let agreement = bus::service(market::BUS_ID)
-        .send(market::GetAgreement { agreement_id })
-        .await??;
-
-    Ok(agreement)
+    get_agreement(get_agreement_id(db, activity_id).await?).await
 }
 
 pub(crate) async fn authorize_activity_initiator(
@@ -76,13 +74,7 @@ pub(crate) async fn authorize_activity_initiator(
     caller: impl ToString,
     activity_id: &str,
 ) -> Result<(), Error> {
-    let agreement_id = db
-        .as_dao::<ActivityDao>()
-        .get_agreement_id(&activity_id)
-        .await
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
-    authorize_agreement_initiator(caller, &agreement_id).await
+    authorize_agreement_initiator(caller, &get_agreement_id(db, activity_id).await?).await
 }
 
 pub(crate) async fn authorize_activity_executor(
@@ -90,13 +82,7 @@ pub(crate) async fn authorize_activity_executor(
     caller: impl ToString,
     activity_id: &str,
 ) -> Result<(), Error> {
-    let agreement_id = db
-        .as_dao::<ActivityDao>()
-        .get_agreement_id(&activity_id)
-        .await
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
-    authorize_agreement_executor(caller, &agreement_id).await
+    authorize_agreement_executor(caller, &get_agreement_id(db, activity_id).await?).await
 }
 
 pub(crate) async fn authorize_agreement_initiator(
@@ -104,12 +90,9 @@ pub(crate) async fn authorize_agreement_initiator(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let initiator_id = agreement
-        .demand
-        .requestor_id
-        .ok_or(Error::BadRequest("no requestor id".into()))?;
+    let initiator_id = agreement.requestor_id()?.parse()?;
 
-    authorize_caller(caller, initiator_id)
+    authorize_caller(caller.to_string().parse()?, initiator_id)
 }
 
 pub(crate) async fn authorize_agreement_executor(
@@ -117,18 +100,17 @@ pub(crate) async fn authorize_agreement_executor(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let executor_id = agreement
-        .offer
-        .provider_id
-        .ok_or(Error::BadRequest("no provider id".into()))?;
+    let executor_id = agreement.provider_id()?.parse()?;
 
-    authorize_caller(caller, executor_id)
+    authorize_caller(caller.to_string().parse()?, executor_id)
 }
 
 #[inline(always)]
-pub(crate) fn authorize_caller(caller: impl ToString, authorized: String) -> Result<(), Error> {
-    match caller.to_string() == authorized {
+pub(crate) fn authorize_caller(caller: NodeId, authorized: NodeId) -> Result<(), Error> {
+    let msg = format!("caller: {} is not authorized: {}", caller, authorized);
+    log::debug!("{}", msg);
+    match caller == authorized {
         true => Ok(()),
-        false => Err(Error::Forbidden),
+        false => Err(Error::Forbidden(msg)),
     }
 }

@@ -1,12 +1,11 @@
-use actix_web::error::ResponseError;
-use thiserror::Error;
+use actix_web::{error::ResponseError, HttpResponse};
 
 use ya_core_model::{appkey, market::RpcMessageError};
 use ya_model::ErrorMessage;
 
 use crate::db::models::ConversionError;
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("DB connection error: {0}")]
     Db(#[from] r2d2::Error),
@@ -20,10 +19,10 @@ pub enum Error {
     Service(String),
     #[error("Bad request: {0}")]
     BadRequest(String),
-    #[error("Not found")]
-    NotFound,
-    #[error("Forbidden")]
-    Forbidden,
+    #[error("Not found: {0}")]
+    NotFound(String),
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
     #[error("Timeout")]
     Timeout,
     #[error("task: {0}")]
@@ -34,18 +33,6 @@ pub enum Error {
     ConversionError(#[from] ConversionError),
     #[error("App-key error: {0}")]
     AppKeyError(#[from] appkey::Error),
-}
-
-macro_rules! service_error {
-    ($err:expr) => {
-        RpcMessageError::Service(format!("{}", $err))
-    };
-}
-
-macro_rules! internal_error_http_response {
-    ($err:expr) => {
-        actix_web::HttpResponse::InternalServerError().json(ErrorMessage::new(format!("{}", $err)))
-    };
 }
 
 impl From<ya_persistence::executor::Error> for Error {
@@ -73,11 +60,11 @@ impl From<ya_service_bus::error::Error> for Error {
 impl From<RpcMessageError> for Error {
     fn from(e: RpcMessageError) -> Self {
         match e {
-            RpcMessageError::Market(err) => Error::Service(err),
-            RpcMessageError::Service(err) => Error::Service(err),
-            RpcMessageError::BadRequest(err) => Error::BadRequest(err),
-            RpcMessageError::Forbidden => Error::Forbidden,
-            RpcMessageError::NotFound => Error::NotFound,
+            RpcMessageError::Service(msg) => Error::Service(msg),
+            RpcMessageError::Market(msg) => Error::Service(msg),
+            RpcMessageError::BadRequest(msg) => Error::BadRequest(msg),
+            RpcMessageError::Forbidden(msg) => Error::Forbidden(msg),
+            RpcMessageError::NotFound(msg) => Error::NotFound(msg),
             RpcMessageError::Timeout => Error::Timeout,
         }
     }
@@ -86,42 +73,32 @@ impl From<RpcMessageError> for Error {
 impl From<Error> for RpcMessageError {
     fn from(e: Error) -> Self {
         match e {
-            Error::Db(err) => service_error!(err),
-            Error::Dao(err) => service_error!(err),
-            Error::Gsb(err) => service_error!(err),
-            Error::Serialization(err) => service_error!(err),
-            Error::Service(err) => RpcMessageError::Market(err),
-            Error::BadRequest(err) => RpcMessageError::BadRequest(err),
-            Error::NotFound => RpcMessageError::NotFound,
-            Error::Forbidden => RpcMessageError::Forbidden,
+            Error::Service(msg) => RpcMessageError::Market(msg),
+            Error::BadRequest(msg) => RpcMessageError::BadRequest(msg),
+            Error::NotFound(msg) => RpcMessageError::NotFound(msg),
+            Error::Forbidden(msg) => RpcMessageError::Forbidden(msg),
             Error::Timeout => RpcMessageError::Timeout,
-            Error::RuntimeError(err) => service_error!(err),
-            Error::ClientError(err) => service_error!(err),
-            Error::ConversionError(err) => service_error!(err),
-            Error::AppKeyError(err) => service_error!(err),
+            _ => RpcMessageError::Service(e.to_string()),
         }
     }
 }
 
-impl actix_web::error::ResponseError for Error {
-    fn error_response(&self) -> actix_web::HttpResponse {
+impl ResponseError for Error {
+    fn error_response(&self) -> HttpResponse {
         match self {
-            Error::Db(err) => internal_error_http_response!(err),
-            Error::Dao(err) => internal_error_http_response!(err),
-            Error::Gsb(err) => internal_error_http_response!(err),
-            Error::Serialization(err) => internal_error_http_response!(err),
-            Error::Service(err) => internal_error_http_response!(err),
-            Error::BadRequest(err) => {
-                actix_web::HttpResponse::BadRequest().json(ErrorMessage::new(err.clone()))
+            Error::BadRequest(_) => {
+                HttpResponse::BadRequest().json(ErrorMessage::new(self.to_string()))
             }
-            Error::NotFound => actix_web::HttpResponse::NotFound().finish(),
-            Error::Forbidden => actix_web::HttpResponse::Forbidden()
-                .json(ErrorMessage::new("Invalid credentials".into())),
-            Error::Timeout => actix_web::HttpResponse::RequestTimeout().finish(),
-            Error::RuntimeError(err) => internal_error_http_response!(err),
-            Error::ClientError(err) => internal_error_http_response!(err),
-            Error::ConversionError(err) => internal_error_http_response!(err),
-            Error::AppKeyError(err) => internal_error_http_response!(err),
+            Error::NotFound(_) => {
+                HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
+            }
+            Error::Forbidden(_) => {
+                HttpResponse::Forbidden().json(ErrorMessage::new(self.to_string()))
+            }
+            Error::Timeout => {
+                HttpResponse::RequestTimeout().json(ErrorMessage::new(self.to_string()))
+            }
+            _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
     }
 }

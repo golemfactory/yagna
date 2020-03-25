@@ -144,14 +144,22 @@ pub mod local {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Error message for activity service bus API.
+#[derive(thiserror::Error, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcMessageError {
+    #[error("Service error: {0}")]
     Service(String),
+    #[error("Market API error: {0}")]
     Activity(String),
+    #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Usage limit exceeded: {0}")]
     UsageLimitExceeded(String),
-    NotFound,
-    Forbidden,
+    #[error("Not found: {0}")]
+    NotFound(String),
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+    #[error("Timeout")]
     Timeout,
 }

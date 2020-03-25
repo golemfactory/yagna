@@ -1,4 +1,4 @@
-use actix_web::error::ResponseError;
+use actix_web::{error::ResponseError, HttpResponse};
 
 use ya_core_model::activity::RpcMessageError;
 use ya_core_model::market::RpcMessageError as MarketRpcMessageError;
@@ -20,28 +20,14 @@ pub enum Error {
     Service(String),
     #[error("Bad request: {0}")]
     BadRequest(String),
-    #[error("Not found")]
-    NotFound,
-    #[error("Forbidden")]
-    Forbidden,
+    #[error("Not found: {0}")]
+    NotFound(String),
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
     #[error("Timeout")]
     Timeout,
     #[error("task: {0}")]
     RuntimeError(#[from] tokio::task::JoinError),
-}
-
-macro_rules! service_error {
-    ($err:expr) => {
-        RpcMessageError::Service(format!("{}", $err))
-    };
-}
-
-macro_rules! internal_error_http_response {
-    ($err:expr) => {
-        actix_web::HttpResponse::InternalServerError().json(ErrorMessage {
-            message: Some(format!("{}", $err)),
-        })
-    };
 }
 
 impl From<ya_persistence::executor::Error> for Error {
@@ -79,12 +65,12 @@ impl From<RpcMessageError> for Error {
     fn from(e: RpcMessageError) -> Self {
         log::trace!("RpcMessageError: {:?}", e);
         match e {
-            RpcMessageError::Activity(err) => Error::Service(err),
-            RpcMessageError::Service(err) => Error::Service(err),
-            RpcMessageError::UsageLimitExceeded(err) => Error::Service(err),
-            RpcMessageError::BadRequest(err) => Error::BadRequest(err),
-            RpcMessageError::Forbidden => Error::Forbidden,
-            RpcMessageError::NotFound => Error::NotFound,
+            RpcMessageError::Service(msg) => Error::Service(msg),
+            RpcMessageError::Activity(msg) => Error::Service(msg),
+            RpcMessageError::UsageLimitExceeded(msg) => Error::Service(msg),
+            RpcMessageError::BadRequest(msg) => Error::BadRequest(msg),
+            RpcMessageError::Forbidden(msg) => Error::Forbidden(msg),
+            RpcMessageError::NotFound(msg) => Error::NotFound(msg),
             RpcMessageError::Timeout => Error::Timeout,
         }
     }
@@ -94,11 +80,11 @@ impl From<MarketRpcMessageError> for Error {
     fn from(e: MarketRpcMessageError) -> Self {
         log::trace!("MarketRpcMessageError: {:?}", e);
         match e {
-            MarketRpcMessageError::Market(err) => Error::Service(err),
-            MarketRpcMessageError::Service(err) => Error::Service(err),
-            MarketRpcMessageError::BadRequest(err) => Error::BadRequest(err),
-            MarketRpcMessageError::Forbidden => Error::Forbidden,
-            MarketRpcMessageError::NotFound => Error::NotFound,
+            MarketRpcMessageError::Service(msg) => Error::Service(msg),
+            MarketRpcMessageError::Market(msg) => Error::Service(msg),
+            MarketRpcMessageError::BadRequest(msg) => Error::BadRequest(msg),
+            MarketRpcMessageError::Forbidden(msg) => Error::Forbidden(msg),
+            MarketRpcMessageError::NotFound(msg) => Error::NotFound(msg),
             MarketRpcMessageError::Timeout => Error::Timeout,
         }
     }
@@ -116,41 +102,43 @@ impl From<ya_net::NetApiError> for Error {
     }
 }
 
+impl From<ya_core_model::ethaddr::ParseError> for Error {
+    fn from(err: ya_core_model::ethaddr::ParseError) -> Self {
+        Error::BadRequest(err.to_string())
+    }
+}
+
 impl From<Error> for RpcMessageError {
     fn from(e: Error) -> Self {
         log::trace!("for RpcMessageError: {:?}", e);
         match e {
-            Error::Db(err) => service_error!(err),
-            Error::Dao(err) => service_error!(err),
-            Error::Gsb(err) => service_error!(err),
-            Error::RuntimeError(err) => service_error!(err),
-            Error::Serialization(err) => service_error!(err),
-            Error::Service(err) => RpcMessageError::Activity(err),
-            Error::BadRequest(err) => RpcMessageError::BadRequest(err),
-            Error::Forbidden => RpcMessageError::Forbidden,
-            Error::NotFound => RpcMessageError::NotFound,
+            Error::Service(msg) => RpcMessageError::Activity(msg),
+            Error::BadRequest(msg) => RpcMessageError::BadRequest(msg),
+            Error::NotFound(msg) => RpcMessageError::NotFound(msg),
+            Error::Forbidden(msg) => RpcMessageError::Forbidden(msg),
             Error::Timeout => RpcMessageError::Timeout,
+            _ => RpcMessageError::Service(e.to_string()),
         }
     }
 }
 
-impl actix_web::error::ResponseError for Error {
-    fn error_response(&self) -> actix_web::HttpResponse {
+impl ResponseError for Error {
+    fn error_response(&self) -> HttpResponse {
         log::trace!("actix_web::error::ResponseError: {:?}", self);
         match self {
-            Error::Db(err) => internal_error_http_response!(err),
-            Error::Dao(err) => internal_error_http_response!(err),
-            Error::Gsb(err) => internal_error_http_response!(err),
-            Error::RuntimeError(err) => internal_error_http_response!(err),
-            Error::Serialization(err) => internal_error_http_response!(err),
-            Error::Service(err) => internal_error_http_response!(err),
-            Error::BadRequest(err) => {
-                actix_web::HttpResponse::BadRequest().json(ErrorMessage::new(err.clone()))
+            Error::BadRequest(_) => {
+                HttpResponse::BadRequest().json(ErrorMessage::new(self.to_string()))
             }
-            Error::Forbidden => actix_web::HttpResponse::Forbidden()
-                .json(ErrorMessage::new("Invalid credentials".to_string())),
-            Error::NotFound => actix_web::HttpResponse::NotFound().finish(),
-            Error::Timeout => actix_web::HttpResponse::RequestTimeout().finish(),
+            Error::NotFound(_) => {
+                HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
+            }
+            Error::Forbidden(_) => {
+                HttpResponse::Forbidden().json(ErrorMessage::new(self.to_string()))
+            }
+            Error::Timeout => {
+                HttpResponse::RequestTimeout().json(ErrorMessage::new(self.to_string()))
+            }
+            _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
     }
 }

@@ -56,8 +56,7 @@ async fn create_activity(
     log::debug!("activity created: {}, inserting", activity_id);
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &agreement_id)
-        .await
-        .map_err(Error::from)?;
+        .await?;
 
     Ok::<_, Error>(web::Json(activity_id))
 }
@@ -72,7 +71,7 @@ async fn destroy_activity(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::Destroy {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
@@ -93,8 +92,7 @@ async fn destroy_activity(
             None,
             None,
         )
-        .await
-        .map_err(Error::from)?;
+        .await?;
 
     Ok::<_, Error>(web::Json(()))
 }
@@ -112,7 +110,7 @@ async fn exec(
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let batch_id = generate_id();
     let msg = activity::Exec {
         activity_id: path.activity_id.clone(),
@@ -141,7 +139,7 @@ async fn get_batch_results(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),

@@ -82,7 +82,10 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
 
         match &self.state.running_command {
             Some(command) => Ok(command.clone()),
-            None => Err(RpcMessageError::NotFound),
+            None => Err(RpcMessageError::NotFound(format!(
+                "no command is running within activity id: {}",
+                msg.activity_id
+            ))),
         }
     }
 }

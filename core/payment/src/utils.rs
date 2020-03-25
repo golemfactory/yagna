@@ -17,7 +17,10 @@ pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
             if msg.agreement_id == agreement_id {
                 Ok(agreement)
             } else {
-                Err(market::RpcMessageError::NotFound)
+                Err(market::RpcMessageError::NotFound(format!(
+                    "have only agreement id: {}",
+                    agreement_id
+                )))
             }
         }
     });
@@ -33,9 +36,9 @@ pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Er
     .await
     {
         Ok(agreement) => Ok(Some(agreement)),
-        Err(Error::ExtService(ExternalServiceError::Market(market::RpcMessageError::NotFound))) => {
-            Ok(None)
-        }
+        Err(Error::ExtService(ExternalServiceError::Market(
+            market::RpcMessageError::NotFound(_),
+        ))) => Ok(None),
         Err(e) => Err(e),
     }
 }

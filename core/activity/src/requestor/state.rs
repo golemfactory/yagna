@@ -31,17 +31,17 @@ async fn get_activity_state(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = activity::GetState {
-        activity_id: path.activity_id.to_string(),
-        timeout: query.timeout.clone(),
-    };
-
     // Return a locally persisted state if activity has been terminated
     let persisted_state = get_persisted_state(&db, &path.activity_id).await?;
     if persisted_state.terminated() {
         return Ok::<_, Error>(web::Json(persisted_state.unwrap()));
     }
+
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    let msg = activity::GetState {
+        activity_id: path.activity_id.to_string(),
+        timeout: query.timeout.clone(),
+    };
 
     // Retrieve and persist activity state
     let activity_state = agreement
@@ -82,7 +82,7 @@ async fn get_activity_usage(
         }
     }
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::GetUsage {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -113,7 +113,7 @@ async fn get_running_command(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::GetRunningCommand {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),
@@ -133,11 +133,7 @@ async fn get_persisted_state(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<Option<ActivityState>, Error> {
-    let maybe_state = db
-        .as_dao::<ActivityStateDao>()
-        .get(activity_id)
-        .await
-        .map_err(Error::from)?;
+    let maybe_state = db.as_dao::<ActivityStateDao>().get(activity_id).await?;
 
     if let Some(s) = maybe_state {
         let state: StatePair = serde_json::from_str(&s.name)?;
@@ -157,11 +153,7 @@ async fn get_persisted_usage(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<Option<ActivityUsage>, Error> {
-    let maybe_usage = db
-        .as_dao::<ActivityUsageDao>()
-        .get(&activity_id)
-        .await
-        .map_err(Error::from)?;
+    let maybe_usage = db.as_dao::<ActivityUsageDao>().get(&activity_id).await?;
 
     if let Some(activity_usage) = maybe_usage {
         return Ok(Some(ActivityUsage {

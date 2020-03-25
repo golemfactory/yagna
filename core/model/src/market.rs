@@ -25,19 +25,20 @@ impl RpcMessage for GetAgreement {
     type Error = RpcMessageError;
 }
 
-#[derive(Clone, Debug, Error, Serialize, Deserialize)]
+/// Error message for market service bus API.
+#[derive(thiserror::Error, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RpcMessageError {
-    #[error("{0}")]
+    #[error("Service error: {0}")]
     Service(String),
-    #[error("market api: {0}")]
+    #[error("Market API error: {0}")]
     Market(String),
-    #[error("{0}")]
+    #[error("Bad request: {0}")]
     BadRequest(String),
-    #[error("resource not found")]
-    NotFound,
-    #[error("configuration error")]
-    Forbidden,
-    #[error("timeout")]
+    #[error("Not found: {0}")]
+    NotFound(String),
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+    #[error("Timeout")]
     Timeout,
 }

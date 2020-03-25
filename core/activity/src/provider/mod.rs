@@ -1,5 +1,4 @@
 use actix_web::{web, Responder};
-use futures::prelude::*;
 use std::convert::From;
 
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent};
@@ -9,7 +8,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::common::{authorize_activity_executor, PathActivity, QueryTimeoutMaxCount};
-use crate::dao::*;
+use crate::dao::{ActivityStateDao, ActivityUsageDao, Event, EventDao};
 use crate::error::Error;
 
 pub mod service;
@@ -41,14 +40,16 @@ impl From<Event> for ProviderEvent {
 async fn get_activity_state(db: &DbExecutor, activity_id: &str) -> Result<ActivityState, Error> {
     db.as_dao::<ActivityStateDao>()
         .get(activity_id)
-        .await
-        .map_err(Error::from)?
+        .await?
         .map(|state| ActivityState {
             state: serde_json::from_str(&state.name).unwrap(),
             reason: state.reason,
             error_message: state.error_message,
         })
-        .ok_or(Error::NotFound.into())
+        .ok_or(Error::NotFound(format!(
+            "activity id: {} while getting state",
+            activity_id
+        )))
 }
 
 #[actix_web::get("/activity/{activity_id}/state")]
@@ -70,15 +71,15 @@ async fn set_activity_state(
     activity_id: &str,
     activity_state: ActivityState,
 ) -> Result<(), Error> {
-    db.as_dao::<ActivityStateDao>()
+    Ok(db
+        .as_dao::<ActivityStateDao>()
         .set(
             activity_id,
             activity_state.state.clone(),
             activity_state.reason.clone(),
             activity_state.error_message.clone(),
         )
-        .await
-        .map_err(|e| Error::from(e).into())
+        .await?)
 }
 
 #[actix_web::put("/activity/{activity_id}/state")]
@@ -100,14 +101,16 @@ async fn set_activity_state_web(
 async fn get_activity_usage(db: &DbExecutor, activity_id: &str) -> Result<ActivityUsage, Error> {
     db.as_dao::<ActivityUsageDao>()
         .get(activity_id)
-        .await
-        .map_err(Error::from)?
+        .await?
         .map(|usage| ActivityUsage {
             current_usage: usage
                 .vector_json
                 .map(|json| serde_json::from_str(&json).unwrap()),
         })
-        .ok_or(Error::NotFound)
+        .ok_or(Error::NotFound(format!(
+            "activity id: {} while getting usage",
+            activity_id
+        )))
 }
 
 #[actix_web::get("/activity/{activity_id}/usage")]
@@ -135,7 +138,6 @@ async fn get_events_web(
         .as_dao::<EventDao>()
         .get_events_wait(id.identity, query.max_count)
         .timeout(query.timeout)
-        .map_err(Error::from)
         .await??
         .into_iter()
         .map(ProviderEvent::from)
