@@ -1,11 +1,12 @@
+//! Market service bus API.
 use serde::{Deserialize, Serialize};
-use thiserror::*;
-use ya_model::market::Agreement;
+pub use ya_model::market::Agreement;
 use ya_service_bus::RpcMessage;
 
-pub const SERVICE_ID: &str = "/market";
-pub const BUS_ID: &str = "/private/market";
+/// Public Market bus address.
+pub const BUS_ID: &str = "/public/market";
 
+/// Returns the [Agreement](../../ya_model/market/agreement/struct.Agreement.html).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetAgreement {

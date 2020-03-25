@@ -7,6 +7,11 @@ use ya_service_bus::RpcMessage;
 
 use crate::ethaddr::NodeId;
 
+/// Public Activity bus address.
+///
+/// # See also
+///  * [`local::BUS_ID`](local/constant.BUS_ID.html)
+///  * [`exeunit::bus_id`](exeunit/fn.bus_id.html)
 pub const BUS_ID: &str = "/public/activity";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
