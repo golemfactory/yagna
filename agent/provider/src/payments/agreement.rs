@@ -10,7 +10,6 @@ use super::model::{PaymentDescription, PaymentModel};
 use ya_client::activity::ActivityProviderApi;
 use ya_model::market::Agreement;
 
-
 #[derive(Clone, PartialEq)]
 pub struct CostInfo {
     pub usage: Vec<f64>,
@@ -120,9 +119,10 @@ impl AgreementPayment {
             self.activities
                 .iter()
                 .filter_map(|(_, activity)| match activity {
-                    ActivityPayment::Finalized { cost_summary: cost_info, .. } => {
-                        Some((&cost_info.cost, &cost_info.usage))
-                    }
+                    ActivityPayment::Finalized {
+                        cost_summary: cost_info,
+                        ..
+                    } => Some((&cost_info.cost, &cost_info.usage)),
                     _ => None,
                 });
 
@@ -148,14 +148,11 @@ impl AgreementPayment {
         activity_id: &str,
         debit_note_id: Option<String>,
     ) -> Result<()> {
-        let activity = self
-            .activities
-            .get_mut(activity_id)
-            .ok_or(anyhow!(
-                "Can't find activity [{}] for agreement [{}].",
-                activity_id,
-                self.agreement_id
-            ))?;
+        let activity = self.activities.get_mut(activity_id).ok_or(anyhow!(
+            "Can't find activity [{}] for agreement [{}].",
+            activity_id,
+            self.agreement_id
+        ))?;
 
         if let ActivityPayment::Running { .. } = activity {
             let new_activity = ActivityPayment::Running {
@@ -205,4 +202,3 @@ pub async fn compute_cost(
 
     Ok(CostInfo { cost, usage })
 }
-

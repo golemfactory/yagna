@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
 use derive_more::Display;
+use futures::future::{AbortHandle, Abortable};
 use std::path::{Path, PathBuf};
 use tokio::process::{Child, Command};
-use futures::future::{AbortHandle, Abortable};
 
 /// Working ExeUnit instance representation.
 #[derive(Display)]
@@ -66,6 +66,8 @@ impl ExeUnitInstance {
     }
 
     pub fn take_process_handle(&mut self) -> Result<Abortable<Child>> {
-        self.process.take().ok_or(anyhow!("Process handle already taken."))
+        self.process
+            .take()
+            .ok_or(anyhow!("Process handle already taken."))
     }
 }

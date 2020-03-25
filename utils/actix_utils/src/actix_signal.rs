@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 
 /// Subscribe to process signals.
 #[derive(Message)]
@@ -32,17 +32,21 @@ where
 
     /// Send signal to all subscribers
     pub fn send_signal(&self, message: MessageType) -> Result<()> {
-        let errors = self.subscribers
+        let errors = self
+            .subscribers
             .iter()
-            .map(|subscriber|{ subscriber.do_send(message.clone()) })
+            .map(|subscriber| subscriber.do_send(message.clone()))
             .filter_map(|result| {
                 match result {
                     Err(error) => {
                         //TODO: It would be useful to have better error message, that suggest which signal failed.
-                        log::error!("Sending signal to subscriber failed in SignalSlot::send_signal. {}", error);
+                        log::error!(
+                            "Sending signal to subscriber failed in SignalSlot::send_signal. {}",
+                            error
+                        );
                         Some(error)
-                    },
-                    Ok(_) => None
+                    }
+                    Ok(_) => None,
                 }
             })
             .collect::<Vec<SendError<MessageType>>>();

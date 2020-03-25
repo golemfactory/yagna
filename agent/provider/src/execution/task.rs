@@ -2,9 +2,13 @@ use derive_more::Display;
 
 use super::exeunit_instance::ExeUnitInstance;
 
-
 #[derive(Display)]
-#[display(fmt = "Task: agreement id [{}], activity id [{}], {}", agreement_id, activity_id, exeunit)]
+#[display(
+    fmt = "Task: agreement id [{}], activity id [{}], {}",
+    agreement_id,
+    activity_id,
+    exeunit
+)]
 pub struct Task {
     pub exeunit: ExeUnitInstance,
     pub agreement_id: String,
@@ -20,4 +24,3 @@ impl Task {
         }
     }
 }
-

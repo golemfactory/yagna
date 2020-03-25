@@ -44,7 +44,11 @@ async fn create_activity(
 
     // Note: empty string will be invalid id in NodeId::from_str function.
     // FIXME: Should provider_id be optional? Or we can take this id from somewhere else?
-    let node_id = agreement.offer.provider_id.clone().unwrap_or("".to_string());
+    let node_id = agreement
+        .offer
+        .provider_id
+        .clone()
+        .unwrap_or("".to_string());
     let provider_id = NodeId::from_str(&node_id)
         .map_err(|error| Error::Service(format!("Invalid node id [{}]: {}", &node_id, error)))?;
 

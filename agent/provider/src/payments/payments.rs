@@ -1,24 +1,23 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use bigdecimal::BigDecimal;
-use chrono::{Utc, DateTime};
+use chrono::{DateTime, Utc};
 use log;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
+use super::model::PaymentModel;
 use crate::execution::{ActivityCreated, ActivityDestroyed};
 use crate::market::provider_market::AgreementApproved;
-use super::model::PaymentModel;
-use super::agreement::{AgreementPayment, ActivityPayment, CostInfo, compute_cost};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::payment::provider::ProviderApi;
-use ya_model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice, Payment, InvoiceStatus};
+use ya_model::payment::{DebitNote, Invoice, InvoiceStatus, NewDebitNote, NewInvoice, Payment};
 use ya_utils_actix::actix_handler::{send_message, ResultTypeGetter};
 use ya_utils_actix::forward_actix_handler;
-
 
 // =========================================== //
 // Internal messages
@@ -134,7 +133,11 @@ impl Payments {
         }
     }
 
-    pub fn on_signed_agreement(&mut self, msg: AgreementApproved, _ctx: &mut Context<Self>) -> Result<()> {
+    pub fn on_signed_agreement(
+        &mut self,
+        msg: AgreementApproved,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
         log::info!(
             "Payments got signed agreement [{}]. Waiting for activities creation...",
             &msg.agreement.agreement_id
@@ -296,12 +299,8 @@ async fn compute_cost_and_send_debit_note(
         &cost_info.cost
     );
 
-    let debit_note = send_debit_note(
-        provider_context,
-        invoice_info.clone(),
-        cost_info.clone(),
-    )
-    .await?;
+    let debit_note =
+        send_debit_note(provider_context, invoice_info.clone(), cost_info.clone()).await?;
     Ok((debit_note, cost_info))
 }
 
@@ -348,8 +347,9 @@ impl Handler<ActivityDestroyed> for Payments {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
             agreement.activity_destroyed(&msg.activity_id).unwrap();
 
-            if let Some(ActivityPayment::Destroyed { last_debit_note, .. }) =
-                agreement.activities.get(&msg.activity_id)
+            if let Some(ActivityPayment::Destroyed {
+                last_debit_note, ..
+            }) = agreement.activities.get(&msg.activity_id)
             {
                 let payment_model = agreement.payment_model.clone();
                 let provider_context = self.context.clone();
@@ -368,12 +368,19 @@ impl Handler<ActivityDestroyed> for Payments {
                         match compute_cost_and_send_debit_note(
                             provider_context.clone(),
                             payment_model.clone(),
-                            &invoice_info).await {
+                            &invoice_info,
+                        )
+                        .await
+                        {
                             Ok(debit_note) => break debit_note,
                             Err(error) => {
                                 let interval = provider_context.invoice_resend_interval;
 
-                                log::error!("{} Final debit note will be resent after {:#?}.", error, interval);
+                                log::error!(
+                                    "{} Final debit note will be resent after {:#?}.",
+                                    error,
+                                    interval
+                                );
                                 tokio::time::delay_for(interval).await
                             }
                         }
@@ -395,7 +402,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 }
                 .into_actor(self);
 
-                return ActorResponse::r#async(future.map(|_,_,_| { Ok(()) }));
+                return ActorResponse::r#async(future.map(|_, _, _| Ok(())));
             } else {
                 log::error!("Shouldn't happen.");
             }
@@ -417,7 +424,10 @@ impl Handler<UpdateCost> for Payments {
         let agreement = match self.agreements.get(&msg.invoice_info.agreement_id) {
             Some(agreement) => agreement,
             None => {
-                let err_msg = format!("Not my activity - agreement [{}].", &msg.invoice_info.agreement_id);
+                let err_msg = format!(
+                    "Not my activity - agreement [{}].",
+                    &msg.invoice_info.agreement_id
+                );
                 log::warn!("{}", &err_msg);
 
                 return ActorResponse::reply(Err(anyhow!(err_msg)));
@@ -436,28 +446,38 @@ impl Handler<UpdateCost> for Payments {
                         let (debit_note, _cost) = compute_cost_and_send_debit_note(
                             context.clone(),
                             payment_model.clone(),
-                            &invoice_info).await?;
+                            &invoice_info,
+                        )
+                        .await?;
                         Ok(debit_note)
                     }
                     .into_actor(self)
-                    .map(move |result: Result<DebitNote, Error>, myself, ctx| {
-                        match result {
-                            Err(error) => log::error!("{}", error),
-                            Ok(debit_note) => {
-                                if let Some(agreement) = myself.agreements.get_mut(&debit_note.agreement_id) {
-                                    // We can unwrap, because we set activity id while sending debit note.
-                                    let activity_id = debit_note.activity_id.unwrap();
-                                    agreement.update_debit_note(&activity_id,debit_note.previous_debit_note_id.clone())?;
+                    .map(
+                        move |result: Result<DebitNote, Error>, myself, ctx| {
+                            match result {
+                                Err(error) => log::error!("{}", error),
+                                Ok(debit_note) => {
+                                    if let Some(agreement) =
+                                        myself.agreements.get_mut(&debit_note.agreement_id)
+                                    {
+                                        // We can unwrap, because we set activity id while sending debit note.
+                                        let activity_id = debit_note.activity_id.unwrap();
+                                        agreement.update_debit_note(
+                                            &activity_id,
+                                            debit_note.previous_debit_note_id.clone(),
+                                        )?;
 
-                                    // Resend message, but update last DebitNote id.
-                                    msg.invoice_info.last_debit_note = debit_note.previous_debit_note_id.clone();
-                                };
-                            },
-                        };
-                        // In case of error in match statement above, msg will contain previous last_debit_note.
-                        ctx.notify_later(msg, update_interval);
-                        Ok(())
-                    }),
+                                        // Resend message, but update last DebitNote id.
+                                        msg.invoice_info.last_debit_note =
+                                            debit_note.previous_debit_note_id.clone();
+                                    };
+                                }
+                            };
+                            // In case of error in match statement above, msg will contain previous last_debit_note.
+                            ctx.notify_later(msg, update_interval);
+                            Ok(())
+                        },
+                    ),
                 );
             } else {
                 // Activity is not running anymore. We don't send here new UpdateCost
@@ -524,12 +544,9 @@ impl Handler<AgreementClosed> for Payments {
                 // Resend invoice until it will reach provider.
                 // Note: that we don't remove invoices that were issued but not sent.
                 loop {
-                    match send_invoice(
-                        &provider_context,
-                        &agreement_id,
-                        &cost_summary,
-                        &activities,
-                    ).await {
+                    match send_invoice(&provider_context, &agreement_id, &cost_summary, &activities)
+                        .await
+                    {
                         Ok(invoice) => return invoice,
                         Err(error) => {
                             let interval = provider_context.invoice_resend_interval;
@@ -544,7 +561,9 @@ impl Handler<AgreementClosed> for Payments {
             .map(|invoice, myself, context| {
                 // Wait until Requestor accepts (or rejects) Invoice. This message will
                 // be resent until Invoice state will change.
-                let msg = CheckInvoiceAcceptance{invoice_id: invoice.invoice_id.clone()};
+                let msg = CheckInvoiceAcceptance {
+                    invoice_id: invoice.invoice_id.clone(),
+                };
                 context.notify_later(msg, myself.context.invoice_accept_check_interval);
                 Ok(())
             });
@@ -563,40 +582,42 @@ impl Handler<CheckInvoiceAcceptance> for Payments {
         let pay_ctx = self.context.clone();
         let invoice_id = msg.invoice_id.clone();
 
-        let future = async move {
-            pay_ctx.payment_api.get_invoice(&invoice_id).await
-        }
-        .into_actor(self)
-        .map(move |result, myself, context| {
-            match result {
-                Ok(invoice) => {
-                    match invoice.status {
-                        InvoiceStatus::Accepted => {
-                            log::info!("Invoice [{}] accepted by requestor.", &msg.invoice_id);
+        let future = async move { pay_ctx.payment_api.get_invoice(&invoice_id).await }
+            .into_actor(self)
+            .map(move |result, myself, context| {
+                match result {
+                    Ok(invoice) => {
+                        match invoice.status {
+                            InvoiceStatus::Accepted => {
+                                log::info!("Invoice [{}] accepted by requestor.", &msg.invoice_id);
 
-                            // Wait for payment to be settled.
-                            myself.invoices_to_pay.push(invoice);
-                            return Ok(());
-                        },
-                        InvoiceStatus::Rejected => {
-                            log::warn!("Invoice [{}] rejected by requestor.", &msg.invoice_id);
-                            //TODO: Send signal to other provider's modules to react to this situation.
-                            //      Probably we don't want to cooperate with this Requestor anymore.
-                            return Ok(());
-                        },
-                        //TODO: What means InvoiceStatus::Failed? How should we handle it?
-                        _ => ()
+                                // Wait for payment to be settled.
+                                myself.invoices_to_pay.push(invoice);
+                                return Ok(());
+                            }
+                            InvoiceStatus::Rejected => {
+                                log::warn!("Invoice [{}] rejected by requestor.", &msg.invoice_id);
+                                //TODO: Send signal to other provider's modules to react to this situation.
+                                //      Probably we don't want to cooperate with this Requestor anymore.
+                                return Ok(());
+                            }
+                            //TODO: What means InvoiceStatus::Failed? How should we handle it?
+                            _ => (),
+                        }
                     }
-                },
-                Err(error) => {
-                    log::error!("Can't get Invoice [{}] status. Error: {}", &msg.invoice_id, error);
-                }
-            };
+                    Err(error) => {
+                        log::error!(
+                            "Can't get Invoice [{}] status. Error: {}",
+                            &msg.invoice_id,
+                            error
+                        );
+                    }
+                };
 
-            // Check invoice acceptance later, if state didn't change.
-            context.notify_later(msg, myself.context.invoice_accept_check_interval);
-            return Ok(());
-        });
+                // Check invoice acceptance later, if state didn't change.
+                context.notify_later(msg, myself.context.invoice_accept_check_interval);
+                return Ok(());
+            });
         return ActorResponse::r#async(future);
     }
 }
@@ -617,21 +638,23 @@ impl Handler<CheckInvoicePayments> for Payments {
                 }
             };
 
-            payments.into_iter()
-                .for_each(|payment| {
-                    if let Some(invoices) = payment.invoice_ids.clone() {
-                        let paid_message = InvoicesPaid{payment, invoices};
-                        self_addr.do_send(paid_message);
-                    } else {
-                        // What does it mean? Payment for debit notes? It seems that something
-                        // has gone wrong, so better warn about this.
-                        log::warn!("Payment [{}] has no invoices listed.", &payment.payment_id)
-                    }
-                });
+            payments.into_iter().for_each(|payment| {
+                if let Some(invoices) = payment.invoice_ids.clone() {
+                    let paid_message = InvoicesPaid { payment, invoices };
+                    self_addr.do_send(paid_message);
+                } else {
+                    // What does it mean? Payment for debit notes? It seems that something
+                    // has gone wrong, so better warn about this.
+                    log::warn!("Payment [{}] has no invoices listed.", &payment.payment_id)
+                }
+            });
             Ok(())
         };
 
-        ctx.notify_later(CheckInvoicePayments{since: Utc::now()}, self.context.invoice_paid_check_interval);
+        ctx.notify_later(
+            CheckInvoicePayments { since: Utc::now() },
+            self.context.invoice_paid_check_interval,
+        );
         return ActorResponse::r#async(future.into_actor(self));
     }
 }
@@ -640,13 +663,23 @@ impl Handler<InvoicesPaid> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: InvoicesPaid, _ctx: &mut Context<Self>) -> Self::Result {
-        log::info!("Got payment [{}] confirmation, details: {}", msg.payment.payment_id, msg.payment.details);
+        log::info!(
+            "Got payment [{}] confirmation, details: {}",
+            msg.payment.payment_id,
+            msg.payment.details
+        );
 
-        let paid_agreements = self.invoices_to_pay
+        let paid_agreements = self
+            .invoices_to_pay
             .iter()
-            .filter(|element| { msg.invoices.contains(&element.invoice_id) })
+            .filter(|element| msg.invoices.contains(&element.invoice_id))
             .map(|invoice| {
-                log::info!("Invoice [{}] for agreement [{}] was paid. Amount: {}.", invoice.invoice_id, invoice.agreement_id, invoice.amount);
+                log::info!(
+                    "Invoice [{}] for agreement [{}] was paid. Amount: {}.",
+                    invoice.invoice_id,
+                    invoice.agreement_id,
+                    invoice.amount
+                );
                 invoice.agreement_id.clone()
             })
             .collect::<Vec<String>>();
@@ -655,24 +688,28 @@ impl Handler<InvoicesPaid> for Payments {
 
         log::info!("Our current earnings: {}.", self.earnings);
 
-        self.invoices_to_pay.retain(|invoice| !msg.invoices.contains(&invoice.invoice_id));
-        self.agreements.retain(|agreement_id, _| !paid_agreements.contains(agreement_id));
+        self.invoices_to_pay
+            .retain(|invoice| !msg.invoices.contains(&invoice.invoice_id));
+        self.agreements
+            .retain(|agreement_id, _| !paid_agreements.contains(agreement_id));
 
-        let left_to_pay: Vec<String> = self.invoices_to_pay.iter().map(|invoice| invoice.invoice_id.clone()).collect();
+        let left_to_pay: Vec<String> = self
+            .invoices_to_pay
+            .iter()
+            .map(|invoice| invoice.invoice_id.clone())
+            .collect();
         log::info!("Invoices waiting for payment: {:#?}", left_to_pay);
 
         return ActorResponse::reply(Ok(()));
     }
 }
 
-
-
 impl Actor for Payments {
     type Context = Context<Self>;
 
     fn started(&mut self, context: &mut Context<Self>) {
         // Start checking incoming payments.
-        let msg = CheckInvoicePayments{since: Utc::now()};
+        let msg = CheckInvoicePayments { since: Utc::now() };
         context.notify_later(msg, self.context.invoice_paid_check_interval);
     }
 }

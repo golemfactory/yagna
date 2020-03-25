@@ -124,7 +124,6 @@ pub struct TaskRunner {
     pub activity_destroyed: SignalSlot<ActivityDestroyed>,
 }
 
-
 impl TaskRunner {
     pub fn new(client: ActivityProviderApi) -> TaskRunner {
         TaskRunner {
@@ -139,7 +138,11 @@ impl TaskRunner {
 
     #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?} {:?}")]
     #[logfn(ok = "INFO", err = "ERROR", fmt = "ExeUnits initialized: {:?}")]
-    pub fn initialize_exeunits(&mut self, msg: InitializeExeUnits, _ctx: &mut Context<Self>) -> Result<()> {
+    pub fn initialize_exeunits(
+        &mut self,
+        msg: InitializeExeUnits,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
         self.registry.register_exeunits_from_file(&msg.file)
     }
 
@@ -236,14 +239,16 @@ impl TaskRunner {
         Arbiter::spawn(async move {
             let status = match process.await {
                 Err(_aborted) => ExeUnitExitStatus::Aborted,
-                Ok(result) => {
-                    match result {
-                        Ok(status) => ExeUnitExitStatus::Finished(status),
-                        Err(error) => ExeUnitExitStatus::Error(error),
-                    }
-                }
+                Ok(result) => match result {
+                    Ok(status) => ExeUnitExitStatus::Finished(status),
+                    Err(error) => ExeUnitExitStatus::Error(error),
+                },
             };
-            let msg = ExeUnitProcessFinished{activity_id, agreement_id, status};
+            let msg = ExeUnitProcessFinished {
+                activity_id,
+                agreement_id,
+                status,
+            };
 
             self_addr.do_send(msg);
         });
@@ -253,12 +258,16 @@ impl TaskRunner {
 
     #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
     #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity destroyed: {:?}")]
-    fn on_destroy_activity(&mut self, msg: DestroyActivity, _ctx: &mut Context<Self>) -> Result<()> {
+    fn on_destroy_activity(
+        &mut self,
+        msg: DestroyActivity,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
         let task_position = match self.tasks.iter().position(|task| {
             task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
         }) {
             None => bail!("Can't destroy not existing activity [{:?}]", msg),
-            Some(task_position) => task_position
+            Some(task_position) => task_position,
         };
 
         // Remove task from list and destroy everything related with it.
@@ -268,8 +277,17 @@ impl TaskRunner {
         Ok(())
     }
 
-    fn on_exeunit_exited(&mut self, msg: ExeUnitProcessFinished, _ctx: &mut Context<Self>) -> Result<()> {
-        log::info!("ExeUnit process exited with status {}, agreement [{}], activity [{}].", msg.status, msg.agreement_id, msg.agreement_id);
+    fn on_exeunit_exited(
+        &mut self,
+        msg: ExeUnitProcessFinished,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        log::info!(
+            "ExeUnit process exited with status {}, agreement [{}], activity [{}].",
+            msg.status,
+            msg.agreement_id,
+            msg.agreement_id
+        );
 
         let msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
@@ -295,7 +313,11 @@ impl TaskRunner {
     }
 
     #[logfn_inputs(Debug, fmt = "{}Got {:?} {:?}")]
-    pub fn on_agreement_approved(&mut self, msg: AgreementApproved, _ctx: &mut Context<Self>) -> Result<()> {
+    pub fn on_agreement_approved(
+        &mut self,
+        msg: AgreementApproved,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
         // Agreement waits for first create activity.
         // FIXME: clean-up agreements upon TTL or maybe payments
         self.active_agreements.insert(msg.agreement.agreement_id);
@@ -325,7 +347,11 @@ impl TaskRunner {
         Ok(Task::new(exeunit_instance, agreement_id, activity_id))
     }
 
-    pub fn on_subscribe_activity_created(&mut self, msg: Subscribe<ActivityCreated>, _ctx: &mut Context<Self>) -> Result<()> {
+    pub fn on_subscribe_activity_created(
+        &mut self,
+        msg: Subscribe<ActivityCreated>,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
         Ok(self.activity_created.on_subscribe(msg))
     }
 
@@ -397,4 +423,3 @@ impl DestroyActivity {
         }
     }
 }
-

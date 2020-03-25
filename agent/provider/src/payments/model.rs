@@ -39,25 +39,26 @@ impl PaymentDescription {
 
     pub fn get_update_interval(&self) -> Result<Duration> {
         let interval_addr = "golem.com.scheme.payu.interval_sec";
-        let interval = self
-            .commercial_agreement
-            .get(interval_addr)
-            .ok_or(anyhow!(
-                "Can't get payment update interval '{}'.", interval_addr
-            ))?;
-        let interval = interval.parse::<u64>()
-            .map_err(|error| anyhow!("Can't parse payment update interval '{}' to u64. {}", error, interval_addr))?;
+        let interval = self.commercial_agreement.get(interval_addr).ok_or(anyhow!(
+            "Can't get payment update interval '{}'.",
+            interval_addr
+        ))?;
+        let interval = interval.parse::<u64>().map_err(|error| {
+            anyhow!(
+                "Can't parse payment update interval '{}' to u64. {}",
+                error,
+                interval_addr
+            )
+        })?;
         Ok(Duration::from_secs(interval))
     }
 
     pub fn get_usage_coefficients(&self) -> Result<Vec<f64>> {
         let coeffs_addr = "golem.com.pricing.model.linear.coeffs";
-        let usage_vec_str = self.commercial_agreement
-            .get(coeffs_addr)
-            .ok_or(anyhow!(
-                "Can't find usage coefficients in agreement ('{}').",
-                coeffs_addr
-            ))?;
+        let usage_vec_str = self.commercial_agreement.get(coeffs_addr).ok_or(anyhow!(
+            "Can't find usage coefficients in agreement ('{}').",
+            coeffs_addr
+        ))?;
 
         let usage: Vec<f64> = serde_json::from_str(&usage_vec_str)
             .map_err(|error| anyhow!("Can't parse usage vector. Error: {}", error))?;
