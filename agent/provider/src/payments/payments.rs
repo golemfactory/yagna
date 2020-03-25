@@ -413,7 +413,7 @@ impl Handler<ActivityDestroyed> for Payments {
 impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, mut msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
         let agreement = match self.agreements.get(&msg.invoice_info.agreement_id) {
             Some(agreement) => agreement,
             None => {
@@ -428,56 +428,35 @@ impl Handler<UpdateCost> for Payments {
             if let ActivityPayment::Running { .. } = activity {
                 let payment_model = agreement.payment_model.clone();
                 let context = self.context.clone();
-                let msg = msg.clone();
+                let invoice_info = msg.invoice_info.clone();
                 let update_interval = agreement.update_interval;
 
                 return ActorResponse::r#async(
                     async move {
-                        let cost_info = compute_cost(
-                            payment_model.clone(),
-                            context.activity_api.clone(),
-                            msg.invoice_info.activity_id.clone(),
-                        )
-                        .await?;
-
-                        log::info!(
-                            "Updating cost for activity [{}]: {}.",
-                            &msg.invoice_info.activity_id,
-                            &cost_info.cost
-                        );
-
-                        send_debit_note(
+                        let (debit_note, _cost) = compute_cost_and_send_debit_note(
                             context.clone(),
-                            msg.invoice_info,
-                            cost_info,
-                        )
-                        .await
+                            payment_model.clone(),
+                            &invoice_info).await?;
+                        Ok(debit_note)
                     }
                     .into_actor(self)
-                    .map(move |result, myself, ctx| {
+                    .map(move |result: Result<DebitNote, Error>, myself, ctx| {
                         match result {
+                            Err(error) => log::error!("{}", error),
                             Ok(debit_note) => {
                                 if let Some(agreement) = myself.agreements.get_mut(&debit_note.agreement_id) {
                                     // We can unwrap, because we set activity id while sending debit note.
                                     let activity_id = debit_note.activity_id.unwrap();
                                     agreement.update_debit_note(&activity_id,debit_note.previous_debit_note_id.clone())?;
 
-                                    let msg = UpdateCost {
-                                        invoice_info: DebitNoteInfo {
-                                            agreement_id: debit_note.agreement_id.clone(),
-                                            activity_id,
-                                            last_debit_note: debit_note.previous_debit_note_id.clone(),
-                                        },
-                                    };
-                                    ctx.notify_later(msg, update_interval);
+                                    // Resend message, but update last DebitNote id.
+                                    msg.invoice_info.last_debit_note = debit_note.previous_debit_note_id.clone();
                                 };
-                                Ok(())
                             },
-                            Err(error) => {
-                                log::error!("{}", error);
-                                return Err(error);
-                            }
-                        }
+                        };
+                        // In case of error in match statement above, msg will contain previous last_debit_note.
+                        ctx.notify_later(msg, update_interval);
+                        Ok(())
                     }),
                 );
             } else {

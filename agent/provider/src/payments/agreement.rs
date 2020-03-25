@@ -181,8 +181,8 @@ impl AgreementPayment {
 
 pub async fn compute_cost(
     payment_model: Arc<dyn PaymentModel>,
-    activity_api: Arc<ActivityProviderApi>,
-    activity_id: String,
+    _activity_api: Arc<ActivityProviderApi>,
+    _activity_id: String,
 ) -> Result<CostInfo> {
     // let usage = activity_api
     //     .get_activity_usage(&activity_id)
