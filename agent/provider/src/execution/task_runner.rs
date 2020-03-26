@@ -208,12 +208,12 @@ impl TaskRunner {
 
         // TODO: Get ExeUnit name from agreement.
         let exeunit_name = "wasmtime";
-        let mut task = match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
+        let task = match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
         };
 
-        let process = task.exeunit.take_process_handle()?;
+        let process = task.exeunit.get_process_handle();
         self.tasks.push(task);
 
         let _ = self.activity_created.send_signal(ActivityCreated {

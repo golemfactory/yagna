@@ -3836,6 +3836,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared_child"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cebcf3a403e4deafaf34dc882c4a1b6a648b43e5670aa2e4bb985914eaeb2d2"
+dependencies = [
+ "libc",
+ "winapi 0.3.8",
+]
+
+[[package]]
 name = "shell32-sys"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5643,6 +5653,7 @@ dependencies = [
  "log-derive",
  "serde",
  "serde_json",
+ "shared_child",
  "structopt",
  "tokio 0.2.13",
  "url 2.1.1",

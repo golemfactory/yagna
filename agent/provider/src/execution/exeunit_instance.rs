@@ -1,8 +1,12 @@
 use anyhow::{anyhow, Result};
 use derive_more::Display;
-use futures::future::{AbortHandle, AbortRegistration, Abortable};
+use futures::channel::oneshot::channel;
 use std::path::{Path, PathBuf};
-use tokio::process::{Child, Command};
+use std::process::{Command, Stdio};
+use shared_child::SharedChild;
+use std::sync::Arc;
+use std::thread;
+
 
 /// Working ExeUnit instance representation.
 #[derive(Display)]
@@ -11,15 +15,13 @@ pub struct ExeUnitInstance {
     name: String,
     #[allow(dead_code)]
     working_dir: PathBuf,
-
-    abort_handle: AbortHandle,
-    process: Option<ProcessHandle>,
+    process: Arc<SharedChild>,
 }
 
 #[derive(Display)]
 pub enum ExeUnitExitStatus {
-    #[display(fmt = "Aborted")]
-    Aborted,
+    #[display(fmt = "Aborted - {}", _0)]
+    Aborted(std::process::ExitStatus),
     #[display(fmt = "Finished - {}", _0)]
     Finished(std::process::ExitStatus),
     #[display(fmt = "Error - {}", _0)]
@@ -27,8 +29,7 @@ pub enum ExeUnitExitStatus {
 }
 
 pub struct ProcessHandle {
-    process: Child,
-    registration: AbortRegistration,
+    process: Arc<SharedChild>,
 }
 
 impl ExeUnitInstance {
@@ -40,30 +41,27 @@ impl ExeUnitInstance {
     ) -> Result<ExeUnitInstance> {
         log::info!("Spawning exeunit instance : {}", name);
         //        let child = Command::new(binary_path)
-        let child = Command::new("sleep")
+        let mut command = Command::new("sleep");
+        command
             .args(vec!["5000"])
             //.args(args)
             .current_dir(working_dir)
-            .kill_on_drop(true)
-            .spawn() // FIXME -- this is not returning
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
+        let child = Arc::new(SharedChild::spawn(&mut command)
             .map_err(|error| {
                 anyhow!(
-                    "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
-                    name, binary_path.display(), working_dir.display(), error
-                )
-            })?;
-        log::info!("Exeunit process spawned, pid: {}", child.id());
+                        "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
+                        name, binary_path.display(), working_dir.display(), error
+                    )
+            })?);
 
-        let (abort_handle, registration) = AbortHandle::new_pair();
-        let process = ProcessHandle {
-            process: child,
-            registration,
-        };
+        log::info!("Exeunit process spawned, pid: {}", child.id());
 
         let instance = ExeUnitInstance {
             name: name.to_string(),
-            process: Some(process),
-            abort_handle,
+            process: child,
             working_dir: working_dir.to_path_buf(),
         };
         log::info!(
@@ -77,31 +75,34 @@ impl ExeUnitInstance {
 
     pub fn kill(&self) {
         log::info!("Killing ExeUnit [{}]...", &self.name);
-
-        // It requires kill_on_drop(true) to really kill process.
-        // We don't call kill explicit, but process handle will be dropped
-        // and so all references to this process.
-        self.abort_handle.abort();
+        let _ = self.process.kill();
     }
 
-    pub fn take_process_handle(&mut self) -> Result<ProcessHandle> {
-        self.process
-            .take()
-            .ok_or(anyhow!("Process handle already taken."))
+    pub fn get_process_handle(&self) -> ProcessHandle {
+        ProcessHandle{process: self.process.clone()}
     }
 }
 
 impl ProcessHandle {
     pub async fn wait_until_finished(self) -> ExeUnitExitStatus {
-        let process = self.process;
-        let abortable = Abortable::new(process.wait_with_output(), self.registration);
+        let process = self.process.clone();
+        let (sender, receiver) = channel::<ExeUnitExitStatus>();
 
-        match abortable.await {
-            Err(_aborted) => ExeUnitExitStatus::Aborted,
-            Ok(result) => match result {
-                Ok(output) => ExeUnitExitStatus::Finished(output.status),
+        thread::spawn(move || {
+            let result = process.wait();
+
+            let status = match result {
+                Ok(status) => match status.code() {
+                    // status.code() will return None in case of termination by signal.
+                    None => ExeUnitExitStatus::Aborted(status),
+                    Some(_code) => ExeUnitExitStatus::Finished(status),
+                },
                 Err(error) => ExeUnitExitStatus::Error(error),
-            },
-        }
+            };
+            sender.send(status)
+        });
+
+        return receiver.await.unwrap();
     }
 }
+
