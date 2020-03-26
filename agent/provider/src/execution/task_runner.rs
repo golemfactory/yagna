@@ -16,6 +16,7 @@ use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
 
+use super::exeunit_instance::ExeUnitExitStatus;
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
@@ -92,16 +93,6 @@ struct ExeUnitProcessFinished {
     pub activity_id: String,
     pub agreement_id: String,
     pub status: ExeUnitExitStatus,
-}
-
-#[derive(Display)]
-enum ExeUnitExitStatus {
-    #[display(fmt = "Aborted")]
-    Aborted,
-    #[display(fmt = "Finished - {}", _0)]
-    Finished(std::process::ExitStatus),
-    #[display(fmt = "Error - {}", _0)]
-    Error(std::io::Error),
 }
 
 // =========================================== //
@@ -237,13 +228,7 @@ impl TaskRunner {
         let agreement_id = msg.agreement_id.clone();
 
         Arbiter::spawn(async move {
-            let status = match process.await {
-                Err(_aborted) => ExeUnitExitStatus::Aborted,
-                Ok(result) => match result {
-                    Ok(status) => ExeUnitExitStatus::Finished(status),
-                    Err(error) => ExeUnitExitStatus::Error(error),
-                },
-            };
+            let status = process.wait_until_finished().await;
             let msg = ExeUnitProcessFinished {
                 activity_id,
                 agreement_id,

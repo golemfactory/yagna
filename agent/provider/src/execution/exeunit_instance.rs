@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use derive_more::Display;
-use futures::future::{AbortHandle, Abortable};
+use futures::future::{AbortHandle, AbortRegistration, Abortable};
 use std::path::{Path, PathBuf};
 use tokio::process::{Child, Command};
 
@@ -13,7 +13,22 @@ pub struct ExeUnitInstance {
     working_dir: PathBuf,
 
     abort_handle: AbortHandle,
-    process: Option<Abortable<Child>>,
+    process: Option<ProcessHandle>,
+}
+
+#[derive(Display)]
+pub enum ExeUnitExitStatus {
+    #[display(fmt = "Aborted")]
+    Aborted,
+    #[display(fmt = "Finished - {}", _0)]
+    Finished(std::process::ExitStatus),
+    #[display(fmt = "Error - {}", _0)]
+    Error(std::io::Error),
+}
+
+pub struct ProcessHandle {
+    process: Child,
+    registration: AbortRegistration,
 }
 
 impl ExeUnitInstance {
@@ -21,12 +36,13 @@ impl ExeUnitInstance {
         name: &str,
         binary_path: &Path,
         working_dir: &Path,
-        args: &Vec<String>,
+        _args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
         log::info!("Spawning exeunit instance : {}", name);
         //        let child = Command::new(binary_path)
-        let child = Command::new("echo")
-            .args(args)
+        let child = Command::new("sleep")
+            .args(vec!["5000"])
+            //.args(args)
             .current_dir(working_dir)
             .kill_on_drop(true)
             .spawn() // FIXME -- this is not returning
@@ -38,8 +54,11 @@ impl ExeUnitInstance {
             })?;
         log::info!("Exeunit process spawned, pid: {}", child.id());
 
-        let (abort_handle, reg) = AbortHandle::new_pair();
-        let process = Abortable::new(child, reg);
+        let (abort_handle, registration) = AbortHandle::new_pair();
+        let process = ProcessHandle {
+            process: child,
+            registration,
+        };
 
         let instance = ExeUnitInstance {
             name: name.to_string(),
@@ -65,9 +84,24 @@ impl ExeUnitInstance {
         self.abort_handle.abort();
     }
 
-    pub fn take_process_handle(&mut self) -> Result<Abortable<Child>> {
+    pub fn take_process_handle(&mut self) -> Result<ProcessHandle> {
         self.process
             .take()
             .ok_or(anyhow!("Process handle already taken."))
+    }
+}
+
+impl ProcessHandle {
+    pub async fn wait_until_finished(self) -> ExeUnitExitStatus {
+        let process = self.process;
+        let abortable = Abortable::new(process.wait_with_output(), self.registration);
+
+        match abortable.await {
+            Err(_aborted) => ExeUnitExitStatus::Aborted,
+            Ok(result) => match result {
+                Ok(output) => ExeUnitExitStatus::Finished(output.status),
+                Err(error) => ExeUnitExitStatus::Error(error),
+            },
+        }
     }
 }
