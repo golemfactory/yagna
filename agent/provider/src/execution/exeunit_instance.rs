@@ -1,12 +1,11 @@
 use anyhow::{anyhow, Result};
 use derive_more::Display;
 use futures::channel::oneshot::channel;
+use shared_child::SharedChild;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use shared_child::SharedChild;
 use std::sync::Arc;
 use std::thread;
-
 
 /// Working ExeUnit instance representation.
 #[derive(Display)]
@@ -49,13 +48,15 @@ impl ExeUnitInstance {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let child = Arc::new(SharedChild::spawn(&mut command)
-            .map_err(|error| {
-                anyhow!(
-                        "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
-                        name, binary_path.display(), working_dir.display(), error
-                    )
-            })?);
+        let child = Arc::new(SharedChild::spawn(&mut command).map_err(|error| {
+            anyhow!(
+                "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
+                name,
+                binary_path.display(),
+                working_dir.display(),
+                error
+            )
+        })?);
 
         log::info!("Exeunit process spawned, pid: {}", child.id());
 
@@ -79,7 +80,9 @@ impl ExeUnitInstance {
     }
 
     pub fn get_process_handle(&self) -> ProcessHandle {
-        ProcessHandle{process: self.process.clone()}
+        ProcessHandle {
+            process: self.process.clone(),
+        }
     }
 }
 
@@ -105,4 +108,3 @@ impl ProcessHandle {
         return receiver.await.unwrap();
     }
 }
-
