@@ -99,6 +99,7 @@ impl Handler<ExecCmd> for RuntimeProcess {
 
                 let fut = async move {
                     let child = Command::new(binary)
+                        .kill_on_drop(true)
                         .args(args?)
                         .kill_on_drop(true)
                         .stdout(Stdio::piped())
