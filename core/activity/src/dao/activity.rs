@@ -2,11 +2,11 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde_json;
 
-use ya_model::activity::State;
+use ya_model::activity::{State, StatePair};
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::schema;
 
-use crate::dao::{last_insert_rowid, Result};
+use crate::dao::{last_insert_rowid, DaoError, Result};
 use diesel::dsl::exists;
 
 pub struct ActivityDao<'c> {
@@ -20,17 +20,22 @@ impl<'a> AsDao<'a> for ActivityDao<'a> {
 }
 
 impl<'c> ActivityDao<'c> {
-    pub async fn get_agreement_id(&self, activity_id: &str) -> Result<Option<String>> {
+    pub async fn get_agreement_id(&self, activity_id: &str) -> Result<String> {
         use schema::activity::dsl;
 
         let activity_id = activity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            Ok(dsl::activity
+            dsl::activity
                 .select(dsl::agreement_id)
-                .filter(dsl::natural_id.eq(activity_id))
+                .filter(dsl::natural_id.eq(&activity_id))
                 .first(conn)
-                .optional()?)
+                .map_err(|e| match e {
+                    diesel::NotFound => {
+                        DaoError::NotFound(format!("agreement id for activity: {}", activity_id))
+                    }
+                    e => e.into(),
+                })
         })
         .await
     }
@@ -43,7 +48,7 @@ impl<'c> ActivityDao<'c> {
         let reason: Option<String> = None;
         let error_message: Option<String> = None;
         let vector_json: Option<String> = None;
-        let state = serde_json::to_string(&State::New).unwrap();
+        let state = serde_json::to_string(&StatePair::from(State::New))?;
         let now = Utc::now().naive_utc();
 
         let activity_id = activity_id.to_owned();

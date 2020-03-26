@@ -8,6 +8,8 @@ pub mod models;
 pub mod schema;
 pub mod types;
 
+pub use executor::Error;
+
 #[allow(dead_code)]
 pub mod migrations {
     #[derive(EmbedMigrations)]

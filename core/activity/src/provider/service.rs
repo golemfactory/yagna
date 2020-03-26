@@ -3,12 +3,12 @@ use std::convert::From;
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id, get_agreement,
-    RpcMessageResult,
+    get_persisted_state, get_persisted_usage, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::error::Error;
 use ya_core_model::activity;
-use ya_model::activity::{activity_state::StatePair, State};
+use ya_model::activity::State;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
 use ya_service_bus::{timeout::*, typed as bus, RpcMessage};
@@ -124,14 +124,13 @@ async fn destroy_activity_gsb(
         "waiting {:?}ms for activity status change to Terminate",
         msg.timeout
     );
-    db.as_dao::<ActivityStateDao>()
-        .get_state_wait(&msg.activity_id, Some(StatePair(State::Terminated, None)))
+    Ok(db
+        .as_dao::<ActivityStateDao>()
+        .get_state_wait(&msg.activity_id, Some(State::Terminated.into()))
         .timeout(msg.timeout)
         .map_err(Error::from)
-        .await?
-        .map_err(Error::from)?;
-
-    Ok(())
+        .await
+        .map(|_| ())?)
 }
 
 async fn get_activity_state_gsb(
@@ -141,9 +140,7 @@ async fn get_activity_state_gsb(
 ) -> RpcMessageResult<activity::GetState> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-    super::get_activity_state(&db, &msg.activity_id)
-        .await
-        .map_err(Into::into)
+    Ok(get_persisted_state(&db, &msg.activity_id).await?)
 }
 
 async fn get_activity_usage_gsb(
@@ -153,13 +150,12 @@ async fn get_activity_usage_gsb(
 ) -> RpcMessageResult<activity::GetUsage> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-    super::get_activity_usage(&db, &msg.activity_id)
-        .await
-        .map_err(Error::into)
+    Ok(get_persisted_usage(&db, &msg.activity_id).await?)
 }
 
 mod local {
     use super::*;
+    use crate::common::{set_persisted_state, set_persisted_usage};
 
     pub fn bind_gsb(db: &DbExecutor) {
         // local for ExeUnit interactions
@@ -180,9 +176,8 @@ mod local {
     ) -> RpcMessageResult<activity::local::SetState> {
         authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-        super::super::set_activity_state(&db, &msg.activity_id, msg.state)
-            .map_err(Into::into)
-            .await
+        set_persisted_state(&db, &msg.activity_id, msg.state).await?;
+        Ok(())
     }
 
     /// Pass current activity usage (which may include error details).
@@ -194,9 +189,7 @@ mod local {
     ) -> RpcMessageResult<activity::local::SetUsage> {
         authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-        db.as_dao::<ActivityUsageDao>()
-            .set(&msg.activity_id, &msg.usage.current_usage)
-            .await
-            .map_err(|e| Error::from(e).into())
+        set_persisted_usage(&db, &msg.activity_id, msg.usage).await?;
+        Ok(())
     }
 }

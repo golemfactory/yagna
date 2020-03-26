@@ -38,9 +38,10 @@ pub enum Error {
 impl From<ya_persistence::executor::Error> for Error {
     fn from(e: ya_persistence::executor::Error) -> Self {
         match e {
-            ya_persistence::executor::Error::Diesel(e) => Error::from(e),
-            ya_persistence::executor::Error::Pool(e) => Error::from(e),
-            ya_persistence::executor::Error::RuntimeError(e) => Error::from(e),
+            ya_persistence::executor::Error::DieselError(e) => e.into(),
+            ya_persistence::executor::Error::PoolError(e) => e.into(),
+            ya_persistence::executor::Error::RuntimeError(e) => e.into(),
+            ya_persistence::executor::Error::SerdeJsonError(e) => e.into(),
         }
     }
 }

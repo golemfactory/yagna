@@ -1,10 +1,8 @@
 use actix_web::{web, Responder};
 use serde::Deserialize;
-use std::str::FromStr;
 
-use ya_core_model::{activity, ethaddr::NodeId};
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{ExeScriptCommand, ExeScriptRequest, State};
+use ya_core_model::activity;
+use ya_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -12,9 +10,9 @@ use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
+    get_activity_agreement, get_agreement, set_persisted_state, PathActivity, QueryTimeout,
 };
-use crate::dao::{ActivityDao, ActivityStateDao};
+use crate::dao::ActivityDao;
 use crate::error::Error;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -40,8 +38,7 @@ async fn create_activity(
     log::trace!("agreement: {:#?}", agreement);
 
     let msg = activity::Create {
-        // TODO: fix this
-        provider_id: NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap()).unwrap(),
+        provider_id: agreement.provider_id()?.parse()?,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
@@ -85,16 +82,17 @@ async fn destroy_activity(
         .timeout(query.timeout)
         .await???;
 
-    db.as_dao::<ActivityStateDao>()
-        .set(
-            &path.activity_id,
-            StatePair(State::Terminated, None),
-            None,
-            None,
-        )
-        .await?;
-
-    Ok::<_, Error>(web::Json(()))
+    set_persisted_state(
+        &db,
+        &path.activity_id,
+        ActivityState {
+            state: State::Terminated.into(),
+            reason: None,
+            error_message: None,
+        },
+    )
+    .await
+    .map(|_| web::Json(()))
 }
 
 /// Executes an ExeScript batch within a given Activity.

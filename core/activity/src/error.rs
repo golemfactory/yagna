@@ -8,14 +8,10 @@ use crate::dao::DaoError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("DB connection error: {0}")]
-    Db(#[from] r2d2::Error),
     #[error("DAO error: {0}")]
     Dao(#[from] DaoError),
     #[error("GSB error: {0}")]
-    Gsb(ya_service_bus::error::Error),
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
+    Gsb(#[from] ya_service_bus::Error),
     #[error("Service error: {0}")]
     Service(String),
     #[error("Bad request: {0}")]
@@ -26,44 +22,28 @@ pub enum Error {
     Forbidden(String),
     #[error("Timeout")]
     Timeout,
-    #[error("task: {0}")]
-    RuntimeError(#[from] tokio::task::JoinError),
 }
 
 impl From<ya_persistence::executor::Error> for Error {
     fn from(e: ya_persistence::executor::Error) -> Self {
-        log::trace!("ya_persistence::executor::Error: {:?}", e);
-        match e {
-            ya_persistence::executor::Error::Diesel(e) => Error::from(DaoError::from(e)),
-            ya_persistence::executor::Error::Pool(e) => Error::from(e),
-            ya_persistence::executor::Error::RuntimeError(e) => Error::from(e),
-        }
+        Error::Dao(e.into())
     }
 }
 
-impl Into<actix_web::HttpResponse> for Error {
-    fn into(self) -> actix_web::HttpResponse {
-        self.error_response()
-    }
-}
-
-impl From<ya_service_bus::error::Error> for Error {
-    fn from(e: ya_service_bus::error::Error) -> Self {
-        log::trace!("ya_service_bus::error::Error: {:?}", e);
-        Error::Gsb(e)
+impl From<Error> for actix_web::HttpResponse {
+    fn from(err: Error) -> Self {
+        err.error_response()
     }
 }
 
 impl From<tokio::time::Elapsed> for Error {
     fn from(_: tokio::time::Elapsed) -> Self {
-        log::trace!("tokio::time::Elapsed");
         Error::Timeout
     }
 }
 
 impl From<RpcMessageError> for Error {
     fn from(e: RpcMessageError) -> Self {
-        log::trace!("RpcMessageError: {:?}", e);
         match e {
             RpcMessageError::Service(msg) => Error::Service(msg),
             RpcMessageError::Activity(msg) => Error::Service(msg),
@@ -78,7 +58,6 @@ impl From<RpcMessageError> for Error {
 
 impl From<MarketRpcMessageError> for Error {
     fn from(e: MarketRpcMessageError) -> Self {
-        log::trace!("MarketRpcMessageError: {:?}", e);
         match e {
             MarketRpcMessageError::Service(msg) => Error::Service(msg),
             MarketRpcMessageError::Market(msg) => Error::Service(msg),
@@ -110,7 +89,6 @@ impl From<ya_core_model::ethaddr::ParseError> for Error {
 
 impl From<Error> for RpcMessageError {
     fn from(e: Error) -> Self {
-        log::trace!("for RpcMessageError: {:?}", e);
         match e {
             Error::Service(msg) => RpcMessageError::Activity(msg),
             Error::BadRequest(msg) => RpcMessageError::BadRequest(msg),
@@ -124,7 +102,6 @@ impl From<Error> for RpcMessageError {
 
 impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
-        log::trace!("actix_web::error::ResponseError: {:?}", self);
         match self {
             Error::BadRequest(_) => {
                 HttpResponse::BadRequest().json(ErrorMessage::new(self.to_string()))

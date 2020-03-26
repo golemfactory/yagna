@@ -2,11 +2,14 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use ya_core_model::{ethaddr::NodeId, market};
-use ya_model::market::Agreement;
+use ya_model::{
+    activity::{ActivityState, ActivityUsage},
+    market::Agreement,
+};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
-use crate::dao::ActivityDao;
+use crate::dao::{ActivityDao, ActivityStateDao, ActivityUsageDao};
 use crate::error::Error;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
@@ -44,6 +47,42 @@ pub(crate) fn generate_id() -> String {
     Uuid::new_v4().to_simple().to_string()
 }
 
+pub(crate) async fn get_persisted_state(
+    db: &DbExecutor,
+    activity_id: &str,
+) -> Result<ActivityState, Error> {
+    Ok(db.as_dao::<ActivityStateDao>().get(activity_id).await?)
+}
+
+pub(crate) async fn set_persisted_state(
+    db: &DbExecutor,
+    activity_id: &str,
+    activity_state: ActivityState,
+) -> Result<ActivityState, Error> {
+    Ok(db
+        .as_dao::<ActivityStateDao>()
+        .set(activity_id, activity_state)
+        .await?)
+}
+
+pub(crate) async fn get_persisted_usage(
+    db: &DbExecutor,
+    activity_id: &str,
+) -> Result<ActivityUsage, Error> {
+    Ok(db.as_dao::<ActivityUsageDao>().get(&activity_id).await?)
+}
+
+pub(crate) async fn set_persisted_usage(
+    db: &DbExecutor,
+    activity_id: &str,
+    activity_usage: ActivityUsage,
+) -> Result<ActivityUsage, Error> {
+    Ok(db
+        .as_dao::<ActivityUsageDao>()
+        .set(activity_id, activity_usage)
+        .await?)
+}
+
 pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreement, Error> {
     Ok(bus::service(market::BUS_ID)
         .send(market::GetAgreement {
@@ -52,14 +91,11 @@ pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreeme
         .await??)
 }
 
-async fn get_agreement_id(db: &DbExecutor, activity_id: &str) -> Result<String, Error> {
-    db.as_dao::<ActivityDao>()
+pub(crate) async fn get_agreement_id(db: &DbExecutor, activity_id: &str) -> Result<String, Error> {
+    Ok(db
+        .as_dao::<ActivityDao>()
         .get_agreement_id(activity_id)
-        .await?
-        .ok_or(Error::NotFound(format!(
-            "agreement for activity id: {}",
-            activity_id
-        )))
+        .await?)
 }
 
 pub(crate) async fn get_activity_agreement(
