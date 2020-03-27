@@ -11,8 +11,7 @@ impl Service for Activity {
 
 impl Activity {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
-        let db = ctx.component();
-        provider::service::bind_gsb(&db);
+        provider::service::bind_gsb(&ctx.component());
         Ok(())
     }
 

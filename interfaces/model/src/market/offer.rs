@@ -21,7 +21,7 @@ pub struct Offer {
     #[serde(rename = "offerId", skip_serializing_if = "Option::is_none")]
     pub offer_id: Option<String>,
     #[serde(rename = "providerId", skip_serializing_if = "Option::is_none")]
-    pub provider_id: Option<String>,
+    pub provider_id: Option<String>, // TODO: use NodeId
 }
 
 impl Offer {
@@ -34,11 +34,17 @@ impl Offer {
         }
     }
 
-    pub fn offer_id(&self) -> Result<&String, ErrorMessage> {
-        self.offer_id.as_ref().ok_or("no offer id".into())
+    pub fn offer_id(&self) -> Result<&str, ErrorMessage> {
+        self.offer_id
+            .as_ref()
+            .map(AsRef::as_ref)
+            .ok_or("no offer id".into())
     }
 
-    pub fn provider_id(&self) -> Result<&String, ErrorMessage> {
-        self.provider_id.as_ref().ok_or("no provider id".into())
+    pub fn provider_id(&self) -> Result<&str, ErrorMessage> {
+        self.provider_id
+            .as_ref()
+            .map(AsRef::as_ref)
+            .ok_or("no provider id".into())
     }
 }

@@ -3,11 +3,10 @@ use std::borrow::Cow;
 use std::mem::MaybeUninit;
 use std::str::FromStr;
 use std::{fmt, str};
-use thiserror::Error;
 
-#[derive(Debug, Error)]
-#[error("{0}")]
-pub struct ParseError(&'static str);
+#[derive(Debug, thiserror::Error, PartialEq)]
+#[error("NodeId parsing error: {0}")]
+pub struct ParseError(String);
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct NodeId {
@@ -78,19 +77,17 @@ impl<'a> From<Cow<'a, [u8]>> for NodeId {
     }
 }
 
-impl ToString for NodeId {
-    fn to_string(&self) -> String {
-        self.with_hex(|str| str.into())
-    }
-}
-
 #[inline]
-fn hex_to_dec(hex: u8) -> Result<u8, ParseError> {
+fn hex_to_dec(hex: u8, s: &str) -> Result<u8, ParseError> {
     match hex {
         b'A'..=b'F' => Ok(hex - b'A' + 10),
         b'a'..=b'f' => Ok(hex - b'a' + 10),
         b'0'..=b'9' => Ok(hex - b'0'),
-        _ => Err(ParseError("invalid char, expected hex")),
+        _ => Err(ParseError(format!(
+            "expected hex chars, but got: `{}` within {}",
+            char::from(hex),
+            s
+        ))),
     }
 }
 
@@ -101,18 +98,22 @@ impl str::FromStr for NodeId {
         let bytes = s.as_bytes();
 
         if bytes.len() != 42 {
-            return Err(ParseError("expected size 42 chars"));
+            return Err(ParseError(format!(
+                "expected size 42 chars, but {} given: {}",
+                s.len(),
+                s
+            )));
         }
 
         if bytes[0] != b'0' || bytes[1] != b'x' {
-            return Err(ParseError("expected 0x"));
+            return Err(ParseError(format!("expected 0x prefix, but got: {}", s)));
         }
 
         let mut inner = [0u8; 20];
         let mut p = 0;
 
         for b in bytes[2..].chunks(2) {
-            let (hi, lo) = (hex_to_dec(b[0])?, hex_to_dec(b[1])?);
+            let (hi, lo) = (hex_to_dec(b[0], s)?, hex_to_dec(b[1], s)?);
             inner[p] = (hi << 4) | lo;
             p += 1;
         }
@@ -137,6 +138,12 @@ impl Serialize for NodeId {
 }
 
 impl fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl fmt::Display for NodeId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.with_hex(|hex_str| write!(f, "{}", hex_str))
     }
@@ -239,4 +246,69 @@ mod sql {
     #[derive(FromSqlRow)]
     #[diesel(foreign_derive)]
     struct NodeIdProxy(NodeId);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_empty_str() {
+        assert_eq!(
+            "".parse::<NodeId>().unwrap_err().to_string(),
+            "NodeId parsing error: expected size 42 chars, but 0 given: ".to_string()
+        );
+    }
+
+    #[test]
+    fn parse_short_str() {
+        assert_eq!(
+            "short".parse::<NodeId>().unwrap_err().to_string(),
+            "NodeId parsing error: expected size 42 chars, but 5 given: short".to_string()
+        );
+    }
+
+    #[test]
+    fn parse_long_str() {
+        assert_eq!(
+            "0123456789012345678901234567890123456789123"
+                .parse::<NodeId>()
+                .unwrap_err()
+                .to_string(),
+            "NodeId parsing error: expected size 42 chars, but 43 given: 0123456789012345678901234567890123456789123".to_string()
+        );
+    }
+
+    #[test]
+    fn parse_wo_0x_str() {
+        assert_eq!(
+            "012345678901234567890123456789012345678912"
+                .parse::<NodeId>()
+                .unwrap_err()
+                .to_string(),
+            "NodeId parsing error: expected 0x prefix, but got: 012345678901234567890123456789012345678912".to_string()
+        );
+    }
+
+    #[test]
+    fn parse_non_hex_str() {
+        assert_eq!(
+            "0xx000000000000000000000000000000000000000"
+                .parse::<NodeId>()
+                .unwrap_err()
+                .to_string(),
+            "NodeId parsing error: expected hex chars, but got: `x` within 0xx000000000000000000000000000000000000000".to_string()
+        );
+    }
+
+    #[test]
+    fn parse_proper_str() {
+        assert_eq!(
+            "0xbabe000000000000000000000000000000000000"
+                .parse::<NodeId>()
+                .unwrap()
+                .to_string(),
+            "0xbabe000000000000000000000000000000000000".to_string()
+        );
+    }
 }

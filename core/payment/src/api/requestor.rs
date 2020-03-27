@@ -12,10 +12,12 @@ use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
-use ya_core_model::payment::public::{AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE};
+use ya_core_model::payment::public::{
+    AcceptDebitNote, AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE,
+};
 use ya_core_model::payment::RpcMessageError;
 use ya_model::payment::*;
-use ya_net::RemoteEndpoint;
+use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -95,8 +97,64 @@ async fn accept_debit_note(
     path: Path<DebitNoteId>,
     query: Query<Timeout>,
     body: Json<Acceptance>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let debit_note_id = path.debit_note_id.clone();
+    let recipient_id = id.identity.to_string();
+    let acceptance = body.into_inner();
+    let allocation_id = acceptance.allocation_id.clone();
+
+    let dao: DebitNoteDao = db.as_dao();
+    let debit_note: DebitNote = match dao.get(debit_note_id.clone()).await {
+        Ok(Some(debit_note)) if debit_note.recipient_id == recipient_id => debit_note.into(),
+        Err(e) => return response::server_error(&e),
+        _ => return response::not_found(),
+    };
+
+    if debit_note.total_amount_due != acceptance.total_amount_accepted {
+        return response::bad_request(&"Invalid amount accepted");
+    }
+
+    match debit_note.status {
+        InvoiceStatus::Received => (),
+        InvoiceStatus::Rejected => (),
+        InvoiceStatus::Failed => (),
+        InvoiceStatus::Accepted => return response::ok(Null),
+        InvoiceStatus::Settled => return response::ok(Null),
+        InvoiceStatus::Issued => return response::server_error(&"Illegal status: issued"),
+        InvoiceStatus::Cancelled => return response::bad_request(&"Debit note cancelled"),
+    }
+
+    with_timeout(query.timeout, async move {
+        let issuer_id: NodeId = debit_note.issuer_id.parse().unwrap();
+        let msg = AcceptDebitNote {
+            debit_note_id: debit_note_id.clone(),
+            acceptance,
+        };
+        match async move {
+            issuer_id.try_service(PUBLIC_SERVICE)?.call(msg).await??;
+            Ok(())
+        }
+        .await
+        {
+            Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(e)))) => {
+                return response::bad_request(&e);
+            }
+            Err(e) => return response::server_error(&e),
+            _ => (),
+        }
+
+        // TODO: Compute amount to pay and schedule payment
+
+        match dao
+            .update_status(debit_note_id, InvoiceStatus::Accepted.into())
+            .await
+        {
+            Ok(_) => response::ok(Null),
+            Err(e) => response::server_error(&e),
+        }
+    })
+    .await
 }
 
 async fn reject_debit_note(
@@ -201,7 +259,7 @@ async fn accept_invoice(
             acceptance,
         };
         match async move {
-            issuer_id.service(PUBLIC_SERVICE).call(msg).await??;
+            issuer_id.try_service(PUBLIC_SERVICE)?.call(msg).await??;
             Ok(())
         }
         .await

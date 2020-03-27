@@ -21,7 +21,7 @@ pub struct Demand {
     #[serde(rename = "demandId", skip_serializing_if = "Option::is_none")]
     pub demand_id: Option<String>,
     #[serde(rename = "requestorId", skip_serializing_if = "Option::is_none")]
-    pub requestor_id: Option<String>,
+    pub requestor_id: Option<String>, // TODO: use NodeId
 }
 
 impl Demand {
@@ -34,11 +34,17 @@ impl Demand {
         }
     }
 
-    pub fn demand_id(&self) -> Result<&String, ErrorMessage> {
-        self.demand_id.as_ref().ok_or("no demand id".into())
+    pub fn demand_id(&self) -> Result<&str, ErrorMessage> {
+        self.demand_id
+            .as_ref()
+            .map(AsRef::as_ref)
+            .ok_or("no demand id".into())
     }
 
-    pub fn requestor_id(&self) -> Result<&String, ErrorMessage> {
-        self.requestor_id.as_ref().ok_or("no requestor id".into())
+    pub fn requestor_id(&self) -> Result<&str, ErrorMessage> {
+        self.requestor_id
+            .as_ref()
+            .map(AsRef::as_ref)
+            .ok_or("no requestor id".into())
     }
 }

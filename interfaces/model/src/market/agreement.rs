@@ -11,6 +11,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::ErrorMessage;
+
+/// Agreement expresses the terms of the deal between Provider and Requestor.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Agreement {
     #[serde(rename = "agreementId")]
@@ -19,13 +22,15 @@ pub struct Agreement {
     pub demand: crate::market::Demand,
     #[serde(rename = "offer")]
     pub offer: crate::market::Offer,
-    /// End of validity period. Agreement needs to be accepted, rejected or cancellled before this date; otherwise will expire
+    /// End of validity period.
+    ///
+    /// Agreement needs to be accepted, rejected or cancelled before this date; otherwise will expire.
     #[serde(rename = "validTo")]
     pub valid_to: DateTime<Utc>,
-    /// date of the Agreement approval
+    /// date of the Agreement approval.
     #[serde(rename = "approvedDate", skip_serializing_if = "Option::is_none")]
     pub approved_date: Option<DateTime<Utc>>,
-    /// * `Proposal` - newly created by a Requestor (based on Proposal) * `Pending` - confirmed by a Requestor and send to Provider for approval * `Cancelled` by a Requestor * `Rejected` by a Provider * `Approved` by both sides * `Expired` - not accepted, rejected nor cancelled within validity period * `Terminated` - finished after approval.
+    /// See [State](enum.State.html).
     #[serde(rename = "state")]
     pub state: State,
     #[serde(rename = "proposedSignature", skip_serializing_if = "Option::is_none")]
@@ -56,23 +61,37 @@ impl Agreement {
             committed_signature: None,
         }
     }
+
+    pub fn provider_id(&self) -> Result<&str, ErrorMessage> {
+        self.offer.provider_id()
+    }
+
+    pub fn requestor_id(&self) -> Result<&str, ErrorMessage> {
+        self.demand.requestor_id()
+    }
 }
 
-/// * `Proposal` - newly created by a Requestor (based on Proposal) * `Pending` - confirmed by a Requestor and send to Provider for approval * `Cancelled` by a Requestor * `Rejected` by a Provider * `Approved` by both sides * `Expired` - not accepted, rejected nor cancelled within validity period * `Terminated` - finished after approval.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum State {
+    /// newly created by a Requestor (based on Proposal)
     #[serde(rename = "Proposal")]
     Proposal,
+    /// confirmed by a Requestor and send to Provider for approval
     #[serde(rename = "Pending")]
     Pending,
+    /// Cancelled by a Requestor
     #[serde(rename = "Cancelled")]
     Cancelled,
+    /// Rejected by a Provider
     #[serde(rename = "Rejected")]
     Rejected,
+    /// Approved by both sides
     #[serde(rename = "Approved")]
     Approved,
+    /// Expired - not accepted, rejected nor cancelled within validity period
     #[serde(rename = "Expired")]
     Expired,
+    /// `Terminated` - finished after approval.
     #[serde(rename = "Terminated")]
     Terminated,
 }

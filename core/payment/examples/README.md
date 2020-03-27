@@ -4,12 +4,12 @@
 
 To start the provider:
 ```shell script
-RUST_BACKTRACE=1 CENTRAL_NET_HOST=34.244.4.185:7464 cargo run --example payment_api -- provider
+RUST_BACKTRACE=1 cargo run --example payment_api -- provider
 ```
 
 To start the requestor:
 ```shell script
-RUST_BACKTRACE=1 CENTRAL_NET_HOST=34.244.4.185:7464 GSB_URL="tcp://127.0.0.1:8464" YAGNA_BUS_PORT=8464 YAGNA_HTTP_PORT=8465 cargo run --example payment_api -- requestor
+RUST_BACKTRACE=1 GSB_URL="tcp://127.0.0.1:8464" YAGNA_API_URL="http://127.0.0.1:8465" cargo run --example payment_api -- requestor
 ```
 
 #### Debit note flow
@@ -42,6 +42,17 @@ To see debit notes issued by the provider:
 
 To see debit notes received by the requestor:  
 `GET` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNotes`
+
+To accept a debit note:
+`POST` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNotes/<debitNoteId>/accept`
+
+Payload:
+```json
+{
+  "totalAmountAccepted": "1.123456789012345678",
+  "allocationId": "<allocationId>"
+}
+```
 
 #### Invoice flow
 

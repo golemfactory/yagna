@@ -17,9 +17,9 @@ use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
 use ya_payment_driver::{AccountMode, Chain, DummyDriver, GntDriver, PaymentDriver, SignTx};
 use ya_persistence::executor::DbExecutor;
-use ya_service_api::constants::{YAGNA_BUS_ADDR, YAGNA_HTTP_ADDR};
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::rest_api_addr;
 
 #[derive(Clone, Debug, StructOpt)]
 enum Command {
@@ -155,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
     let db = DbExecutor::new(database_url)?;
     db.apply_migration(migrations::run_with_output)?;
 
-    ya_sb_router::bind_router(*YAGNA_BUS_ADDR).await?;
+    ya_sb_router::bind_gsb_router(None).await?;
     let processor = match &args.driver {
         Driver::Dummy => PaymentProcessor::new(DummyDriver::new(), db.clone()),
         Driver::Gnt => PaymentProcessor::new(
@@ -166,8 +166,7 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor);
     fake_sign_tx(Box::new(sign_tx));
 
-    let net_host = ya_net::resolve_default()?;
-    ya_net::bind_remote(&net_host, &node_id).await?;
+    ya_net::bind_remote(&node_id.parse()?).await?;
 
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
@@ -209,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
             .wrap(DummyAuth::new(identity.clone()))
             .service(payment_service)
     })
-    .bind(*YAGNA_HTTP_ADDR)?
+    .bind(rest_api_addr())?
     .run()
     .await?;
 
