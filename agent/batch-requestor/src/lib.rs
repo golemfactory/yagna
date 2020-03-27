@@ -8,10 +8,12 @@ use ya_client::{
 };
 use ya_model::market::{AgreementProposal, Demand, Proposal, RequestorEvent};
 
+#[derive(Clone)]
 pub enum WasmRuntime {
     Wasi(i32), /* Wasi version */
 }
 
+#[derive(Clone)]
 pub struct ImageSpec {
     runtime: WasmRuntime,
     /* TODO */
@@ -93,6 +95,7 @@ impl TaskSession {
     }
 }
 
+#[derive(Clone)]
 pub struct WasmDemand {
     spec: ImageSpec,
     min_ram_gib: f64,
@@ -118,6 +121,30 @@ impl WasmDemand {
             min_storage_gib: min_storage_gib.into(),
             ..self
         }
+    }
+}
+
+impl From<WasmDemand> for Demand {
+    fn from(wasm_demand: WasmDemand) -> Self {
+        Demand::new(
+            serde_json::json!({
+                "golem": {
+                    "node": {
+                        "id": {
+                            "name": "xyz"
+                        },
+                        "ala": 1
+                    }
+                }
+            }),
+            format!(
+                r#"(&
+                    (golem.inf.mem.gib>{})
+                    (golem.inf.storage.gib>{})
+                )"#,
+                wasm_demand.min_storage_gib, wasm_demand.min_ram_gib
+            ),
+        )
     }
 }
 
@@ -147,25 +174,7 @@ impl Actor for TaskSession {
             .unwrap()
             .interface_at(activity_url);
 
-        let demand = Demand {
-            properties: serde_json::json!({
-                "golem": {
-                    "node": {
-                        "id": {
-                            "name": "xyz"
-                        },
-                        "ala": 1
-                    }
-                }
-            }),
-            constraints: r#"(&
-                (golem.inf.mem.gib>0.5)
-                (golem.inf.storage.gib>1)
-            )"#
-            .to_string(),
-            demand_id: Default::default(),
-            requestor_id: Default::default(),
-        };
+        let demand: Demand = self.demand.clone().unwrap().into();
         /* TODO 1. download image spec (demand.spec) 2. market api -> subscribe 3. activity_api */
 
         eprintln!(
@@ -181,8 +190,11 @@ impl Actor for TaskSession {
                 let r2 = r.unwrap();
                 loop {
                     eprintln!("waiting");
-                    let events = market_api.collect(&r2, Some(120.0), Some(5)).await?;
-                    eprintln!("received {:?}", events);
+                    let events = market_api.collect(&r2, Some(120.0), Some(5)).await;
+                    match events {
+                        Ok(evs) => eprintln!("received {:?}", evs),
+                        Err(e) => eprintln!("error {:?}", e),
+                    }
                     tokio::time::delay_for(Duration::from_millis(1000)).await;
                 }
                 Ok::<(), ya_client::error::Error>(())
@@ -193,7 +205,7 @@ impl Actor for TaskSession {
                 fut::ready(())
             }),
         );
-        eprintln!("done",);
+        eprintln!("done");
     }
 }
 
