@@ -8,7 +8,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ya_core_model::activity;
+
 use super::exeunit_instance::ExeUnitInstance;
+//use ya_model::market::Agreement;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -32,10 +35,19 @@ impl ExeUnitsRegistry {
         }
     }
 
-    pub fn spawn_exeunit(&self, name: &str, working_dir: &Path) -> Result<ExeUnitInstance> {
+    pub fn spawn_exeunit(
+        &self,
+        name: &str,
+        activity_id: &str,
+        _agreement_id: &str,
+    ) -> Result<ExeUnitInstance> {
+        let working_dir = std::env::current_dir()?;
         let exeunit_desc = self.find_exeunit(name)?;
-        info!("spawning exeunit: {:?}", exeunit_desc);
-        ExeUnitInstance::new(name, &exeunit_desc.path, working_dir, &exeunit_desc.args)
+        let mut args = exeunit_desc.args.clone();
+        // TODO: pass also agreement or its part with task_package
+        args.push(activity_id.into());
+        args.push(activity::local::BUS_ID.into());
+        ExeUnitInstance::new(name, &exeunit_desc.path, &working_dir, &args)
     }
 
     pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {

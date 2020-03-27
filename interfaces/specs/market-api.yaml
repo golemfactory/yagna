@@ -126,8 +126,8 @@ paths:
   /offers/{subscriptionId}/events:
     parameters:
       - $ref: '#/components/parameters/subscriptionId'
-      - $ref: '#/components/parameters/timeout'
-      - $ref: '#/components/parameters/maxEvents'
+      - $ref: 'common.yaml#/parameters/timeout'
+      - $ref: 'common.yaml#/parameters/maxEvents'
     get:
       tags:
         - provider
@@ -351,8 +351,8 @@ paths:
   /demands/{subscriptionId}/events:
     parameters:
       - $ref: '#/components/parameters/subscriptionId'
-      - $ref: '#/components/parameters/timeout'
-      - $ref: '#/components/parameters/maxEvents'
+      - $ref: 'common.yaml#/parameters/timeout'
+      - $ref: 'common.yaml#/parameters/maxEvents'
     get:
       tags:
         - requestor
@@ -612,7 +612,7 @@ paths:
   /agreements/{agreementId}/wait:
     parameters:
       - $ref: '#/components/parameters/agreementId'
-      - $ref: '#/components/parameters/timeout'
+      - $ref: 'common.yaml#/parameters/timeout'
     post:
       tags:
         - requestor
@@ -658,7 +658,7 @@ paths:
   /agreements/{agreementId}/approve:
     parameters:
       - $ref: '#/components/parameters/agreementId'
-      - $ref: '#/components/parameters/timeout'
+      - $ref: 'common.yaml#/parameters/timeout'
     post:
       tags:
         - provider
@@ -799,20 +799,6 @@ components:
       schema:
         type: string
 
-    timeout:
-      name: timeout
-      in: query
-      schema:
-        type: number
-        format: float
-
-    maxEvents:
-      name: maxEvents
-      in: query
-      schema:
-        type: integer
-        format: int32
-
     agreementId:
       name: agreementId
       in: path
@@ -891,28 +877,28 @@ components:
       content:
         application/json:
           schema:
-            $ref: 'error_message.yaml#/ErrorMessage'
+            $ref: 'common.yaml#/schemas/ErrorMessage'
 
     Unauthorized:
       description: Authorization information is missing or invalid.
       content:
         application/json:
           schema:
-            $ref: 'error_message.yaml#/ErrorMessage'
+            $ref: 'common.yaml#/schemas/ErrorMessage'
 
     NotFound:
       description: The specified resource was not found.
       content:
         application/json:
           schema:
-            $ref: 'error_message.yaml#/ErrorMessage'
+            $ref: 'common.yaml#/schemas/ErrorMessage'
 
     UnexpectedError:
       description: Unexpected error.
       content:
         application/json:
           schema:
-            $ref: 'error_message.yaml#/ErrorMessage'
+            $ref: 'common.yaml#/schemas/ErrorMessage'
 
   schemas:
 
