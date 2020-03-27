@@ -7,7 +7,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::common::{
-    authorize_activity_executor, set_persisted_state, PathActivity, QueryTimeoutMaxCount,
+    authorize_activity_executor, set_persisted_state, PathActivity, QueryTimeoutMaxEvents,
 };
 use crate::dao::EventDao;
 use crate::error::Error;
@@ -39,13 +39,13 @@ async fn set_activity_state_web(
 #[actix_web::get("/events")]
 async fn get_events_web(
     db: web::Data<DbExecutor>,
-    query: web::Query<QueryTimeoutMaxCount>,
+    query: web::Query<QueryTimeoutMaxEvents>,
     id: Identity,
 ) -> impl Responder {
     log::trace!("getting events {:?}", query);
     let events = db
         .as_dao::<EventDao>()
-        .get_events_wait(id.identity, query.max_count)
+        .get_events_wait(id.identity, query.max_events)
         .timeout(query.timeout)
         .await??
         .into_iter()
