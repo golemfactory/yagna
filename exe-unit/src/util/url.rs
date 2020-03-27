@@ -37,6 +37,14 @@ impl TransferUrl {
         Ok(TransferUrl { hash, url: parsed })
     }
 
+    pub fn parse_with_hash(url: &str, fallback_scheme: &str) -> Result<Self, TransferError> {
+        let parsed = Self::parse(url, fallback_scheme)?;
+        match &parsed.hash {
+            Some(_) => Ok(parsed),
+            None => Err(TransferError::InvalidUrlError("Missing hash".to_owned())),
+        }
+    }
+
     pub fn map_scheme<F>(mut self, f: F) -> Result<Self, TransferError>
     where
         F: Fn(&str) -> &str,
