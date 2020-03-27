@@ -22,7 +22,7 @@ impl TryRemoteEndpoint for NodeId {
             return Err(NetApiError::PublicPrefixNeeded(bus_addr.into()));
         }
         let exported_part = &bus_addr[net::PUBLIC_PREFIX.len()..];
-        let net_bus_addr = format!("{}/{:?}{}", net::SERVICE_ID, self, exported_part);
+        let net_bus_addr = format!("{}/{:?}{}", net::BUS_ID, self, exported_part);
         Ok(bus::service(&net_bus_addr))
     }
 }
@@ -34,7 +34,7 @@ impl TryRemoteEndpoint for &str {
 }
 
 pub fn net_node_id(node_id: &NodeId) -> String {
-    format!("{}/{:?}", net::SERVICE_ID, node_id)
+    format!("{}/{:?}", net::BUS_ID, node_id)
 }
 
 #[cfg(test)]

@@ -5820,6 +5820,7 @@ dependencies = [
  "log 0.4.8",
  "serde",
  "structopt",
+ "url 2.1.1",
  "ya-core-model",
  "ya-identity",
  "ya-persistence",
