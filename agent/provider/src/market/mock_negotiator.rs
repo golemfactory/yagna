@@ -12,10 +12,10 @@ pub struct AcceptAllNegotiator;
 impl Negotiator for AcceptAllNegotiator {
     fn create_offer(&mut self, offer: &OfferDefinition) -> Result<Offer> {
         Ok(Offer::new(
-            offer.clone().into_json(),
-            r#"(&
-                (golem.srv.comp.wasm.task_package=http://localhost:8000/rust-wasi-tutorial.zip)
-            )"#
+            offer.clone().into_json(), ""
+//            r#"(&
+//                (golem.srv.comp.wasm.task_package=http://34.244.4.185:8000/rust-wasi-tutorial.zip)
+//            )"#
             .into(),
         ))
     }

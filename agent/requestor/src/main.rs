@@ -151,7 +151,7 @@ fn build_demand(node_name: &str) -> Demand {
                 "srv": {
                     "comp":{
                         "wasm": {
-                            "task_package": "http://localhost:8000/rust-wasi-tutorial.zip"
+                            "task_package": "http://34.244.4.185:8000/rust-wasi-tutorial.zip"
                         }
                     }
                 }
