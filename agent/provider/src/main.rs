@@ -7,7 +7,8 @@ mod provider_agent;
 mod startup_config;
 
 use provider_agent::ProviderAgent;
-use startup_config::StartupConfig;
+use startup_config::{StartupConfig, PresetsConfig, ExeUnitsConfig};
+
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,6 +18,14 @@ async fn main() -> anyhow::Result<()> {
     let app_name = clap::crate_name!();
     log::info!("Starting {}...", app_name);
 
-    let args = StartupConfig::from_args();
-    ProviderAgent::new(args).await?.wait_for_ctrl_c().await
+    let config = StartupConfig::from_args();
+    match config {
+        StartupConfig::Run(args) => ProviderAgent::new(args).await?.wait_for_ctrl_c().await,
+        StartupConfig::Presets(presets_cmd) => match presets_cmd {
+            PresetsConfig::List => unimplemented!()
+        },
+        StartupConfig::ExeUnit(exeunit_cmd) => match exeunit_cmd {
+            ExeUnitsConfig::List => unimplemented!()
+        }
+    }
 }

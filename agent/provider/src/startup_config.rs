@@ -7,7 +7,7 @@ use ya_client::{
 };
 
 #[derive(StructOpt)]
-pub struct StartupConfig {
+pub struct RunConfig {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
     pub auth: String,
     ///
@@ -27,7 +27,28 @@ pub struct StartupConfig {
     pub credit_address: String,
 }
 
-impl StartupConfig {
+#[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+pub enum PresetsConfig {
+    List,
+}
+
+#[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+/// TODO: Install command - could download ExeUnit and add to descriptor file.
+pub enum ExeUnitsConfig {
+    List,
+}
+
+#[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+pub enum StartupConfig {
+    Run(RunConfig),
+    Presets(PresetsConfig),
+    ExeUnit(ExeUnitsConfig)
+}
+
+impl RunConfig {
     pub fn market_client(&self) -> Result<MarketProviderApi> {
         Ok(WebClient::with_token(&self.auth)?.interface_at(self.market_url.clone()))
     }

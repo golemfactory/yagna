@@ -45,9 +45,9 @@ cargo run --bin yagna -- app-key list
 Pass key field as `authorization_token` parameter from command line
 or add to .env file as `YAGNA_APPKEY`:
 ```
-cargo run --bin ya-provider --app-key {authorization_token}
+cargo run --bin ya-provider run --app-key {authorization_token}
 # or with .env
-cargo run --bin ya-provider
+cargo run --bin ya-provider run
 ```
 
 ### Running with mock requestor
@@ -67,6 +67,8 @@ cargo run --bin yagna payment status
 # Run requestor:
 cargo run --bin ya-requestor
 ``` 
+
+## Presets
 
 
 ## ExeUnits
