@@ -154,5 +154,46 @@ where
         + From<r2d2::Error>
         + From<diesel::result::Error>,
 {
-    do_with_connection(pool, move |conn| conn.transaction(|| f(conn))).await
+    do_with_connection(pool, move |conn| conn.immediate_transaction(|| f(conn))).await
+}
+
+#[cfg(debug_assertions)]
+pub async fn readonly_transaction<R: Send + 'static, Error, F>(
+    pool: &PoolType,
+    f: F,
+) -> Result<R, Error>
+where
+    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    Error: Send
+        + 'static
+        + From<tokio::task::JoinError>
+        + From<r2d2::Error>
+        + From<diesel::result::Error>,
+{
+    do_with_connection(pool, move |conn| {
+        conn.transaction(|| {
+            let _ = conn.execute("PRAGMA query_only=1;")?;
+            let result = f(conn);
+            let _ = conn.execute("PRAGMA query_only=0;")?;
+            result
+        })
+    })
+    .await
+}
+
+#[cfg(not(debug_assertions))]
+#[inline]
+pub async fn readonly_transaction<R: Send + 'static, Error, F>(
+    pool: &PoolType,
+    f: F,
+) -> Result<R, Error>
+where
+    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    Error: Send
+        + 'static
+        + From<tokio::task::JoinError>
+        + From<r2d2::Error>
+        + From<diesel::result::Error>,
+{
+    do_with_connection(pool, f).await
 }
