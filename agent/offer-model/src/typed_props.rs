@@ -156,7 +156,6 @@ impl ComInfo {
 // golem.inf.mem.gib
 // golem.inf.storage.gib
 // R: golem.activity.timeout_secs
-// TODO: golem.srv.comp.wasm.task_package
 
 // golem.com.payment.scheme="payu"
 // golem.com.payment.scheme.payu.interval_sec=3600

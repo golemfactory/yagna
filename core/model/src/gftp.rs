@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub fn file_bus_id(hash: &str) -> String {
-    format!("/public/gftp/{}", hash)
+    format!("{}/gftp/{}", crate::net::PUBLIC_PREFIX, hash)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]

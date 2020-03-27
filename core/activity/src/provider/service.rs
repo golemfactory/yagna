@@ -3,39 +3,37 @@ use std::convert::From;
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id, get_agreement,
-    RpcMessageResult,
+    get_persisted_state, get_persisted_usage, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::error::Error;
-use ya_core_model::activity::*;
-use ya_model::activity::{activity_state::StatePair, State};
+use ya_core_model::activity;
+use ya_model::activity::{ExeScriptCommand, State};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
-use ya_service_bus::timeout::*;
-
-lazy_static::lazy_static! {
-    static ref PRIVATE_ID: String = format!("/private{}", SERVICE_ID);
-    static ref PUBLIC_ID: String = format!("/public{}", SERVICE_ID);
-}
+use ya_service_bus::{
+    timeout::*,
+    typed::{self as bus, ServiceBinder},
+    RpcEndpoint,
+};
 
 pub fn bind_gsb(db: &DbExecutor) {
     // public for remote requestors interactions
-    bind_gsb_method!(&PUBLIC_ID, db, create_activity_gsb);
-    bind_gsb_method!(&PUBLIC_ID, db, destroy_activity_gsb);
-    bind_gsb_method!(&PUBLIC_ID, db, get_activity_state_gsb);
-    bind_gsb_method!(&PUBLIC_ID, db, get_activity_usage_gsb);
+    ServiceBinder::new(activity::BUS_ID, db, ())
+        .bind(create_activity_gsb)
+        .bind(destroy_activity_gsb)
+        .bind(get_activity_state_gsb)
+        .bind(get_activity_usage_gsb);
 
-    // local for ExeUnit interactions
-    bind_gsb_method!(&PRIVATE_ID, db, set_activity_state_gsb);
-    bind_gsb_method!(&PRIVATE_ID, db, set_activity_usage_gsb);
+    local::bind_gsb(db);
 }
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity_gsb(
     db: DbExecutor,
     caller: String,
-    msg: CreateActivity,
-) -> RpcMessageResult<CreateActivity> {
+    msg: activity::Create,
+) -> RpcMessageResult<activity::Create> {
     authorize_agreement_initiator(caller, &msg.agreement_id).await?;
 
     let activity_id = generate_id();
@@ -77,8 +75,8 @@ async fn create_activity_gsb(
 async fn destroy_activity_gsb(
     db: DbExecutor,
     caller: String,
-    msg: DestroyActivity,
-) -> RpcMessageResult<DestroyActivity> {
+    msg: activity::Destroy,
+) -> RpcMessageResult<activity::Destroy> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
     let provider_id = get_agreement(&msg.agreement_id)
         .await?
@@ -95,69 +93,91 @@ async fn destroy_activity_gsb(
         .await
         .map_err(Error::from)?;
 
+    if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
+        return Ok(());
+    }
+
+    log::debug!("sending ExeScript with Terminate command...");
+    let batch_id = bus::service(activity::exeunit::bus_id(&msg.activity_id))
+        .send(activity::Exec {
+            activity_id: msg.activity_id.clone(),
+            batch_id: generate_id(),
+            exe_script: vec![ExeScriptCommand::Terminate {}],
+            timeout: msg.timeout.clone(),
+        })
+        .await
+        .map_err(Error::from)??;
+    log::debug!("ExeScript send. batch id: {}", batch_id);
+
     log::debug!(
         "waiting {:?}ms for activity status change to Terminate",
         msg.timeout
     );
-    db.as_dao::<ActivityStateDao>()
-        .get_state_wait(&msg.activity_id, Some(StatePair(State::Terminated, None)))
+    Ok(db
+        .as_dao::<ActivityStateDao>()
+        .get_state_wait(&msg.activity_id, Some(State::Terminated.into()))
         .timeout(msg.timeout)
         .map_err(Error::from)
-        .await?
-        .map_err(Error::from)?;
-
-    Ok(())
+        .await
+        .map(|_| ())?)
 }
 
 async fn get_activity_state_gsb(
     db: DbExecutor,
     caller: String,
-    msg: GetActivityState,
-) -> RpcMessageResult<GetActivityState> {
+    msg: activity::GetState,
+) -> RpcMessageResult<activity::GetState> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-    super::get_activity_state(&db, &msg.activity_id)
-        .await
-        .map_err(Into::into)
-}
-
-/// Pass activity state (which may include error details).
-/// Called by ExeUnits.
-async fn set_activity_state_gsb(
-    db: DbExecutor,
-    caller: String,
-    msg: SetActivityState,
-) -> RpcMessageResult<SetActivityState> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
-
-    super::set_activity_state(&db, &msg.activity_id, msg.state)
-        .map_err(Into::into)
-        .await
+    Ok(get_persisted_state(&db, &msg.activity_id).await?)
 }
 
 async fn get_activity_usage_gsb(
     db: DbExecutor,
     caller: String,
-    msg: GetActivityUsage,
-) -> RpcMessageResult<GetActivityUsage> {
+    msg: activity::GetUsage,
+) -> RpcMessageResult<activity::GetUsage> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-    super::get_activity_usage(&db, &msg.activity_id)
-        .await
-        .map_err(Error::into)
+    Ok(get_persisted_usage(&db, &msg.activity_id).await?)
 }
 
-/// Pass current activity usage (which may include error details).
-/// Called by ExeUnits.
-async fn set_activity_usage_gsb(
-    db: DbExecutor,
-    caller: String,
-    msg: SetActivityUsage,
-) -> RpcMessageResult<SetActivityUsage> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+/// Local Activity services for ExeUnit reporting.
+mod local {
+    use super::*;
+    use crate::common::{set_persisted_state, set_persisted_usage};
 
-    db.as_dao::<ActivityUsageDao>()
-        .set(&msg.activity_id, &msg.usage.current_usage)
-        .await
-        .map_err(|e| Error::from(e).into())
+    pub fn bind_gsb(db: &DbExecutor) {
+        ServiceBinder::new(activity::local::BUS_ID, db, ())
+            .bind(set_activity_state_gsb)
+            .bind(set_activity_usage_gsb);
+    }
+
+    /// Pass activity state (which may include error details).
+    /// Called by ExeUnits.
+    ///
+    /// Security consideration: we assume activity_id as a cryptographically strong, so every1
+    /// who knows it is authorized to call this endpoint
+    async fn set_activity_state_gsb(
+        db: DbExecutor,
+        _caller: String,
+        msg: activity::local::SetState,
+    ) -> RpcMessageResult<activity::local::SetState> {
+        set_persisted_state(&db, &msg.activity_id, msg.state).await?;
+        Ok(())
+    }
+
+    /// Pass current activity usage (which may include error details).
+    /// Called by ExeUnits.
+    ///
+    /// Security consideration: we assume activity_id as a cryptographically strong, so every1
+    /// who knows it is authorized to call this endpoint
+    async fn set_activity_usage_gsb(
+        db: DbExecutor,
+        _caller: String,
+        msg: activity::local::SetUsage,
+    ) -> RpcMessageResult<activity::local::SetUsage> {
+        set_persisted_usage(&db, &msg.activity_id, msg.usage).await?;
+        Ok(())
+    }
 }

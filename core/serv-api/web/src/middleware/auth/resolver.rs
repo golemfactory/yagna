@@ -26,7 +26,7 @@ impl ValueResolver for AppKeyResolver {
         let key = key.clone();
         Box::pin(async move {
             let resp = actix_rpc::service(appkey::BUS_ID)
-                .send(None, Get::with_key(key))
+                .send(Get::with_key(key))
                 .map_err(|e| ErrorInternalServerError(format!("{}", e)))
                 .await?;
             Ok(resp.ok())

@@ -13,7 +13,7 @@ use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::public::{SendDebitNote, SendError, SendInvoice, BUS_ID};
 use ya_core_model::payment::RpcMessageError;
 use ya_model::payment::*;
-use ya_net::RemoteEndpoint;
+use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
@@ -148,7 +148,8 @@ async fn send_debit_note(
     with_timeout(query.timeout, async move {
         let recipient_id: NodeId = debit_note.recipient_id.parse().unwrap();
         let result = match recipient_id
-            .service(BUS_ID)
+            .try_service(BUS_ID)
+            .unwrap() // FIXME
             .call(SendDebitNote(debit_note))
             .await
         {
@@ -276,7 +277,11 @@ async fn send_invoice(
         None
     };
     match async move {
-        addr.service(BUS_ID).send(msg).timeout(timeout).await???;
+        addr.try_service(BUS_ID)
+            .unwrap() // FIXME
+            .send(msg)
+            .timeout(timeout)
+            .await???;
         Ok(())
     }
     .await

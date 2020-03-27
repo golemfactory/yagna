@@ -14,11 +14,13 @@ pub type InnerConnType = SqliteConnection;
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("{0}")]
-    Diesel(#[from] diesel::result::Error),
+    DieselError(#[from] diesel::result::Error),
     #[error("{0}")]
-    Pool(#[from] r2d2::Error),
+    PoolError(#[from] r2d2::Error),
     #[error("task: {0}")]
     RuntimeError(#[from] tokio::task::JoinError),
+    #[error("Serde Json error: {0}")]
+    SerdeJsonError(#[from] serde_json::error::Error),
 }
 
 #[derive(Clone)]

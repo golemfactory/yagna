@@ -22,6 +22,12 @@ pub struct ActivityState {
     pub error_message: Option<String>,
 }
 
+impl ActivityState {
+    pub fn alive(&self) -> bool {
+        self.state.alive()
+    }
+}
+
 impl From<&StatePair> for ActivityState {
     fn from(pending: &StatePair) -> Self {
         ActivityState {

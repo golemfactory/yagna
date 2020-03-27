@@ -6,7 +6,7 @@ pub mod exe_script_command_state;
 pub mod exe_script_request;
 pub mod provider_event;
 
-pub use self::activity_state::{ActivityState, State};
+pub use self::activity_state::{ActivityState, State, StatePair};
 pub use self::activity_usage::ActivityUsage;
 pub use self::exe_script_command::ExeScriptCommand;
 pub use self::exe_script_command_result::{ExeScriptCommandResult, Result as CommandResult};

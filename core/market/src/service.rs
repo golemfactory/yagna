@@ -23,16 +23,7 @@ impl Service for MarketService {
 impl MarketService {
     pub async fn gsb<Context>(_: &Context) -> anyhow::Result<()> {
         let _ = bus::bind(market::BUS_ID, |get: market::GetAgreement| async move {
-            let market_api: MarketProviderApi = WebClient::builder()
-                .build()
-                .map_err(Error::from)?
-                .interface()
-                .map_err(Error::from)?;
-            let agreement = market_api
-                .get_agreement(&get.agreement_id)
-                .await
-                .map_err(Error::from)?;
-            Ok(agreement)
+            Ok(get_agreement(&get).await?)
         });
 
         tmp_send_keys()
@@ -41,6 +32,12 @@ impl MarketService {
 
         Ok(())
     }
+}
+
+async fn get_agreement(get: &market::GetAgreement) -> Result<market::Agreement, Error> {
+    let market_api: MarketProviderApi = WebClient::builder().build()?.interface()?;
+
+    Ok(market_api.get_agreement(&get.agreement_id).await?)
 }
 
 async fn tmp_send_keys() -> anyhow::Result<()> {

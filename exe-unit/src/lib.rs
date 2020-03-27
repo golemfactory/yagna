@@ -1,12 +1,14 @@
-pub mod agreement;
-pub mod error;
-mod handlers;
-pub mod message;
-pub mod metrics;
-pub mod runtime;
-pub mod service;
-pub mod state;
-pub mod util;
+use actix::prelude::*;
+use futures::TryFutureExt;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use ya_core_model::activity;
+use ya_model::activity::activity_state::StatePair;
+use ya_model::activity::{
+    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
+};
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::agreement::Agreement;
 use crate::error::Error;
@@ -16,16 +18,16 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
-use actix::prelude::*;
-use futures::TryFutureExt;
-use std::path::PathBuf;
-use std::time::Duration;
-use ya_core_model::activity::*;
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{
-    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
-};
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+
+pub mod agreement;
+pub mod error;
+mod handlers;
+pub mod message;
+pub mod metrics;
+pub mod runtime;
+pub mod service;
+pub mod state;
+pub mod util;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -64,7 +66,7 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
-        if let Some(activity_id) = &self.ctx.service_id {
+        if let Some(activity_id) = &self.ctx.activity_id {
             let fut = report_usage(
                 self.ctx.report_url.clone().unwrap(),
                 activity_id.clone(),
@@ -110,7 +112,7 @@ impl<R: Runtime> ExeUnit<R> {
         addr: Addr<Self>,
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
-        exec: Exec,
+        exec: activity::Exec,
     ) {
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
@@ -146,6 +148,7 @@ impl<R: Runtime> ExeUnit<R> {
                 }
 
                 let message = format!("Command interrupted: {}", error.to_string());
+                log::error!("{}", message);
                 Self::shutdown(&addr, ShutdownReason::Error(message)).await;
                 break;
             }
@@ -260,12 +263,13 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     fn started(&mut self, ctx: &mut Self::Context) {
         let addr = ctx.address();
 
-        if let Some(s) = &self.ctx.service_id {
-            actix_rpc::bind::<Exec>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityState>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityUsage>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetRunningCommand>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetExecBatchResults>(&s, addr.clone().recipient());
+        if let Some(activity_id) = &self.ctx.activity_id {
+            let srv_id = activity::exeunit::bus_id(activity_id);
+            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
@@ -285,7 +289,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
-    pub service_id: Option<String>,
+    pub activity_id: Option<String>,
     pub report_url: Option<String>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
@@ -293,13 +297,13 @@ pub struct ExeUnitContext {
 }
 
 impl ExeUnitContext {
-    pub fn match_service(&self, service_id: &str) -> Result<()> {
-        match &self.service_id {
-            Some(sid) => match sid == service_id {
+    pub fn verify_activity_id(&self, activity_id: &str) -> Result<()> {
+        match &self.activity_id {
+            Some(act_id) => match act_id == activity_id {
                 true => Ok(()),
                 false => Err(Error::RemoteServiceError(format!(
-                    "Invalid destination service address: {}",
-                    service_id
+                    "Forbidden! Invalid activity id: {}",
+                    activity_id
                 ))),
             },
             None => Ok(()),
@@ -327,7 +331,7 @@ async fn report_usage<R: Runtime>(
     match metrics.send(GetMetrics).await {
         Ok(resp) => match resp {
             Ok(data) => {
-                let msg = SetActivityUsage {
+                let msg = activity::local::SetUsage {
                     activity_id,
                     usage: ActivityUsage::from(data),
                     timeout: None,
