@@ -1,7 +1,20 @@
 use actix_web::{middleware, App, HttpServer};
+
+use ya_activity::service;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::migrations;
-use ya_service_api_web::{rest_api_addr, scope::ExtendableScope};
+use ya_service_api_interfaces::Provider;
+use ya_service_api_web::rest_api_addr;
+
+struct ServiceContext {
+    db: DbExecutor,
+}
+
+impl<Service> Provider<Service, DbExecutor> for ServiceContext {
+    fn component(&self) -> DbExecutor {
+        self.db.clone()
+    }
+}
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -12,16 +25,14 @@ async fn main() -> anyhow::Result<()> {
     migrations::run_with_output(&db.conn()?, &mut std::io::stdout())?;
 
     ya_sb_router::bind_gsb_router(None).await?;
-    ya_activity::provider::service::bind_gsb(&db);
+
+    let context = ServiceContext { db: db.clone() };
+    ya_activity::service::Activity::gsb(&context).await?;
 
     HttpServer::new(move || {
-        let activity = actix_web::web::scope(ya_activity::ACTIVITY_API_PATH)
-            .data(db.clone())
-            .extend(ya_activity::provider::extend_web_scope);
-
         App::new()
             .wrap(middleware::Logger::default())
-            .service(activity)
+            .service(service::Activity::rest(&db))
     })
     .bind(rest_api_addr())?
     .run()
