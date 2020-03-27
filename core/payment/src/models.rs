@@ -172,6 +172,36 @@ pub struct DebitNoteEvent {
     pub details: Option<String>,
 }
 
+impl From<DebitNoteEvent> for api_model::DebitNoteEvent {
+    fn from(event: DebitNoteEvent) -> Self {
+        Self {
+            debit_note_id: event.debit_note_id,
+            timestamp: Utc.from_utc_datetime(&event.timestamp),
+            details: event.details.map(|s| serde_json::from_str(&s).unwrap()),
+            event_type: event.event_type.try_into().unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, Identifiable, Insertable)]
+#[table_name = "pay_debit_note_event"]
+#[primary_key(debit_note_id, event_type)]
+pub struct NewDebitNoteEvent {
+    pub debit_note_id: String,
+    pub event_type: String,
+    pub details: Option<String>,
+}
+
+impl From<api_model::NewDebitNoteEvent> for NewDebitNoteEvent {
+    fn from(event: api_model::NewDebitNoteEvent) -> Self {
+        Self {
+            debit_note_id: event.debit_note_id,
+            event_type: event.event_type.into(),
+            details: event.details.map(|s| serde_json::to_string(&s).unwrap()),
+        }
+    }
+}
+
 #[derive(Queryable, QueryableByName, Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice"]
 pub struct BareInvoice {

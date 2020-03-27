@@ -43,6 +43,17 @@ To see debit notes issued by the provider:
 To see debit notes received by the requestor:  
 `GET` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNotes`
 
+To accept a debit note:
+`POST` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNotes/<debitNoteId>/accept`
+
+Payload:
+```json
+{
+  "totalAmountAccepted": "1.123456789012345678",
+  "allocationId": "<allocationId>"
+}
+```
+
 #### Invoice flow
 
 To issue an invoice:  
