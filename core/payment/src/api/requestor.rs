@@ -1,9 +1,5 @@
 use crate::api::*;
-use crate::dao::allocation::AllocationDao;
-use crate::dao::debit_note::DebitNoteDao;
-use crate::dao::invoice::InvoiceDao;
-use crate::dao::invoice_event::InvoiceEventDao;
-use crate::dao::payment::PaymentDao;
+use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::models as db_models;
 use crate::utils::{listen_for_events, response, with_timeout};
@@ -166,8 +162,27 @@ async fn reject_debit_note(
     response::not_implemented() // TODO
 }
 
-async fn get_debit_note_events(db: Data<DbExecutor>, query: Query<EventParams>) -> HttpResponse {
-    response::not_implemented() // TODO
+async fn get_debit_note_events(
+    db: Data<DbExecutor>,
+    query: Query<EventParams>,
+    id: Identity,
+) -> HttpResponse {
+    let recipient_id = id.identity.to_string();
+    let timeout_secs = query.timeout;
+    let later_than = query.later_than.map(|d| d.naive_utc());
+
+    let dao: DebitNoteEventDao = db.as_dao();
+    let getter = || async {
+        dao.get_for_recipient(recipient_id.clone(), later_than.clone())
+            .await
+    };
+
+    match listen_for_events(getter, timeout_secs).await {
+        Err(e) => response::server_error(&e),
+        Ok(events) => {
+            response::ok::<Vec<DebitNoteEvent>>(events.into_iter().map(Into::into).collect())
+        }
+    }
 }
 
 // *************************** INVOICE ****************************
