@@ -1,14 +1,21 @@
 use actix_rt::Arbiter;
 use futures::{channel::mpsc, prelude::*};
-use std::time::Duration;
+use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use url::Url;
 
 use ya_client::{
-    activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
+    activity::ActivityRequestorApi, market::MarketRequestorApi, web::WebClient, web::WebInterface,
 };
-//use ya_model::market::proposal::State;
-use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
+use ya_model::{
+    activity::{
+        activity_state::{State as ActivityState, StatePair},
+        ExeScriptRequest,
+    },
+    market::{
+        proposal::State as ProposalState, AgreementProposal, Demand, Proposal, RequestorEvent,
+    },
+};
 
 #[derive(StructOpt)]
 struct AppSettings {
@@ -16,17 +23,16 @@ struct AppSettings {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
     app_key: String,
 
-    ///
-    #[structopt(
-        long = "market-url",
-        env = "YAGNA_MARKET_URL",
-        default_value = "http://10.30.10.202:5001/market-api/v1/"
-    )]
+    /// Market API URL
+    #[structopt(long = "market-url", env = MarketRequestorApi::API_URL_ENV_VAR)]
     market_url: Url,
 
-    ///
-    #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
+    /// Activity API URL
+    #[structopt(long = "activity-url", env = ActivityRequestorApi::API_URL_ENV_VAR)]
     activity_url: Option<Url>,
+
+    #[structopt(long)]
+    exe_script: PathBuf,
 }
 
 impl AppSettings {
@@ -34,7 +40,7 @@ impl AppSettings {
         Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
     }
 
-    fn activity_api(&self) -> Result<ActivityRequestorControlApi, anyhow::Error> {
+    fn activity_api(&self) -> Result<ActivityRequestorApi, anyhow::Error> {
         let client = WebClient::with_token(&self.app_key)?;
         if let Some(url) = &self.activity_url {
             Ok(client.interface_at(url.clone()))
@@ -57,7 +63,7 @@ async fn process_offer(
 ) -> Result<ProcessOfferResult, anyhow::Error> {
     let proposal_id = offer.proposal_id()?.clone();
 
-    if offer.state.unwrap_or(State::Initial) == State::Initial {
+    if offer.state.unwrap_or(ProposalState::Initial) == ProposalState::Initial {
         if offer.prev_proposal_id.is_some() {
             anyhow::bail!("Proposal in Initial state but with prev id: {:#?}", offer)
         }
@@ -141,6 +147,13 @@ fn build_demand(node_name: &str) -> Demand {
                         "name": node_name
                     },
                     "ala": 1
+                },
+                "srv": {
+                    "comp":{
+                        "wasm": {
+                            "task_package": "http://localhost:8000/rust-wasi-tutorial.zip"
+                        }
+                    }
                 }
             }
         }),
@@ -156,21 +169,63 @@ fn build_demand(node_name: &str) -> Demand {
 }
 
 async fn process_agreement(
-    activity_api: &ActivityRequestorControlApi,
+    activity_api: &ActivityRequestorApi,
     agreement_id: String,
+    exe_script: &PathBuf,
 ) -> Result<(), anyhow::Error> {
     log::info!("GOT new agreement = {}", agreement_id);
 
-    let act_id = activity_api.create_activity(&agreement_id).await?;
+    let act_id = activity_api
+        .control()
+        .create_activity(&agreement_id)
+        .await?;
     log::info!("GOT new activity = (({})); YAY!", act_id);
 
     tokio::time::delay_for(Duration::from_millis(7000)).await;
 
+    let contents = std::fs::read_to_string(&exe_script)?;
+    let commands_cnt = match serde_json::from_str(&contents)? {
+        serde_json::Value::Array(arr) => {
+            log::info!("script commands cnt: {}", arr.len());
+            arr.len()
+        }
+        _ => 0,
+    };
+
+    let batch_id = activity_api
+        .control()
+        .exec(ExeScriptRequest::new(contents), &act_id)
+        .await?;
+    log::info!("got batch_id={}", batch_id);
+
+    loop {
+        let state = activity_api.state().get_state(&act_id).await?;
+        if state.state == StatePair::from(ActivityState::Terminated) {
+            log::info!("activity {} terminated: {:?}", act_id, state);
+            break;
+        }
+
+        log::info!("activity {} state: {:?}", act_id, state);
+        let results = activity_api
+            .control()
+            .get_exec_batch_results(&act_id, &batch_id, Some(7))
+            .await?;
+
+        log::info!("batch results {:?}", results);
+
+        if results.len() >= commands_cnt {
+            break;
+        }
+
+        tokio::time::delay_for(Duration::from_millis(700)).await;
+    }
+
+    tokio::time::delay_for(Duration::from_millis(7000)).await;
+
     log::info!("destroying activity = (({})); AGRRR!", act_id);
-    activity_api.destroy_activity(&act_id).await?;
+    activity_api.control().destroy_activity(&act_id).await?;
     log::info!("I'M DONE FOR NOW");
 
-    //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
     Ok(())
 }
 
@@ -209,7 +264,7 @@ async fn main() -> anyhow::Result<()> {
 
     let activity_api = settings.activity_api()?;
     if let Some(id) = rx.next().await {
-        if let Err(e) = process_agreement(&activity_api, id.clone()).await {
+        if let Err(e) = process_agreement(&activity_api, id.clone(), &settings.exe_script).await {
             log::error!("processing agreement id {} error: {}", id, e);
         }
     }

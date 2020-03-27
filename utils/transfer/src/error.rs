@@ -67,6 +67,8 @@ pub enum Error {
     HexError(#[from] hex::FromHexError),
     #[error("Interrupted: {0}")]
     Interrupted(String),
+    #[error("Net API error: {0}")]
+    NetApiError(#[from] ya_net::NetApiError),
 }
 
 impl ResponseError for Error {}

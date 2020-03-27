@@ -3,12 +3,11 @@ use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
 use std::path::PathBuf;
 
-pub mod constants;
-
 #[derive(Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
     pub http_address: (String, u16),
+    pub gsb_url: Option<url::Url>,
     pub json_output: bool,
     pub interactive: bool,
 }

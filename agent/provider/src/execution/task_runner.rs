@@ -2,15 +2,11 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashSet;
-use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use ya_client::activity::ActivityProviderApi;
-use ya_model::activity::{
-    activity_state::{State, StatePair},
-    ActivityState, ProviderEvent,
-};
+use ya_model::activity::ProviderEvent;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
 
@@ -180,21 +176,6 @@ impl TaskRunner {
                 // Remove task from list and destroy everything related with it.
                 let task = self.tasks.swap_remove(task_position);
                 TaskRunner::destroy_task(task);
-
-                // TODO: remove this
-                let client = self.api.clone();
-                Arbiter::spawn(async move {
-                    log::debug!("changing activity state to: Terminated");
-                    if let Err(e) = client
-                        .set_activity_state(
-                            &msg.activity_id,
-                            &ActivityState::from(StatePair::from(State::Terminated)),
-                        )
-                        .await
-                    {
-                        log::error!("Setting state for activity [{:?}], error: {}", msg, e);
-                    }
-                })
             }
         }
         Ok(())
@@ -216,10 +197,9 @@ impl TaskRunner {
         activity_id: &str,
         agreement_id: &str,
     ) -> Result<Task> {
-        let exeunit_working_dir = env::current_dir()?;
         let exeunit_instance = self
             .registry
-            .spawn_exeunit(exeunit_name, &exeunit_working_dir)
+            .spawn_exeunit(exeunit_name, activity_id, agreement_id)
             .map_err(|error| {
                 anyhow!(
                     "Spawning ExeUnit failed for agreement [{}] with error: {}",

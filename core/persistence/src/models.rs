@@ -8,6 +8,7 @@ use diesel::deserialize;
 use diesel::serialize::Output;
 use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
+use std::convert::TryFrom;
 use std::error::Error;
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -70,10 +71,34 @@ pub struct ActivityState {
     pub updated_date: NaiveDateTime,
 }
 
+impl std::convert::TryFrom<ActivityState> for ya_model::activity::ActivityState {
+    type Error = crate::Error;
+
+    fn try_from(value: ActivityState) -> Result<Self, Self::Error> {
+        Ok(ya_model::activity::ActivityState {
+            state: serde_json::from_str(&value.name)?,
+            reason: value.reason,
+            error_message: value.error_message,
+        })
+    }
+}
+
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "activity_usage"]
 pub struct ActivityUsage {
     pub id: i32,
     pub vector_json: Option<String>,
     pub updated_date: NaiveDateTime,
+}
+
+impl std::convert::TryFrom<ActivityUsage> for ya_model::activity::ActivityUsage {
+    type Error = crate::Error;
+
+    fn try_from(value: ActivityUsage) -> Result<Self, Self::Error> {
+        Ok(value
+            .vector_json
+            .map(|json_str| serde_json::from_str(&json_str))
+            .transpose()?)
+        .map(|current_usage| ya_model::activity::ActivityUsage { current_usage })
+    }
 }

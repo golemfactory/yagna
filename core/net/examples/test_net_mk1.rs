@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use structopt::StructOpt;
 
+use ya_core_model::{ethaddr::NodeId, net};
+use ya_net::TryRemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 #[derive(Serialize, Deserialize)]
@@ -38,11 +40,16 @@ enum Side {
 }
 
 impl Options {
-    fn id(side: &Side) -> String {
-        format!("0x0_{:?}", side)
+    fn id(side: &Side) -> NodeId {
+        match side {
+            Side::Listener => "0xbabe000000000000000000000000000000000000",
+            Side::Sender => "0xfeed000000000000000000000000000000000000",
+        }
+        .parse()
+        .unwrap()
     }
 
-    fn my_id(&self) -> String {
+    fn my_id(&self) -> NodeId {
         Options::id(&self.side)
     }
 }
@@ -56,12 +63,12 @@ async fn main() -> Result<()> {
     );
     env_logger::init();
 
-    let local_bus_addr = *ya_service_api::constants::YAGNA_BUS_ADDR;
-    ya_sb_router::bind_tcp_router(local_bus_addr)
+    ya_sb_router::bind_gsb_router(None)
         .await
-        .context(format!("Error binding local router to {}", local_bus_addr))?;
+        .context(format!("Error binding local router"))?;
 
-    ya_net::bind_remote(&options.hub_addr, &options.my_id())
+    std::env::set_var(ya_net::CENTRAL_ADDR_ENV_VAR, &options.hub_addr);
+    ya_net::bind_remote(&options.my_id())
         .await
         .context(format!(
             "Error binding service at {} for {}",
@@ -72,7 +79,7 @@ async fn main() -> Result<()> {
 
     match options.side {
         Side::Listener => {
-            let _ = bus::bind("/public", |p: Test| async move {
+            let _ = bus::bind(net::PUBLIC_PREFIX, |p: Test| async move {
                 log::info!("test called!!");
                 Ok(format!("pong {}", p.0))
             });
@@ -83,8 +90,9 @@ async fn main() -> Result<()> {
         }
         Side::Sender => {
             let listener_id = Options::id(&Side::Listener);
-            let r = bus::service(&format!("/net/{}", listener_id))
-                .send(Test("Test".into()))
+            let r = listener_id
+                .try_service(net::PUBLIC_PREFIX)?
+                .send(Test("Test msg".into()))
                 .map_err(Error::msg)
                 .await?;
             log::info!("Sending Result: {:?}", r);

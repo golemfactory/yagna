@@ -1,3 +1,5 @@
+//! Yagna internal definitions for service bus API.
+
 #[cfg(feature = "activity")]
 pub mod activity;
 

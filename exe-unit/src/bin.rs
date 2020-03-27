@@ -2,7 +2,7 @@ use actix::{Actor, System};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use ya_core_model::activity::Exec;
+use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
     let cli: Cli = Cli::from_args();
     let mut commands = None;
     let mut ctx = ExeUnitContext {
-        service_id: None,
+        activity_id: None,
         report_url: None,
         agreement: Agreement::try_from(&cli.agreement)?,
         work_dir: create_path(&cli.work_dir)?,
@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
             service_id,
             report_url,
         } => {
-            ctx.service_id = Some(service_id);
+            ctx.activity_id = Some(service_id);
             ctx.report_url = Some(report_url);
         }
     }
@@ -89,9 +89,9 @@ fn main() -> anyhow::Result<()> {
     exe_unit.do_send(Register(signals));
 
     if let Some(exe_script) = commands {
-        let msg = Exec {
+        let msg = activity::Exec {
             activity_id: String::new(),
-            batch_id: String::new(),
+            batch_id: "fake_batch_id".into(),
             exe_script,
             timeout: None,
         };
