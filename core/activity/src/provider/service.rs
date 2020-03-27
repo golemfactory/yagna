@@ -122,13 +122,13 @@ async fn get_activity_usage_gsb(
     Ok(get_persisted_usage(&db, &msg.activity_id).await?)
 }
 
+/// Local Activity services for ExeUnit reporting.
 mod local {
     use super::*;
     use crate::common::{set_persisted_state, set_persisted_usage};
 
     pub fn bind_gsb(db: &DbExecutor) {
-        // local for ExeUnit interactions
-        ServiceBinder::new(activity::BUS_ID, db, ())
+        ServiceBinder::new(activity::local::BUS_ID, db, ())
             .bind(set_activity_state_gsb)
             .bind(set_activity_usage_gsb);
     }
@@ -137,11 +137,9 @@ mod local {
     /// Called by ExeUnits.
     async fn set_activity_state_gsb(
         db: DbExecutor,
-        caller: String,
+        _caller: String,
         msg: activity::local::SetState,
     ) -> RpcMessageResult<activity::local::SetState> {
-        authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
-
         set_persisted_state(&db, &msg.activity_id, msg.state).await?;
         Ok(())
     }
@@ -150,11 +148,9 @@ mod local {
     /// Called by ExeUnits.
     async fn set_activity_usage_gsb(
         db: DbExecutor,
-        caller: String,
+        _caller: String,
         msg: activity::local::SetUsage,
     ) -> RpcMessageResult<activity::local::SetUsage> {
-        authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
-
         set_persisted_usage(&db, &msg.activity_id, msg.usage).await?;
         Ok(())
     }

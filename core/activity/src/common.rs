@@ -144,9 +144,11 @@ pub(crate) async fn authorize_agreement_executor(
 #[inline(always)]
 pub(crate) fn authorize_caller(caller: NodeId, authorized: NodeId) -> Result<(), Error> {
     let msg = format!("caller: {} is not authorized: {}", caller, authorized);
-    log::debug!("{}", msg);
     match caller == authorized {
         true => Ok(()),
-        false => Err(Error::Forbidden(msg)),
+        false => {
+            log::debug!("{}", msg);
+            Err(Error::Forbidden(msg))
+        }
     }
 }
