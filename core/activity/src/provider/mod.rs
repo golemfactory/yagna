@@ -1,3 +1,4 @@
+//! Provider side operations
 use actix_web::{web, Responder};
 
 use ya_model::activity::{ActivityState, ProviderEvent};
@@ -6,8 +7,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::common::{
-    authorize_activity_executor, get_persisted_state, get_persisted_usage, set_persisted_state,
-    PathActivity, QueryTimeoutMaxCount,
+    authorize_activity_executor, set_persisted_state, PathActivity, QueryTimeoutMaxCount,
 };
 use crate::dao::EventDao;
 use crate::error::Error;
@@ -17,22 +17,7 @@ pub mod service;
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
         .service(get_events_web)
-        .service(get_activity_state_web)
         .service(set_activity_state_web)
-        .service(get_activity_usage_web)
-}
-
-#[actix_web::get("/activity/{activity_id}/state")]
-async fn get_activity_state_web(
-    db: web::Data<DbExecutor>,
-    path: web::Path<PathActivity>,
-    _id: Identity,
-) -> impl Responder {
-    //FIXME:    authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
-
-    get_persisted_state(&db, &path.activity_id)
-        .await
-        .map(web::Json)
 }
 
 #[actix_web::put("/activity/{activity_id}/state")]
@@ -48,19 +33,6 @@ async fn set_activity_state_web(
     set_persisted_state(&db, &path.activity_id, state.into_inner())
         .await
         .map(|_| web::Json(()))
-}
-
-#[actix_web::get("/activity/{activity_id}/usage")]
-async fn get_activity_usage_web(
-    db: web::Data<DbExecutor>,
-    path: web::Path<PathActivity>,
-    id: Identity,
-) -> impl Responder {
-    authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
-
-    get_persisted_usage(&db, &path.activity_id)
-        .await
-        .map(web::Json)
 }
 
 /// Fetch Requestor command events.
