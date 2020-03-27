@@ -48,7 +48,7 @@ impl<'c> ActivityDao<'c> {
         let reason: Option<String> = None;
         let error_message: Option<String> = None;
         let vector_json: Option<String> = None;
-        let state = serde_json::to_string(&StatePair::from(State::New))?;
+        let state = serde_json::to_string(&StatePair(State::New, None)).unwrap();
         let now = Utc::now().naive_utc();
 
         let activity_id = activity_id.to_owned();
