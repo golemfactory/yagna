@@ -119,7 +119,7 @@ async fn exec(
 
     agreement
         .provider_id()?
-        .try_service(activity::BUS_ID)?
+        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
         .send(msg)
         .timeout(query.timeout)
         .await???;
@@ -146,7 +146,7 @@ async fn get_batch_results(
 
     let results = agreement
         .provider_id()?
-        .try_service(activity::BUS_ID)?
+        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
         .send(msg)
         .timeout(query.timeout)
         .await???;

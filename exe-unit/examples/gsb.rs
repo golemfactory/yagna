@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
     let _ = actix_rpc::service(ACTIVITY_ID)
         .send(Exec {
             activity_id: ACTIVITY_ID.to_owned(),
-            batch_id: String::new(),
+            batch_id: "fake_batch_id".into(),
             exe_script,
             timeout: None,
         })
