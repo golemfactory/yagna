@@ -113,6 +113,7 @@ mod public {
     use crate::error::{DbError, Error, PaymentError};
     use crate::utils::*;
 
+    use crate::dao::DebitNoteEventDao;
     use ya_core_model::payment::public::*;
     use ya_model::payment::*;
 
@@ -173,7 +174,57 @@ mod public {
         sender: String,
         msg: AcceptDebitNote,
     ) -> Result<Ack, AcceptRejectError> {
-        unimplemented!() // TODO
+        let debit_note_id = msg.debit_note_id;
+        let acceptance = msg.acceptance;
+        let dao: DebitNoteDao = db.as_dao();
+        let debit_note: DebitNote = match dao.get(debit_note_id.clone()).await {
+            Ok(Some(debit_note)) => debit_note.into(),
+            Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
+            Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
+        };
+
+        let sender_id = sender.trim_start_matches("/net/");
+        if sender_id != debit_note.recipient_id {
+            return Err(AcceptRejectError::Forbidden);
+        }
+
+        if debit_note.total_amount_due != acceptance.total_amount_accepted {
+            let msg = format!(
+                "Invalid amount accepted. Expected: {} Actual: {}",
+                debit_note.total_amount_due, acceptance.total_amount_accepted
+            );
+            return Err(AcceptRejectError::BadRequest(msg));
+        }
+
+        match debit_note.status {
+            InvoiceStatus::Accepted => return Ok(Ack {}),
+            InvoiceStatus::Settled => return Ok(Ack {}),
+            InvoiceStatus::Cancelled => {
+                return Err(AcceptRejectError::BadRequest(
+                    "Cannot accept cancelled debit note".to_owned(),
+                ))
+            }
+            _ => (),
+        }
+
+        if let Err(e) = dao
+            .update_status(debit_note_id.clone(), InvoiceStatus::Accepted.into())
+            .await
+        {
+            return Err(AcceptRejectError::ServiceError(e.to_string()));
+        }
+
+        let dao: DebitNoteEventDao = db.as_dao();
+        let event = NewDebitNoteEvent {
+            debit_note_id,
+            details: None,
+            event_type: EventType::Accepted,
+        };
+        match dao.create(event.into()).await {
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+            Ok(_) => Ok(Ack {}),
+        }
     }
 
     async fn reject_debit_note(
@@ -267,9 +318,6 @@ mod public {
         }
 
         match invoice.status {
-            InvoiceStatus::Issued => (),
-            InvoiceStatus::Received => (),
-            InvoiceStatus::Rejected => (),
             InvoiceStatus::Accepted => return Ok(Ack {}),
             InvoiceStatus::Settled => return Ok(Ack {}),
             InvoiceStatus::Cancelled => {
@@ -277,11 +325,7 @@ mod public {
                     "Cannot accept cancelled invoice".to_owned(),
                 ))
             }
-            InvoiceStatus::Failed => {
-                return Err(AcceptRejectError::BadRequest(
-                    "Cannot accept failed invoice".to_owned(),
-                ))
-            }
+            _ => (),
         }
 
         if let Err(e) = dao

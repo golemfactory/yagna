@@ -62,6 +62,8 @@ pub enum Error {
     Database(#[from] DbError),
     #[error("Service bus error: {0}")]
     ServiceBus(#[from] ya_service_bus::Error),
+    #[error("Network error: {0}")]
+    Network(#[from] ya_net::NetApiError),
     #[error("External service error: {0}")]
     ExtService(#[from] ExternalServiceError),
     #[error("Payment error: {0}")]
