@@ -31,19 +31,19 @@ pub struct ProcessHandle {
     process: Arc<SharedChild>,
 }
 
+// TODO: should check spawned process state and report it back via GSB
 impl ExeUnitInstance {
     pub fn new(
         name: &str,
         binary_path: &Path,
         working_dir: &Path,
-        _args: &Vec<String>,
+        args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
         log::info!("Spawning exeunit instance : {}", name);
-        //        let child = Command::new(binary_path)
-        let mut command = Command::new("sleep");
+
+        let mut command = Command::new(binary_path);
         command
-            .args(vec!["5000"])
-            //.args(args)
+            .args(args)
             .current_dir(working_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -58,7 +58,7 @@ impl ExeUnitInstance {
             )
         })?);
 
-        log::info!("Exeunit process spawned, pid: {}", child.id());
+        log::debug!("Exeunit process spawned, pid: {}", child.id());
 
         let instance = ExeUnitInstance {
             name: name.to_string(),

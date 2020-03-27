@@ -5,7 +5,7 @@ use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
-use ya_core_model::activity::SetActivityState;
+use ya_core_model::activity::local::SetState as SetActivityState;
 use ya_model::activity::ActivityState;
 
 impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
@@ -25,7 +25,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 log::debug!("Entering state: {:?}", state);
                 self.state.inner = state.clone();
 
-                if let Some(id) = &self.ctx.service_id {
+                if let Some(id) = &self.ctx.activity_id {
                     ctx.spawn(
                         report(
                             self.ctx.report_url.clone().unwrap(),

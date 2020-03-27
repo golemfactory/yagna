@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::debug!("Starting TransferService");
     let exe_ctx = ExeUnitContext {
-        service_id: None,
+        activity_id: None,
         report_url: None,
         agreement,
         work_dir: work_dir.clone(),

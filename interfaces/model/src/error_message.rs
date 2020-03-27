@@ -9,9 +9,8 @@
  */
 
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Error, Default)]
+#[derive(thiserror::Error, Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[error("Yagna API error: {message:?}")]
 pub struct ErrorMessage {
     pub message: Option<String>,

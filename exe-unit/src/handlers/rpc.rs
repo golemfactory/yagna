@@ -11,7 +11,7 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
-        self.ctx.match_service(&msg.activity_id)?;
+        self.ctx.verify_activity_id(&msg.activity_id)?;
 
         let batch_id = msg.batch_id.clone();
         let fut = Self::exec(
@@ -26,15 +26,11 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     }
 }
 
-impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
-    type Result = <RpcEnvelope<GetActivityState> as Message>::Result;
+impl<R: Runtime> Handler<RpcEnvelope<GetState>> for ExeUnit<R> {
+    type Result = <RpcEnvelope<GetState> as Message>::Result;
 
-    fn handle(
-        &mut self,
-        msg: RpcEnvelope<GetActivityState>,
-        _: &mut Self::Context,
-    ) -> Self::Result {
-        self.ctx.match_service(&msg.activity_id)?;
+    fn handle(&mut self, msg: RpcEnvelope<GetState>, _: &mut Self::Context) -> Self::Result {
+        self.ctx.verify_activity_id(&msg.activity_id)?;
 
         Ok(ActivityState {
             state: self.state.inner.clone(),
@@ -44,15 +40,11 @@ impl<R: Runtime> Handler<RpcEnvelope<GetActivityState>> for ExeUnit<R> {
     }
 }
 
-impl<R: Runtime> Handler<RpcEnvelope<GetActivityUsage>> for ExeUnit<R> {
+impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
     type Result = ActorResponse<Self, ActivityUsage, RpcMessageError>;
 
-    fn handle(
-        &mut self,
-        msg: RpcEnvelope<GetActivityUsage>,
-        _: &mut Self::Context,
-    ) -> Self::Result {
-        if let Err(e) = self.ctx.match_service(&msg.activity_id) {
+    fn handle(&mut self, msg: RpcEnvelope<GetUsage>, _: &mut Self::Context) -> Self::Result {
+        if let Err(e) = self.ctx.verify_activity_id(&msg.activity_id) {
             return ActorResponse::r#async(futures::future::err(e.into()).into_actor(self));
         }
 
@@ -86,11 +78,14 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
         msg: RpcEnvelope<GetRunningCommand>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        self.ctx.match_service(&msg.activity_id)?;
+        self.ctx.verify_activity_id(&msg.activity_id)?;
 
         match &self.state.running_command {
             Some(command) => Ok(command.clone()),
-            None => Err(RpcMessageError::NotFound),
+            None => Err(RpcMessageError::NotFound(format!(
+                "no command is running within activity id: {}",
+                msg.activity_id
+            ))),
         }
     }
 }
@@ -103,7 +98,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         msg: RpcEnvelope<GetExecBatchResults>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        self.ctx.match_service(&msg.activity_id)?;
+        self.ctx.verify_activity_id(&msg.activity_id)?;
 
         Ok(self.state.batch_results(&msg.batch_id))
     }

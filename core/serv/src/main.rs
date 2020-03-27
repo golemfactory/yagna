@@ -4,17 +4,20 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
-    net::SocketAddr,
     path::PathBuf,
 };
 use structopt::{clap, StructOpt};
 use url::Url;
 
 use ya_persistence::executor::DbExecutor;
+use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
 use ya_service_api_interfaces::Provider;
-use ya_service_api_web::middleware::{auth, Identity};
+use ya_service_api_web::{
+    middleware::{auth, Identity},
+    DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
+};
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -33,7 +36,8 @@ struct CliArgs {
         long = "datadir",
         set = clap::ArgSettings::Global,
         env = "YAGNA_DATADIR",
-        default_value
+        default_value,
+        hide_env_values = true,
     )]
     data_dir: DataDir,
 
@@ -41,13 +45,21 @@ struct CliArgs {
     #[structopt(
         short,
         long,
-        env = "YAGNA_API_URL",
-        default_value = "http://127.0.0.1:7465"
+        env = YAGNA_API_URL_ENV_VAR,
+        default_value = DEFAULT_YAGNA_API_URL,
+        hide_env_values = true,
     )]
     api_url: Url,
 
-    #[structopt(long = "net-addr", env = "ya_net::NET_ENV_VAR")]
-    net_addr: Option<SocketAddr>,
+    /// Service Bus (aka GSB) URL
+    #[structopt(
+        short,
+        long,
+        env = GSB_URL_ENV_VAR,
+        default_value = DEFAULT_GSB_URL,
+        hide_env_values = true
+    )]
+    gsb_url: Url,
 
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -106,8 +118,9 @@ impl TryFrom<&CliArgs> for CliCtx {
         log::info!("Using data dir: {:?} ", data_dir);
 
         Ok(CliCtx {
-            http_address: args.get_http_address()?,
             data_dir,
+            http_address: args.get_http_address()?,
+            gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
             interactive: args.interactive,
         })
@@ -182,7 +195,7 @@ impl ServiceCommand {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
-                ya_sb_router::bind_gsb_router()
+                ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
                     .context("binding service bus router")?;
 
@@ -230,10 +243,7 @@ async fn main() -> Result<()> {
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
     env_logger::init();
 
-    // TODO: fix this hack
-    if let Some(net_addr) = args.net_addr {
-        std::env::set_var(ya_net::NET_ENV_VAR, net_addr.to_string());
-    }
+    std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
     args.run_command().await
 }
