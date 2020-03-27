@@ -1,9 +1,8 @@
 use actix_web::{web, Responder};
 use serde::Deserialize;
-use std::str::FromStr;
 
-use ya_core_model::{activity, ethaddr::NodeId};
-use ya_model::activity::{activity_state::StatePair, ExeScriptCommand, ExeScriptRequest, State};
+use ya_core_model::activity;
+use ya_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -11,9 +10,9 @@ use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
+    get_activity_agreement, get_agreement, set_persisted_state, PathActivity, QueryTimeout,
 };
-use crate::dao::{ActivityDao, ActivityStateDao};
+use crate::dao::ActivityDao;
 use crate::error::Error;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -39,7 +38,7 @@ async fn create_activity(
     log::trace!("agreement: {:#?}", agreement);
 
     let msg = activity::Create {
-        provider_id: NodeId::from_str(agreement.provider_id()?)?,
+        provider_id: agreement.provider_id()?.parse()?,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
@@ -54,8 +53,7 @@ async fn create_activity(
     log::debug!("activity created: {}, inserting", activity_id);
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &agreement_id)
-        .await
-        .map_err(Error::from)?;
+        .await?;
 
     Ok::<_, Error>(web::Json(activity_id))
 }
@@ -70,7 +68,7 @@ async fn destroy_activity(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::Destroy {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
@@ -84,17 +82,17 @@ async fn destroy_activity(
         .timeout(query.timeout)
         .await???;
 
-    db.as_dao::<ActivityStateDao>()
-        .set(
-            &path.activity_id,
-            StatePair(State::Terminated, None),
-            None,
-            None,
-        )
-        .await
-        .map_err(Error::from)?;
-
-    Ok::<_, Error>(web::Json(()))
+    set_persisted_state(
+        &db,
+        &path.activity_id,
+        ActivityState {
+            state: State::Terminated.into(),
+            reason: None,
+            error_message: None,
+        },
+    )
+    .await
+    .map(|_| web::Json(()))
 }
 
 /// Executes an ExeScript batch within a given Activity.
@@ -110,7 +108,7 @@ async fn exec(
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let batch_id = generate_id();
     let msg = activity::Exec {
         activity_id: path.activity_id.clone(),
@@ -139,7 +137,7 @@ async fn get_batch_results(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),

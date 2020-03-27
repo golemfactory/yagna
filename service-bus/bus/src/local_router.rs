@@ -380,6 +380,7 @@ impl Router {
     pub fn forward<T: RpcMessage + Unpin>(
         &mut self,
         addr: &str,
+        // TODO: add `from: &str` as in `forward_bytes` below
         msg: T,
     ) -> impl Future<Output = Result<Result<T::Item, T::Error>, Error>> + Unpin {
         let caller = "local".to_string();
@@ -427,6 +428,7 @@ impl Router {
     pub fn streaming_forward<T: RpcStreamMessage>(
         &mut self,
         addr: &str,
+        // TODO: add `from: &str` as in `forward_bytes` below
         msg: T,
     ) -> impl Stream<Item = Result<Result<T::Item, T::Error>, Error>> {
         let caller = "local".to_string();

@@ -2,12 +2,15 @@ use serde::Deserialize;
 use serde_with::rust::string_empty_as_none;
 use uuid::Uuid;
 
-use ya_core_model::market;
-use ya_model::market::Agreement;
+use ya_core_model::{ethaddr::NodeId, market};
+use ya_model::{
+    activity::{ActivityState, ActivityUsage},
+    market::Agreement,
+};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
-use crate::dao::ActivityDao;
+use crate::dao::{ActivityDao, ActivityStateDao, ActivityUsageDao};
 use crate::error::Error;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
@@ -45,6 +48,42 @@ pub(crate) fn generate_id() -> String {
     Uuid::new_v4().to_simple().to_string()
 }
 
+pub(crate) async fn get_persisted_state(
+    db: &DbExecutor,
+    activity_id: &str,
+) -> Result<ActivityState, Error> {
+    Ok(db.as_dao::<ActivityStateDao>().get(activity_id).await?)
+}
+
+pub(crate) async fn set_persisted_state(
+    db: &DbExecutor,
+    activity_id: &str,
+    activity_state: ActivityState,
+) -> Result<ActivityState, Error> {
+    Ok(db
+        .as_dao::<ActivityStateDao>()
+        .set(activity_id, activity_state)
+        .await?)
+}
+
+pub(crate) async fn get_persisted_usage(
+    db: &DbExecutor,
+    activity_id: &str,
+) -> Result<ActivityUsage, Error> {
+    Ok(db.as_dao::<ActivityUsageDao>().get(&activity_id).await?)
+}
+
+pub(crate) async fn set_persisted_usage(
+    db: &DbExecutor,
+    activity_id: &str,
+    activity_usage: ActivityUsage,
+) -> Result<ActivityUsage, Error> {
+    Ok(db
+        .as_dao::<ActivityUsageDao>()
+        .set(activity_id, activity_usage)
+        .await?)
+}
+
 pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreement, Error> {
     Ok(bus::service(market::BUS_ID)
         .send(market::GetAgreement {
@@ -53,23 +92,18 @@ pub(crate) async fn get_agreement(agreement_id: impl ToString) -> Result<Agreeme
         .await??)
 }
 
+pub(crate) async fn get_agreement_id(db: &DbExecutor, activity_id: &str) -> Result<String, Error> {
+    Ok(db
+        .as_dao::<ActivityDao>()
+        .get_agreement_id(activity_id)
+        .await?)
+}
+
 pub(crate) async fn get_activity_agreement(
     db: &DbExecutor,
     activity_id: &str,
-    _timeout: Option<f32>,
 ) -> Result<Agreement, Error> {
-    let agreement_id = db
-        .as_dao::<ActivityDao>()
-        .get_agreement_id(activity_id)
-        .await
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
-
-    let agreement = bus::service(market::BUS_ID)
-        .send(market::GetAgreement { agreement_id })
-        .await??;
-
-    Ok(agreement)
+    get_agreement(get_agreement_id(db, activity_id).await?).await
 }
 
 pub(crate) async fn authorize_activity_initiator(
@@ -77,13 +111,7 @@ pub(crate) async fn authorize_activity_initiator(
     caller: impl ToString,
     activity_id: &str,
 ) -> Result<(), Error> {
-    let agreement_id = db
-        .as_dao::<ActivityDao>()
-        .get_agreement_id(&activity_id)
-        .await
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
-    authorize_agreement_initiator(caller, &agreement_id).await
+    authorize_agreement_initiator(caller, &get_agreement_id(db, activity_id).await?).await
 }
 
 pub(crate) async fn authorize_activity_executor(
@@ -91,13 +119,7 @@ pub(crate) async fn authorize_activity_executor(
     caller: impl ToString,
     activity_id: &str,
 ) -> Result<(), Error> {
-    let agreement_id = db
-        .as_dao::<ActivityDao>()
-        .get_agreement_id(&activity_id)
-        .await
-        .map_err(Error::from)?
-        .ok_or(Error::NotFound)?;
-    authorize_agreement_executor(caller, &agreement_id).await
+    authorize_agreement_executor(caller, &get_agreement_id(db, activity_id).await?).await
 }
 
 pub(crate) async fn authorize_agreement_initiator(
@@ -105,9 +127,9 @@ pub(crate) async fn authorize_agreement_initiator(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let initiator_id = agreement.demand.requestor_id()?;
+    let initiator_id = agreement.requestor_id()?.parse()?;
 
-    authorize_caller(caller, initiator_id)
+    authorize_caller(caller.to_string().parse()?, initiator_id)
 }
 
 pub(crate) async fn authorize_agreement_executor(
@@ -115,18 +137,19 @@ pub(crate) async fn authorize_agreement_executor(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let executor_id = agreement.offer.provider_id()?;
+    let executor_id = agreement.provider_id()?.parse()?;
 
-    authorize_caller(caller, executor_id)
+    authorize_caller(caller.to_string().parse()?, executor_id)
 }
 
 #[inline(always)]
-pub(crate) fn authorize_caller(caller: impl ToString, authorized: &str) -> Result<(), Error> {
-    let caller = caller.to_string();
-    let authorized = authorized.to_string();
-    log::debug!("caller {} vs {} authorized", caller, authorized);
+pub(crate) fn authorize_caller(caller: NodeId, authorized: NodeId) -> Result<(), Error> {
+    let msg = format!("caller: {} is not authorized: {}", caller, authorized);
     match caller == authorized {
         true => Ok(()),
-        false => Err(Error::Forbidden),
+        false => {
+            log::debug!("{}", msg);
+            Err(Error::Forbidden(msg))
+        }
     }
 }

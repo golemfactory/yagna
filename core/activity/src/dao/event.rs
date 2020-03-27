@@ -10,6 +10,7 @@ use ya_persistence::models::ActivityEventType;
 use ya_persistence::schema;
 
 use crate::dao::Result;
+use ya_model::activity::ProviderEvent;
 
 pub const MAX_EVENTS: u32 = 100;
 
@@ -19,6 +20,21 @@ pub struct Event {
     pub event_type: ActivityEventType,
     pub activity_natural_id: String,
     pub agreement_natural_id: String,
+}
+
+impl From<Event> for ProviderEvent {
+    fn from(value: Event) -> Self {
+        match value.event_type {
+            ActivityEventType::CreateActivity => ProviderEvent::CreateActivity {
+                activity_id: value.activity_natural_id,
+                agreement_id: value.agreement_natural_id,
+            },
+            ActivityEventType::DestroyActivity => ProviderEvent::DestroyActivity {
+                activity_id: value.activity_natural_id,
+                agreement_id: value.agreement_natural_id,
+            },
+        }
+    }
 }
 
 pub struct EventDao<'c> {
@@ -80,7 +96,7 @@ impl<'c> EventDao<'c> {
         &self,
         identity_id: &str,
         max_events: Option<u32>,
-    ) -> Result<Option<Vec<Event>>> {
+    ) -> Result<Option<Vec<ProviderEvent>>> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
 
@@ -115,7 +131,7 @@ impl<'c> EventDao<'c> {
                 }
             }
 
-            Ok(results)
+            Ok(results.map(|r| r.into_iter().map(ProviderEvent::from).collect()))
         })
         .await
     }
@@ -124,7 +140,7 @@ impl<'c> EventDao<'c> {
         &self,
         identity_id: impl ToString,
         max_events: Option<u32>,
-    ) -> Result<Vec<Event>> {
+    ) -> Result<Vec<ProviderEvent>> {
         let duration = Duration::from_millis(750);
         let identity_id = identity_id.to_string();
 

@@ -69,18 +69,15 @@ pub async fn bind_remote(source_node_id: &NodeId) -> std::io::Result<()> {
 
     // bind /net on my local bus and forward all calls to remote bus under /net
     let source_node_id = source_node_id.to_string();
-    local_bus::subscribe(
-        net::SERVICE_ID,
-        move |_caller: &str, addr: &str, msg: &[u8]| {
-            log::debug!(
-                "Sending message to hub. Called by: {}, addr: {}.",
-                my_net_node_id,
-                addr
-            );
-            // `_caller` here is usually "local", so we replace it with our src node id
-            central_bus.call(source_node_id.clone(), addr.to_string(), Vec::from(msg))
-        },
-    );
+    local_bus::subscribe(net::BUS_ID, move |_caller: &str, addr: &str, msg: &[u8]| {
+        log::debug!(
+            "Sending message to hub. Called by: {}, addr: {}.",
+            my_net_node_id,
+            addr
+        );
+        // `_caller` here is usually "local", so we replace it with our src node id
+        central_bus.call(source_node_id.clone(), addr.to_string(), Vec::from(msg))
+    });
 
     Ok(())
 }
