@@ -294,9 +294,10 @@ async fn compute_cost_and_send_debit_note(
     .await?;
 
     log::info!(
-        "Updating cost for activity [{}]: {}.",
+        "Updating cost for activity [{}]: {}, usage {:?}.",
         &invoice_info.activity_id,
-        &cost_info.cost
+        &cost_info.cost,
+        &cost_info.usage
     );
 
     let debit_note =
