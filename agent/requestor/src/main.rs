@@ -318,6 +318,7 @@ async fn main() -> anyhow::Result<()> {
             if let Err(e) = process_agreement(&activity_api, id.clone(), &exe_script).await {
                 log::error!("processing agreement id {} error: {}", id, e);
             }
+            // TODO: Market doesn't support agreement termination yet.
             let terminate_result = market_api.terminate_agreement(&id).await;
             log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
         }
