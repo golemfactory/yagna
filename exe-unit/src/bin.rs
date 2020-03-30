@@ -46,7 +46,13 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     if let Err(error) = std::fs::create_dir_all(path) {
         match &error.kind() {
             std::io::ErrorKind::AlreadyExists => (),
-            _ => return Err(anyhow!("Can't create directory: {}, {}", path.display(), error)),
+            _ => {
+                return Err(anyhow!(
+                    "Can't create directory: {}, {}",
+                    path.display(),
+                    error
+                ))
+            }
         }
     }
     Ok(path.canonicalize()?)
@@ -107,7 +113,9 @@ fn main() -> anyhow::Result<()> {
         .log_to_file()
         .duplicate_to_stderr(flexi_logger::Duplicate::Info)
         .directory("logs")
-        .start().unwrap();
+        .format(flexi_logger::colored_opt_format)
+        .start()
+        .unwrap();
 
     let result = run();
     if let Err(error) = result {
@@ -117,4 +125,3 @@ fn main() -> anyhow::Result<()> {
 
     Ok(result?)
 }
-

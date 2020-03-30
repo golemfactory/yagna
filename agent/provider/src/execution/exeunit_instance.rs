@@ -3,7 +3,7 @@ use derive_more::Display;
 use futures::channel::oneshot::channel;
 use shared_child::SharedChild;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::Arc;
 use std::thread;
 
@@ -42,11 +42,7 @@ impl ExeUnitInstance {
         log::info!("Spawning exeunit instance : {}", name);
 
         let mut command = Command::new(binary_path);
-        command
-            .args(args)
-            .current_dir(working_dir)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        command.args(args).current_dir(working_dir);
 
         let child = Arc::new(SharedChild::spawn(&mut command).map_err(|error| {
             anyhow!(
