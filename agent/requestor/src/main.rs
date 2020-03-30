@@ -306,6 +306,7 @@ async fn main() -> anyhow::Result<()> {
                     log::info!("got debit note event {:?}", event);
                 }
                 ts = next_ts;
+                tokio::time::delay_for(Duration::from_secs(5)).await;
             }
         })
     }
