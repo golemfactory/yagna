@@ -306,7 +306,7 @@ async fn main() -> anyhow::Result<()> {
                     log::info!("got debit note event {:?}", event);
                 }
                 ts = next_ts;
-                tokio::time::delay_for(Duration::from_secs(5)).await;
+                tokio::time::delay_for(Duration::from_secs(15)).await;
             }
         })
     }
@@ -333,7 +333,7 @@ async fn main() -> anyhow::Result<()> {
             let events = payment_api.get_invoice_events(Some(&ts)).await.unwrap();
             // TODO: timeout on get_invoice_events does not work
             if events.is_empty() {
-                tokio::time::delay_for(Duration::from_secs(10)).await;
+                tokio::time::delay_for(Duration::from_secs(15)).await;
             }
 
             for event in events {

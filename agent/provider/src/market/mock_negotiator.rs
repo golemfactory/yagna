@@ -14,8 +14,8 @@ impl Negotiator for AcceptAllNegotiator {
     fn create_offer(&mut self, offer: &OfferDefinition) -> Result<Offer> {
         let com_info = LinearPricingOffer::new()
             .add_coefficient("golem.usage.duration_sec", 0.01)
-            .add_coefficient("golem.usage.cpu_sec", 0.016)
-            .initial_cost(0.02)
+            .add_coefficient("golem.usage.cpu_sec", 0.2)
+            .initial_cost(1.0)
             .interval(6.0)
             .build();
 
