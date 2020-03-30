@@ -1,6 +1,4 @@
-use crate::dao::debit_note::DebitNoteDao;
-use crate::dao::invoice::InvoiceDao;
-use crate::dao::payment::PaymentDao;
+use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao};
 use crate::error::{Error, PaymentError, PaymentResult};
 use crate::models as db_models;
 use crate::utils::get_sign_tx;

@@ -15,7 +15,6 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao;
-    use crate::dao::AllocationDao;
     use crate::error::DbError;
     use ethereum_types::H160;
     use ya_core_model::payment::local::*;
@@ -79,7 +78,7 @@ mod local {
         }
         .map_err(|e: DbError| GenericError::new(e));
         let reserved_fut = async {
-            db.as_dao::<AllocationDao>()
+            db.as_dao::<dao::AllocationDao>()
                 .total_allocation(req.identity())
                 .await
                 .map_err(|e| {
@@ -107,9 +106,7 @@ mod local {
 mod public {
     use super::*;
 
-    use crate::dao::debit_note::DebitNoteDao;
-    use crate::dao::invoice::InvoiceDao;
-    use crate::dao::invoice_event::InvoiceEventDao;
+    use crate::dao::*;
     use crate::error::{DbError, Error, PaymentError};
     use crate::utils::*;
 
@@ -142,6 +139,7 @@ mod public {
         msg: SendDebitNote,
     ) -> Result<Ack, SendError> {
         let mut debit_note = msg.0;
+        let debit_note_id = debit_note.debit_note_id.clone();
         let agreement = match get_agreement(debit_note.agreement_id.clone()).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
@@ -163,9 +161,21 @@ mod public {
         let dao: DebitNoteDao = db.as_dao();
         debit_note.status = InvoiceStatus::Received;
         match dao.insert(debit_note.into()).await {
-            Ok(_) => Ok(Ack {}),
+            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+            Err(e) => return Err(SendError::ServiceError(e.to_string())),
+            _ => (),
+        }
+
+        let dao: DebitNoteEventDao = db.as_dao();
+        let event = NewDebitNoteEvent {
+            debit_note_id,
+            details: None,
+            event_type: EventType::Received,
+        };
+        match dao.create(event.into()).await {
             Err(DbError::Query(e)) => Err(SendError::BadRequest(e.to_string())),
             Err(e) => Err(SendError::ServiceError(e.to_string())),
+            Ok(_) => Ok(Ack {}),
         }
     }
 

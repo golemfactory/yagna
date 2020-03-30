@@ -54,6 +54,12 @@ Payload:
 }
 ```
 
+To listen for requestor's debit note events:
+`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNoteEvents?timeout=<seconds>`
+
+To listen for provider's debit note events:
+`GET` `http://127.0.0.1:8465/payment-api/v1/provider/debitNoteEvents?timeout=<seconds>`
+
 #### Invoice flow
 
 To issue an invoice:  
