@@ -178,26 +178,25 @@ impl AgreementPayment {
 
 pub async fn compute_cost(
     payment_model: Arc<dyn PaymentModel>,
-    _activity_api: Arc<ActivityProviderApi>,
-    _activity_id: String,
+    activity_api: Arc<ActivityProviderApi>,
+    activity_id: String,
 ) -> Result<CostInfo> {
-    // let usage = activity_api
-    //     .get_activity_usage(&activity_id)
-    //     .await
-    //     .map_err(|error| {
-    //         anyhow!(
-    //             "Can't query usage for activity [{}]. Error: {}",
-    //             &activity_id,
-    //             error
-    //         )
-    //     })?
-    //     .current_usage
-    //     .ok_or(anyhow!(
-    //         "Empty usage vector for activity [{}].",
-    //         &activity_id
-    //     ))?;
+    let usage = activity_api
+        .get_activity_usage(&activity_id)
+        .await
+        .map_err(|error| {
+            anyhow!(
+                "Can't query usage for activity [{}]. Error: {}",
+                &activity_id,
+                error
+            )
+        })?
+        .current_usage
+        .ok_or(anyhow!(
+            "Empty usage vector for activity [{}].",
+            &activity_id
+        ))?;
 
-    let usage = vec![1.0, 1.0];
     let cost = payment_model.compute_cost(&usage)?;
 
     Ok(CostInfo { cost, usage })
