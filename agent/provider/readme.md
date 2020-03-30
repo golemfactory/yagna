@@ -6,6 +6,9 @@ Provider agent can be used with .env file. Here is list of additional
 environment variables that can be set:
 * YAGNA_APPKEY - authorization token
 * CREDIT_ADDRESS - ETH address where payments will be sent
+* YAGNA_MARKET_URL - Market api address
+* YAGNA_ACTIVITY_URL - Activity api address
+* YAGNA_PAYMENT_URL -  Payment api address
 
 ### Command line parameters:
 
@@ -13,9 +16,9 @@ environment variables that can be set:
 | Parameter      | Description   
 | -------------- |------------------------------------------------|
 | app-key        | Authorization token. Overrides `YAGNA_APPKEY`
-| market-url     | Market api address
-| activity-url   | Activity api address
-| payment-url    | Payment api address
+| market-url     | Market api address. Overrides `YAGNA_MARKET_URL`
+| activity-url   | Activity api address. Overrides `YAGNA_ACTIVITY_URL`
+| payment-url    | Payment api address. Overrides `YAGNA_PAYMENT_URL`
 | credit-address | Ethereum account for payments. Overrides `CREDIT_ADDRESS`
 
 ## Creating token

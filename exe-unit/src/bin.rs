@@ -1,5 +1,5 @@
 use actix::{Actor, System};
-use anyhow::anyhow;
+use anyhow::bail;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -46,13 +46,7 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     if let Err(error) = std::fs::create_dir_all(path) {
         match &error.kind() {
             std::io::ErrorKind::AlreadyExists => (),
-            _ => {
-                return Err(anyhow!(
-                    "Can't create directory: {}, {}",
-                    path.display(),
-                    error
-                ))
-            }
+            _ => bail!("Can't create directory: {}, {}", path.display(), error),
         }
     }
     Ok(path.canonicalize()?)

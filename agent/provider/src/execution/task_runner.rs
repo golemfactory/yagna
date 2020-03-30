@@ -270,11 +270,11 @@ impl TaskRunner {
             msg.agreement_id
         );
 
-        let msg = ActivityDestroyed {
+        let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
             activity_id: msg.activity_id.clone(),
         };
-        let _ = self.activity_destroyed.send_signal(msg.clone());
+        let _ = self.activity_destroyed.send_signal(destroy_msg.clone());
         Ok(())
     }
 

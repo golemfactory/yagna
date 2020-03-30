@@ -101,6 +101,9 @@ impl ProcessHandle {
             sender.send(status)
         });
 
+        // Note: unwrap can't fail here. All sender, receiver and thread will
+        // end their lifetime before await will return. There's no danger
+        // that one of them will be dropped earlier.
         return receiver.await.unwrap();
     }
 }
