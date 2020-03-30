@@ -1,4 +1,5 @@
 use actix::{Actor, System};
+use anyhow::anyhow;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
