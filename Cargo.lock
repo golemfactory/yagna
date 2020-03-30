@@ -1578,6 +1578,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "flexi_logger"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd4de217664c0ebd05d54e722f42c190fdf31c8965a77fcfac9253ff61a0369"
+dependencies = [
+ "chrono",
+ "glob",
+ "log 0.4.8",
+ "thiserror",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5440,6 +5452,7 @@ dependencies = [
  "crossbeam-channel 0.3.9",
  "dotenv 0.15.0",
  "env_logger 0.7.1",
+ "flexi_logger",
  "futures 0.3.4",
  "hex",
  "lazy_static",

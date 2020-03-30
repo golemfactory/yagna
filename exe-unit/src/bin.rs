@@ -45,15 +45,14 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     if let Err(error) = std::fs::create_dir_all(path) {
         match &error.kind() {
             std::io::ErrorKind::AlreadyExists => (),
-            _ => return Err(error.into()),
+            _ => return Err(anyhow!("Can't create directory: {}, {}", path.display(), error)),
         }
     }
     Ok(path.canonicalize()?)
 }
 
-fn main() -> anyhow::Result<()> {
+fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-    env_logger::init();
 
     let cli: Cli = Cli::from_args();
     let mut commands = None;
@@ -101,3 +100,20 @@ fn main() -> anyhow::Result<()> {
     sys.run()?;
     Ok(())
 }
+
+fn main() -> anyhow::Result<()> {
+    flexi_logger::Logger::with_env()
+        .log_to_file()
+        .duplicate_to_stderr(flexi_logger::Duplicate::Info)
+        .directory("logs")
+        .start().unwrap();
+
+    let result = run();
+    if let Err(error) = result {
+        log::error!("Exiting with error: {}", error);
+        return Err(error);
+    }
+
+    Ok(result?)
+}
+

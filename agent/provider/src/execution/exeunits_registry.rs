@@ -41,6 +41,7 @@ impl ExeUnitsRegistry {
         activity_id: &str,
         _agreement_id: &str,
     ) -> Result<ExeUnitInstance> {
+        // TODO: We should create separate directory for each execution of ExeUnit.
         let working_dir = std::env::current_dir()?;
         let exeunit_desc = self.find_exeunit(name)?;
         let mut args = exeunit_desc.args.clone();
