@@ -47,7 +47,7 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
         match &error.kind() {
             std::io::ErrorKind::AlreadyExists => (),
             _ => {
-                return Err(anyhow!(
+                bail!(
                     "Can't create directory: {}, {}",
                     path.display(),
                     error
