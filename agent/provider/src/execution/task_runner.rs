@@ -81,7 +81,6 @@ struct DestroyActivity {
 
 /// Called when process exited. There are 3 reasons for process to exit:
 /// - We got DestroyActivity event and killed process.
-/// - Requestor sent Terminate command to ExeUnit.
 /// - ExeUnit crashed.
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
