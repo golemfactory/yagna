@@ -1,6 +1,4 @@
-use crate::dao::debit_note::DebitNoteDao;
-use crate::dao::invoice::InvoiceDao;
-use crate::dao::payment::PaymentDao;
+use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao};
 use crate::error::{Error, PaymentError, PaymentResult};
 use crate::models as db_models;
 use crate::utils::get_sign_tx;
@@ -14,7 +12,7 @@ use uuid::Uuid;
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_model::payment::{Invoice, InvoiceStatus, Payment};
-use ya_net::RemoteEndpoint;
+use ya_net::TryRemoteEndpoint;
 use ya_payment_driver::{
     AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
     PaymentDriverError, PaymentStatus,
@@ -125,7 +123,11 @@ impl PaymentProcessor {
 
             let payee_id: NodeId = payment.payment.payee_id.parse().unwrap();
             let msg = SendPayment(payment.into());
-            payee_id.service(BUS_ID).call(msg).await??;
+            payee_id
+                .try_service(BUS_ID)
+                .unwrap() //FIXME
+                .call(msg)
+                .await??;
 
             let invoice_dao: InvoiceDao = self.db_executor.as_dao();
             invoice_dao

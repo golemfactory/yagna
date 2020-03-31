@@ -16,6 +16,7 @@ pub use self::allocation::NewAllocation;
 pub use self::debit_note::DebitNote;
 pub use self::debit_note::NewDebitNote;
 pub use self::debit_note_event::DebitNoteEvent;
+pub use self::debit_note_event::NewDebitNoteEvent;
 pub use self::event_type::EventType;
 pub use self::invoice::Invoice;
 pub use self::invoice::NewInvoice;

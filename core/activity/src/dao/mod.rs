@@ -21,4 +21,19 @@ pub enum DaoError {
     JoinError(#[from] tokio::task::JoinError),
     #[error("R2D2 error: {0}")]
     R2D2Error(#[from] r2d2::Error),
+    #[error("Serde Json error: {0}")]
+    SerdeJsonError(#[from] serde_json::error::Error),
+    #[error("Not found: {0}")]
+    NotFound(String),
+}
+
+impl From<ya_persistence::executor::Error> for DaoError {
+    fn from(err: ya_persistence::executor::Error) -> Self {
+        match err {
+            ya_persistence::executor::Error::DieselError(e) => e.into(),
+            ya_persistence::executor::Error::PoolError(e) => e.into(),
+            ya_persistence::executor::Error::RuntimeError(e) => e.into(),
+            ya_persistence::executor::Error::SerdeJsonError(e) => e.into(),
+        }
+    }
 }

@@ -1,9 +1,13 @@
-pub mod allocation;
-pub mod debit_note;
-pub mod invoice;
-pub mod invoice_event;
-pub mod payment;
+mod allocation;
+mod debit_note;
+mod debit_note_event;
+mod invoice;
+mod invoice_event;
+mod payment;
 
-pub use self::{
-    allocation::AllocationDao, debit_note::DebitNoteDao, invoice::InvoiceDao, payment::PaymentDao,
-};
+pub use self::allocation::AllocationDao;
+pub use self::debit_note::DebitNoteDao;
+pub use self::debit_note_event::DebitNoteEventDao;
+pub use self::invoice::InvoiceDao;
+pub use self::invoice_event::InvoiceEventDao;
+pub use self::payment::PaymentDao;

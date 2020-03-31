@@ -43,7 +43,7 @@ impl ActivityProviderApi {
         #[allow(non_snake_case)]
         timeout: Option<i32>,
         #[allow(non_snake_case)]
-        maxEvents: Option<i32>, // TODO: max_events
+        maxEvents: Option<i32>,
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
             "events",

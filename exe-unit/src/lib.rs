@@ -1,12 +1,14 @@
-pub mod agreement;
-pub mod error;
-mod handlers;
-pub mod message;
-pub mod metrics;
-pub mod runtime;
-pub mod service;
-pub mod state;
-pub mod util;
+use actix::prelude::*;
+use futures::TryFutureExt;
+use std::path::PathBuf;
+use std::time::Duration;
+
+use ya_core_model::activity;
+use ya_model::activity::activity_state::StatePair;
+use ya_model::activity::{
+    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
+};
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::agreement::Agreement;
 use crate::error::Error;
@@ -16,16 +18,16 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
-use actix::prelude::*;
-use futures::TryFutureExt;
-use std::path::PathBuf;
-use std::time::Duration;
-use ya_core_model::activity::*;
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{
-    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
-};
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+
+pub mod agreement;
+pub mod error;
+mod handlers;
+pub mod message;
+pub mod metrics;
+pub mod runtime;
+pub mod service;
+pub mod state;
+pub mod util;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -64,7 +66,7 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
-        if let Some(activity_id) = &self.ctx.service_id {
+        if let Some(activity_id) = &self.ctx.activity_id {
             let fut = report_usage(
                 self.ctx.report_url.clone().unwrap(),
                 activity_id.clone(),
@@ -110,7 +112,7 @@ impl<R: Runtime> ExeUnit<R> {
         addr: Addr<Self>,
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
-        exec: Exec,
+        exec: activity::Exec,
     ) {
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
@@ -146,6 +148,7 @@ impl<R: Runtime> ExeUnit<R> {
                 }
 
                 let message = format!("Command interrupted: {}", error.to_string());
+                log::error!("{}", message);
                 Self::shutdown(&addr, ShutdownReason::Error(message)).await;
                 break;
             }
@@ -164,24 +167,22 @@ impl<R: Runtime> ExeUnit<R> {
         ctx: ExecCtx,
     ) -> Result<()> {
         let state = addr.send(GetState {}).await?.0;
-        let before_state = match (&state.0, &state.1) {
+        let exec_state = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
             }
-            (State::Terminated, _) => {
+            (State::New, _) | (State::Terminated, _) => {
                 return Err(StateError::InvalidState(state).into());
             }
-            (State::New, _) => match &ctx.cmd {
-                ExeScriptCommand::Deploy { .. } => StatePair(State::New, Some(State::Deployed)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
+            (State::Initialized, _) => match &ctx.cmd {
+                ExeScriptCommand::Deploy { .. } => {
+                    StatePair(State::Initialized, Some(State::Deployed))
                 }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (State::Deployed, _) => match &ctx.cmd {
                 ExeScriptCommand::Start { .. } => StatePair(State::Deployed, Some(State::Ready)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
-                }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (s, _) => match &ctx.cmd {
                 ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
@@ -192,7 +193,7 @@ impl<R: Runtime> ExeUnit<R> {
         };
 
         addr.send(SetState {
-            state: Some(before_state.clone()),
+            state: Some(exec_state.clone()),
             running_command: Some(Some(ctx.cmd.clone().into())),
             batch_result: None,
         })
@@ -212,16 +213,16 @@ impl<R: Runtime> ExeUnit<R> {
         }
 
         let sanity_state = addr.send(GetState {}).await?.0;
-        if sanity_state != before_state {
+        if sanity_state != exec_state {
             return Err(StateError::UnexpectedState {
                 current: sanity_state,
-                expected: before_state,
+                expected: exec_state,
             }
             .into());
         }
 
         addr.send(SetState {
-            state: Some(StatePair(before_state.1.unwrap(), None)),
+            state: Some(StatePair(exec_state.1.unwrap(), None)),
             running_command: Some(None),
             batch_result: Some((ctx.batch_id.clone(), exe_result.into_exe_result(ctx.idx))),
         })
@@ -260,18 +261,24 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     fn started(&mut self, ctx: &mut Self::Context) {
         let addr = ctx.address();
 
-        if let Some(s) = &self.ctx.service_id {
-            actix_rpc::bind::<Exec>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityState>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityUsage>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetRunningCommand>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetExecBatchResults>(&s, addr.clone().recipient());
+        if let Some(activity_id) = &self.ctx.activity_id {
+            let srv_id = activity::exeunit::bus_id(activity_id);
+            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
             .finish()
             .spawn(ctx);
 
+        addr.do_send(SetState {
+            state: Some(State::Initialized.into()),
+            running_command: None,
+            batch_result: None,
+        });
         log::info!("Started");
     }
 
@@ -285,7 +292,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
-    pub service_id: Option<String>,
+    pub activity_id: Option<String>,
     pub report_url: Option<String>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
@@ -293,13 +300,13 @@ pub struct ExeUnitContext {
 }
 
 impl ExeUnitContext {
-    pub fn match_service(&self, service_id: &str) -> Result<()> {
-        match &self.service_id {
-            Some(sid) => match sid == service_id {
+    pub fn verify_activity_id(&self, activity_id: &str) -> Result<()> {
+        match &self.activity_id {
+            Some(act_id) => match act_id == activity_id {
                 true => Ok(()),
                 false => Err(Error::RemoteServiceError(format!(
-                    "Invalid destination service address: {}",
-                    service_id
+                    "Forbidden! Invalid activity id: {}",
+                    activity_id
                 ))),
             },
             None => Ok(()),
@@ -327,7 +334,7 @@ async fn report_usage<R: Runtime>(
     match metrics.send(GetMetrics).await {
         Ok(resp) => match resp {
             Ok(data) => {
-                let msg = SetActivityUsage {
+                let msg = activity::local::SetUsage {
                     activity_id,
                     usage: ActivityUsage::from(data),
                     timeout: None,
