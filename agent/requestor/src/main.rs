@@ -1,5 +1,5 @@
 use actix_rt::Arbiter;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures::{channel::mpsc, prelude::*};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
@@ -14,7 +14,7 @@ use ya_model::{
     market::{
         proposal::State as ProposalState, AgreementProposal, Demand, Proposal, RequestorEvent,
     },
-    payment::{Acceptance, EventType, NewAllocation},
+    payment::{Acceptance, Allocation, EventType, NewAllocation},
 };
 
 #[derive(StructOpt)]
@@ -238,13 +238,85 @@ async fn process_agreement(
         tokio::time::delay_for(Duration::from_millis(700)).await;
     }
 
-    tokio::time::delay_for(Duration::from_millis(7000)).await;
+    //    tokio::time::delay_for(Duration::from_millis(7000)).await;
 
-    log::info!("destroying activity = (({})); AGRRR!", act_id);
+    log::info!("\n\n AGRRR! destroying activity: {}; ", act_id);
     activity_api.control().destroy_activity(&act_id).await?;
-    log::info!("I'M DONE FOR NOW");
+    log::info!("\n\n I'M DONE FOR NOW");
 
+    tx.send(()).await?;
     Ok(())
+}
+
+/// MOCK: fixed price allocation
+async fn allocate_funds_for_task(payment_api: &PaymentApi) -> anyhow::Result<Allocation> {
+    let new_allocation = NewAllocation {
+        total_amount: 10.into(),
+        timeout: None,
+        make_deposit: false,
+    };
+    let allocation = payment_api.create_allocation(&new_allocation).await?;
+    log::info!("Allocated {} GNT.", &allocation.total_amount);
+    Ok(allocation)
+}
+
+/// MOCK: log incoming debit notes, and... ignore them
+async fn log_and_ignore_debit_notes(
+    payment_api: &PaymentApi,
+    started_at: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    let mut ts = started_at.clone();
+    loop {
+        let next_ts = Utc::now();
+        let events = payment_api.get_debit_note_events(Some(&ts)).await?;
+
+        for event in events {
+            log::info!("got debit note event {:#?}", event);
+        }
+        ts = next_ts;
+        tokio::time::delay_for(Duration::from_secs(5)).await;
+    }
+}
+
+/// MOCK: accept all incoming invoices
+async fn process_payments(
+    payment_api: &PaymentApi,
+    allocation: Allocation,
+    started_at: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    let mut ts = started_at;
+    loop {
+        let next_ts = Utc::now();
+
+        let events = payment_api.get_invoice_events(Some(&ts)).await?;
+        // TODO: timeout on get_invoice_events does not work
+        if events.is_empty() {
+            tokio::time::delay_for(Duration::from_secs(10)).await;
+        }
+
+        for event in events {
+            log::info!("got invoice event {:#?}", event);
+            match event.event_type {
+                EventType::Received => {
+                    let invoice = payment_api.get_invoice(&event.invoice_id).await?;
+                    let acceptance = Acceptance {
+                        total_amount_accepted: invoice.amount,
+                        allocation_id: allocation.allocation_id.clone(),
+                    };
+                    payment_api
+                        .accept_invoice(&event.invoice_id, &acceptance)
+                        .await?;
+                    log::info!("invoice accepted: {:?}", event.invoice_id);
+                }
+                _ => log::info!(
+                    "ignoring event type {:?} for: {}",
+                    event.event_type,
+                    event.invoice_id
+                ),
+            }
+            ts = next_ts;
+        }
+    }
 }
 
 #[actix_rt::main]
@@ -255,32 +327,28 @@ async fn main() -> anyhow::Result<()> {
     let settings = AppSettings::from_args();
 
     let payment_api = settings.payment_api()?;
+    let allocation = allocate_funds_for_task(&payment_api).await?;
 
     let node_name = "test1";
-
     let my_demand = build_demand(node_name);
     //(golem.runtime.wasm.wasi.version@v=*)
-
-    let allocation = NewAllocation {
-        total_amount: 10.into(),
-        timeout: None,
-        make_deposit: false,
-    };
-    let new_allocation = payment_api.create_allocation(&allocation).await.unwrap();
-
-    log::info!("Allocated {} GNT.", &allocation.total_amount);
 
     let market_api = settings.market_api()?;
     let subscription_id = market_api.subscribe(&my_demand).await?;
 
     log::info!("sub_id={}", subscription_id);
 
-    let mkt_api = market_api.clone();
-    let sub_id = subscription_id.clone();
-    Arbiter::spawn(async move {
-        tokio::signal::ctrl_c().await.unwrap();
-        mkt_api.unsubscribe(&sub_id).await.unwrap();
-    });
+    // mount signal handler to unsubscribe from the market
+    {
+        let market_api = market_api.clone();
+        let sub_id = subscription_id.clone();
+        Arbiter::spawn(async move {
+            tokio::signal::ctrl_c().await.unwrap();
+            market_api.unsubscribe(&sub_id).await.unwrap();
+            // TODO: destroy running activity
+            // TODO: process (accept / reject) incoming payments
+        });
+    }
 
     let mkt_api = market_api.clone();
     let sub_id = subscription_id.clone();
@@ -291,75 +359,42 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let activity_api = settings.activity_api()?;
+    let exe_script = settings.exe_script.clone();
+    let (agreement_tx, mut _agreement_rx) = mpsc::channel::<()>(1);
+    Arbiter::spawn(async move {
+        while let Some(id) = rx.next().await {
+            let agreement_tx = agreement_tx.clone();
+            if let Err(e) =
+                process_agreement(&activity_api, id.clone(), &exe_script, agreement_tx).await
+            {
+                log::error!("processing agreement id {} error: {}", id, e);
+            }
+            // TODO: Market doesn't support agreement termination yet.
+            // let terminate_result = market_api.terminate_agreement(&id).await;
+            // log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
+        }
+    });
+
     // log incoming debit notes
     {
         let payment_api = payment_api.clone();
-        let mut ts = started_at.clone();
+        let started_at = started_at.clone();
         Arbiter::spawn(async move {
-            loop {
-                let next_ts = Utc::now();
-                let events = match payment_api.get_debit_note_events(Some(&ts)).await {
-                    Err(e) => {
-                        log::error!("fail get debit notes events: {}", e);
-                        break;
-                    }
-                    Ok(events) => events,
-                };
-
-                for event in events {
-                    log::info!("got debit note event {:?}", event);
-                }
-                ts = next_ts;
-                tokio::time::delay_for(Duration::from_secs(5)).await;
+            if let Err(e) = log_and_ignore_debit_notes(&payment_api, started_at).await {
+                log::error!("logging debit notes error: {}", e);
             }
         })
     }
 
-    let activity_api = settings.activity_api()?;
-    let exe_script = settings.exe_script.clone();
     Arbiter::spawn(async move {
-        while let Some(id) = rx.next().await {
-            if let Err(e) = process_agreement(&activity_api, id.clone(), &exe_script).await {
-                log::error!("processing agreement id {} error: {}", id, e);
-            }
-            // TODO: Market doesn't support agreement termination yet.
-            let terminate_result = market_api.terminate_agreement(&id).await;
-            log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
+        if let Err(e) = process_payments(&payment_api, allocation, started_at).await {
+            log::error!("processing payments error: {}", e)
         }
     });
 
-    Arbiter::spawn(async move {
-        let mut ts = started_at;
-
-        loop {
-            let next_ts = Utc::now();
-
-            let events = payment_api.get_invoice_events(Some(&ts)).await.unwrap();
-            // TODO: timeout on get_invoice_events does not work
-            if events.is_empty() {
-                tokio::time::delay_for(Duration::from_secs(10)).await;
-            }
-
-            for event in events {
-                match event.event_type {
-                    EventType::Received => {
-                        let invoice = payment_api.get_invoice(&event.invoice_id).await.unwrap();
-                        let acceptance = Acceptance {
-                            total_amount_accepted: invoice.amount,
-                            allocation_id: new_allocation.allocation_id.clone(),
-                        };
-                        let result = payment_api
-                            .accept_invoice(&event.invoice_id, &acceptance)
-                            .await;
-                        log::info!("payment acceptance result: {:?}", result);
-                    }
-                    _ => (),
-                }
-                ts = next_ts;
-            }
-        }
-    });
-
+    // waiting only for first agreement to be fully processed
+    // agreement_rx.next().await;
     tokio::signal::ctrl_c().await?;
     settings.market_api()?.unsubscribe(&subscription_id).await?;
     Ok(())
