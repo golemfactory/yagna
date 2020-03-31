@@ -139,7 +139,7 @@ impl ProviderMarket {
         Ok(())
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Subscribed offer: {:?} {:?}")]
+    #[logfn_inputs(Trace, fmt = "{}Subscribed offer: {:?} {:?}")]
     fn on_offer_subscribed(
         &mut self,
         msg: OfferSubscription,
@@ -210,7 +210,7 @@ impl ProviderMarket {
             return;
         };
 
-        log::info!(
+        log::debug!(
             "Collected {} market events for subscription [{}]. Processing...",
             events.len(),
             &subscription.subscription_id
@@ -345,33 +345,46 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
-    #[logfn(Debug, fmt = "decided to: {:?}")]
+    #[logfn(Info, fmt = "decided to: {:?}")]
     fn on_proposal(
         &mut self,
         msg: GotProposal,
         _ctx: &mut Context<Self>,
     ) -> Result<ProposalResponse> {
+        log::debug!(
+            "Got proposal event {:?} with state {:?}",
+            msg.proposal.proposal_id,
+            msg.proposal.state
+        );
+
         self.negotiator
             .react_to_proposal(&msg.subscription.offer, &msg.proposal)
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
-    #[logfn(Debug, fmt = "decided to: {:?}")]
+    #[logfn(Info, fmt = "decided to: {:?}")]
     fn on_agreement(
         &mut self,
         msg: GotAgreement,
         _ctx: &mut Context<Self>,
     ) -> Result<AgreementResponse> {
+        log::debug!(
+            "Got agreement event {:?} with state {:?}",
+            msg.agreement.agreement_id,
+            msg.agreement.state
+        );
         self.negotiator.react_to_agreement(&msg.agreement)
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Got {:?} {:?}")]
     fn on_agreement_approved(
         &mut self,
         msg: AgreementApproved,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
+        log::info!(
+            "Got approved agreement {:?} with state {:?}",
+            msg.agreement.agreement_id,
+            msg.agreement.state
+        );
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(AgreementApproved {
             agreement: msg.agreement,

@@ -10,10 +10,7 @@ use ya_client::{
     activity::ActivityRequestorApi, market::MarketRequestorApi, web::WebClient, web::WebInterface,
 };
 use ya_model::{
-    activity::{
-        activity_state::{State as ActivityState, StatePair},
-        ExeScriptRequest,
-    },
+    activity::ExeScriptRequest,
     market::{
         proposal::State as ProposalState, AgreementProposal, Demand, Proposal, RequestorEvent,
     },
@@ -75,7 +72,7 @@ async fn process_offer(
     offer: Proposal,
     subscription_id: &str,
     my_demand: Demand,
-) -> Result<ProcessOfferResult, anyhow::Error> {
+) -> anyhow::Result<ProcessOfferResult> {
     let proposal_id = offer.proposal_id()?.clone();
 
     if offer.state.unwrap_or(ProposalState::Initial) == ProposalState::Initial {
@@ -110,15 +107,15 @@ async fn spawn_workers(
     requestor_api: MarketRequestorApi,
     subscription_id: &str,
     my_demand: &Demand,
-    tx: futures::channel::mpsc::Sender<String>,
-) -> Result<(), anyhow::Error> {
+    tx: mpsc::Sender<String>,
+) -> anyhow::Result<()> {
     loop {
         let events = requestor_api
             .collect(&subscription_id, Some(2.0), Some(5))
             .await?;
 
         if !events.is_empty() {
-            log::debug!("market events={:#?}", events);
+            log::debug!("got {} market events", events.len());
         } else {
             tokio::time::delay_for(Duration::from_millis(3000)).await;
         }
@@ -128,6 +125,12 @@ async fn spawn_workers(
                     event_date: _,
                     proposal,
                 } => {
+                    log::debug!(
+                        "processing ProposalEvent [{:?}] with state: {:?}",
+                        proposal.proposal_id,
+                        proposal.state
+                    );
+                    log::trace!("processing proposal {:?}", proposal);
                     let mut tx = tx.clone();
                     let requestor_api = requestor_api.clone();
                     let my_subs_id = subscription_id.to_string();
@@ -188,19 +191,20 @@ async fn process_agreement(
     activity_api: &ActivityRequestorApi,
     agreement_id: String,
     exe_script: &PathBuf,
-) -> Result<(), anyhow::Error> {
-    log::info!("GOT new agreement = {}", agreement_id);
+    mut tx: mpsc::Sender<()>,
+) -> anyhow::Result<()> {
+    log::info!("\n\n processing AGREEMENT = {}", agreement_id);
 
     let act_id = activity_api
         .control()
         .create_activity(&agreement_id)
         .await?;
-    log::info!("GOT new activity = (({})); YAY!", act_id);
+    log::info!("\n\n created new ACTIVITY: {}; YAY!", act_id);
 
     let contents = std::fs::read_to_string(&exe_script)?;
     let commands_cnt = match serde_json::from_str(&contents)? {
         serde_json::Value::Array(arr) => {
-            log::info!("script commands cnt: {}", arr.len());
+            log::info!("\n\n Executing script {} commands", arr.len());
             arr.len()
         }
         _ => 0,
@@ -210,12 +214,12 @@ async fn process_agreement(
         .control()
         .exec(ExeScriptRequest::new(contents), &act_id)
         .await?;
-    log::info!("got batch_id={}", batch_id);
+    log::info!("got BATCH_ID: {}", batch_id);
 
     loop {
         let state = activity_api.state().get_state(&act_id).await?;
-        if state.state == StatePair::from(ActivityState::Terminated) {
-            log::info!("activity {} terminated: {:?}", act_id, state);
+        if !state.alive() {
+            log::info!("activity {} is NOT ALIVE any more.", act_id);
             break;
         }
 
