@@ -423,6 +423,9 @@ components:
           items:
             type: number
             format: double
+        timestamp:
+          type: integer
+          description: Usage update timestamp (UTC)
 
     ActivityState:
       required:

@@ -1,21 +1,22 @@
-use futures::prelude::*;
-use std::convert::From;
-
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id, get_agreement,
     get_persisted_state, get_persisted_usage, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::error::Error;
+use actix_rt::Arbiter;
+use chrono::Utc;
+use futures::future::LocalBoxFuture;
+use futures::prelude::*;
+use std::convert::From;
+use std::time::Duration;
 use ya_core_model::activity;
-use ya_model::activity::{ExeScriptCommand, State};
+use ya_model::activity::{ActivityState, ActivityUsage, State};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
-use ya_service_bus::{
-    timeout::*,
-    typed::{self as bus, ServiceBinder},
-    RpcEndpoint,
-};
+use ya_service_bus::{timeout::*, typed::ServiceBinder};
+
+const INACTIVITY_TIME_LIMIT: i64 = 10;
 
 pub fn bind_gsb(db: &DbExecutor) {
     // public for remote requestors interactions
@@ -59,18 +60,23 @@ async fn create_activity_gsb(
         .await
         .map_err(Error::from)?;
 
-    let state = db
-        .as_dao::<ActivityStateDao>()
+    db.as_dao::<ActivityStateDao>()
         .get_state_wait(
             &activity_id,
             vec![State::Initialized.into(), State::Terminated.into()],
         )
         .timeout(msg.timeout)
-        .map_err(Error::from)
-        .await?
-        .map_err(Error::from)?;
-    log::debug!("activity state: {:?}", state);
+        .await
+        .map_err(|e| {
+            Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, &provider_id));
+            Error::from(e)
+        })?
+        .map_err(|e| {
+            Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, &provider_id));
+            Error::from(e)
+        })?;
 
+    Arbiter::spawn(monitor_activity(db, activity_id.clone(), provider_id));
     Ok(activity_id)
 }
 
@@ -87,6 +93,10 @@ async fn destroy_activity_gsb(
         .provider_id
         .ok_or(Error::BadRequest("Invalid agreement".to_owned()))?;
 
+    if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
+        return Ok(());
+    }
+
     db.as_dao::<EventDao>()
         .create(
             &msg.activity_id,
@@ -95,22 +105,6 @@ async fn destroy_activity_gsb(
         )
         .await
         .map_err(Error::from)?;
-
-    if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
-        return Ok(());
-    }
-
-    log::debug!("sending ExeScript with Terminate command...");
-    let batch_id = bus::service(activity::exeunit::bus_id(&msg.activity_id))
-        .send(activity::Exec {
-            activity_id: msg.activity_id.clone(),
-            batch_id: generate_id(),
-            exe_script: vec![ExeScriptCommand::Terminate {}],
-            timeout: msg.timeout.clone(),
-        })
-        .await
-        .map_err(Error::from)??;
-    log::debug!("ExeScript send. batch id: {}", batch_id);
 
     log::debug!(
         "waiting {:?}ms for activity status change to Terminate",
@@ -143,6 +137,69 @@ async fn get_activity_usage_gsb(
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
     Ok(get_persisted_usage(&db, &msg.activity_id).await?)
+}
+
+async fn get_activity_progress(
+    db: &DbExecutor,
+    activity_id: &str,
+) -> Result<(ActivityState, ActivityUsage), Error> {
+    let state = db.as_dao::<ActivityStateDao>().get(&activity_id).await?;
+    let usage = db.as_dao::<ActivityUsageDao>().get(&activity_id).await?;
+    Ok((state, usage))
+}
+
+fn enqueue_destroy_evt(
+    db: DbExecutor,
+    activity_id: impl ToString,
+    provider_id: impl ToString,
+) -> LocalBoxFuture<'static, ()> {
+    let activity_id = activity_id.to_string();
+    let provider_id = provider_id.to_string();
+
+    log::debug!("Enqueueing a Destroy event for activity {}", activity_id);
+
+    async move {
+        let result = db
+            .as_dao::<EventDao>()
+            .create(
+                &activity_id,
+                &provider_id,
+                ActivityEventType::DestroyActivity,
+            )
+            .await;
+
+        if let Err(err) = result {
+            log::error!(
+                "Unable to enqueue a Destroy event for activity {}: {:?}",
+                activity_id,
+                err
+            );
+        }
+    }
+    .boxed_local()
+}
+
+async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_id: impl ToString) {
+    let activity_id = activity_id.to_string();
+    let provider_id = provider_id.to_string();
+    let delay = Duration::from_secs(INACTIVITY_TIME_LIMIT as u64 / 3);
+
+    log::debug!("Starting activity monitor: {}", activity_id);
+
+    loop {
+        if let Ok((state, usage)) = get_activity_progress(&db, &activity_id).await {
+            if !state.state.alive() {
+                break;
+            }
+            if Utc::now().timestamp() >= usage.timestamp + INACTIVITY_TIME_LIMIT {
+                enqueue_destroy_evt(db, &activity_id, &provider_id).await;
+                break;
+            }
+        };
+        tokio::time::delay_for(delay).await;
+    }
+
+    log::debug!("Stopping activity monitor: {}", activity_id);
 }
 
 /// Local Activity services for ExeUnit reporting.

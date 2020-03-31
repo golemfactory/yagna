@@ -18,6 +18,7 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
+use chrono::Utc;
 
 pub mod agreement;
 pub mod error;
@@ -336,7 +337,10 @@ async fn report_usage<R: Runtime>(
             Ok(data) => {
                 let msg = activity::local::SetUsage {
                     activity_id,
-                    usage: ActivityUsage::from(data),
+                    usage: ActivityUsage {
+                        current_usage: Some(data),
+                        timestamp: Utc::now().timestamp(),
+                    },
                     timeout: None,
                 };
                 report(report_url, msg).await;
