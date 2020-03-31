@@ -162,24 +162,22 @@ impl<R: Runtime> ExeUnit<R> {
         ctx: ExecCtx,
     ) -> Result<()> {
         let state = addr.send(GetState {}).await?.0;
-        let before_state = match (&state.0, &state.1) {
+        let exec_state = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
             }
-            (State::Terminated, _) => {
+            (State::New, _) | (State::Terminated, _) => {
                 return Err(StateError::InvalidState(state).into());
             }
-            (State::New, _) => match &ctx.cmd {
-                ExeScriptCommand::Deploy { .. } => StatePair(State::New, Some(State::Deployed)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
+            (State::Initialized, _) => match &ctx.cmd {
+                ExeScriptCommand::Deploy { .. } => {
+                    StatePair(State::Initialized, Some(State::Deployed))
                 }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (State::Deployed, _) => match &ctx.cmd {
                 ExeScriptCommand::Start { .. } => StatePair(State::Deployed, Some(State::Ready)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
-                }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (s, _) => match &ctx.cmd {
                 ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
@@ -190,7 +188,7 @@ impl<R: Runtime> ExeUnit<R> {
         };
 
         addr.send(SetState {
-            state: Some(before_state.clone()),
+            state: Some(exec_state.clone()),
             running_command: Some(Some(ctx.cmd.clone().into())),
             batch_result: None,
         })
@@ -210,16 +208,16 @@ impl<R: Runtime> ExeUnit<R> {
         }
 
         let sanity_state = addr.send(GetState {}).await?.0;
-        if sanity_state != before_state {
+        if sanity_state != exec_state {
             return Err(StateError::UnexpectedState {
                 current: sanity_state,
-                expected: before_state,
+                expected: exec_state,
             }
             .into());
         }
 
         addr.send(SetState {
-            state: Some(StatePair(before_state.1.unwrap(), None)),
+            state: Some(StatePair(exec_state.1.unwrap(), None)),
             running_command: Some(None),
             batch_result: Some((ctx.batch_id.clone(), exe_result.into_exe_result(ctx.idx))),
         })
@@ -271,6 +269,11 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             .finish()
             .spawn(ctx);
 
+        addr.do_send(SetState {
+            state: Some(State::Initialized.into()),
+            running_command: None,
+            batch_result: None,
+        });
         log::info!("Started");
     }
 

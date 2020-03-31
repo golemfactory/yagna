@@ -57,7 +57,10 @@ async fn create_activity_gsb(
 
     let state = db
         .as_dao::<ActivityStateDao>()
-        .get_state_wait(&activity_id, None)
+        .get_state_wait(
+            &activity_id,
+            vec![State::Initialized.into(), State::Terminated.into()],
+        )
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await?
@@ -99,7 +102,7 @@ async fn destroy_activity_gsb(
     );
     Ok(db
         .as_dao::<ActivityStateDao>()
-        .get_state_wait(&msg.activity_id, Some(State::Terminated.into()))
+        .get_state_wait(&msg.activity_id, vec![State::Terminated.into()])
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await
