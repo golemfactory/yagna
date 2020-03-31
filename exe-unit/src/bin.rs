@@ -1,5 +1,6 @@
 use actix::{Actor, System};
 use anyhow::bail;
+use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -102,14 +103,23 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn colored_stderr_exeunit_prefixed_format(
+    w: &mut dyn std::io::Write,
+    now: &mut DeferredNow,
+    record: &Record,
+) -> Result<(), std::io::Error> {
+    write!(w, "[ExeUnit] ")?;
+    flexi_logger::colored_opt_format(w, now, record)
+}
+
 fn main() -> anyhow::Result<()> {
     flexi_logger::Logger::with_env()
         .log_to_file()
-        .duplicate_to_stderr(flexi_logger::Duplicate::Info)
         .directory("logs")
         .format(flexi_logger::colored_opt_format)
-        .start()
-        .unwrap();
+        .duplicate_to_stderr(flexi_logger::Duplicate::Debug)
+        .format_for_stderr(colored_stderr_exeunit_prefixed_format)
+        .start()?;
 
     let result = run();
     if let Err(error) = result {
