@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use bigdecimal::BigDecimal;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -191,11 +191,25 @@ pub async fn compute_cost(
                 error
             )
         })?
-        .current_usage
-        .ok_or(anyhow!(
-            "Empty usage vector for activity [{}].",
-            &activity_id
-        ))?;
+        .current_usage;
+
+    // Empty usage vector can occur, when ExeUnit didn't send
+    // any metric yet. We can handle this as usage with all values
+    // set to 0.0. Note that cost in this case can be not zero, as
+    // there's constant coefficient.
+    let usage = match usage {
+        Some(usage_vec) => usage_vec,
+        None => vec![0.0; payment_model.expected_usage_len()],
+    };
+
+    if usage.len() != payment_model.expected_usage_len() {
+        bail!(
+            "Incorrect usage vector length {} for activity [{}]. Expected: {}.",
+            usage.len(),
+            activity_id,
+            payment_model.expected_usage_len()
+        );
+    }
 
     let cost = payment_model.compute_cost(&usage)?;
 
