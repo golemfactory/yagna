@@ -188,23 +188,21 @@ impl<R: Runtime> ExeUnit<R> {
             },
         };
 
-        addr.send(SetState {
-            state: Some(exec_state.clone()),
-            running_command: Some(Some(ctx.cmd.clone().into())),
-            batch_result: None,
-        })
-        .await?;
+        addr.send(SetState::exec(exec_state.clone(), ctx.cmd.clone()))
+            .await?;
 
         log::info!("Executing command: {:?}", ctx.cmd);
 
         Self::pre_exec(transfer_service, runtime.clone(), ctx.clone()).await?;
 
-        let exe_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
-        if let CommandResult::Error = exe_result.result {
+        let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
+        if let CommandResult::Error = exec_result.result {
             return Err(Error::CommandError(format!(
                 "{:?} command error: {}",
                 ctx.cmd,
-                exe_result.stderr.unwrap_or("<no stderr output>".to_owned())
+                exec_result
+                    .stderr
+                    .unwrap_or("<no stderr output>".to_owned())
             )));
         }
 
@@ -217,11 +215,11 @@ impl<R: Runtime> ExeUnit<R> {
             .into());
         }
 
-        addr.send(SetState {
-            state: Some(StatePair(exec_state.1.unwrap(), None)),
-            running_command: Some(None),
-            batch_result: Some((ctx.batch_id.clone(), exe_result.into_exe_result(ctx.idx))),
-        })
+        addr.send(SetState::result(
+            exec_state.1.unwrap().into(),
+            ctx.batch_id,
+            exec_result.into_exe_result(ctx.idx),
+        ))
         .await?;
 
         Ok(())
@@ -270,11 +268,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             .finish()
             .spawn(ctx);
 
-        addr.do_send(SetState {
-            state: Some(State::Initialized.into()),
-            running_command: None,
-            batch_result: None,
-        });
+        addr.do_send(SetState::from(State::Initialized));
         log::info!("Started");
     }
 

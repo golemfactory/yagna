@@ -20,10 +20,12 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     type Result = <SetState as Message>::Result;
 
     fn handle(&mut self, msg: SetState, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(state) = &msg.state {
-            if &self.state.inner != state {
-                log::debug!("Entering state: {:?}", state);
+        if let Some((state, reason)) = msg.state {
+            if self.state.inner != state {
                 self.state.inner = state.clone();
+
+                log::debug!("Entering state: {:?}", state);
+                log::debug!("Report: {}", self.state.report());
 
                 if let Some(id) = &self.ctx.activity_id {
                     ctx.spawn(
@@ -32,6 +34,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                             SetActivityState {
                                 activity_id: id.clone(),
                                 state: ActivityState::from(state),
+                                reason,
                                 timeout: None,
                             },
                         )
@@ -76,6 +79,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         let runtime = self.runtime.clone();
         let services = std::mem::replace(&mut self.services, Vec::new());
         let state = self.state.inner.to_pending(State::Terminated);
+        let reason = format!("{}: {}", msg.0, self.state.report());
 
         let fut = async move {
             log::info!("Shutting down ...");
@@ -86,7 +90,9 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
                 service.stop().await;
             }
 
-            let _ = address.send(SetState::from(State::Terminated)).await;
+            let _ = address
+                .send(SetState::from((State::Terminated, reason)))
+                .await;
 
             System::current().stop();
 

@@ -26,25 +26,49 @@ pub struct GetStateResult(pub StatePair);
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub struct SetState {
-    pub state: Option<StatePair>,
+    pub state: Option<(StatePair, Option<String>)>,
     pub running_command: Option<Option<ExeScriptCommandState>>,
     pub batch_result: Option<(String, ExeScriptCommandResult)>,
 }
 
-impl From<StatePair> for SetState {
-    fn from(state: StatePair) -> Self {
+impl SetState {
+    pub fn exec(state: StatePair, command: ExeScriptCommand) -> Self {
         SetState {
-            state: Some(state),
-            running_command: None,
+            state: Some((state, None)),
+            running_command: Some(Some(command.into())),
             batch_result: None,
+        }
+    }
+
+    pub fn result(state: StatePair, batch_id: String, result: ExeScriptCommandResult) -> Self {
+        SetState {
+            state: Some((state, None)),
+            running_command: Some(None),
+            batch_result: Some((batch_id, result)),
         }
     }
 }
 
 impl From<State> for SetState {
     fn from(state: State) -> Self {
+        Self::from(StatePair::from(state))
+    }
+}
+
+impl From<StatePair> for SetState {
+    fn from(state: StatePair) -> Self {
         SetState {
-            state: Some(StatePair::from(state)),
+            state: Some((state, None)),
+            running_command: None,
+            batch_result: None,
+        }
+    }
+}
+
+impl From<(State, String)> for SetState {
+    fn from(tuple: (State, String)) -> Self {
+        SetState {
+            state: Some((tuple.0.into(), Some(tuple.1))),
             running_command: None,
             batch_result: None,
         }
