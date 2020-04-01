@@ -8,8 +8,9 @@ use tokio::process::Command;
 use ya_core_model::activity::{
     self,
     local::{SetState, SetUsage},
-    Exec,
+    Exec, GetExecBatchResults,
 };
+use ya_model::activity::ExeScriptCommand;
 use ya_service_bus::{actix_rpc, RpcEnvelope};
 
 const ACTIVITY_BUS_ID: &str = "activity";
@@ -102,20 +103,36 @@ async fn main() -> anyhow::Result<()> {
     ];
 
     let contents = std::fs::read_to_string(&args.script)?;
-    let exe_script = serde_json::from_str(&contents)?;
+    let exe_script: Vec<ExeScriptCommand> = serde_json::from_str(&contents)?;
+    let exe_last_idx = exe_script.len() - 1;
 
-    let child = Command::new(args.supervisor).args(child_args).spawn()?;
+    let mut child = Command::new(args.supervisor).args(child_args).spawn()?;
     tokio::time::delay_for(Duration::from_secs(2)).await;
 
-    let _ = actix_rpc::service(&activity::exeunit::bus_id(ACTIVITY_ID))
+    let batch_id = "fake_batch_id";
+    let exe_unit_url = activity::exeunit::bus_id(ACTIVITY_ID);
+    let _ = actix_rpc::service(&exe_unit_url)
         .send(Exec {
             activity_id: ACTIVITY_ID.to_owned(),
-            batch_id: "fake_batch_id".into(),
+            batch_id: batch_id.to_string(),
             exe_script,
             timeout: None,
         })
         .await?;
 
-    child.wait_with_output().await?;
+    for i in 0..exe_last_idx {
+        let results = actix_rpc::service(&exe_unit_url)
+            .send(GetExecBatchResults {
+                activity_id: ACTIVITY_ID.to_owned(),
+                batch_id: batch_id.to_string(),
+                timeout: Some(10.0),
+                command_index: Some(i),
+            })
+            .await?;
+
+        log::info!("Command result {}: {:?}", i, results);
+    }
+
+    child.kill()?;
     Ok(())
 }

@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use thiserror::Error;
+use ya_core_model::activity::Exec;
 pub use ya_model::activity::activity_state::{State, StatePair};
 use ya_model::activity::{ExeScriptCommandResult, ExeScriptCommandState};
 
@@ -20,6 +21,7 @@ pub enum StateError {
 pub struct ExeUnitState {
     pub inner: StatePair,
     pub running_command: Option<ExeScriptCommandState>,
+    pub batches: HashMap<String, Exec>,
     batch_results: HashMap<String, Vec<ExeScriptCommandResult>>,
 }
 
@@ -45,6 +47,7 @@ impl Default for ExeUnitState {
     fn default() -> Self {
         ExeUnitState {
             inner: StatePair::default(),
+            batches: HashMap::new(),
             batch_results: HashMap::new(),
             running_command: None,
         }

@@ -13,6 +13,8 @@ pub enum LocalServiceError {
     MetricError(#[from] MetricError),
     #[error("Transfer error: {0}")]
     TransferError(#[from] TransferError),
+    #[error("Timeout error: {0}")]
+    TimeoutError(#[from] tokio::time::Elapsed),
 }
 
 #[derive(Error, Debug)]
@@ -107,6 +109,12 @@ impl From<StateError> for Error {
 impl From<TransferError> for Error {
     fn from(e: TransferError) -> Self {
         Error::from(LocalServiceError::TransferError(e))
+    }
+}
+
+impl From<tokio::time::Elapsed> for Error {
+    fn from(e: tokio::time::Elapsed) -> Self {
+        Error::from(LocalServiceError::TimeoutError(e))
     }
 }
 

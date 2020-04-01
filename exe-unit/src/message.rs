@@ -17,11 +17,18 @@ pub struct SetTaskPackagePath(pub PathBuf);
 pub struct GetMetrics;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "GetStateResult")]
+#[rtype(result = "GetStateResponse")]
 pub struct GetState;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
-pub struct GetStateResult(pub StatePair);
+pub struct GetStateResponse(pub StatePair);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[rtype(result = "GetBatchResultsResponse")]
+pub struct GetBatchResults(pub String);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
+pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
