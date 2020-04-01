@@ -49,24 +49,19 @@ impl<'c> ActivityStateDao<'c> {
     pub async fn get_state_wait(
         &self,
         activity_id: &str,
-        state: Option<StatePair>,
+        states: Vec<StatePair>,
     ) -> Result<ActivityState> {
         let duration = Duration::from_millis(750);
 
-        log::debug!("waiting {:?} for activity state: {:?}", duration, state);
+        log::debug!("waiting {:?} for activity states: {:?}", duration, states);
         loop {
             let result = self.get(activity_id).await;
             if let Ok(s) = result {
-                match &state {
-                    Some(state) => {
-                        if &s.state == state {
-                            log::debug!("got requested state: {:?}", state);
-                            return Ok(s);
-                        }
-                        log::debug!("got state: {:?} != {:?}. Waiting...", s.state, state);
-                    }
-                    None => return Ok(s),
+                if states.contains(&s.state) {
+                    log::debug!("got requested state: {:?}", s.state);
+                    return Ok(s);
                 }
+                log::debug!("got state: {:?} != {:?}. Waiting...", s.state, states);
             }
 
             delay_for(duration).await;

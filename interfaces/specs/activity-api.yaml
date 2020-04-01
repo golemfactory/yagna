@@ -433,6 +433,7 @@ components:
           type: string
           enum:
             - New
+            - Initialized
             - Deploying
             - Ready
             - Starting

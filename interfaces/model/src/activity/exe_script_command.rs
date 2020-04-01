@@ -24,7 +24,6 @@ pub enum ExeScriptCommand {
         #[serde(default)]
         args: Vec<String>,
     },
-    Terminate {},
     Transfer {
         from: String,
         to: String,
@@ -54,11 +53,6 @@ impl From<ExeScriptCommand> for ExeScriptCommandState {
                     args.insert(0, entry_point);
                     args
                 }),
-            },
-            ExeScriptCommand::Terminate {} => ExeScriptCommandState {
-                command: "Terminate".to_string(),
-                progress: None,
-                params: None,
             },
             ExeScriptCommand::Transfer { from, to } => ExeScriptCommandState {
                 command: "Transfer".to_string(),
