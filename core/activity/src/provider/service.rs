@@ -16,7 +16,14 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
 
-const INACTIVITY_TIME_LIMIT: i64 = 10;
+const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
+const DEFAULT_INACTIVITY_LIMIT_SECONDS: i64 = 10;
+
+fn inactivity_limit_seconds() -> i64 {
+    std::env::var(INACTIVITY_LIMIT_SECONDS_ENV_VAR)
+        .and_then(|v| v.parse().map_err(|_| std::env::VarError::NotPresent))
+        .unwrap_or(DEFAULT_INACTIVITY_LIMIT_SECONDS)
+}
 
 pub fn bind_gsb(db: &DbExecutor) {
     // public for remote requestors interactions
@@ -174,7 +181,8 @@ fn enqueue_destroy_evt(
 async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_id: impl ToString) {
     let activity_id = activity_id.to_string();
     let provider_id = provider_id.to_string();
-    let delay = Duration::from_secs(INACTIVITY_TIME_LIMIT as u64 / 3);
+    let limit_seconds = inactivity_limit_seconds();
+    let delay = Duration::from_secs(limit_seconds as u64 / 3);
 
     log::debug!("Starting activity monitor: {}", activity_id);
 
@@ -183,7 +191,13 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
             if !state.state.alive() {
                 break;
             }
-            if Utc::now().timestamp() >= usage.timestamp + INACTIVITY_TIME_LIMIT {
+            let inactive_seconds = Utc::now().timestamp() - usage.timestamp;
+            if inactive_seconds > limit_seconds {
+                log::warn!(
+                    "activity {} inactive for {}s. Destroying...",
+                    activity_id,
+                    inactive_seconds
+                );
                 enqueue_destroy_evt(db, &activity_id, &provider_id).await;
                 break;
             }
