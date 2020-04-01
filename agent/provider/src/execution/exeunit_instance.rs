@@ -1,11 +1,15 @@
+use actix::prelude::*;
 use anyhow::{anyhow, Result};
 use derive_more::Display;
 use futures::channel::oneshot::channel;
+use futures::future::{Abortable, AbortHandle};
+use shared_child::unix::SharedChildExt;
 use shared_child::SharedChild;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 /// Working ExeUnit instance representation.
 #[derive(Display)]
@@ -14,7 +18,7 @@ pub struct ExeUnitInstance {
     name: String,
     #[allow(dead_code)]
     working_dir: PathBuf,
-    process: Arc<SharedChild>,
+    process_handle: ProcessHandle,
 }
 
 #[derive(Display)]
@@ -27,11 +31,12 @@ pub enum ExeUnitExitStatus {
     Error(std::io::Error),
 }
 
+
+#[derive(Clone)]
 pub struct ProcessHandle {
     process: Arc<SharedChild>,
 }
 
-// TODO: should check spawned process state and report it back via GSB
 impl ExeUnitInstance {
     pub fn new(
         name: &str,
@@ -58,7 +63,7 @@ impl ExeUnitInstance {
 
         let instance = ExeUnitInstance {
             name: name.to_string(),
-            process: child,
+            process_handle: ProcessHandle{ process: child },
             working_dir: working_dir.to_path_buf(),
         };
         log::info!(
@@ -72,17 +77,59 @@ impl ExeUnitInstance {
 
     pub fn kill(&self) {
         log::info!("Killing ExeUnit [{}]...", &self.name);
-        let _ = self.process.kill();
+        self.process_handle.kill();
+    }
+
+    pub async fn terminate(&self, timeout: Duration) -> Result<()> {
+        log::info!("Terminating ExeUnit [{}]...", &self.name);
+        self.process_handle.terminate(timeout).await
     }
 
     pub fn get_process_handle(&self) -> ProcessHandle {
-        ProcessHandle {
-            process: self.process.clone(),
-        }
+        self.process_handle.clone()
     }
 }
 
 impl ProcessHandle {
+    pub fn kill(&self) {
+        let _ = self.process.kill();
+    }
+
+    /// TODO: Unix specific code. Support windows in future.
+    pub async fn terminate(&self, timeout: Duration) -> Result<()> {
+        let process = self.process.clone();
+        if let Err(_) = process.send_signal(libc::SIGTERM) {
+            // Error means, that probably process was already terminated, because:
+            // - We have permissions to send signal, since we created this process.
+            // - We specified correct signal SIGTERM.
+            // But better let's check.
+            return self.check_if_running();
+        }
+
+        let process = self.clone();
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+
+        Arbiter::spawn(async move {
+            tokio::time::delay_for(timeout).await;
+            abort_handle.abort();
+        });
+
+        let _ = Abortable::new(process.wait_until_finished(), abort_registration).await;
+        self.check_if_running()
+    }
+
+    pub fn check_if_running(&self) -> Result<()> {
+        let terminate_result = self.process.try_wait();
+        match terminate_result {
+            Ok(expected_status) => match expected_status {
+                // Process already exited. Terminate was successful.
+                Some(_status) => Ok(()),
+                None => Err(anyhow!("Process [pid={}] is still running.", self.process.id()))
+            },
+            Err(error) => Err(anyhow!("Failed to wait for process [pid={}]. Error: {}", self.process.id(), error))
+        }
+    }
+
     pub async fn wait_until_finished(self) -> ExeUnitExitStatus {
         let process = self.process.clone();
         let (sender, receiver) = channel::<ExeUnitExitStatus>();

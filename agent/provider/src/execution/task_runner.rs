@@ -5,6 +5,7 @@ use log_derive::{logfn, logfn_inputs};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ya_client::activity::ActivityProviderApi;
 use ya_model::activity::ProviderEvent;
@@ -92,6 +93,24 @@ struct ExeUnitProcessFinished {
 }
 
 // =========================================== //
+// TaskRunner configuration
+// =========================================== //
+
+/// Configuration for TaskRunner actor.
+/// TODO: Load configuration from somewhere.
+pub struct TaskRunnerConfig {
+    pub process_termination_timeout: Duration,
+}
+
+impl Default for TaskRunnerConfig {
+    fn default() -> Self {
+        TaskRunnerConfig {
+            process_termination_timeout: Duration::from_secs(5),
+        }
+    }
+}
+
+// =========================================== //
 // TaskRunner declaration
 // =========================================== //
 
@@ -109,6 +128,8 @@ pub struct TaskRunner {
     /// External actors can listen on these signals.
     pub activity_created: SignalSlot<ActivityCreated>,
     pub activity_destroyed: SignalSlot<ActivityDestroyed>,
+
+    config: Arc<TaskRunnerConfig>,
 }
 
 impl TaskRunner {
@@ -120,6 +141,7 @@ impl TaskRunner {
             active_agreements: HashSet::new(),
             activity_created: SignalSlot::<ActivityCreated>::new(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
+            config: Arc::new(TaskRunnerConfig::default()),
         }
     }
 
@@ -237,13 +259,13 @@ impl TaskRunner {
         Ok(())
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity destroyed: {:?}")]
     fn on_destroy_activity(
         &mut self,
         msg: DestroyActivity,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
+        log::info!("Destroying activity [{}].", msg.activity_id);
+
         let task_position = match self.tasks.iter().position(|task| {
             task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
         }) {
@@ -253,8 +275,16 @@ impl TaskRunner {
 
         // Remove task from list and destroy everything related with it.
         let task = self.tasks.swap_remove(task_position);
-        task.exeunit.kill();
+        let config = self.config.clone();
 
+        Arbiter::spawn(async move {
+            if let Err(error) = task.exeunit.terminate(config.process_termination_timeout).await {
+                log::warn!("Could not terminate ExeUnit for activity: [{}]. Error: {}", msg.activity_id, error);
+                task.exeunit.kill();
+            }
+
+            log::info!("Activity destroyed: [{}].", msg.activity_id);
+        });
         Ok(())
     }
 
