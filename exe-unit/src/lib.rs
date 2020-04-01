@@ -152,11 +152,6 @@ impl<R: Runtime> ExeUnit<R> {
                 Self::shutdown(&addr, ShutdownReason::Error(message)).await;
                 break;
             }
-
-            if let ExeScriptCommand::Terminate {} = &ctx.cmd {
-                Self::shutdown(&addr, ShutdownReason::Finished).await;
-                return;
-            }
         }
     }
 

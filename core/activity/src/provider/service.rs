@@ -8,14 +8,10 @@ use crate::common::{
 use crate::dao::*;
 use crate::error::Error;
 use ya_core_model::activity;
-use ya_model::activity::{ExeScriptCommand, State};
+use ya_model::activity::State;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::models::ActivityEventType;
-use ya_service_bus::{
-    timeout::*,
-    typed::{self as bus, ServiceBinder},
-    RpcEndpoint,
-};
+use ya_service_bus::{timeout::*, typed::ServiceBinder};
 
 pub fn bind_gsb(db: &DbExecutor) {
     // public for remote requestors interactions
@@ -99,18 +95,6 @@ async fn destroy_activity_gsb(
     if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
         return Ok(());
     }
-
-    log::debug!("sending ExeScript with Terminate command...");
-    let batch_id = bus::service(activity::exeunit::bus_id(&msg.activity_id))
-        .send(activity::Exec {
-            activity_id: msg.activity_id.clone(),
-            batch_id: generate_id(),
-            exe_script: vec![ExeScriptCommand::Terminate {}],
-            timeout: msg.timeout.clone(),
-        })
-        .await
-        .map_err(Error::from)??;
-    log::debug!("ExeScript send. batch id: {}", batch_id);
 
     log::debug!(
         "waiting {:?}ms for activity status change to Terminate",
