@@ -135,11 +135,7 @@ impl<R: Runtime> ExeUnit<R> {
                     result: Some(ya_model::activity::CommandResult::Error),
                     message: Some(error.to_string()),
                 };
-                let set_state = SetState {
-                    state: None,
-                    running_command: Some(None),
-                    batch_result: Some((ctx.batch_id, cmd_result)),
-                };
+                let set_state = SetState::new().cmd(None).result(ctx.batch_id, cmd_result);
 
                 if let Err(error) = addr.send(set_state).await {
                     log::error!(
@@ -188,22 +184,20 @@ impl<R: Runtime> ExeUnit<R> {
             },
         };
 
-        addr.send(SetState::exec(exec_state.clone(), ctx.cmd.clone()))
-            .await?;
-
         log::info!("Executing command: {:?}", ctx.cmd);
+
+        addr.send(
+            SetState::new()
+                .state(exec_state.clone())
+                .cmd(Some(ctx.cmd.clone())),
+        )
+        .await?;
 
         Self::pre_exec(transfer_service, runtime.clone(), ctx.clone()).await?;
 
         let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exec_result.result {
-            return Err(Error::CommandError(format!(
-                "{:?} command error: {}",
-                ctx.cmd,
-                exec_result
-                    .stderr
-                    .unwrap_or("<no stderr output>".to_owned())
-            )));
+            return Err(Error::command(&ctx.cmd, exec_result.stderr.clone()));
         }
 
         let sanity_state = addr.send(GetState {}).await?.0;
@@ -215,11 +209,12 @@ impl<R: Runtime> ExeUnit<R> {
             .into());
         }
 
-        addr.send(SetState::result(
-            exec_state.1.unwrap().into(),
-            ctx.batch_id,
-            exec_result.into_exe_result(ctx.idx),
-        ))
+        addr.send(
+            SetState::new()
+                .state(exec_state.1.unwrap().into())
+                .cmd(None)
+                .result(ctx.batch_id, exec_result.into_exe_result(ctx.idx)),
+        )
         .await?;
 
         Ok(())

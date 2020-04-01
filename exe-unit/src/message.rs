@@ -26,52 +26,77 @@ pub struct GetStateResult(pub StatePair);
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub struct SetState {
-    pub state: Option<(StatePair, Option<String>)>,
-    pub running_command: Option<Option<ExeScriptCommandState>>,
-    pub batch_result: Option<(String, ExeScriptCommandResult)>,
+    pub state: Option<StateUpdate>,
+    pub running_command: Option<CommandUpdate>,
+    pub batch_result: Option<ResultUpdate>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StateUpdate {
+    pub state: StatePair,
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CommandUpdate {
+    pub cmd: Option<ExeScriptCommandState>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ResultUpdate {
+    pub batch_id: String,
+    pub result: ExeScriptCommandResult,
 }
 
 impl SetState {
-    pub fn exec(state: StatePair, command: ExeScriptCommand) -> Self {
+    pub fn new() -> Self {
         SetState {
-            state: Some((state, None)),
-            running_command: Some(Some(command.into())),
+            state: None,
+            running_command: None,
             batch_result: None,
         }
     }
 
-    pub fn result(state: StatePair, batch_id: String, result: ExeScriptCommandResult) -> Self {
-        SetState {
-            state: Some((state, None)),
-            running_command: Some(None),
-            batch_result: Some((batch_id, result)),
-        }
+    pub fn state(mut self, state: StatePair) -> Self {
+        self.state = Some(StateUpdate {
+            state,
+            reason: None,
+        });
+        self
+    }
+
+    pub fn state_reason(mut self, state: StatePair, reason: String) -> Self {
+        self.state = Some(StateUpdate {
+            state,
+            reason: Some(reason),
+        });
+        self
+    }
+
+    pub fn cmd(mut self, command: Option<ExeScriptCommand>) -> Self {
+        self.running_command = Some(CommandUpdate {
+            cmd: command.map(|c| c.into()),
+        });
+        self
+    }
+
+    pub fn result(mut self, batch_id: String, result: ExeScriptCommandResult) -> Self {
+        self.batch_result = Some(ResultUpdate { batch_id, result });
+        self
     }
 }
 
 impl From<State> for SetState {
+    #[inline]
     fn from(state: State) -> Self {
         Self::from(StatePair::from(state))
     }
 }
 
 impl From<StatePair> for SetState {
+    #[inline]
     fn from(state: StatePair) -> Self {
-        SetState {
-            state: Some((state, None)),
-            running_command: None,
-            batch_result: None,
-        }
-    }
-}
-
-impl From<(State, String)> for SetState {
-    fn from(tuple: (State, String)) -> Self {
-        SetState {
-            state: Some((tuple.0.into(), Some(tuple.1))),
-            running_command: None,
-            batch_result: None,
-        }
+        Self::new().state(state)
     }
 }
 
