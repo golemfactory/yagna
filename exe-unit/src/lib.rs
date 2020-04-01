@@ -135,7 +135,9 @@ impl<R: Runtime> ExeUnit<R> {
                     result: Some(ya_model::activity::CommandResult::Error),
                     message: Some(error.to_string()),
                 };
-                let set_state = SetState::new().cmd(None).result(ctx.batch_id, cmd_result);
+                let set_state = SetState::default()
+                    .cmd(None)
+                    .result(ctx.batch_id, cmd_result);
 
                 if let Err(error) = addr.send(set_state).await {
                     log::error!(
@@ -187,7 +189,7 @@ impl<R: Runtime> ExeUnit<R> {
         log::info!("Executing command: {:?}", ctx.cmd);
 
         addr.send(
-            SetState::new()
+            SetState::default()
                 .state(exec_state.clone())
                 .cmd(Some(ctx.cmd.clone())),
         )
@@ -210,7 +212,7 @@ impl<R: Runtime> ExeUnit<R> {
         }
 
         addr.send(
-            SetState::new()
+            SetState::default()
                 .state(exec_state.1.unwrap().into())
                 .cmd(None)
                 .result(ctx.batch_id, exec_result.into_exe_result(ctx.idx)),

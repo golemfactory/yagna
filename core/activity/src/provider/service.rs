@@ -38,11 +38,8 @@ async fn create_activity_gsb(
     authorize_agreement_initiator(caller, &msg.agreement_id).await?;
 
     let activity_id = generate_id();
-    let provider_id = get_agreement(&msg.agreement_id)
-        .await?
-        .offer
-        .provider_id
-        .ok_or(Error::BadRequest("Invalid agreement".to_owned()))?;
+    let agreement = get_agreement(&msg.agreement_id).await?;
+    let provider_id = agreement.provider_id().map_err(Error::from)?.to_string();
 
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &msg.agreement_id)
@@ -87,20 +84,16 @@ async fn destroy_activity_gsb(
     msg: activity::Destroy,
 ) -> RpcMessageResult<activity::Destroy> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
-    let provider_id = get_agreement(&msg.agreement_id)
-        .await?
-        .offer
-        .provider_id
-        .ok_or(Error::BadRequest("Invalid agreement".to_owned()))?;
 
     if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
         return Ok(());
     }
 
+    let agreement = get_agreement(&msg.agreement_id).await?;
     db.as_dao::<EventDao>()
         .create(
             &msg.activity_id,
-            &provider_id,
+            agreement.provider_id().map_err(Error::from)?,
             ActivityEventType::DestroyActivity,
         )
         .await
@@ -159,16 +152,15 @@ fn enqueue_destroy_evt(
     log::debug!("Enqueueing a Destroy event for activity {}", activity_id);
 
     async move {
-        let result = db
+        if let Err(err) = db
             .as_dao::<EventDao>()
             .create(
                 &activity_id,
                 &provider_id,
                 ActivityEventType::DestroyActivity,
             )
-            .await;
-
-        if let Err(err) = result {
+            .await
+        {
             log::error!(
                 "Unable to enqueue a Destroy event for activity {}: {:?}",
                 activity_id,

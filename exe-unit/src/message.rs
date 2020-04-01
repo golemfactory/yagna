@@ -23,7 +23,7 @@ pub struct GetState;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
 pub struct GetStateResult(pub StatePair);
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub struct SetState {
     pub state: Option<StateUpdate>,
@@ -49,14 +49,6 @@ pub struct ResultUpdate {
 }
 
 impl SetState {
-    pub fn new() -> Self {
-        SetState {
-            state: None,
-            running_command: None,
-            batch_result: None,
-        }
-    }
-
     pub fn state(mut self, state: StatePair) -> Self {
         self.state = Some(StateUpdate {
             state,
@@ -96,7 +88,7 @@ impl From<State> for SetState {
 impl From<StatePair> for SetState {
     #[inline]
     fn from(state: StatePair) -> Self {
-        Self::new().state(state)
+        Self::default().state(state)
     }
 }
 

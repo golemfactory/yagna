@@ -91,7 +91,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
             }
 
             let _ = address
-                .send(SetState::new().state_reason(State::Terminated.into(), reason))
+                .send(SetState::default().state_reason(State::Terminated.into(), reason))
                 .await;
 
             System::current().stop();
