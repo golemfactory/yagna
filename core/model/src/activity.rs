@@ -149,7 +149,6 @@ pub mod local {
     pub struct SetState {
         pub activity_id: String,
         pub state: ActivityState,
-        pub reason: Option<String>,
         pub timeout: Option<f32>,
     }
 

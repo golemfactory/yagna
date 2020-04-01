@@ -40,8 +40,11 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                         self.ctx.report_url.clone().unwrap(),
                         SetActivityState {
                             activity_id: id.clone(),
-                            state: ActivityState::from(update.state),
-                            reason: update.reason,
+                            state: ActivityState {
+                                state: update.state,
+                                reason: update.reason,
+                                error_message: None,
+                            },
                             timeout: None,
                         },
                     );
