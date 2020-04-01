@@ -76,17 +76,21 @@ impl ExeUnitInstance {
     }
 
     pub fn kill(&self) {
-        log::info!("Killing ExeUnit [{}]...", &self.name);
+        log::info!("Killing ExeUnit [{}]... pid: {}", &self.name, self.pid());
         self.process_handle.kill();
     }
 
     pub async fn terminate(&self, timeout: Duration) -> Result<()> {
-        log::info!("Terminating ExeUnit [{}]...", &self.name);
+        log::info!("Terminating ExeUnit [{}]... pid: {}", &self.name, self.pid());
         self.process_handle.terminate(timeout).await
     }
 
     pub fn get_process_handle(&self) -> ProcessHandle {
         self.process_handle.clone()
+    }
+
+    fn pid(&self) -> u32 {
+        self.process_handle.process.id()
     }
 }
 
