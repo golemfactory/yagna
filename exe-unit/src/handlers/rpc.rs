@@ -124,14 +124,19 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         let fut = async move {
             let idx = msg.command_index.unwrap_or(last_idx) as usize;
             loop {
-                if let Ok(results) = address.send(GetBatchResults(msg.batch_id.clone())).await {
-                    if results.0.len() >= idx + 1 {
-                        let mut results = results.0;
-                        results.truncate(idx + 1);
-                        break Ok(results);
+                let batch_results = address.send(GetBatchResults(msg.batch_id.clone())).await;
+                match msg.timeout {
+                    Some(_) => {
+                        if let Ok(mut results) = batch_results {
+                            if results.0.len() >= idx + 1 {
+                                results.0.truncate(idx + 1);
+                                break Ok(results.0);
+                            }
+                        }
+                        tokio::time::delay_for(delay).await;
                     }
+                    None => break Ok(batch_results.map(|b| b.0).unwrap_or(Vec::new())),
                 }
-                tokio::time::delay_for(delay).await;
             }
         };
 
