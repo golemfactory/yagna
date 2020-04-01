@@ -4,7 +4,6 @@ use crate::runtime::Runtime;
 use crate::ExeUnit;
 use actix::prelude::*;
 use futures::{FutureExt, TryFutureExt};
-use std::time::Duration;
 use ya_core_model::activity::*;
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_service_bus::timeout::IntoTimeoutFuture;
@@ -108,12 +107,11 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
 
         let address = ctx.address();
         let timeout = msg.timeout.clone();
-        let delay = Duration::from_millis(500);
 
         let last_idx = match self.state.batches.get(&msg.batch_id) {
             Some(exec) => match exec.exe_script.len() {
                 0 => return ActorResponse::reply(Ok(Vec::new())),
-                l => l - 1,
+                len => len - 1,
             },
             None => {
                 let err = RpcMessageError::NotFound(format!("batch_id = {}", msg.batch_id));
@@ -121,6 +119,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
             }
         };
 
+        let mut notifier = self.state.notifier(&msg.batch_id).clone();
         let fut = async move {
             let idx = msg.command_index.unwrap_or(last_idx) as usize;
             loop {
@@ -133,7 +132,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
                                 break Ok(results.0);
                             }
                         }
-                        tokio::time::delay_for(delay).await;
+                        notifier = notifier.await;
                     }
                     None => break Ok(batch_results.map(|b| b.0).unwrap_or(Vec::new())),
                 }

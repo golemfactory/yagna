@@ -24,6 +24,7 @@ pub mod error;
 mod handlers;
 pub mod message;
 pub mod metrics;
+mod notify;
 pub mod runtime;
 pub mod service;
 pub mod state;
