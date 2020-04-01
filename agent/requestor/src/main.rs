@@ -283,12 +283,18 @@ async fn process_payments(
     payment_api: &PaymentApi,
     allocation: Allocation,
     started_at: DateTime<Utc>,
-) -> anyhow::Result<()> {
+) -> ! {
     let mut ts = started_at;
     loop {
-        let next_ts = Utc::now();
+        let next_ts = Utc::now(); // FIXME
 
-        let events = payment_api.get_invoice_events(Some(&ts)).await?;
+        let events = match payment_api.get_invoice_events(Some(&ts)).await {
+            Err(e) => {
+                log::error!("getting invoice events error: {}", e);
+                vec![]
+            }
+            Ok(x) => x,
+        };
         // TODO: timeout on get_invoice_events does not work
         if events.is_empty() {
             tokio::time::delay_for(Duration::from_secs(10)).await;
@@ -298,15 +304,29 @@ async fn process_payments(
             log::info!("got invoice event {:#?}", event);
             match event.event_type {
                 EventType::Received => {
-                    let invoice = payment_api.get_invoice(&event.invoice_id).await?;
+                    let invoice = payment_api.get_invoice(&event.invoice_id).await;
+                    if let Err(e) = invoice {
+                        log::error!("getting invoice {}, err: {}", event.invoice_id, e);
+                        // TODO: loop until you've got proper invoice
+                        continue;
+                    }
+                    let invoice = invoice.unwrap();
+
                     let acceptance = Acceptance {
                         total_amount_accepted: invoice.amount,
                         allocation_id: allocation.allocation_id.clone(),
                     };
-                    payment_api
+                    match payment_api
                         .accept_invoice(&event.invoice_id, &acceptance)
-                        .await?;
-                    log::info!("invoice accepted: {:?}", event.invoice_id);
+                        .await
+                    {
+                        Err(e) => {
+                            log::error!("accepting invoice {}, err: {}", event.invoice_id, e);
+                            // TODO: reconsider what to do in this case
+                            continue;
+                        }
+                        Ok(_) => log::info!("invoice accepted: {:?}", event.invoice_id),
+                    }
                 }
                 _ => log::info!(
                     "ignoring event type {:?} for: {}",
@@ -387,11 +407,7 @@ async fn main() -> anyhow::Result<()> {
         })
     }
 
-    Arbiter::spawn(async move {
-        if let Err(e) = process_payments(&payment_api, allocation, started_at).await {
-            log::error!("processing payments error: {}", e)
-        }
-    });
+    Arbiter::spawn(async move { process_payments(&payment_api, allocation, started_at).await });
 
     // waiting only for first agreement to be fully processed
     // agreement_rx.next().await;
