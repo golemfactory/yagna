@@ -12,8 +12,8 @@ use ya_model::activity::ProviderEvent;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
+use ya_utils_process::ExeUnitExitStatus;
 
-use super::exeunit_instance::ExeUnitExitStatus;
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
