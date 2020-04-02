@@ -53,11 +53,11 @@ impl RequestorApi {
         debit_note_id: &str,
         acceptance: &Acceptance,
     ) -> Result<String> {
-        let ackTimeout = self.config.accept_debit_note_timeout;
+        let timeout = self.config.accept_debit_note_timeout;
         let url = url_format!(
             "requestor/debitNotes/{debit_note_id}/accept",
             debit_note_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send_json(acceptance).json().await
     }
@@ -69,11 +69,11 @@ impl RequestorApi {
         debit_note_id: &str,
         rejection: &Rejection,
     ) -> Result<String> {
-        let ackTimeout = self.config.reject_debit_note_timeout;
+        let timeout = self.config.reject_debit_note_timeout;
         let url = url_format!(
             "requestor/debitNotes/{debit_note_id}/reject",
             debit_note_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send_json(rejection).json().await
     }
@@ -89,11 +89,11 @@ impl RequestorApi {
         Tz::Offset: Display,
     {
         let laterThan = later_than.map(|dt| dt.to_rfc3339());
-        let eventTimeout = self.config.debit_note_event_timeout;
+        let timeout = self.config.debit_note_event_timeout;
         let url = url_format!(
             "requestor/debitNoteEvents",
             #[query] laterThan,
-            #[query] eventTimeout
+            #[query] timeout
         );
         self.client.get(&url).send().json().await
     }
@@ -119,11 +119,11 @@ impl RequestorApi {
         invoice_id: &str,
         acceptance: &Acceptance,
     ) -> Result<String> {
-        let ackTimeout = self.config.accept_invoice_timeout;
+        let timeout = self.config.accept_invoice_timeout;
         let url = url_format!(
             "requestor/invoices/{invoice_id}/accept",
             invoice_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send_json(acceptance).json().await
     }
@@ -131,11 +131,11 @@ impl RequestorApi {
     #[allow(non_snake_case)]
     #[rustfmt::skip]
     pub async fn reject_invoice(&self, invoice_id: &str, rejection: &Rejection) -> Result<String> {
-        let ackTimeout = self.config.reject_invoice_timeout;
+        let timeout = self.config.reject_invoice_timeout;
         let url = url_format!(
             "requestor/invoices/{invoice_id}/reject",
             invoice_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send_json(rejection).json().await
     }
@@ -151,11 +151,11 @@ impl RequestorApi {
         Tz::Offset: Display,
     {
         let laterThan = later_than.map(|dt| dt.to_rfc3339());
-        let eventTimeout = self.config.invoice_event_timeout;
+        let timeout = self.config.invoice_event_timeout;
         let url = url_format!(
             "requestor/invoiceEvents",
             #[query] laterThan,
-            #[query] eventTimeout
+            #[query] timeout
         );
         self.client.get(&url).send().json().await
     }
@@ -199,11 +199,11 @@ impl RequestorApi {
         Tz::Offset: Display,
     {
         let laterThan = later_than.map(|dt| dt.to_rfc3339());
-        let eventTimeout = self.config.payment_event_timeout;
+        let timeout = self.config.payment_event_timeout;
         let url = url_format!(
             "requestor/payments",
             #[query] laterThan,
-            #[query] eventTimeout
+            #[query] timeout
         );
         self.client.get(&url).send().json().await
     }
