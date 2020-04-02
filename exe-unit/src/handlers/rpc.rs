@@ -3,6 +3,7 @@ use crate::message::GetMetrics;
 use crate::runtime::Runtime;
 use crate::ExeUnit;
 use actix::prelude::*;
+use chrono::Utc;
 use ya_core_model::activity::*;
 use ya_model::activity::{ActivityState, ActivityUsage};
 use ya_service_bus::RpcEnvelope;
@@ -12,6 +13,7 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
 
     fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
         self.ctx.verify_activity_id(&msg.activity_id)?;
+        self.state.batches.insert(msg.batch_id.clone(), msg.clone());
 
         let batch_id = msg.batch_id.clone();
         let fut = Self::exec(
@@ -61,6 +63,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
             match resp {
                 Ok(data) => Ok(ActivityUsage {
                     current_usage: Some(data),
+                    timestamp: Utc::now().timestamp(),
                 }),
                 Err(e) => Err(Error::from(e).into()),
             }

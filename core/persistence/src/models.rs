@@ -95,10 +95,12 @@ impl std::convert::TryFrom<ActivityUsage> for ya_model::activity::ActivityUsage 
     type Error = crate::Error;
 
     fn try_from(value: ActivityUsage) -> Result<Self, Self::Error> {
-        Ok(value
-            .vector_json
-            .map(|json_str| serde_json::from_str(&json_str))
-            .transpose()?)
-        .map(|current_usage| ya_model::activity::ActivityUsage { current_usage })
+        Ok(ya_model::activity::ActivityUsage {
+            current_usage: value
+                .vector_json
+                .map(|json_str| serde_json::from_str(&json_str))
+                .transpose()?,
+            timestamp: value.updated_date.timestamp(),
+        })
     }
 }
