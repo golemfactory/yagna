@@ -139,19 +139,21 @@ fn directories_mounts(
     mount_points
         .iter()
         .map(|mount_point| {
-            let mount = mount_point.path();
-            let host_path = workdir.join(mount);
+            let mut mount = PathBuf::from(mount_point.path());
+            let host_path = workdir.join(&mount);
 
-            validate_path(mount)?;
+            validate_path(&mount)?;
+            mount = PathBuf::from("/").join(mount);
+
             Ok(DirectoryMount {
                 host: host_path,
-                guest: PathBuf::from(mount),
+                guest: mount,
             })
         })
         .collect()
 }
 
-fn validate_path(path: &str) -> Result<()> {
+fn validate_path(path: &Path) -> Result<()> {
     // Protect ExeUnit from directory traversal attack.
     // Wasm can access only paths inside working directory.
     let path = PathBuf::from(path);
