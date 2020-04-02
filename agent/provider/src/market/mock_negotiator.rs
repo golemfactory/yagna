@@ -22,7 +22,14 @@ impl Negotiator for AcceptAllNegotiator {
         let mut offer = offer.clone();
         offer.com_info = com_info;
 
-        Ok(Offer::new(offer.into_json(), "()".into()))
+        Ok(Offer::new(
+            offer.clone().into_json(),
+            "()"
+                //r#"(&
+                //    (golem.srv.comp.wasm.task_package=http://34.244.4.185:8000/rust-wasi-tutorial.zip)
+                //)"#
+                .into(),
+        ))
     }
 
     fn react_to_proposal(
