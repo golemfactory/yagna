@@ -18,6 +18,7 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
+use chrono::Utc;
 
 pub mod agreement;
 pub mod error;
@@ -134,11 +135,9 @@ impl<R: Runtime> ExeUnit<R> {
                     result: Some(ya_model::activity::CommandResult::Error),
                     message: Some(error.to_string()),
                 };
-                let set_state = SetState {
-                    state: None,
-                    running_command: Some(None),
-                    batch_result: Some((ctx.batch_id, cmd_result)),
-                };
+                let set_state = SetState::default()
+                    .cmd(None)
+                    .result(ctx.batch_id, cmd_result);
 
                 if let Err(error) = addr.send(set_state).await {
                     log::error!(
@@ -152,11 +151,6 @@ impl<R: Runtime> ExeUnit<R> {
                 Self::shutdown(&addr, ShutdownReason::Error(message)).await;
                 break;
             }
-
-            if let ExeScriptCommand::Terminate {} = &ctx.cmd {
-                Self::shutdown(&addr, ShutdownReason::Finished).await;
-                return;
-            }
         }
     }
 
@@ -167,24 +161,22 @@ impl<R: Runtime> ExeUnit<R> {
         ctx: ExecCtx,
     ) -> Result<()> {
         let state = addr.send(GetState {}).await?.0;
-        let before_state = match (&state.0, &state.1) {
+        let exec_state = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
             }
-            (State::Terminated, _) => {
+            (State::New, _) | (State::Terminated, _) => {
                 return Err(StateError::InvalidState(state).into());
             }
-            (State::New, _) => match &ctx.cmd {
-                ExeScriptCommand::Deploy { .. } => StatePair(State::New, Some(State::Deployed)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
+            (State::Initialized, _) => match &ctx.cmd {
+                ExeScriptCommand::Deploy { .. } => {
+                    StatePair(State::Initialized, Some(State::Deployed))
                 }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (State::Deployed, _) => match &ctx.cmd {
                 ExeScriptCommand::Start { .. } => StatePair(State::Deployed, Some(State::Ready)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
-                }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (s, _) => match &ctx.cmd {
                 ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
@@ -194,40 +186,37 @@ impl<R: Runtime> ExeUnit<R> {
             },
         };
 
-        addr.send(SetState {
-            state: Some(before_state.clone()),
-            running_command: Some(Some(ctx.cmd.clone().into())),
-            batch_result: None,
-        })
-        .await?;
-
         log::info!("Executing command: {:?}", ctx.cmd);
+
+        addr.send(
+            SetState::default()
+                .state(exec_state.clone())
+                .cmd(Some(ctx.cmd.clone())),
+        )
+        .await?;
 
         Self::pre_exec(transfer_service, runtime.clone(), ctx.clone()).await?;
 
-        let exe_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
-        if let CommandResult::Error = exe_result.result {
-            return Err(Error::CommandError(format!(
-                "{:?} command error: {}",
-                ctx.cmd,
-                exe_result.stderr.unwrap_or("<no stderr output>".to_owned())
-            )));
+        let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
+        if let CommandResult::Error = exec_result.result {
+            return Err(Error::command(&ctx.cmd, exec_result.stderr.clone()));
         }
 
         let sanity_state = addr.send(GetState {}).await?.0;
-        if sanity_state != before_state {
+        if sanity_state != exec_state {
             return Err(StateError::UnexpectedState {
                 current: sanity_state,
-                expected: before_state,
+                expected: exec_state,
             }
             .into());
         }
 
-        addr.send(SetState {
-            state: Some(StatePair(before_state.1.unwrap(), None)),
-            running_command: Some(None),
-            batch_result: Some((ctx.batch_id.clone(), exe_result.into_exe_result(ctx.idx))),
-        })
+        addr.send(
+            SetState::default()
+                .state(exec_state.1.unwrap().into())
+                .cmd(None)
+                .result(ctx.batch_id, exec_result.into_exe_result(ctx.idx)),
+        )
         .await?;
 
         Ok(())
@@ -276,6 +265,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             .finish()
             .spawn(ctx);
 
+        addr.do_send(SetState::from(State::Initialized));
         log::info!("Started");
     }
 
@@ -333,7 +323,10 @@ async fn report_usage<R: Runtime>(
             Ok(data) => {
                 let msg = activity::local::SetUsage {
                     activity_id,
-                    usage: ActivityUsage::from(data),
+                    usage: ActivityUsage {
+                        current_usage: Some(data),
+                        timestamp: Utc::now().timestamp(),
+                    },
                     timeout: None,
                 };
                 report(report_url, msg).await;

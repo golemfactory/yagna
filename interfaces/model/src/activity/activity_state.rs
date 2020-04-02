@@ -80,6 +80,7 @@ impl Default for StatePair {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum State {
     New,
+    Initialized,
     Deployed,
     Ready,
     Active,

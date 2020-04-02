@@ -36,7 +36,8 @@ impl<'c> DebitNoteEventDao<'c> {
             let query = dsl::pay_debit_note_event
                 .inner_join(debit_note_dsl::pay_debit_note)
                 .filter(debit_note_dsl::recipient_id.eq(recipient_id))
-                .select(crate::schema::pay_debit_note_event::all_columns);
+                .select(crate::schema::pay_debit_note_event::all_columns)
+                .order_by(dsl::timestamp.asc());
             let events = match later_than {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,
@@ -55,7 +56,8 @@ impl<'c> DebitNoteEventDao<'c> {
             let query = dsl::pay_debit_note_event
                 .inner_join(debit_note_dsl::pay_debit_note)
                 .filter(debit_note_dsl::issuer_id.eq(issuer_id))
-                .select(crate::schema::pay_debit_note_event::all_columns);
+                .select(crate::schema::pay_debit_note_event::all_columns)
+                .order_by(dsl::timestamp.asc());
             let events = match later_than {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,

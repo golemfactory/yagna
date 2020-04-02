@@ -423,6 +423,9 @@ components:
           items:
             type: number
             format: double
+        timestamp:
+          type: integer
+          description: Usage update timestamp (UTC)
 
     ActivityState:
       required:
@@ -433,6 +436,7 @@ components:
           type: string
           enum:
             - New
+            - Initialized
             - Deploying
             - Ready
             - Starting

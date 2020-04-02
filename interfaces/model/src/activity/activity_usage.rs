@@ -15,18 +15,6 @@ pub struct ActivityUsage {
     /// Current usage vector
     #[serde(rename = "currentUsage", skip_serializing_if = "Option::is_none")]
     pub current_usage: Option<Vec<f64>>,
-}
-
-impl ActivityUsage {
-    pub fn new(current_usage: Option<Vec<f64>>) -> ActivityUsage {
-        ActivityUsage { current_usage }
-    }
-}
-
-impl From<Vec<f64>> for ActivityUsage {
-    fn from(vec: Vec<f64>) -> Self {
-        ActivityUsage {
-            current_usage: Some(vec),
-        }
-    }
+    #[serde(rename = "timestamp")]
+    pub timestamp: i64,
 }

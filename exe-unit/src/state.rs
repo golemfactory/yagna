@@ -1,6 +1,7 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
+use ya_core_model::activity::Exec;
 pub use ya_model::activity::activity_state::{State, StatePair};
 use ya_model::activity::{ExeScriptCommandResult, ExeScriptCommandState};
 
@@ -20,10 +21,37 @@ pub enum StateError {
 pub struct ExeUnitState {
     pub inner: StatePair,
     pub running_command: Option<ExeScriptCommandState>,
+    pub batches: HashMap<String, Exec>,
     batch_results: HashMap<String, Vec<ExeScriptCommandResult>>,
 }
 
 impl ExeUnitState {
+    pub fn report(&self) -> ExeUnitReport {
+        let mut report = ExeUnitReport::new();
+
+        self.batches.iter().for_each(|(batch_id, exec)| {
+            let total = exec.exe_script.len();
+            match self.batch_results.get(batch_id) {
+                Some(results) => {
+                    let done = results.len();
+                    if done == total {
+                        report.batches_done += 1;
+                    } else {
+                        report.batches_pending += 1;
+                    }
+                    report.cmds_done += done;
+                    report.cmds_pending += total - done;
+                }
+                None => {
+                    report.batches_pending += 1;
+                    report.cmds_pending += total;
+                }
+            }
+        });
+
+        report
+    }
+
     pub fn batch_results(&self, batch_id: &String) -> Vec<ExeScriptCommandResult> {
         match self.batch_results.get(batch_id) {
             Some(vec) => vec.clone(),
@@ -45,8 +73,34 @@ impl Default for ExeUnitState {
     fn default() -> Self {
         ExeUnitState {
             inner: StatePair::default(),
+            batches: HashMap::new(),
             batch_results: HashMap::new(),
             running_command: None,
         }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ExeUnitReport {
+    batches_done: usize,
+    batches_pending: usize,
+    cmds_done: usize,
+    cmds_pending: usize,
+}
+
+impl ExeUnitReport {
+    pub fn new() -> Self {
+        ExeUnitReport {
+            batches_done: 0,
+            batches_pending: 0,
+            cmds_done: 0,
+            cmds_pending: 0,
+        }
+    }
+}
+
+impl std::fmt::Display for ExeUnitReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&serde_json::to_string(self).unwrap())
     }
 }

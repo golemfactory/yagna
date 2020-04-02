@@ -6,6 +6,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 use tokio::process::Command;
 use ya_core_model::activity::{
+    self,
     local::{SetState, SetUsage},
     Exec,
 };
@@ -103,10 +104,10 @@ async fn main() -> anyhow::Result<()> {
     let contents = std::fs::read_to_string(&args.script)?;
     let exe_script = serde_json::from_str(&contents)?;
 
-    let child = Command::new(args.supervisor).args(child_args).spawn()?;
+    let _ = Command::new(args.supervisor).args(child_args).spawn()?;
     tokio::time::delay_for(Duration::from_secs(2)).await;
 
-    let _ = actix_rpc::service(ACTIVITY_ID)
+    let _ = actix_rpc::service(&activity::exeunit::bus_id(ACTIVITY_ID))
         .send(Exec {
             activity_id: ACTIVITY_ID.to_owned(),
             batch_id: "fake_batch_id".into(),
@@ -115,7 +116,6 @@ async fn main() -> anyhow::Result<()> {
         })
         .await?;
 
-    child.wait_with_output().await?;
     actix_rt::signal::ctrl_c().await?;
     Ok(())
 }
