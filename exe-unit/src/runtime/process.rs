@@ -10,7 +10,16 @@ use std::process::{Output, Stdio};
 use tokio::process::Command;
 use ya_model::activity::{CommandResult, ExeScriptCommand};
 
-const PROCESS_KILL_TIMEOUT_SEC: u64 = 5;
+const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
+const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
+const MIN_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 1;
+
+fn process_kill_timeout_seconds() -> i64 {
+    let limit = std::env::var(PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR)
+        .and_then(|v| v.parse().map_err(|_| std::env::VarError::NotPresent))
+        .unwrap_or(DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS);
+    std::cmp::max(limit, MIN_PROCESS_KILL_TIMEOUT_SECONDS)
+}
 
 pub struct RuntimeProcess {
     binary: PathBuf,
@@ -162,8 +171,9 @@ impl Handler<Shutdown> for RuntimeProcess {
 
     fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
         let children = std::mem::replace(&mut self.children, HashSet::new());
+        let timeout = process_kill_timeout_seconds();
         let fut = async move {
-            futures::future::join_all(children.into_iter().map(kill_pid)).await;
+            futures::future::join_all(children.into_iter().map(|p| kill_pid(p, timeout))).await;
             Ok(())
         };
 
@@ -192,13 +202,13 @@ fn vec_to_string(vec: Vec<u8>) -> String {
 }
 
 #[cfg(windows)]
-async fn kill_pid(pid: u32) {
+async fn kill_pid(_: u32, _: i64) {
     // FIXME: implement for win32
     unimplemented!()
 }
 
 #[cfg(not(windows))]
-async fn kill_pid(pid: u32) {
+async fn kill_pid(pid: u32, timeout: i64) {
     use chrono::Local;
     use nix::sys::signal;
     use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
@@ -216,14 +226,14 @@ async fn kill_pid(pid: u32) {
     }
 
     let pid = Pid::from_raw(pid as i32);
-    let delay = Duration::from_secs_f32(PROCESS_KILL_TIMEOUT_SEC as f32 / 10.);
+    let delay = Duration::from_secs_f32(timeout as f32 / 10.);
     let started = Local::now().timestamp();
 
     if let Ok(_) = signal::kill(pid, signal::Signal::SIGTERM) {
         log::info!("Sent SIGTERM to process {:?}", pid);
 
         loop {
-            let elapsed = Local::now().timestamp() >= started + PROCESS_KILL_TIMEOUT_SEC as i64;
+            let elapsed = Local::now().timestamp() >= started + timeout as i64;
 
             match alive(pid) {
                 true => {
