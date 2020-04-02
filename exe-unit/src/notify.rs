@@ -8,7 +8,8 @@ use std::sync::{Arc, Mutex};
 
 pub struct Notify<T: Clone + Eq> {
     uid: usize,
-    prev: Option<T>,
+    when: Option<Box<dyn Fn(T) -> bool>>,
+    last: Option<T>,
     state: Arc<Mutex<NotifyState<T>>>,
 }
 
@@ -24,13 +25,19 @@ impl<T: Clone + Eq> Notify<T> {
         };
         state.waker_map.values_mut().for_each(|w| w.wake_by_ref());
     }
+
+    pub fn when<F: Fn(T) -> bool + 'static>(mut self, f: F) -> Self {
+        self.when = Some(Box::new(f));
+        self
+    }
 }
 
 impl<T: Clone + Eq> Default for Notify<T> {
     fn default() -> Self {
         Notify {
             uid: 1,
-            prev: None,
+            when: None,
+            last: None,
             state: Arc::new(Mutex::new(NotifyState::default())),
         }
     }
@@ -43,7 +50,8 @@ impl<T: Clone + Eq> Clone for Notify<T> {
 
         Notify {
             uid,
-            prev: None,
+            when: None,
+            last: None,
             state: self.state.clone(),
         }
     }
@@ -56,7 +64,7 @@ impl<T: Clone + Eq + Unpin> Future for Notify<T> {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let inner = {
             let state = self.state.lock().unwrap();
-            if self.prev != state.inner {
+            if self.last != state.inner {
                 state.inner.clone()
             } else {
                 None
@@ -64,8 +72,10 @@ impl<T: Clone + Eq + Unpin> Future for Notify<T> {
         };
 
         if let Some(t) = inner {
-            self.as_mut().prev.replace(t.clone());
-            return Poll::Ready(self.to_owned());
+            self.as_mut().last.replace(t.clone());
+            if self.when.as_ref().map(|f| f(t)).unwrap_or(true) {
+                return Poll::Ready(self.to_owned());
+            }
         }
 
         let mut state = self.state.lock().unwrap();
