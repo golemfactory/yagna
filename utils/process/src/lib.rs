@@ -2,15 +2,13 @@ use actix::prelude::*;
 use anyhow::{anyhow, Result};
 use derive_more::Display;
 use futures::channel::oneshot::channel;
-use futures::future::{Abortable, AbortHandle};
+use futures::future::{AbortHandle, Abortable};
 use shared_child::unix::SharedChildExt;
 use shared_child::SharedChild;
-use std::sync::Arc;
 use std::process::Command;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-
-
 
 #[derive(Display)]
 pub enum ExeUnitExitStatus {
@@ -22,7 +20,6 @@ pub enum ExeUnitExitStatus {
     Error(std::io::Error),
 }
 
-
 #[derive(Clone)]
 pub struct ProcessHandle {
     process: Arc<SharedChild>,
@@ -30,7 +27,9 @@ pub struct ProcessHandle {
 
 impl ProcessHandle {
     pub fn new(mut command: &mut Command) -> Result<ProcessHandle> {
-        Ok(ProcessHandle{process: Arc::new(SharedChild::spawn(&mut command)?)})
+        Ok(ProcessHandle {
+            process: Arc::new(SharedChild::spawn(&mut command)?),
+        })
     }
 
     pub fn kill(&self) {
@@ -70,9 +69,16 @@ impl ProcessHandle {
             Ok(expected_status) => match expected_status {
                 // Process already exited. Terminate was successful.
                 Some(_status) => Ok(()),
-                None => Err(anyhow!("Process [pid={}] is still running.", self.process.id()))
+                None => Err(anyhow!(
+                    "Process [pid={}] is still running.",
+                    self.process.id()
+                )),
             },
-            Err(error) => Err(anyhow!("Failed to wait for process [pid={}]. Error: {}", self.process.id(), error))
+            Err(error) => Err(anyhow!(
+                "Failed to wait for process [pid={}]. Error: {}",
+                self.process.id(),
+                error
+            )),
         }
     }
 

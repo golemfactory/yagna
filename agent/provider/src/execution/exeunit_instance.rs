@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use ya_utils_process::ProcessHandle;
 
-
 /// Working ExeUnit instance representation.
 #[derive(Display)]
 #[display(fmt = "ExeUnit: name [{}]", name)]
@@ -61,7 +60,11 @@ impl ExeUnitInstance {
     }
 
     pub async fn terminate(&self, timeout: Duration) -> Result<()> {
-        log::info!("Terminating ExeUnit [{}]... pid: {}", &self.name, self.pid());
+        log::info!(
+            "Terminating ExeUnit [{}]... pid: {}",
+            &self.name,
+            self.pid()
+        );
         self.process_handle.terminate(timeout).await
     }
 
