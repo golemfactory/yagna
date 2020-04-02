@@ -234,17 +234,17 @@ async fn kill_pid(pid: u32, timeout: i64) {
 
         loop {
             let elapsed = Local::now().timestamp() >= started + timeout as i64;
-
             match alive(pid) {
                 true => {
                     if elapsed {
                         log::info!("Sending SIGKILL to process {:?}", pid);
-                        let _ = signal::kill(pid, signal::Signal::SIGKILL);
+                        if let Ok(_) = signal::kill(pid, signal::Signal::SIGKILL) {
+                            let _ = waitpid(pid, None);
+                        }
                     }
                 }
                 _ => break,
             }
-
             match elapsed {
                 true => break,
                 _ => tokio::time::delay_for(delay).await,
