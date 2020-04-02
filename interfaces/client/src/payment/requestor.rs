@@ -2,8 +2,7 @@ use chrono::{DateTime, TimeZone};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::web::WebInterface;
-use crate::{web::WebClient, Result};
+use crate::{web::default_on_timeout, web::WebClient, web::WebInterface, Result};
 use ya_model::payment::*;
 
 #[derive(Default)]
@@ -109,7 +108,7 @@ impl RequestorApi {
             #[query] laterThan,
             #[query] timeout
         );
-        self.client.get(&url).send().json().await
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 
     pub async fn get_invoices(&self) -> Result<Vec<Invoice>> {
@@ -171,7 +170,7 @@ impl RequestorApi {
             #[query] laterThan,
             #[query] timeout
         );
-        self.client.get(&url).send().json().await
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 
     pub async fn create_allocation(&self, allocation: &NewAllocation) -> Result<Allocation> {
@@ -219,7 +218,7 @@ impl RequestorApi {
             #[query] laterThan,
             #[query] timeout
         );
-        self.client.get(&url).send().json().await
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 
     pub async fn get_payment(&self, payment_id: &str) -> Result<Payment> {

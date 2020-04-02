@@ -165,6 +165,18 @@ impl WebRequest<SendClientRequest> {
     }
 }
 
+// this is used internally to translate from HTTP Timeout into default result
+// (empty vec most of tht time)
+pub(crate) fn default_on_timeout<T: Default>(err: Error) -> Result<T> {
+    match err {
+        Error::TimeoutError { msg, url, .. } => {
+            log::trace!("timeout getting url {}: {}", url, msg);
+            Ok(Default::default())
+        }
+        _ => Err(err),
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct WebClientBuilder {
     pub(crate) host_port: Option<String>,
