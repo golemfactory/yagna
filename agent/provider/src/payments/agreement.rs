@@ -21,21 +21,13 @@ pub struct CostInfo {
 //      should deduce it based on activity id.
 pub enum ActivityPayment {
     /// We got activity created event.
-    Running {
-        activity_id: String,
-        last_debit_note: Option<String>,
-    },
+    Running { activity_id: String },
     /// We got activity destroyed event, but cost still isn't computed.
-    Destroyed {
-        activity_id: String,
-        last_debit_note: Option<String>,
-    },
+    Destroyed { activity_id: String },
     /// We computed cost and sent last debit note. Activity should
     /// never change from this moment.
     Finalized {
         activity_id: String,
-        /// Option in case, we didn't sent any debit notes.
-        last_debit_note: Option<String>,
         cost_summary: CostInfo,
     },
 }
@@ -67,22 +59,17 @@ impl AgreementPayment {
     pub fn add_created_activity(&mut self, activity_id: &str) {
         let activity = ActivityPayment::Running {
             activity_id: activity_id.to_string(),
-            last_debit_note: None,
         };
         self.activities.insert(activity_id.to_string(), activity);
     }
 
     pub fn activity_destroyed(&mut self, activity_id: &str) -> Result<()> {
         if let Some(activity) = self.activities.get_mut(activity_id) {
-            if let ActivityPayment::Running {
-                activity_id,
-                last_debit_note,
-            } = activity
-            {
-                return Ok(*activity = ActivityPayment::Destroyed {
+            if let ActivityPayment::Running { activity_id } = activity {
+                *activity = ActivityPayment::Destroyed {
                     activity_id: activity_id.clone(),
-                    last_debit_note: last_debit_note.clone(),
-                });
+                };
+                return Ok(());
             }
         }
         Err(anyhow!("Activity [{}] didn't exist before.", activity_id))
@@ -91,23 +78,19 @@ impl AgreementPayment {
     pub fn finish_activity(&mut self, activity_id: &str, cost_info: CostInfo) -> Result<()> {
         if cost_info.usage.len() != self.payment_model.expected_usage_len() {
             return Err(anyhow!(
-                "Usage vector has length {} but expected {}.",
+                "Usage vector has length {}, but expected {}.",
                 cost_info.usage.len(),
                 self.payment_model.expected_usage_len()
             ));
         }
 
         if let Some(activity) = self.activities.get_mut(activity_id) {
-            if let ActivityPayment::Destroyed {
-                activity_id,
-                last_debit_note,
-            } = activity
-            {
-                return Ok(*activity = ActivityPayment::Finalized {
+            if let ActivityPayment::Destroyed { activity_id } = activity {
+                *activity = ActivityPayment::Finalized {
                     activity_id: activity_id.clone(),
-                    last_debit_note: last_debit_note.clone(),
                     cost_summary: cost_info,
-                });
+                };
+                return Ok(());
             }
         }
         Err(anyhow!("Activity [{}] didn't exist before.", activity_id))
@@ -141,31 +124,6 @@ impl AgreementPayment {
         );
 
         CostInfo { cost, usage }
-    }
-
-    pub fn update_debit_note(
-        &mut self,
-        activity_id: &str,
-        debit_note_id: Option<String>,
-    ) -> Result<()> {
-        let activity = self.activities.get_mut(activity_id).ok_or(anyhow!(
-            "Can't find activity [{}] for agreement [{}].",
-            activity_id,
-            self.agreement_id
-        ))?;
-
-        if let ActivityPayment::Running { .. } = activity {
-            let new_activity = ActivityPayment::Running {
-                last_debit_note: debit_note_id,
-                activity_id: activity_id.to_string(),
-            };
-            *activity = new_activity;
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "Can't update debit note id for finalized activity."
-            ))
-        }
     }
 
     pub fn list_activities(&self) -> Vec<String> {
