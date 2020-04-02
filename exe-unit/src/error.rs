@@ -3,6 +3,7 @@ use crate::metrics::error::MetricError;
 use crate::state::StateError;
 use thiserror::Error;
 use ya_core_model::activity::RpcMessageError as RpcError;
+use ya_model::activity::ExeScriptCommand;
 pub use ya_transfer::error::Error as TransferError;
 
 #[derive(Error, Debug)]
@@ -91,6 +92,14 @@ impl Error {
         LocalServiceError: From<E>,
     {
         Error::from(LocalServiceError::from(err))
+    }
+
+    pub fn command(cmd: &ExeScriptCommand, stderr: Option<String>) -> Self {
+        Error::CommandError(format!(
+            "{:?} command error: {}",
+            cmd,
+            stderr.unwrap_or("<no stderr output>".to_owned())
+        ))
     }
 }
 

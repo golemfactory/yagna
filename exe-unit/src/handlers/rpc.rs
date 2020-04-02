@@ -3,6 +3,7 @@ use crate::message::{GetBatchResults, GetMetrics};
 use crate::runtime::Runtime;
 use crate::ExeUnit;
 use actix::prelude::*;
+use chrono::Utc;
 use std::time::Duration;
 use ya_core_model::activity::*;
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
@@ -63,6 +64,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
             match resp {
                 Ok(data) => Ok(ActivityUsage {
                     current_usage: Some(data),
+                    timestamp: Utc::now().timestamp(),
                 }),
                 Err(e) => Err(Error::from(e).into()),
             }
