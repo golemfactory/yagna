@@ -28,8 +28,9 @@ impl WebInterface for RequestorApi {
 
     fn from(client: WebClient) -> Self {
         let mut config = RequestorApiConfig::default();
-        config.invoice_event_timeout = Some(5000);
-        config.accept_invoice_timeout = Some(50000);
+        config.invoice_event_timeout = Some(5);
+        config.debit_note_event_timeout = Some(5);
+        config.accept_invoice_timeout = Some(50);
         let config = Arc::new(config);
         Self { client, config }
     }
