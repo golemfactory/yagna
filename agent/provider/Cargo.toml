@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 ya-client = "0.1"
 ya-model = "0.1"
-ya-core-model = "0.1"
+ya-core-model = { version = "0.1", features = ['activity'] }
 ya-agent-offer-model="0.1.0"
 ya-utils-actix = "0.1"
 

@@ -1,4 +1,4 @@
-use structopt::StructOpt;
+use structopt::{clap, StructOpt};
 use url::Url;
 
 use ya_client::{
@@ -7,6 +7,8 @@ use ya_client::{
 };
 
 #[derive(StructOpt)]
+#[structopt(setting = clap::AppSettings::ColoredHelp)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 pub struct StartupConfig {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
     pub auth: String,
@@ -19,9 +21,13 @@ pub struct StartupConfig {
     ///
     #[structopt(long = "payment-url", env = ProviderApi::API_URL_ENV_VAR)]
     payment_url: Option<Url>,
-    ///
-    #[structopt(long = "exe-unit-path", env = "EXE_UNIT_PATH")]
-    pub exe_unit_path: Option<String>,
+    /// Descriptor file (JSON) for available ExeUnits
+    #[structopt(
+        long = "exe-unit-path",
+        env = "EXE_UNIT_PATH",
+        default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
+    )]
+    pub exe_unit_path: String,
     ///
     #[structopt(long = "credit-address", env = "CREDIT_ADDRESS")]
     pub credit_address: String,
