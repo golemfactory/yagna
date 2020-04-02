@@ -18,11 +18,13 @@ use ya_service_bus::{timeout::*, typed::ServiceBinder};
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const DEFAULT_INACTIVITY_LIMIT_SECONDS: i64 = 10;
+const MIN_INACTIVITY_LIMIT_SECONDS: i64 = 2;
 
 fn inactivity_limit_seconds() -> i64 {
-    std::env::var(INACTIVITY_LIMIT_SECONDS_ENV_VAR)
+    let limit = std::env::var(INACTIVITY_LIMIT_SECONDS_ENV_VAR)
         .and_then(|v| v.parse().map_err(|_| std::env::VarError::NotPresent))
-        .unwrap_or(DEFAULT_INACTIVITY_LIMIT_SECONDS)
+        .unwrap_or(DEFAULT_INACTIVITY_LIMIT_SECONDS);
+    std::cmp::max(limit, MIN_INACTIVITY_LIMIT_SECONDS)
 }
 
 pub fn bind_gsb(db: &DbExecutor) {
@@ -182,7 +184,7 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
     let activity_id = activity_id.to_string();
     let provider_id = provider_id.to_string();
     let limit_seconds = inactivity_limit_seconds();
-    let delay = Duration::from_secs(limit_seconds as u64 / 3);
+    let delay = Duration::from_secs_f64(limit_seconds as f64 / 3.);
 
     log::debug!("Starting activity monitor: {}", activity_id);
 
