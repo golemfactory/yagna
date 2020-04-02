@@ -23,7 +23,7 @@ pub struct RequestorApi {
 }
 
 impl WebInterface for RequestorApi {
-    const API_URL_ENV_VAR: &'static str = "YAGNA_PAYMENT_URL";
+    const API_URL_ENV_VAR: &'static str = crate::payment::PAYMENT_URL_ENV_VAR;
     const API_SUFFIX: &'static str = ya_model::payment::PAYMENT_API_PATH;
 
     fn from(client: WebClient) -> Self {
