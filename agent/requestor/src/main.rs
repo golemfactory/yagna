@@ -5,7 +5,7 @@ use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use url::Url;
 
-use ya_client::payment::requestor::RequestorApi as PaymentApi;
+use ya_client::payment::requestor::RequestorApi as PaymentRequestorApi;
 use ya_client::{
     activity::ActivityRequestorApi, market::MarketRequestorApi, web::WebClient, web::WebInterface,
 };
@@ -31,7 +31,7 @@ struct AppSettings {
     #[structopt(long = "activity-url", env = ActivityRequestorApi::API_URL_ENV_VAR)]
     activity_url: Option<Url>,
 
-    #[structopt(long = "payment-url", env = "YAGNA_PAYMENT_URL")]
+    #[structopt(long = "payment-url", env = PaymentRequestorApi::API_URL_ENV_VAR)]
     payment_url: Option<Url>,
 
     #[structopt(long = "exe-script")]
@@ -39,11 +39,11 @@ struct AppSettings {
 }
 
 impl AppSettings {
-    fn market_api(&self) -> Result<ya_client::market::MarketRequestorApi, anyhow::Error> {
+    fn market_api(&self) -> anyhow::Result<MarketRequestorApi> {
         Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
     }
 
-    fn activity_api(&self) -> Result<ActivityRequestorApi, anyhow::Error> {
+    fn activity_api(&self) -> anyhow::Result<ActivityRequestorApi> {
         let client = WebClient::with_token(&self.app_key)?;
         if let Some(url) = &self.activity_url {
             Ok(client.interface_at(url.clone()))
@@ -52,7 +52,7 @@ impl AppSettings {
         }
     }
 
-    fn payment_api(&self) -> Result<PaymentApi, anyhow::Error> {
+    fn payment_api(&self) -> anyhow::Result<PaymentRequestorApi> {
         let client = WebClient::with_token(&self.app_key)?;
         if let Some(url) = &self.payment_url {
             Ok(client.interface_at(url.clone()))
@@ -249,7 +249,7 @@ async fn process_agreement(
 }
 
 /// MOCK: fixed price allocation
-async fn allocate_funds_for_task(payment_api: &PaymentApi) -> anyhow::Result<Allocation> {
+async fn allocate_funds_for_task(payment_api: &PaymentRequestorApi) -> anyhow::Result<Allocation> {
     let new_allocation = NewAllocation {
         total_amount: 10.into(),
         timeout: None,
@@ -262,7 +262,7 @@ async fn allocate_funds_for_task(payment_api: &PaymentApi) -> anyhow::Result<All
 
 /// MOCK: log incoming debit notes, and... ignore them
 async fn log_and_ignore_debit_notes(
-    payment_api: &PaymentApi,
+    payment_api: &PaymentRequestorApi,
     started_at: DateTime<Utc>,
 ) -> anyhow::Result<()> {
     // FIXME: should be persisted and restored upon next ya-requestor start
@@ -282,7 +282,7 @@ async fn log_and_ignore_debit_notes(
 
 /// MOCK: accept all incoming invoices
 async fn process_payments(
-    payment_api: &PaymentApi,
+    payment_api: &PaymentRequestorApi,
     allocation: Allocation,
     started_at: DateTime<Utc>,
 ) -> ! {
