@@ -236,10 +236,12 @@ async fn send_invoice(
         agreement_id: agreement_id.to_string(),
         activity_ids: Some(activities.clone()),
         amount: cost_summary.clone().cost,
+        // TODO: This is temporary. In the future we won't need to set these fields.
         usage_counter_vector: Some(json!(cost_summary.usage)),
-        // TODO: This is temporary. In the future we want need to set these fields.
         credit_account_id: provider_context.credit_account.clone(),
         payment_platform: None,
+        // TODO: Change this date to meaningful value.
+        //  Now all our invoices are immediately outdated.
         payment_due_date: Utc::now(),
     };
 

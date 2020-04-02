@@ -5,9 +5,11 @@ use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use url::Url;
 
-use ya_client::payment::requestor::RequestorApi as PaymentApi;
+use ya_client::payment::requestor::RequestorApi as PaymentRequestorApi;
 use ya_client::{
-    activity::ActivityRequestorApi, market::MarketRequestorApi, web::WebClient, web::WebInterface,
+    activity::ActivityRequestorApi,
+    market::MarketRequestorApi,
+    web::{WebAuth, WebClient, WebInterface},
 };
 use ya_model::{
     activity::ExeScriptRequest,
@@ -31,7 +33,7 @@ struct AppSettings {
     #[structopt(long = "activity-url", env = ActivityRequestorApi::API_URL_ENV_VAR)]
     activity_url: Option<Url>,
 
-    #[structopt(long = "payment-url", env = "YAGNA_PAYMENT_URL")]
+    #[structopt(long = "payment-url", env = PaymentRequestorApi::API_URL_ENV_VAR)]
     payment_url: Option<Url>,
 
     #[structopt(long = "exe-script")]
@@ -39,11 +41,11 @@ struct AppSettings {
 }
 
 impl AppSettings {
-    fn market_api(&self) -> Result<ya_client::market::MarketRequestorApi, anyhow::Error> {
+    fn market_api(&self) -> anyhow::Result<MarketRequestorApi> {
         Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
     }
 
-    fn activity_api(&self) -> Result<ActivityRequestorApi, anyhow::Error> {
+    fn activity_api(&self) -> anyhow::Result<ActivityRequestorApi> {
         let client = WebClient::with_token(&self.app_key)?;
         if let Some(url) = &self.activity_url {
             Ok(client.interface_at(url.clone()))
@@ -52,8 +54,11 @@ impl AppSettings {
         }
     }
 
-    fn payment_api(&self) -> Result<PaymentApi, anyhow::Error> {
-        let client = WebClient::with_token(&self.app_key)?;
+    fn payment_api(&self) -> anyhow::Result<PaymentRequestorApi> {
+        let client = WebClient::builder()
+            .auth(WebAuth::Bearer(self.app_key.clone()))
+            .timeout(Duration::from_secs(60)) // more than default accept invoice timeout which is 50s
+            .build()?;
         if let Some(url) = &self.payment_url {
             Ok(client.interface_at(url.clone()))
         } else {
@@ -107,7 +112,7 @@ async fn spawn_workers(
     requestor_api: MarketRequestorApi,
     subscription_id: &str,
     my_demand: &Demand,
-    tx: mpsc::Sender<String>,
+    agreement_tx: mpsc::Sender<String>,
 ) -> anyhow::Result<()> {
     loop {
         let events = requestor_api
@@ -131,7 +136,7 @@ async fn spawn_workers(
                         proposal.state
                     );
                     log::trace!("processing proposal {:?}", proposal);
-                    let mut tx = tx.clone();
+                    let mut agreement_tx = agreement_tx.clone();
                     let requestor_api = requestor_api.clone();
                     let my_subs_id = subscription_id.to_string();
                     let my_demand = my_demand.clone();
@@ -140,7 +145,9 @@ async fn spawn_workers(
                             Ok(ProcessOfferResult::ProposalId(id)) => {
                                 log::info!("responded with counter proposal (id: {})", id)
                             }
-                            Ok(ProcessOfferResult::AgreementId(id)) => tx.send(id).await.unwrap(),
+                            Ok(ProcessOfferResult::AgreementId(id)) => {
+                                agreement_tx.send(id).await.unwrap()
+                            }
                             Err(e) => {
                                 log::error!("unable to process offer: {}", e);
                                 return;
@@ -169,7 +176,7 @@ fn build_demand(node_name: &str) -> Demand {
                 "srv": {
                     "comp":{
                         "wasm": {
-                            "task_package": "http://localhost:8000/rust-wasi-tutorial.zip"
+                            "task_package": "http://34.244.4.185:8000/rust-wasi-tutorial.zip"
                         }
                     }
                 }
@@ -191,7 +198,6 @@ async fn process_agreement(
     activity_api: &ActivityRequestorApi,
     agreement_id: String,
     exe_script: &PathBuf,
-    mut tx: mpsc::Sender<()>,
 ) -> anyhow::Result<()> {
     log::info!("\n\n processing AGREEMENT = {}", agreement_id);
 
@@ -244,12 +250,11 @@ async fn process_agreement(
     activity_api.control().destroy_activity(&act_id).await?;
     log::info!("\n\n I'M DONE FOR NOW");
 
-    tx.send(()).await?;
     Ok(())
 }
 
 /// MOCK: fixed price allocation
-async fn allocate_funds_for_task(payment_api: &PaymentApi) -> anyhow::Result<Allocation> {
+async fn allocate_funds_for_task(payment_api: &PaymentRequestorApi) -> anyhow::Result<Allocation> {
     let new_allocation = NewAllocation {
         total_amount: 10.into(),
         timeout: None,
@@ -261,52 +266,72 @@ async fn allocate_funds_for_task(payment_api: &PaymentApi) -> anyhow::Result<All
 }
 
 /// MOCK: log incoming debit notes, and... ignore them
-async fn log_and_ignore_debit_notes(
-    payment_api: &PaymentApi,
-    started_at: DateTime<Utc>,
-) -> anyhow::Result<()> {
-    let mut ts = started_at.clone();
-    loop {
-        let next_ts = Utc::now();
-        let events = payment_api.get_debit_note_events(Some(&ts)).await?;
+async fn log_and_ignore_debit_notes(payment_api: PaymentRequestorApi, started_at: DateTime<Utc>) {
+    // FIXME: should be persisted and restored upon next ya-requestor start
+    let mut events_after = started_at.clone();
 
-        for event in events {
-            log::info!("got debit note event {:#?}", event);
+    loop {
+        match payment_api.get_debit_note_events(Some(&events_after)).await {
+            Err(e) => {
+                log::error!("getting debit notes events error: {}", e);
+                tokio::time::delay_for(Duration::from_secs(5)).await;
+            }
+            Ok(events) => {
+                for event in events {
+                    log::info!("got debit note event {:#?}", event);
+                    events_after = event.timestamp;
+                }
+            }
         }
-        ts = next_ts;
-        tokio::time::delay_for(Duration::from_secs(5)).await;
     }
 }
 
 /// MOCK: accept all incoming invoices
 async fn process_payments(
-    payment_api: &PaymentApi,
+    payment_api: PaymentRequestorApi,
     allocation: Allocation,
     started_at: DateTime<Utc>,
-) -> anyhow::Result<()> {
-    let mut ts = started_at;
-    loop {
-        let next_ts = Utc::now();
+) {
+    // FIXME: should be persisted and restored upon next ya-requestor start
+    let mut events_after = started_at;
 
-        let events = payment_api.get_invoice_events(Some(&ts)).await?;
-        // TODO: timeout on get_invoice_events does not work
-        if events.is_empty() {
-            tokio::time::delay_for(Duration::from_secs(10)).await;
-        }
+    loop {
+        let events = match payment_api.get_invoice_events(Some(&events_after)).await {
+            Err(e) => {
+                log::error!("getting invoice events error: {}", e);
+                tokio::time::delay_for(Duration::from_secs(5)).await;
+                vec![]
+            }
+            Ok(events) => events,
+        };
 
         for event in events {
             log::info!("got invoice event {:#?}", event);
             match event.event_type {
                 EventType::Received => {
-                    let invoice = payment_api.get_invoice(&event.invoice_id).await?;
+                    let invoice = payment_api.get_invoice(&event.invoice_id).await;
+                    if let Err(e) = invoice {
+                        log::error!("getting invoice {}, err: {}", event.invoice_id, e);
+                        // TODO: loop until you've got proper invoice
+                        continue;
+                    }
+                    let invoice = invoice.unwrap();
+
                     let acceptance = Acceptance {
                         total_amount_accepted: invoice.amount,
                         allocation_id: allocation.allocation_id.clone(),
                     };
-                    payment_api
+                    match payment_api
                         .accept_invoice(&event.invoice_id, &acceptance)
-                        .await?;
-                    log::info!("invoice accepted: {:?}", event.invoice_id);
+                        .await
+                    {
+                        Err(e) => {
+                            log::error!("accepting invoice {}, err: {}", event.invoice_id, e);
+                            // TODO: reconsider what to do in this case
+                            continue;
+                        }
+                        Ok(_) => log::info!("invoice accepted: {:?}", event.invoice_id),
+                    }
                 }
                 _ => log::info!(
                     "ignoring event type {:?} for: {}",
@@ -314,7 +339,7 @@ async fn process_payments(
                     event.invoice_id
                 ),
             }
-            ts = next_ts;
+            events_after = event.timestamp;
         }
     }
 }
@@ -352,22 +377,18 @@ async fn main() -> anyhow::Result<()> {
 
     let mkt_api = market_api.clone();
     let sub_id = subscription_id.clone();
-    let (tx, mut rx) = mpsc::channel::<String>(1);
+    let (agreement_tx, mut agreement_rx) = mpsc::channel::<String>(1);
     Arbiter::spawn(async move {
-        if let Err(e) = spawn_workers(mkt_api, &sub_id, &my_demand, tx).await {
+        if let Err(e) = spawn_workers(mkt_api, &sub_id, &my_demand, agreement_tx).await {
             log::error!("spawning workers for {} error: {}", sub_id, e);
         }
     });
 
     let activity_api = settings.activity_api()?;
     let exe_script = settings.exe_script.clone();
-    let (agreement_tx, mut _agreement_rx) = mpsc::channel::<()>(1);
     Arbiter::spawn(async move {
-        while let Some(id) = rx.next().await {
-            let agreement_tx = agreement_tx.clone();
-            if let Err(e) =
-                process_agreement(&activity_api, id.clone(), &exe_script, agreement_tx).await
-            {
+        while let Some(id) = agreement_rx.next().await {
+            if let Err(e) = process_agreement(&activity_api, id.clone(), &exe_script).await {
                 log::error!("processing agreement id {} error: {}", id, e);
             }
             // TODO: Market doesn't support agreement termination yet.
@@ -376,26 +397,14 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // log incoming debit notes
-    {
-        let payment_api = payment_api.clone();
-        let started_at = started_at.clone();
-        Arbiter::spawn(async move {
-            if let Err(e) = log_and_ignore_debit_notes(&payment_api, started_at).await {
-                log::error!("logging debit notes error: {}", e);
-            }
-        })
-    }
+    Arbiter::spawn(log_and_ignore_debit_notes(
+        payment_api.clone(),
+        started_at.clone(),
+    ));
 
-    Arbiter::spawn(async move {
-        if let Err(e) = process_payments(&payment_api, allocation, started_at).await {
-            log::error!("processing payments error: {}", e)
-        }
-    });
+    Arbiter::spawn(process_payments(payment_api, allocation, started_at));
 
-    // waiting only for first agreement to be fully processed
-    // agreement_rx.next().await;
     tokio::signal::ctrl_c().await?;
-    settings.market_api()?.unsubscribe(&subscription_id).await?;
+    market_api.unsubscribe(&subscription_id).await?;
     Ok(())
 }

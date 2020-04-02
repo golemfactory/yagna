@@ -1,7 +1,7 @@
 //! Requestor part of Market API
 use ya_model::market::{Agreement, AgreementProposal, Demand, Proposal, RequestorEvent};
 
-use crate::{web::WebClient, web::WebInterface, Error, Result};
+use crate::{web::default_on_timeout, web::WebClient, web::WebInterface, Result};
 
 /// Bindings for Requestor part of the Market API.
 #[derive(Clone)]
@@ -60,10 +60,7 @@ impl MarketRequestorApi {
             #[query] timeout,
             #[query] maxEvents
         );
-        match self.client.get(&url).send().json().await {
-            Err(Error::TimeoutError{..}) => Ok(Vec::new()),
-            x => x
-        }
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 
     /// Responds with a bespoke Demand to received Offer.
