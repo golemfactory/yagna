@@ -14,8 +14,6 @@ pub enum LocalServiceError {
     MetricError(#[from] MetricError),
     #[error("Transfer error: {0}")]
     TransferError(#[from] TransferError),
-    #[error("Timeout error: {0}")]
-    TimeoutError(#[from] tokio::time::Elapsed),
 }
 
 #[derive(Error, Debug)]
@@ -26,36 +24,12 @@ pub enum SignalError {
 
 #[derive(Error, Debug)]
 pub enum ChannelError {
-    #[error("Receive error: {0}")]
-    ReceiveError(#[from] crossbeam_channel::RecvError),
-    #[error("Receive error: {0}")]
-    TryReceiveError(#[from] crossbeam_channel::TryRecvError),
-    #[error("Receive timeout error: {0}")]
-    ReceiveTimeoutError(#[from] crossbeam_channel::RecvTimeoutError),
     #[error("Send error: {0}")]
     SendError(String),
     #[error("Send error: {0}")]
     TrySendError(String),
     #[error("Send timeout: {0}")]
     SendTimeoutError(String),
-}
-
-impl<T> From<crossbeam_channel::SendError<T>> for ChannelError {
-    fn from(err: crossbeam_channel::SendError<T>) -> Self {
-        ChannelError::SendError(err.to_string())
-    }
-}
-
-impl<T> From<crossbeam_channel::TrySendError<T>> for ChannelError {
-    fn from(err: crossbeam_channel::TrySendError<T>) -> Self {
-        ChannelError::TrySendError(err.to_string())
-    }
-}
-
-impl<T> From<crossbeam_channel::SendTimeoutError<T>> for ChannelError {
-    fn from(err: crossbeam_channel::SendTimeoutError<T>) -> Self {
-        ChannelError::SendTimeoutError(err.to_string())
-    }
 }
 
 #[derive(Error, Debug)]
@@ -118,12 +92,6 @@ impl From<StateError> for Error {
 impl From<TransferError> for Error {
     fn from(e: TransferError) -> Self {
         Error::from(LocalServiceError::TransferError(e))
-    }
-}
-
-impl From<tokio::time::Elapsed> for Error {
-    fn from(e: tokio::time::Elapsed) -> Self {
-        Error::from(LocalServiceError::TimeoutError(e))
     }
 }
 
