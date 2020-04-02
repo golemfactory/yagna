@@ -265,15 +265,17 @@ async fn log_and_ignore_debit_notes(
     payment_api: &PaymentApi,
     started_at: DateTime<Utc>,
 ) -> anyhow::Result<()> {
-    let mut ts = started_at.clone();
+    // FIXME: should be persisted and restored upon next ya-requestor start
+    let mut events_after = started_at.clone();
     loop {
-        let next_ts = Utc::now();
-        let events = payment_api.get_debit_note_events(Some(&ts)).await?;
+        let events = payment_api
+            .get_debit_note_events(Some(&events_after))
+            .await?;
 
         for event in events {
             log::info!("got debit note event {:#?}", event);
+            events_after = event.timestamp;
         }
-        ts = next_ts;
         tokio::time::delay_for(Duration::from_secs(5)).await;
     }
 }
@@ -284,21 +286,16 @@ async fn process_payments(
     allocation: Allocation,
     started_at: DateTime<Utc>,
 ) -> ! {
-    let mut ts = started_at;
+    // FIXME: should be persisted and restored upon next ya-requestor start
+    let mut events_after = started_at;
     loop {
-        let next_ts = Utc::now(); // FIXME
-
-        let events = match payment_api.get_invoice_events(Some(&ts)).await {
+        let events = match payment_api.get_invoice_events(Some(&events_after)).await {
             Err(e) => {
                 log::error!("getting invoice events error: {}", e);
                 vec![]
             }
             Ok(x) => x,
         };
-        // TODO: timeout on get_invoice_events does not work
-        if events.is_empty() {
-            tokio::time::delay_for(Duration::from_secs(10)).await;
-        }
 
         for event in events {
             log::info!("got invoice event {:#?}", event);
@@ -334,7 +331,7 @@ async fn process_payments(
                     event.invoice_id
                 ),
             }
-            ts = next_ts;
+            events_after = event.timestamp;
         }
     }
 }
