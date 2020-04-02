@@ -148,7 +148,7 @@ impl NewDebitNote {
             id: Uuid::new_v4().to_string(),
             issuer_id,
             recipient_id,
-            previous_debit_note_id: debit_note.previous_debit_note_id,
+            previous_debit_note_id: None,
             agreement_id: debit_note.agreement_id,
             activity_id: debit_note.activity_id,
             total_amount_due: debit_note.total_amount_due.into(),

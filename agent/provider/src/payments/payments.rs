@@ -80,7 +80,6 @@ struct InvoicesPaid {
 pub struct DebitNoteInfo {
     pub agreement_id: String,
     pub activity_id: String,
-    pub last_debit_note: Option<String>,
 }
 
 /// Yagna APIs and payments information about provider.
@@ -164,13 +163,12 @@ impl Payments {
 
 async fn send_debit_note(
     provider_context: Arc<ProviderCtx>,
-    invoice_info: DebitNoteInfo,
+    debit_note_info: DebitNoteInfo,
     cost_info: CostInfo,
 ) -> Result<DebitNote> {
     let debit_note = NewDebitNote {
-        agreement_id: invoice_info.agreement_id.clone(),
-        activity_id: Some(invoice_info.activity_id.clone()),
-        previous_debit_note_id: invoice_info.last_debit_note.clone(),
+        agreement_id: debit_note_info.agreement_id.clone(),
+        activity_id: Some(debit_note_info.activity_id.clone()),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
         credit_account_id: provider_context.credit_account.clone(),
@@ -183,14 +181,14 @@ async fn send_debit_note(
         serde_json::to_string(&debit_note)?
     );
 
-    let payment_api = provider_context.payment_api.clone();
+    let payment_api = &provider_context.payment_api;
     let debit_note = payment_api
         .issue_debit_note(&debit_note)
         .await
         .map_err(|error| {
             anyhow!(
                 "Failed to issue debit note for activity [{}]. {}",
-                &invoice_info.activity_id,
+                &debit_note_info.activity_id,
                 error
             )
         })?;
@@ -198,7 +196,7 @@ async fn send_debit_note(
     log::debug!(
         "Sending debit note [{}] for activity [{}].",
         &debit_note.debit_note_id,
-        &invoice_info.activity_id
+        &debit_note_info.activity_id
     );
     payment_api
         .send_debit_note(&debit_note.debit_note_id)
@@ -207,7 +205,7 @@ async fn send_debit_note(
             anyhow!(
                 "Failed to send debit note [{}] for activity [{}]. {}",
                 &debit_note.debit_note_id,
-                &invoice_info.activity_id,
+                &debit_note_info.activity_id,
                 error
             )
         })?;
@@ -215,7 +213,7 @@ async fn send_debit_note(
     log::info!(
         "Debit note [{}] for activity [{}] sent.",
         &debit_note.debit_note_id,
-        &invoice_info.activity_id
+        &debit_note_info.activity_id
     );
 
     Ok(debit_note)
@@ -239,6 +237,7 @@ async fn send_invoice(
         activity_ids: Some(activities.clone()),
         amount: cost_summary.clone().cost,
         usage_counter_vector: Some(json!(cost_summary.usage)),
+        // TODO: This is temporary. In the future we want need to set these fields.
         credit_account_id: provider_context.credit_account.clone(),
         payment_platform: None,
         payment_due_date: Utc::now(),
@@ -246,7 +245,7 @@ async fn send_invoice(
 
     log::debug!("Creating invoice {}.", serde_json::to_string(&invoice)?);
 
-    let payment_api = provider_context.payment_api.clone();
+    let payment_api = &provider_context.payment_api;
     let invoice = payment_api.issue_invoice(&invoice).await.map_err(|error| {
         anyhow!(
             "Failed to issue debit note for agreement [{}]. {}",
@@ -322,7 +321,6 @@ impl Handler<ActivityCreated> for Payments {
                 invoice_info: DebitNoteInfo {
                     agreement_id: msg.agreement_id.clone(),
                     activity_id: msg.activity_id.clone(),
-                    last_debit_note: None,
                 },
             };
 
@@ -344,83 +342,77 @@ impl Handler<ActivityDestroyed> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
-            agreement.activity_destroyed(&msg.activity_id).unwrap();
-
-            if let Some(ActivityPayment::Destroyed {
-                last_debit_note, ..
-            }) = agreement.activities.get(&msg.activity_id)
-            {
-                let payment_model = agreement.payment_model.clone();
-                let provider_context = self.context.clone();
-                let address = ctx.address();
-                let mut invoice_info = DebitNoteInfo {
-                    activity_id: msg.activity_id.clone(),
-                    agreement_id: msg.agreement_id.clone(),
-                    last_debit_note: last_debit_note.clone(),
-                };
-
-                let future = async move {
-                    // Computing last DebitNote can't fail, so we must repeat it until
-                    // it reaches Requestor. DebitNote itself is not important so much, but
-                    // we must ensure that we send FinalizeActivity and Invoice in consequence.
-                    let (debit_note, cost_info) = loop {
-                        match compute_cost_and_send_debit_note(
-                            provider_context.clone(),
-                            payment_model.clone(),
-                            &invoice_info,
-                        )
-                        .await
-                        {
-                            Ok(debit_note) => break debit_note,
-                            Err(error) => {
-                                let interval = provider_context.invoice_resend_interval;
-
-                                log::error!(
-                                    "{} Final debit note will be resent after {:#?}.",
-                                    error,
-                                    interval
-                                );
-                                tokio::time::delay_for(interval).await
-                            }
-                        }
-                    };
-
-                    log::info!(
-                        "Final cost for activity [{}]: {}.",
-                        &invoice_info.activity_id,
-                        &debit_note.total_amount_due
-                    );
-
-                    invoice_info.last_debit_note = Some(debit_note.debit_note_id);
-                    let msg = FinalizeActivity {
-                        cost_summary: cost_info,
-                        debit_info: invoice_info,
-                    };
-
-                    address.do_send(msg);
-                }
-                .into_actor(self);
-
-                return ActorResponse::r#async(future.map(|_, _, _| Ok(())));
-            } else {
-                log::error!("Shouldn't happen.");
+        let agreement = match self.agreements.get_mut(&msg.agreement_id) {
+            Some(agreement) => agreement,
+            None => {
+                log::warn!(
+                    "Can't find activity [{}] and agreement [{}].",
+                    &msg.activity_id,
+                    &msg.agreement_id
+                );
+                return ActorResponse::reply(Err(anyhow!("")));
             }
-        }
+        };
 
-        log::warn!(
-            "Can't find activity [{}] and agreement [{}].",
-            &msg.activity_id,
-            &msg.agreement_id
-        );
-        return ActorResponse::reply(Err(anyhow!("")));
+        agreement.activity_destroyed(&msg.activity_id).unwrap();
+
+        let payment_model = agreement.payment_model.clone();
+        let provider_context = self.context.clone();
+        let address = ctx.address();
+        let debit_note_info = DebitNoteInfo {
+            activity_id: msg.activity_id.clone(),
+            agreement_id: msg.agreement_id.clone(),
+        };
+
+        let future = async move {
+            // Computing last DebitNote can't fail, so we must repeat it until
+            // it reaches Requestor. DebitNote itself is not important so much, but
+            // we must ensure that we send FinalizeActivity and Invoice in consequence.
+            let (debit_note, cost_info) = loop {
+                match compute_cost_and_send_debit_note(
+                    provider_context.clone(),
+                    payment_model.clone(),
+                    &debit_note_info,
+                )
+                .await
+                {
+                    Ok(debit_note) => break debit_note,
+                    Err(error) => {
+                        let interval = provider_context.invoice_resend_interval;
+
+                        log::error!(
+                            "{} Final debit note will be resent after {:#?}.",
+                            error,
+                            interval
+                        );
+                        tokio::time::delay_for(interval).await
+                    }
+                }
+            };
+
+            log::info!(
+                "Final cost for activity [{}]: {}.",
+                &debit_note_info.activity_id,
+                &debit_note.total_amount_due
+            );
+
+            let msg = FinalizeActivity {
+                cost_summary: cost_info,
+                debit_info: debit_note_info,
+            };
+
+            address.do_send(msg);
+        }
+        .into_actor(self);
+
+        return ActorResponse::r#async(future.map(|_, _, _| Ok(())));
     }
 }
 
 impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, mut msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
         let agreement = match self.agreements.get(&msg.invoice_info.agreement_id) {
             Some(agreement) => agreement,
             None => {
@@ -441,44 +433,26 @@ impl Handler<UpdateCost> for Payments {
                 let invoice_info = msg.invoice_info.clone();
                 let update_interval = agreement.update_interval;
 
-                return ActorResponse::r#async(
-                    async move {
-                        let (debit_note, _cost) = compute_cost_and_send_debit_note(
-                            context.clone(),
-                            payment_model.clone(),
-                            &invoice_info,
-                        )
-                        .await?;
-                        Ok(debit_note)
+                let debit_note_future = async move {
+                    let (debit_note, _cost) = compute_cost_and_send_debit_note(
+                        context.clone(),
+                        payment_model.clone(),
+                        &invoice_info,
+                    )
+                    .await?;
+                    Ok(debit_note)
+                }
+                .into_actor(self)
+                .map(move |result: Result<DebitNote, Error>, _, ctx| {
+                    if let Err(error) = result {
+                        log::error!("{}", error)
                     }
-                    .into_actor(self)
-                    .map(
-                        move |result: Result<DebitNote, Error>, myself, ctx| {
-                            match result {
-                                Err(error) => log::error!("{}", error),
-                                Ok(debit_note) => {
-                                    if let Some(agreement) =
-                                        myself.agreements.get_mut(&debit_note.agreement_id)
-                                    {
-                                        // We can unwrap, because we set activity id while sending debit note.
-                                        let activity_id = debit_note.activity_id.unwrap();
-                                        agreement.update_debit_note(
-                                            &activity_id,
-                                            debit_note.previous_debit_note_id.clone(),
-                                        )?;
-
-                                        // Resend message, but update last DebitNote id.
-                                        msg.invoice_info.last_debit_note =
-                                            debit_note.previous_debit_note_id.clone();
-                                    };
-                                }
-                            };
-                            // In case of error in match statement above, msg will contain previous last_debit_note.
-                            ctx.notify_later(msg, update_interval);
-                            Ok(())
-                        },
-                    ),
-                );
+                    // Don't bother, if previous debit note was sent successfully or not.
+                    // Schedule UpdateCost for later.
+                    ctx.notify_later(msg, update_interval);
+                    Ok(())
+                });
+                return ActorResponse::r#async(debit_note_future);
             } else {
                 // Activity is not running anymore. We don't send here new UpdateCost
                 // message, what stops further updates.
