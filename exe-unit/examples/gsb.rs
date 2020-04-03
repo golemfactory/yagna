@@ -104,8 +104,7 @@ async fn main() -> anyhow::Result<()> {
 
     let contents = std::fs::read_to_string(&args.script)?;
     let exe_script: Vec<ExeScriptCommand> = serde_json::from_str(&contents)?;
-    let exe_last_idx = exe_script.len() - 1;
-
+    let exe_len = exe_script.len();
     let mut child = Command::new(args.supervisor).args(child_args).spawn()?;
     tokio::time::delay_for(Duration::from_secs(2)).await;
 
@@ -120,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .await?;
 
-    for i in 0..exe_last_idx {
+    for i in 0..exe_len {
         let results = actix_rpc::service(&exe_unit_url)
             .send(GetExecBatchResults {
                 activity_id: ACTIVITY_ID.to_owned(),
