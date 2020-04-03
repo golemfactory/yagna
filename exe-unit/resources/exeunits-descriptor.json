@@ -1,0 +1,15 @@
+[
+    {
+        "name": "wasmtime",
+        "path": "/usr/lib/yagna/plugins/exe-unit",
+        "args": [
+            "-b", "/usr/lib/yagna/plugins/wasmtime-exeunit",
+            "-c", "exe-unit-wd/cache/",
+            "-w", "exe-unit-wd/work/",
+            "-a", "agreement.json",
+            "service-bus"
+        ],
+        "description" : "this is just a sample descriptor for wasmtime exeunit used by ya-provider",
+        "FIXME":  "it assumes proper `agreement.json` file is in work dir"
+    }
+]

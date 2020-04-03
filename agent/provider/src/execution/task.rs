@@ -1,5 +1,14 @@
+use derive_more::Display;
+
 use super::exeunit_instance::ExeUnitInstance;
 
+#[derive(Display)]
+#[display(
+    fmt = "Task: agreement id [{}], activity id [{}], {}",
+    agreement_id,
+    activity_id,
+    exeunit
+)]
 pub struct Task {
     pub exeunit: ExeUnitInstance,
     pub agreement_id: String,
@@ -13,14 +22,5 @@ impl Task {
             agreement_id: agreement_id.to_string(),
             activity_id: activity_id.to_string(),
         }
-    }
-}
-
-impl std::fmt::Debug for Task {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Task")
-            .field("agreement_id", &self.agreement_id)
-            .field("activity_id", &self.activity_id)
-            .finish()
     }
 }

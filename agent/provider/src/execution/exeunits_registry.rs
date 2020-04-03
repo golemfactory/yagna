@@ -41,6 +41,7 @@ impl ExeUnitsRegistry {
         activity_id: &str,
         _agreement_id: &str,
     ) -> Result<ExeUnitInstance> {
+        // TODO: We should create separate directory for each execution of ExeUnit.
         let working_dir = std::env::current_dir()?;
         let exeunit_desc = self.find_exeunit(name)?;
         let mut args = exeunit_desc.args.clone();
@@ -114,5 +115,39 @@ mod tests {
         let dummy_desc = registry.find_exeunit("wasm").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasm");
         assert_eq!(dummy_desc.path.to_str().unwrap(), "wasm.exe");
+    }
+
+    #[test]
+    fn test_fill_registry_from_local_exe_unit_descriotor() {
+        let exe_units_descriptor = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../exe-unit/resources/local-exeunits-descriptor.json");
+        let mut registry = ExeUnitsRegistry::new();
+        registry
+            .register_exeunits_from_file(&exe_units_descriptor)
+            .unwrap();
+
+        let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
+        assert_eq!(dummy_desc.name.as_str(), "wasmtime");
+        assert_eq!(
+            dummy_desc.path.to_str().unwrap(),
+            "../target/debug/exe-unit"
+        );
+    }
+
+    #[test]
+    fn test_fill_registry_from_deb_exe_unit_descriotor() {
+        let exe_units_descriptor = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../exe-unit/resources/exeunits-descriptor.json");
+        let mut registry = ExeUnitsRegistry::new();
+        registry
+            .register_exeunits_from_file(&exe_units_descriptor)
+            .unwrap();
+
+        let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
+        assert_eq!(dummy_desc.name.as_str(), "wasmtime");
+        assert_eq!(
+            dummy_desc.path.to_str().unwrap(),
+            "/usr/lib/yagna/plugins/exe-unit"
+        );
     }
 }

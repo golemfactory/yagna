@@ -1,55 +1,78 @@
 use anyhow::{anyhow, Result};
-use log_derive::{logfn, logfn_inputs};
+use derive_more::Display;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
-//TODO: use tokio::process::{Child, Command};
+use std::process::Command;
+use std::time::Duration;
+
+use ya_utils_process::ProcessHandle;
 
 /// Working ExeUnit instance representation.
-#[derive(Debug)]
+#[derive(Display)]
+#[display(fmt = "ExeUnit: name [{}]", name)]
 pub struct ExeUnitInstance {
     name: String,
-    process: Child,
     #[allow(dead_code)]
     working_dir: PathBuf,
+    process_handle: ProcessHandle,
 }
 
-// TODO: should check spawned process state and report it back via GSB
 impl ExeUnitInstance {
-    #[logfn_inputs(Debug, fmt = "Spawning ExeUnit: {}, bin={:?}, wd={:?}, args={:?}")]
-    #[logfn(Debug, fmt = "ExeUnit spawned: {:?}")]
     pub fn new(
         name: &str,
         binary_path: &Path,
         working_dir: &Path,
         args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
-        let child = Command::new(binary_path)
-//        let child = Command::new("echo")
-            .args(args)
-            .current_dir(working_dir)
-            .spawn()
-            .map_err(|error| {
-                anyhow!(
-                    "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
-                    name, binary_path.display(), working_dir.display(), error
-                )
-            })?;
-        log::debug!("ExeUnit spawned, pid: {}", child.id());
+        log::info!("Spawning exeunit instance : {}", name);
+
+        let mut command = Command::new(binary_path);
+        command.args(args).current_dir(working_dir);
+
+        let child = ProcessHandle::new(&mut command).map_err(|error| {
+            anyhow!(
+                "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
+                name,
+                binary_path.display(),
+                working_dir.display(),
+                error
+            )
+        })?;
+
+        log::debug!("Exeunit process spawned, pid: {}", child.pid());
 
         let instance = ExeUnitInstance {
             name: name.to_string(),
-            process: child,
+            process_handle: child,
             working_dir: working_dir.to_path_buf(),
         };
+        log::info!(
+            "Exeunit instance [{}] spawned in workdir {}",
+            &instance.name,
+            &instance.working_dir.display()
+        );
 
         Ok(instance)
     }
 
-    #[logfn_inputs(Debug, fmt = "Killing ExeUnit: {:?}")]
-    #[logfn(Debug, fmt = "exeunit killed: {:?}")]
-    pub fn kill(&mut self) {
-        if let Err(_error) = self.process.kill() {
-            log::warn!("Process wasn't running.");
-        }
+    pub fn kill(&self) {
+        log::info!("Killing ExeUnit [{}]... pid: {}", &self.name, self.pid());
+        self.process_handle.kill();
+    }
+
+    pub async fn terminate(&self, timeout: Duration) -> Result<()> {
+        log::info!(
+            "Terminating ExeUnit [{}]... pid: {}",
+            &self.name,
+            self.pid()
+        );
+        self.process_handle.terminate(timeout).await
+    }
+
+    pub fn get_process_handle(&self) -> ProcessHandle {
+        self.process_handle.clone()
+    }
+
+    fn pid(&self) -> u32 {
+        self.process_handle.pid()
     }
 }

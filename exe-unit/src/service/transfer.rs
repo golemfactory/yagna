@@ -175,7 +175,7 @@ impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, PathBuf, Error>;
 
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let source_url = actor_try!(TransferUrl::parse(&self.task_package, "file"));
+        let source_url = actor_try!(TransferUrl::parse_with_hash(&self.task_package, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
         let cache_path = self.cache.to_cache_path(&cache_name);
         let final_path = self.cache.to_final_path(&cache_name);
