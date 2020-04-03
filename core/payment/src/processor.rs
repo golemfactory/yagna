@@ -101,6 +101,33 @@ impl PaymentProcessor {
     async fn process_payment(&self, invoice: Invoice, allocation_id: String) {
         let invoice_id = invoice.invoice_id.clone();
         let result: Result<(), Error> = async move {
+            // ************************************** BEGIN **************************************
+            // This code is placed here as a temporary workaround because schedule_payment
+            // implementation in GNTDriver is waiting for blockchain confirmation.
+            // FIXME: Move code below back to PaymentProcessor.schedule_payment
+            let invoice_id = invoice.invoice_id.clone();
+            let amount = PaymentAmount {
+                base_currency_amount: big_dec_to_u256(invoice.amount.clone())?,
+                gas_amount: None,
+            };
+            // TODO: Allow signing transactions with different key than node ID
+            let sender = str_to_addr(&invoice.recipient_id)?;
+            let recipient = str_to_addr(&invoice.credit_account_id)?;
+            let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
+            self.driver
+                .lock()
+                .await
+                .schedule_payment(
+                    &invoice_id,
+                    amount,
+                    sender,
+                    recipient,
+                    invoice.payment_due_date,
+                    &sign_tx,
+                )
+                .await?;
+            // *************************************** END ***************************************
+
             let confirmation = self.wait_for_payment(&invoice.invoice_id).await?;
 
             let payment_id = Uuid::new_v4().to_string();
@@ -152,28 +179,6 @@ impl PaymentProcessor {
         invoice: Invoice,
         allocation_id: String,
     ) -> PaymentResult<()> {
-        let invoice_id = invoice.invoice_id.clone();
-        let amount = PaymentAmount {
-            base_currency_amount: big_dec_to_u256(invoice.amount.clone())?,
-            gas_amount: None,
-        };
-        // TODO: Allow signing transactions with different key than node ID
-        let sender = str_to_addr(&invoice.recipient_id)?;
-        let recipient = str_to_addr(&invoice.credit_account_id)?;
-        let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
-        self.driver
-            .lock()
-            .await
-            .schedule_payment(
-                &invoice_id,
-                amount,
-                sender,
-                recipient,
-                invoice.payment_due_date,
-                &sign_tx,
-            )
-            .await?;
-
         let processor = self.clone();
         tokio::task::spawn_local(async move {
             processor.process_payment(invoice, allocation_id).await;
@@ -217,11 +222,19 @@ impl PaymentProcessor {
             return Err(PaymentError::Verification(msg).into());
         }
 
+        // Translate account ids to lower case, because recipient will be address without checksum.
         let recipient = addr_to_str(details.recipient);
-        let account_ids = invoice_dao.get_accounts_ids(invoice_ids.clone()).await?;
+        let account_ids = invoice_dao
+            .get_accounts_ids(invoice_ids.clone())
+            .await?
+            .iter()
+            .map(|account| account.to_lowercase())
+            .collect::<Vec<String>>();
         log::debug!("Recipient: {}, account_ids: {:?}", recipient, account_ids);
-        if account_ids != [recipient] {
-            return Err(PaymentError::Verification("Invalid account ID".to_string()).into());
+        if account_ids != [recipient.clone()] {
+            return Err(
+                PaymentError::Verification(format!("Invalid account ID: {}", recipient)).into(),
+            );
         }
 
         // TODO: Check debit notes as well

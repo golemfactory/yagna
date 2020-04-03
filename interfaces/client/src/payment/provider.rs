@@ -2,7 +2,7 @@ use chrono::{DateTime, TimeZone};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::{web::WebClient, Result};
+use crate::{web::WebClient, web::WebInterface, Result};
 use ya_model::payment::*;
 
 #[derive(Default)]
@@ -21,6 +21,16 @@ pub struct ProviderApi {
     config: ProviderApiConfig,
 }
 
+impl WebInterface for ProviderApi {
+    const API_URL_ENV_VAR: &'static str = crate::payment::PAYMENT_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = PAYMENT_API_PATH;
+
+    fn from(client: WebClient) -> Self {
+        let config = ProviderApiConfig::default();
+        ProviderApi::new(&Arc::new(client), config)
+    }
+}
+
 impl ProviderApi {
     pub fn new(client: &Arc<WebClient>, config: ProviderApiConfig) -> Self {
         Self {
@@ -29,7 +39,7 @@ impl ProviderApi {
         }
     }
 
-    pub async fn issue_debit_note(&self, debit_note: &DebitNote) -> Result<DebitNote> {
+    pub async fn issue_debit_note(&self, debit_note: &NewDebitNote) -> Result<DebitNote> {
         self.client
             .post("provider/debitNotes")
             .send_json(debit_note)
@@ -56,12 +66,12 @@ impl ProviderApi {
 
     #[allow(non_snake_case)]
     #[rustfmt::skip]
-    pub async fn send_debit_note(&self, debit_note_id: &str) -> Result<String> {
-        let ackTimeout = self.config.send_debit_note_timeout;
+    pub async fn send_debit_note(&self, debit_note_id: &str) -> Result<()> {
+        let timeout = self.config.send_debit_note_timeout;
         let url = url_format!(
             "provider/debitNotes/{debit_note_id}/send",
             debit_note_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send().json().await
     }
@@ -69,11 +79,11 @@ impl ProviderApi {
     #[allow(non_snake_case)]
     #[rustfmt::skip]
     pub async fn cancel_debit_note(&self, debit_note_id: &str) -> Result<String> {
-        let ackTimeout = self.config.cancel_debit_note_timeout;
+        let timeout = self.config.cancel_debit_note_timeout;
         let url = url_format!(
             "provider/debitNotes/{debit_note_id}/cancel",
             debit_note_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send().json().await
     }
@@ -89,16 +99,16 @@ impl ProviderApi {
         Tz::Offset: Display,
     {
         let laterThan = later_than.map(|dt| dt.to_rfc3339());
-        let eventTimeout = self.config.debit_note_event_timeout;
+        let timeout = self.config.debit_note_event_timeout;
         let url = url_format!(
             "provider/debitNoteEvents",
             #[query] laterThan,
-            #[query] eventTimeout
+            #[query] timeout
         );
         self.client.get(&url).send().json().await
     }
 
-    pub async fn issue_invoice(&self, invoice: &Invoice) -> Result<Invoice> {
+    pub async fn issue_invoice(&self, invoice: &NewInvoice) -> Result<Invoice> {
         self.client
             .post("provider/invoices")
             .send_json(invoice)
@@ -122,12 +132,12 @@ impl ProviderApi {
 
     #[allow(non_snake_case)]
     #[rustfmt::skip]
-    pub async fn send_invoice(&self, invoice_id: &str) -> Result<String> {
-        let ackTimeout = self.config.send_invoice_timeout;
+    pub async fn send_invoice(&self, invoice_id: &str) -> Result<()> {
+        let timeout = self.config.send_invoice_timeout;
         let url = url_format!(
             "provider/invoices/{invoice_id}/send",
             invoice_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send().json().await
     }
@@ -135,11 +145,11 @@ impl ProviderApi {
     #[allow(non_snake_case)]
     #[rustfmt::skip]
     pub async fn cancel_invoice(&self, invoice_id: &str) -> Result<String> {
-        let ackTimeout = self.config.cancel_invoice_timeout;
+        let timeout = self.config.cancel_invoice_timeout;
         let url = url_format!(
             "provider/invoices/{invoice_id}/cancel",
             invoice_id,
-            #[query] ackTimeout
+            #[query] timeout
         );
         self.client.post(&url).send().json().await
     }
@@ -155,11 +165,11 @@ impl ProviderApi {
         Tz::Offset: Display,
     {
         let laterThan = later_than.map(|dt| dt.to_rfc3339());
-        let eventTimeout = self.config.invoice_event_timeout;
+        let timeout = self.config.invoice_event_timeout;
         let url = url_format!(
             "provider/invoiceEvents",
             #[query] laterThan,
-            #[query] eventTimeout
+            #[query] timeout
         );
         self.client.get(&url).send().json().await
     }
@@ -175,11 +185,11 @@ impl ProviderApi {
         Tz::Offset: Display,
     {
         let laterThan = later_than.map(|dt| dt.to_rfc3339());
-        let eventTimeout = self.config.payment_event_timeout;
+        let timeout = self.config.payment_event_timeout;
         let url = url_format!(
             "provider/payments",
             #[query] laterThan,
-            #[query] eventTimeout
+            #[query] timeout
         );
         self.client.get(&url).send().json().await
     }

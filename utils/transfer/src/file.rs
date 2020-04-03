@@ -55,7 +55,9 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
 
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
+        //TODO: Return Result from function if file creation fails.
         tokio::task::spawn_local(async move {
+            let local_url = url.clone();
             let fut = async move {
                 let mut file = File::create(url.clone()).await?;
                 while let Some(result) = rx.next().await {
@@ -65,7 +67,10 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
 
                 Result::<(), Error>::Ok(())
             }
-            .map_err(Error::from);
+            .map_err(|error| {
+                log::error!("Error opening destination file [{}]: {}", local_url, error);
+                Error::from(error)
+            });
 
             abortable_sink(fut, res_tx).await
         });
