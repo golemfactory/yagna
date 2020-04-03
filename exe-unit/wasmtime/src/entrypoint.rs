@@ -143,6 +143,8 @@ fn directories_mounts(
             let host_path = workdir.join(&mount);
 
             validate_path(&mount)?;
+
+            // Requestor should see all paths as mounted to root.
             mount = PathBuf::from("/").join(mount);
 
             Ok(DirectoryMount {
@@ -199,10 +201,10 @@ mod tests {
 
     #[test]
     fn test_path_validation() {
-        assert_eq!(validate_path("/path/path").is_err(), true);
-        assert_eq!(validate_path("path/path/path").is_err(), false);
-        assert_eq!(validate_path("path/../path").is_err(), true);
-        assert_eq!(validate_path("./path/../path").is_err(), true);
-        assert_eq!(validate_path("./path/path").is_err(), true);
+        assert_eq!(validate_path(&PathBuf::from("/path/path")).is_err(), true);
+        assert_eq!(validate_path(&PathBuf::from("path/path/path")).is_err(), false);
+        assert_eq!(validate_path(&PathBuf::from("path/../path")).is_err(), true);
+        assert_eq!(validate_path(&PathBuf::from("./path/../path")).is_err(), true);
+        assert_eq!(validate_path(&PathBuf::from("./path/path")).is_err(), true);
     }
 }
