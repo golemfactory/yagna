@@ -144,12 +144,12 @@ impl CpuInfo {
 
 #[derive(Default, Clone)]
 pub struct ComInfo {
-    _inner: (),
+    pub params: serde_json::Value,
 }
 
 impl ComInfo {
-    fn write_json(self, _map: &mut serde_json::Map<String, serde_json::Value>) {
-        // TODO:
+    fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
+        let _ = map.insert("com".to_string(), self.params.clone());
     }
 }
 

@@ -2,7 +2,7 @@ use chrono::{DateTime, TimeZone};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::{web::WebClient, Result};
+use crate::{web::default_on_timeout, web::WebClient, web::WebInterface, Result};
 use ya_model::payment::*;
 
 #[derive(Default)]
@@ -16,17 +16,31 @@ pub struct RequestorApiConfig {
     payment_event_timeout: Option<u32>,
 }
 
+#[derive(Clone)]
 pub struct RequestorApi {
-    client: Arc<WebClient>,
-    config: RequestorApiConfig,
+    client: WebClient,
+    config: Arc<RequestorApiConfig>,
+}
+
+impl WebInterface for RequestorApi {
+    const API_URL_ENV_VAR: &'static str = crate::payment::PAYMENT_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = ya_model::payment::PAYMENT_API_PATH;
+
+    fn from(client: WebClient) -> Self {
+        let mut config = RequestorApiConfig::default();
+        config.invoice_event_timeout = Some(5);
+        config.debit_note_event_timeout = Some(5);
+        config.accept_invoice_timeout = Some(50);
+        let config = Arc::new(config);
+        Self { client, config }
+    }
 }
 
 impl RequestorApi {
-    pub fn new(client: &Arc<WebClient>, config: RequestorApiConfig) -> Self {
-        Self {
-            client: client.clone(),
-            config,
-        }
+    pub fn new(client: &WebClient, config: RequestorApiConfig) -> Self {
+        let config = config.into();
+        let client = client.clone();
+        Self { client, config }
     }
 
     pub async fn get_debit_notes(&self) -> Result<Vec<DebitNote>> {
@@ -95,7 +109,7 @@ impl RequestorApi {
             #[query] laterThan,
             #[query] timeout
         );
-        self.client.get(&url).send().json().await
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 
     pub async fn get_invoices(&self) -> Result<Vec<Invoice>> {
@@ -118,7 +132,7 @@ impl RequestorApi {
         &self,
         invoice_id: &str,
         acceptance: &Acceptance,
-    ) -> Result<String> {
+    ) -> Result<()> {
         let timeout = self.config.accept_invoice_timeout;
         let url = url_format!(
             "requestor/invoices/{invoice_id}/accept",
@@ -157,10 +171,10 @@ impl RequestorApi {
             #[query] laterThan,
             #[query] timeout
         );
-        self.client.get(&url).send().json().await
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 
-    pub async fn create_allocation(&self, allocation: &Allocation) -> Result<Allocation> {
+    pub async fn create_allocation(&self, allocation: &NewAllocation) -> Result<Allocation> {
         self.client
             .post("requestor/allocations")
             .send_json(allocation)
@@ -205,7 +219,7 @@ impl RequestorApi {
             #[query] laterThan,
             #[query] timeout
         );
-        self.client.get(&url).send().json().await
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 
     pub async fn get_payment(&self, payment_id: &str) -> Result<Payment> {
