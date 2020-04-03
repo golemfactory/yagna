@@ -1,8 +1,4 @@
-FROM ubuntu:16.04
-WORKDIR /src/
-RUN apt-get update && apt-get install -y curl gcc pkg-config libssl-dev
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
+FROM rust:1.42
 RUN cargo install cargo-deb
 COPY . .
 RUN cargo deb -p yagna
