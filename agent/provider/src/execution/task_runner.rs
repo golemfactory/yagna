@@ -2,13 +2,15 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use derive_more::Display;
 use log_derive::{logfn, logfn_inputs};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use ya_client::activity::ActivityProviderApi;
+use ya_core_model::activity;
 use ya_model::activity::ProviderEvent;
+use ya_model::market::Agreement;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
@@ -17,6 +19,7 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
+use std::fs::create_dir_all;
 
 // =========================================== //
 // Public exposed messages
@@ -122,7 +125,7 @@ pub struct TaskRunner {
     /// Spawned tasks.
     tasks: Vec<Task>,
     /// Agreements, that wait for CreateActivity event.
-    active_agreements: HashSet<String>,
+    active_agreements: HashMap<String, Agreement>,
 
     /// External actors can listen on these signals.
     pub activity_created: SignalSlot<ActivityCreated>,
@@ -137,7 +140,7 @@ impl TaskRunner {
             api: Arc::new(client),
             registry: ExeUnitsRegistry::new(),
             tasks: vec![],
-            active_agreements: HashSet::new(),
+            active_agreements: HashMap::new(),
             activity_created: SignalSlot::<ActivityCreated>::new(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
             config: Arc::new(TaskRunnerConfig::default()),
@@ -219,9 +222,10 @@ impl TaskRunner {
     #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
     #[logfn(ok = "INFO", err = "ERROR", fmt = "Activity created: {:?}")]
     fn on_create_activity(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Result<()> {
-        if !self.active_agreements.contains(&msg.agreement_id) {
-            bail!("Can't create activity for not my agreement [{:?}].", msg);
-        }
+        let agreement = match self.active_agreements.get(&msg.agreement_id) {
+            None => bail!("Can't create activity for not my agreement [{:?}].", msg),
+            Some(agreement) => agreement,
+        };
 
         // TODO: Get ExeUnit name from agreement.
         let exeunit_name = "wasmtime";
@@ -319,7 +323,8 @@ impl TaskRunner {
     ) -> Result<()> {
         // Agreement waits for first create activity.
         // FIXME: clean-up agreements upon TTL or maybe payments
-        self.active_agreements.insert(msg.agreement.agreement_id);
+        let agreement_id = msg.agreement.agreement_id.clone();
+        self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
     }
 
@@ -331,9 +336,61 @@ impl TaskRunner {
         activity_id: &str,
         agreement_id: &str,
     ) -> Result<Task> {
+        let current_dir = std::env::current_dir()?;
+        let working_dir = current_dir
+            .join("exe-unit")
+            .join("work")
+            .join(agreement_id)
+            .join(activity_id);
+
+        let cache_dir = current_dir.join("exe-unit").join("cache");
+
+        create_dir_all(&working_dir).map_err(|error| {
+            anyhow!(
+                "Can't create working directory [{}] for activity [{}]. Error: {}",
+                working_dir.display(),
+                activity_id,
+                error
+            )
+        })?;
+
+        create_dir_all(&cache_dir).map_err(|error| {
+            anyhow!(
+                "Can't create cache directory [{}]. Error: {}",
+                cache_dir.display(),
+                error
+            )
+        })?;
+
+        let agreement_path = working_dir
+            .parent()
+            .unwrap() // Parent must exist, since we built this path.
+            .join("agreement.json");
+
+        // Try convert to str to check if won't fail. If not we can than
+        // unwrap() cache_dir, working_dir and agreement_path.
+        current_dir.to_str().ok_or(anyhow!(
+            "Current dir [{}] contains invalid characters.",
+            current_dir.display()
+        ))?;
+
+        // TODO: Still fake agreement.
+        std::fs::copy("exe-unit/agreement.json", &agreement_path)?;
+
+        let mut args = vec![];
+        args.extend(["-c", cache_dir.to_str().unwrap()].iter());
+        args.extend(["-w", working_dir.to_str().unwrap()].iter());
+        args.extend(["-a", agreement_path.to_str().unwrap()].iter());
+
+        args.push("service-bus");
+        args.push(activity_id);
+        args.push(activity::local::BUS_ID);
+
+        let args = args.iter().map(ToString::to_string).collect();
+
         let exeunit_instance = self
             .registry
-            .spawn_exeunit(exeunit_name, activity_id, agreement_id)
+            .spawn_exeunit(exeunit_name, args, &working_dir)
             .map_err(|error| {
                 anyhow!(
                     "Spawning ExeUnit failed for agreement [{}] with error: {}",
@@ -361,6 +418,17 @@ impl TaskRunner {
         Ok(self.activity_destroyed.on_subscribe(msg))
     }
 }
+
+// fn task_package_from(agreement: Agreement) -> Result<String> {
+//     let props = agreement.demand.properties;
+//     let runtime_key_str = "golem.runtime.";
+//     let _ = props.as_object()
+//         .ok_or(anyhow!("Agreement properties has unexpected format."))?
+//         .iter()
+//         .find(|(key, value)| { key.starts_with(runtime_key_str) })
+//         .ok_or(anyhow!("Can't find key '{}'.", runtime_key_str))?
+//
+// }
 
 // =========================================== //
 // Actix stuff

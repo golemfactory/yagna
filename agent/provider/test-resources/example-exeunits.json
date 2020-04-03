@@ -1,12 +1,12 @@
 [
   {
     "name": "dummy",
-    "path": "dummy.exe",
-    "args": ["help"]
+    "supervisor-path": "dummy.exe",
+    "runtime-path": ""
   },
   {
     "name": "wasm",
-    "path": "wasm.exe",
-    "args": []
+    "supervisor-path": "wasm.exe",
+    "runtime-path": ""
   }
 ]

@@ -8,18 +8,23 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ya_core_model::activity;
-
 use super::exeunit_instance::ExeUnitInstance;
-//use ya_model::market::Agreement;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
 pub struct ExeUnitDesc {
     name: String,
-    path: PathBuf,
-    args: Vec<String>,
+    supervisor_path: PathBuf,
+    runtime_path: PathBuf,
+
     // Here other capabilities and exe units metadata.
+    #[serde(default = "default_description")]
+    description: String,
+}
+
+fn default_description() -> String {
+    "No description provided.".to_string()
 }
 
 /// Responsible for creating ExeUnits.
@@ -38,26 +43,73 @@ impl ExeUnitsRegistry {
     pub fn spawn_exeunit(
         &self,
         name: &str,
-        activity_id: &str,
-        _agreement_id: &str,
+        args: Vec<String>,
+        working_dir: &Path,
     ) -> Result<ExeUnitInstance> {
-        // TODO: We should create separate directory for each execution of ExeUnit.
-        let working_dir = std::env::current_dir()?;
         let exeunit_desc = self.find_exeunit(name)?;
-        let mut args = exeunit_desc.args.clone();
-        // TODO: pass also agreement or its part with task_package
-        args.push(activity_id.into());
-        args.push(activity::local::BUS_ID.into());
-        ExeUnitInstance::new(name, &exeunit_desc.path, &working_dir, &args)
+
+        // Add to arguments path to runtime, which should be spawned
+        // by supervisor as subprocess.
+
+        // TODO: I'm not sure, if we should do it. Supervisor don't have to use
+        //       runtime path at all. This path can be invalid and execution could
+        //       be still correct. But as long as there's only one runtime, better
+        //       handle this here.
+        let runtime_path = exeunit_desc
+            .runtime_path
+            .to_str()
+            .ok_or(anyhow!(
+                "ExeUnit runtime path [{}] contains invalid characters.",
+                &exeunit_desc.runtime_path.display()
+            ))?
+            .to_string();
+
+        let mut extended_args = vec!["-b".to_owned(), runtime_path];
+
+        // Add arguments from front. ExeUnit api requires positional
+        // arguments, so ExeUnit can add only non-positional args.
+        extended_args.extend(args);
+
+        ExeUnitInstance::new(name, &exeunit_desc.supervisor_path, &working_dir, &extended_args)
     }
 
-    pub fn register_exeunit(&mut self, desc: ExeUnitDesc) {
+    pub fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
+        let current_dir = std::env::current_dir()?;
+
+        if !desc.supervisor_path.is_absolute() {
+            let path = current_dir.join(&desc.supervisor_path);
+            desc.supervisor_path = path
+                .canonicalize()
+                .map_err(|error| {
+                    anyhow!(
+                    "Failed to canonicalize supervisor path [{}]. Error: {}",
+                    &path.display(),
+                    error
+                )
+                })?;
+        }
+
+        if !desc.runtime_path.is_absolute() {
+            let path = current_dir.join(&desc.runtime_path);
+            desc.runtime_path = path
+                .canonicalize()
+                .map_err(|error| {
+                    anyhow!(
+                    "Failed to canonicalize runtime path [{}]. Error: {}",
+                    &path.display(),
+                    error
+                )
+                })?;
+        }
+
         info!(
-            "Added [{}] ExeUnit to registry. Binary path: [{}].",
+            "Added [{}] ExeUnit to registry. Supervisor path: [{}], Runtime path: [{}].",
             desc.name,
-            desc.path.display()
+            desc.supervisor_path.display(),
+            desc.runtime_path.display()
         );
         self.descriptors.insert(desc.name.clone(), desc);
+        Ok(())
     }
 
     pub fn register_exeunits_from_file(&mut self, path: &Path) -> Result<()> {
@@ -79,7 +131,8 @@ impl ExeUnitsRegistry {
         })?;
 
         for desc in descs.into_iter() {
-            self.register_exeunit(desc);
+            // TODO: We could add only descriptors, that didn't fail and log warning.
+            self.register_exeunit(desc)?
         }
         Ok(())
     }
@@ -110,11 +163,11 @@ mod tests {
 
         let dummy_desc = registry.find_exeunit("dummy").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "dummy");
-        assert_eq!(dummy_desc.path.to_str().unwrap(), "dummy.exe");
+        assert_eq!(dummy_desc.supervisor_path.to_str().unwrap(), "dummy.exe");
 
         let dummy_desc = registry.find_exeunit("wasm").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasm");
-        assert_eq!(dummy_desc.path.to_str().unwrap(), "wasm.exe");
+        assert_eq!(dummy_desc.supervisor_path.to_str().unwrap(), "wasm.exe");
     }
 
     #[test]
@@ -129,7 +182,7 @@ mod tests {
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
         assert_eq!(
-            dummy_desc.path.to_str().unwrap(),
+            dummy_desc.supervisor_path.to_str().unwrap(),
             "../target/debug/exe-unit"
         );
     }
@@ -146,7 +199,7 @@ mod tests {
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
         assert_eq!(
-            dummy_desc.path.to_str().unwrap(),
+            dummy_desc.supervisor_path.to_str().unwrap(),
             "/usr/lib/yagna/plugins/exe-unit"
         );
     }
