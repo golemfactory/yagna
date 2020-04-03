@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
@@ -39,29 +39,13 @@ impl ProviderAgent {
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();
 
-        let exe_unit_path = format!(
-            "{}/example-exeunits.json",
-            match config.exe_unit_path.is_none() {
-                true => {
-                    let global_path_linux = "/usr/lib/yagna/plugins";
-                    if cfg!(target_os = "linux") && Path::new(global_path_linux).exists() {
-                        global_path_linux.into()
-                    } else {
-                        "exe-unit".into()
-                    }
-                }
-                false => config.exe_unit_path.unwrap(),
-            }
-        );
-        log::debug!("Exe unit configuration path: {}", exe_unit_path);
-
         let mut provider = ProviderAgent {
             market,
             runner,
             payments,
             node_info,
             service_info,
-            exe_unit_path,
+            exe_unit_path: config.exe_unit_path,
         };
         provider.initialize().await?;
 
@@ -84,12 +68,8 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         // Load ExeUnits descriptors from file.
-        // TODO: Hardcoded exeunits file. How should we handle this in future?
-        let exeunits_file = PathBuf::from(
-            self.exe_unit_path.clone(), /*"exe-unit/example-exeunits.json"*/
-        );
         let msg = InitializeExeUnits {
-            file: exeunits_file,
+            file: PathBuf::from(&self.exe_unit_path),
         };
         self.runner.send(msg).await??;
 

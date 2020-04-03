@@ -274,11 +274,15 @@ impl TaskRunner {
 
         // Remove task from list and destroy everything related with it.
         let task = self.tasks.swap_remove(task_position);
-        let config = self.config.clone();
+        let termination_timeout = self.config.process_termination_timeout;
 
         Arbiter::spawn(async move {
-            if let Err(error) = task.exeunit.terminate(config.process_termination_timeout).await {
-                log::warn!("Could not terminate ExeUnit for activity: [{}]. Error: {}", msg.activity_id, error);
+            if let Err(error) = task.exeunit.terminate(termination_timeout).await {
+                log::warn!(
+                    "Could not terminate ExeUnit for activity: [{}]. Error: {}",
+                    msg.activity_id,
+                    error
+                );
                 task.exeunit.kill();
             }
 
