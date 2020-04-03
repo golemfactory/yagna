@@ -13,10 +13,11 @@ pub struct LinearPricing {
 
 impl PaymentModel for LinearPricing {
     fn compute_cost(&self, usage: &Vec<f64>) -> Result<BigDecimal> {
-        // Note: first element of usage_coeffs contains constant initial cost
+        // Note: last element of usage_coeffs contains constant initial cost
         // of computing task, so we don't multiply it.
-        let cost: f64 = self.usage_coeffs[0]
-            + self.usage_coeffs[1..]
+        let const_coeff_idx = self.usage_coeffs.len() - 1;
+        let cost: f64 = self.usage_coeffs[const_coeff_idx]
+            + self.usage_coeffs[0..const_coeff_idx]
                 .iter()
                 .zip(usage.iter())
                 .map(|(coeff, usage_value)| coeff * usage_value)
@@ -45,6 +46,7 @@ impl LinearPricing {
 
 /// Helper for building offer.
 pub struct LinearPricingOffer {
+    initial_cost: f64,
     usage_coeffs: Vec<f64>,
     usage_params: Vec<String>,
     interval: f64,
@@ -54,9 +56,10 @@ impl LinearPricingOffer {
     pub fn new() -> LinearPricingOffer {
         // Initialize first constant coefficient to 0.
         LinearPricingOffer {
-            usage_coeffs: vec![0.0],
+            usage_coeffs: vec![],
             usage_params: vec![],
             interval: 6.0,
+            initial_cost: 0.0,
         }
     }
 
@@ -68,7 +71,7 @@ impl LinearPricingOffer {
 
     /// Adds constant cost paid no matter how many resources computations will consume.
     pub fn initial_cost(&mut self, value: f64) -> &mut LinearPricingOffer {
-        self.usage_coeffs[0] = value;
+        self.initial_cost = value;
         return self;
     }
 
@@ -78,6 +81,9 @@ impl LinearPricingOffer {
     }
 
     pub fn build(&self) -> ComInfo {
+        let mut coeffs = self.usage_coeffs.clone();
+        coeffs.push(self.initial_cost);
+
         let params = json!({
             "scheme": "payu".to_string(),
             "scheme.payu": json!({
@@ -86,7 +92,7 @@ impl LinearPricingOffer {
             "pricing": json!({
                 "model": "linear".to_string(),
                 "model.linear": json!({
-                    "coeffs": self.usage_coeffs.clone()
+                    "coeffs": coeffs
                 })
             }),
             "usage": json!({
