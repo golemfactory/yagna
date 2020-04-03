@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use anyhow::{Error, Result};
+use derive_more::Display;
 use futures::future::join_all;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -17,7 +18,6 @@ use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 
 // Temporrary
-use serde::export::Formatter;
 use ya_agent_offer_model::OfferDefinition;
 
 // =========================================== //
@@ -90,7 +90,7 @@ impl GotAgreement {
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct AgreementApproved {
-    pub agreement_id: String,
+    pub agreement: Agreement,
 }
 
 // =========================================== //
@@ -98,6 +98,9 @@ pub struct AgreementApproved {
 // =========================================== //
 
 /// Manages market api communication and forwards proposal to implementation of market strategy.
+// Outputing empty string for logfn macro purposes
+#[derive(Display)]
+#[display(fmt = "")]
 pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
     market_api: Arc<MarketProviderApi>,
@@ -105,13 +108,6 @@ pub struct ProviderMarket {
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<AgreementApproved>,
-}
-
-// outputing empty string for logfn macro purposes
-impl std::fmt::Display for ProviderMarket {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "")
-    }
 }
 
 impl ProviderMarket {
@@ -143,8 +139,17 @@ impl ProviderMarket {
         Ok(())
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Subscribed offer: {:?}")]
-    fn on_offer_subscribed(&mut self, msg: OfferSubscription) -> Result<()> {
+    #[logfn_inputs(Trace, fmt = "{}Subscribed offer: {:?} {:?}")]
+    fn on_offer_subscribed(
+        &mut self,
+        msg: OfferSubscription,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        log::info!(
+            "Subscribed offer. Subscription id [{}].",
+            &msg.subscription_id
+        );
+
         self.offer_subscriptions
             .insert(msg.subscription_id.clone(), msg);
         Ok(())
@@ -201,7 +206,15 @@ impl ProviderMarket {
         market_api: Arc<MarketProviderApi>,
         subscription: OfferSubscription,
     ) {
-        log::info!("Collected {} market events. Processing...", events.len());
+        if events.len() == 0 {
+            return;
+        };
+
+        log::debug!(
+            "Collected {} market events for subscription [{}]. Processing...",
+            events.len(),
+            &subscription.subscription_id
+        );
 
         let dispatch_futures = events
             .iter()
@@ -310,7 +323,7 @@ impl ProviderMarket {
                     // We negotiated agreement and here responsibility of ProviderMarket ends.
                     // Notify outside world about agreement for further processing.
                     let message = AgreementApproved {
-                        agreement_id: agreement.agreement_id.to_string(),
+                        agreement: agreement.clone(),
                     };
 
                     let _ = addr.send(message).await?;
@@ -332,24 +345,49 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
-    #[logfn(Debug, fmt = "decided to: {:?}")]
-    fn on_proposal(&mut self, msg: GotProposal) -> Result<ProposalResponse> {
+    #[logfn(Info, fmt = "decided to: {:?}")]
+    fn on_proposal(
+        &mut self,
+        msg: GotProposal,
+        _ctx: &mut Context<Self>,
+    ) -> Result<ProposalResponse> {
+        log::debug!(
+            "Got proposal event {:?} with state {:?}",
+            msg.proposal.proposal_id,
+            msg.proposal.state
+        );
+
         self.negotiator
             .react_to_proposal(&msg.subscription.offer, &msg.proposal)
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Processing {:?}")]
-    #[logfn(Debug, fmt = "decided to: {:?}")]
-    fn on_agreement(&mut self, msg: GotAgreement) -> Result<AgreementResponse> {
+    #[logfn(Info, fmt = "decided to: {:?}")]
+    fn on_agreement(
+        &mut self,
+        msg: GotAgreement,
+        _ctx: &mut Context<Self>,
+    ) -> Result<AgreementResponse> {
+        log::debug!(
+            "Got agreement event {:?} with state {:?}",
+            msg.agreement.agreement_id,
+            msg.agreement.state
+        );
         self.negotiator.react_to_agreement(&msg.agreement)
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Got {:?}")]
-    fn on_agreement_approved(&mut self, msg: AgreementApproved) -> Result<()> {
+    fn on_agreement_approved(
+        &mut self,
+        msg: AgreementApproved,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        log::info!(
+            "Got approved agreement {:?} with state {:?}",
+            msg.agreement.agreement_id,
+            msg.agreement.state
+        );
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(AgreementApproved {
-            agreement_id: msg.agreement_id,
+            agreement: msg.agreement,
         })
     }
 
@@ -357,7 +395,11 @@ impl ProviderMarket {
     // Market internals - event subscription
     // =========================================== //
 
-    pub fn on_subscribe(&mut self, msg: Subscribe<AgreementApproved>) -> Result<()> {
+    pub fn on_subscribe(
+        &mut self,
+        msg: Subscribe<AgreementApproved>,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
         self.agreement_signed_signal.on_subscribe(msg);
         Ok(())
     }
