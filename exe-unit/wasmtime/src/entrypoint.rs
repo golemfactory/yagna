@@ -202,9 +202,15 @@ mod tests {
     #[test]
     fn test_path_validation() {
         assert_eq!(validate_path(&PathBuf::from("/path/path")).is_err(), true);
-        assert_eq!(validate_path(&PathBuf::from("path/path/path")).is_err(), false);
+        assert_eq!(
+            validate_path(&PathBuf::from("path/path/path")).is_err(),
+            false
+        );
         assert_eq!(validate_path(&PathBuf::from("path/../path")).is_err(), true);
-        assert_eq!(validate_path(&PathBuf::from("./path/../path")).is_err(), true);
+        assert_eq!(
+            validate_path(&PathBuf::from("./path/../path")).is_err(),
+            true
+        );
         assert_eq!(validate_path(&PathBuf::from("./path/path")).is_err(), true);
     }
 }
