@@ -103,7 +103,11 @@ impl WebClient {
 }
 
 impl WebRequest<ClientRequest> {
-    pub fn send_json<T: Serialize>(self, value: &T) -> WebRequest<SendClientRequest> {
+    pub fn send_json<T: Serialize + std::fmt::Debug>(
+        self,
+        value: &T,
+    ) -> WebRequest<SendClientRequest> {
+        log::trace!("sending payload: {:?}", value);
         WebRequest {
             inner_request: self.inner_request.send_json(value),
             url: self.url,
@@ -158,6 +162,18 @@ impl WebRequest<SendClientRequest> {
         }
 
         Ok(response.json().await?)
+    }
+}
+
+// this is used internally to translate from HTTP Timeout into default result
+// (empty vec most of tht time)
+pub(crate) fn default_on_timeout<T: Default>(err: Error) -> Result<T> {
+    match err {
+        Error::TimeoutError { msg, url, .. } => {
+            log::trace!("timeout getting url {}: {}", url, msg);
+            Ok(Default::default())
+        }
+        _ => Err(err),
     }
 }
 

@@ -2,6 +2,7 @@ use structopt::{clap, StructOpt};
 
 mod execution;
 mod market;
+mod payments;
 mod provider_agent;
 mod startup_config;
 

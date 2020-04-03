@@ -2,7 +2,7 @@ use chrono::{DateTime, TimeZone};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::{web::WebClient, Result};
+use crate::{web::WebClient, web::WebInterface, Result};
 use ya_model::payment::*;
 
 #[derive(Default)]
@@ -21,6 +21,16 @@ pub struct ProviderApi {
     config: ProviderApiConfig,
 }
 
+impl WebInterface for ProviderApi {
+    const API_URL_ENV_VAR: &'static str = crate::payment::PAYMENT_URL_ENV_VAR;
+    const API_SUFFIX: &'static str = PAYMENT_API_PATH;
+
+    fn from(client: WebClient) -> Self {
+        let config = ProviderApiConfig::default();
+        ProviderApi::new(&Arc::new(client), config)
+    }
+}
+
 impl ProviderApi {
     pub fn new(client: &Arc<WebClient>, config: ProviderApiConfig) -> Self {
         Self {
@@ -29,7 +39,7 @@ impl ProviderApi {
         }
     }
 
-    pub async fn issue_debit_note(&self, debit_note: &DebitNote) -> Result<DebitNote> {
+    pub async fn issue_debit_note(&self, debit_note: &NewDebitNote) -> Result<DebitNote> {
         self.client
             .post("provider/debitNotes")
             .send_json(debit_note)
@@ -56,7 +66,7 @@ impl ProviderApi {
 
     #[allow(non_snake_case)]
     #[rustfmt::skip]
-    pub async fn send_debit_note(&self, debit_note_id: &str) -> Result<String> {
+    pub async fn send_debit_note(&self, debit_note_id: &str) -> Result<()> {
         let timeout = self.config.send_debit_note_timeout;
         let url = url_format!(
             "provider/debitNotes/{debit_note_id}/send",
@@ -98,7 +108,7 @@ impl ProviderApi {
         self.client.get(&url).send().json().await
     }
 
-    pub async fn issue_invoice(&self, invoice: &Invoice) -> Result<Invoice> {
+    pub async fn issue_invoice(&self, invoice: &NewInvoice) -> Result<Invoice> {
         self.client
             .post("provider/invoices")
             .send_json(invoice)
@@ -122,7 +132,7 @@ impl ProviderApi {
 
     #[allow(non_snake_case)]
     #[rustfmt::skip]
-    pub async fn send_invoice(&self, invoice_id: &str) -> Result<String> {
+    pub async fn send_invoice(&self, invoice_id: &str) -> Result<()> {
         let timeout = self.config.send_invoice_timeout;
         let url = url_format!(
             "provider/invoices/{invoice_id}/send",
