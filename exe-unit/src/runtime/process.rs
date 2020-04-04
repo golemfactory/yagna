@@ -33,10 +33,21 @@ impl RuntimeProcess {
         let pkg_path = self
             .task_package_path
             .clone()
-            .ok_or(Error::RuntimeError("Task package path missing".to_owned()))?;
+            .ok_or(Error::RuntimeError("Task package path missing".to_owned()))?
+            .to_str()
+            .ok_or(Error::RuntimeError("Task package path non UTF8".to_owned()))?
+            .replace("\\\\?\\", "");
+        
+        let work_dir_path = self
+            .work_dir
+            .clone()
+            .to_str()
+            .ok_or(Error::RuntimeError("Task work dir non UTF8".to_owned()))?
+            .replace("\\\\?\\", "");
+
         let mut args = vec![
             OsString::from("--workdir"),
-            self.work_dir.clone().into_os_string(),
+            OsString::from(work_dir_path),
             OsString::from("--task-package"),
             OsString::from(pkg_path),
         ];

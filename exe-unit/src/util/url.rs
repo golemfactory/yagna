@@ -51,7 +51,12 @@ impl TransferUrl {
     {
         let scheme = self.url.scheme().to_owned();
         let new_scheme = f(&scheme);
-        self.url = { Url::parse(&self.url.as_str().replacen(&scheme, new_scheme, 1))? };
+        let replaced_url = &self.url
+            .as_str()
+            .replacen(&scheme, new_scheme, 1)
+            .replace("\\\\%3F", "");
+
+        self.url = { Url::parse(replaced_url)? };
         Ok(self)
     }
 

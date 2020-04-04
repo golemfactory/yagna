@@ -66,6 +66,9 @@ fn run() -> anyhow::Result<()> {
         cache_dir: create_path(&cli.cache_dir)?,
     };
 
+    log::debug!("CLI args: {:?}", cli);
+    log::debug!("ExeUnitContext args: {:?}", ctx);
+
     match cli.command {
         Command::FromFile { input } => {
             let contents = std::fs::read_to_string(&input)?;
