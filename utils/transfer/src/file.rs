@@ -14,8 +14,7 @@ pub struct FileTransferProvider;
 
 impl FileTransferProvider {
     fn sanitize_file_urls(url: &Url) -> String {
-        url
-            .as_str()
+        url.as_str()
             .replace("file:///?\\", "")
             .replace("file:///%3F/", "")
             .replace("file:///", "")

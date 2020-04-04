@@ -46,7 +46,7 @@ impl RuntimeProcess {
             .to_str()
             .ok_or(Error::RuntimeError("Task package path non UTF8".to_owned()))?
             .replace("\\\\?\\", "");
-        
+
         let work_dir_path = self
             .work_dir
             .clone()
