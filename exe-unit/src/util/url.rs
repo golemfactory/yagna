@@ -51,7 +51,8 @@ impl TransferUrl {
     {
         let scheme = self.url.scheme().to_owned();
         let new_scheme = f(&scheme);
-        let replaced_url = &self.url
+        let replaced_url = &self
+            .url
             .as_str()
             .replacen(&scheme, new_scheme, 1)
             .replace("\\\\%3F", "");

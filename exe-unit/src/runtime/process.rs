@@ -1,10 +1,8 @@
 use crate::error::Error;
 use crate::message::{ExecCmd, ExecCmdResult, SetTaskPackagePath, Shutdown};
 use crate::runtime::Runtime;
-use crate::util::Abort;
 use crate::ExeUnitContext;
 use actix::prelude::*;
-use futures::future::{AbortHandle, Abortable};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -12,11 +10,22 @@ use std::process::{Output, Stdio};
 use tokio::process::Command;
 use ya_model::activity::{CommandResult, ExeScriptCommand};
 
+const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
+const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
+const MIN_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 1;
+
+fn process_kill_timeout_seconds() -> i64 {
+    let limit = std::env::var(PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR)
+        .and_then(|v| v.parse().map_err(|_| std::env::VarError::NotPresent))
+        .unwrap_or(DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS);
+    std::cmp::max(limit, MIN_PROCESS_KILL_TIMEOUT_SECONDS)
+}
+
 pub struct RuntimeProcess {
     binary: PathBuf,
     work_dir: PathBuf,
     task_package_path: Option<PathBuf>,
-    abort_handles: HashSet<Abort>,
+    children: HashSet<u32>,
 }
 
 impl RuntimeProcess {
@@ -25,7 +34,7 @@ impl RuntimeProcess {
             binary,
             work_dir: ctx.work_dir.clone(),
             task_package_path: None,
-            abort_handles: HashSet::new(),
+            children: HashSet::new(),
         }
     }
 
@@ -37,7 +46,7 @@ impl RuntimeProcess {
             .to_str()
             .ok_or(Error::RuntimeError("Task package path non UTF8".to_owned()))?
             .replace("\\\\?\\", "");
-        
+
         let work_dir_path = self
             .work_dir
             .clone()
@@ -72,11 +81,11 @@ impl Actor for RuntimeProcess {
 
 #[derive(Debug, Message)]
 #[rtype("()")]
-struct AddChildHandle(Abort);
+struct AddChild(u32);
 
 #[derive(Debug, Message)]
 #[rtype("()")]
-struct RemoveChildHandle(Abort);
+struct RemoveChild(u32);
 
 impl Handler<ExecCmd> for RuntimeProcess {
     type Result = ActorResponse<Self, ExecCmdResult, Error>;
@@ -115,14 +124,12 @@ impl Handler<ExecCmd> for RuntimeProcess {
                         .stdout(Stdio::piped())
                         .stderr(Stdio::piped())
                         .spawn()?;
+                    let pid = child.id();
 
-                    let (handle, reg) = AbortHandle::new_pair();
-                    let abort = Abort::from(handle);
-                    address.do_send(AddChildHandle(abort.clone()));
-                    let result = Abortable::new(child.wait_with_output(), reg).await;
-                    address.do_send(RemoveChildHandle(abort));
-                    let output =
-                        result.map_err(|_| Error::CommandError("aborted".to_owned()))??;
+                    address.do_send(AddChild(pid));
+                    let result = child.wait_with_output().await;
+                    address.do_send(RemoveChild(pid));
+                    let output = result?;
 
                     Ok(ExecCmdResult {
                         result: output_to_result(&output),
@@ -154,31 +161,34 @@ impl Handler<SetTaskPackagePath> for RuntimeProcess {
     }
 }
 
-impl Handler<AddChildHandle> for RuntimeProcess {
-    type Result = <AddChildHandle as Message>::Result;
+impl Handler<AddChild> for RuntimeProcess {
+    type Result = <AddChild as Message>::Result;
 
-    fn handle(&mut self, msg: AddChildHandle, _: &mut Self::Context) -> Self::Result {
-        self.abort_handles.insert(msg.0);
+    fn handle(&mut self, msg: AddChild, _: &mut Self::Context) -> Self::Result {
+        self.children.insert(msg.0);
     }
 }
 
-impl Handler<RemoveChildHandle> for RuntimeProcess {
-    type Result = <RemoveChildHandle as Message>::Result;
+impl Handler<RemoveChild> for RuntimeProcess {
+    type Result = <RemoveChild as Message>::Result;
 
-    fn handle(&mut self, msg: RemoveChildHandle, _: &mut Self::Context) -> Self::Result {
-        self.abort_handles.remove(&msg.0);
+    fn handle(&mut self, msg: RemoveChild, _: &mut Self::Context) -> Self::Result {
+        self.children.remove(&msg.0);
     }
 }
 
 impl Handler<Shutdown> for RuntimeProcess {
-    type Result = <Shutdown as Message>::Result;
+    type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
-        for handle in std::mem::replace(&mut self.abort_handles, HashSet::new()).into_iter() {
-            handle.abort();
-        }
-        ctx.stop();
-        Ok(())
+    fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
+        let children = std::mem::replace(&mut self.children, HashSet::new());
+        let timeout = process_kill_timeout_seconds();
+        let fut = async move {
+            futures::future::join_all(children.into_iter().map(|p| kill_pid(p, timeout))).await;
+            Ok(())
+        };
+
+        ActorResponse::r#async(fut.into_actor(self))
     }
 }
 
@@ -199,5 +209,57 @@ fn vec_to_string(vec: Vec<u8>) -> String {
             .into_iter()
             .map(|&c| c as char)
             .collect::<String>(),
+    }
+}
+
+#[cfg(windows)]
+async fn kill_pid(_: u32, _: i64) {
+    // FIXME: implement for win32
+    unimplemented!()
+}
+
+#[cfg(not(windows))]
+async fn kill_pid(pid: u32, timeout: i64) {
+    use chrono::Local;
+    use nix::sys::signal;
+    use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
+    use nix::unistd::Pid;
+    use std::time::Duration;
+
+    fn alive(pid: Pid) -> bool {
+        match waitpid(pid, Some(WaitPidFlag::WNOHANG)) {
+            Ok(status) => match status {
+                WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
+                _ => true,
+            },
+            _ => false,
+        }
+    }
+
+    let pid = Pid::from_raw(pid as i32);
+    let delay = Duration::from_secs_f32(timeout as f32 / 10.);
+    let started = Local::now().timestamp();
+
+    if let Ok(_) = signal::kill(pid, signal::Signal::SIGTERM) {
+        log::info!("Sent SIGTERM to process {:?}", pid);
+
+        loop {
+            let elapsed = Local::now().timestamp() >= started + timeout as i64;
+            match alive(pid) {
+                true => {
+                    if elapsed {
+                        log::info!("Sending SIGKILL to process {:?}", pid);
+                        if let Ok(_) = signal::kill(pid, signal::Signal::SIGKILL) {
+                            let _ = waitpid(pid, None);
+                        }
+                    }
+                }
+                _ => break,
+            }
+            match elapsed {
+                true => break,
+                _ => tokio::time::delay_for(delay).await,
+            }
+        }
     }
 }
