@@ -1359,6 +1359,17 @@ dependencies = [
 
 [[package]]
 name = "errno"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e2b2decb0484e15560df3210cf0d78654bb0864b2c138977c07e377a1bae0e2"
+dependencies = [
+ "kernel32-sys",
+ "libc",
+ "winapi 0.2.8",
+]
+
+[[package]]
+name = "errno"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a071601ed01b988f896ab14b95e67335d1eeb50190932a1320f7fe3cadc84e"
@@ -2274,6 +2285,16 @@ name = "libc"
 version = "0.2.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dea0c0405123bba743ee3f91f49b1c7cfb684eef0da0a50110f758ccf24cdff0"
+
+[[package]]
+name = "libproc"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b220bc8e4907c8b851ca767e0f9d10c75d1391a5bf0a5603fc9f94eae36598a"
+dependencies = [
+ "errno 0.1.8",
+ "libc",
+]
 
 [[package]]
 name = "libsqlite3-sys"
@@ -5066,7 +5087,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-wasm",
  "directories",
- "errno",
+ "errno 0.2.4",
  "file-per-thread-logger",
  "indexmap",
  "lazy_static",
@@ -5458,6 +5479,7 @@ dependencies = [
  "futures 0.3.4",
  "hex",
  "lazy_static",
+ "libproc",
  "log 0.4.8",
  "nix 0.17.0",
  "pretty_env_logger",

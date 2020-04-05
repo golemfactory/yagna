@@ -13,7 +13,8 @@ name = "exe-unit"
 path = "src/bin.rs"
 
 [target.'cfg(not(windows))'.dependencies]
-nix = { version = "0.17.0" }
+nix = "0.17.0"
+libproc = "0.7.1"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.8", features = ["jobapi2"] }
