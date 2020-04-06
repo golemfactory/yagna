@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail, Error, Result};
 use derive_more::Display;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::ExeUnitsRegistry;
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, File};
 
 // =========================================== //
 // Public exposed messages
@@ -374,8 +374,7 @@ impl TaskRunner {
             current_dir.display()
         ))?;
 
-        // TODO: Still fake agreement.
-        std::fs::copy("exe-unit/agreement.json", &agreement_path)?;
+        self.save_agreement(&agreement_path, &agreement_id)?;
 
         let mut args = vec![];
         args.extend(["-c", cache_dir.to_str().unwrap()].iter());
@@ -400,6 +399,18 @@ impl TaskRunner {
             })?;
 
         Ok(Task::new(exeunit_instance, agreement_id, activity_id))
+    }
+
+    fn save_agreement(&self, agreement_path: &Path, agreement_id: &str) -> Result<()> {
+        let agreement = self.active_agreements.get(agreement_id)
+            .ok_or(anyhow!("Can't find agreement [{}].", agreement_id))?;
+
+        let agreement_file = File::create(&agreement_path)
+            .map_err(|error| anyhow!("Can't create agreement file [{}]. Error: {}", &agreement_path.display(), error))?;
+
+        serde_json::to_writer_pretty(&agreement_file, &agreement)
+            .map_err(|error| anyhow!("Failed to serialize agreement [{}]. Error: {}", agreement_id, error))?;
+        Ok(())
     }
 
     pub fn on_subscribe_activity_created(
