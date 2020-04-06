@@ -49,7 +49,7 @@ impl TryFrom<Value> for Agreement {
             .as_typed(Value::as_str)?
             .to_owned();
         let usage_vector = value
-            .pointer("/demand/properties/golem/com/usage/vector")
+            .pointer("/offer/properties/golem/com/usage/vector")
             .as_typed_array(|v| v.as_str().map(|s| s.to_owned()))?;
 
         let limits = vec![(
