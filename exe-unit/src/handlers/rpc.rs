@@ -5,6 +5,7 @@ use crate::ExeUnit;
 use actix::prelude::*;
 use chrono::Utc;
 use std::time::Duration;
+use tokio::time::timeout;
 use ya_core_model::activity::*;
 use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_service_bus::RpcEnvelope;
@@ -105,17 +106,17 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         if let Err(err) = self.ctx.verify_activity_id(&msg.activity_id) {
             return ActorResponse::reply(Err(err.into()));
         }
+
         if msg.command_index.is_some() && msg.timeout.is_none() {
-            return ActorResponse::reply(Err(RpcMessageError::BadRequest(
-                "timeout required".to_owned(),
-            )));
+            let err = Err(RpcMessageError::BadRequest("Timeout required".to_owned()));
+            return ActorResponse::reply(err);
         }
 
         let address = ctx.address();
-        let last_idx = match self.state.batches.get(&msg.batch_id) {
+        let idx = match self.state.batches.get(&msg.batch_id) {
             Some(exec) => match exec.exe_script.len() {
                 0 => return ActorResponse::reply(Ok(Vec::new())),
-                len => len - 1,
+                len => msg.command_index.unwrap_or(len - 1),
             },
             None => {
                 let err = RpcMessageError::NotFound(format!("batch_id = {}", msg.batch_id));
@@ -123,25 +124,24 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
             }
         };
 
-        let idx = msg.command_index.unwrap_or(last_idx) as usize;
         let notifier = self.state.notifier(&msg.batch_id).clone();
-
         let fut = async move {
             match msg.timeout {
-                Some(timeout) => {
-                    let d = Duration::from_secs_f64(timeout as f64);
-                    match tokio::time::timeout(d, notifier.when(move |i| i >= idx)).await {
-                        Ok(_) => {
-                            let results = address.send(GetBatchResults(msg.batch_id.clone())).await;
-                            Ok(results
-                                .map(|mut m| {
-                                    m.0.truncate(idx + 1);
-                                    m.0
-                                })
-                                .unwrap_or(Vec::new()))
-                        }
-                        _ => Err(RpcMessageError::Timeout),
+                Some(t) => {
+                    let dur = Duration::from_secs_f64(t as f64);
+                    if let Err(_) = timeout(dur, notifier.when(move |i| i >= idx)).await {
+                        return Err(RpcMessageError::Timeout);
                     }
+
+                    let results = address
+                        .send(GetBatchResults(msg.batch_id.clone()))
+                        .await
+                        .map(|mut m| {
+                            m.0.truncate(idx + 1);
+                            m.0
+                        })
+                        .unwrap_or(Vec::new());
+                    Ok(results)
                 }
                 None => match address.send(GetBatchResults(msg.batch_id.clone())).await {
                     Ok(results) => Ok(results.0),

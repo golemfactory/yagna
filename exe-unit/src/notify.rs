@@ -60,16 +60,15 @@ impl<T: Clone + Eq + Unpin> Future for Notify<T> {
 
     #[inline]
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let inner = {
+        let new_state = {
             let state = self.state.lock().unwrap();
-            if self.last != state.inner {
-                state.inner.clone()
-            } else {
-                None
+            match state.inner == self.last {
+                true => None,
+                _ => state.inner.clone(),
             }
         };
 
-        if let Some(t) = inner {
+        if let Some(t) = new_state {
             self.as_mut().last.replace(t.clone());
             if self.when.as_ref().map(|f| f(t)).unwrap_or(true) {
                 return Poll::Ready(self.to_owned());
