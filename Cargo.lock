@@ -5457,6 +5457,7 @@ dependencies = [
  "winapi 0.3.8",
  "ya-core-model",
  "ya-model",
+ "ya-sb-router",
  "ya-service-bus",
  "ya-transfer",
 ]

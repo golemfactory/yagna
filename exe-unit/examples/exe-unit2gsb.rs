@@ -18,28 +18,29 @@ const ACTIVITY_ID: &str = "0x07";
 
 #[derive(StructOpt, Debug)]
 pub struct Cli {
-    /// Agreement file path
-    #[structopt(long, short)]
-    pub agreement: PathBuf,
-    /// Working directory
-    #[structopt(long, short)]
-    pub work_dir: PathBuf,
-    /// Common cache directory
-    #[structopt(long, short)]
-    pub cache_dir: PathBuf,
     /// Supervisor binary
-    #[structopt(long)]
+    #[structopt(long, default_value = "target/debug/exe-unit")]
     pub supervisor: PathBuf,
     /// Runtime binary
-    #[structopt(long)]
+    #[structopt(long, default_value = "target/debug/wasmtime-exeunit")]
     pub runtime: PathBuf,
-    #[structopt(long)]
+    /// Agreement file path
+    #[structopt(long, short, default_value = "exe-unit/examples/agreement.json")]
+    pub agreement: PathBuf,
+    /// Working directory
+    #[structopt(long, short, default_value = ".")]
+    pub work_dir: PathBuf,
+    /// Common cache directory
+    #[structopt(long, short, default_value = ".")]
+    pub cache_dir: PathBuf,
+    /// Exe script to run
+    #[structopt(long, default_value = "exe-unit/examples/commands.json")]
     pub script: PathBuf,
 }
 
-struct Activity;
+struct MockActivity;
 
-impl Actor for Activity {
+impl Actor for MockActivity {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -49,7 +50,7 @@ impl Actor for Activity {
     }
 }
 
-impl Handler<RpcEnvelope<SetState>> for Activity {
+impl Handler<RpcEnvelope<SetState>> for MockActivity {
     type Result = <RpcEnvelope<SetState> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<SetState>, _: &mut Self::Context) -> Self::Result {
@@ -58,7 +59,7 @@ impl Handler<RpcEnvelope<SetState>> for Activity {
     }
 }
 
-impl Handler<RpcEnvelope<SetUsage>> for Activity {
+impl Handler<RpcEnvelope<SetUsage>> for MockActivity {
     type Result = <RpcEnvelope<SetUsage> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<SetUsage>, _: &mut Self::Context) -> Self::Result {
@@ -71,13 +72,17 @@ impl Handler<RpcEnvelope<SetUsage>> for Activity {
 async fn main() -> anyhow::Result<()> {
     println!(
         r#"
+    This example allows to test ExeUnit supervisor with GSB.
+    It has two mock services: SetState and SetUsage bound to GSB.
+    ExeUnit should periodically report to those two.
+
+    Example ends when all ExeScript commands are executed.
+    So it tests also Exec and GetExecBatchResults messages support by ExeUnit.
 
     >> YO! YAGNA DEV <<
 
     Before running this example you should also start:
       cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
-    and
-      cargo run --example ya_sb_router -- -l 127.0.0.1:7464
     "#
     );
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
@@ -85,7 +90,9 @@ async fn main() -> anyhow::Result<()> {
 
     let args: Cli = Cli::from_args();
 
-    let activity = Activity {};
+    ya_sb_router::bind_gsb_router(None).await?;
+
+    let activity = MockActivity {};
     activity.start();
 
     let child_args = vec![
@@ -129,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
             })
             .await?;
 
-        log::info!("Command result {}: {:?}", i, results);
+        log::warn!("Command result {}: {:?}", i, results);
     }
 
     child.kill()?;
