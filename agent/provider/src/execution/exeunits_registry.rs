@@ -70,7 +70,12 @@ impl ExeUnitsRegistry {
         // arguments, so ExeUnit can add only non-positional args.
         extended_args.extend(args);
 
-        ExeUnitInstance::new(name, &exeunit_desc.supervisor_path, &working_dir, &extended_args)
+        ExeUnitInstance::new(
+            name,
+            &exeunit_desc.supervisor_path,
+            &working_dir,
+            &extended_args,
+        )
     }
 
     pub fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
@@ -78,28 +83,24 @@ impl ExeUnitsRegistry {
 
         if !desc.supervisor_path.is_absolute() {
             let path = current_dir.join(&desc.supervisor_path);
-            desc.supervisor_path = path
-                .canonicalize()
-                .map_err(|error| {
-                    anyhow!(
+            desc.supervisor_path = path.canonicalize().map_err(|error| {
+                anyhow!(
                     "Failed to canonicalize supervisor path [{}]. Error: {}",
                     &path.display(),
                     error
                 )
-                })?;
+            })?;
         }
 
         if !desc.runtime_path.is_absolute() {
             let path = current_dir.join(&desc.runtime_path);
-            desc.runtime_path = path
-                .canonicalize()
-                .map_err(|error| {
-                    anyhow!(
+            desc.runtime_path = path.canonicalize().map_err(|error| {
+                anyhow!(
                     "Failed to canonicalize runtime path [{}]. Error: {}",
                     &path.display(),
                     error
                 )
-                })?;
+            })?;
         }
 
         info!(
