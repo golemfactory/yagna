@@ -147,8 +147,9 @@ impl<R: Runtime> ExeUnit<R> {
                     );
                 }
 
-                let message = format!("Command interrupted: {}", error.to_string());
-                log::error!("{}", message);
+                log::error!("Command interrupted: {}", error.to_string());
+
+                let message = format!("Command interrupted: {:?}", ctx.cmd);
                 Self::shutdown(&addr, ShutdownReason::Error(message)).await;
                 break;
             }

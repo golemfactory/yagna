@@ -5668,6 +5668,7 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.4",
  "futures-util",
+ "libc",
  "log 0.4.8",
  "log-derive",
  "serde",
@@ -5681,6 +5682,7 @@ dependencies = [
  "ya-core-model",
  "ya-model",
  "ya-utils-actix",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -5895,6 +5897,20 @@ dependencies = [
  "anyhow",
  "futures 0.3.4",
  "log 0.4.8",
+]
+
+[[package]]
+name = "ya-utils-process"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "anyhow",
+ "derive_more 0.99.3",
+ "futures 0.3.4",
+ "futures-util",
+ "libc",
+ "shared_child",
+ "tokio 0.2.13",
 ]
 
 [[package]]
