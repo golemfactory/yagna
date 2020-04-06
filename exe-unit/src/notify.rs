@@ -33,7 +33,7 @@ impl<T: Clone + Eq> Notify<T> {
 impl<T: Clone + Eq> Default for Notify<T> {
     fn default() -> Self {
         Notify {
-            uid: 1,
+            uid: usize::max_value(),
             when: None,
             last: None,
             state: Arc::new(Mutex::new(NotifyState::default())),
