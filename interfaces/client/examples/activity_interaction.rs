@@ -9,7 +9,7 @@ use ya_model::activity::ExeScriptRequest;
 
 async fn provider(client: &ActivityProviderApi, activity_id: &str) -> Result<()> {
     println!("[?] Events for activity {}", activity_id);
-    let activity_events = client.get_activity_events(Some(60i32), None).await.unwrap();
+    let activity_events = client.get_activity_events(Some(60.), None).await.unwrap();
     println!("[<] Events: {:?}", activity_events);
 
     println!("[+] Activity state");
