@@ -1,5 +1,7 @@
 use anyhow::anyhow;
 use std::rc::Rc;
+use std::time::Duration;
+use tokio::time::delay_for;
 use url::Url;
 
 use ya_client::{
@@ -11,6 +13,9 @@ use ya_service_api_interfaces::Service;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use crate::Error;
+
+const KEY_EXPORT_RETRY_COUNT: u8 = 3;
+const KEY_EXPORT_RETRY_DELAY: Duration = Duration::from_secs(5);
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
@@ -62,15 +67,39 @@ async fn tmp_send_keys() -> anyhow::Result<()> {
     url.set_path("admin/import-key");
     log::debug!("posting to: {:?}", url);
 
-    let resp: serde_json::Value = awc::Client::new()
+    let request: awc::FrozenClientRequest = awc::Client::new()
         .post(url.to_string())
-        .send_json(&ids)
-        .await
-        .map_err(|e| anyhow!("posting to: {:?} error: {}", url, e.to_string()))?
-        .json()
-        .await
-        .map_err(|e| anyhow!("key export response decoding error: {}", e.to_string()))?;
-    log::info!("done. number of keys exported: {}", resp);
+        .freeze()
+        .map_err(|e| anyhow!("Failed to build frozen request. Error: {}", e.to_string()))?;
+
+    for count in 0..KEY_EXPORT_RETRY_COUNT {
+        match request.send_json(&ids).await {
+            Ok(mut response) => {
+                let parsed_response: serde_json::Value = response
+                    .json()
+                    .await
+                    .map_err(|e| anyhow!("Failed to parse key export response. Error: {}", e))?;
+
+                log::info!(
+                    "Key export successful, exported keys count: {}",
+                    parsed_response
+                );
+                break;
+            }
+            Err(e) => {
+                if count == KEY_EXPORT_RETRY_COUNT - 1 {
+                    log::error!("Key export failed, no retries left. Error: {}", e);
+                } else {
+                    log::debug!(
+                        "Key export failed, retrying in: {} seconds. Retries left: {}",
+                        KEY_EXPORT_RETRY_DELAY.as_secs(),
+                        KEY_EXPORT_RETRY_COUNT - (count + 1)
+                    );
+                    delay_for(KEY_EXPORT_RETRY_DELAY).await;
+                }
+            }
+        }
+    }
 
     Ok(())
 }
