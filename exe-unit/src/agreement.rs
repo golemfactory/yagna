@@ -431,48 +431,15 @@ constraints: |
     fn expand_json_good() {
         let actual = try_from_json(
             r#"
-{
-  "agreementId": "b9c568a7-5471-44a6-af51-caa98ef03877",
-  "demand": {
-    "properties": {
-      "golem.node.ala": "1",
-      "golem.node.id.name": "\"test1\"",
-      "golem.srv.comp.wasm.task_package": "\"http://34.244.4.185:8000/rust-wasi-tutorial.zip\""
-    },
-    "constraints": "(&\n            (golem.inf.mem.gib>0.5)\n            (golem.inf.storage.gib>1)\n            (golem.com.pricing.model=linear)\n        )",
-    "demandId": "b471069d-4a9a-483c-ae90-8cff0dcad13a",
-    "requestorId": "0x8ef0c6567e88c5f4d1258bff707a906132c6050b"
-  },
-  "offer": {
-    "properties": {
-      "golem.com.pricing.model": "\"linear\"",
-      "golem.com.pricing.model.linear.coeffs": "[0.01,0.2,1]",
-      "golem.com.scheme": "\"payu\"",
-      "golem.com.scheme.payu.interval_sec": "6",
-      "golem.com.usage.vector": "[\"golem.usage.duration_sec\",\"golem.usage.cpu_sec\"]",
-      "golem.inf.mem.gib": "1",
-      "golem.inf.storage.gib": "10",
-      "golem.node.id.name": "\"\"",
-      "golem.runtime.wasm.wasi.version@v": "\"0.0.0\""
-    },
-    "constraints": "()",
-    "offerId": "b9c568a7-5471-44a6-af51-caa98ef03877",
-    "providerId": "0xe27729b3f7e08f6abf27a02f5d7860fb71b3fc17"
-  },
-  "validTo": "2020-04-06T12:56:16.121473800Z",
-  "state": "Pending"
-}"#,
+            {
+                "a.b": { "c": 1 },
+                "a": { "b": 2 }
+            }"#,
         )
         .unwrap();
-        //        let expected = serde_json::json!({
-        //            "a": { "b": { "c": 1, PROPERTY_TAG: 2 } },
-        //        });
-        //        assert_eq!(actual, expected);
-        println!(
-            "{:#?}",
-            actual
-                .pointer("/offer/properties/golem/com/usage/vector")
-                .as_typed_array(|v| v.as_str().map(|s| s.to_owned()))
-        )
+        let expected = serde_json::json!({
+            "a": { "b": { "c": 1, PROPERTY_TAG: 2 } },
+        });
+        assert_eq!(actual, expected);
     }
 }

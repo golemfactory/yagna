@@ -112,9 +112,19 @@ pub struct ExecCmdResult {
 
 impl ExecCmdResult {
     pub fn into_exe_result(self, index: usize) -> ExeScriptCommandResult {
-        let message = match self.result {
-            CommandResult::Ok => self.stdout,
-            CommandResult::Error => self.stderr,
+        let stdout = self
+            .stdout
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stdout: {}", s));
+        let stderr = self
+            .stderr
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stderr: {}", s));
+        let message = match (stdout, stderr) {
+            (None, None) => None,
+            (Some(stdout), None) => Some(stdout),
+            (None, Some(stderr)) => Some(stderr),
+            (Some(stdout), Some(stderr)) => Some(format!("{}\n{}", stdout, stderr)),
         };
         ExeScriptCommandResult {
             index: index as u32,

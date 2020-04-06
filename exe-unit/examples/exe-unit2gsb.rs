@@ -14,7 +14,8 @@ use ya_model::activity::ExeScriptCommand;
 use ya_service_bus::{actix_rpc, RpcEnvelope};
 
 const ACTIVITY_BUS_ID: &str = "activity";
-const ACTIVITY_ID: &str = "0x07";
+const ACTIVITY_ID: &str = "fake_activity_id";
+const BATCH_ID: &str = "fake_batch_id";
 
 #[derive(StructOpt, Debug)]
 pub struct Cli {
@@ -38,9 +39,9 @@ pub struct Cli {
     pub script: PathBuf,
 }
 
-struct MockActivity;
+struct MockActivityService;
 
-impl Actor for MockActivity {
+impl Actor for MockActivityService {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -50,7 +51,7 @@ impl Actor for MockActivity {
     }
 }
 
-impl Handler<RpcEnvelope<SetState>> for MockActivity {
+impl Handler<RpcEnvelope<SetState>> for MockActivityService {
     type Result = <RpcEnvelope<SetState> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<SetState>, _: &mut Self::Context) -> Self::Result {
@@ -59,7 +60,7 @@ impl Handler<RpcEnvelope<SetState>> for MockActivity {
     }
 }
 
-impl Handler<RpcEnvelope<SetUsage>> for MockActivity {
+impl Handler<RpcEnvelope<SetUsage>> for MockActivityService {
     type Result = <RpcEnvelope<SetUsage> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<SetUsage>, _: &mut Self::Context) -> Self::Result {
@@ -92,53 +93,67 @@ async fn main() -> anyhow::Result<()> {
 
     ya_sb_router::bind_gsb_router(None).await?;
 
-    let activity = MockActivity {};
+    let activity = MockActivityService {};
     activity.start();
 
     let child_args = vec![
         OsString::from("--binary"),
-        OsString::from(args.runtime),
+        OsString::from(&args.runtime),
         OsString::from("-c"),
-        OsString::from(args.cache_dir),
+        OsString::from(&args.cache_dir),
         OsString::from("-w"),
-        OsString::from(args.work_dir),
+        OsString::from(&args.work_dir),
         OsString::from("-a"),
-        OsString::from(args.agreement),
+        OsString::from(&args.agreement),
         OsString::from("service-bus"),
         OsString::from(ACTIVITY_ID),
         OsString::from(ACTIVITY_BUS_ID),
     ];
 
+    let mut child = Command::new(&args.supervisor)
+        .env("RUST_LOG", "warn")
+        .args(child_args)
+        .spawn()?;
+    log::info!("exeunit supervisor spawned. PID: {}", child.id());
+    tokio::time::delay_for(Duration::from_secs(2)).await;
+
+    if let Err(e) = exec_and_wait(&args).await {
+        log::error!("executing script {:?} error: {:?}", args.script, e);
+    }
+
+    log::info!("killing exeunit if it is still alive");
+    child.kill()?;
+    Ok(())
+}
+
+async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
     let contents = std::fs::read_to_string(&args.script)?;
     let exe_script: Vec<ExeScriptCommand> = serde_json::from_str(&contents)?;
     let exe_len = exe_script.len();
-    let mut child = Command::new(args.supervisor).args(child_args).spawn()?;
-    tokio::time::delay_for(Duration::from_secs(2)).await;
+    log::info!("executing script with {} commands", exe_len);
 
-    let batch_id = "fake_batch_id";
     let exe_unit_url = activity::exeunit::bus_id(ACTIVITY_ID);
     let _ = actix_rpc::service(&exe_unit_url)
         .send(Exec {
             activity_id: ACTIVITY_ID.to_owned(),
-            batch_id: batch_id.to_string(),
+            batch_id: BATCH_ID.to_string(),
             exe_script,
             timeout: None,
         })
         .await?;
 
     for i in 0..exe_len {
+        log::info!("waiting at most 10s for {} command", i);
         let results = actix_rpc::service(&exe_unit_url)
             .send(GetExecBatchResults {
                 activity_id: ACTIVITY_ID.to_owned(),
-                batch_id: batch_id.to_string(),
+                batch_id: BATCH_ID.to_string(),
                 timeout: Some(10.0),
                 command_index: Some(i),
             })
             .await?;
 
-        log::warn!("Command result {}: {:?}", i, results);
+        log::warn!("Command {} result: {:#?}", i, results);
     }
-
-    child.kill()?;
     Ok(())
 }
