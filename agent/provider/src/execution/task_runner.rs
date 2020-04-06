@@ -132,11 +132,42 @@ pub struct TaskRunner {
     pub activity_destroyed: SignalSlot<ActivityDestroyed>,
 
     config: Arc<TaskRunnerConfig>,
+
+    tasks_dir: PathBuf,
+    cache_dir: PathBuf,
 }
 
 impl TaskRunner {
-    pub fn new(client: ActivityProviderApi) -> TaskRunner {
-        TaskRunner {
+    pub fn new(client: ActivityProviderApi) -> Result<TaskRunner> {
+        let current_dir = std::env::current_dir()?;
+        let tasks_dir = current_dir.join("exe-unit").join("work");
+
+        let cache_dir = current_dir.join("exe-unit").join("cache");
+
+        create_dir_all(&tasks_dir).map_err(|error| {
+            anyhow!(
+                "Can't create tasks directory [{}].. Error: {}",
+                tasks_dir.display(),
+                error
+            )
+        })?;
+
+        create_dir_all(&cache_dir).map_err(|error| {
+            anyhow!(
+                "Can't create cache directory [{}]. Error: {}",
+                cache_dir.display(),
+                error
+            )
+        })?;
+
+        // Try convert to str to check if won't fail. If not we can than
+        // unwrap() all paths that we created relative to current_dir.
+        current_dir.to_str().ok_or(anyhow!(
+            "Current dir [{}] contains invalid characters.",
+            current_dir.display()
+        ))?;
+
+        Ok(TaskRunner {
             api: Arc::new(client),
             registry: ExeUnitsRegistry::new(),
             tasks: vec![],
@@ -144,7 +175,9 @@ impl TaskRunner {
             activity_created: SignalSlot::<ActivityCreated>::new(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
             config: Arc::new(TaskRunnerConfig::default()),
-        }
+            tasks_dir,
+            cache_dir,
+        })
     }
 
     #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?} {:?}")]
@@ -336,14 +369,7 @@ impl TaskRunner {
         activity_id: &str,
         agreement_id: &str,
     ) -> Result<Task> {
-        let current_dir = std::env::current_dir()?;
-        let working_dir = current_dir
-            .join("exe-unit")
-            .join("work")
-            .join(agreement_id)
-            .join(activity_id);
-
-        let cache_dir = current_dir.join("exe-unit").join("cache");
+        let working_dir = self.tasks_dir.join(agreement_id).join(activity_id);
 
         create_dir_all(&working_dir).map_err(|error| {
             anyhow!(
@@ -354,32 +380,17 @@ impl TaskRunner {
             )
         })?;
 
-        create_dir_all(&cache_dir).map_err(|error| {
-            anyhow!(
-                "Can't create cache directory [{}]. Error: {}",
-                cache_dir.display(),
-                error
-            )
-        })?;
-
         let agreement_path = working_dir
             .parent()
-            .unwrap() // Parent must exist, since we built this path.
+            .ok_or(anyhow!("None"))? // Parent must exist, since we built this path.
             .join("agreement.json");
-
-        // Try convert to str to check if won't fail. If not we can than
-        // unwrap() cache_dir, working_dir and agreement_path.
-        current_dir.to_str().ok_or(anyhow!(
-            "Current dir [{}] contains invalid characters.",
-            current_dir.display()
-        ))?;
 
         self.save_agreement(&agreement_path, &agreement_id)?;
 
         let mut args = vec![];
-        args.extend(["-c", cache_dir.to_str().unwrap()].iter());
-        args.extend(["-w", working_dir.to_str().unwrap()].iter());
-        args.extend(["-a", agreement_path.to_str().unwrap()].iter());
+        args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
+        args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
+        args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
 
         args.push("service-bus");
         args.push(activity_id);
@@ -445,10 +456,11 @@ impl TaskRunner {
 fn task_package_from(agreement: &Agreement) -> Result<String> {
     let props = &agreement.offer.properties;
     let runtime_key_str = "golem.runtime.name";
-    let runtime_name = props.as_object()
+    let runtime_name = props
+        .as_object()
         .ok_or(anyhow!("Agreement properties has unexpected format."))?
         .iter()
-        .find(|(key, _)| { key == &runtime_key_str })
+        .find(|(key, _)| key == &runtime_key_str)
         .ok_or(anyhow!("Can't find key '{}'.", runtime_key_str))?
         .1
         .as_str()

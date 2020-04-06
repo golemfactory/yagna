@@ -28,7 +28,7 @@ pub struct ProviderAgent {
 impl ProviderAgent {
     pub async fn new(config: StartupConfig) -> anyhow::Result<ProviderAgent> {
         let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
-        let runner = TaskRunner::new(config.activity_client()?).start();
+        let runner = TaskRunner::new(config.activity_client()?)?.start();
         let payments = Payments::new(
             config.activity_client()?,
             config.payment_client()?,
