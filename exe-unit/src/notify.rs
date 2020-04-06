@@ -16,13 +16,11 @@ pub struct Notify<T: Clone + Eq> {
 impl<T: Clone + Eq> Notify<T> {
     pub fn notify(&mut self, t: T) {
         let mut state = self.state.lock().unwrap();
-        let _ = match &state.inner {
-            Some(s) => match s == &t {
-                true => return,
-                false => state.inner.replace(t),
-            },
-            None => state.inner.replace(t),
-        };
+        if state.inner.as_ref() == Some(&t) {
+            return;
+        } else {
+            state.inner.replace(t);
+        }
         state.waker_map.values_mut().for_each(|w| w.wake_by_ref());
     }
 
