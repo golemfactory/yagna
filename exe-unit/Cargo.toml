@@ -29,7 +29,6 @@ anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
 dotenv = "0.15.0"
-env_logger = "0.7"
 flexi_logger = { version = "0.15", features = ["colors"] }
 futures = "0.3"
 hex = "0.4.2"
@@ -49,9 +48,11 @@ url = "2.1.1"
 
 [dev-dependencies]
 ya-sb-router = "0.1"
+
 actix-files = "0.2.1"
 actix-rt = "1.0.0"
 actix-web = "2.0.0"
+env_logger = "0.7"
 rand = "0.7.3"
 sha3 = "0.8.2"
 tempdir = "0.3.7"

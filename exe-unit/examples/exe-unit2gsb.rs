@@ -110,10 +110,7 @@ async fn main() -> anyhow::Result<()> {
         OsString::from(ACTIVITY_BUS_ID),
     ];
 
-    let mut child = Command::new(&args.supervisor)
-        .env("RUST_LOG", "warn")
-        .args(child_args)
-        .spawn()?;
+    let mut child = Command::new(&args.supervisor).args(child_args).spawn()?;
     log::info!("exeunit supervisor spawned. PID: {}", child.id());
     tokio::time::delay_for(Duration::from_secs(2)).await;
 
