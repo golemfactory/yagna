@@ -232,7 +232,7 @@ async fn process_agreement(
         log::info!("activity {} state: {:?}", act_id, state);
         let results = activity_api
             .control()
-            .get_exec_batch_results(&act_id, &batch_id, Some(7))
+            .get_exec_batch_results(&act_id, &batch_id, Some(7.), None)
             .await?;
 
         log::info!("batch results {:?}", results);

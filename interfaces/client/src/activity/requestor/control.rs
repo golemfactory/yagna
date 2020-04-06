@@ -47,13 +47,15 @@ impl ActivityRequestorControlApi {
         activity_id: &str,
         batch_id: &str,
         #[allow(non_snake_case)]
-        timeout: Option<i32>,
+        timeout: Option<f32>,
+        command_index: Option<usize>,
     ) -> Result<Vec<ExeScriptCommandResult>> {
         let uri = url_format!(
             "activity/{activity_id}/exec/{batch_id}",
             activity_id,
             batch_id,
             #[query] timeout,
+            #[query] command_index,
         );
         self.client.get(&uri).send().json().await
     }

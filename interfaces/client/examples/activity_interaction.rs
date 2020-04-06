@@ -55,7 +55,7 @@ async fn requestor_exec(client: &ActivityRequestorControlApi, activity_id: &str)
 
     println!("[?] Batch results for activity {}", activity_id);
     let results = client
-        .get_exec_batch_results(&activity_id, &batch_id, Some(3))
+        .get_exec_batch_results(&activity_id, &batch_id, Some(10.), None)
         .await?;
     println!("[<] Batch results: {:?}", results);
     Ok(())
