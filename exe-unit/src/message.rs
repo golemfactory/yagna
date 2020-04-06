@@ -128,7 +128,7 @@ impl ExecCmdResult {
         };
         ExeScriptCommandResult {
             index: index as u32,
-            result: Some(self.result),
+            result: self.result,
             message,
         }
     }

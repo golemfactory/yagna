@@ -133,7 +133,7 @@ impl<R: Runtime> ExeUnit<R> {
             {
                 let cmd_result = ExeScriptCommandResult {
                     index: ctx.idx as u32,
-                    result: Some(ya_model::activity::CommandResult::Error),
+                    result: ya_model::activity::CommandResult::Error,
                     message: Some(error.to_string()),
                 };
                 let set_state = SetState::default()
