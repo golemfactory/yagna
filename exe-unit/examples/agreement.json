@@ -8,7 +8,8 @@
         },
         "com.usage.vector": [
           "golem.usage.duration_sec",
-          "golem.usage.cpu_sec"
+          "golem.usage.cpu_sec",
+          "golem.usage.gib"
         ]
       }
     }

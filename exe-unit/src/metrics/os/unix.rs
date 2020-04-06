@@ -1,5 +1,4 @@
 use crate::metrics::{error::MetricError, Result};
-use libproc::libproc::proc_pid::{listpids, ProcType};
 use nix::libc;
 use std::collections::{HashMap, HashSet};
 use std::mem;
@@ -135,7 +134,57 @@ struct Process {
     start_ts: u64,
 }
 
+#[cfg(target_os = "linux")]
 impl Process {
+    fn all() -> impl Iterator<Item = Process> {
+        use std::str::FromStr;
+
+        std::fs::read_dir("/proc/")
+            .expect("no /proc mountpoint")
+            .into_iter()
+            .filter_map(|res| res.ok())
+            .filter_map(|entry| i32::from_str(&entry.file_name().to_string_lossy()).ok())
+            .filter_map(|pid| Process::info(pid).ok())
+    }
+
+    fn info(pid: i32) -> Result<Process> {
+        let proc = Self::stat(pid)?;
+
+        Ok(Process {
+            pid: proc.pid,
+            ppid: proc.stat.ppid,
+            pgid: proc.stat.pgrp,
+            start_ts: proc.stat.starttime,
+        })
+    }
+
+    fn usage(pid: i32) -> Result<Usage> {
+        let proc = Self::stat(pid)?;
+
+        let tps = procfs::ticks_per_second().map_err(|e| SystemError::Error(e.to_string()))?;
+        let cpu_sec = Duration::from_secs((proc.stat.stime + proc.stat.utime) / tps as u64);
+        let rss_gib = proc.stat.rss as f64 / (1024. * 1024.);
+
+        Ok(Usage { cpu_sec, rss_gib })
+    }
+
+    #[inline]
+    fn stat(pid: i32) -> Result<procfs::process::Process> {
+        procfs::process::Process::new(pid).map_err(|e| SystemError::Error(e.to_string()).into())
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Process {
+    fn all() -> impl Iterator<Item = Process> {
+        use libproc::libproc::proc_pid::{listpids, ProcType};
+
+        listpids(ProcType::ProcAllPIDS)
+            .unwrap_or(Vec::new())
+            .into_iter()
+            .filter_map(|p| Process::info(p as i32).ok())
+    }
+
     fn info(pid: i32) -> Result<Process> {
         use libproc::libproc::bsd_info::BSDInfo;
         use libproc::libproc::proc_pid::pidinfo;
@@ -158,7 +207,7 @@ impl Process {
         let cpu_sec = Duration::from_secs_f64(
             (usage.ri_system_time as f64 + usage.ri_user_time as f64) / 1_000_000_000.,
         );
-        let rss_gib = usage.ri_resident_size as f64 / (1024. * 1024.);
+        let rss_gib = usage.ri_resident_size as f64 / (1024. * 1024. * 1024.);
 
         Ok(Usage { cpu_sec, rss_gib })
     }
@@ -185,7 +234,7 @@ impl From<libc::rusage> for Usage {
         let cpu_sec = Duration::from_secs((usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) as u64)
             + Duration::from_micros((usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) as u64);
         let rss_gib = (usage.ru_maxrss + usage.ru_ixrss + usage.ru_idrss + usage.ru_isrss) as f64
-            / (1024. * 1024.);
+            / (1024. * 1024. * 1024.);
 
         Usage { cpu_sec, rss_gib }
     }
@@ -194,10 +243,7 @@ impl From<libc::rusage> for Usage {
 fn process_tree_info(pid: i32, gid: i32) -> Result<Vec<Process>> {
     let now = chrono::Local::now().timestamp() as u64;
 
-    let candidates = listpids(ProcType::ProcAllPIDS)
-        .map_err(|e| MetricError::from(SystemError::Error(e)))?
-        .into_iter()
-        .filter_map(|p| Process::info(p as i32).ok())
+    let candidates = Process::all()
         .filter(|i| (i.pgid == gid) && (i.start_ts <= now))
         .collect::<Vec<_>>();
 
