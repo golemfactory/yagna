@@ -57,6 +57,7 @@ impl ServiceInfo {
                 let _ = map.insert(
                     "runtime".into(),
                     serde_json::json!({
+                        "name": "wasmtime",
                         "wasm":{
                             "wasi": {
                                 "version@v": wasi_version

@@ -227,9 +227,9 @@ impl TaskRunner {
             Some(agreement) => agreement,
         };
 
-        // TODO: Get ExeUnit name from agreement.
-        let exeunit_name = "wasmtime";
-        let task = match self.create_task(exeunit_name, &msg.activity_id, &msg.agreement_id) {
+        let exeunit_name = task_package_from(&agreement)?;
+
+        let task = match self.create_task(&exeunit_name, &msg.activity_id, &msg.agreement_id) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
         };
@@ -442,16 +442,21 @@ impl TaskRunner {
     }
 }
 
-// fn task_package_from(agreement: Agreement) -> Result<String> {
-//     let props = agreement.demand.properties;
-//     let runtime_key_str = "golem.runtime.";
-//     let _ = props.as_object()
-//         .ok_or(anyhow!("Agreement properties has unexpected format."))?
-//         .iter()
-//         .find(|(key, value)| { key.starts_with(runtime_key_str) })
-//         .ok_or(anyhow!("Can't find key '{}'.", runtime_key_str))?
-//
-// }
+fn task_package_from(agreement: &Agreement) -> Result<String> {
+    let props = &agreement.offer.properties;
+    let runtime_key_str = "golem.runtime.name";
+    let runtime_name = props.as_object()
+        .ok_or(anyhow!("Agreement properties has unexpected format."))?
+        .iter()
+        .find(|(key, _)| { key == &runtime_key_str })
+        .ok_or(anyhow!("Can't find key '{}'.", runtime_key_str))?
+        .1
+        .as_str()
+        .ok_or(anyhow!("'{}' is not a string.", runtime_key_str))?;
+
+    // Workaround for string escaping in current market.
+    Ok(runtime_name[1..runtime_name.len() - 1].to_string())
+}
 
 // =========================================== //
 // Actix stuff
