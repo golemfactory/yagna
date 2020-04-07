@@ -1,7 +1,7 @@
 # Provider Agent
 
 ## Central setup
-We have centrally deployed (ip: `34.244.4.185`) three independet standalone modules/apps:
+We have centrally deployed (ip: `34.244.4.185`) three independent standalone modules/apps:
  - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 34.244.4.185:7464 \
    (can be invoked locally with `cargo run --release --example ya_sb_router`)
  - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://34.244.4.185:8080/market-api/v1/ \
