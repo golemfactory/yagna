@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use log::info;
+use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -79,29 +80,8 @@ impl ExeUnitsRegistry {
     }
 
     pub fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
-        let current_dir = std::env::current_dir()?;
-
-        if !desc.supervisor_path.is_absolute() {
-            let path = current_dir.join(&desc.supervisor_path);
-            desc.supervisor_path = path.canonicalize().map_err(|error| {
-                anyhow!(
-                    "Failed to canonicalize supervisor path [{}]. Error: {}",
-                    &path.display(),
-                    error
-                )
-            })?;
-        }
-
-        if !desc.runtime_path.is_absolute() {
-            let path = current_dir.join(&desc.runtime_path);
-            desc.runtime_path = path.canonicalize().map_err(|error| {
-                anyhow!(
-                    "Failed to canonicalize runtime path [{}]. Error: {}",
-                    &path.display(),
-                    error
-                )
-            })?;
-        }
+        desc.supervisor_path = normalize_path(&desc.supervisor_path)?;
+        desc.runtime_path = normalize_path(&desc.runtime_path)?;
 
         info!(
             "Added [{}] ExeUnit to registry. Supervisor path: [{}], Runtime path: [{}].",
@@ -132,7 +112,6 @@ impl ExeUnitsRegistry {
         })?;
 
         for desc in descs.into_iter() {
-            // TODO: We could add only descriptors, that didn't fail and log warning.
             self.register_exeunit(desc)?
         }
         Ok(())
@@ -145,6 +124,17 @@ impl ExeUnitsRegistry {
             .ok_or(anyhow!("ExeUnit [{}] doesn't exist in registry.", name))?
             .clone())
     }
+}
+
+fn normalize_path(path: &Path) -> Result<PathBuf> {
+    let current_dir = std::env::current_dir()?;
+
+    let mut path = path.to_path_buf();
+    if !path.is_absolute() {
+        path = current_dir.join(&path);
+    }
+
+    Ok(path.clean())
 }
 
 #[cfg(test)]
@@ -164,11 +154,25 @@ mod tests {
 
         let dummy_desc = registry.find_exeunit("dummy").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "dummy");
-        assert_eq!(dummy_desc.supervisor_path.to_str().unwrap(), "dummy.exe");
+        assert_eq!(
+            dummy_desc
+                .supervisor_path
+                .to_str()
+                .unwrap()
+                .contains("dummy.exe"),
+            true
+        );
 
         let dummy_desc = registry.find_exeunit("wasm").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasm");
-        assert_eq!(dummy_desc.supervisor_path.to_str().unwrap(), "wasm.exe");
+        assert_eq!(
+            dummy_desc
+                .supervisor_path
+                .to_str()
+                .unwrap()
+                .contains("wasm.exe"),
+            true
+        );
     }
 
     #[test]
@@ -183,8 +187,12 @@ mod tests {
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
         assert_eq!(
-            dummy_desc.supervisor_path.to_str().unwrap(),
-            "../target/debug/exe-unit"
+            dummy_desc
+                .supervisor_path
+                .to_str()
+                .unwrap()
+                .contains("/target/debug/exe-unit"),
+            true
         );
     }
 
@@ -200,8 +208,12 @@ mod tests {
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
         assert_eq!(
-            dummy_desc.supervisor_path.to_str().unwrap(),
-            "/usr/lib/yagna/plugins/exe-unit"
+            dummy_desc
+                .supervisor_path
+                .to_str()
+                .unwrap()
+                .contains("/usr/lib/yagna/plugins/exe-unit"),
+            true
         );
     }
 }
