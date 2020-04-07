@@ -90,6 +90,8 @@ cargo run --bin ya-requestor
 ``` 
 
 
+`RUST_LOG=info cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json`
+
 ## ExeUnits
 
 Provider agent will load json file with ExeUnits descriptors from `exe-unit/example-exeunits.json`
