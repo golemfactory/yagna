@@ -407,7 +407,6 @@ async fn main() -> anyhow::Result<()> {
 
     market_api.unsubscribe(&subscription_id).await?;
     payment_api.release_allocation(&allocation_id).await?;
-    // TODO: destroy running activity
     // TODO: process (accept / reject) incoming payments
 
     Arbiter::current().stop();
