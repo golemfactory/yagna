@@ -11,14 +11,14 @@ We have centrally deployed (ip: `34.244.4.185`) three independent standalone mod
    (can be invoked locally with `cargo run --release --example http-get-put --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`
    TODO: describe how to build and pack yagna wasm binary image
 
-## Configuration:
+## Configuration
 
 Provider agent can be used with `.env` file. [Here](https://github.com/golemfactory/yagna/wiki/DotEnv-Configuration) is list of additional environment variables that can be set.
 
-Best practice is to create separate working dir for the Provider Agent (say `~/ya-prov`), and create there `.env` file by copying
+Create separate working dir for the Provider Agent (please create `ya-prov` in the main yagna source code directory), and create `.env` file there by copying
 [`.env-template`](https://github.com/golemfactory/yagna/blob/master/.env-template) from yagna repo main directory.
 
-### Command line parameters:
+### Command line parameters
 
 This can be displayed using `--help`
 
@@ -28,12 +28,13 @@ This can be displayed using `--help`
 | market-url     | Market api address. Overrides `YAGNA_MARKET_URL`
 | activity-url   | Activity api address. Overrides `YAGNA_ACTIVITY_URL`
 | payment-url    | Payment api address. Overrides `YAGNA_PAYMENT_URL`
-| credit-address | Ethereum account for payments. Overrides `CREDIT_ADDRESS`
+| credit-address | Ethereum account for payments (should match NodeId). Overrides `CREDIT_ADDRESS`
+| exe-unit-path  | Path to JSON descriptor file for ExeUnits. Overrides `EXE_UNIT_PATH`
 
 ### Creating app-key authentication token
 
 To use Provider Agent we nedd to provide afromentioned `YAGNA_APPKEY`.
-To obtain it we need be in this newly created workdir `cd ~/ya-prov` :
+To obtain it we need to be in this newly created workdir `cd ya-prov`:
 
 1. Run [yagna daemon](https://github.com/golemfactory/yagna/blob/master/core/serv/README.md):
 ```
@@ -46,15 +47,13 @@ RUST_LOG=debug,tokio_core=info,hyper=info,tokio_reactor=info cargo run --bin yag
 
 2. Create token:
 
-In another console, go to the same directory and
+In another console, go to the same directory and run:
 ```
 cargo run --bin yagna -- app-key create "provider-agent"
 ```
 it will display newly created app-key eg.
 ```
 $ cargo run --bin yagna -- app-key create "provider-agent"
-    Finished dev [unoptimized + debuginfo] target(s) in 0.35s
-     Running `/Users/tworec/git/yagna/target/debug/yagna app-key create provider-agent`
 58cffa9aa1e74811b223b627c7f87aac
 ```
 
@@ -63,10 +62,9 @@ $ cargo run --bin yagna -- app-key create "provider-agent"
 
 ## Running the Provider Agent
 
-While the yagna daemon is still running, and you are in in `~/ya-prov` you can now start Provider Agent 
+While the yagna daemon is still running, and you are in the `ya-prov` directory you can now start Provider Agent 
 
 `cargo run --bin ya-provider`
-
 `RUST_LOG=debug cargo run --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json`
 
 
@@ -74,25 +72,26 @@ While the yagna daemon is still running, and you are in in `~/ya-prov` you can n
 
 Run `ya-requestor` app to mock negotiations and activity.
 
-Note: You need to run separate yagna service with different identity,
+You need to run a separate yagna service with a different identity,
 if you want to run requestor on the same machine. The best way is to create
-separate directory with new .env file for Requestor.
-You must change gsb port `GSB_URL=tcp://127.0.0.1:7766` in your `.env` for requestor.
+a separate directory (please use `ya-requestor` in the main yagna 
+source directory) with a new .env file for requestor. You must change port 
+numbers for `YAGNA_API_URL`, and `YAGNA_ACTIVITY_URL` to e.g. 7768, 
+and the port number in `GSB_URL` to e.g. 7465 in your new `.env` file.
+
+```
+# Run yagna service:
+cargo run --bin yagna -- service run
+```
+
 ```
 # Get some ETH and GNT from faucet on testnet. This can last a little bit long!
+# If it doesn't work, try again.
 cargo run --bin yagna payment init -r
 
-# Check if you got creadit on your account:
+# Check if you got credit on your account:
 cargo run --bin yagna payment status
 
-# Run requestor:
-cargo run --bin ya-requestor
-``` 
-
-
-`RUST_LOG=info cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json`
-
-## ExeUnits
-
-Provider agent will load json file with ExeUnits descriptors from `exe-unit/example-exeunits.json`
-that is placed in yagna repository.
+# Run requestor in a new console (commands.json contains commands to be executed on the provider):
+RUST_LOG=info cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
+```
