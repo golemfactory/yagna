@@ -75,7 +75,7 @@ While the yagna daemon is still running, and you are in in `~/ya-prov` you can n
 Run `ya-requestor` app to mock negotiations and activity.
 
 Note: You need to run separate yagna service with different identity,
-if you want to run requestor on the same machine. The best wait is to create
+if you want to run requestor on the same machine. The best way is to create
 separate directory with new .env file for Requestor.
 You must change gsb port `GSB_URL=tcp://127.0.0.1:7766` in your `.env` for requestor.
 ```
