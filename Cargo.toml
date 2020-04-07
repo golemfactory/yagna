@@ -30,6 +30,7 @@ members = [
     "service-bus/util",
     "utils/scheduler",
     "utils/actix_utils",
+    "utils/process",
     "utils/transfer",
 ]
 
@@ -65,3 +66,4 @@ ya-payment-driver = { path = "core/payment-driver" }
 ya-persistence = { path = "core/persistence" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-process = { path = "utils/process"}

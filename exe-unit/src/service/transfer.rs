@@ -196,7 +196,10 @@ impl Handler<DeployImage> for TransferService {
 
         let fut = async move {
             let final_path = final_path.to_path_buf();
-            if final_path.exists() {
+            let cache_path = cache_path.to_path_buf();
+
+            if cache_path.exists() {
+                std::fs::copy(cache_path, &final_path)?;
                 return Ok(final_path);
             }
 
@@ -206,7 +209,7 @@ impl Handler<DeployImage> for TransferService {
                 .map_err(TransferError::from)??;
             address.send(RemoveAbortHandle(abort)).await?;
 
-            std::fs::rename(cache_path.to_path_buf(), &final_path)?;
+            std::fs::copy(cache_path, &final_path)?;
 
             log::info!("Deployment from {:?} finished", source_url.url);
             Ok(final_path)
