@@ -5,11 +5,7 @@
       "golem": {
         "srv.comp.wasm": {
           "task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://localhost:8000/rust-wasi-tutorial.zip"
-        },
-        "com.usage.vector": [
-          "golem.usage.duration_sec",
-          "golem.usage.cpu_sec"
-        ]
+        }
       }
     }
   },
@@ -17,6 +13,10 @@
     "properties.golem.inf": {
       "mem.gib": 0.5,
       "storage.gib": 5
-    }
+    },
+    "properties.golem.com.usage.vector": [
+      "golem.usage.duration_sec",
+      "golem.usage.cpu_sec"
+    ]
   }
 }

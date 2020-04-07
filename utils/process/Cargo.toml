@@ -1,0 +1,15 @@
+[package]
+name = "ya-utils-process"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+actix = "0.9"
+anyhow = "1.0"
+derive_more = "0.99.3"
+libc = "0.2"
+futures = "0.3"
+futures-util = "0.3.4"
+shared_child = "0.3.4"
+tokio = { version = "0.2.10", features = ["process", "signal"] }
