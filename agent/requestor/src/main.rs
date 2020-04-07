@@ -253,7 +253,7 @@ async fn process_agreement(
 /// MOCK: fixed price allocation
 async fn allocate_funds_for_task(payment_api: &PaymentRequestorApi) -> anyhow::Result<Allocation> {
     let new_allocation = NewAllocation {
-        total_amount: 10.into(),
+        total_amount: 100.into(),
         timeout: None,
         make_deposit: false,
     };
