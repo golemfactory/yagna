@@ -17,6 +17,18 @@ const ACTIVITY_BUS_ID: &str = "activity";
 const ACTIVITY_ID: &str = "fake_activity_id";
 const BATCH_ID: &str = "fake_batch_id";
 
+/// This example allows to test ExeUnit supervisor with GSB.
+/// It has two mock services: SetState and SetUsage bound to GSB.
+/// ExeUnit should periodically report to those two.
+///
+/// It tests also Exec and GetExecBatchResults messages support by ExeUnit.
+/// Example ends when all ExeScript commands are executed or timeout occurs.
+///
+/// Before running this example you need to provide http server
+/// as specified in your `agreement.json` and `commands.json`
+/// For default files it is enough to invoke this:
+///
+///   cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
 #[derive(StructOpt, Debug)]
 pub struct Cli {
     /// Supervisor binary
@@ -25,7 +37,7 @@ pub struct Cli {
     /// Runtime binary
     #[structopt(long, default_value = "target/debug/wasmtime-exeunit")]
     pub runtime: PathBuf,
-    /// Agreement file path
+    /// Agreement file path (JSON)
     #[structopt(long, short, default_value = "exe-unit/examples/agreement.json")]
     pub agreement: PathBuf,
     /// Working directory
@@ -34,9 +46,16 @@ pub struct Cli {
     /// Common cache directory
     #[structopt(long, short, default_value = ".")]
     pub cache_dir: PathBuf,
-    /// Exe script to run
+    /// Exe script to run file path (JSON)
     #[structopt(long, default_value = "exe-unit/examples/commands.json")]
     pub script: PathBuf,
+    /// Wait strategy. By default this example waits for each consecutive command.
+    /// Other strategy is to wait once for the whole script to complete.
+    #[structopt(long)]
+    pub wait_once: bool,
+    /// timeout in seconds
+    #[structopt(long)]
+    pub timeout: Option<f32>,
 }
 
 struct MockActivityService;
@@ -71,21 +90,6 @@ impl Handler<RpcEnvelope<SetUsage>> for MockActivityService {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    println!(
-        r#"
-    This example allows to test ExeUnit supervisor with GSB.
-    It has two mock services: SetState and SetUsage bound to GSB.
-    ExeUnit should periodically report to those two.
-
-    Example ends when all ExeScript commands are executed.
-    So it tests also Exec and GetExecBatchResults messages support by ExeUnit.
-
-    >> YO! YAGNA DEV <<
-
-    Before running this example you should also start:
-      cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
-    "#
-    );
     env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
     env_logger::init();
 
@@ -111,14 +115,14 @@ async fn main() -> anyhow::Result<()> {
     ];
 
     let mut child = Command::new(&args.supervisor).args(child_args).spawn()?;
-    log::info!("exeunit supervisor spawned. PID: {}", child.id());
+    log::warn!("exeunit supervisor spawned. PID: {}", child.id());
     tokio::time::delay_for(Duration::from_secs(2)).await;
 
     if let Err(e) = exec_and_wait(&args).await {
         log::error!("executing script {:?} error: {:?}", args.script, e);
     }
 
-    log::info!("killing exeunit if it is still alive");
+    log::warn!("killing exeunit if it is still alive");
     child.kill()?;
     Ok(())
 }
@@ -127,10 +131,11 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
     let contents = std::fs::read_to_string(&args.script)?;
     let exe_script: Vec<ExeScriptCommand> = serde_json::from_str(&contents)?;
     let exe_len = exe_script.len();
-    log::info!("executing script with {} commands", exe_len);
+    log::warn!("executing script with {} commands", exe_len);
 
     let exe_unit_url = activity::exeunit::bus_id(ACTIVITY_ID);
-    let _ = actix_rpc::service(&exe_unit_url)
+    let exe_unit_service = actix_rpc::service(&exe_unit_url);
+    let _ = exe_unit_service
         .send(Exec {
             activity_id: ACTIVITY_ID.to_owned(),
             batch_id: BATCH_ID.to_string(),
@@ -139,16 +144,28 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
         })
         .await?;
 
+    let mut msg = GetExecBatchResults {
+        activity_id: ACTIVITY_ID.to_owned(),
+        batch_id: BATCH_ID.to_string(),
+        timeout: args.timeout,
+        command_index: None,
+    };
+
+    if args.wait_once {
+        log::warn!(
+            "waiting at most {:?}s for exe script to complete",
+            args.timeout
+        );
+        let results = exe_unit_service.send(msg).await?;
+        log::warn!("Exe script results: {:#?}", results);
+        return Ok(());
+    }
+
     for i in 0..exe_len {
-        log::info!("waiting at most 10s for {} command", i);
-        let results = actix_rpc::service(&exe_unit_url)
-            .send(GetExecBatchResults {
-                activity_id: ACTIVITY_ID.to_owned(),
-                batch_id: BATCH_ID.to_string(),
-                timeout: Some(10.0),
-                command_index: Some(i),
-            })
-            .await?;
+        log::warn!("waiting at most {:?}s for {} command", args.timeout, i);
+
+        msg.command_index = Some(i);
+        let results = exe_unit_service.send(msg.clone()).await?;
 
         log::warn!("Command {} result: {:#?}", i, results);
     }
