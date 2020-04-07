@@ -201,7 +201,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exec_result.result {
-            return Err(Error::command(&ctx.cmd, exec_result.stderr.clone()));
+            return Err(Error::CommandError(exec_result));
         }
 
         let sanity_state = addr.send(GetState {}).await?.0;

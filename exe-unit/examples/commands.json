@@ -13,10 +13,16 @@
       "to": "container:/input/file_in"
     }
   },
-  {"run": {
-    "entry_point": "rust-wasi-tutorial",
-    "args": ["input/file_in", "output/file_cp"]
-  }},
+  {
+    "transfer": {
+      "from": "container:/input/file_in",
+      "to": "container:/output/file_cp",
+      "FIXME: replace this transfer with":   {"run": {
+        "entry_point": "rust-wasi-tutorial",
+        "args": ["input/file_in", "output/file_cp"]
+      }}
+    }
+  },
   {
     "transfer": {
       "from": "container:/output/file_cp",
