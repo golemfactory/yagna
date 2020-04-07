@@ -39,7 +39,7 @@ To obtain it we need be in this newly created workdir `cd ~/ya-prov` :
 ```
 cargo run --bin yagna -- service run
 ```
-or optionaly with RUST_LOG teweaks:
+or optionaly with RUST_LOG tweaks:
 ```
 RUST_LOG=debug,tokio_core=info,hyper=info,tokio_reactor=info cargo run --bin yagna -- service run
 ```
