@@ -68,7 +68,7 @@ While the yagna daemon is still running, and you are in the `ya-prov` directory 
 `RUST_LOG=debug cargo run --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json`
 
 
-### Running with mock requestor
+## Mock requestor
 
 Run `ya-requestor` app to mock negotiations and activity.
 
@@ -79,19 +79,19 @@ source directory) with a new .env file for requestor. You must change port
 numbers for `YAGNA_API_URL`, and `YAGNA_ACTIVITY_URL` to e.g. 7768, 
 and the port number in `GSB_URL` to e.g. 7465 in your new `.env` file.
 
+Run yagna daemon:
 ```
-# Run yagna service:
 cargo run --bin yagna -- service run
 ```
 
+In a new console:
 ```
-# Get some ETH and GNT from faucet on testnet. This can last a little bit long!
-# If it doesn't work, try again.
+# Get some ETH and GNT from faucet on testnet. This can last a little bit long! If it doesn't work, try again.
 cargo run --bin yagna payment init -r
 
 # Check if you got credit on your account:
 cargo run --bin yagna payment status
 
-# Run requestor in a new console (commands.json contains commands to be executed on the provider):
+# Run requestor (commands.json contains commands to be executed on the provider):
 RUST_LOG=info cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
 ```
