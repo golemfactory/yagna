@@ -191,7 +191,7 @@ mod tests {
                 .supervisor_path
                 .to_str()
                 .unwrap()
-                .contains("/target/debug/exe-unit"),
+                .contains("exe-unit"),
             true
         );
     }
