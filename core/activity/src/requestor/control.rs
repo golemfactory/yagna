@@ -139,7 +139,7 @@ async fn get_batch_results(
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
     if query.command_index.is_some() && query.timeout.is_none() {
-        return Err::<_, Error>(Error::BadRequest("Timeout required".to_owned()));
+        return Err(Error::BadRequest("Timeout required".to_owned()));
     }
 
     let agreement = get_activity_agreement(&db, &path.activity_id).await?;
@@ -157,7 +157,7 @@ async fn get_batch_results(
         .timeout(query.timeout)
         .await???;
 
-    Ok::<_, Error>(web::Json(results))
+    Ok(web::Json(results))
 }
 
 #[derive(Deserialize)]

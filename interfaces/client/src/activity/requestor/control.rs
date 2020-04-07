@@ -1,7 +1,7 @@
 //! Requestor control part of Activity API
 use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest, ACTIVITY_API_PATH};
 
-use crate::{web::WebClient, web::WebInterface, Result};
+use crate::{web::default_on_timeout, web::WebClient, web::WebInterface, Result};
 
 /// Bindings for Requestor Control part of the Activity API.
 pub struct ActivityRequestorControlApi {
@@ -57,6 +57,6 @@ impl ActivityRequestorControlApi {
             #[query] timeout,
             #[query] command_index,
         );
-        self.client.get(&uri).send().json().await
+        self.client.get(&uri).send().json().await.or_else(default_on_timeout)
     }
 }

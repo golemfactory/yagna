@@ -97,13 +97,13 @@ async fn process_offer(
         Utc::now() + chrono::Duration::hours(2),
     );
     let _ack = requestor_api.create_agreement(&new_agreement).await?;
-    log::info!("confirm agreement = {}", new_agreement_id);
+    log::info!("\n\nconfirming agreement = {}", new_agreement_id);
     requestor_api.confirm_agreement(&new_agreement_id).await?;
-    log::info!("wait for agreement = {}", new_agreement_id);
+    log::info!("\n\nwaiting for agreement = {}", new_agreement_id);
     requestor_api
         .wait_for_approval(&new_agreement_id, Some(7.879))
         .await?;
-    log::info!("agreement = {} CONFIRMED!", new_agreement_id);
+    log::info!("\n\nagreement = {} CONFIRMED!", new_agreement_id);
 
     Ok(ProcessOfferResult::AgreementId(new_agreement_id))
 }
@@ -116,13 +116,11 @@ async fn spawn_workers(
 ) -> anyhow::Result<()> {
     loop {
         let events = requestor_api
-            .collect(&subscription_id, Some(2.0), Some(5))
+            .collect(&subscription_id, Some(5.0), Some(5))
             .await?;
 
         if !events.is_empty() {
             log::debug!("got {} market events", events.len());
-        } else {
-            tokio::time::delay_for(Duration::from_millis(3000)).await;
         }
         for event in events {
             match event {
@@ -131,11 +129,11 @@ async fn spawn_workers(
                     proposal,
                 } => {
                     log::debug!(
-                        "processing ProposalEvent [{:?}] with state: {:?}",
-                        proposal.proposal_id,
+                        "\n\n got ProposalEvent [{}]; state: {:?}",
+                        proposal.proposal_id()?,
                         proposal.state
                     );
-                    log::trace!("processing proposal {:?}", proposal);
+                    log::trace!("proposal: {:#?}", proposal);
                     let mut agreement_tx = agreement_tx.clone();
                     let requestor_api = requestor_api.clone();
                     let my_subs_id = subscription_id.to_string();
@@ -143,7 +141,7 @@ async fn spawn_workers(
                     Arbiter::spawn(async move {
                         match process_offer(requestor_api, proposal, &my_subs_id, my_demand).await {
                             Ok(ProcessOfferResult::ProposalId(id)) => {
-                                log::info!("responded with counter proposal (id: {})", id)
+                                log::info!("\n\n responded with counter proposal [{}]", id)
                             }
                             Ok(ProcessOfferResult::AgreementId(id)) => {
                                 agreement_tx.send(id).await.unwrap()
@@ -210,7 +208,7 @@ async fn process_agreement(
     let contents = std::fs::read_to_string(&exe_script)?;
     let commands_cnt = match serde_json::from_str(&contents)? {
         serde_json::Value::Array(arr) => {
-            log::info!("\n\n Executing script {} commands", arr.len());
+            log::info!("\n\n Executing script: {} commands", arr.len());
             arr.len()
         }
         _ => 0,
@@ -229,22 +227,21 @@ async fn process_agreement(
             break;
         }
 
-        log::info!("activity {} state: {:?}", act_id, state);
+        log::info!(
+            "Activity state: {:?}. Waiting for batch to complete...",
+            state
+        );
         let results = activity_api
             .control()
             .get_exec_batch_results(&act_id, &batch_id, Some(7.), None)
             .await?;
 
-        log::info!("batch results {:?}", results);
+        log::info!("Batch results {:#?}", results);
 
         if results.len() >= commands_cnt {
             break;
         }
-
-        tokio::time::delay_for(Duration::from_millis(700)).await;
     }
-
-    //    tokio::time::delay_for(Duration::from_millis(7000)).await;
 
     log::info!("\n\n AGRRR! destroying activity: {}; ", act_id);
     activity_api.control().destroy_activity(&act_id).await?;
