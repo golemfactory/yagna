@@ -57,6 +57,7 @@ impl ServiceInfo {
                 let _ = map.insert(
                     "runtime".into(),
                     serde_json::json!({
+                        "name": "wasmtime",
                         "wasm":{
                             "wasi": {
                                 "version@v": wasi_version
@@ -156,7 +157,6 @@ impl ComInfo {
 // golem.inf.mem.gib
 // golem.inf.storage.gib
 // R: golem.activity.timeout_secs
-// TODO: golem.srv.comp.wasm.task_package
 
 // golem.com.payment.scheme="payu"
 // golem.com.payment.scheme.payu.interval_sec=3600

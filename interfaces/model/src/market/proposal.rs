@@ -22,7 +22,7 @@ pub struct Proposal {
     #[serde(rename = "proposalId", skip_serializing_if = "Option::is_none")]
     pub proposal_id: Option<String>,
     #[serde(rename = "issuerId", skip_serializing_if = "Option::is_none")]
-    pub issuer_id: Option<String>,
+    pub issuer_id: Option<String>, // TODO: use NodeId
     /// * `Initial` - proposal arrived from the market as response to subscription
     /// * `Draft` - bespoke counter-proposal issued by one party directly to other party (negotiation phase)
     /// * `Rejected` by other party

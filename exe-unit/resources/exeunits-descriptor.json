@@ -1,0 +1,9 @@
+[
+    {
+        "name": "wasmtime",
+        "supervisor-path": "/usr/lib/yagna/plugins/exe-unit",
+        "runtime-path": "/usr/lib/yagna/plugins/wasmtime-exeunit",
+        "description" : "this is just a sample descriptor for wasmtime exeunit used by ya-provider",
+        "FIXME":  "it assumes proper `agreement.json` file is in work dir"
+    }
+]

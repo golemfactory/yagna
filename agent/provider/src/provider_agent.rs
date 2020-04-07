@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
@@ -28,7 +28,7 @@ pub struct ProviderAgent {
 impl ProviderAgent {
     pub async fn new(config: RunConfig) -> anyhow::Result<ProviderAgent> {
         let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
-        let runner = TaskRunner::new(config.activity_client()?).start();
+        let runner = TaskRunner::new(config.activity_client()?)?.start();
         let payments = Payments::new(
             config.activity_client()?,
             config.payment_client()?,
@@ -39,16 +39,13 @@ impl ProviderAgent {
         let node_info = ProviderAgent::create_node_info();
         let service_info = ProviderAgent::create_service_info();
 
-        let exe_unit_path = ProviderAgent::get_exe_units_config_path(&config.exe_unit_path);
-        log::debug!("Exe unit configuration path: {}", exe_unit_path.display());
-
         let mut provider = ProviderAgent {
             market,
             runner,
             payments,
             node_info,
             service_info,
-            exe_unit_path,
+            exe_unit_path: config.exe_unit_path,
         };
         provider.initialize().await?;
 
@@ -71,9 +68,8 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         // Load ExeUnits descriptors from file.
-        let exeunits_file = self.exe_unit_path.clone();
         let msg = InitializeExeUnits {
-            file: exeunits_file,
+            file: PathBuf::from(&self.exe_unit_path),
         };
         self.runner.send(msg).await??;
 
@@ -117,24 +113,6 @@ impl ProviderAgent {
         );
 
         market.send(OnShutdown {}).await?
-    }
-
-    pub fn get_exe_units_config_path(path: &Option<String>) -> PathBuf {
-        let exe_unit_path = format!(
-            "{}/example-exeunits.json",
-            match path.is_none() {
-                true => {
-                    let global_path_linux = "/usr/lib/yagna/plugins";
-                    if cfg!(target_os = "linux") && Path::new(global_path_linux).exists() {
-                        global_path_linux
-                    } else {
-                        "exe-unit"
-                    }
-                }
-                false => &path.as_ref().unwrap(),
-            }
-        );
-        PathBuf::from(exe_unit_path)
     }
 }
 

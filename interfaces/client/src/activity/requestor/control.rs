@@ -9,7 +9,7 @@ pub struct ActivityRequestorControlApi {
 }
 
 impl WebInterface for ActivityRequestorControlApi {
-    const API_URL_ENV_VAR: &'static str = "YAGNA_ACTIVITY_URL";
+    const API_URL_ENV_VAR: &'static str = crate::activity::ACTIVITY_URL_ENV_VAR;
     const API_SUFFIX: &'static str = ACTIVITY_API_PATH;
 
     fn from(client: WebClient) -> Self {
@@ -48,15 +48,12 @@ impl ActivityRequestorControlApi {
         batch_id: &str,
         #[allow(non_snake_case)]
         timeout: Option<i32>,
-        #[allow(non_snake_case)]
-        maxCount: Option<i32>,
     ) -> Result<Vec<ExeScriptCommandResult>> {
         let uri = url_format!(
             "activity/{activity_id}/exec/{batch_id}",
             activity_id,
             batch_id,
             #[query] timeout,
-            #[query] maxCount
         );
         self.client.get(&uri).send().json().await
     }

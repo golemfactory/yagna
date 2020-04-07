@@ -175,7 +175,7 @@ impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, PathBuf, Error>;
 
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let source_url = actor_try!(TransferUrl::parse(&self.task_package, "file"));
+        let source_url = actor_try!(TransferUrl::parse_with_hash(&self.task_package, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
         let cache_path = self.cache.to_cache_path(&cache_name);
         let final_path = self.cache.to_final_path(&cache_name);
@@ -196,7 +196,10 @@ impl Handler<DeployImage> for TransferService {
 
         let fut = async move {
             let final_path = final_path.to_path_buf();
-            if final_path.exists() {
+            let cache_path = cache_path.to_path_buf();
+
+            if cache_path.exists() {
+                std::fs::copy(cache_path, &final_path)?;
                 return Ok(final_path);
             }
 
@@ -206,7 +209,7 @@ impl Handler<DeployImage> for TransferService {
                 .map_err(TransferError::from)??;
             address.send(RemoveAbortHandle(abort)).await?;
 
-            std::fs::rename(cache_path.to_path_buf(), &final_path)?;
+            std::fs::copy(cache_path, &final_path)?;
 
             log::info!("Deployment from {:?} finished", source_url.url);
             Ok(final_path)

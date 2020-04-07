@@ -10,12 +10,12 @@ edition = "2018"
 
 [dependencies]
 ya-activity = "0.2"
-ya-core-model = "0.1"
 ya-identity = "0.2"
 ya-market = "0.1"
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = { version = "0.1", features = ["gnt-driver"] }
 ya-persistence = "0.2"
+ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.1"
@@ -41,7 +41,8 @@ assets = [
     ["target/release/yagna", "usr/bin/", "755"],
     ["target/release/ya-requestor", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
+    ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
     ["target/release/wasmtime-exeunit", "usr/lib/yagna/plugins/", "755"],
-    ["../../exe-unit/example-exeunits.json", "usr/lib/yagna/plugins/", "644"],
+    ["../../exe-unit/resources/exeunits-descriptor.json", "usr/lib/yagna/plugins/", "644"],
 ]
 

@@ -103,7 +103,11 @@ impl WebClient {
 }
 
 impl WebRequest<ClientRequest> {
-    pub fn send_json<T: Serialize>(self, value: &T) -> WebRequest<SendClientRequest> {
+    pub fn send_json<T: Serialize + std::fmt::Debug>(
+        self,
+        value: &T,
+    ) -> WebRequest<SendClientRequest> {
+        log::trace!("sending payload: {:?}", value);
         WebRequest {
             inner_request: self.inner_request.send_json(value),
             url: self.url,
@@ -158,6 +162,18 @@ impl WebRequest<SendClientRequest> {
         }
 
         Ok(response.json().await?)
+    }
+}
+
+// this is used internally to translate from HTTP Timeout into default result
+// (empty vec most of tht time)
+pub(crate) fn default_on_timeout<T: Default>(err: Error) -> Result<T> {
+    match err {
+        Error::TimeoutError { msg, url, .. } => {
+            log::trace!("timeout getting url {}: {}", url, msg);
+            Ok(Default::default())
+        }
+        _ => Err(err),
     }
 }
 
@@ -255,13 +271,10 @@ impl<'a> QueryParamsBuilder<'a> {
     }
 
     pub fn put<N: ToString, V: ToString>(mut self, name: N, value: Option<V>) -> Self {
-        let value = match value {
-            Some(v) => v.to_string(),
-            None => String::new(),
+        if let Some(v) = value {
+            self.serializer
+                .append_pair(&name.to_string(), &v.to_string());
         };
-
-        self.serializer
-            .append_pair(name.to_string().as_str(), value.as_str());
         self
     }
 
@@ -287,6 +300,7 @@ macro_rules! url_format {
 }
 
 #[cfg(test)]
+#[rustfmt::skip]
 mod tests {
 
     #[test]
@@ -306,7 +320,7 @@ mod tests {
         assert_eq!(url_format!("foo/{bar}", bar), "foo/qux");
     }
 
-    // compilation erro when wrong var name given
+    // compilation error when wrong var name given
     //    #[test]
     //    fn wrong_single_var_url() {
     //        let bar="qux";
@@ -324,10 +338,9 @@ mod tests {
     }
 
     #[test]
-    #[rustfmt::skip]
     fn empty_query_url() {
         let bar = Option::<String>::None;
-        assert_eq!(url_format!("foo", #[query] bar), "foo?bar=");
+        assert_eq!(url_format!("foo", #[query] bar), "foo");
     }
 
     #[test]
@@ -338,37 +351,20 @@ mod tests {
     }
 
     #[test]
-    #[rustfmt::skip]
     fn mix_query_url() {
         let bar = Option::<String>::None;
         let baz = Some("quz");
-        assert_eq!(
-            url_format!(
-                "foo",
-                #[query] bar,
-                #[query] baz
-            ),
-            "foo?bar=&baz=quz"
-        );
+        assert_eq!(url_format!("foo", #[query] bar, #[query] baz), "foo?baz=quz");
     }
 
     #[test]
-    #[rustfmt::skip]
     fn multi_query_url() {
         let bar = Some("qux");
         let baz = Some("quz");
-        assert_eq!(
-            url_format!(
-                "foo",
-                #[query] bar,
-                #[query] baz
-            ),
-            "foo?bar=qux&baz=quz"
-        );
+        assert_eq!(url_format!("foo", #[query] bar, #[query] baz), "foo?bar=qux&baz=quz");
     }
 
     #[test]
-    #[rustfmt::skip]
     fn multi_var_and_query_url() {
         let bar = "baara";
         let baz = 0;

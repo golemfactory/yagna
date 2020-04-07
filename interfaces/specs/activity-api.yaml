@@ -40,25 +40,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         403:
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
       x-codegen-request-body-name: agreementId
   /activity/{activityId}/exec:
     post:
@@ -92,25 +92,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         403:
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
       x-codegen-request-body-name: script
   /activity/{activityId}/exec/{batchId}:
     get:
@@ -131,16 +131,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: timeout
-          in: query
-          schema:
-            type: number
-            format: float
-        - name: maxCount
-          in: query
-          schema:
-            type: integer
-            format: int32
+        - $ref: 'common.yaml#/parameters/timeout'
       responses:
         200:
           description: Success
@@ -155,25 +146,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         403:
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
   /activity/{activityId}:
     delete:
       tags:
@@ -197,19 +188,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         404:
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
   /events:
     get:
       tags:
@@ -217,11 +208,9 @@ paths:
       summary: Fetch Requestor command events.
       operationId: CollectActivityEvents
       parameters:
-        - name: timeout
-          in: query
-          schema:
-            type: number
-            format: float
+        - $ref: 'common.yaml#/parameters/timeout'
+        - $ref: 'common.yaml#/parameters/maxEvents'
+
       responses:
         200:
           description: Success
@@ -240,13 +229,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
   /activity/{activityId}/state:
     get:
       tags:
@@ -272,13 +261,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
     put:
       tags:
         - provider
@@ -305,13 +294,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
   /activity/{activityId}/usage:
     get:
       tags:
@@ -345,13 +334,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
   /activity/{activityId}/command:
     get:
       tags:
@@ -377,13 +366,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
         500:
           description: Server Error
           content:
             application/json:
               schema:
-                $ref: 'error_message.yaml#/ErrorMessage'
+                $ref: 'common.yaml#/schemas/ErrorMessage'
 components:
   schemas:
     ExeScriptRequest:
@@ -434,6 +423,9 @@ components:
           items:
             type: number
             format: double
+        timestamp:
+          type: integer
+          description: Usage update timestamp (UTC)
 
     ActivityState:
       required:
@@ -444,6 +436,7 @@ components:
           type: string
           enum:
             - New
+            - Initialized
             - Deploying
             - Ready
             - Starting

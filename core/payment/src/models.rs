@@ -148,7 +148,7 @@ impl NewDebitNote {
             id: Uuid::new_v4().to_string(),
             issuer_id,
             recipient_id,
-            previous_debit_note_id: debit_note.previous_debit_note_id,
+            previous_debit_note_id: None,
             agreement_id: debit_note.agreement_id,
             activity_id: debit_note.activity_id,
             total_amount_due: debit_note.total_amount_due.into(),
@@ -170,6 +170,36 @@ pub struct DebitNoteEvent {
     pub event_type: String,
     pub timestamp: NaiveDateTime,
     pub details: Option<String>,
+}
+
+impl From<DebitNoteEvent> for api_model::DebitNoteEvent {
+    fn from(event: DebitNoteEvent) -> Self {
+        Self {
+            debit_note_id: event.debit_note_id,
+            timestamp: Utc.from_utc_datetime(&event.timestamp),
+            details: event.details.map(|s| serde_json::from_str(&s).unwrap()),
+            event_type: event.event_type.try_into().unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, Identifiable, Insertable)]
+#[table_name = "pay_debit_note_event"]
+#[primary_key(debit_note_id, event_type)]
+pub struct NewDebitNoteEvent {
+    pub debit_note_id: String,
+    pub event_type: String,
+    pub details: Option<String>,
+}
+
+impl From<api_model::NewDebitNoteEvent> for NewDebitNoteEvent {
+    fn from(event: api_model::NewDebitNoteEvent) -> Self {
+        Self {
+            debit_note_id: event.debit_note_id,
+            event_type: event.event_type.into(),
+            details: event.details.map(|s| serde_json::to_string(&s).unwrap()),
+        }
+    }
 }
 
 #[derive(Queryable, QueryableByName, Debug, Identifiable, Insertable)]

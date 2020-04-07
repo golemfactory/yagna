@@ -1,7 +1,7 @@
 //! Provider part of Activity API
 use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, ACTIVITY_API_PATH};
 
-use crate::{web::WebClient, web::WebInterface, Error, Result};
+use crate::{web::default_on_timeout, web::WebClient, web::WebInterface, Result};
 
 pub struct ActivityProviderApi {
     client: WebClient,
@@ -43,7 +43,7 @@ impl ActivityProviderApi {
         #[allow(non_snake_case)]
         timeout: Option<i32>,
         #[allow(non_snake_case)]
-        maxEvents: Option<i32>, // TODO: max_events
+        maxEvents: Option<i32>,
     ) -> Result<Vec<ProviderEvent>> {
         let url = url_format!(
             "events",
@@ -51,15 +51,6 @@ impl ActivityProviderApi {
             #[query] maxEvents
         );
 
-        match self.client.get(&url).send().json().await {
-            Ok(v) => Ok(v),
-            Err(e) => match e {
-                Error::TimeoutError { msg, url,.. } => {
-                    log::trace!("timeout getting url {}: {}", url, msg);
-                    Ok(Vec::new())
-                },
-                _ => Err(e),
-            },
-        }
+        self.client.get(&url).send().json().await.or_else(default_on_timeout)
     }
 }

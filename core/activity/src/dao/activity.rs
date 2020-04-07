@@ -2,12 +2,11 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde_json;
 
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::State;
+use ya_model::activity::{State, StatePair};
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::schema;
 
-use crate::dao::{last_insert_rowid, Result};
+use crate::dao::{last_insert_rowid, DaoError, Result};
 use diesel::dsl::exists;
 
 pub struct ActivityDao<'c> {
@@ -21,17 +20,22 @@ impl<'a> AsDao<'a> for ActivityDao<'a> {
 }
 
 impl<'c> ActivityDao<'c> {
-    pub async fn get_agreement_id(&self, activity_id: &str) -> Result<Option<String>> {
+    pub async fn get_agreement_id(&self, activity_id: &str) -> Result<String> {
         use schema::activity::dsl;
 
         let activity_id = activity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            Ok(dsl::activity
+            dsl::activity
                 .select(dsl::agreement_id)
-                .filter(dsl::natural_id.eq(activity_id))
+                .filter(dsl::natural_id.eq(&activity_id))
                 .first(conn)
-                .optional()?)
+                .map_err(|e| match e {
+                    diesel::NotFound => {
+                        DaoError::NotFound(format!("agreement id for activity: {}", activity_id))
+                    }
+                    e => e.into(),
+                })
         })
         .await
     }
