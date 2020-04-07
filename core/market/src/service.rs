@@ -8,7 +8,7 @@ use ya_client::{
     market::MarketProviderApi,
     web::{WebClient, WebInterface},
 };
-use ya_core_model::{appkey, market};
+use ya_core_model::{appkey, identity, market};
 use ya_service_api_interfaces::Service;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
@@ -62,7 +62,37 @@ async fn get_app_keys() -> anyhow::Result<Vec<serde_json::Value>> {
     Ok(ids)
 }
 
+async fn create_test_key() -> anyhow::Result<()> {
+    let ids = get_app_keys().await?;
+
+    if ids.len() == 0 {
+        log::info!("Creating test app-key");
+        let default_id = bus::service(identity::BUS_ID)
+            .send(identity::Get::ByDefault)
+            .await
+            .map_err(anyhow::Error::msg)??
+            .ok_or(anyhow!(
+                "Creating test app-key failed, no default identity."
+            ))?
+            .node_id;
+
+        bus::service(appkey::BUS_ID)
+            .send(appkey::Create {
+                name: "test-key".to_string(),
+                role: "manager".to_string(),
+                identity: default_id,
+            })
+            .await
+            .ok();
+        log::info!("Test app-key created");
+    }
+
+    Ok(())
+}
+
 async fn tmp_send_keys() -> anyhow::Result<()> {
+    create_test_key().await?;
+
     let mut url =
         MarketProviderApi::rebase_service_url(Rc::new(Url::parse("http://127.0.0.1:5001")?))?
             .as_ref()
