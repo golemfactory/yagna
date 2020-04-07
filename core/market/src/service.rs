@@ -45,7 +45,7 @@ async fn get_agreement(get: &market::GetAgreement) -> Result<market::Agreement, 
     Ok(market_api.get_agreement(&get.agreement_id).await?)
 }
 
-async fn tmp_send_keys() -> anyhow::Result<()> {
+async fn get_app_keys() -> anyhow::Result<Vec<serde_json::Value>> {
     let (ids, _n) = bus::service(appkey::BUS_ID)
         .send(appkey::List {
             identity: None,
@@ -58,8 +58,11 @@ async fn tmp_send_keys() -> anyhow::Result<()> {
         .into_iter()
         .map(|k: appkey::AppKey| serde_json::json! {{"key": k.key, "nodeId": k.identity}})
         .collect();
-    log::debug!("exporting all app-keys: {:#?}", &ids);
 
+    Ok(ids)
+}
+
+async fn tmp_send_keys() -> anyhow::Result<()> {
     let mut url =
         MarketProviderApi::rebase_service_url(Rc::new(Url::parse("http://127.0.0.1:5001")?))?
             .as_ref()
@@ -73,6 +76,8 @@ async fn tmp_send_keys() -> anyhow::Result<()> {
         .map_err(|e| anyhow!("Failed to build frozen request. Error: {}", e.to_string()))?;
 
     for count in 0..KEY_EXPORT_RETRY_COUNT {
+        let ids = get_app_keys().await?;
+
         match request.send_json(&ids).await {
             Ok(mut response) => {
                 let parsed_response: serde_json::Value = response
