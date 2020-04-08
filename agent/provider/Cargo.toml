@@ -1,5 +1,6 @@
 [package]
 name = "ya-provider"
+description = "Yagna Provider Agent reference implementation."
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"

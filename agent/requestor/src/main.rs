@@ -17,6 +17,9 @@ use ya_model::{
 };
 
 #[derive(StructOpt)]
+#[structopt(about = clap::crate_description!())]
+#[structopt(setting = clap::AppSettings::ColoredHelp)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,
