@@ -1,6 +1,6 @@
-use actix_rt::Arbiter;
+use actix_rt::{signal, Arbiter};
 use chrono::{DateTime, Utc};
-use futures::{channel::mpsc, prelude::*};
+use futures::{channel::mpsc, channel::oneshot, future, prelude::*};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use url::Url;
@@ -350,6 +350,7 @@ async fn main() -> anyhow::Result<()> {
 
     let payment_api = settings.payment_api()?;
     let allocation = allocate_funds_for_task(&payment_api).await?;
+    let allocation_id = allocation.allocation_id.clone();
 
     let node_name = "test1";
     let my_demand = build_demand(node_name);
@@ -359,18 +360,6 @@ async fn main() -> anyhow::Result<()> {
     let subscription_id = market_api.subscribe(&my_demand).await?;
 
     log::info!("sub_id={}", subscription_id);
-
-    // mount signal handler to unsubscribe from the market
-    {
-        let market_api = market_api.clone();
-        let sub_id = subscription_id.clone();
-        Arbiter::spawn(async move {
-            tokio::signal::ctrl_c().await.unwrap();
-            market_api.unsubscribe(&sub_id).await.unwrap();
-            // TODO: destroy running activity
-            // TODO: process (accept / reject) incoming payments
-        });
-    }
 
     let mkt_api = market_api.clone();
     let sub_id = subscription_id.clone();
@@ -383,10 +372,16 @@ async fn main() -> anyhow::Result<()> {
 
     let activity_api = settings.activity_api()?;
     let exe_script = settings.exe_script.clone();
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
     Arbiter::spawn(async move {
         while let Some(id) = agreement_rx.next().await {
-            if let Err(e) = process_agreement(&activity_api, id.clone(), &exe_script).await {
-                log::error!("processing agreement id {} error: {}", id, e);
+            match process_agreement(&activity_api, id.clone(), &exe_script).await {
+                Ok(_) => {
+                    shutdown_tx.send(()).unwrap();
+                    break;
+                }
+                Err(e) => log::error!("processing agreement id {} error: {}", id, e),
             }
             // TODO: Market doesn't support agreement termination yet.
             // let terminate_result = market_api.terminate_agreement(&id).await;
@@ -399,9 +394,18 @@ async fn main() -> anyhow::Result<()> {
         started_at.clone(),
     ));
 
-    Arbiter::spawn(process_payments(payment_api, allocation, started_at));
+    Arbiter::spawn(process_payments(
+        payment_api.clone(),
+        allocation,
+        started_at,
+    ));
 
-    tokio::signal::ctrl_c().await?;
+    future::select(signal::ctrl_c().boxed_local(), shutdown_rx).await;
+
     market_api.unsubscribe(&subscription_id).await?;
+    payment_api.release_allocation(&allocation_id).await?;
+    // TODO: process (accept / reject) incoming payments
+
+    Arbiter::current().stop();
     Ok(())
 }

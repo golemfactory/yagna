@@ -14,7 +14,7 @@ use ya_model::market::{
 };
 
 #[derive(StructOpt)]
-#[structopt(name = "Router", about = "Service Bus Router")]
+#[structopt(name = "Market", about = "Market service properties")]
 struct Options {
     #[structopt(short = "a", long, default_value = "localhost:5001")]
     host_port: String,
