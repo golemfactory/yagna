@@ -1,5 +1,3 @@
-
-
 /// Preset describing offer, that can be saved and loaded from disk.
 pub struct Preset {
     exeunit_name: String,
@@ -7,6 +5,4 @@ pub struct Preset {
 }
 
 /// Responsible for presets management.
-pub struct Presets {
-
-}
+pub struct Presets {}

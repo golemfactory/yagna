@@ -1,13 +1,12 @@
+use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 use url::Url;
-use std::path::PathBuf;
 
 use ya_client::{
     activity::ActivityProviderApi, market::MarketProviderApi,
     payment::provider::ProviderApi as PaymentProviderApi, web::WebClient, web::WebInterface,
     Result,
 };
-
 
 #[derive(StructOpt)]
 pub struct RunConfig {
@@ -44,8 +43,16 @@ pub enum PresetsConfig {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum ExeUnitsConfig {
-    List,
-    // TODO: Install command - could download ExeUnit and add to descriptor file.
+    List {
+        /// Descriptor file (JSON) for available ExeUnits
+        #[structopt(
+            long = "exe-unit-path",
+            env = "EXE_UNIT_PATH",
+            default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
+        )]
+        exe_unit_path: PathBuf,
+    }, // TODO: Install command - could download ExeUnit and add to descriptor file.
+       // TODO: Update command - could update ExeUnit.
 }
 
 #[derive(StructOpt)]
@@ -55,7 +62,7 @@ pub enum ExeUnitsConfig {
 pub enum StartupConfig {
     Run(RunConfig),
     Presets(PresetsConfig),
-    ExeUnit(ExeUnitsConfig)
+    ExeUnit(ExeUnitsConfig),
 }
 
 impl RunConfig {

@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use derive_more::Display;
 use log::info;
 use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
@@ -11,9 +12,17 @@ use std::{
 
 use super::exeunit_instance::ExeUnitInstance;
 
+
 /// Descriptor of ExeUnit
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Display)]
 #[serde(rename_all = "kebab-case")]
+#[display(
+    fmt = "Name:        {}\nSupervisor:  {}\nRuntime:     {}\nDescription: {}",
+    name,
+    "supervisor_path.display()",
+    "runtime_path.display()",
+    description,
+)]
 pub struct ExeUnitDesc {
     name: String,
     supervisor_path: PathBuf,
@@ -123,6 +132,13 @@ impl ExeUnitsRegistry {
             .get(name)
             .ok_or(anyhow!("ExeUnit [{}] doesn't exist in registry.", name))?
             .clone())
+    }
+
+    pub fn list_exeunits(&self) -> Vec<ExeUnitDesc> {
+        self.descriptors
+            .iter()
+            .map(|(_, desc)| desc.clone())
+            .collect()
     }
 }
 

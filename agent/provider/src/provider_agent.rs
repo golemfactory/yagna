@@ -7,14 +7,15 @@ use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
-    ActivityCreated, ActivityDestroyed, InitializeExeUnits, TaskRunner, UpdateActivity,
+    ActivityCreated, ActivityDestroyed, ExeUnitsRegistry, InitializeExeUnits,
+    TaskRunner, UpdateActivity,
 };
 use crate::market::{
     provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
     CreateOffer, ProviderMarket,
 };
 use crate::payments::Payments;
-use crate::startup_config::RunConfig;
+use crate::startup_config::{ExeUnitsConfig, PresetsConfig, RunConfig};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -113,6 +114,19 @@ impl ProviderAgent {
         );
 
         market.send(OnShutdown {}).await?
+    }
+
+    pub fn list_exeunits(exe_unit_path: PathBuf) -> anyhow::Result<()> {
+        let mut registry = ExeUnitsRegistry::new();
+        registry.register_exeunits_from_file(&exe_unit_path)?;
+
+        println!("Available ExeUnits:");
+
+        let exeunits = registry.list_exeunits();
+        for exeunit in exeunits.iter() {
+            println!("{}", exeunit);
+        }
+        Ok(())
     }
 }
 
