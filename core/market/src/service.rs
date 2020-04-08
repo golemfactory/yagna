@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use std::{rc::Rc, time::Duration};
+use std::{convert::TryInto, rc::Rc, time::Duration};
 use url::Url;
 
 use ya_client::{
@@ -7,8 +7,11 @@ use ya_client::{
     web::{WebClient, WebInterface},
 };
 use ya_core_model::{appkey, market};
-use ya_service_api_interfaces::Service;
+use ya_persistence::executor::DbExecutor;
+use ya_service_api_interfaces::{Provider, Service};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+
+use crate::{dao::AgreementDao, Error};
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
@@ -19,18 +22,35 @@ impl Service for MarketService {
 }
 
 impl MarketService {
-    pub async fn gsb<Context>(_: &Context) -> anyhow::Result<()> {
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
+        let db = ctx.component();
         let client = WebClient::builder()
             .timeout(Duration::from_secs(5))
             .build()?;
 
         let _ = bus::bind(market::BUS_ID, move |get: market::GetAgreement| {
             let market_api: MarketProviderApi = client.interface().unwrap();
+            let db = db.clone();
+
             async move {
-                Ok(market_api
+                let dao = db.as_dao::<AgreementDao>();
+                if let Ok(agreement) = dao.get(get.agreement_id.clone()).await {
+                    log::debug!("got agreement from db: {:#?}", agreement);
+                    return Ok(agreement.try_into().map_err(Error::from)?);
+                }
+
+                log::debug!("fetching agreement [{}] via REST", get.agreement_id);
+                let agreement = market_api
                     .get_agreement(&get.agreement_id)
                     .await
-                    .map_err(|e| market::RpcMessageError::Service(e.to_string()))?)
+                    .map_err(|e| market::RpcMessageError::Service(e.to_string()))?;
+
+                log::debug!("inserting agreement: {:#?}", agreement);
+                dao.create(agreement.clone().try_into().map_err(Error::from)?)
+                    .await
+                    .map_err(Error::from)?;
+
+                Ok(agreement)
             }
         });
 
