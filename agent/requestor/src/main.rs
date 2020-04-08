@@ -163,7 +163,7 @@ async fn spawn_workers(
     }
 }
 
-fn build_demand(node_name: &str) -> Demand {
+fn build_demand(node_name: &str, task_package: &str) -> Demand {
     Demand {
         properties: serde_json::json!({
             "golem": {
@@ -176,7 +176,7 @@ fn build_demand(node_name: &str) -> Demand {
                 "srv": {
                     "comp":{
                         "wasm": {
-                            "task_package": "http://34.244.4.185:8000/rust-wasi-tutorial.zip"
+                            "task_package": task_package
                         }
                     }
                 }
@@ -355,7 +355,8 @@ async fn main() -> anyhow::Result<()> {
     let allocation = allocate_funds_for_task(&payment_api).await?;
 
     let node_name = "test1";
-    let my_demand = build_demand(node_name);
+    let task_package = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip";
+    let my_demand = build_demand(node_name, task_package);
     //(golem.runtime.wasm.wasi.version@v=*)
 
     let market_api = settings.market_api()?;
