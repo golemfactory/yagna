@@ -24,6 +24,7 @@ impl Service for MarketService {
 impl MarketService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let db = ctx.component();
+        crate::dao::init(&db)?;
         let client = WebClient::builder()
             .timeout(Duration::from_secs(5))
             .build()?;
@@ -35,7 +36,7 @@ impl MarketService {
             async move {
                 let dao = db.as_dao::<AgreementDao>();
                 if let Ok(agreement) = dao.get(get.agreement_id.clone()).await {
-                    log::debug!("got agreement from db: {:#?}", agreement);
+                    log::debug!("got agreement from db: {}", agreement.natural_id);
                     return Ok(agreement.try_into().map_err(Error::from)?);
                 }
 
@@ -45,7 +46,8 @@ impl MarketService {
                     .await
                     .map_err(|e| market::RpcMessageError::Service(e.to_string()))?;
 
-                log::debug!("inserting agreement: {:#?}", agreement);
+                log::debug!("inserting agreement: {}", agreement.agreement_id);
+                log::trace!("inserting agreement: {:#?}", agreement);
                 dao.create(agreement.clone().try_into().map_err(Error::from)?)
                     .await
                     .map_err(Error::from)?;
