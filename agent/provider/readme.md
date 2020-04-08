@@ -40,9 +40,9 @@ To obtain it we need to be in this newly created workdir `cd ya-prov`:
 ```
 cargo run --bin yagna -- service run
 ```
-or optionaly with RUST_LOG tweaks:
+When enabling `debug` log level or higher its good to filter out core crates to `info`:
 ```
-RUST_LOG=debug,tokio_core=info,hyper=info,tokio_reactor=info cargo run --bin yagna -- service run
+RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info cargo run --bin yagna -- service run
 ```
 
 2. Create token:
@@ -63,9 +63,13 @@ $ cargo run --bin yagna -- app-key create "provider-agent"
 
 ## Running the Provider Agent
 
+Make sure you have compiled latest changes to exe-init binaries:
+
+`cargo build --release --bin exe-unit --bin wasmtime-exeunit`
+
 While the yagna daemon is still running (and you are in the `ya-prov` directory) you can now start Provider Agent:
 
-`RUST_LOG=debug cargo run --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json`
+`cargo run --release --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json`
 
 
 ## Mock requestor
@@ -109,5 +113,5 @@ cargo run --bin yagna payment status
 8. Run requestor (commands.json contains commands to be executed on the provider):
 
 ```
-RUST_LOG=info cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
+cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
 ```
