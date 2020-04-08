@@ -12,7 +12,7 @@ use crate::execution::{
 };
 use crate::market::{
     provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
-    CreateOffer, ProviderMarket,
+    CreateOffer, ProviderMarket, Presets,
 };
 use crate::payments::Payments;
 use crate::startup_config::{ExeUnitsConfig, PresetsConfig, RunConfig};
@@ -125,6 +125,20 @@ impl ProviderAgent {
         let exeunits = registry.list_exeunits();
         for exeunit in exeunits.iter() {
             println!("{}", exeunit);
+        }
+        Ok(())
+    }
+
+    pub fn list_presets(presets_path: PathBuf) -> anyhow::Result<()> {
+        let mut presets = Presets::new();
+        presets.load_from_file(&presets_path)?;
+
+        println!("Available Presets:");
+
+        let presets_list = presets.list();
+        for preset in presets_list.iter() {
+            println!();   // Enter
+            println!("{}", preset);
         }
         Ok(())
     }
