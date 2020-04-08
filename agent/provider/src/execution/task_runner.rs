@@ -361,7 +361,6 @@ impl TaskRunner {
         Ok(())
     }
 
-    #[logfn_inputs(Info, fmt = "{}Creating task: {}, activity id: {}, agreement id: {}")]
     #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
@@ -397,6 +396,13 @@ impl TaskRunner {
         args.push(activity::local::BUS_ID);
 
         let args = args.iter().map(ToString::to_string).collect();
+
+        log::info!(
+            "Creating task: agreement [{}], activity [{}] in directory: [{}].",
+            agreement_id,
+            activity_id,
+            working_dir.display()
+        );
 
         let exeunit_instance = self
             .registry
@@ -466,8 +472,7 @@ fn task_package_from(agreement: &Agreement) -> Result<String> {
         .as_str()
         .ok_or(anyhow!("'{}' is not a string.", runtime_key_str))?;
 
-    // Workaround for string escaping in current market.
-    Ok(runtime_name[1..runtime_name.len() - 1].to_string())
+    Ok(runtime_name.to_string())
 }
 
 // =========================================== //
