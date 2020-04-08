@@ -6,7 +6,7 @@
             "-b", "../target/debug/wasmtime-exeunit",
             "-c", "exe-unit-wd/cache/",
             "-w", "exe-unit-wd/work/",
-            "-a", "../exe-unit/examples/agreement.json",
+            "-a", "../exe-unit/examples/local_agreement.json",
             "service-bus"
         ]
     }
