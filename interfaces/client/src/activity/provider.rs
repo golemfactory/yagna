@@ -3,6 +3,7 @@ use ya_model::activity::{ActivityState, ActivityUsage, ProviderEvent, ACTIVITY_A
 
 use crate::{web::default_on_timeout, web::WebClient, web::WebInterface, Result};
 
+#[derive(Clone)]
 pub struct ActivityProviderApi {
     client: WebClient,
 }

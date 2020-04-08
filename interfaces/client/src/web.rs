@@ -87,18 +87,13 @@ impl WebClient {
         self.request(Method::DELETE, url)
     }
 
-    pub fn interface<T: WebInterface>(&self) -> Result<T> {
-        let base_url = T::rebase_service_url(self.base_url.clone())?;
+    pub fn interface<T: WebInterface>(&self, url: Option<Url>) -> Result<T> {
+        let base_url = match url {
+            Some(url) => url.into(),
+            None => T::rebase_service_url(self.base_url.clone())?,
+        };
         let awc = self.awc.clone();
         Ok(T::from(WebClient { base_url, awc }))
-    }
-
-    pub fn interface_at<T: WebInterface>(&self, base_url: Url) -> T {
-        let awc = self.awc.clone();
-        T::from(WebClient {
-            base_url: base_url.into(),
-            awc,
-        })
     }
 }
 

@@ -23,10 +23,10 @@ async fn provider(client: &ActivityProviderApi, activity_id: &str) -> Result<()>
 }
 
 async fn requestor(client: &WebClient, agreement_id: &str) -> Result<()> {
-    let activity_id = requestor_start(&client.interface()?, agreement_id).await?;
-    requestor_exec(&client.interface()?, &activity_id).await?;
-    requestor_state(&client.interface()?, &activity_id).await?;
-    requestor_stop(&client.interface()?, &activity_id).await
+    let activity_id = requestor_start(&client.interface(None)?, agreement_id).await?;
+    requestor_exec(&client.interface(None)?, &activity_id).await?;
+    requestor_state(&client.interface(None)?, &activity_id).await?;
+    requestor_stop(&client.interface(None)?, &activity_id).await
 }
 
 async fn requestor_start(
@@ -79,7 +79,7 @@ async fn requestor_state(client: &ActivityRequestorStateApi, activity_id: &str) 
 async fn interact() -> Result<()> {
     let client = WebClient::builder().build()?;
     requestor(&client, "agreement_id").await?;
-    provider(&client.interface()?, "activity_id").await
+    provider(&client.interface(None)?, "activity_id").await
 }
 
 #[actix_rt::main]

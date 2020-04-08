@@ -263,8 +263,8 @@ async fn interact(host_port: &String) -> Result<()> {
     let client = WebClient::builder().host_port(host_port).build()?;
 
     futures::try_join!(
-        provider_interact(client.interface()?, host_port),
-        requestor_interact(client.interface()?, host_port)
+        provider_interact(client.interface(None)?, host_port),
+        requestor_interact(client.interface(None)?, host_port)
     )
     .map(|_| ())
 }

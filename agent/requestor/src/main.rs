@@ -1,70 +1,28 @@
 use actix_rt::{signal, Arbiter};
 use chrono::{DateTime, Utc};
 use futures::{channel::mpsc, channel::oneshot, future, prelude::*};
-use std::{path::PathBuf, time::Duration};
-use structopt::StructOpt;
-use url::Url;
+use std::{convert::TryInto, path::PathBuf, time::Duration};
+use structopt::{clap, StructOpt};
 
-use ya_client::payment::requestor::RequestorApi as PaymentRequestorApi;
 use ya_client::{
-    activity::ActivityRequestorApi,
-    market::MarketRequestorApi,
-    web::{WebAuth, WebClient, WebInterface},
+    activity::ActivityRequestorApi, cli::ApiOpts, market::MarketRequestorApi,
+    payment::requestor::RequestorApi as PaymentRequestorApi, RequestorApi,
 };
 use ya_model::{
     activity::ExeScriptRequest,
     market::{
         proposal::State as ProposalState, AgreementProposal, Demand, Proposal, RequestorEvent,
     },
-    payment::{Acceptance, Allocation, EventType, NewAllocation},
+    payment::{Acceptance, Allocation, EventType, NewAllocation, Rejection, RejectionReason},
 };
 
 #[derive(StructOpt)]
 struct AppSettings {
-    /// Authorization token to server
-    #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
-    app_key: String,
-
-    /// Market API URL
-    #[structopt(long = "market-url", env = MarketRequestorApi::API_URL_ENV_VAR)]
-    market_url: Url,
-
-    /// Activity API URL
-    #[structopt(long = "activity-url", env = ActivityRequestorApi::API_URL_ENV_VAR)]
-    activity_url: Option<Url>,
-
-    #[structopt(long = "payment-url", env = PaymentRequestorApi::API_URL_ENV_VAR)]
-    payment_url: Option<Url>,
+    #[structopt(flatten)]
+    api: ApiOpts,
 
     #[structopt(long = "exe-script")]
     exe_script: PathBuf,
-}
-
-impl AppSettings {
-    fn market_api(&self) -> anyhow::Result<MarketRequestorApi> {
-        Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
-    }
-
-    fn activity_api(&self) -> anyhow::Result<ActivityRequestorApi> {
-        let client = WebClient::with_token(&self.app_key)?;
-        if let Some(url) = &self.activity_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
-        }
-    }
-
-    fn payment_api(&self) -> anyhow::Result<PaymentRequestorApi> {
-        let client = WebClient::builder()
-            .auth(WebAuth::Bearer(self.app_key.clone()))
-            .timeout(Duration::from_secs(60)) // more than default accept invoice timeout which is 50s
-            .build()?;
-        if let Some(url) = &self.payment_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
-        }
-    }
 }
 
 enum ProcessOfferResult {

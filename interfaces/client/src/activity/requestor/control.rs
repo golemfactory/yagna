@@ -4,6 +4,7 @@ use ya_model::activity::{ExeScriptCommandResult, ExeScriptRequest, ACTIVITY_API_
 use crate::{web::default_on_timeout, web::WebClient, web::WebInterface, Result};
 
 /// Bindings for Requestor Control part of the Activity API.
+#[derive(Clone)]
 pub struct ActivityRequestorControlApi {
     client: WebClient,
 }
