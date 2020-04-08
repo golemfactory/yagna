@@ -25,6 +25,7 @@ pub mod error;
 mod handlers;
 pub mod message;
 pub mod metrics;
+mod notify;
 pub mod runtime;
 pub mod service;
 pub mod state;
@@ -132,7 +133,7 @@ impl<R: Runtime> ExeUnit<R> {
             {
                 let cmd_result = ExeScriptCommandResult {
                     index: ctx.idx as u32,
-                    result: Some(ya_model::activity::CommandResult::Error),
+                    result: ya_model::activity::CommandResult::Error,
                     message: Some(error.to_string()),
                 };
                 let set_state = SetState::default()
@@ -200,7 +201,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exec_result.result {
-            return Err(Error::command(&ctx.cmd, exec_result.stderr.clone()));
+            return Err(Error::CommandError(exec_result));
         }
 
         let sanity_state = addr.send(GetState {}).await?.0;

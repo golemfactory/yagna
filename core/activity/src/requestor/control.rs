@@ -11,6 +11,7 @@ use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
     get_activity_agreement, get_agreement, set_persisted_state, PathActivity, QueryTimeout,
+    QueryTimeoutCommandIndex,
 };
 use crate::dao::ActivityDao;
 use crate::error::Error;
@@ -132,16 +133,21 @@ async fn exec(
 async fn get_batch_results(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
-    query: web::Query<QueryTimeout>,
+    query: web::Query<QueryTimeoutCommandIndex>,
     id: Identity,
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+
+    if query.command_index.is_some() && query.timeout.is_none() {
+        return Err(Error::BadRequest("Timeout required".to_owned()));
+    }
 
     let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
+        command_index: query.command_index,
     };
 
     let results = agreement
@@ -151,7 +157,7 @@ async fn get_batch_results(
         .timeout(query.timeout)
         .await???;
 
-    Ok::<_, Error>(web::Json(results))
+    Ok(web::Json(results))
 }
 
 #[derive(Deserialize)]
