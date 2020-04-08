@@ -239,7 +239,7 @@ impl WebClientBuilder {
             Ok(WebClient {
                 base_url: Rc::new(Url::parse(&format!(
                     "http://{}",
-                    self.host_port.unwrap_or_else(|| "127.0.0.1:5001".into())
+                    self.host_port.unwrap_or_else(|| "127.0.0.1:7465".into())
                 ))?),
                 awc: builder.finish(),
             })
