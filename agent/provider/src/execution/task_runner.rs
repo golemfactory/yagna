@@ -209,7 +209,7 @@ impl TaskRunner {
     }
 
     async fn query_events(client: Arc<ActivityProviderApi>) -> Result<Vec<ProviderEvent>> {
-        Ok(client.get_activity_events(Some(3), None).await?)
+        Ok(client.get_activity_events(Some(3.), None).await?)
     }
 
     // =========================================== //

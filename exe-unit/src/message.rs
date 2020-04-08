@@ -17,11 +17,18 @@ pub struct SetTaskPackagePath(pub PathBuf);
 pub struct GetMetrics;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "GetStateResult")]
+#[rtype(result = "GetStateResponse")]
 pub struct GetState;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
-pub struct GetStateResult(pub StatePair);
+pub struct GetStateResponse(pub StatePair);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[rtype(result = "GetBatchResultsResponse")]
+pub struct GetBatchResults(pub String);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
+pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
@@ -105,13 +112,23 @@ pub struct ExecCmdResult {
 
 impl ExecCmdResult {
     pub fn into_exe_result(self, index: usize) -> ExeScriptCommandResult {
-        let message = match self.result {
-            CommandResult::Ok => self.stdout,
-            CommandResult::Error => self.stderr,
+        let stdout = self
+            .stdout
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stdout: {}", s));
+        let stderr = self
+            .stderr
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stderr: {}", s));
+        let message = match (stdout, stderr) {
+            (None, None) => None,
+            (Some(stdout), None) => Some(stdout),
+            (None, Some(stderr)) => Some(stderr),
+            (Some(stdout), Some(stderr)) => Some(format!("{}\n{}", stdout, stderr)),
         };
         ExeScriptCommandResult {
             index: index as u32,
-            result: Some(self.result),
+            result: self.result,
             message,
         }
     }

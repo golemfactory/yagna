@@ -26,6 +26,14 @@ pub struct QueryTimeout {
     pub timeout: Option<f32>,
 }
 
+#[derive(Deserialize)]
+pub struct QueryTimeoutCommandIndex {
+    #[serde(rename = "timeout")]
+    pub timeout: Option<f32>,
+    #[serde(rename = "commandIndex")]
+    pub command_index: Option<usize>,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct QueryTimeoutMaxEvents {
     /// number of milliseconds to wait

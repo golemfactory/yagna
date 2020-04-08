@@ -41,7 +41,7 @@ impl ActivityProviderApi {
     pub async fn get_activity_events(
         &self,
         #[allow(non_snake_case)]
-        timeout: Option<i32>,
+        timeout: Option<f32>,
         #[allow(non_snake_case)]
         maxEvents: Option<i32>,
     ) -> Result<Vec<ProviderEvent>> {
