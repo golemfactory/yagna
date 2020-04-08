@@ -1,9 +1,9 @@
 [
     {
         "name": "wasmtime",
-        "path": "../target/release/exe-unit",
+        "path": "../target/debug/exe-unit",
         "args": [
-            "-b", "../target/release/wasmtime-exeunit",
+            "-b", "../target/debug/wasmtime-exeunit",
             "-c", "exe-unit-wd/cache/",
             "-w", "exe-unit-wd/work/",
             "-a", "../exe-unit/examples/agreement.json",
