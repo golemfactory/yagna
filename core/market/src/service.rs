@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use std::rc::Rc;
+use std::{rc::Rc, time::Duration};
 use url::Url;
 
 use ya_client::{
@@ -9,9 +9,6 @@ use ya_client::{
 use ya_core_model::{appkey, market};
 use ya_service_api_interfaces::Service;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
-
-use crate::Error;
-use std::time::Duration;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
