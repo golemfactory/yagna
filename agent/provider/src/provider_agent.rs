@@ -15,7 +15,7 @@ use crate::market::{
     CreateOffer, ProviderMarket, Presets,
 };
 use crate::payments::Payments;
-use crate::startup_config::{ExeUnitsConfig, PresetsConfig, RunConfig};
+use crate::startup_config::RunConfig;
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
