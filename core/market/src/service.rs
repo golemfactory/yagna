@@ -11,6 +11,7 @@ use ya_service_api_interfaces::Service;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use crate::Error;
+use std::time::Duration;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
@@ -22,8 +23,18 @@ impl Service for MarketService {
 
 impl MarketService {
     pub async fn gsb<Context>(_: &Context) -> anyhow::Result<()> {
-        let _ = bus::bind(market::BUS_ID, |get: market::GetAgreement| async move {
-            Ok(get_agreement(&get).await?)
+        let client = WebClient::builder()
+            .timeout(Duration::from_secs(5))
+            .build()?;
+
+        let _ = bus::bind(market::BUS_ID, move |get: market::GetAgreement| {
+            let market_api: MarketProviderApi = client.interface().unwrap();
+            async move {
+                Ok(market_api
+                    .get_agreement(&get.agreement_id)
+                    .await
+                    .map_err(|e| market::RpcMessageError::Service(e.to_string()))?)
+            }
         });
 
         tmp_send_keys()
@@ -32,12 +43,6 @@ impl MarketService {
 
         Ok(())
     }
-}
-
-async fn get_agreement(get: &market::GetAgreement) -> Result<market::Agreement, Error> {
-    let market_api: MarketProviderApi = WebClient::builder().build()?.interface()?;
-
-    Ok(market_api.get_agreement(&get.agreement_id).await?)
 }
 
 async fn tmp_send_keys() -> anyhow::Result<()> {
