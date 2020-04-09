@@ -7,7 +7,10 @@ pub trait SecurePath {
     fn secure_join<PathRef: AsRef<Path>>(&self, path: PathRef) -> PathBuf;
 }
 
-impl<T> SecurePath for T where T : AsRef<Path> {
+impl<T> SecurePath for T
+where
+    T: AsRef<Path>,
+{
     fn secure_join<PathRef: AsRef<Path>>(&self, path: PathRef) -> PathBuf {
         let append = remove_insecure_chars(path);
         self.as_ref().join(&append)
