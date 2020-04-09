@@ -142,17 +142,21 @@ async fn spawn_activity(
 
     match api.payment.create_allocation(&new_allocation).await {
         Ok(alloc) => {
-            log::info!("Allocated {} GNT.", &alloc.total_amount);
+            log::info!(
+                "allocated {} GNT ({})",
+                alloc.total_amount,
+                alloc.allocation_id
+            );
             allocations
                 .lock()
                 .unwrap()
                 .insert(agreement_id.clone(), alloc.allocation_id);
         }
         Err(err) => {
-            log::error!("Unable to allocate GNT: {:?}", err);
+            log::error!("unable to allocate GNT: {:?}", err);
             match api.market.cancel_agreement(&agreement_id).await {
-                Ok(_) => log::warn!("Agreement {} cancelled", agreement_id),
-                Err(e) => log::error!("Unable to cancel agreement {}: {}", agreement_id, e),
+                Ok(_) => log::warn!("agreement {} cancelled", agreement_id),
+                Err(e) => log::error!("unable to cancel agreement {}: {}", agreement_id, e),
             }
             return;
         }
@@ -167,7 +171,7 @@ async fn spawn_activity(
     );
 
     if let Err(e) = fut.await {
-        log::error!("Error processing agreement {}: {}", agreement_id, e);
+        log::error!("error processing agreement {}: {}", agreement_id, e);
     }
     // TODO: Market doesn't support agreement termination yet.
     // let terminate_result = market_api.terminate_agreement(&id).await;
@@ -221,7 +225,7 @@ async fn run_activity(
 
     activities.lock().unwrap().insert(act_id.clone());
     log::info!("\n\n ACTIVITY CREATED: {}; YAY!", act_id);
-    log::info!("\n\n Executing script with {} commands", commands_cnt);
+    log::info!("\n\n executing script with {} commands", commands_cnt);
 
     let batch_id = activity_api
         .control()
@@ -237,7 +241,7 @@ async fn run_activity(
         }
 
         log::info!(
-            "Activity state: {:?}. Waiting for batch to complete...",
+            "activity state: {:?}. Waiting for batch to complete...",
             state
         );
         let results = activity_api
@@ -334,12 +338,13 @@ async fn process_invoice(
     let invoice = invoice.unwrap();
     log::debug!("got INVOICE: {:#?}", invoice);
 
-    match allocations
+    let allocation = allocations
         .lock()
         .unwrap()
         .get(&invoice.agreement_id)
-        .cloned()
-    {
+        .cloned();
+
+    match allocation {
         Some(allocation_id) => {
             let acceptance = Acceptance {
                 total_amount_accepted: invoice.amount,
@@ -352,8 +357,9 @@ async fn process_invoice(
             }
 
             allocations.lock().unwrap().remove(&invoice.agreement_id);
-            if let Err(e) = payment_api.release_allocation(&allocation_id).await {
-                log::error!("Unable to release allocation {}: {}", allocation_id, e);
+            match payment_api.release_allocation(&allocation_id).await {
+                Ok(_) => log::info!("released allocation {}", allocation_id),
+                Err(e) => log::error!("Unable to release allocation {}: {}", allocation_id, e),
             }
         }
         None => {
@@ -384,21 +390,22 @@ async fn shutdown_handler(
     log::info!("terminating...");
     log::info!("unsubscribing demand...");
     if let Err(e) = market_api.unsubscribe(&subscription_id).await {
-        log::error!("Unable to unsubscribe from the market: {:?}", e);
+        log::error!("unable to unsubscribe from the market: {:?}", e);
     }
 
-    for activity_id in std::mem::replace(&mut (*activities.lock().unwrap()), HashSet::new()) {
+    let activities = std::mem::replace(&mut (*activities.lock().unwrap()), HashSet::new());
+    for activity_id in activities {
         log::info!("destroying activity {} ...", activity_id);
         if let Err(e) = activity_api.control().destroy_activity(&activity_id).await {
-            log::error!("Unable to destroy activity {}: {:?}", activity_id, e);
+            log::error!("unable to destroy activity {}: {:?}", activity_id, e);
         }
     }
 
     let allocations = std::mem::replace(&mut (*allocations.lock().unwrap()), HashMap::new());
     for allocation_id in allocations.values() {
-        log::info!("releasing allocation...");
+        log::info!("releasing allocation {} ...", allocation_id);
         if let Err(e) = payment_api.release_allocation(&allocation_id).await {
-            log::error!("Unable to release allocation {}: {:?}", allocation_id, e);
+            log::error!("unable to release allocation {}: {}", allocation_id, e);
         }
     }
 
@@ -477,6 +484,5 @@ async fn main() -> anyhow::Result<()> {
     });
 
     shutdown.await;
-    log::debug!("THE END.");
     Ok(())
 }
