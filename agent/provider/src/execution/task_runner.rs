@@ -14,6 +14,7 @@ use ya_model::market::Agreement;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
+use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
 
 use super::exeunits_registry::ExeUnitsRegistry;
@@ -368,7 +369,10 @@ impl TaskRunner {
         activity_id: &str,
         agreement_id: &str,
     ) -> Result<Task> {
-        let working_dir = self.tasks_dir.join(agreement_id).join(activity_id);
+        let working_dir = self
+            .tasks_dir
+            .secure_join(agreement_id)
+            .secure_join(activity_id);
 
         create_dir_all(&working_dir).map_err(|error| {
             anyhow!(

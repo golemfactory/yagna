@@ -5702,6 +5702,7 @@ dependencies = [
  "ya-core-model",
  "ya-model",
  "ya-utils-actix",
+ "ya-utils-path",
  "ya-utils-process",
 ]
 
@@ -5918,6 +5919,10 @@ dependencies = [
  "futures 0.3.4",
  "log 0.4.8",
 ]
+
+[[package]]
+name = "ya-utils-path"
+version = "0.1.0"
 
 [[package]]
 name = "ya-utils-process"
