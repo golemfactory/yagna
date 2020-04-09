@@ -16,6 +16,7 @@ use ya_utils_actix::{
 
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
+use super::Preset;
 
 // Temporrary
 use ya_agent_offer_model::OfferDefinition;
@@ -29,6 +30,7 @@ use ya_agent_offer_model::OfferDefinition;
 #[rtype(result = "Result<()>")]
 pub struct CreateOffer {
     pub offer_definition: OfferDefinition,
+    pub preset: Preset,
 }
 
 /// Collects events from market and runs negotiations.
@@ -436,32 +438,39 @@ impl Handler<CreateOffer> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
-        log::info!("Creating initial offer.");
+        log::info!("Creating offer for preset [{}].", msg.preset.name);
 
-        match self.negotiator.create_offer(&msg.offer_definition) {
-            Ok(offer) => {
-                let addr = ctx.address();
-                let client = self.market_api.clone();
-
-                log::info!("Subscribing to events...");
-
-                ActorResponse::r#async(
-                    async move {
-                        ProviderMarket::create_offer(addr, client, offer)
-                            .await
-                            .map_err(|error| {
-                                log::error!("Can't subscribe new offer, error: {}", error);
-                                error
-                            })
-                    }
-                    .into_actor(self),
-                )
-            }
+        let offer = match self.negotiator.create_offer(&msg.offer_definition) {
+            Ok(offer) => offer,
             Err(error) => {
-                log::error!("Negotiator failed to create offer. Error: {}", error);
-                ActorResponse::reply(Err(error))
+                log::error!(
+                    "Negotiator failed to create offer for preset [{}]. Error: {}",
+                    msg.preset.name,
+                    error
+                );
+                return ActorResponse::reply(Err(error))
             }
-        }
+        };
+
+        let addr = ctx.address();
+        let client = self.market_api.clone();
+
+        log::info!("Subscribing to events... [{}]", msg.preset.name);
+
+        let future = async move {
+            ProviderMarket::create_offer(addr, client, offer)
+                .await
+                .map_err(|error| {
+                    log::error!(
+                        "Can't subscribe new offer for preset [{}], error: {}",
+                        msg.preset.name,
+                        error
+                    );
+                    error
+                })
+        };
+
+        ActorResponse::r#async(future.into_actor(self))
     }
 }
 

@@ -32,6 +32,8 @@ pub struct RunConfig {
     /// (will be removed in future release)
     #[structopt(long = "credit-address", env = "CREDIT_ADDRESS")]
     pub credit_address: String,
+    /// Offer presets, that will be sent to market.
+    pub presets: Vec<String>,
 }
 
 #[derive(StructOpt)]

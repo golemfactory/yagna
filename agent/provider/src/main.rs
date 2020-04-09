@@ -23,14 +23,12 @@ async fn main() -> anyhow::Result<()> {
             log::info!("Starting {}...", app_name);
 
             ProviderAgent::new(args).await?.wait_for_ctrl_c().await
-        },
+        }
         StartupConfig::Presets(presets_cmd) => match presets_cmd {
-            PresetsConfig::List => {
-                ProviderAgent::list_presets(PathBuf::from("presets.json"))
-            },
+            PresetsConfig::List => ProviderAgent::list_presets(PathBuf::from("presets.json")),
         },
         StartupConfig::ExeUnit(exeunit_cmd) => match exeunit_cmd {
-            ExeUnitsConfig::List{exe_unit_path} => ProviderAgent::list_exeunits(exe_unit_path),
+            ExeUnitsConfig::List { exe_unit_path } => ProviderAgent::list_exeunits(exe_unit_path),
         },
     }
 }

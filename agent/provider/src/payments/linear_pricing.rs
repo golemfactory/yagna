@@ -1,10 +1,11 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde_json::json;
 
 use ya_agent_offer_model::ComInfo;
 
 use super::model::{PaymentDescription, PaymentModel};
+use crate::market::presets::Preset;
 
 /// Computes computations costs.
 pub struct LinearPricing {
@@ -101,5 +102,26 @@ impl LinearPricingOffer {
         });
 
         ComInfo { params }
+    }
+
+    pub fn from_preset(preset: &Preset) -> Result<LinearPricingOffer> {
+        if preset.pricing_model != "linear" {
+            return Err(anyhow!(
+                "Invalid pricing model [{}] passed to build offer",
+                preset.pricing_model
+            ));
+        }
+
+        let mut pricing_offer = LinearPricingOffer::new();
+        preset
+            .list_usage_metrics()
+            .iter()
+            .zip(preset.usage_coeffs.iter())
+            .for_each(|(metric, value)| {
+                pricing_offer.add_coefficient(metric, *value);
+            });
+
+        pricing_offer.initial_cost(preset.usage_coeffs[preset.usage_coeffs.len() - 1]);
+        Ok(pricing_offer)
     }
 }

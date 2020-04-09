@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
+use anyhow::anyhow;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -7,14 +8,14 @@ use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
-    ActivityCreated, ActivityDestroyed, ExeUnitsRegistry, InitializeExeUnits,
-    TaskRunner, UpdateActivity,
+    ActivityCreated, ActivityDestroyed, ExeUnitsRegistry, InitializeExeUnits, TaskRunner,
+    UpdateActivity,
 };
 use crate::market::{
     provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
-    CreateOffer, ProviderMarket, Presets,
+    CreateOffer, Presets, ProviderMarket,
 };
-use crate::payments::Payments;
+use crate::payments::{LinearPricingOffer, Payments};
 use crate::startup_config::RunConfig;
 
 pub struct ProviderAgent {
@@ -48,12 +49,12 @@ impl ProviderAgent {
             service_info,
             exe_unit_path: config.exe_unit_path,
         };
-        provider.initialize().await?;
+        provider.initialize(config.presets).await?;
 
         Ok(provider)
     }
 
-    pub async fn initialize(&mut self) -> anyhow::Result<()> {
+    pub async fn initialize(&mut self, presets: Vec<String>) -> anyhow::Result<()> {
         // Forward AgreementApproved event to TaskRunner actor.
         let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
         self.market.send(msg).await??;
@@ -74,15 +75,44 @@ impl ProviderAgent {
         };
         self.runner.send(msg).await??;
 
-        // Create simple offer on market.
-        let create_offer_message = CreateOffer {
-            offer_definition: OfferDefinition {
-                node_info: self.node_info.clone(),
-                service: self.service_info.clone(),
-                com_info: Default::default(),
-            },
-        };
-        Ok(self.market.send(create_offer_message).await??)
+        Ok(self.create_offers(presets).await?)
+    }
+
+    async fn create_offers(&mut self, presets_names: Vec<String>) -> anyhow::Result<()> {
+        if presets_names.is_empty() {
+            return Err(anyhow!("No Presets were selected. Can't create offers."));
+        }
+
+        // TODO: Hardcoded presets file path.
+        let presets = Presets::new()
+            .load_from_file(&PathBuf::from("presets.json"))?
+            .list_matching(presets_names);
+
+        for preset in presets.into_iter() {
+            let com_info = match preset.pricing_model.as_str() {
+                "linear" => LinearPricingOffer::from_preset(&preset)?
+                    .interval(6.0)
+                    .build(),
+                _ => {
+                    return Err(anyhow!(
+                        "Unsupported pricing model: {}.",
+                        preset.pricing_model
+                    ))
+                }
+            };
+
+            // Create simple offer on market.
+            let create_offer_message = CreateOffer {
+                preset,
+                offer_definition: OfferDefinition {
+                    node_info: self.node_info.clone(),
+                    service: self.service_info.clone(),
+                    com_info,
+                },
+            };
+            self.market.send(create_offer_message).await??
+        }
+        Ok(())
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
@@ -137,7 +167,7 @@ impl ProviderAgent {
 
         let presets_list = presets.list();
         for preset in presets_list.iter() {
-            println!();   // Enter
+            println!(); // Enter
             println!("{}", preset);
         }
         Ok(())

@@ -12,7 +12,6 @@ use std::{
 
 use super::exeunit_instance::ExeUnitInstance;
 
-
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug, Display)]
 #[serde(rename_all = "kebab-case")]
@@ -21,7 +20,7 @@ use super::exeunit_instance::ExeUnitInstance;
     name,
     "supervisor_path.display()",
     "runtime_path.display()",
-    description,
+    description
 )]
 pub struct ExeUnitDesc {
     name: String,
