@@ -32,6 +32,7 @@ members = [
     "utils/actix_utils",
     "utils/process",
     "utils/transfer",
+    "utils/path",
 ]
 
 [patch.crates-io]
@@ -67,3 +68,4 @@ ya-persistence = { path = "core/persistence" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-process = { path = "utils/process"}
+ya-utils-path = { path = "utils/path"}

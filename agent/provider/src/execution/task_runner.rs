@@ -14,6 +14,7 @@ use ya_model::market::Agreement;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
+use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
 
 use super::exeunits_registry::ExeUnitsRegistry;
@@ -245,7 +246,7 @@ impl TaskRunner {
     }
 
     async fn query_events(client: Arc<ActivityProviderApi>) -> Result<Vec<ProviderEvent>> {
-        Ok(client.get_activity_events(Some(3), None).await?)
+        Ok(client.get_activity_events(Some(3.), None).await?)
     }
 
     // =========================================== //
@@ -361,7 +362,6 @@ impl TaskRunner {
         Ok(())
     }
 
-    #[logfn_inputs(Info, fmt = "{}Creating task: {}, activity id: {}, agreement id: {}")]
     #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
@@ -369,7 +369,10 @@ impl TaskRunner {
         activity_id: &str,
         agreement_id: &str,
     ) -> Result<Task> {
-        let working_dir = self.tasks_dir.join(agreement_id).join(activity_id);
+        let working_dir = self
+            .tasks_dir
+            .secure_join(agreement_id)
+            .secure_join(activity_id);
 
         create_dir_all(&working_dir).map_err(|error| {
             anyhow!(
@@ -397,6 +400,13 @@ impl TaskRunner {
         args.push(activity::local::BUS_ID);
 
         let args = args.iter().map(ToString::to_string).collect();
+
+        log::info!(
+            "Creating task: agreement [{}], activity [{}] in directory: [{}].",
+            agreement_id,
+            activity_id,
+            working_dir.display()
+        );
 
         let exeunit_instance = self
             .registry
@@ -466,8 +476,7 @@ fn task_package_from(agreement: &Agreement) -> Result<String> {
         .as_str()
         .ok_or(anyhow!("'{}' is not a string.", runtime_key_str))?;
 
-    // Workaround for string escaping in current market.
-    Ok(runtime_name[1..runtime_name.len() - 1].to_string())
+    Ok(runtime_name.to_string())
 }
 
 // =========================================== //

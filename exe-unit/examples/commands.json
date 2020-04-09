@@ -4,6 +4,9 @@
   {"start": {
     "args": []
   }},
+  {"run": {
+    "entry_point": "hello-world"
+  }},
   {
     "transfer": {
       "from": "http://34.244.4.185:8000/LICENSE",
