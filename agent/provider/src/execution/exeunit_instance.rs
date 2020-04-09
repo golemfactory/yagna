@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use derive_more::Display;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,9 +23,13 @@ impl ExeUnitInstance {
         working_dir: &Path,
         args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
-        log::info!("Spawning exeunit instance : {}", name);
+        log::info!("Spawning exeunit instance: {}", name);
 
-        let mut command = Command::new(binary_path);
+        let binary_path = binary_path
+            .canonicalize()
+            .with_context(|| format!("Failed to spawn [{}].", binary_path.display()))?;
+
+        let mut command = Command::new(&binary_path);
         command.args(args).current_dir(working_dir);
 
         let child = ProcessHandle::new(&mut command).map_err(|error| {
