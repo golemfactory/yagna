@@ -12,12 +12,13 @@ pub use error::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub trait ApiClient {
+pub trait ApiClient: Clone {
     type Market: web::WebInterface;
     type Activity: web::WebInterface;
     type Payment: web::WebInterface;
 }
 
+#[derive(Clone)]
 pub struct Api<T: ApiClient> {
     pub market: T::Market,
     pub activity: T::Activity,
@@ -27,7 +28,9 @@ pub struct Api<T: ApiClient> {
 pub type RequestorApi = Api<Requestor>;
 pub type ProviderApi = Api<Provider>;
 
+#[derive(Clone)]
 pub struct Requestor;
+#[derive(Clone)]
 pub struct Provider;
 
 impl ApiClient for Requestor {

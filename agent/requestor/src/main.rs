@@ -1,6 +1,8 @@
 use actix_rt::{signal, Arbiter};
 use chrono::{DateTime, Utc};
-use futures::{channel::mpsc, channel::oneshot, future, prelude::*};
+use futures::{channel::mpsc, prelude::*};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use std::{convert::TryInto, path::PathBuf, time::Duration};
 use structopt::{clap, StructOpt};
 
@@ -13,7 +15,7 @@ use ya_model::{
     market::{
         proposal::State as ProposalState, AgreementProposal, Demand, Proposal, RequestorEvent,
     },
-    payment::{Acceptance, Allocation, EventType, NewAllocation, Rejection, RejectionReason},
+    payment::{Acceptance, EventType, NewAllocation, Rejection, RejectionReason},
 };
 
 #[derive(StructOpt)]
@@ -23,9 +25,10 @@ use ya_model::{
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,
-
     #[structopt(long = "exe-script")]
     exe_script: PathBuf,
+    #[structopt(long = "allocation-amount", default_value = "100")]
+    allocation_amount: i64,
 }
 
 enum ProcessOfferResult {
@@ -122,6 +125,55 @@ async fn spawn_workers(
     }
 }
 
+async fn spawn_activity(
+    agreement_id: String,
+    exe_script: String,
+    commands_cnt: usize,
+    alloc_amount: i64,
+    activities: Arc<Mutex<HashSet<String>>>,
+    allocations: Arc<Mutex<HashMap<String, String>>>,
+    api: RequestorApi,
+) {
+    let new_allocation = NewAllocation {
+        total_amount: alloc_amount.into(),
+        timeout: None,
+        make_deposit: false,
+    };
+
+    match api.payment.create_allocation(&new_allocation).await {
+        Ok(alloc) => {
+            log::info!("Allocated {} GNT.", &alloc.total_amount);
+            allocations
+                .lock()
+                .unwrap()
+                .insert(agreement_id.clone(), alloc.allocation_id);
+        }
+        Err(err) => {
+            log::error!("Unable to allocate GNT: {:?}", err);
+            match api.market.cancel_agreement(&agreement_id).await {
+                Ok(_) => log::warn!("Agreement {} cancelled", agreement_id),
+                Err(e) => log::error!("Unable to cancel agreement {}: {}", agreement_id, e),
+            }
+            return;
+        }
+    };
+
+    let fut = run_activity(
+        &api.activity,
+        agreement_id.clone(),
+        exe_script,
+        commands_cnt,
+        activities,
+    );
+
+    if let Err(e) = fut.await {
+        log::error!("Error processing agreement {}: {}", agreement_id, e);
+    }
+    // TODO: Market doesn't support agreement termination yet.
+    // let terminate_result = market_api.terminate_agreement(&id).await;
+    // log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
+}
+
 fn build_demand(node_name: &str) -> Demand {
     Demand {
         properties: serde_json::json!({
@@ -156,7 +208,9 @@ fn build_demand(node_name: &str) -> Demand {
 async fn run_activity(
     activity_api: &ActivityRequestorApi,
     agreement_id: String,
-    exe_script: &PathBuf,
+    exe_script: String,
+    commands_cnt: usize,
+    activities: Arc<Mutex<HashSet<String>>>,
 ) -> anyhow::Result<()> {
     log::info!("creating activity for agreement = {}", agreement_id);
 
@@ -164,20 +218,14 @@ async fn run_activity(
         .control()
         .create_activity(&agreement_id)
         .await?;
-    log::info!("\n\n ACTIVITY CREATED: {}; YAY!", act_id);
 
-    let contents = std::fs::read_to_string(&exe_script)?;
-    let commands_cnt = match serde_json::from_str(&contents)? {
-        serde_json::Value::Array(arr) => {
-            log::info!("\n\n Executing script with {} commands", arr.len());
-            arr.len()
-        }
-        _ => 0,
-    };
+    activities.lock().unwrap().insert(act_id.clone());
+    log::info!("\n\n ACTIVITY CREATED: {}; YAY!", act_id);
+    log::info!("\n\n Executing script with {} commands", commands_cnt);
 
     let batch_id = activity_api
         .control()
-        .exec(ExeScriptRequest::new(contents), &act_id)
+        .exec(ExeScriptRequest::new(exe_script), &act_id)
         .await?;
     log::info!("\n\n EXE SCRIPT called, batch_id: {}", batch_id);
 
@@ -205,29 +253,11 @@ async fn run_activity(
     }
 
     log::info!("\n\n AGRRR! destroying activity: {}; ", act_id);
+    activities.lock().unwrap().remove(&act_id);
     activity_api.control().destroy_activity(&act_id).await?;
     log::info!("\n\n ACTIVITY DESTROYED.");
 
     Ok(())
-}
-
-/// MOCK: fixed price allocation
-async fn allocate_funds_for_task(
-    payment_api: &PaymentRequestorApi,
-    allocation_tx: oneshot::Sender<String>,
-) -> anyhow::Result<Allocation> {
-    let new_allocation = NewAllocation {
-        total_amount: 100.into(),
-        timeout: None,
-        make_deposit: false,
-    };
-    let allocation = payment_api.create_allocation(&new_allocation).await?;
-    log::info!("Allocated {} GNT.", &allocation.total_amount);
-
-    let allocation_id = allocation.allocation_id.clone();
-    allocation_tx.send(allocation_id).unwrap();
-
-    Ok(allocation)
 }
 
 /// MOCK: log incoming debit notes, and... ignore them
@@ -251,21 +281,16 @@ async fn log_and_ignore_debit_notes(payment_api: PaymentRequestorApi, started_at
     }
 }
 
-/// MOCK: accept all incoming invoices
 async fn process_payments(
     payment_api: PaymentRequestorApi,
-    allocation: Allocation,
     started_at: DateTime<Utc>,
-    finished_agreement_id: String,
+    allocations: Arc<Mutex<HashMap<String, String>>>,
 ) {
-    log::info!(
-        "\n\n waiting for INVOICE for finished agreement = {}",
-        finished_agreement_id
-    );
+    log::info!("\n\n waiting for INVOICES");
     // FIXME: should be persisted and restored upon next ya-requestor start
     let mut events_after = started_at;
 
-    'infinite_loop: loop {
+    loop {
         let events = match payment_api.get_invoice_events(Some(&events_after)).await {
             Err(e) => {
                 log::error!("getting invoice events error: {}", e);
@@ -277,46 +302,16 @@ async fn process_payments(
 
         for event in events {
             log::info!("got INVOICE event {:#?}", event);
-            let invoice_id = &event.invoice_id;
             match event.event_type {
-                EventType::Received => {
-                    let mut invoice = payment_api.get_invoice(invoice_id).await;
-                    while let Err(e) = invoice {
-                        log::error!("retry getting invoice {} after error: {}", invoice_id, e);
-                        tokio::time::delay_for(Duration::from_secs(5)).await;
-                        invoice = payment_api.get_invoice(invoice_id).await;
-                    }
-
-                    let invoice = invoice.unwrap();
-                    log::debug!("got INVOICE: {:#?}", invoice);
-                    if invoice.agreement_id != finished_agreement_id {
-                        let rejection = Rejection {
-                            rejection_reason: RejectionReason::UnsolicitedService,
-                            total_amount_accepted: 0.into(),
-                            message: None,
-                        };
-                        match payment_api.reject_invoice(invoice_id, &rejection).await {
-                            Err(e) => log::error!("rejecting invoice {}, error: {}", invoice_id, e),
-                            Ok(_) => log::warn!("invoice rejected: {:?}", invoice_id),
-                        }
-                        continue;
-                    }
-
-                    let acceptance = Acceptance {
-                        total_amount_accepted: invoice.amount,
-                        allocation_id: allocation.allocation_id.clone(),
-                    };
-                    match payment_api.accept_invoice(invoice_id, &acceptance).await {
-                        // TODO: reconsider what to do in this case: probably retry
-                        Err(e) => log::error!("accepting invoice {}, error: {}", invoice_id, e),
-                        Ok(_) => log::info!("\n\n INVOICE ACCEPTED: {:?}", invoice_id),
-                    }
-                    break 'infinite_loop; // we just want to accept one invoice for the finished agreement
-                }
+                EventType::Received => Arbiter::spawn(process_invoice(
+                    event.invoice_id,
+                    allocations.clone(),
+                    payment_api.clone(),
+                )),
                 _ => log::warn!(
                     "ignoring event type {:?} for: {}",
                     event.event_type,
-                    invoice_id
+                    event.invoice_id
                 ),
             }
             events_after = event.timestamp;
@@ -324,31 +319,92 @@ async fn process_payments(
     }
 }
 
-/// if needed unsubscribes from the market and releases allocation
-async fn shutdown_handler(
-    mut allocation_rx: oneshot::Receiver<String>,
-    mut subscription_rx: oneshot::Receiver<String>,
-    invoice_rx: oneshot::Receiver<()>,
-    shutdown_tx: oneshot::Sender<()>,
-    market_api: MarketRequestorApi,
+async fn process_invoice(
+    invoice_id: String,
+    allocations: Arc<Mutex<HashMap<String, String>>>,
     payment_api: PaymentRequestorApi,
 ) {
-    future::select(signal::ctrl_c().boxed_local(), invoice_rx).await;
+    let mut invoice = payment_api.get_invoice(&invoice_id).await;
+    while let Err(e) = invoice {
+        log::error!("retry getting invoice {} after error: {}", invoice_id, e);
+        tokio::time::delay_for(Duration::from_secs(5)).await;
+        invoice = payment_api.get_invoice(&invoice_id).await;
+    }
+
+    let invoice = invoice.unwrap();
+    log::debug!("got INVOICE: {:#?}", invoice);
+
+    match allocations
+        .lock()
+        .unwrap()
+        .get(&invoice.agreement_id)
+        .cloned()
+    {
+        Some(allocation_id) => {
+            let acceptance = Acceptance {
+                total_amount_accepted: invoice.amount,
+                allocation_id: allocation_id.clone(),
+            };
+            match payment_api.accept_invoice(&invoice_id, &acceptance).await {
+                // TODO: reconsider what to do in this case: probably retry
+                Err(e) => log::error!("accepting invoice {}, error: {}", invoice_id, e),
+                Ok(_) => log::info!("\n\n INVOICE ACCEPTED: {:?}", invoice_id),
+            }
+
+            allocations.lock().unwrap().remove(&invoice.agreement_id);
+            if let Err(e) = payment_api.release_allocation(&allocation_id).await {
+                log::error!("Unable to release allocation {}: {}", allocation_id, e);
+            }
+        }
+        None => {
+            let rejection = Rejection {
+                rejection_reason: RejectionReason::UnsolicitedService,
+                total_amount_accepted: 0.into(),
+                message: None,
+            };
+            match payment_api.reject_invoice(&invoice_id, &rejection).await {
+                Err(e) => log::error!("rejecting invoice {}, error: {}", invoice_id, e),
+                Ok(_) => log::warn!("invoice rejected: {:?}", invoice_id),
+            }
+        }
+    }
+}
+
+/// if needed unsubscribes from the market and releases allocation
+async fn shutdown_handler(
+    activities: Arc<Mutex<HashSet<String>>>,
+    allocations: Arc<Mutex<HashMap<String, String>>>,
+    subscription_id: String,
+    market_api: MarketRequestorApi,
+    activity_api: ActivityRequestorApi,
+    payment_api: PaymentRequestorApi,
+) {
+    signal::ctrl_c().await.unwrap();
+
     log::info!("terminating...");
-    if let Ok(Some(allocation_id)) = allocation_rx.try_recv() {
-        let a = &allocation_id;
+    log::info!("unsubscribing demand...");
+    if let Err(e) = market_api.unsubscribe(&subscription_id).await {
+        log::error!("Unable to unsubscribe from the market: {:?}", e);
+    }
+
+    for activity_id in std::mem::replace(&mut (*activities.lock().unwrap()), HashSet::new()) {
+        log::info!("destroying activity {} ...", activity_id);
+        if let Err(e) = activity_api.control().destroy_activity(&activity_id).await {
+            log::error!("Unable to destroy activity {}: {:?}", activity_id, e);
+        }
+    }
+
+    let allocations = std::mem::replace(&mut (*allocations.lock().unwrap()), HashMap::new());
+    for allocation_id in allocations.values() {
         log::info!("releasing allocation...");
-        payment_api.release_allocation(&a).await.unwrap();
+        if let Err(e) = payment_api.release_allocation(&allocation_id).await {
+            log::error!("Unable to release allocation {}: {:?}", allocation_id, e);
+        }
     }
-    if let Ok(Some(subscription_id)) = subscription_rx.try_recv() {
-        log::info!("unsubscribing demand...");
-        market_api.unsubscribe(&subscription_id).await.unwrap();
-    }
-    //TODO: destroy started activity
+
     //TODO: maybe even accept invoice
 
     log::debug!("shutdown...");
-    shutdown_tx.send(()).unwrap();
     Arbiter::current().stop()
 }
 
@@ -356,79 +412,71 @@ async fn shutdown_handler(
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     env_logger::init();
+
     let started_at = Utc::now();
     let settings = AppSettings::from_args();
     let api: RequestorApi = settings.api.try_into()?;
 
-    let (allocation_tx, allocation_rx) = oneshot::channel();
-    let (subscription_tx, subscription_rx) = oneshot::channel();
-    let (invoice_tx, invoice_rx) = oneshot::channel();
-    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    let amount = settings.allocation_amount;
+    let exe_script = std::fs::read_to_string(&settings.exe_script)?;
+    let commands_cnt = match serde_json::from_str(&exe_script)? {
+        serde_json::Value::Array(arr) => arr.len(),
+        _ => 0,
+    };
 
-    let payment_api = api.payment.clone();
-    let market_api = api.market.clone();
-    Arbiter::spawn(shutdown_handler(
-        allocation_rx,
-        subscription_rx,
-        invoice_rx,
-        shutdown_tx,
-        market_api,
-        payment_api,
-    ));
-
-    let allocation = allocate_funds_for_task(&api.payment, allocation_tx).await?;
+    let activities = Arc::new(Mutex::new(HashSet::new()));
+    let allocations = Arc::new(Mutex::new(HashMap::new()));
 
     let my_demand = build_demand("test1");
-
     let subscription_id = api.market.subscribe(&my_demand).await?;
-    subscription_tx.send(subscription_id.clone()).unwrap();
-
     log::info!("\n\n DEMAND SUBSCRIBED: {}", subscription_id);
 
-    let mkt_api = api.market.clone();
-    let sub_id = subscription_id.clone();
+    let shutdown = shutdown_handler(
+        activities.clone(),
+        allocations.clone(),
+        subscription_id.clone(),
+        api.market.clone(),
+        api.activity.clone(),
+        api.payment.clone(),
+    );
+
     let (agreement_tx, mut agreement_rx) = mpsc::channel::<String>(1);
+    let market_api = api.market.clone();
+    let payment_api = api.payment.clone();
+    let sub_id = subscription_id.clone();
+
     Arbiter::spawn(async move {
-        if let Err(e) = spawn_workers(mkt_api, &sub_id, &my_demand, agreement_tx).await {
+        if let Err(e) = spawn_workers(market_api, &sub_id, &my_demand, agreement_tx).await {
             log::error!("spawning workers for {} error: {}", sub_id, e);
         }
     });
 
     Arbiter::spawn(log_and_ignore_debit_notes(
-        api.payment.clone(),
+        payment_api.clone(),
         started_at.clone(),
     ));
 
-    let exe_script = settings.exe_script.clone();
+    Arbiter::spawn(process_payments(
+        payment_api.clone(),
+        started_at,
+        allocations.clone(),
+    ));
 
     Arbiter::spawn(async move {
-        let mut finished_agreement_id = "".to_string();
         while let Some(agreement_id) = agreement_rx.next().await {
-            match run_activity(&api.activity, agreement_id.clone(), &exe_script).await {
-                Ok(_) => {
-                    finished_agreement_id = agreement_id;
-                    break;
-                }
-                Err(e) => log::error!("processing agreement id {} error: {}", agreement_id, e),
-            }
-            // TODO: Market doesn't support agreement termination yet.
-            // let terminate_result = market_api.terminate_agreement(&id).await;
-            // log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
+            Arbiter::spawn(spawn_activity(
+                agreement_id,
+                exe_script.clone(),
+                commands_cnt,
+                amount,
+                activities.clone(),
+                allocations.clone(),
+                api.clone(),
+            ))
         }
-
-        process_payments(
-            api.payment.clone(),
-            allocation,
-            started_at,
-            finished_agreement_id,
-        )
-        .await;
-
-        invoice_tx.send(()).unwrap();
-        log::info!("\n\n I'M DONE FOR NOW");
     });
 
-    shutdown_rx.await.unwrap();
+    shutdown.await;
     log::debug!("THE END.");
     Ok(())
 }
