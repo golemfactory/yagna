@@ -233,6 +233,8 @@ async fn run_activity(
         .await?;
     log::info!("\n\n EXE SCRIPT called, batch_id: {}", batch_id);
 
+    let mut results = Vec::new();
+
     loop {
         let state = activity_api.state().get_state(&act_id).await?;
         if !state.alive() {
@@ -244,19 +246,22 @@ async fn run_activity(
             "activity state: {:?}. Waiting for batch to complete...",
             state
         );
-        let results = activity_api
+        results = activity_api
             .control()
             .get_exec_batch_results(&act_id, &batch_id, Some(7.), None)
             .await?;
 
-        log::info!("\n\n BATCH COMPLETED. Results: {:#?}", results);
-
         if results.len() >= commands_cnt {
+            log::info!("\n\n BATCH COMPLETED: {:#?}", results);
             break;
         }
     }
 
-    log::info!("\n\n AGRRR! destroying activity: {}; ", act_id);
+    if results.len() < commands_cnt {
+        log::warn!("\n\n BATCH INTERRUPTED: {:#?}", results);
+    }
+
+    log::info!("\n\n destroying activity: {}; ", act_id);
     activities.lock().unwrap().remove(&act_id);
     activity_api.control().destroy_activity(&act_id).await?;
     log::info!("\n\n ACTIVITY DESTROYED.");
@@ -388,29 +393,37 @@ async fn shutdown_handler(
     signal::ctrl_c().await.unwrap();
 
     log::info!("terminating...");
-    log::info!("unsubscribing demand...");
-    if let Err(e) = market_api.unsubscribe(&subscription_id).await {
-        log::error!("unable to unsubscribe from the market: {:?}", e);
-    }
 
     let activities = std::mem::replace(&mut (*activities.lock().unwrap()), HashSet::new());
-    for activity_id in activities {
-        log::info!("destroying activity {} ...", activity_id);
-        if let Err(e) = activity_api.control().destroy_activity(&activity_id).await {
-            log::error!("unable to destroy activity {}: {:?}", activity_id, e);
-        }
-    }
-
     let allocations = std::mem::replace(&mut (*allocations.lock().unwrap()), HashMap::new());
-    for allocation_id in allocations.values() {
-        log::info!("releasing allocation {} ...", allocation_id);
-        if let Err(e) = payment_api.release_allocation(&allocation_id).await {
-            log::error!("unable to release allocation {}: {}", allocation_id, e);
-        }
-    }
+
+    log::info!("unsubscribing demand...");
+    let mut pending = vec![market_api
+        .unsubscribe(&subscription_id)
+        .map(|_| Ok(()))
+        .map_err(|e| log::error!("unable to unsubscribe the demand: {:?}", e))
+        .boxed_local()];
+
+    log::info!("destroying activities ({}) ...", activities.len());
+    pending.extend(activities.iter().map(|id| {
+        activity_api
+            .control()
+            .destroy_activity(&id)
+            .map_err(|e| log::error!("unable to destroy activity {}: {:?}", id, e))
+            .boxed_local()
+    }));
+
+    log::info!("releasing allocations ({}) ...", allocations.len());
+    pending.extend(allocations.iter().map(|(_, id)| {
+        payment_api
+            .release_allocation(&id)
+            .map_err(|e| log::error!("unable to release allocation {}: {:?}", id, e))
+            .boxed_local()
+    }));
+
+    futures::future::join_all(pending.into_iter()).await;
 
     //TODO: maybe even accept invoice
-
     log::debug!("shutdown...");
     Arbiter::current().stop()
 }
@@ -428,7 +441,7 @@ async fn main() -> anyhow::Result<()> {
     let exe_script = std::fs::read_to_string(&settings.exe_script)?;
     let commands_cnt = match serde_json::from_str(&exe_script)? {
         serde_json::Value::Array(arr) => arr.len(),
-        _ => 0,
+        _ => return Err(anyhow::anyhow!("Command list is empty")),
     };
 
     let activities = Arc::new(Mutex::new(HashSet::new()));
