@@ -8,7 +8,7 @@ use structopt::{clap, StructOpt};
 
 use ya_client::{
     activity::ActivityRequestorApi, cli::ApiOpts, market::MarketRequestorApi,
-    payment::requestor::RequestorApi as PaymentRequestorApi, RequestorApi,
+    payment::requestor::RequestorApi as PaymentRequestorApi, Error, RequestorApi,
 };
 use ya_model::{
     activity::ExeScriptRequest,
@@ -17,6 +17,9 @@ use ya_model::{
     },
     payment::{Acceptance, EventType, NewAllocation, Rejection, RejectionReason},
 };
+
+const DEFAULT_NODE_NAME: &str = "test1";
+const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip";
 
 #[derive(StructOpt)]
 #[structopt(about = clap::crate_description!())]
@@ -27,8 +30,12 @@ struct AppSettings {
     api: ApiOpts,
     #[structopt(long = "exe-script")]
     exe_script: PathBuf,
-    #[structopt(long = "allocation-amount", default_value = "100")]
-    allocation_amount: i64,
+    #[structopt(long = "node-name", default_value = DEFAULT_NODE_NAME)]
+    node_name: String,
+    #[structopt(long = "task-package", default_value = DEFAULT_TASK_PACKAGE)]
+    task_package: String,
+    #[structopt(long = "allocation-size", default_value = "100")]
+    allocation_size: i64,
 }
 
 enum ProcessOfferResult {
@@ -129,13 +136,13 @@ async fn spawn_activity(
     agreement_id: String,
     exe_script: String,
     commands_cnt: usize,
-    alloc_amount: i64,
+    allocation_size: i64,
     activities: Arc<Mutex<HashSet<String>>>,
     allocations: Arc<Mutex<HashMap<String, String>>>,
     api: RequestorApi,
 ) {
     let new_allocation = NewAllocation {
-        total_amount: alloc_amount.into(),
+        total_amount: allocation_size.into(),
         timeout: None,
         make_deposit: false,
     };
@@ -178,7 +185,7 @@ async fn spawn_activity(
     // log::info!("agreement: {}, terminated: {:?}", id, terminate_result);
 }
 
-fn build_demand(node_name: &str) -> Demand {
+fn build_demand(node_name: &str, task_package: &str) -> Demand {
     Demand {
         properties: serde_json::json!({
             "golem": {
@@ -191,7 +198,7 @@ fn build_demand(node_name: &str) -> Demand {
                 "srv": {
                     "comp":{
                         "wasm": {
-                            "task_package": "http://34.244.4.185:8000/rust-wasi-tutorial.zip"
+                            "task_package": task_package
                         }
                     }
                 }
@@ -401,7 +408,7 @@ async fn shutdown_handler(
     let mut pending = vec![market_api
         .unsubscribe(&subscription_id)
         .map(|_| Ok(()))
-        .map_err(|e| log::error!("unable to unsubscribe the demand: {:?}", e))
+        .map_err(move |e: Error| log::error!("unable to unsubscribe the demand: {:?}", e))
         .boxed_local()];
 
     log::info!("destroying activities ({}) ...", activities.len());
@@ -409,7 +416,7 @@ async fn shutdown_handler(
         activity_api
             .control()
             .destroy_activity(&id)
-            .map_err(|e| log::error!("unable to destroy activity {}: {:?}", id, e))
+            .map_err(move |e| log::error!("unable to destroy activity {}: {:?}", id, e))
             .boxed_local()
     }));
 
@@ -417,7 +424,7 @@ async fn shutdown_handler(
     pending.extend(allocations.iter().map(|(_, id)| {
         payment_api
             .release_allocation(&id)
-            .map_err(|e| log::error!("unable to release allocation {}: {:?}", id, e))
+            .map_err(move |e| log::error!("unable to release allocation {}: {:?}", id, e))
             .boxed_local()
     }));
 
@@ -437,7 +444,7 @@ async fn main() -> anyhow::Result<()> {
     let settings = AppSettings::from_args();
     let api: RequestorApi = settings.api.try_into()?;
 
-    let amount = settings.allocation_amount;
+    let allocation_size = settings.allocation_size;
     let exe_script = std::fs::read_to_string(&settings.exe_script)?;
     let commands_cnt = match serde_json::from_str(&exe_script)? {
         serde_json::Value::Array(arr) => arr.len(),
@@ -446,8 +453,9 @@ async fn main() -> anyhow::Result<()> {
 
     let activities = Arc::new(Mutex::new(HashSet::new()));
     let allocations = Arc::new(Mutex::new(HashMap::new()));
+    let my_demand = build_demand(&settings.node_name, &settings.task_package);
+    //(golem.runtime.wasm.wasi.version@v=*)
 
-    let my_demand = build_demand("test1");
     let subscription_id = api.market.subscribe(&my_demand).await?;
     log::info!("\n\n DEMAND SUBSCRIBED: {}", subscription_id);
 
@@ -488,7 +496,7 @@ async fn main() -> anyhow::Result<()> {
                 agreement_id,
                 exe_script.clone(),
                 commands_cnt,
-                amount,
+                allocation_size,
                 activities.clone(),
                 allocations.clone(),
                 api.clone(),

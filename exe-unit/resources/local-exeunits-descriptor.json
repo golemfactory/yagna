@@ -1,13 +1,7 @@
 [
     {
         "name": "wasmtime",
-        "path": "../target/release/exe-unit",
-        "args": [
-            "-b", "../target/release/wasmtime-exeunit",
-            "-c", "exe-unit-wd/cache/",
-            "-w", "exe-unit-wd/work/",
-            "-a", "../exe-unit/examples/local_agreement.json",
-            "service-bus"
-        ]
+        "supervisor-path": "../../target/release/exe-unit",
+        "runtime-path": "../../target/release/wasmtime-exeunit"
     }
 ]

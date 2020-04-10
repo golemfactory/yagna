@@ -28,7 +28,7 @@ impl ProviderAgent {
     pub async fn new(config: StartupConfig) -> anyhow::Result<ProviderAgent> {
         let api: ProviderApi = config.api.try_into()?;
         let market = ProviderMarket::new(api.market, "AcceptAll").start();
-        let runner = TaskRunner::new(api.activity.clone()).start();
+        let runner = TaskRunner::new(api.activity.clone())?.start();
         let payments = Payments::new(api.activity, api.payment, &config.credit_address).start();
 
         let node_info = ProviderAgent::create_node_info();
