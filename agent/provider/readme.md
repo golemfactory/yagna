@@ -30,6 +30,7 @@ This can be displayed using `--help`
 | payment-url    | Payment api address. Overrides `YAGNA_PAYMENT_URL`
 | credit-address | Ethereum account for payments (should match NodeId). Overrides `CREDIT_ADDRESS`
 | exe-unit-path  | Path to JSON descriptor file for ExeUnits. Overrides `EXE_UNIT_PATH`
+| node-name      | Node name to use in agreements.
 
 ### Creating app-key authentication token
 

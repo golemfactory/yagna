@@ -12,6 +12,8 @@ use ya_client::{
 pub struct RunConfig {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
     pub auth: String,
+    #[structopt(long = "node-name", env = "NODE_NAME", hide_env_values = true)]
+    pub node_name: String,
     /// Market API URL
     #[structopt(long = "market-url", env = MarketProviderApi::API_URL_ENV_VAR)]
     market_url: Url,

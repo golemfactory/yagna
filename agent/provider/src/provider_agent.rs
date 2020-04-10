@@ -38,7 +38,7 @@ impl ProviderAgent {
         )
         .start();
 
-        let node_info = ProviderAgent::create_node_info();
+        let node_info = ProviderAgent::create_node_info(&config).await;
         let service_info = ProviderAgent::create_service_info();
 
         let mut provider = ProviderAgent {
@@ -122,9 +122,9 @@ impl ProviderAgent {
         send_message(self.market.clone(), UpdateMarket);
     }
 
-    fn create_node_info() -> NodeInfo {
+    async fn create_node_info(config: &RunConfig) -> NodeInfo {
         // TODO: Get node name from intentity API.
-        NodeInfo::with_name("")
+        NodeInfo::with_name(&config.node_name)
     }
 
     fn create_service_info() -> ServiceInfo {
