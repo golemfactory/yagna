@@ -152,10 +152,15 @@ impl ProviderAgent {
         let mut registry = ExeUnitsRegistry::new();
         registry.register_exeunits_from_file(&exe_unit_path)?;
 
+        if let Err(errors) = registry.validate() {
+            println!("Encountered errors while checking ExeUnits:\n{}", errors);
+        }
+
         println!("Available ExeUnits:");
 
         let exeunits = registry.list_exeunits();
         for exeunit in exeunits.iter() {
+            println!(); // Enter
             println!("{}", exeunit);
         }
         Ok(())

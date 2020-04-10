@@ -5,10 +5,12 @@ use path_clean::PathClean;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fmt,
     fs::File,
     io::BufReader,
     path::{Path, PathBuf},
 };
+use thiserror::Error;
 
 use super::exeunit_instance::ExeUnitInstance;
 
@@ -138,6 +140,56 @@ impl ExeUnitsRegistry {
             .iter()
             .map(|(_, desc)| desc.clone())
             .collect()
+    }
+
+    pub fn validate(&self) -> Result<(), RegistryError> {
+        let errors = self
+            .descriptors
+            .iter()
+            .map(|(_, desc)| desc.validate())
+            .filter_map(|result| match result {
+                Err(error) => Some(error),
+                Ok(_) => None,
+            })
+            .collect::<Vec<ExeUnitValidation>>();
+
+        if errors.is_empty() {
+            return Ok(());
+        }
+        return Err(RegistryError(errors));
+    }
+}
+
+#[derive(Error, Debug)]
+pub struct RegistryError(Vec<ExeUnitValidation>);
+
+impl fmt::Display for RegistryError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for v in &self.0 {
+            write!(f, "{}\n", v)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ExeUnitValidation {
+    #[error("ExeUnit [{}] Supervisor binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
+    SupervisorNotFound { desc: ExeUnitDesc },
+    #[error("ExeUnit [{}] Runtime binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
+    RuntimeNotFound { desc: ExeUnitDesc },
+}
+
+impl ExeUnitDesc {
+    pub fn validate(&self) -> Result<(), ExeUnitValidation> {
+        if !self.supervisor_path.exists() {
+            return Err(ExeUnitValidation::SupervisorNotFound { desc: self.clone() });
+        }
+        // I'm not sure we should force it's existence.
+        if !self.runtime_path.exists() {
+            return Err(ExeUnitValidation::RuntimeNotFound { desc: self.clone() });
+        }
+        Ok(())
     }
 }
 

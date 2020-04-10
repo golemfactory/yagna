@@ -188,7 +188,8 @@ impl TaskRunner {
         msg: InitializeExeUnits,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
-        self.registry.register_exeunits_from_file(&msg.file)
+        self.registry.register_exeunits_from_file(&msg.file)?;
+        Ok(self.registry.validate()?)
     }
 
     pub async fn collect_events(

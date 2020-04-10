@@ -5695,6 +5695,7 @@ dependencies = [
  "serde_json",
  "shared_child",
  "structopt",
+ "thiserror",
  "tokio 0.2.16",
  "url 2.1.1",
  "ya-agent-offer-model",
