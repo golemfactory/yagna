@@ -27,7 +27,8 @@ pub enum AgreementResponse {
 }
 
 pub trait Negotiator: std::fmt::Debug {
-    //TODO: We should add some parameters for offer creation.
+    /// Negotiator can modify offer, that was generated for him. He can save
+    /// information about this offer, that are necessary for negotiations.
     fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<Offer>;
     fn react_to_proposal(&mut self, offer: &Offer, demand: &Proposal) -> Result<ProposalResponse>;
     fn react_to_agreement(&mut self, agreement: &Agreement) -> Result<AgreementResponse>;

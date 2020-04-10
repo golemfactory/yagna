@@ -199,7 +199,7 @@ impl ProviderMarket {
         log::debug!(
             "Collected {} market events for subscription [{}]. Processing...",
             events.len(),
-            &subscription.subscription_id
+            &subscription.preset.name
         );
 
         let dispatch_futures = events
@@ -256,6 +256,13 @@ impl ProviderMarket {
         let subscription_id = subscription.subscription_id.clone();
         let offer = subscription.offer.clone();
 
+        log::info!(
+            "Got proposal [{}] from Requestor [{}] for subscription [{}].",
+            proposal_id,
+            demand.issuer_id()?,
+            subscription.preset.name,
+        );
+
         match addr
             .send(GotProposal::new(subscription, demand.clone()))
             .await?
@@ -296,6 +303,17 @@ impl ProviderMarket {
         subscription: OfferSubscription,
         agreement: &Agreement,
     ) -> Result<()> {
+        log::info!(
+            "Got agreement [{}] from Requestor [{}] for subscription [{}].",
+            agreement.agreement_id,
+            agreement
+                .demand
+                .requestor_id
+                .as_ref()
+                .unwrap_or(&"None".to_string()),
+            subscription.preset.name,
+        );
+
         let response = addr
             .send(GotAgreement::new(subscription, agreement.clone()))
             .await?;
@@ -437,7 +455,11 @@ impl Handler<CreateOffer> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
-        log::info!("Creating offer for preset [{}].", msg.preset.name);
+        log::info!(
+            "Creating offer for preset [{}]. Usage coeffs: {:?}",
+            msg.preset.name,
+            msg.preset.usage_coeffs
+        );
 
         let offer = match self.negotiator.create_offer(&msg.offer_definition) {
             Ok(offer) => offer,
