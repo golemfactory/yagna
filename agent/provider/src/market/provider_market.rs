@@ -448,7 +448,7 @@ impl Handler<CreateOffer> for ProviderMarket {
                     msg.preset.name,
                     error
                 );
-                return ActorResponse::reply(Err(error))
+                return ActorResponse::reply(Err(error));
             }
         };
 

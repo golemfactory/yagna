@@ -66,10 +66,13 @@ impl Presets {
             .collect()
     }
 
-    pub fn list_matching(&self, names: Vec<String>) -> Vec<Preset> {
-        self.list()
-            .into_iter()
-            .filter(|preset| names.contains(&preset.name))
+    pub fn list_matching(&self, names: &Vec<String>) -> Result<Vec<Preset>> {
+        names
+            .iter()
+            .map(|name| match self.presets.get(name) {
+                Some(preset) => Ok(preset.clone()),
+                None => Err(anyhow!("Can't find preset [{}].", name)),
+            })
             .collect()
     }
 }

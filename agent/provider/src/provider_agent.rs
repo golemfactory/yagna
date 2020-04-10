@@ -79,6 +79,8 @@ impl ProviderAgent {
     }
 
     async fn create_offers(&mut self, presets_names: Vec<String>) -> anyhow::Result<()> {
+        log::debug!("Presets names: {:?}", presets_names);
+
         if presets_names.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
         }
@@ -86,7 +88,7 @@ impl ProviderAgent {
         // TODO: Hardcoded presets file path.
         let presets = Presets::new()
             .load_from_file(&PathBuf::from("presets.json"))?
-            .list_matching(presets_names);
+            .list_matching(&presets_names)?;
 
         for preset in presets.into_iter() {
             let com_info = match preset.pricing_model.as_str() {
