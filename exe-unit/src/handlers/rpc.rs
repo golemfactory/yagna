@@ -113,6 +113,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         }
 
         let address = ctx.address();
+        let idx_requested = msg.command_index.is_some();
         let idx = match self.state.batches.get(&msg.batch_id) {
             Some(exec) => match exec.exe_script.len() {
                 0 => return ActorResponse::reply(Ok(Vec::new())),
@@ -130,7 +131,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
                 Some(t) => {
                     let dur = Duration::from_secs_f64(t as f64);
                     if let Err(_) = timeout(dur, notifier.when(move |i| i >= idx)).await {
-                        return Err(RpcMessageError::Timeout);
+                        if idx_requested {
+                            return Err(RpcMessageError::Timeout);
+                        }
                     }
 
                     let results = address
