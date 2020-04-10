@@ -16,6 +16,9 @@ use ya_model::{
     payment::{Acceptance, Allocation, EventType, NewAllocation, Rejection, RejectionReason},
 };
 
+const DEFAULT_NODE_NAME: &str = "test1";
+const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip";
+
 #[derive(StructOpt)]
 #[structopt(about = clap::crate_description!())]
 #[structopt(setting = clap::AppSettings::ColoredHelp)]
@@ -23,9 +26,12 @@ use ya_model::{
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,
-
     #[structopt(long = "exe-script")]
     exe_script: PathBuf,
+    #[structopt(long = "node-name", default_value = DEFAULT_NODE_NAME)]
+    node_name: String,
+    #[structopt(long = "task-package", default_value = DEFAULT_TASK_PACKAGE)]
+    task_package: String,
 }
 
 enum ProcessOfferResult {
@@ -122,7 +128,7 @@ async fn spawn_workers(
     }
 }
 
-fn build_demand(node_name: &str) -> Demand {
+fn build_demand(node_name: &str, task_package: &str) -> Demand {
     Demand {
         properties: serde_json::json!({
             "golem": {
@@ -135,7 +141,7 @@ fn build_demand(node_name: &str) -> Demand {
                 "srv": {
                     "comp":{
                         "wasm": {
-                            "task_package": "http://34.244.4.185:8000/rust-wasi-tutorial.zip"
+                            "task_package": task_package
                         }
                     }
                 }
@@ -377,8 +383,8 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     let allocation = allocate_funds_for_task(&api.payment, allocation_tx).await?;
-
-    let my_demand = build_demand("test1");
+    let my_demand = build_demand(&settings.node_name, &settings.task_package);
+    //(golem.runtime.wasm.wasi.version@v=*)
 
     let subscription_id = api.market.subscribe(&my_demand).await?;
     subscription_tx.send(subscription_id.clone()).unwrap();
