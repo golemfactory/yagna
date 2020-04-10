@@ -62,15 +62,53 @@ $ cargo run --bin yagna -- app-key create "provider-agent"
 
 4. Restart yagna daemon (Ctrl+C, then repeat step 1)
 
+## Presets
+
+Provider uses presets to create market offers. In current version presets are
+defined in presets.json file, that should be placed in working directory.
+You can copy example presets from `agent/provider/examples/presets.json`.
+
+You can list presets by running command:
+`cargo run --bin ya-provider presets list`
+
+The result will be something like this:
+```
+Available Presets:
+
+Name: amazing-offer
+ExeUnit: wasmtime
+Pricing model: linear
+Coefficients: [0.1, 0.2, 1.0]
+
+Name: high-cpu
+ExeUnit: wasmtime
+Pricing model: linear
+Coefficients: [0.01, 1.2, 1.5]
+
+Name: lame-offer
+ExeUnit: wasmtime
+Pricing model: linear
+Coefficients: [0.0, 0.0, 0.0]
+```
+
+Coefficients describe unit price of ExeUnit metrics:
+
+* [1] `golem.usage.duration_sec`
+* [2] `golem.usage.cpu_sec`
+* [3] constant price per created activity 
+
+When running provider, you must list all presets, that you want to use.
+
 ## Running the Provider Agent
 
 Make sure you have compiled latest changes to exe-init binaries:
 
 `cargo build --release --bin exe-unit --bin wasmtime-exeunit`
 
-While the yagna daemon is still running (and you are in the `ya-prov` directory) you can now start Provider Agent:
+While the yagna daemon is still running (and you are in the `ya-prov` directory) you can now start Provider Agent.
+You should list all presets, provider should use to create offers:
 
-`cargo run --release --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json`
+`cargo run --release --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json run high-cpu amazing-offer`
 
 
 ## Mock requestor
