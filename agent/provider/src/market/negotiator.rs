@@ -2,11 +2,13 @@ use ya_agent_offer_model::OfferDefinition;
 use ya_model::market::{Agreement, Offer, Proposal};
 
 use anyhow::Result;
+use derive_more::Display;
 
 /// Response for requestor proposals.
-#[derive(Debug)]
+#[derive(Debug, Display)]
 #[allow(dead_code)]
 pub enum ProposalResponse {
+    #[display(fmt = "CounterProposal")]
     CounterProposal {
         offer: Proposal,
     },
@@ -17,7 +19,7 @@ pub enum ProposalResponse {
 }
 
 /// Response for requestor agreements.
-#[derive(Debug)]
+#[derive(Debug, Display)]
 #[allow(dead_code)]
 pub enum AgreementResponse {
     ApproveAgreement,

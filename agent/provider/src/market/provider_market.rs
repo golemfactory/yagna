@@ -2,7 +2,6 @@ use actix::prelude::*;
 use anyhow::{Error, Result};
 use derive_more::Display;
 use futures::future::join_all;
-use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -49,42 +48,25 @@ pub struct OnShutdown;
 
 /// Send when subscribing to market will be finished.
 #[rtype(result = "Result<()>")]
-#[derive(Clone, Debug, Message)]
+#[derive(Clone, Message)]
 pub struct OfferSubscription {
     subscription_id: String,
+    preset: Preset,
     offer: Offer,
 }
 
-#[derive(Message, Debug)]
+#[derive(Message)]
 #[rtype(result = "Result<ProposalResponse>")]
 pub struct GotProposal {
     subscription: OfferSubscription,
     proposal: Proposal,
 }
 
-impl GotProposal {
-    fn new(subscription: OfferSubscription, proposal: Proposal) -> Self {
-        Self {
-            subscription,
-            proposal,
-        }
-    }
-}
-
-#[derive(Message, Debug)]
+#[derive(Message)]
 #[rtype(result = "Result<AgreementResponse>")]
 pub struct GotAgreement {
     subscription: OfferSubscription,
     agreement: Agreement,
-}
-
-impl GotAgreement {
-    fn new(subscription: OfferSubscription, agreement: Agreement) -> Self {
-        Self {
-            subscription,
-            agreement,
-        }
-    }
 }
 
 /// Async code emits this event to ProviderMarket, which reacts to it
@@ -130,26 +112,28 @@ impl ProviderMarket {
         addr: Addr<ProviderMarket>,
         market_api: Arc<MarketProviderApi>,
         offer: Offer,
+        preset: Preset,
     ) -> Result<()> {
         let subscription_id = market_api.subscribe(&offer).await?;
         let sub = OfferSubscription {
             subscription_id,
             offer,
+            preset,
         };
 
         let _ = addr.send(sub).await?;
         Ok(())
     }
 
-    #[logfn_inputs(Trace, fmt = "{}Subscribed offer: {:?} {:?}")]
     fn on_offer_subscribed(
         &mut self,
         msg: OfferSubscription,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
         log::info!(
-            "Subscribed offer. Subscription id [{}].",
-            &msg.subscription_id
+            "Subscribed offer. Subscription id [{}], preset [{}].",
+            &msg.subscription_id,
+            &msg.preset.name
         );
 
         self.offer_subscriptions
@@ -347,7 +331,6 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    #[logfn(Info, fmt = "decided to: {:?}")]
     fn on_proposal(
         &mut self,
         msg: GotProposal,
@@ -359,11 +342,19 @@ impl ProviderMarket {
             msg.proposal.state
         );
 
-        self.negotiator
-            .react_to_proposal(&msg.subscription.offer, &msg.proposal)
+        let response = self
+            .negotiator
+            .react_to_proposal(&msg.subscription.offer, &msg.proposal)?;
+
+        log::info!(
+            "Decided to {} proposal [{:?}] for subscription [{}].",
+            response,
+            msg.proposal.proposal_id,
+            msg.subscription.preset.name
+        );
+        Ok(response)
     }
 
-    #[logfn(Info, fmt = "decided to: {:?}")]
     fn on_agreement(
         &mut self,
         msg: GotAgreement,
@@ -374,7 +365,15 @@ impl ProviderMarket {
             msg.agreement.agreement_id,
             msg.agreement.state
         );
-        self.negotiator.react_to_agreement(&msg.agreement)
+        let response = self.negotiator.react_to_agreement(&msg.agreement)?;
+
+        log::info!(
+            "Decided to {} agreement [{}] for subscription [{}].",
+            response,
+            msg.agreement.agreement_id,
+            msg.subscription.preset.name
+        );
+        Ok(response)
     }
 
     fn on_agreement_approved(
@@ -458,12 +457,13 @@ impl Handler<CreateOffer> for ProviderMarket {
         log::info!("Subscribing to events... [{}]", msg.preset.name);
 
         let future = async move {
-            ProviderMarket::create_offer(addr, client, offer)
+            let preset_name = msg.preset.name.clone();
+            ProviderMarket::create_offer(addr, client, offer, msg.preset)
                 .await
                 .map_err(|error| {
                     log::error!(
                         "Can't subscribe new offer for preset [{}], error: {}",
-                        msg.preset.name,
+                        preset_name,
                         error
                     );
                     error
@@ -501,6 +501,28 @@ fn create_negotiator(name: &str) -> Box<dyn Negotiator> {
         _ => {
             log::warn!("Unknown negotiator type {}. Using default: AcceptAll", name);
             Box::new(AcceptAllNegotiator::new())
+        }
+    }
+}
+
+// =========================================== //
+// Messages creation helpers
+// =========================================== //
+
+impl GotProposal {
+    fn new(subscription: OfferSubscription, proposal: Proposal) -> Self {
+        Self {
+            subscription,
+            proposal,
+        }
+    }
+}
+
+impl GotAgreement {
+    fn new(subscription: OfferSubscription, agreement: Agreement) -> Self {
+        Self {
+            subscription,
+            agreement,
         }
     }
 }
