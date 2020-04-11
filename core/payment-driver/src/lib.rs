@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use ethereum_types::Address;
 
 #[macro_use]
 extern crate diesel;
 
 mod dummy;
+mod utils;
 
 pub mod account;
 pub mod dao;
@@ -16,10 +16,11 @@ pub mod models;
 pub mod payment;
 pub mod schema;
 
-pub use account::{AccountBalance, Balance, Chain, Currency};
+pub use account::{AccountBalance, Balance, Currency};
 use bitflags::bitflags;
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
+pub use ethereum::Chain;
 pub use gnt::GntDriver;
 pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use std::future::Future;
@@ -48,20 +49,20 @@ pub trait PaymentDriver {
     async fn init(
         &self,
         mode: AccountMode,
-        address: Address,
+        address: &str,
         sign_tx: SignTx<'_>,
     ) -> PaymentDriverResult<()>;
 
     /// Returns account balance
-    async fn get_account_balance(&self, address: Address) -> PaymentDriverResult<AccountBalance>;
+    async fn get_account_balance(&self, address: &str) -> PaymentDriverResult<AccountBalance>;
 
     /// Schedules payment
     async fn schedule_payment(
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
-        sender: Address,
-        recipient: Address,
+        sender: &str,
+        recipient: &str,
         due_date: DateTime<Utc>,
         sign_tx: SignTx<'_>,
     ) -> PaymentDriverResult<()>;
@@ -78,8 +79,8 @@ pub trait PaymentDriver {
     /// Returns sum of transactions from payer addr to payee addr
     async fn get_transaction_balance(
         &self,
-        payer: Address,
-        payee: Address,
+        payer: &str,
+        payee: &str,
     ) -> PaymentDriverResult<Balance>;
 }
 

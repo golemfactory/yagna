@@ -1,8 +1,8 @@
 use actix_rt;
+use bigdecimal::BigDecimal;
+use std::str::FromStr;
 
 use chrono::{Duration, Utc};
-
-use ethereum_types::U256;
 
 use ethsign::{KeyFile, Protected};
 
@@ -14,10 +14,11 @@ use std::future::Future;
 use std::pin::Pin;
 
 use uuid::Uuid;
-
-use ya_payment_driver::account::{AccountBalance, Chain};
+use ya_payment_driver::account::AccountBalance;
+use ya_payment_driver::ethereum::Chain;
 use ya_payment_driver::gnt::GntDriver;
 use ya_payment_driver::payment::{PaymentAmount, PaymentStatus};
+use ya_payment_driver::AccountMode;
 use ya_payment_driver::PaymentDriver;
 
 use ya_persistence::executor::DbExecutor;
@@ -69,7 +70,7 @@ fn get_address(key: KeyFile) -> String {
     hex::encode(address)
 }
 
-async fn show_balance(gnt_driver: &GntDriver, address: ethereum_types::Address) {
+async fn show_balance(gnt_driver: &GntDriver, address: &str) {
     let balance_result = gnt_driver.get_account_balance(address).await;
     let balance: AccountBalance = balance_result.unwrap();
     println!("{:?}", balance);
@@ -83,30 +84,29 @@ async fn main() -> anyhow::Result<()> {
     let address = get_address(key);
     println!("Address: {:?}", address);
 
-    let address: ethereum_types::Address = address.parse().unwrap();
-    let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
-    let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
-
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
     ya_payment_driver::dao::init(&db).await?;
 
     let mut gnt_driver = GntDriver::new(
         Chain::Rinkeby,
         GETH_ADDRESS,
-        gnt_contract_address,
+        GNT_RINKEBY_CONTRACT,
         ETH_FAUCET_ADDRESS,
-        gnt_faucet_address,
+        GNT_FAUCET_CONTRACT,
         db,
     )?;
 
-    gnt_driver.init_funds(address, &sign_tx).await.unwrap();
+    gnt_driver
+        .init(AccountMode::SEND, address.as_str(), &sign_tx)
+        .await
+        .unwrap();
 
-    show_balance(&gnt_driver, address).await;
+    show_balance(&gnt_driver, address.as_str()).await;
 
     let uuid = Uuid::new_v4().to_hyphenated().to_string();
     let invoice_id = uuid.as_str();
     let payment_amount = PaymentAmount {
-        base_currency_amount: U256::from(10000),
+        base_currency_amount: BigDecimal::from_str("69").unwrap(),
         gas_amount: None,
     };
     let due_date = Utc::now() + Duration::days(1i64);
@@ -117,8 +117,8 @@ async fn main() -> anyhow::Result<()> {
         .schedule_payment(
             invoice_id,
             payment_amount,
-            address,
-            address,
+            address.as_str(),
+            address.as_str(),
             due_date,
             &sign_tx,
         )
@@ -127,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Gnt transferred!");
 
-    show_balance(&gnt_driver, address).await;
+    show_balance(&gnt_driver, address.as_str()).await;
 
     match gnt_driver.get_payment_status(invoice_id).await? {
         PaymentStatus::Ok(confirmation) => {

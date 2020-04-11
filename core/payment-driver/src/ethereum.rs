@@ -1,19 +1,24 @@
 use ethereum_types::{Address, H256, U256};
 
+use crate::error::PaymentDriverError;
 use futures3::compat::*;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use web3::contract::Contract;
 use web3::transports::EventLoopHandle;
 use web3::transports::Http;
 use web3::types::{BlockNumber, Bytes, TransactionReceipt};
 use web3::Web3;
 
-use crate::account::Chain;
-use crate::error::PaymentDriverError;
-use std::time::Duration;
-
 const REQUIRED_CONFIRMATIONS: usize = 5;
 const POLL_INTERVAL_SECS: u64 = 1;
 const POLL_INTERVAL_NANOS: u32 = 0;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Chain {
+    Mainnet,
+    Rinkeby,
+}
 
 type EthereumClientResult<T> = Result<T, PaymentDriverError>;
 
@@ -113,8 +118,6 @@ mod tests {
     use ethereum_types::{Address, U256};
 
     use super::*;
-
-    use crate::account::Chain;
 
     const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";

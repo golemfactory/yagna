@@ -22,6 +22,10 @@ pub enum PaymentDriverError {
     UnknownTransaction,
     #[error("Transaction failed")]
     FailedTransaction,
+    #[error("Currency conversion error: {0}")]
+    Conversion(String),
+    #[error("Invalid address: {0}")]
+    Address(String),
 }
 
 impl From<secp256k1::Error> for PaymentDriverError {
@@ -33,6 +37,18 @@ impl From<secp256k1::Error> for PaymentDriverError {
 impl From<DbError> for PaymentDriverError {
     fn from(e: DbError) -> Self {
         PaymentDriverError::DatabaseError(e.to_string())
+    }
+}
+
+impl From<uint::FromDecStrErr> for PaymentDriverError {
+    fn from(e: uint::FromDecStrErr) -> Self {
+        Self::Conversion(format!("{:?}", e))
+    }
+}
+
+impl From<bigdecimal::ParseBigDecimalError> for PaymentDriverError {
+    fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
+        Self::Conversion(e.to_string())
     }
 }
 

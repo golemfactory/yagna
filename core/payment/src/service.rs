@@ -16,7 +16,6 @@ mod local {
     use super::*;
     use crate::dao;
     use crate::error::DbError;
-    use ethereum_types::H160;
     use ya_core_model::payment::local::*;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
@@ -48,7 +47,7 @@ mod local {
         init: Init,
     ) -> Result<(), GenericError> {
         pp.init(
-            H160(init.identity.into_array()),
+            hex::encode(&init.identity.into_array()),
             init.requestor,
             init.provider,
         )
@@ -88,8 +87,8 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let addr = H160(req.identity().into_array());
-        let amount_fut = pp.get_status(addr).map_err(GenericError::new);
+        let addr = hex::encode(req.identity().into_array());
+        let amount_fut = pp.get_status(addr.as_str()).map_err(GenericError::new);
 
         let ((incoming, outgoing), amount, reserved) =
             future::try_join3(db_stats_fut, amount_fut, reserved_fut).await?;

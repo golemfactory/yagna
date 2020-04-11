@@ -1,10 +1,9 @@
 use crate::{
-    AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
+    utils, AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
     PaymentDetails, PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use ethereum_types::{Address, U256};
 use serde_json;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -27,7 +26,7 @@ impl PaymentDriver for DummyDriver {
     async fn init(
         &self,
         _mode: AccountMode,
-        _address: Address,
+        _address: &str,
         _sign_tx: SignTx<'_>,
     ) -> Result<(), PaymentDriverError> {
         Ok(())
@@ -35,16 +34,17 @@ impl PaymentDriver for DummyDriver {
 
     async fn get_account_balance(
         &self,
-        _address: Address,
+        _address: &str,
     ) -> Result<AccountBalance, PaymentDriverError> {
+        let amount = "1000000000000000000000000";
         Ok(AccountBalance {
             base_currency: Balance {
                 currency: Currency::Gnt,
-                amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
+                amount: utils::str_to_big_dec(&amount).unwrap(),
             },
             gas: Some(Balance {
                 currency: Currency::Eth,
-                amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
+                amount: utils::str_to_big_dec(&amount).unwrap(),
             }),
         })
     }
@@ -53,8 +53,8 @@ impl PaymentDriver for DummyDriver {
         &mut self,
         invoice_id: &str,
         amount: PaymentAmount,
-        sender: Address,
-        recipient: Address,
+        sender: &str,
+        recipient: &str,
         _due_date: DateTime<Utc>,
         _sign_tx: SignTx<'_>,
     ) -> Result<(), PaymentDriverError> {
@@ -62,8 +62,8 @@ impl PaymentDriver for DummyDriver {
             Entry::Occupied(_) => Err(PaymentDriverError::AlreadyScheduled),
             Entry::Vacant(entry) => {
                 entry.insert(PaymentDetails {
-                    recipient,
-                    sender,
+                    recipient: recipient.into(),
+                    sender: sender.into(),
                     amount: amount.base_currency_amount,
                     date: Some(Utc::now()),
                 });
@@ -95,12 +95,13 @@ impl PaymentDriver for DummyDriver {
 
     async fn get_transaction_balance(
         &self,
-        _payer: Address,
-        _payee: Address,
+        _payer: &str,
+        _payee: &str,
     ) -> Result<Balance, PaymentDriverError> {
+        let amount = "1000000000000000000000000";
         Ok(Balance {
             currency: Currency::Gnt,
-            amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
+            amount: utils::str_to_big_dec(&amount).unwrap(),
         })
     }
 }

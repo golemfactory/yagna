@@ -1,5 +1,5 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use ethereum_types::{Address, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::models::PaymentEntity;
@@ -66,14 +66,14 @@ impl From<PaymentEntity> for PaymentStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentDetails {
-    pub recipient: Address,
-    pub sender: Address,
-    pub amount: U256,
+    pub recipient: String,
+    pub sender: String,
+    pub amount: BigDecimal,
     pub date: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentAmount {
-    pub base_currency_amount: U256,
-    pub gas_amount: Option<U256>,
+    pub base_currency_amount: BigDecimal,
+    pub gas_amount: Option<BigDecimal>,
 }

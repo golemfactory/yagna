@@ -6,7 +6,7 @@ edition = "2018"
 
 [features]
 default = []
-gnt-driver = ["web3"]
+gnt-driver = []
 dummy-driver = []
 
 [dependencies]
@@ -28,7 +28,6 @@ chrono = { version = "0.4", features = ["serde"]}
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono", "bigdecimal"] }
 diesel_migrations = "1.4"
 env_logger = "0.7"
-ethereum-types = "0.6"
 ethkey = "0.3.1"
 ethsign = "0.7"
 futures = "0.3"
@@ -45,7 +44,6 @@ tokio = "0.2"
 uint = "0.7"
 uuid = { version = "0.8", features = ["v4"] }
 structopt = "0.3"
-web3 = { git = "https://github.com/bidzyyys/rust-web3", optional = true }
 
 [dev-dependencies]
 ya-net = {version = "0.1", features=["service"]}

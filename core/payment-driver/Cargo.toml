@@ -30,3 +30,6 @@ actix-rt = "1.0"
 bitflags="1.2"
 uuid = { version = "0.8", features = ["v4"] }
 log="0.4.8"
+bigdecimal = "0.1.0"
+num-bigint = "0.2"
+uint = "0.7"

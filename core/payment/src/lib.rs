@@ -40,15 +40,12 @@ fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver>
 fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
     use ya_payment_driver::{Chain, GntDriver};
 
-    let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
-    let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
-
     Ok(GntDriver::new(
         Chain::Rinkeby,
         GETH_ADDRESS,
-        gnt_contract_address,
+        GNT_RINKEBY_CONTRACT,
         ETH_FAUCET_ADDRESS,
-        gnt_faucet_address,
+        GNT_FAUCET_CONTRACT,
         db.clone(),
     )?)
 }
