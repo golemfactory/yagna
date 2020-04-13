@@ -1,13 +1,7 @@
 [
     {
         "name": "wasmtime",
-        "path": "../../../target/debug/exe-unit",
-        "args": [
-            "-b", "../../../target/debug/wasmtime-exeunit",
-            "-c", "exe-unit-wd/cache/",
-            "-w", "exe-unit-wd/work/",
-            "-a", "agreement.json",
-            "service-bus"
-        ]
+        "supervisor-path": "../../../target/debug/exe-unit",
+        "runtime-path": "../../../target/debug/wasmtime-exeunit"
     }
 ]
