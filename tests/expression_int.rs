@@ -6,7 +6,6 @@ use market_api::resolver::expression::*;
 use market_api::resolver::ldap_parser::parse;
 use market_api::resolver::properties::*;
 
-
 #[test]
 fn resolve_multistep_with_supplemented_props() {
     let f = "(&(|(a=b)(b=c)(c=d))(!(x=dblah)))";

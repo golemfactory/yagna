@@ -6,7 +6,6 @@ use market_api::resolver::expression::*;
 use market_api::resolver::ldap_parser::parse;
 use market_api::resolver::properties::*;
 
-
 fn run_resolve_test(expr: &str, props: &Vec<&str>, expect_result: ResolveResult) {
     let expression = build_expression(&parse(expr).unwrap()).unwrap();
 
@@ -435,12 +434,11 @@ fn resolve_complex() {
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                                r#"a="b""#, 
-                                r#"b="x""#, 
-                                r#"c="y""#, 
-                                r#"x="notdblah""#
-                            ], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec![r#"a="b""#, r#"b="x""#, r#"c="y""#, r#"x="notdblah""#],
+        ResolveResult::True,
+    );
 }
 
 #[test]
@@ -449,44 +447,54 @@ fn resolve_pricing_model_sample() {
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                                r#"golem.com.pricing.model="linear""#, 
-                                r#"b="x""#, 
-                                r#"c="y""#, 
-                                r#"x="notdblah""#
-                            ], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec![
+            r#"golem.com.pricing.model="linear""#,
+            r#"b="x""#,
+            r#"c="y""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::True,
+    );
 }
 
 #[test]
 fn resolve_pseudo_function_prop_sample_positive() {
-
     // this syntax should work - should refer to "pseudo-function" property
     let f = r#"(&(golem.com.pricing.est{30}<20))"#;
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                                r#"golem.com.pricing.est{30}=15"#, 
-                                r#"b="x""#, 
-                                r#"c="y""#, 
-                                r#"x="notdblah""#
-                            ], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec![
+            r#"golem.com.pricing.est{30}=15"#,
+            r#"b="x""#,
+            r#"c="y""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::True,
+    );
 }
 
 #[test]
 fn resolve_pseudo_function_array_sample_positive() {
-
     // this syntax should work - should refer to "pseudo-function" property
     let f = r#"(&(golem.com.pricing.est{[30]}<20))"#;
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                                r#"golem.com.pricing.est{[30]}=15"#, 
-                                r#"b="x""#, 
-                                r#"c="y""#, 
-                                r#"x="notdblah""#
-                            ], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec![
+            r#"golem.com.pricing.est{[30]}=15"#,
+            r#"b="x""#,
+            r#"c="y""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::True,
+    );
 }
 
 #[test]
@@ -496,15 +504,28 @@ fn resolve_pseudo_function_prop_sample_undefined() {
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                                r#"golem.com.pricing.est{*}"#, 
-                                r#"b="x""#, 
-                                r#"c="y""#, 
-                                r#"x="notdblah""#
-                            ], ResolveResult::Undefined(
-                                vec![&PropertyRef::Value(String::from("golem.com.pricing.est{30}"), PropertyRefType::Any)],
-                                Expression::Less(PropertyRef::Value(String::from("golem.com.pricing.est{30}"), PropertyRefType::Any), String::from("20"))
-                            ));
+    run_resolve_test(
+        f,
+        &vec![
+            r#"golem.com.pricing.est{*}"#,
+            r#"b="x""#,
+            r#"c="y""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(
+                String::from("golem.com.pricing.est{30}"),
+                PropertyRefType::Any,
+            )],
+            Expression::Less(
+                PropertyRef::Value(
+                    String::from("golem.com.pricing.est{30}"),
+                    PropertyRefType::Any,
+                ),
+                String::from("20"),
+            ),
+        ),
+    );
 }
 
 #[test]
@@ -514,15 +535,28 @@ fn resolve_pseudo_function_array_sample_undefined() {
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                                r#"golem.com.pricing.est{*}"#, 
-                                r#"b="x""#, 
-                                r#"c="y""#, 
-                                r#"x="notdblah""#
-                            ], ResolveResult::Undefined(
-                                vec![&PropertyRef::Value(String::from("golem.com.pricing.est{[30]}"), PropertyRefType::Any)],
-                                Expression::Less(PropertyRef::Value(String::from("golem.com.pricing.est{[30]}"), PropertyRefType::Any), String::from("20"))
-                            ));
+    run_resolve_test(
+        f,
+        &vec![
+            r#"golem.com.pricing.est{*}"#,
+            r#"b="x""#,
+            r#"c="y""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(
+                String::from("golem.com.pricing.est{[30]}"),
+                PropertyRefType::Any,
+            )],
+            Expression::Less(
+                PropertyRef::Value(
+                    String::from("golem.com.pricing.est{[30]}"),
+                    PropertyRefType::Any,
+                ),
+                String::from("20"),
+            ),
+        ),
+    );
 }
 
 #[test]
@@ -540,8 +574,6 @@ fn resolve_wildcard_prop_sample_undefined() {
                                                    String::from("hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip"))
                             ));
 }
-
-
 
 #[test]
 fn resolve_complex_or_undefined() {

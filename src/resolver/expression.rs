@@ -189,11 +189,13 @@ impl Expression {
                                         if resolve_result {
                                             ResolveResult::True
                                         } else {
-                                            ResolveResult::False(vec![], Expression::Empty(false)) // if resolved to false - return Empty as reduced expression
+                                            ResolveResult::False(vec![], Expression::Empty(false))
+                                            // if resolved to false - return Empty as reduced expression
                                         }
                                     }
                                     Err(_) => {
-                                        ResolveResult::Undefined(vec![], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
+                                        ResolveResult::Undefined(vec![], self.clone())
+                                        // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
                                     }
                                 }
                             }
@@ -204,11 +206,13 @@ impl Expression {
                                         if val_string == *aspect_value {
                                             ResolveResult::True
                                         } else {
-                                            ResolveResult::False(vec![], Expression::Empty(false)) // if resolved to false - return Empty as reduced expression
+                                            ResolveResult::False(vec![], Expression::Empty(false))
+                                            // if resolved to false - return Empty as reduced expression
                                         }
                                     }
                                     None => {
-                                        ResolveResult::Undefined(vec![prop_ref], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
+                                        ResolveResult::Undefined(vec![prop_ref], self.clone())
+                                        // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
                                     }
                                 }
                             }
@@ -244,7 +248,8 @@ impl Expression {
                             unresolved_exprs.push(Box::new(unresolved_expr));
                         }
                     };
-                    return ResolveResult::False(vec![], Expression::Empty(false)); // resolved properly to false - return Empty as unreduced expression
+                    return ResolveResult::False(vec![], Expression::Empty(false));
+                    // resolved properly to false - return Empty as unreduced expression
                 }
                 ResolveResult::Undefined(mut un_props, unresolved_expr) => {
                     unresolved_refs.append(&mut un_props);
