@@ -448,6 +448,23 @@ fn resolve_pseudo_function_array_sample_undefined() {
                             ));
 }
 
+#[test]
+fn resolve_wildcard_prop_sample_undefined() {
+    // this syntax should work, and should return "undefined" for property declared with wildcards.
+    let f = r#"(golem.srv.comp.wasm.task_package=hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip)"#;
+
+    // test positive
+
+    run_resolve_test(f, &vec![
+                                r#"golem.srv.comp.wasm.task_package"#
+                            ], ResolveResult::Undefined(
+                                vec![&PropertyRef::Value(String::from("golem.srv.comp.wasm.task_package"), PropertyRefType::Any)],
+                                Expression::Equals(PropertyRef::Value(String::from("golem.srv.comp.wasm.task_package"), PropertyRefType::Any), 
+                                                   String::from("hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip"))
+                            ));
+}
+
+
 
 #[test]
 fn resolve_complex_or_undefined() {
