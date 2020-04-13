@@ -116,7 +116,12 @@ impl Handler<ExecCmd> for RuntimeProcess {
                 let binary = self.binary.clone();
                 let args = self.args(cmd_args);
                 let current_path = std::env::current_dir();
-                log::info!("Executing {:?} with {:?} from path {:?}", binary, args, current_path);
+                log::info!(
+                    "Executing {:?} with {:?} from path {:?}",
+                    binary,
+                    args,
+                    current_path
+                );
 
                 let fut = async move {
                     let child = Command::new(binary)
