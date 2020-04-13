@@ -1,19 +1,21 @@
-extern crate nom;
 extern crate asnom;
 extern crate market_api;
+extern crate nom;
 
-use market_api::*;
-use market_api::resolver::*;
-use market_api::resolver::properties::*;
-use market_api::resolver::ldap_parser::parse;
 use market_api::resolver::expression::*;
+use market_api::resolver::ldap_parser::parse;
+use market_api::resolver::properties::*;
+use market_api::resolver::*;
+use market_api::*;
 
 #[test]
 fn prepare_offer_error_for_empty() {
     let demand = Demand::default();
     match PreparedDemand::from(&demand) {
-        Err(_) => {},
-        _ => { assert!(false); }
+        Err(_) => {}
+        _ => {
+            assert!(false);
+        }
     }
 }
 
@@ -21,8 +23,10 @@ fn prepare_offer_error_for_empty() {
 fn prepare_demand_error_for_empty() {
     let offer = Offer::default();
     match PreparedOffer::from(&offer) {
-        Err(_) => {},
-        _ => { assert!(false); }
+        Err(_) => {}
+        _ => {
+            assert!(false);
+        }
     }
 }
 
@@ -31,7 +35,7 @@ fn build_expression_empty() {
     let f = "()";
 
     let expression = Expression::Empty(true);
-    
+
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
 
@@ -39,32 +43,35 @@ fn build_expression_empty() {
 fn build_expression_present() {
     let f = "(objectClass=*)";
 
-    let expression = Expression::Present(PropertyRef::Value(String::from("objectClass"), PropertyRefType::Any));
-    
+    let expression = Expression::Present(PropertyRef::Value(
+        String::from("objectClass"),
+        PropertyRefType::Any,
+    ));
+
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
-
 
 #[test]
 fn build_expression_equals() {
     let f = "(cn=Babs Jensen)";
 
-    let expression = Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Babs Jensen"));
-    
+    let expression = Expression::Equals(
+        PropertyRef::Value(String::from("cn"), PropertyRefType::Any),
+        String::from("Babs Jensen"),
+    );
+
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
-
 
 #[test]
 fn build_expression_not() {
     let f = "(!(cn=Tim Howes))";
 
-    let expression = Expression::Not( 
-            Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("cn"), PropertyRefType::Any), 
-                    String::from("Tim Howes")))
-    );
-    
+    let expression = Expression::Not(Box::new(Expression::Equals(
+        PropertyRef::Value(String::from("cn"), PropertyRefType::Any),
+        String::from("Tim Howes"),
+    )));
+
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
 
@@ -72,20 +79,20 @@ fn build_expression_not() {
 fn build_expression_and() {
     let f = "(&(a=b)(b=c)(c=d))";
 
-    let expression = Expression::And( 
-            vec![
-                Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("a"), PropertyRefType::Any), 
-                    String::from("b"))),
-                Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("b"), PropertyRefType::Any), 
-                    String::from("c"))),
-                Box::new(Expression::Equals(
-                    PropertyRef::Value(String::from("c"), PropertyRefType::Any), 
-                    String::from("d"))),
-            ]
-    );
-    
+    let expression = Expression::And(vec![
+        Box::new(Expression::Equals(
+            PropertyRef::Value(String::from("a"), PropertyRefType::Any),
+            String::from("b"),
+        )),
+        Box::new(Expression::Equals(
+            PropertyRef::Value(String::from("b"), PropertyRefType::Any),
+            String::from("c"),
+        )),
+        Box::new(Expression::Equals(
+            PropertyRef::Value(String::from("c"), PropertyRefType::Any),
+            String::from("d"),
+        )),
+    ]);
+
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
 }
-

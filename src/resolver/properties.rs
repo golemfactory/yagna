@@ -1,27 +1,27 @@
-extern crate uuid;
 extern crate chrono;
+extern crate decimal;
 extern crate regex;
 extern crate semver;
-extern crate decimal;
+extern crate uuid;
 
 use std::str;
 
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use decimal::d128;
 use regex::Regex;
 use semver::Version;
-use decimal::{d128};
+use std::collections::HashMap;
 
-use super::errors::{ ParseError };
+use super::errors::ParseError;
 use super::prop_parser;
-use super::prop_parser::{ Literal };
+use super::prop_parser::Literal;
 
 // #region PropertyValue
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyValue<'a> {
-    Str(&'a str), // String 
+    Str(&'a str), // String
     Boolean(bool),
-    //Int(i32), 
+    //Int(i32),
     //Long(i64),
     Number(f64),
     Decimal(d128),
@@ -30,199 +30,297 @@ pub enum PropertyValue<'a> {
     List(Vec<Box<PropertyValue<'a>>>),
 }
 
-impl <'a> PropertyValue<'a> {
-    
+impl<'a> PropertyValue<'a> {
     // TODO Implement equals() for remaining types
-    pub fn equals(&self, val : &str) -> bool {
+    pub fn equals(&self, val: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(val, *value),  // enhanced string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { parsed_value == *value }, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => parsed_value == *value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::List(value) => match PropertyValue::equals_list(value, val) { Ok(result) => result, _ => false }, // ignore parsing error, assume false  
-            _ => panic!("Not implemented")
+            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(val, *value), // enhanced string comparison
+            PropertyValue::Number(value) => match val.parse::<f64>() {
+                Ok(parsed_value) => parsed_value == *value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+                Ok(parsed_value) => parsed_value == *value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+                Ok(parsed_value) => parsed_value == *value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Version(value) => match Version::parse(val) {
+                Ok(parsed_value) => parsed_value == *value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::List(value) => match PropertyValue::equals_list(value, val) {
+                Ok(result) => result,
+                _ => false,
+            }, // ignore parsing error, assume false
+            _ => panic!("Not implemented"),
         }
     }
 
     // TODO Implement less() for remaining types
-    pub fn less(&self, val : &str) -> bool {
+    pub fn less(&self, val: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value < val,  // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value < parsed_value }, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value < parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::List(_) => false, // operator meaningless for List  
-            _ => panic!("Not implemented")
+            PropertyValue::Str(value) => *value < val, // trivial string comparison
+            PropertyValue::Number(value) => match val.parse::<f64>() {
+                Ok(parsed_value) => *value < parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+                Ok(parsed_value) => *value < parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+                Ok(parsed_value) => *value < parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Version(value) => match Version::parse(val) {
+                Ok(parsed_value) => *value < parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::List(_) => false,           // operator meaningless for List
+            _ => panic!("Not implemented"),
         }
     }
 
     // TODO Implement less_equal() for remaining types
-    pub fn less_equal(&self, val : &str) -> bool {
+    pub fn less_equal(&self, val: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value <= val,  // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value <= parsed_value }, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value <= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::List(_) => false, // operator meaningless for List  
-            _ => panic!("Not implemented")
+            PropertyValue::Str(value) => *value <= val, // trivial string comparison
+            PropertyValue::Number(value) => match val.parse::<f64>() {
+                Ok(parsed_value) => *value <= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+                Ok(parsed_value) => *value <= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+                Ok(parsed_value) => *value <= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Version(value) => match Version::parse(val) {
+                Ok(parsed_value) => *value <= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::List(_) => false,            // operator meaningless for List
+            _ => panic!("Not implemented"),
         }
     }
 
     // TODO Implement greater() for remaining types
-    pub fn greater(&self, val : &str) -> bool {
+    pub fn greater(&self, val: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value > val,  // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value > parsed_value }, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value > parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::List(_) => false, // operator meaningless for List  
-            _ => panic!("Not implemented")
+            PropertyValue::Str(value) => *value > val, // trivial string comparison
+            PropertyValue::Number(value) => match val.parse::<f64>() {
+                Ok(parsed_value) => *value > parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+                Ok(parsed_value) => *value > parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+                Ok(parsed_value) => *value > parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Version(value) => match Version::parse(val) {
+                Ok(parsed_value) => *value > parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::List(_) => false,           // operator meaningless for List
+            _ => panic!("Not implemented"),
         }
     }
 
     // TODO Implement greater_equal() for remaining types
-    pub fn greater_equal(&self, val : &str) -> bool {
+    pub fn greater_equal(&self, val: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value >= val,  // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Decimal(value) => match val.parse::<d128>() { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) { Ok(parsed_value) => { *value >= parsed_value }, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::Version(value) => match Version::parse(val) { Ok(parsed_value) => *value >= parsed_value, _ => false }, // ignore parsing error, assume false  
-            PropertyValue::List(_) => false, // operator meaningless for List  
-            _ => panic!("Not implemented")
+            PropertyValue::Str(value) => *value >= val, // trivial string comparison
+            PropertyValue::Number(value) => match val.parse::<f64>() {
+                Ok(parsed_value) => *value >= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+                Ok(parsed_value) => *value >= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+                Ok(parsed_value) => *value >= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::Version(value) => match Version::parse(val) {
+                Ok(parsed_value) => *value >= parsed_value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            PropertyValue::List(_) => false,            // operator meaningless for List
+            _ => panic!("Not implemented"),
         }
     }
 
     // Implement string equality with * wildcard
     // Note: Only str1 may contain wildcard
     // TODO my be sensible to move the Regex building to the point where property is parsed...
-    fn str_equal_with_wildcard(str1 : &str, str2 : &str) -> bool {
+    fn str_equal_with_wildcard(str1: &str, str2: &str) -> bool {
         if str1.contains("*") {
             let regex_text = format!("^{}$", str1.replace("*", ".*"));
             match Regex::new(&regex_text) {
                 Ok(regex) => regex.is_match(str2),
-                Err(_error) => false
+                Err(_error) => false,
             }
-        }
-        else
-        {
+        } else {
             str1 == str2
         }
     }
 
-    fn parse_date(dt_str : &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+    fn parse_date(dt_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
         PropertyValue::parse_date_from_rfc3339(dt_str)
-    } 
+    }
 
     fn parse_date_from_rfc3339(dt_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
         match DateTime::parse_from_rfc3339(dt_str) {
             Ok(parsed_value) => {
-                let dt = DateTime::<Utc>::from_utc(parsed_value.naive_utc(), Utc); 
+                let dt = DateTime::<Utc>::from_utc(parsed_value.naive_utc(), Utc);
                 Ok(dt)
-            },
-            Err(err) => Err(err)
+            }
+            Err(err) => Err(err),
         }
     }
 
     // Create PropertyValue from value string.
-    pub fn from_value(value : &'a str) -> Result<PropertyValue<'a>, ParseError> {
-        
+    pub fn from_value(value: &'a str) -> Result<PropertyValue<'a>, ParseError> {
         match prop_parser::parse_prop_value_literal(value) {
             Ok(tag) => PropertyValue::from_literal(tag),
-            Err(_error) => Err(ParseError::new(&format!("Error parsing literal: '{}'", value)))
+            Err(_error) => Err(ParseError::new(&format!(
+                "Error parsing literal: '{}'",
+                value
+            ))),
         }
     }
 
     // Convert self into different type of property value
-    // Returns: 
-    // - If conversion possible or not needed: 
+    // Returns:
+    // - If conversion possible or not needed:
     //   None - if conversion not required
     //   Some(new PropertyValue) - if conversion required
-    // - If conversion not possible 
-    //   Err 
-    pub fn to_prop_ref_type(&self, impl_type : &PropertyRefType) -> Result<Option<PropertyValue>, String> {
-        
+    // - If conversion not possible
+    //   Err
+    pub fn to_prop_ref_type(
+        &self,
+        impl_type: &PropertyRefType,
+    ) -> Result<Option<PropertyValue>, String> {
         match impl_type {
             PropertyRefType::Any => Ok(None),
             PropertyRefType::Decimal => match self {
                 PropertyValue::Decimal(_) => Ok(None),
-                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::Decimal(val)) {
-                   Ok(prop_val) => Ok(Some(prop_val)),
-                   Err(error) => Err(format!("{:?}", error))
+                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::Decimal(val))
+                {
+                    Ok(prop_val) => Ok(Some(prop_val)),
+                    Err(error) => Err(format!("{:?}", error)),
                 },
-                _ => { Err(format!("Unable to convert {:?} to {:?}", self, impl_type)) }
+                _ => Err(format!("Unable to convert {:?} to {:?}", self, impl_type)),
             },
             PropertyRefType::DateTime => match self {
                 PropertyValue::DateTime(_) => Ok(None),
-                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::DateTime(val)) {
-                   Ok(prop_val) => Ok(Some(prop_val)),
-                   Err(error) => Err(format!("{:?}", error))
-                },
-                _ => { Err(format!("Unable to convert {:?} to {:?}", self, impl_type)) }
+                PropertyValue::Str(val) => {
+                    match PropertyValue::from_literal(Literal::DateTime(val)) {
+                        Ok(prop_val) => Ok(Some(prop_val)),
+                        Err(error) => Err(format!("{:?}", error)),
+                    }
+                }
+                _ => Err(format!("Unable to convert {:?} to {:?}", self, impl_type)),
             },
             PropertyRefType::Version => match self {
                 PropertyValue::Version(_) => Ok(None),
-                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::Version(val)) {
-                   Ok(prop_val) => Ok(Some(prop_val)),
-                   Err(error) => { 
-                       Err(format!("{:?}", error))
-                   }
+                PropertyValue::Str(val) => match PropertyValue::from_literal(Literal::Version(val))
+                {
+                    Ok(prop_val) => Ok(Some(prop_val)),
+                    Err(error) => Err(format!("{:?}", error)),
                 },
-                _ => { Err(format!("Unable to convert {:?} to {:?}", self, impl_type)) }
-            }
+                _ => Err(format!("Unable to convert {:?} to {:?}", self, impl_type)),
+            },
         }
     }
 
-    fn from_literal(literal : Literal<'a>) -> Result<PropertyValue<'a>, ParseError> {
+    fn from_literal(literal: Literal<'a>) -> Result<PropertyValue<'a>, ParseError> {
         match literal {
             Literal::Str(val) => Ok(PropertyValue::Str(val)),
-            Literal::Number(val) => match val.parse::<f64>() { 
-                Ok(parsed_val) => Ok(PropertyValue::Number(parsed_val)), 
-                Err(_err) => Err(ParseError::new(&format!("Error parsing as Number: '{}'", val))) },
-            Literal::Decimal(val) => match val.parse::<d128>() { 
-                Ok(parsed_val) => if parsed_val.is_nan() {
-                        Err(ParseError::new(&format!("Error parsing as Decimal: '{}'", val)))
-                    }
-                    else { 
+            Literal::Number(val) => match val.parse::<f64>() {
+                Ok(parsed_val) => Ok(PropertyValue::Number(parsed_val)),
+                Err(_err) => Err(ParseError::new(&format!(
+                    "Error parsing as Number: '{}'",
+                    val
+                ))),
+            },
+            Literal::Decimal(val) => match val.parse::<d128>() {
+                Ok(parsed_val) => {
+                    if parsed_val.is_nan() {
+                        Err(ParseError::new(&format!(
+                            "Error parsing as Decimal: '{}'",
+                            val
+                        )))
+                    } else {
                         Ok(PropertyValue::Decimal(parsed_val))
-                    }, 
-                Err(_err) => Err(ParseError::new(&format!("Error parsing as Decimal: '{}'", val))) },
-            Literal::DateTime(val) => match PropertyValue::parse_date(val) { 
-                Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)), 
-                Err(_err) => Err(ParseError::new(&format!("Error parsing as DateTime: '{}'", val))) },
+                    }
+                }
+                Err(_err) => Err(ParseError::new(&format!(
+                    "Error parsing as Decimal: '{}'",
+                    val
+                ))),
+            },
+            Literal::DateTime(val) => match PropertyValue::parse_date(val) {
+                Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)),
+                Err(_err) => Err(ParseError::new(&format!(
+                    "Error parsing as DateTime: '{}'",
+                    val
+                ))),
+            },
             Literal::Bool(val) => Ok(PropertyValue::Boolean(val)),
-            Literal::Version(val) => match Version::parse(val) { 
-                Ok(parsed_val) => Ok(PropertyValue::Version(parsed_val)), 
-                Err(_err) => Err(ParseError::new(&format!("Error parsing as Version: '{}'", val))) },
+            Literal::Version(val) => match Version::parse(val) {
+                Ok(parsed_val) => Ok(PropertyValue::Version(parsed_val)),
+                Err(_err) => Err(ParseError::new(&format!(
+                    "Error parsing as Version: '{}'",
+                    val
+                ))),
+            },
             Literal::List(vals) => {
-                
                 // Attempt parsing...
-                let results : Vec<Result<PropertyValue<'a>, ParseError>> = vals.into_iter().map( |item| { PropertyValue::from_literal(*item) } ).collect();
+                let results: Vec<Result<PropertyValue<'a>, ParseError>> = vals
+                    .into_iter()
+                    .map(|item| PropertyValue::from_literal(*item))
+                    .collect();
 
                 // ...then check if all results are successful.
 
                 for item in results.iter() {
-                    match item { 
-                        Err(error) => { return Err(ParseError::new(&format!("Error parsing list: '{}'", error))); },
-                        _ => {}
+                    match item {
+                        Err(error) => {
+                            return Err(ParseError::new(&format!(
+                                "Error parsing list: '{}'",
+                                error
+                            )));
                         }
+                        _ => {}
+                    }
                 }
 
                 // If yes - map all items into PropertyValues
-                
+
                 Ok(PropertyValue::List(
-                    results.into_iter().map( | item | {match item { Ok(prop_val) => Box::new(prop_val), _ => panic!() } } ).collect()
+                    results
+                        .into_iter()
+                        .map(|item| match item {
+                            Ok(prop_val) => Box::new(prop_val),
+                            _ => panic!(),
+                        })
+                        .collect(),
                 ))
-            },
+            }
         }
     }
 
-    fn equals_list(list_items : &Vec<Box<PropertyValue>>, val : &str) -> Result<bool, String> {
-        
+    fn equals_list(list_items: &Vec<Box<PropertyValue>>, val: &str) -> Result<bool, String> {
         // if val is a proper list syntax - parse it and test list equality
         // otherwise, if val isnt a list - treat it as a single item and execute "IN" operator
         // TODO this is lazy list equality comparison (returns invalid results where eg lists include multiple copies of the same item)
@@ -247,11 +345,11 @@ impl <'a> PropertyValue<'a> {
                     }
                 }
                 return Ok(true);
-            },
+            }
             Err(_) => {
                 for item in list_items {
                     if item.equals(val) {
-                        return Ok(true)
+                        return Ok(true);
                     }
                 }
             }
@@ -266,31 +364,30 @@ impl <'a> PropertyValue<'a> {
 // Property - describes the property with its value and aspects.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Property<'a> {
-    Explicit(&'a str, PropertyValue<'a>, HashMap<&'a str, &'a str>),  // name, values, aspects
-    Implicit(&'a str),  // name
+    Explicit(&'a str, PropertyValue<'a>, HashMap<&'a str, &'a str>), // name, values, aspects
+    Implicit(&'a str),                                               // name
 }
 
 // #region PropertySet
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct PropertySet <'a>{
-    pub properties : HashMap<&'a str, Property<'a>>,
+pub struct PropertySet<'a> {
+    pub properties: HashMap<&'a str, Property<'a>>,
 }
 
-impl <'a> PropertySet<'a> {
+impl<'a> PropertySet<'a> {
     // Create PropertySet from vector of properties expressed in flat form (ie. by parsing)
-    pub fn from_flat_props(props : &'a Vec<String>) -> PropertySet<'a> {
-        let mut result = PropertySet{
-            properties : HashMap::new()
+    pub fn from_flat_props(props: &'a Vec<String>) -> PropertySet<'a> {
+        let mut result = PropertySet {
+            properties: HashMap::new(),
         };
 
         // parse and pack props
         for prop_flat in props {
             match PropertySet::parse_flat_prop(prop_flat) {
-                Ok((prop_name, prop_value)) => 
-                {
+                Ok((prop_name, prop_value)) => {
                     result.properties.insert(prop_name, prop_value);
-                },
+                }
                 Err(_error) => {
                     // do nothing??? ignore the faulty property
                     println!("Error: {:?}", _error);
@@ -302,41 +399,42 @@ impl <'a> PropertySet<'a> {
     }
 
     // Parsing of property values/types
-    fn parse_flat_prop(prop_flat : &'a str) -> Result<(&'a str, Property<'a>), ParseError> {
+    fn parse_flat_prop(prop_flat: &'a str) -> Result<(&'a str, Property<'a>), ParseError> {
         // Parse the property string to extract: property name and property value(s) - also detecting the property types
         match prop_parser::parse_prop_def(prop_flat) {
-            Ok((name, value)) =>
-            {
-                match value {
-                    Some(val) => 
-                    {
-                        match PropertyValue::from_value(val) {
-                            Ok(prop_value) => Ok((name, Property::Explicit(name, prop_value, HashMap::new()))),
-                            Err(error) => Err(error)
-                        }
-                    },
-                    None => Ok((name, Property::Implicit(name)))
-                }
+            Ok((name, value)) => match value {
+                Some(val) => match PropertyValue::from_value(val) {
+                    Ok(prop_value) => {
+                        Ok((name, Property::Explicit(name, prop_value, HashMap::new())))
+                    }
+                    Err(error) => Err(error),
+                },
+                None => Ok((name, Property::Implicit(name))),
             },
-            Err(error) => Err(ParseError::new(&format!("Parsing error: {}", error)))
+            Err(error) => Err(ParseError::new(&format!("Parsing error: {}", error))),
         }
     }
 
     // Set property aspect
-    pub fn set_property_aspect(&mut self, prop_name: &'a str, aspect_name: &'a str, aspect_value: &'a str) {
+    pub fn set_property_aspect(
+        &mut self,
+        prop_name: &'a str,
+        aspect_name: &'a str,
+        aspect_value: &'a str,
+    ) {
         match self.properties.remove(prop_name) {
             Some(prop) => {
                 let new_prop = match prop {
                     Property::Explicit(name, val, mut aspects) => {
-                            // remove aspect if already exists
-                            aspects.remove(aspect_name);
-                            aspects.insert(aspect_name, aspect_value);
-                            Property::Explicit(name, val, aspects) 
-                        } ,
-                    _ => unreachable!()
+                        // remove aspect if already exists
+                        aspects.remove(aspect_name);
+                        aspects.insert(aspect_name, aspect_value);
+                        Property::Explicit(name, val, aspects)
+                    }
+                    _ => unreachable!(),
                 };
                 self.properties.insert(prop_name, new_prop);
-            },
+            }
             None => {}
         }
     }
@@ -356,29 +454,33 @@ pub enum PropertyRefType {
     Any,
     Decimal,
     Version,
-    DateTime
+    DateTime,
 }
 
-pub fn parse_prop_ref(flat_prop : &str) -> Result<PropertyRef, ParseError> {
+pub fn parse_prop_ref(flat_prop: &str) -> Result<PropertyRef, ParseError> {
     // TODO parse the flat_prop using prop_parser and repack to PropertyRef
     match prop_parser::parse_prop_ref_with_aspect(flat_prop) {
-        Ok((name, opt_aspect, impl_type)) => {
-            match opt_aspect {
-                Some(aspect) => Ok(PropertyRef::Aspect(name.to_string(), aspect.to_string(), decode_implied_ref_type(impl_type))),
-                None => Ok(PropertyRef::Value(name.to_string(), decode_implied_ref_type(impl_type)))
-            }
-            
+        Ok((name, opt_aspect, impl_type)) => match opt_aspect {
+            Some(aspect) => Ok(PropertyRef::Aspect(
+                name.to_string(),
+                aspect.to_string(),
+                decode_implied_ref_type(impl_type),
+            )),
+            None => Ok(PropertyRef::Value(
+                name.to_string(),
+                decode_implied_ref_type(impl_type),
+            )),
         },
-        Err(error) => Err(ParseError::new(&format!("Parse error {}", error)))
+        Err(error) => Err(ParseError::new(&format!("Parse error {}", error))),
     }
 }
 
-fn decode_implied_ref_type(impl_type : Option<&str>) -> PropertyRefType {
+fn decode_implied_ref_type(impl_type: Option<&str>) -> PropertyRefType {
     match impl_type {
         Some("d") => PropertyRefType::Decimal,
         Some("v") => PropertyRefType::Version,
         Some("t") => PropertyRefType::DateTime,
         None => PropertyRefType::Any,
-        _ => panic!("Unknown implied type code!")
+        _ => panic!("Unknown implied type code!"),
     }
 }

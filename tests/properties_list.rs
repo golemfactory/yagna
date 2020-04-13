@@ -1,5 +1,5 @@
-extern crate market_api;
 extern crate chrono;
+extern crate market_api;
 
 use market_api::resolver::properties::*;
 
@@ -8,8 +8,8 @@ use market_api::resolver::properties::*;
 fn equals_for_list_contains_true() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.equals("abc"), true);
     assert_eq!(prop_value.equals("def"), true);
@@ -19,8 +19,8 @@ fn equals_for_list_contains_true() {
 fn equals_for_list_contains_false() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.equals("fds"), false);
 }
@@ -29,8 +29,8 @@ fn equals_for_list_contains_false() {
 fn equals_for_list_list_equals_true() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.equals("[abc,def]"), true);
 }
@@ -39,8 +39,8 @@ fn equals_for_list_list_equals_true() {
 fn equals_for_list_list_different_length_false() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.equals("[abc,def,xyz]"), false);
 }
@@ -49,8 +49,8 @@ fn equals_for_list_list_different_length_false() {
 fn equals_for_list_list_different_items_false() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.equals("[abc,xyz]"), false);
 }
@@ -59,8 +59,8 @@ fn equals_for_list_list_different_items_false() {
 fn greater_for_list_false() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.greater("abc"), false);
 }
@@ -69,8 +69,8 @@ fn greater_for_list_false() {
 fn greater_equal_for_list_false() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.greater_equal("abc"), false);
 }
@@ -79,8 +79,8 @@ fn greater_equal_for_list_false() {
 fn less_for_list_false() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.less("abc"), false);
 }
@@ -89,8 +89,8 @@ fn less_for_list_false() {
 fn less_equal_for_list_false() {
     let prop_value = PropertyValue::List(vec![
         Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def"))
-        ]);
+        Box::new(PropertyValue::Str("def")),
+    ]);
 
     assert_eq!(prop_value.less_equal("abc"), false);
 }

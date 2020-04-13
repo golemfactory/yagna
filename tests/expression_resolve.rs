@@ -1,13 +1,13 @@
-extern crate nom;
 extern crate asnom;
 extern crate market_api;
+extern crate nom;
 
-use market_api::resolver::*;
-use market_api::resolver::properties::*;
-use market_api::resolver::ldap_parser::parse;
 use market_api::resolver::expression::*;
+use market_api::resolver::ldap_parser::parse;
+use market_api::resolver::properties::*;
 
-fn run_resolve_test(expr : &str, props : &Vec<&str>, expect_result : ResolveResult) {
+
+fn run_resolve_test(expr: &str, props: &Vec<&str>, expect_result: ResolveResult) {
     let expression = build_expression(&parse(expr).unwrap()).unwrap();
 
     let mut properties = vec![];
@@ -24,7 +24,7 @@ fn run_resolve_test(expr : &str, props : &Vec<&str>, expect_result : ResolveResu
 fn resolve_empty() {
     let f = "()";
 
-    // test positive 
+    // test positive
 
     run_resolve_test(f, &vec!["objectClass=\"Babs Jensen\""], ResolveResult::True);
 }
@@ -33,17 +33,23 @@ fn resolve_empty() {
 fn resolve_present() {
     let f = "(objectClass=*)";
 
-    // test positive 
+    // test positive
 
     run_resolve_test(f, &vec!["objectClass=\"Babs Jensen\""], ResolveResult::True);
 
     // test negative (must return name of unresolved property)
 
-    run_resolve_test(f, &vec!["cn=\"Dblah\""], 
-                    ResolveResult::False(
-                        vec![&PropertyRef::Value(String::from("objectClass"), PropertyRefType::Any)],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=\"Dblah\""],
+        ResolveResult::False(
+            vec![&PropertyRef::Value(
+                String::from("objectClass"),
+                PropertyRefType::Any,
+            )],
+            Expression::Empty(false),
+        ),
+    );
 }
 
 #[test]
@@ -56,19 +62,28 @@ fn resolve_equals() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=\"Dblah\""], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=\"Dblah\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=\"Dblah\""], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
-                        Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Babs Jensen"))
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cnas=\"Dblah\""],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(
+                String::from("cn"),
+                PropertyRefType::Any,
+            )],
+            Expression::Equals(
+                PropertyRef::Value(String::from("cn"), PropertyRefType::Any),
+                String::from("Babs Jensen"),
+            ),
+        ),
+    );
 }
 
 #[test]
@@ -77,23 +92,36 @@ fn resolve_equals_list() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn=[\"Dblah\",\"Babs Jensen\"]"], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec!["cn=[\"Babs Jensen\",\"Dblah\"]"],
+        ResolveResult::True,
+    );
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=[\"Dblah\",\"Argh\"]"], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=[\"Dblah\",\"Argh\"]"],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=[\"Dblah\",\"Argh\"]"], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
-                        Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Babs Jensen"))
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cnas=[\"Dblah\",\"Argh\"]"],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(
+                String::from("cn"),
+                PropertyRefType::Any,
+            )],
+            Expression::Equals(
+                PropertyRef::Value(String::from("cn"), PropertyRefType::Any),
+                String::from("Babs Jensen"),
+            ),
+        ),
+    );
 }
 
 #[test]
@@ -106,19 +134,28 @@ fn resolve_equals_with_wildcard() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=\"Dblah\""], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=\"Dblah\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=\"Dblah\""], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
-                        Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Babs *"))
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cnas=\"Dblah\""],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(
+                String::from("cn"),
+                PropertyRefType::Any,
+            )],
+            Expression::Equals(
+                PropertyRef::Value(String::from("cn"), PropertyRefType::Any),
+                String::from("Babs *"),
+            ),
+        ),
+    );
 }
 
 #[test]
@@ -131,21 +168,20 @@ fn resolve_equals_int() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=456"], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=456"],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test false when parsing error
 
     let f = "(cn=1ds23)";
-    run_resolve_test(f, &vec!["cn=123"], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
-
+    run_resolve_test(
+        f,
+        &vec!["cn=123"],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 }
 
 #[test]
@@ -158,21 +194,20 @@ fn resolve_greater_int() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=12"], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=12"],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test false when parsing error
 
     let f = "(cn>1ds23)";
-    run_resolve_test(f, &vec!["cn=123"], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
-
+    run_resolve_test(
+        f,
+        &vec!["cn=123"],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 }
 
 #[test]
@@ -185,21 +220,20 @@ fn resolve_less_float() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=126"], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=126"],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test false when parsing error
 
     let f = "(cn<1ds23)";
-    run_resolve_test(f, &vec!["cn=123"], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
-
+    run_resolve_test(
+        f,
+        &vec!["cn=123"],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 }
 
 #[test]
@@ -208,71 +242,87 @@ fn resolve_less_equal_datetime() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:20:30.52Z\""], ResolveResult::True);
-    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:20:50.52Z\""], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec!["cn=t\"1985-04-12T23:20:30.52Z\""],
+        ResolveResult::True,
+    );
+    run_resolve_test(
+        f,
+        &vec!["cn=t\"1985-04-12T23:20:50.52Z\""],
+        ResolveResult::True,
+    );
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:21:50.52Z\""], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=t\"1985-04-12T23:21:50.52Z\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test false when parsing error (NOTE the RFC 3339 format is fairly strict)
 
     let f = "(cn<=1985-04-13)";
-    run_resolve_test(f, &vec!["cn=t\"1985-04-12T23:20:50.52Z\""], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
-
+    run_resolve_test(
+        f,
+        &vec!["cn=t\"1985-04-12T23:20:50.52Z\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 }
-
 
 #[test]
 fn resolve_greater_equal_version_with_implied_type() {
-
     // test positive
 
     run_resolve_test("(cn$v>=1.5.0)", &vec!["cn=\"1.10.0\""], ResolveResult::True);
 
     // test negative
 
-    run_resolve_test("(cn>=1.5.0)", &vec!["cn=\"1.10.0\""], ResolveResult::False(vec![], Expression::Empty(false)));
+    run_resolve_test(
+        "(cn>=1.5.0)",
+        &vec!["cn=\"1.10.0\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test - unable to convert
 
-    run_resolve_test("(cn$v>=1.5.0)", &vec!["cn=\"dblah\""], ResolveResult::Undefined(vec![], 
-                    Expression::GreaterEqual(
-                        PropertyRef::Value(
-                            String::from("cn"), 
-                            PropertyRefType::Version), 
-                        String::from("1.5.0") 
-                    )
-                ));
-
+    run_resolve_test(
+        "(cn$v>=1.5.0)",
+        &vec!["cn=\"dblah\""],
+        ResolveResult::Undefined(
+            vec![],
+            Expression::GreaterEqual(
+                PropertyRef::Value(String::from("cn"), PropertyRefType::Version),
+                String::from("1.5.0"),
+            ),
+        ),
+    );
 }
 
 #[test]
 fn resolve_greater_equal_decimal_with_implied_type() {
-
     // test positive
 
-    run_resolve_test("(cn$d>=10)", &vec!["cn=\"1\""], ResolveResult::False(vec![], Expression::Empty(false)));
+    run_resolve_test(
+        "(cn$d>=10)",
+        &vec!["cn=\"1\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test - unable to convert
 
-    run_resolve_test("(cn$d>=10)", &vec!["cn=\"dblah\""], ResolveResult::Undefined(vec![], 
-                    Expression::GreaterEqual(
-                        PropertyRef::Value(
-                            String::from("cn"), 
-                            PropertyRefType::Decimal), 
-                        String::from("10") 
-                    )
-                ));
-
+    run_resolve_test(
+        "(cn$d>=10)",
+        &vec!["cn=\"dblah\""],
+        ResolveResult::Undefined(
+            vec![],
+            Expression::GreaterEqual(
+                PropertyRef::Value(String::from("cn"), PropertyRefType::Decimal),
+                String::from("10"),
+            ),
+        ),
+    );
 }
 
 #[test]
@@ -285,19 +335,28 @@ fn resolve_not() {
 
     // test negative
 
-    run_resolve_test(f, &vec!["cn=\"Tim Howes\""], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cn=\"Tim Howes\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test undefined
 
-    run_resolve_test(f, &vec!["cnas=\"Dblah\""], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("cn"), PropertyRefType::Any)],
-                        Expression::Not(Box::new(Expression::Equals(PropertyRef::Value(String::from("cn"), PropertyRefType::Any), String::from("Tim Howes"))))
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["cnas=\"Dblah\""],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(
+                String::from("cn"),
+                PropertyRefType::Any,
+            )],
+            Expression::Not(Box::new(Expression::Equals(
+                PropertyRef::Value(String::from("cn"), PropertyRefType::Any),
+                String::from("Tim Howes"),
+            ))),
+        ),
+    );
 }
 
 #[test]
@@ -306,26 +365,34 @@ fn resolve_and() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["a=\"b\"", "b=\"c\"", "c=\"d\""], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec!["a=\"b\"", "b=\"c\"", "c=\"d\""],
+        ResolveResult::True,
+    );
 
     // test negative
 
-    run_resolve_test(f, &vec!["a=\"x\"", "b=\"c\"", "c=\"d\""], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["a=\"x\"", "b=\"c\"", "c=\"d\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=\"c\"", "c=\"d\""], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                        Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["b=\"c\"", "c=\"d\""],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
+            Expression::Equals(
+                PropertyRef::Value(String::from("a"), PropertyRefType::Any),
+                String::from("b"),
+            ),
+        ),
+    );
 }
-
-
 
 #[test]
 fn resolve_or() {
@@ -333,23 +400,33 @@ fn resolve_or() {
 
     // test positive
 
-    run_resolve_test(f, &vec!["a=\"b\"", "b=\"c\"", "c=\"d\""], ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec!["a=\"b\"", "b=\"c\"", "c=\"d\""],
+        ResolveResult::True,
+    );
 
     // test negative
 
-    run_resolve_test(f, &vec!["a=\"x\"", "b=\"y\"", "c=\"z\""], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["a=\"x\"", "b=\"y\"", "c=\"z\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 
     // test undefined
 
-    run_resolve_test(f, &vec!["b=\"x\"", "c=\"y\""], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                        Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))
-                    ));
+    run_resolve_test(
+        f,
+        &vec!["b=\"x\"", "c=\"y\""],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
+            Expression::Equals(
+                PropertyRef::Value(String::from("a"), PropertyRefType::Any),
+                String::from("b"),
+            ),
+        ),
+    );
 }
 
 #[test]
@@ -472,13 +549,18 @@ fn resolve_complex_or_undefined() {
 
     // test positive
 
-    run_resolve_test(f, &vec![/*"a=\"b\"",*/ "b=\"x\"", "c=\"y\"", "x=\"notdblah\""], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
-                        Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))
-                    ));
+    run_resolve_test(
+        f,
+        &vec![/*"a=\"b\"",*/ "b=\"x\"", "c=\"y\"", "x=\"notdblah\""],
+        ResolveResult::Undefined(
+            vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any)],
+            Expression::Equals(
+                PropertyRef::Value(String::from("a"), PropertyRefType::Any),
+                String::from("b"),
+            ),
+        ),
+    );
 }
-
 
 #[test]
 fn resolve_complex_or_undefined_reduced() {
@@ -486,13 +568,16 @@ fn resolve_complex_or_undefined_reduced() {
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                                /*"a=\"b\"",*/ 
-                                r#"b="c""#, 
-                                r#"c="y""#, 
-                                r#"x="notdblah""#
-                            ], 
-                    ResolveResult::True);
+    run_resolve_test(
+        f,
+        &vec![
+            /*"a=\"b\"",*/
+            r#"b="c""#,
+            r#"c="y""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::True,
+    );
 }
 
 #[test]
@@ -503,19 +588,31 @@ fn resolve_complex_and_undefined() {
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                        /*"a=\"b\"",
-                        "b=\"c\"",*/ 
-                        r#"c="d""#, 
-                        r#"x="notdblah""#
-                        ], 
-                    ResolveResult::Undefined(
-                        vec![&PropertyRef::Value(String::from("a"), PropertyRefType::Any), &PropertyRef::Value(String::from("b"), PropertyRefType::Any)],
-                        Expression::And(vec![
-                            Box::new(Expression::Equals(PropertyRef::Value(String::from("a"), PropertyRefType::Any), String::from("b"))),
-                            Box::new(Expression::Equals(PropertyRef::Value(String::from("b"), PropertyRefType::Any), String::from("c")))
-                            ])
-                    ));
+    run_resolve_test(
+        f,
+        &vec![
+            /*"a=\"b\"",
+            "b=\"c\"",*/
+            r#"c="d""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::Undefined(
+            vec![
+                &PropertyRef::Value(String::from("a"), PropertyRefType::Any),
+                &PropertyRef::Value(String::from("b"), PropertyRefType::Any),
+            ],
+            Expression::And(vec![
+                Box::new(Expression::Equals(
+                    PropertyRef::Value(String::from("a"), PropertyRefType::Any),
+                    String::from("b"),
+                )),
+                Box::new(Expression::Equals(
+                    PropertyRef::Value(String::from("b"), PropertyRefType::Any),
+                    String::from("c"),
+                )),
+            ]),
+        ),
+    );
 }
 
 #[test]
@@ -524,15 +621,14 @@ fn resolve_complex_and_undefined_reduced() {
 
     // test positive
 
-    run_resolve_test(f, &vec![
-                            /*"a=\"b\"",*/ 
-                            r#"b="c""#, 
-                            r#"c="x""#, 
-                            r#"x="notdblah""#
-                        ], 
-                    ResolveResult::False(
-                        vec![],
-                        Expression::Empty(false)
-                    ));
+    run_resolve_test(
+        f,
+        &vec![
+            /*"a=\"b\"",*/
+            r#"b="c""#,
+            r#"c="x""#,
+            r#"x="notdblah""#,
+        ],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
 }
-

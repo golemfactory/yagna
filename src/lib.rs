@@ -2,54 +2,49 @@
 extern crate nom;
 extern crate asnom;
 extern crate chrono;
-extern crate uuid;
+extern crate decimal;
 extern crate regex;
 extern crate semver;
-extern crate decimal;
+extern crate uuid;
 
+use std::collections::HashMap;
 use std::error;
 use std::fmt;
-use std::collections::HashMap;
 use uuid::Uuid;
 
-use resolver::ldap_parser::parse;
 use resolver::expression::*;
+use resolver::ldap_parser::parse;
 use resolver::properties::PropertySet;
-
 
 pub mod provider;
 pub mod requestor;
 pub mod resolver;
 
-pub use resolver::matching::{ MatchResult, match_weak };
-pub use resolver::prepare::{ PreparedOffer, PreparedDemand };
+pub use resolver::matching::{match_weak, MatchResult};
+pub use resolver::prepare::{PreparedDemand, PreparedOffer};
 
 // #region Externally visible functions
 #[repr(C)]
 pub struct StringRef {
     bytes: *const u8,
-    length: u32
+    length: u32,
 }
 
-fn unpack_string_ref_array<'a>(str_ref_arr : *const StringRef, count: u32) -> Vec<String> {
+fn unpack_string_ref_array<'a>(str_ref_arr: *const StringRef, count: u32) -> Vec<String> {
     let array_slice = unsafe { std::slice::from_raw_parts(str_ref_arr, count as usize) };
     let mut result = vec![];
     for item in array_slice {
         result.push(String::from(unpack_string_ref(&item)));
-    };
+    }
 
     result
 }
 
-fn unpack_string_ref<'a>(str_ref : &StringRef) -> &str {
-    let slice = unsafe { 
-        std::slice::from_raw_parts(str_ref.bytes, str_ref.length as usize) 
-        };
+fn unpack_string_ref<'a>(str_ref: &StringRef) -> &str {
+    let slice = unsafe { std::slice::from_raw_parts(str_ref.bytes, str_ref.length as usize) };
     let str_result = std::str::from_utf8(slice);
     match str_result {
-        Ok(str_content) => {
-            str_content
-            },
+        Ok(str_content) => str_content,
         Err(error) => {
             println!("{:?}", error);
             panic!(error);
@@ -57,12 +52,15 @@ fn unpack_string_ref<'a>(str_ref : &StringRef) -> &str {
     }
 }
 
-
 #[no_mangle]
-pub extern fn match_demand_offer(demand_props: *const StringRef, demand_props_count: u32,
-                                 demand_constraints: StringRef, 
-                                 offer_props: *const StringRef, offer_props_count: u32,
-                                 offer_constraints: StringRef) -> i32 {
+pub extern "C" fn match_demand_offer(
+    demand_props: *const StringRef,
+    demand_props_count: u32,
+    demand_constraints: StringRef,
+    offer_props: *const StringRef,
+    offer_props_count: u32,
+    offer_constraints: StringRef,
+) -> i32 {
     let mut demand = Demand::default();
     demand.properties = unpack_string_ref_array(demand_props, demand_props_count);
     demand.constraints = String::from(unpack_string_ref(&demand_constraints));
@@ -77,51 +75,52 @@ pub extern fn match_demand_offer(demand_props: *const StringRef, demand_props_co
     // Validate Demand and Offer inputs and return -1 in case of parsing errors.
 
     match prep_demand_result {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => {
             return -1;
         }
     }
 
     match prep_offer_result {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(_) => {
             return -1;
         }
     }
 
     // Calculate match...
-    
-    match match_weak(&prep_demand_result.unwrap(), &prep_offer_result.unwrap()){
-        Ok(match_result) => {
-            match match_result {
-                MatchResult::True => 1,
-                MatchResult::False(_,_) => 0,
-                MatchResult::Undefined(_,_) => 2,
-                MatchResult::Err(_) => -1
-            }
-        },
-        Err(_) => {
-            -1
-        }
-    }
 
+    match match_weak(&prep_demand_result.unwrap(), &prep_offer_result.unwrap()) {
+        Ok(match_result) => match match_result {
+            MatchResult::True => 1,
+            MatchResult::False(_, _) => 0,
+            MatchResult::Undefined(_, _) => 2,
+            MatchResult::Err(_) => -1,
+        },
+        Err(_) => -1,
+    }
 }
 
 #[no_mangle]
-pub extern fn resolve_expression(expression: StringRef, props: *const StringRef, props_count: u32) -> i32 {
+pub extern "C" fn resolve_expression(
+    expression: StringRef,
+    props: *const StringRef,
+    props_count: u32,
+) -> i32 {
     let expr = unpack_string_ref(&expression);
     let expr_tree = match parse(expr) {
         Ok(tag) => tag,
-        Err(_) => { return -1; }
+        Err(_) => {
+            return -1;
+        }
     };
 
-    let expression =
-        match build_expression(&expr_tree)
-        {
-            Ok(express) => express,
-            Err(_) => { return -1; }
-        };
+    let expression = match build_expression(&expr_tree) {
+        Ok(express) => express,
+        Err(_) => {
+            return -1;
+        }
+    };
 
     let properties = unpack_string_ref_array(props, props_count);
 
@@ -131,14 +130,11 @@ pub extern fn resolve_expression(expression: StringRef, props: *const StringRef,
         ResolveResult::True => 1,
         ResolveResult::False(_, _) => 0,
         ResolveResult::Undefined(_, _) => 2,
-        _ => -1
+        _ => -1,
     }
-
 }
 
-
 // #endregion
-
 
 // Id of Golem Node
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -146,52 +142,48 @@ pub struct NodeId {}
 
 #[derive(Debug, Default)]
 pub struct Offer {
-    pub offer_id : Uuid,
-    pub provider_id : NodeId,
+    pub offer_id: Uuid,
+    pub provider_id: NodeId,
 
     // Properties (expressed in flat form, ie. as lines of text)
-    pub properties : Vec<String>,
+    pub properties: Vec<String>,
 
     // TODO REMOVE Explicit properties (with values)
-    pub exp_properties : HashMap<String, String>,
+    pub exp_properties: HashMap<String, String>,
 
     // Filter expression
-    pub constraints : String,
+    pub constraints: String,
 
     // TODO REMOVE Implicit properties (no values declared)
-    pub imp_properties : Vec<String>,
+    pub imp_properties: Vec<String>,
 }
 
 #[derive(Debug, Default)]
 pub struct Demand {
-    pub demand_id : Uuid,
-    pub requestor_id : NodeId,
+    pub demand_id: Uuid,
+    pub requestor_id: NodeId,
 
     // Properties (expressed in flat form, ie. as lines of text)
-    pub properties : Vec<String>,
+    pub properties: Vec<String>,
 
     // TODO REMOVE Explicit properties (with values)
-    pub exp_properties : HashMap<String, String>,
+    pub exp_properties: HashMap<String, String>,
 
     // Filter expression
-    pub constraints : String,
+    pub constraints: String,
 
     // TODO REMOVE Implicit properties (no values declared)
-    pub imp_properties : Vec<String>,
+    pub imp_properties: Vec<String>,
 }
 
 pub struct Agreement {
-    pub agreement_id : Uuid,
+    pub agreement_id: Uuid,
 }
-
-
 
 // #region ScanError
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ScanError {
-
-}
+pub struct ScanError {}
 
 impl fmt::Display for ScanError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -215,9 +207,7 @@ impl error::Error for ScanError {
 // #region SubscribeError
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SubscribeError {
-
-}
+pub struct SubscribeError {}
 
 impl fmt::Display for SubscribeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -241,9 +231,7 @@ impl error::Error for SubscribeError {
 // #region UnSubscribeError
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct UnSubscribeError {
-
-}
+pub struct UnSubscribeError {}
 
 impl fmt::Display for UnSubscribeError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -267,9 +255,7 @@ impl error::Error for UnSubscribeError {
 // #region CollectError
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CollectError {
-
-}
+pub struct CollectError {}
 
 impl fmt::Display for CollectError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -293,9 +279,7 @@ impl error::Error for CollectError {
 // #region ProposalError
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ProposalError {
-
-}
+pub struct ProposalError {}
 
 impl fmt::Display for ProposalError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -319,9 +303,7 @@ impl error::Error for ProposalError {
 // #region AgreementError
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AgreementError {
-
-}
+pub struct AgreementError {}
 
 impl fmt::Display for AgreementError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

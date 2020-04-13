@@ -1,5 +1,5 @@
-extern crate market_api;
 extern crate chrono;
+extern crate market_api;
 extern crate semver;
 
 use semver::Version;
@@ -51,4 +51,3 @@ fn greater_equal_for_version_simple_true() {
 }
 
 // #endregion
-
