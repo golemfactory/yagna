@@ -2,7 +2,6 @@ use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
 use futures::Future;
-use lazy_static::lazy_static;
 use std::convert::TryInto;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -14,7 +13,7 @@ use ya_model::payment::PAYMENT_API_PATH;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
-use ya_payment_driver::{AccountMode, Chain, DummyDriver, GntDriver, PaymentDriver, SignTx};
+use ya_payment_driver::{AccountMode, DummyDriver, GntDriver, PaymentDriver, SignTx};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
@@ -53,17 +52,6 @@ impl std::fmt::Display for Driver {
     }
 }
 
-lazy_static! {
-    pub static ref GETH_ADDR: String =
-        std::env::var("GETH_ADDR").unwrap_or("http://1.geth.testnet.golem.network:55555".into());
-    pub static ref ETH_FAUCET_ADDR: String = std::env::var("ETH_FAUCET_ADDR")
-        .unwrap_or("http://faucet.testnet.golem.network:4000/donate".into());
-    pub static ref GNT_CONTRACT_ADDR: String = std::env::var("GNT_CONTRACT_ADDR")
-        .unwrap_or("924442A66cFd812308791872C4B242440c108E19".into());
-    pub static ref GNT_FAUCET_ADDR: String = std::env::var("GNT_FAUCET_ADDR")
-        .unwrap_or("77b6145E853dfA80E8755a4e824c4F510ac6692e".into());
-}
-
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
     #[structopt(subcommand)]
@@ -88,14 +76,7 @@ async fn get_gnt_driver(
     sign_tx: SignTx<'_>,
     command: Command,
 ) -> anyhow::Result<GntDriver> {
-    let driver = GntDriver::new(
-        Chain::Rinkeby,
-        &*GETH_ADDR,
-        &*GNT_CONTRACT_ADDR,
-        &*ETH_FAUCET_ADDR,
-        &*GNT_FAUCET_ADDR,
-        db.clone(),
-    )?;
+    let driver = GntDriver::new(db.clone())?;
 
     let mode = match command {
         Command::Provider => AccountMode::RECV,
@@ -129,6 +110,7 @@ fn get_sign_tx(
 async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", "debug");
     env_logger::init();
+    dotenv::dotenv().expect("Failed to read .env file");
 
     let args: Args = Args::from_args();
 

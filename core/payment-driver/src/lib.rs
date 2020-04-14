@@ -20,7 +20,6 @@ pub use account::{AccountBalance, Balance, Currency};
 use bitflags::bitflags;
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
-pub use ethereum::Chain;
 pub use gnt::GntDriver;
 pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use std::future::Future;

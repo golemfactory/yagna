@@ -1,4 +1,5 @@
 use ethereum_types::{Address, H256, U256};
+use std::env;
 
 use crate::error::PaymentDriverError;
 use futures3::compat::*;
@@ -14,10 +15,34 @@ const REQUIRED_CONFIRMATIONS: usize = 5;
 const POLL_INTERVAL_SECS: u64 = 1;
 const POLL_INTERVAL_NANOS: u32 = 0;
 
+const MAINNET_ID: u64 = 1;
+const RINKEBY_ID: u64 = 4;
+
+const CHAIN_ID_ENV_KEY: &str = "CHAIN_ID";
+const GETH_ADDRESS_ENV_KEY: &str = "GETH_ADDRESS";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Chain {
     Mainnet,
     Rinkeby,
+}
+
+impl Chain {
+    pub fn from_env() -> Result<Chain, PaymentDriverError> {
+        let chain_id = std::env::var(CHAIN_ID_ENV_KEY)?;
+        match chain_id.parse::<u64>().unwrap() {
+            MAINNET_ID => Ok(Chain::Mainnet),
+            RINKEBY_ID => Ok(Chain::Rinkeby),
+            _chain => Err(PaymentDriverError::UnknownChain(_chain)),
+        }
+    }
+
+    pub fn id(&self) -> u64 {
+        match &self {
+            Chain::Mainnet => MAINNET_ID,
+            Chain::Rinkeby => RINKEBY_ID,
+        }
+    }
 }
 
 type EthereumClientResult<T> = Result<T, PaymentDriverError>;
@@ -29,11 +54,12 @@ pub struct EthereumClient {
 }
 
 impl EthereumClient {
-    pub fn new(chain: Chain, geth_address: &str) -> EthereumClientResult<EthereumClient> {
-        let (eloop, transport) = web3::transports::Http::new(geth_address)?;
+    pub fn new() -> EthereumClientResult<EthereumClient> {
+        let (eloop, transport) =
+            web3::transports::Http::new(env::var(GETH_ADDRESS_ENV_KEY)?.as_str())?;
 
         Ok(EthereumClient {
-            chain: chain,
+            chain: Chain::from_env()?,
             _eloop: eloop,
             web3: Web3::new(transport),
         })
@@ -83,10 +109,7 @@ impl EthereumClient {
     }
 
     pub fn get_chain_id(&self) -> u64 {
-        match self.chain {
-            Chain::Mainnet => 1,
-            Chain::Rinkeby => 4,
-        }
+        self.chain.id()
     }
 
     pub async fn get_next_nonce(&self, eth_address: Address) -> EthereumClientResult<U256> {
@@ -115,36 +138,36 @@ impl EthereumClient {
 
 #[cfg(test)]
 mod tests {
-    use ethereum_types::{Address, U256};
+    use ethereum_types::U256;
 
     use super::*;
+    use crate::utils;
+    use std::sync::Once;
+    const GNT_CONTRACT_ADDRESS: &str = "0x924442A66cFd812308791872C4B242440c108E19";
+    const ETH_ADDRESS: &str = "0x2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 
-    const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
-    const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
-    const GNT_CONTRACT_ADDRESS: &str = "924442A66cFd812308791872C4B242440c108E19";
+    static INIT: Once = Once::new();
 
-    fn to_address(address: &str) -> Address {
-        address.parse().unwrap()
-    }
-
-    #[test]
-    fn test_get_mainnet_chain_id() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Mainnet, GETH_ADDRESS)?;
-        assert_eq!(ethereum_client.get_chain_id(), 1);
-        Ok(())
+    fn init_env() {
+        INIT.call_once(|| {
+            std::env::set_var("GETH_ADDRESS", "http://1.geth.testnet.golem.network:55555");
+            std::env::set_var("CHAIN_ID", format!("{:?}", Chain::Rinkeby.id()))
+        });
     }
 
     #[test]
     fn test_get_rinkeby_chain_id() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
-        assert_eq!(ethereum_client.get_chain_id(), 4);
+        init_env();
+        let ethereum_client = EthereumClient::new()?;
+        assert_eq!(ethereum_client.get_chain_id(), Chain::Rinkeby.id());
         Ok(())
     }
 
     #[tokio::test]
     async fn test_get_eth_balance() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
-        let address = to_address(ETH_ADDRESS);
+        init_env();
+        let ethereum_client = EthereumClient::new()?;
+        let address = utils::str_to_addr(ETH_ADDRESS)?;
         let balance: U256 = ethereum_client.get_eth_balance(address, None).await?;
         assert!(balance >= U256::from(0));
         Ok(())
@@ -152,7 +175,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_gas_price() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
+        init_env();
+        let ethereum_client = EthereumClient::new()?;
         let gas_price: U256 = ethereum_client.get_gas_price().await?;
         assert!(gas_price >= U256::from(0));
         Ok(())
@@ -160,10 +184,11 @@ mod tests {
 
     #[test]
     fn test_get_contract() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
+        init_env();
+        let ethereum_client = EthereumClient::new()?;
         assert!(ethereum_client
             .get_contract(
-                to_address(GNT_CONTRACT_ADDRESS),
+                utils::str_to_addr(GNT_CONTRACT_ADDRESS)?,
                 include_bytes!("./contracts/gnt.json")
             )
             .is_ok());
@@ -173,9 +198,10 @@ mod tests {
 
     #[test]
     fn test_get_contract_invalid_abi() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClient::new(Chain::Rinkeby, GETH_ADDRESS)?;
+        init_env();
+        let ethereum_client = EthereumClient::new()?;
         assert!(ethereum_client
-            .get_contract(to_address(ETH_ADDRESS), &[0])
+            .get_contract(utils::str_to_addr(ETH_ADDRESS)?, &[0])
             .is_err());
         Ok(())
     }

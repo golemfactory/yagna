@@ -26,6 +26,10 @@ pub enum PaymentDriverError {
     Conversion(String),
     #[error("Invalid address: {0}")]
     Address(String),
+    #[error("Missing envirnonment variable: {0}")]
+    MissingEnvironmentVariable(#[from] std::env::VarError),
+    #[error("Unknown chain: {0}")]
+    UnknownChain(u64),
 }
 
 impl From<secp256k1::Error> for PaymentDriverError {

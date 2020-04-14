@@ -27,6 +27,7 @@ bigdecimal = "0.1.0"
 chrono = { version = "0.4", features = ["serde"]}
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono", "bigdecimal"] }
 diesel_migrations = "1.4"
+dotenv = "0.15.0"
 env_logger = "0.7"
 ethkey = "0.3.1"
 ethsign = "0.7"

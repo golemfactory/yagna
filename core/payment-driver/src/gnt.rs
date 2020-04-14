@@ -21,7 +21,7 @@ use crate::account::{AccountBalance, Balance, Currency};
 use crate::dao::payment::PaymentDao;
 use crate::dao::transaction::TransactionDao;
 use crate::error::{DbResult, PaymentDriverError};
-use crate::ethereum::{Chain, EthereumClient};
+use crate::ethereum::EthereumClient;
 use crate::models::{PaymentEntity, TransactionEntity};
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
@@ -29,7 +29,7 @@ use actix_rt::Arbiter;
 use futures3::compat::*;
 
 use crate::utils;
-
+use std::env;
 const GNT_TRANSFER_GAS: u32 = 55000;
 const GNT_FAUCET_GAS: u32 = 90000;
 
@@ -45,6 +45,11 @@ const TX_LOG_TOPICS_LENGTH: usize = 3;
 const TRANSFER_CANONICAL_SIGNATURE: &str =
     "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
+const GNT_CONTRACT_ADDRESS_ENV_KEY: &str = "GNT_CONTRACT_ADDRESS";
+const GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY: &str = "FAUCET_CONTRACT_ADDRESS";
+
+const ETH_FAUCET_ADDRESS_ENV_KEY: &str = "ETH_FAUCET_ADDRESS";
+
 pub struct GntDriver {
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
@@ -55,14 +60,7 @@ pub struct GntDriver {
 
 impl GntDriver {
     /// Creates new driver
-    pub fn new(
-        chain: Chain,
-        geth_address: &str,
-        gnt_contract_address: &str,
-        eth_faucet_address: &str,
-        gnt_faucet_address: &str,
-        db: DbExecutor,
-    ) -> PaymentDriverResult<GntDriver> {
+    pub fn new(db: DbExecutor) -> PaymentDriverResult<GntDriver> {
         // TODO
         let migrate_db = db.clone();
         Arbiter::spawn(async move {
@@ -71,20 +69,22 @@ impl GntDriver {
             }
         });
 
-        let ethereum_client = EthereumClient::new(chain, geth_address)?;
+        let ethereum_client = EthereumClient::new()?;
 
         let gnt_contract = GntDriver::prepare_contract(
             &ethereum_client,
-            utils::str_to_addr(gnt_contract_address)?,
+            utils::str_to_addr(env::var(GNT_CONTRACT_ADDRESS_ENV_KEY)?.as_str())?,
             include_bytes!("./contracts/gnt.json"),
         )?;
 
-        let eth_faucet_address = eth_faucet_address.into();
+        let eth_faucet_address = env::var(ETH_FAUCET_ADDRESS_ENV_KEY)?;
         Ok(GntDriver {
             ethereum_client,
             gnt_contract,
             eth_faucet_address,
-            gnt_faucet_address: utils::str_to_addr(gnt_faucet_address)?,
+            gnt_faucet_address: utils::str_to_addr(
+                env::var(GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY)?.as_str(),
+            )?,
             db,
         })
     }
@@ -629,49 +629,41 @@ impl PaymentDriver for GntDriver {
 
 #[cfg(test)]
 mod tests {
-    use ethereum_types::Address;
-
     use super::*;
     use crate::account::Currency;
-    use crate::ethereum::Chain;
     use crate::utils;
-    const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
+    use crate::ethereum::Chain;
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
-    const GNT_CONTRACT_ADDRESS: &str = "924442A66cFd812308791872C4B242440c108E19";
 
-    const ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
-    const GNT_FAUCET_ADDRESS: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
-
-    fn to_address(address: &str) -> Address {
-        address.parse().unwrap()
+    fn init_env() {
+        INIT.call_once(|| {
+            std::env::set_var("GETH_ADDRESS", "http://1.geth.testnet.golem.network:55555");
+            std::env::set_var("CHAIN_ID", format!("{:?}", Chain::Rinkeby.id()));
+            std::env::set_var("GNT_CONTRACT_ADDRESS", "0x924442A66cFd812308791872C4B242440c108E19");
+            std::env::set_var("FAUCET_CONTRACT_ADDRESS", "0x77b6145E853dfA80E8755a4e824c4F510ac6692e");
+            std::env::set_var("ETH_FAUCET_ADDRESS", "http://faucet.testnet.golem.network:4000/donate");
+        });
     }
 
     #[tokio::test]
     async fn test_new_driver() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            GNT_CONTRACT_ADDRESS,
-            ETH_FAUCET_ADDRESS,
-            GNT_FAUCET_ADDRESS,
-            DbExecutor::new(":memory:").unwrap(),
-        );
+        init_env();
+        let driver = GntDriver::new(DbExecutor::new(":memory:").unwrap());
         assert!(driver.is_ok());
         Ok(())
     }
 
     #[tokio::test]
     async fn test_get_eth_balance() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            GNT_CONTRACT_ADDRESS,
-            ETH_FAUCET_ADDRESS,
-            GNT_FAUCET_ADDRESS,
-            DbExecutor::new(":memory:")?,
-        )
-        .unwrap();
-        let eth_balance = driver.get_eth_balance(to_address(ETH_ADDRESS)).await?;
+        init_env();
+        let driver = GntDriver::new(DbExecutor::new(":memory:")?).unwrap();
+        let eth_balance = driver
+            .get_eth_balance(utils::str_to_addr(ETH_ADDRESS)?)
+            .await?;
         assert_eq!(eth_balance.currency, Currency::Eth {});
         assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
         Ok(())
@@ -679,16 +671,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            GNT_CONTRACT_ADDRESS,
-            ETH_FAUCET_ADDRESS,
-            GNT_FAUCET_ADDRESS,
-            DbExecutor::new(":memory:")?,
-        )
-        .unwrap();
-        let gnt_balance = driver.get_gnt_balance(to_address(ETH_ADDRESS)).await?;
+        init_env();
+        let driver = GntDriver::new(DbExecutor::new(":memory:")?).unwrap();
+        let gnt_balance = driver
+            .get_gnt_balance(utils::str_to_addr(ETH_ADDRESS)?)
+            .await?;
         assert_eq!(gnt_balance.currency, Currency::Gnt {});
         assert!(gnt_balance.amount >= utils::str_to_big_dec("0")?);
         Ok(())
@@ -696,15 +683,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_account_balance() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            GNT_CONTRACT_ADDRESS,
-            ETH_FAUCET_ADDRESS,
-            GNT_FAUCET_ADDRESS,
-            DbExecutor::new(":memory:")?,
-        )
-        .unwrap();
+        init_env();
+        let driver = GntDriver::new(DbExecutor::new(":memory:")?).unwrap();
 
         let balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
 
