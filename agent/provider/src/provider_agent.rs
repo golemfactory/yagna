@@ -190,12 +190,13 @@ impl ProviderAgent {
 
         let preset = PresetUpdater::new(Preset::default(), exeunits, pricing_models).interact()?;
 
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&presets_path)?;
+
         println!();
         println!("Preset created:");
         println!("{}", preset);
-
-        presets.add_preset(preset)?;
-        presets.save_to_file(&presets_path)
+        Ok(())
     }
 
     pub fn remove_preset(
@@ -210,11 +211,31 @@ impl ProviderAgent {
     }
 
     pub fn update_preset(
-        _config: ProviderConfig,
-        _presets_path: PathBuf,
-        _name: String,
+        config: ProviderConfig,
+        presets_path: PathBuf,
+        name: String,
     ) -> anyhow::Result<()> {
-        unimplemented!()
+        let mut presets = Presets::from_file(&presets_path)?;
+        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+
+        let exeunits = registry
+            .list_exeunits()
+            .into_iter()
+            .map(|desc| desc.name)
+            .collect();
+        let pricing_models = vec!["linear".to_string()];
+
+        let preset =
+            PresetUpdater::new(presets.get(&name)?, exeunits, pricing_models).interact()?;
+
+        presets.remove_preset(&name)?;
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&presets_path)?;
+
+        println!();
+        println!("Preset updated:");
+        println!("{}", preset);
+        Ok(())
     }
 }
 

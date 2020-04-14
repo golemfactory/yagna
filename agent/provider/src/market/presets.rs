@@ -16,7 +16,6 @@ pub struct Preset {
     pub usage_coeffs: Vec<f64>,
 }
 
-
 /// Responsible for presets management.
 pub struct Presets {
     presets: HashMap<String, Preset>,
@@ -87,6 +86,13 @@ impl Presets {
         Ok(())
     }
 
+    pub fn get(&self, name: &str) -> Result<Preset> {
+        match self.presets.get(name) {
+            Some(preset) => Ok(preset.clone()),
+            None => Err(anyhow!("Preset [{}] doesn't exists.", &name)),
+        }
+    }
+
     pub fn remove_preset(&mut self, name: &str) -> Result<()> {
         if !self.presets.contains_key(name) {
             return Err(anyhow!("Preset [{}] doesn't exists.", &name));
@@ -132,7 +138,6 @@ impl Preset {
             .collect()
     }
 }
-
 
 impl fmt::Display for Preset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
