@@ -1,14 +1,14 @@
 use actix_rt;
 use bigdecimal::BigDecimal;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 
-use ethsign::{KeyFile, Protected};
-
 use ethkey::prelude::*;
 
-use futures3::future;
+use std::convert::TryInto;
+
 use std::future::Future;
 
 use std::pin::Pin;
@@ -32,42 +32,31 @@ const GNT_FAUCET_CONTRACT: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
 const KEYSTORE: &str = "/tmp/keystore.json";
 const PASSWORD: &str = "";
 
-fn sign_tx(bytes: Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    let secret = get_secret_key(KEYSTORE, PASSWORD);
-
-    // Sign the message
-    let signature = secret.sign(&bytes).unwrap();
-
-    // Prepare signature
-    let mut v = Vec::with_capacity(65);
-    v.push(signature.v);
-    v.extend_from_slice(&signature.r[..]);
-    v.extend_from_slice(&signature.s[..]);
-
-    Box::pin(future::ready(v))
+fn get_sign_tx(
+    account: Box<EthAccount>,
+) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+    let account: Arc<EthAccount> = account.into();
+    move |msg| {
+        let account = account.clone();
+        let fut = async move {
+            let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
+            let signature = account.sign(&msg).unwrap();
+            let mut v = Vec::with_capacity(65);
+            v.push(signature.v);
+            v.extend_from_slice(&signature.r);
+            v.extend_from_slice(&signature.s);
+            v
+        };
+        Box::pin(fut)
+    }
 }
 
-fn load_or_generate_account(keystore: &str, password: &str) {
-    let _ = EthAccount::load_or_generate(keystore, password)
-        .expect("should load or generate new eth key");
+fn get_account(keystore: &str, password: &str) -> Box<EthAccount> {
+    EthAccount::load_or_generate(keystore, password).expect("should load or generate new eth key")
 }
 
-fn get_key(keystore: &str) -> KeyFile {
-    let file = std::fs::File::open(keystore).unwrap();
-    let key: KeyFile = serde_json::from_reader(file).unwrap();
-    key
-}
-
-fn get_secret_key(keystore: &str, password: &str) -> SecretKey {
-    let key = get_key(keystore);
-    let pwd: Protected = password.into();
-    let secret = key.to_secret_key(&pwd).unwrap();
-    secret
-}
-
-fn get_address(key: KeyFile) -> String {
-    let address: Vec<u8> = key.address.unwrap().0;
-    hex::encode(address)
+fn get_address(key: &Box<EthAccount>) -> String {
+    hex::encode(key.address())
 }
 
 async fn show_balance(gnt_driver: &GntDriver, address: &str) {
@@ -78,11 +67,10 @@ async fn show_balance(gnt_driver: &GntDriver, address: &str) {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    load_or_generate_account(KEYSTORE, PASSWORD);
-    let key = get_key(KEYSTORE);
-
-    let address = get_address(key);
+    let account = get_account(KEYSTORE, PASSWORD);
+    let address = get_address(&account);
     println!("Address: {:?}", address);
+    let sign_tx = get_sign_tx(account);
 
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
     ya_payment_driver::dao::init(&db).await?;
