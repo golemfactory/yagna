@@ -7,25 +7,17 @@ use ya_service_bus::typed as bus;
 
 use crate::dao::AppKeyDao;
 use actix_rt::Arbiter;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
+#[derive(Default)]
 struct Subscription {
     subscriptions: HashMap<u64, String>,
     last_id: u64,
 }
 
 impl Subscription {
-    fn new() -> Self {
-        let subscriptions = Default::default();
-        let last_id = Default::default();
-        Subscription {
-            subscriptions,
-            last_id,
-        }
-    }
-
     fn subscribe(&mut self, endpoint: String) -> u64 {
         let id = self.last_id;
         self.last_id += 1;
@@ -35,11 +27,8 @@ impl Subscription {
     }
 }
 
-fn send_events(
-    s: &Rc<RefCell<Subscription>>,
-    event: model::event::Event,
-) -> impl Future<Output = ()> {
-    let destinations: Vec<String> = s.borrow().subscriptions.values().cloned().collect();
+fn send_events(s: Ref<Subscription>, event: model::event::Event) -> impl Future<Output = ()> {
+    let destinations: Vec<String> = s.subscriptions.values().cloned().collect();
 
     // TODO: Remove on no destination.
     async move {
@@ -57,12 +46,14 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let dbx = db.clone();
     let (tx, rx) = futures::channel::mpsc::unbounded();
 
-    let subscription = Rc::new(RefCell::new(Subscription::new()));
+    let subscription = Rc::new(RefCell::new(Subscription::default()));
 
     {
         let subscription = subscription.clone();
         Arbiter::spawn(async move {
-            let _ = rx.for_each(|event| send_events(&subscription, event)).await;
+            let _ = rx
+                .for_each(|event| send_events(subscription.borrow(), event))
+                .await;
         })
     }
 
