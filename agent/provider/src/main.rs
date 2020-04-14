@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
                 .wait_for_ctrl_c()
                 .await
         }
-        Commands::Presets(presets_cmd) => match presets_cmd {
+        Commands::Preset(presets_cmd) => match presets_cmd {
             PresetsConfig::List => {
                 ProviderAgent::list_presets(config, PathBuf::from("presets.json"))
             }

@@ -69,7 +69,7 @@ defined in presets.json file, that should be placed in working directory.
 You can copy example presets from `agent/provider/examples/presets.json`.
 
 You can list presets by running command:
-`cargo run --bin ya-provider presets list`
+`cargo run --bin ya-provider preset list`
 
 The result will be something like this:
 ```

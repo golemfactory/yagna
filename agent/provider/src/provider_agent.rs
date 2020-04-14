@@ -8,8 +8,8 @@ use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
-    ActivityCreated, ActivityDestroyed, ExeUnitsRegistry, InitializeExeUnits, TaskRunner,
-    UpdateActivity,
+    ActivityCreated, ActivityDestroyed, ExeUnitDesc, ExeUnitsRegistry, GetExeUnit,
+    InitializeExeUnits, TaskRunner, UpdateActivity,
 };
 use crate::market::{
     provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
@@ -24,7 +24,6 @@ pub struct ProviderAgent {
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
     node_info: NodeInfo,
-    service_info: ServiceInfo,
     exe_unit_path: PathBuf,
 }
 
@@ -40,14 +39,12 @@ impl ProviderAgent {
         .start();
 
         let node_info = ProviderAgent::create_node_info(&run_args).await;
-        let service_info = ProviderAgent::create_service_info();
 
         let mut provider = ProviderAgent {
             market,
             runner,
             payments,
             node_info,
-            service_info,
             exe_unit_path: config.exe_unit_path,
         };
         provider.initialize(run_args.presets).await?;
@@ -87,9 +84,8 @@ impl ProviderAgent {
         }
 
         // TODO: Hardcoded presets file path.
-        let presets = Presets::new()
-            .load_from_file(&PathBuf::from("presets.json"))?
-            .list_matching(&presets_names)?;
+        let presets =
+            Presets::from_file(&PathBuf::from("presets.json"))?.list_matching(&presets_names)?;
 
         for preset in presets.into_iter() {
             let com_info = match preset.pricing_model.as_str() {
@@ -104,12 +100,23 @@ impl ProviderAgent {
                 }
             };
 
+            let msg = GetExeUnit {
+                name: preset.exeunit_name.clone(),
+            };
+            let exeunit_desc = self.runner.send(msg).await?.map_err(|error| {
+                anyhow!(
+                    "Failed to create offer for preset [{}]. Error: {}",
+                    preset.name,
+                    error
+                )
+            })?;
+
             // Create simple offer on market.
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
                     node_info: self.node_info.clone(),
-                    service: self.service_info.clone(),
+                    service: Self::create_service_info(&exeunit_desc),
                     com_info,
                 },
             };
@@ -128,8 +135,9 @@ impl ProviderAgent {
         NodeInfo::with_name(&config.node_name)
     }
 
-    fn create_service_info() -> ServiceInfo {
+    fn create_service_info(_exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
         let inf = InfNodeInfo::new().with_mem(1.0).with_storage(10.0);
+
         let wasi_version = "0.0.0".into();
         ServiceInfo::Wasm { inf, wasi_version }
     }

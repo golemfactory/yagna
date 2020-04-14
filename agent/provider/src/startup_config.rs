@@ -74,7 +74,7 @@ pub struct StartupConfig {
 #[derive(StructOpt)]
 pub enum Commands {
     Run(RunConfig),
-    Presets(PresetsConfig),
+    Preset(PresetsConfig),
     ExeUnit(ExeUnitsConfig),
 }
 
