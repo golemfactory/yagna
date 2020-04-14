@@ -70,7 +70,7 @@ struct CliArgs {
     interactive: bool,
 
     /// Log verbosity level
-    #[structopt(long, default_value = "debug")]
+    #[structopt(long, default_value = "info")]
     log_level: String,
 
     #[structopt(subcommand)]
@@ -244,6 +244,15 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
+
+    {
+        if std::env::var("YAGNA_MARKET_URL").is_err() {
+            std::env::set_var(
+                "YAGNA_MARKET_URL",
+                "http://34.244.4.185:8080/market-api/v1/",
+            )
+        }
+    }
 
     args.run_command().await
 }

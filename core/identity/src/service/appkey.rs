@@ -1,26 +1,94 @@
 use uuid::Uuid;
 
+use futures::prelude::*;
+use ya_core_model::appkey as model;
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::typed as bus;
 
 use crate::dao::AppKeyDao;
+use actix_rt::Arbiter;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
+struct Subscription {
+    subscriptions: HashMap<u64, String>,
+    last_id: u64,
+}
+
+impl Subscription {
+    fn new() -> Self {
+        let subscriptions = Default::default();
+        let last_id = Default::default();
+        Subscription {
+            subscriptions,
+            last_id,
+        }
+    }
+
+    fn subscribe(&mut self, endpoint: String) -> u64 {
+        let id = self.last_id;
+        self.last_id += 1;
+        let r = self.subscriptions.insert(id, endpoint);
+        assert!(r.is_none());
+        id
+    }
+}
+
+fn send_events(
+    s: &Rc<RefCell<Subscription>>,
+    event: model::event::Event,
+) -> impl Future<Output = ()> {
+    let destinations: Vec<String> = s.borrow().subscriptions.values().cloned().collect();
+
+    // TODO: Remove on no destination.
+    async move {
+        for endpoint in destinations {
+            match bus::service(&endpoint).call(event.clone()).await {
+                Err(e) => log::error!("fail to send event: {}", e),
+                Ok(Err(e)) => log::error!("fail to send event: {}", e),
+                Ok(Ok(_)) => log::debug!("send event: {:?} to {}", event, endpoint),
+            }
+        }
+    }
+}
 
 pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
-    use ya_core_model::appkey as model;
-    use ya_service_bus::typed as bus;
-
     let dbx = db.clone();
+    let (tx, rx) = futures::channel::mpsc::unbounded();
 
+    let subscription = Rc::new(RefCell::new(Subscription::new()));
+
+    {
+        let subscription = subscription.clone();
+        Arbiter::spawn(async move {
+            let _ = rx.for_each(|event| send_events(&subscription, event)).await;
+        })
+    }
+
+    let _ = bus::bind(&model::BUS_ID, move |s: model::Subscribe| {
+        let id = subscription.borrow_mut().subscribe(s.endpoint);
+        future::ok(id)
+    });
+
+    let create_tx = tx.clone();
     // Create a new application key entry
     let _ = bus::bind(&model::BUS_ID, move |create: model::Create| {
         let key = Uuid::new_v4().to_simple().to_string();
         let db = dbx.clone();
+        let mut create_tx = create_tx.clone();
+        let identity = create.identity.clone();
         async move {
-            Ok(db
+            let result = db
                 .as_dao::<AppKeyDao>()
                 .create(key.clone(), create.name, create.role, create.identity)
                 .await
                 .map_err(|e| model::Error::internal(e))
-                .map(|_| key)?)
+                .map(|_| key)?;
+            let _ = create_tx
+                .send(model::event::Event::NewKey { identity })
+                .await;
+            Ok(result)
         }
     });
 

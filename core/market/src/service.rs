@@ -60,6 +60,21 @@ impl MarketService {
             .await
             .unwrap_or_else(|e| log::error!("app-key export error: {}", e));
 
+        let event_addr = "/events/market/appkey";
+        let _ = bus::bind(event_addr, |_: appkey::event::Event| async move {
+            let _ignore = tmp_send_keys().await;
+            Ok(())
+        });
+
+        if let Err(e) = bus::service(appkey::BUS_ID)
+            .send(appkey::Subscribe {
+                endpoint: event_addr.into(),
+            })
+            .await
+        {
+            log::error!("init app-key listener error: {}", e)
+        }
+
         Ok(())
     }
 }
