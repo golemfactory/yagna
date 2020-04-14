@@ -76,7 +76,7 @@ async fn get_gnt_driver(
     sign_tx: SignTx<'_>,
     command: Command,
 ) -> anyhow::Result<GntDriver> {
-    let driver = GntDriver::new(db.clone())?;
+    let mut driver = GntDriver::new(db.clone())?;
 
     let mode = match command {
         Command::Provider => AccountMode::RECV,

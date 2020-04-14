@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 #[macro_use]
@@ -43,44 +42,56 @@ pub mod migrations {
     struct _Dummy;
 }
 
-#[async_trait(?Send)]
 pub trait PaymentDriver {
-    async fn init(
-        &self,
+    fn init<'a>(
+        &'a mut self,
         mode: AccountMode,
         address: &str,
         sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>>;
 
     /// Returns account balance
-    async fn get_account_balance(&self, address: &str) -> PaymentDriverResult<AccountBalance>;
+    fn get_account_balance<'a>(
+        &'a self,
+        address: &str,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>>;
 
     /// Schedules payment
-    async fn schedule_payment(
-        &mut self,
+    fn schedule_payment<'a>(
+        &'a mut self,
         invoice_id: &str,
         amount: PaymentAmount,
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
         sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>>;
+
+    /// Schedules payment
+    fn reschedule_payment<'a>(
+        &'a mut self,
+        invoice_id: &str,
+        sign_tx: SignTx<'_>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>>;
 
     /// Returns payment status
-    async fn get_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus>;
+    fn get_payment_status<'a>(
+        &'a self,
+        invoice_id: &str,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>>;
 
     /// Verifies payment
-    async fn verify_payment(
-        &self,
+    fn verify_payment<'a>(
+        &'a self,
         confirmation: &PaymentConfirmation,
-    ) -> PaymentDriverResult<PaymentDetails>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>>;
 
     /// Returns sum of transactions from payer addr to payee addr
-    async fn get_transaction_balance(
-        &self,
+    fn get_transaction_balance<'a>(
+        &'a self,
         payer: &str,
         payee: &str,
-    ) -> PaymentDriverResult<Balance>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>>;
 }
 
 #[cfg(test)]

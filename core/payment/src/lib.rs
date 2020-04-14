@@ -32,7 +32,7 @@ fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver>
 
 #[cfg(feature = "gnt-driver")]
 fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    use ya_payment_driver::{GntDriver};
+    use ya_payment_driver::GntDriver;
 
     Ok(GntDriver::new(db.clone())?)
 }

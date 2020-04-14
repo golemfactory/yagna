@@ -6,10 +6,10 @@ pub enum PaymentDriverError {
     InsufficientGas,
     #[error("Insufficient funds")]
     InsufficientFunds,
-    #[error("Payment already scheduled")]
-    AlreadyScheduled,
-    #[error("Payment not found")]
-    NotFound,
+    #[error("Payment: {0} already scheduled")]
+    PaymentAlreadyScheduled(String),
+    #[error("Payment: {0} not found")]
+    PaymentNotFound(String),
     #[error("Connection refused")]
     ConnectionRefused,
     #[error("Library error")]

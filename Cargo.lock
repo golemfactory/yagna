@@ -5736,7 +5736,6 @@ version = "0.1.0"
 dependencies = [
  "actix-rt",
  "anyhow",
- "async-trait",
  "bigdecimal",
  "bitflags 1.2.1",
  "chrono",
