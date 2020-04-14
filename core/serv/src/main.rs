@@ -245,14 +245,5 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
-    {
-        if std::env::var("YAGNA_MARKET_URL").is_err() {
-            std::env::set_var(
-                "YAGNA_MARKET_URL",
-                "http://34.244.4.185:8080/market-api/v1/",
-            )
-        }
-    }
-
     args.run_command().await
 }

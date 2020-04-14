@@ -9,7 +9,7 @@ use ya_client::payment::requestor::RequestorApi as PaymentRequestorApi;
 use ya_client::{
     activity::ActivityRequestorApi,
     market::MarketRequestorApi,
-    web::{WebAuth, WebClient, WebInterface},
+    web::{WebClient, WebInterface},
 };
 use ya_model::{
     activity::ExeScriptRequest,
@@ -27,7 +27,7 @@ struct AppSettings {
 
     /// Market API URL
     #[structopt(long = "market-url", env = MarketRequestorApi::API_URL_ENV_VAR)]
-    market_url: Url,
+    market_url: Option<Url>,
 
     /// Activity API URL
     #[structopt(long = "activity-url", env = ActivityRequestorApi::API_URL_ENV_VAR)]
@@ -42,27 +42,22 @@ struct AppSettings {
 
 impl AppSettings {
     fn market_api(&self) -> anyhow::Result<MarketRequestorApi> {
-        Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
+        self.api_client(&self.market_url)
     }
 
     fn activity_api(&self) -> anyhow::Result<ActivityRequestorApi> {
-        let client = WebClient::with_token(&self.app_key)?;
-        if let Some(url) = &self.activity_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
-        }
+        self.api_client(&self.activity_url)
     }
 
     fn payment_api(&self) -> anyhow::Result<PaymentRequestorApi> {
-        let client = WebClient::builder()
-            .auth(WebAuth::Bearer(self.app_key.clone()))
-            .timeout(Duration::from_secs(60)) // more than default accept invoice timeout which is 50s
-            .build()?;
-        if let Some(url) = &self.payment_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
+        self.api_client(&self.payment_url)
+    }
+
+    pub fn api_client<T: WebInterface>(&self, url: &Option<Url>) -> anyhow::Result<T> {
+        let client = WebClient::with_token(&self.app_key)?;
+        match url.as_ref() {
+            Some(url) => Ok(client.interface_at(url.clone())),
+            None => Ok(client.interface()?),
         }
     }
 }
