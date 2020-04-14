@@ -190,6 +190,10 @@ impl ProviderAgent {
 
         let preset = PresetUpdater::new(Preset::default(), exeunits, pricing_models).interact()?;
 
+        println!();
+        println!("Preset created:");
+        println!("{}", preset);
+
         presets.add_preset(preset)?;
         presets.save_to_file(&presets_path)
     }

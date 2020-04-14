@@ -16,45 +16,6 @@ pub struct Preset {
     pub usage_coeffs: Vec<f64>,
 }
 
-impl fmt::Display for Preset {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let align = 20;
-        let align_coeff = align - 4; // Minus intent.
-
-        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
-        write!(
-            f,
-            "{:width$}{}\n",
-            "ExeUnit:",
-            self.exeunit_name,
-            width = align
-        )?;
-        write!(
-            f,
-            "{:width$}{}\n",
-            "Pricing model:",
-            self.pricing_model,
-            width = align
-        )?;
-        write!(f, "{}\n", "Coefficients:")?;
-
-        for (coeff, name) in self
-            .usage_coeffs
-            .iter()
-            .zip(self.list_readable_metrics().iter())
-        {
-            write!(f, "    {:width$}{} GNT\n", name, coeff, width = align_coeff)?;
-        }
-
-        write!(
-            f,
-            "    {:16}{} GNT",
-            "Init price",
-            self.usage_coeffs[self.usage_coeffs.len() - 1]
-        )?;
-        Ok(())
-    }
-}
 
 /// Responsible for presets management.
 pub struct Presets {
@@ -169,5 +130,46 @@ impl Preset {
             .into_iter()
             .map(ToString::to_string)
             .collect()
+    }
+}
+
+
+impl fmt::Display for Preset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let align = 20;
+        let align_coeff = align - 4; // Minus intent.
+
+        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "ExeUnit:",
+            self.exeunit_name,
+            width = align
+        )?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Pricing model:",
+            self.pricing_model,
+            width = align
+        )?;
+        write!(f, "{}\n", "Coefficients:")?;
+
+        for (coeff, name) in self
+            .usage_coeffs
+            .iter()
+            .zip(self.list_readable_metrics().iter())
+        {
+            write!(f, "    {:width$}{} GNT\n", name, coeff, width = align_coeff)?;
+        }
+
+        write!(
+            f,
+            "    {:16}{} GNT",
+            "Init price",
+            self.usage_coeffs[self.usage_coeffs.len() - 1]
+        )?;
+        Ok(())
     }
 }
