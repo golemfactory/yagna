@@ -1,26 +1,59 @@
 use anyhow::{anyhow, Result};
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-#[derive(Serialize, Deserialize, Clone, Display, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
-#[display(
-    fmt = "Name: {}\nExeUnit: {}\nPricing model: {}\nCoefficients: {:?}",
-    name,
-    exeunit_name,
-    pricing_model,
-    usage_coeffs
-)]
 /// Preset describing offer, that can be saved and loaded from disk.
 pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
     pub pricing_model: String,
     pub usage_coeffs: Vec<f64>,
+}
+
+impl fmt::Display for Preset {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let align = 20;
+        let align_coeff = align - 4; // Minus intent.
+
+        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "ExeUnit:",
+            self.exeunit_name,
+            width = align
+        )?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Pricing model:",
+            self.pricing_model,
+            width = align
+        )?;
+        write!(f, "{}\n", "Coefficients:")?;
+
+        for (coeff, name) in self
+            .usage_coeffs
+            .iter()
+            .zip(self.list_readable_metrics().iter())
+        {
+            write!(f, "    {:width$}{} GNT\n", name, coeff, width = align_coeff)?;
+        }
+
+        write!(
+            f,
+            "    {:16}{} GNT",
+            "Init price",
+            self.usage_coeffs[self.usage_coeffs.len() - 1]
+        )?;
+        Ok(())
+    }
 }
 
 /// Responsible for presets management.
@@ -126,6 +159,13 @@ impl Preset {
     /// not so many of them.
     pub fn list_usage_metrics(&self) -> Vec<String> {
         vec!["golem.usage.duration_sec", "golem.usage.cpu_sec"]
+            .into_iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    pub fn list_readable_metrics(&self) -> Vec<String> {
+        vec!["Duration", "CPU usage"]
             .into_iter()
             .map(ToString::to_string)
             .collect()

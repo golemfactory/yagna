@@ -206,9 +206,9 @@ impl ProviderAgent {
     }
 
     pub fn update_preset(
-        config: ProviderConfig,
-        presets_path: PathBuf,
-        name: String,
+        _config: ProviderConfig,
+        _presets_path: PathBuf,
+        _name: String,
     ) -> anyhow::Result<()> {
         unimplemented!()
     }
