@@ -13,10 +13,11 @@ use crate::execution::{
 };
 use crate::market::{
     provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
-    CreateOffer, Presets, ProviderMarket,
+    CreateOffer, Preset, Presets, ProviderMarket,
 };
 use crate::payments::{LinearPricingOffer, Payments};
-use crate::startup_config::RunConfig;
+use crate::preset_cli::PresetUpdater;
+use crate::startup_config::{ProviderConfig, RunConfig};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -28,17 +29,17 @@ pub struct ProviderAgent {
 }
 
 impl ProviderAgent {
-    pub async fn new(config: RunConfig) -> anyhow::Result<ProviderAgent> {
-        let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
-        let runner = TaskRunner::new(config.activity_client()?)?.start();
+    pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+        let market = ProviderMarket::new(run_args.market_client()?, "AcceptAll").start();
+        let runner = TaskRunner::new(run_args.activity_client()?)?.start();
         let payments = Payments::new(
-            config.activity_client()?,
-            config.payment_client()?,
-            &config.credit_address,
+            run_args.activity_client()?,
+            run_args.payment_client()?,
+            &run_args.credit_address,
         )
         .start();
 
-        let node_info = ProviderAgent::create_node_info(&config).await;
+        let node_info = ProviderAgent::create_node_info(&run_args).await;
         let service_info = ProviderAgent::create_service_info();
 
         let mut provider = ProviderAgent {
@@ -49,7 +50,7 @@ impl ProviderAgent {
             service_info,
             exe_unit_path: config.exe_unit_path,
         };
-        provider.initialize(config.presets).await?;
+        provider.initialize(run_args.presets).await?;
 
         Ok(provider)
     }
@@ -148,10 +149,8 @@ impl ProviderAgent {
         market.send(OnShutdown {}).await?
     }
 
-    pub fn list_exeunits(exe_unit_path: PathBuf) -> anyhow::Result<()> {
-        let mut registry = ExeUnitsRegistry::new();
-        registry.register_exeunits_from_file(&exe_unit_path)?;
-
+    pub fn list_exeunits(config: ProviderConfig) -> anyhow::Result<()> {
+        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
         if let Err(errors) = registry.validate() {
             println!("Encountered errors while checking ExeUnits:\n{}", errors);
         }
@@ -166,10 +165,8 @@ impl ProviderAgent {
         Ok(())
     }
 
-    pub fn list_presets(presets_path: PathBuf) -> anyhow::Result<()> {
-        let mut presets = Presets::new();
-        presets.load_from_file(&presets_path)?;
-
+    pub fn list_presets(_: ProviderConfig, presets_path: PathBuf) -> anyhow::Result<()> {
+        let presets = Presets::from_file(&presets_path)?;
         println!("Available Presets:");
 
         let presets_list = presets.list();
@@ -178,6 +175,42 @@ impl ProviderAgent {
             println!("{}", preset);
         }
         Ok(())
+    }
+
+    pub fn create_preset(config: ProviderConfig, presets_path: PathBuf) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&presets_path)?;
+        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+
+        let exeunits = registry
+            .list_exeunits()
+            .into_iter()
+            .map(|desc| desc.name)
+            .collect();
+        let pricing_models = vec!["linear".to_string()];
+
+        let preset = PresetUpdater::new(Preset::default(), exeunits, pricing_models).interact()?;
+
+        presets.add_preset(preset)?;
+        presets.save_to_file(&presets_path)
+    }
+
+    pub fn remove_preset(
+        _config: ProviderConfig,
+        presets_path: PathBuf,
+        name: String,
+    ) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&presets_path)?;
+
+        presets.remove_preset(&name)?;
+        presets.save_to_file(&presets_path)
+    }
+
+    pub fn update_preset(
+        config: ProviderConfig,
+        presets_path: PathBuf,
+        name: String,
+    ) -> anyhow::Result<()> {
+        unimplemented!()
     }
 }
 

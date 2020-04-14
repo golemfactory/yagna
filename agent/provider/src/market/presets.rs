@@ -3,10 +3,10 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-#[derive(Serialize, Deserialize, Clone, Display)]
+#[derive(Serialize, Deserialize, Clone, Display, Default)]
 #[serde(rename_all = "kebab-case")]
 #[display(
     fmt = "Name: {}\nExeUnit: {}\nPricing model: {}\nCoefficients: {:?}",
@@ -35,6 +35,12 @@ impl Presets {
         }
     }
 
+    pub fn from_file(presets_file: &Path) -> Result<Presets> {
+        let mut presets = Presets::new();
+        presets.load_from_file(&presets_file)?;
+        Ok(presets)
+    }
+
     pub fn load_from_file(&mut self, presets_file: &Path) -> Result<&mut Presets> {
         let file = File::open(presets_file).map_err(|error| {
             anyhow!(
@@ -53,10 +59,46 @@ impl Presets {
             )
         })?;
 
-        presets.into_iter().for_each(|preset| {
-            self.presets.insert(preset.name.clone(), preset);
-        });
+        presets
+            .into_iter()
+            .map(|preset| self.add_preset(preset))
+            .collect::<Result<()>>()?;
         Ok(self)
+    }
+
+    pub fn save_to_file(&self, presets_file: &Path) -> Result<()> {
+        let file = File::create(presets_file).map_err(|error| {
+            anyhow!(
+                "Can't create Presets from file {}, error: {}.",
+                presets_file.display(),
+                error
+            )
+        })?;
+        serde_json::to_writer_pretty(BufWriter::new(file), &self.list()).map_err(|error| {
+            anyhow!(
+                "Failed to serialize presets to file [{}], error: {}",
+                presets_file.display(),
+                error
+            )
+        })?;
+        Ok(())
+    }
+
+    pub fn add_preset(&mut self, preset: Preset) -> Result<()> {
+        if self.presets.contains_key(&preset.name) {
+            return Err(anyhow!("Preset name [{}] already exists.", &preset.name));
+        }
+
+        self.presets.insert(preset.name.clone(), preset);
+        Ok(())
+    }
+
+    pub fn remove_preset(&mut self, name: &str) -> Result<()> {
+        if !self.presets.contains_key(name) {
+            return Err(anyhow!("Preset [{}] doesn't exists.", &name));
+        }
+        self.presets.remove(name);
+        Ok(())
     }
 
     pub fn list(&self) -> Vec<Preset> {

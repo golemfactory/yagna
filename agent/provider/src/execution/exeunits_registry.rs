@@ -25,13 +25,13 @@ use super::exeunit_instance::ExeUnitInstance;
     description
 )]
 pub struct ExeUnitDesc {
-    name: String,
-    supervisor_path: PathBuf,
-    runtime_path: PathBuf,
+    pub name: String,
+    pub supervisor_path: PathBuf,
+    pub runtime_path: PathBuf,
 
     // Here other capabilities and exe units metadata.
     #[serde(default = "default_description")]
-    description: String,
+    pub description: String,
 }
 
 fn default_description() -> String {
@@ -49,6 +49,13 @@ impl ExeUnitsRegistry {
         ExeUnitsRegistry {
             descriptors: HashMap::new(),
         }
+    }
+
+    pub fn from_file(path: &Path) -> Result<ExeUnitsRegistry> {
+        let mut registry = ExeUnitsRegistry::new();
+        registry.register_exeunits_from_file(&path)?;
+
+        Ok(registry)
     }
 
     pub fn spawn_exeunit(

@@ -823,12 +823,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "clicolors-control"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90082ee5dcdd64dc4e9e0d37fbf3ee325419e39c0092191e0393df65518f741e"
+dependencies = [
+ "atty",
+ "lazy_static",
+ "libc",
+ "winapi 0.3.8",
+]
+
+[[package]]
 name = "cloudabi"
 version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddfc5b9aa5d4507acaf872de71051dfd0e309860e88966e1051e462a077aac4f"
 dependencies = [
  "bitflags 1.2.1",
+]
+
+[[package]]
+name = "console"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6728a28023f207181b193262711102bfbaf47cc9d13bc71d0736607ef8efe88c"
+dependencies = [
+ "clicolors-control",
+ "encode_unicode 0.3.6",
+ "lazy_static",
+ "libc",
+ "regex",
+ "termios",
+ "unicode-width",
+ "winapi 0.3.8",
 ]
 
 [[package]]
@@ -1150,6 +1178,17 @@ dependencies = [
  "proc-macro2 1.0.10",
  "quote 1.0.3",
  "syn 1.0.17",
+]
+
+[[package]]
+name = "dialoguer"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94616e25d2c04fc97253d145f6ca33ad84a584258dc70c4e621cc79a57f903b6"
+dependencies = [
+ "console",
+ "lazy_static",
+ "tempfile",
 ]
 
 [[package]]
@@ -4182,6 +4221,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "termios"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f0fcee7b24a25675de40d5bb4de6e41b0df07bc9856295e7e2b3a3600c400c2"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5683,6 +5731,7 @@ dependencies = [
  "bigdecimal",
  "chrono",
  "derive_more 0.99.5",
+ "dialoguer",
  "dotenv 0.15.0",
  "env_logger 0.7.1",
  "futures 0.3.4",

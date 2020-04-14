@@ -8,6 +8,18 @@ use ya_client::{
     Result,
 };
 
+/// Common configuration for all Provider commands.
+#[derive(StructOpt)]
+pub struct ProviderConfig {
+    /// Descriptor file (JSON) for available ExeUnits
+    #[structopt(
+        long = "exe-unit-path",
+        env = "EXE_UNIT_PATH",
+        default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
+    )]
+    pub exe_unit_path: PathBuf,
+}
+
 #[derive(StructOpt)]
 pub struct RunConfig {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
@@ -23,13 +35,6 @@ pub struct RunConfig {
     /// Payment API URL
     #[structopt(long = "payment-url", env = PaymentProviderApi::API_URL_ENV_VAR)]
     payment_url: Option<Url>,
-    /// Descriptor file (JSON) for available ExeUnits
-    #[structopt(
-        long = "exe-unit-path",
-        env = "EXE_UNIT_PATH",
-        default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
-    )]
-    pub exe_unit_path: PathBuf,
     /// Credit address. Can be set same as default identity
     /// (will be removed in future release)
     #[structopt(long = "credit-address", env = "CREDIT_ADDRESS")]
@@ -42,28 +47,32 @@ pub struct RunConfig {
 #[structopt(rename_all = "kebab-case")]
 pub enum PresetsConfig {
     List,
+    Create,
+    Remove { name: String },
+    Update { name: String },
 }
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum ExeUnitsConfig {
-    List {
-        /// Descriptor file (JSON) for available ExeUnits
-        #[structopt(
-            long = "exe-unit-path",
-            env = "EXE_UNIT_PATH",
-            default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
-        )]
-        exe_unit_path: PathBuf,
-    }, // TODO: Install command - could download ExeUnit and add to descriptor file.
-       // TODO: Update command - could update ExeUnit.
+    List,
+    // TODO: Install command - could download ExeUnit and add to descriptor file.
+    // TODO: Update command - could update ExeUnit.
 }
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(setting = clap::AppSettings::ColoredHelp)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-pub enum StartupConfig {
+pub struct StartupConfig {
+    #[structopt(flatten)]
+    pub config: ProviderConfig,
+    #[structopt(flatten)]
+    pub commands: Commands,
+}
+
+#[derive(StructOpt)]
+pub enum Commands {
     Run(RunConfig),
     Presets(PresetsConfig),
     ExeUnit(ExeUnitsConfig),
