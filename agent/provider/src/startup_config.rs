@@ -39,6 +39,10 @@ pub struct RunConfig {
     /// (will be removed in future release)
     #[structopt(long = "credit-address", env = "CREDIT_ADDRESS")]
     pub credit_address: String,
+    /// Subnetwork identifier. You can set this value to filter nodes
+    /// with other identifiers than selected. Useful for test purposes.
+    #[structopt(long = "subnet", env = "SUBNET")]
+    pub subnet: Option<String>,
     /// Offer presets, that will be sent to market.
     pub presets: Vec<String>,
 }

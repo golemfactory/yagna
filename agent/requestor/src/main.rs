@@ -38,6 +38,11 @@ struct AppSettings {
 
     #[structopt(long = "exe-script")]
     exe_script: PathBuf,
+
+    /// Subnetwork identifier. You can set this value to filter nodes
+    /// with other identifiers than selected. Useful for test purposes.
+    #[structopt(long = "subnet", env = "SUBNET")]
+    pub subnet: Option<String>,
 }
 
 impl AppSettings {
@@ -161,31 +166,47 @@ async fn spawn_workers(
     }
 }
 
-fn build_demand(node_name: &str, task_package: &str) -> Demand {
-    Demand {
-        properties: serde_json::json!({
-            "golem": {
-                "node": {
-                    "id": {
-                        "name": node_name
-                    },
-                    "ala": 1
+fn build_demand(node_name: &str, task_package: &str, subnet: &Option<String>) -> Demand {
+    let mut properties = serde_json::json!({
+        "golem": {
+            "node": {
+                "id": {
+                    "name": node_name
                 },
-                "srv": {
-                    "comp":{
-                        "wasm": {
-                            "task_package": task_package
-                        }
+                "ala": 1
+            },
+            "srv": {
+                "comp":{
+                    "wasm": {
+                        "task_package": task_package
                     }
                 }
             }
-        }),
-        constraints: r#"(&
+        }
+    });
+
+    let subnet_constraint = match subnet {
+        Some(subnet) => {
+            properties.as_object_mut().unwrap().insert(
+                "golem.node.debug.subnet".to_string(),
+                serde_json::Value::String(subnet.clone()),
+            );
+            format!("(golem.node.debug.subnet={})", subnet.clone())
+        }
+        None => "".to_string(),
+    };
+
+    Demand {
+        properties,
+        constraints: format!(
+            "(&
             (golem.inf.mem.gib>0.5)
             (golem.inf.storage.gib>1)
             (golem.com.pricing.model=linear)
-        )"#
-        .to_string(),
+            {}
+        )",
+            subnet_constraint
+        ),
 
         demand_id: Default::default(),
         requestor_id: Default::default(),
@@ -354,7 +375,7 @@ async fn main() -> anyhow::Result<()> {
 
     let node_name = "test1";
     let task_package = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip";
-    let my_demand = build_demand(node_name, task_package);
+    let my_demand = build_demand(node_name, task_package, &settings.subnet);
     //(golem.runtime.wasm.wasi.version@v=*)
 
     let market_api = settings.market_api()?;

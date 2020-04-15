@@ -111,6 +111,13 @@ impl ProviderAgent {
                 )
             })?;
 
+            // If user set subnet name, we should add constraint for filtering
+            // nodes that didn't set the same nam in properties.
+            let constraints = match self.node_info.subnet.clone() {
+                Some(subnet) => format!("(golem.node.debug.subnet={})", subnet),
+                None => "()".to_string(),
+            };
+
             // Create simple offer on market.
             let create_offer_message = CreateOffer {
                 preset,
@@ -118,6 +125,7 @@ impl ProviderAgent {
                     node_info: self.node_info.clone(),
                     service: Self::create_service_info(&exeunit_desc),
                     com_info,
+                    constraints,
                 },
             };
             self.market.send(create_offer_message).await??
@@ -132,7 +140,13 @@ impl ProviderAgent {
 
     async fn create_node_info(config: &RunConfig) -> NodeInfo {
         // TODO: Get node name from identity API.
-        NodeInfo::with_name(&config.node_name)
+        let mut node_info = NodeInfo::with_name(&config.node_name);
+
+        // Debug subnet to filter foreign nodes.
+        if let Some(subnet) = config.subnet.clone() {
+            node_info.with_subnet(subnet.clone());
+        }
+        node_info
     }
 
     fn create_service_info(exeunit_desc: &ExeUnitDesc) -> ServiceInfo {

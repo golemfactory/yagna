@@ -7,6 +7,10 @@ pub struct OfferDefinition {
     pub node_info: NodeInfo,
     pub service: ServiceInfo,
     pub com_info: ComInfo,
+
+    // TODO: We should implement better api for constructing
+    //       constraints. Dealing with strings will be difficult.
+    pub constraints: String,
 }
 
 impl OfferDefinition {
@@ -21,8 +25,9 @@ impl OfferDefinition {
 
 #[derive(Clone)]
 pub struct NodeInfo {
-    name: Option<String>,
-    geo_country_code: Option<String>,
+    pub name: Option<String>,
+    pub subnet: Option<String>,
+    pub geo_country_code: Option<String>,
 }
 
 impl NodeInfo {
@@ -30,7 +35,13 @@ impl NodeInfo {
         NodeInfo {
             name: Some(name.into()),
             geo_country_code: None,
+            subnet: None,
         }
+    }
+
+    pub fn with_subnet(&mut self, subnet: String) -> &mut Self {
+        self.subnet = Some(subnet);
+        self
     }
 
     fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
@@ -40,6 +51,9 @@ impl NodeInfo {
         }
         if let Some(cc) = self.geo_country_code {
             let _ = node.insert("geo".into(), serde_json::json!({ "country_code": cc }));
+        }
+        if let Some(subnet) = self.subnet {
+            let _ = node.insert("debug".into(), serde_json::json!({ "subnet": subnet }));
         }
         map.insert("node".into(), node.into());
     }
@@ -169,6 +183,7 @@ mod test {
                 wasi_version: "0.0".to_string(),
             },
             com_info: Default::default(),
+            constraints: "()".to_string(),
         };
 
         eprintln!(
