@@ -1,3 +1,7 @@
+pub trait OfferBuilder {
+    fn build(&self) -> serde_json::Value;
+}
+
 #[derive(Clone)]
 pub struct OfferDefinition {
     pub node_info: NodeInfo,
@@ -42,31 +46,19 @@ impl NodeInfo {
 }
 
 #[derive(Clone)]
-pub enum ServiceInfo {
-    Wasm {
-        inf: InfNodeInfo,
-        wasi_version: String,
-    },
+pub struct ServiceInfo {
+    inf: InfNodeInfo,
+    exeunit_info: serde_json::Value,
 }
 
 impl ServiceInfo {
+    pub fn new(inf: InfNodeInfo, exeunit_info: serde_json::Value) -> ServiceInfo {
+        ServiceInfo { inf, exeunit_info }
+    }
+
     fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
-        match self {
-            ServiceInfo::Wasm { inf, wasi_version } => {
-                inf.write_json(map);
-                let _ = map.insert(
-                    "runtime".into(),
-                    serde_json::json!({
-                        "name": "wasmtime",
-                        "wasm":{
-                            "wasi": {
-                                "version@v": wasi_version
-                            }
-                        }
-                    }),
-                );
-            }
-        }
+        self.inf.write_json(map);
+        let _ = map.insert("runtime".into(), self.exeunit_info);
     }
 }
 

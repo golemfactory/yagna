@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use log::info;
 use path_clean::PathClean;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -13,6 +12,8 @@ use std::{
 use thiserror::Error;
 
 use super::exeunit_instance::ExeUnitInstance;
+use serde_json::Value;
+use ya_agent_offer_model::OfferBuilder;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -23,6 +24,10 @@ pub struct ExeUnitDesc {
     pub supervisor_path: PathBuf,
     pub runtime_path: PathBuf,
 
+    // ExeUnit defined properties, that will be appended to offer.
+    #[serde(default = "empty_properties")]
+    pub properties: serde_json::Map<String, Value>,
+
     // Here other capabilities and exe units metadata.
     #[serde(default = "default_description")]
     pub description: String,
@@ -30,6 +35,10 @@ pub struct ExeUnitDesc {
 
 fn default_description() -> String {
     "No description provided.".to_string()
+}
+
+fn empty_properties() -> serde_json::Map<String, Value> {
+    serde_json::Map::<String, Value>::new()
 }
 
 /// Responsible for creating ExeUnits.
@@ -94,7 +103,7 @@ impl ExeUnitsRegistry {
         desc.supervisor_path = normalize_path(&desc.supervisor_path)?;
         desc.runtime_path = normalize_path(&desc.runtime_path)?;
 
-        info!(
+        log::info!(
             "Added [{}] ExeUnit to registry. Supervisor path: [{}], Runtime path: [{}].",
             desc.name,
             desc.supervisor_path.display(),
@@ -194,6 +203,19 @@ impl ExeUnitDesc {
     }
 }
 
+impl OfferBuilder for ExeUnitDesc {
+    fn build(&self) -> Value {
+        let mut common = serde_json::json!({
+            "name": self.name,
+            "version": self.version.to_string()
+        });
+        let mut offer_part = self.properties.clone();
+        offer_part.append(common.as_object_mut().unwrap());
+
+        return serde_json::Value::Object(offer_part);
+    }
+}
+
 fn normalize_path(path: &Path) -> Result<PathBuf> {
     let current_dir = std::env::current_dir()?;
 
@@ -208,13 +230,38 @@ fn normalize_path(path: &Path) -> Result<PathBuf> {
 impl fmt::Display for ExeUnitDesc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let align = 15;
+        let align_prop = 30;
 
         write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
         write!(f, "{:width$}{}\n", "Version:", self.version, width = align)?;
-        write!(f, "{:width$}{}\n", "Supervisor:", self.supervisor_path.display(), width = align)?;
-        write!(f, "{:width$}{}\n", "Runtime:", self.runtime_path.display(), width = align)?;
-        write!(f, "{:width$}{}\n", "Description:", self.description, width = align)?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Supervisor:",
+            self.supervisor_path.display(),
+            width = align
+        )?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Runtime:",
+            self.runtime_path.display(),
+            width = align
+        )?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Description:",
+            self.description,
+            width = align
+        )?;
 
+        if !self.properties.is_empty() {
+            write!(f, "Properties:\n")?;
+            for (key, value) in self.properties.iter() {
+                write!(f, "    {:width$}{}\n", key, value, width = align_prop)?;
+            }
+        }
         Ok(())
     }
 }

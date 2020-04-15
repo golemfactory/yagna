@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
+use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
@@ -131,17 +131,14 @@ impl ProviderAgent {
     }
 
     async fn create_node_info(config: &RunConfig) -> NodeInfo {
-        // TODO: Get node name from intentity API.
+        // TODO: Get node name from identity API.
         NodeInfo::with_name(&config.node_name)
     }
 
-    fn create_service_info(_exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
-        let inf = InfNodeInfo::new()
-            .with_mem(1.0)
-            .with_storage(10.0);
+    fn create_service_info(exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
+        let inf = InfNodeInfo::new().with_mem(1.0).with_storage(10.0);
 
-        let wasi_version = "0.0.0".into();
-        ServiceInfo::Wasm { inf, wasi_version }
+        ServiceInfo::new(inf, exeunit_desc.build())
     }
 
     pub async fn wait_for_ctrl_c(self) -> anyhow::Result<()> {
