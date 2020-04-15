@@ -100,7 +100,6 @@ fn get_gnt_contract_address() -> PaymentDriverResult<Address> {
 
 fn get_contract_address(env_key: &str) -> PaymentDriverResult<Address> {
     let contract_address: Address = utils::str_to_addr(env::var(env_key)?.as_str())?;
-
     Ok(contract_address)
 }
 
@@ -111,6 +110,89 @@ fn prepare_contract(
 ) -> PaymentDriverResult<Contract<Http>> {
     let contract = ethereum_client.get_contract(address, json_abi)?;
     Ok(contract)
+}
+
+fn verify_gnt_tx(receipt: &TransactionReceipt) -> PaymentDriverResult<()> {
+    verify_gnt_tx_logs(&receipt.logs)?;
+    verify_gnt_tx_status(&receipt.status)?;
+    Ok(())
+}
+
+fn verify_gnt_tx_status(status: &Option<U64>) -> PaymentDriverResult<()> {
+    match status {
+        None => Err(PaymentDriverError::UnknownTransaction),
+        Some(status) => {
+            if *status == U64::from(ETH_TX_SUCCESS) {
+                Ok(())
+            } else {
+                Err(PaymentDriverError::FailedTransaction)
+            }
+        }
+    }
+}
+
+fn verify_gnt_tx_logs(logs: &Vec<Log>) -> PaymentDriverResult<()> {
+    if logs.len() != TRANSFER_LOGS_LENGTH {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    verify_gnt_tx_log(&logs[0])?;
+    Ok(())
+}
+
+fn verify_gnt_tx_log(log: &Log) -> PaymentDriverResult<()> {
+    verify_gnt_tx_log_contract_address(&log.address)?;
+    verify_gnt_tx_log_topics(&log.topics)?;
+    verify_gnt_tx_log_data(&log.data)?;
+    Ok(())
+}
+
+fn verify_gnt_tx_log_contract_address(contract_address: &Address) -> PaymentDriverResult<()> {
+    if *contract_address != get_gnt_contract_address()? {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    Ok(())
+}
+
+fn verify_gnt_tx_log_topics(topics: &Vec<H256>) -> PaymentDriverResult<()> {
+    if topics.len() != TX_LOG_TOPICS_LENGTH {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    // topics[0] is the keccak-256 of the Transfer(address,address,uint256) canonical signature
+    verify_gnt_tx_log_canonical_signature(&topics[0])?;
+    Ok(())
+}
+
+fn verify_gnt_tx_log_canonical_signature(canonical_signature: &H256) -> PaymentDriverResult<()> {
+    if *canonical_signature != H256::from_slice(&hex::decode(TRANSFER_CANONICAL_SIGNATURE).unwrap())
+    {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    Ok(())
+}
+
+fn verify_gnt_tx_log_data(data: &Bytes) -> PaymentDriverResult<()> {
+    if data.0.len() != TX_LOG_DATA_LENGTH {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    Ok(())
+}
+
+fn build_payment_details(receipt: &TransactionReceipt) -> PaymentDriverResult<PaymentDetails> {
+    // topics[1] is the value of the _from address as H256
+    let sender = utils::topic_to_address(&receipt.logs[0].topics[1]);
+    // topics[2] is the value of the _to address as H256
+    let recipient = utils::topic_to_address(&receipt.logs[0].topics[2]);
+    // The data field from the returned Log struct contains the transferred token amount value
+    let amount: U256 = utils::u256_from_big_endian(&receipt.logs[0].data.0);
+    // Do not have any info about date in receipt
+    let date = None;
+
+    Ok(PaymentDetails {
+        recipient: utils::addr_to_str(recipient).into(),
+        sender: utils::addr_to_str(sender).into(),
+        amount: utils::u256_to_big_dec(amount)?,
+        date,
+    })
 }
 
 pub struct GntDriver {
@@ -492,103 +574,6 @@ impl GntDriver {
         let dao: PaymentDao = self.db.as_dao();
         dao.get(invoice_id).await
     }
-
-    fn verify_gnt_tx(&self, receipt: &TransactionReceipt) -> PaymentDriverResult<()> {
-        self.verify_gnt_tx_logs(&receipt.logs)?;
-        self.verify_gnt_tx_status(&receipt.status)?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_status(&self, status: &Option<U64>) -> PaymentDriverResult<()> {
-        match status {
-            None => Err(PaymentDriverError::UnknownTransaction),
-            Some(status) => {
-                if *status == U64::from(ETH_TX_SUCCESS) {
-                    Ok(())
-                } else {
-                    Err(PaymentDriverError::FailedTransaction)
-                }
-            }
-        }
-    }
-
-    fn verify_gnt_tx_logs(&self, logs: &Vec<Log>) -> PaymentDriverResult<()> {
-        if logs.len() != TRANSFER_LOGS_LENGTH {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        self.verify_gnt_tx_log(&logs[0])?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log(&self, log: &Log) -> PaymentDriverResult<()> {
-        self.verify_gnt_tx_log_contract_address(&log.address)?;
-        self.verify_gnt_tx_log_topics(&log.topics)?;
-        self.verify_gnt_tx_log_data(&log.data)?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_contract_address(
-        &self,
-        contract_address: &Address,
-    ) -> PaymentDriverResult<()> {
-        if *contract_address != self.gnt_contract.address() {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_topics(&self, topics: &Vec<H256>) -> PaymentDriverResult<()> {
-        if topics.len() != TX_LOG_TOPICS_LENGTH {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        // topics[0] is the keccak-256 of the Transfer(address,address,uint256) canonical signature
-        self.verify_gnt_tx_log_canonical_signature(&topics[0])?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_canonical_signature(
-        &self,
-        canonical_signature: &H256,
-    ) -> PaymentDriverResult<()> {
-        if *canonical_signature
-            != H256::from_slice(&hex::decode(TRANSFER_CANONICAL_SIGNATURE).unwrap())
-        {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_data(&self, data: &Bytes) -> PaymentDriverResult<()> {
-        if data.0.len() != TX_LOG_DATA_LENGTH {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        Ok(())
-    }
-
-    fn build_payment_details(
-        &self,
-        receipt: &TransactionReceipt,
-    ) -> PaymentDriverResult<PaymentDetails> {
-        // topics[1] is the value of the _from address as H256
-        let sender = GntDriver::topic_to_address(&receipt.logs[0].topics[1]);
-        // topics[2] is the value of the _to address as H256
-        let recipient = GntDriver::topic_to_address(&receipt.logs[0].topics[2]);
-        // The data field from the returned Log struct contains the transferred token amount value
-        let amount: U256 = U256::from_big_endian(&receipt.logs[0].data.0);
-        // Do not have any info about date in receipt
-        let date = None;
-
-        Ok(PaymentDetails {
-            recipient: utils::addr_to_str(recipient),
-            sender: utils::addr_to_str(sender),
-            amount: utils::u256_to_big_dec(amount)?,
-            date,
-        })
-    }
-
-    fn topic_to_address(topic: &H256) -> Address {
-        H160::from_slice(&topic.as_bytes()[12..])
-    }
 }
 
 impl PaymentDriver for GntDriver {
@@ -652,7 +637,17 @@ impl PaymentDriver for GntDriver {
         &'a self,
         confirmation: &PaymentConfirmation,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>> {
-        unimplemented!()
+        let tx_hash: H256 = H256::from_slice(&confirmation.confirmation);
+        Box::pin(async move {
+            let ethereum_client = EthereumClient::new()?;
+            match ethereum_client.get_transaction_receipt(tx_hash).await? {
+                None => Err(PaymentDriverError::UnknownTransaction),
+                Some(receipt) => {
+                    verify_gnt_tx(&receipt)?;
+                    build_payment_details(&receipt)
+                }
+            }
+        })
     }
 
     /// Returns sum of transactions from given address
@@ -746,6 +741,26 @@ mod tests {
         let eth_balance = some_eth_balance.unwrap();
         assert_eq!(eth_balance.currency, Currency::Eth {});
         assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_payment() -> anyhow::Result<()> {
+        init_env();
+        let driver = GntDriver::new(DbExecutor::new(":memory:")?).unwrap();
+        let tx_hash: Vec<u8> =
+            hex::decode("df06916d8a8fe218e6261d3e811b1d9aee9cf8e07fb539431f0433abcdd9a8c2")
+                .unwrap();
+        let confirmation = PaymentConfirmation::from(&tx_hash);
+
+        let expected = PaymentDetails {
+            recipient: String::from("0x43a5b798e0e78be13b7bc0c553e433fb5b639be5"),
+            sender: String::from("0x43a5b798e0e78be13b7bc0c553e433fb5b639be5"),
+            amount: utils::str_to_big_dec("0.00000000000001")?,
+            date: None,
+        };
+        let details = driver.verify_payment(&confirmation).await?;
+        assert_eq!(details, expected);
         Ok(())
     }
 }

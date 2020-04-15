@@ -64,7 +64,7 @@ impl From<PaymentEntity> for PaymentStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PaymentDetails {
     pub recipient: String,
     pub sender: String,

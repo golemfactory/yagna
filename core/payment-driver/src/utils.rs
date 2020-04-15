@@ -2,7 +2,7 @@ use crate::error::PaymentDriverError;
 use crate::PaymentDriverResult;
 
 use bigdecimal::BigDecimal;
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H160, H256, U256};
 use num_bigint::ToBigInt;
 use std::str::FromStr;
 
@@ -33,6 +33,14 @@ pub fn u256_to_big_dec(v: U256) -> PaymentDriverResult<BigDecimal> {
 pub fn str_to_big_dec(v: &str) -> PaymentDriverResult<BigDecimal> {
     let v: BigDecimal = BigDecimal::from_str(v)?;
     Ok(v)
+}
+
+pub fn topic_to_address(topic: &H256) -> Address {
+    H160::from_slice(&topic.as_bytes()[12..])
+}
+
+pub fn u256_from_big_endian(bytes: &Vec<u8>) -> U256 {
+    U256::from_big_endian(bytes)
 }
 
 #[cfg(test)]
