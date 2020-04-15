@@ -6,7 +6,7 @@ use structopt::{clap, StructOpt};
 
 use ya_client::{
     activity::ActivityRequestorApi, cli::ApiOpts, market::MarketRequestorApi,
-    payment::requestor::RequestorApi as PaymentRequestorApi, RequestorApi,
+    payment::requestor::RequestorApi as PaymentRequestorApi, cli::RequestorApi,
 };
 use ya_model::{
     activity::ExeScriptRequest,
