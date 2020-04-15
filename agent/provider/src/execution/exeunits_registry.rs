@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
-use derive_more::Display;
 use log::info;
 use path_clean::PathClean;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -15,17 +15,11 @@ use thiserror::Error;
 use super::exeunit_instance::ExeUnitInstance;
 
 /// Descriptor of ExeUnit
-#[derive(Serialize, Deserialize, Clone, Debug, Display)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
-#[display(
-    fmt = "Name:        {}\nSupervisor:  {}\nRuntime:     {}\nDescription: {}",
-    name,
-    "supervisor_path.display()",
-    "runtime_path.display()",
-    description
-)]
 pub struct ExeUnitDesc {
     pub name: String,
+    pub version: Version,
     pub supervisor_path: PathBuf,
     pub runtime_path: PathBuf,
 
@@ -209,6 +203,20 @@ fn normalize_path(path: &Path) -> Result<PathBuf> {
     }
 
     Ok(path.clean())
+}
+
+impl fmt::Display for ExeUnitDesc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let align = 15;
+
+        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
+        write!(f, "{:width$}{}\n", "Version:", self.version, width = align)?;
+        write!(f, "{:width$}{}\n", "Supervisor:", self.supervisor_path.display(), width = align)?;
+        write!(f, "{:width$}{}\n", "Runtime:", self.runtime_path.display(), width = align)?;
+        write!(f, "{:width$}{}\n", "Description:", self.description, width = align)?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

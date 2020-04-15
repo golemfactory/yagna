@@ -136,7 +136,9 @@ impl ProviderAgent {
     }
 
     fn create_service_info(_exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
-        let inf = InfNodeInfo::new().with_mem(1.0).with_storage(10.0);
+        let inf = InfNodeInfo::new()
+            .with_mem(1.0)
+            .with_storage(10.0);
 
         let wasi_version = "0.0.0".into();
         ServiceInfo::Wasm { inf, wasi_version }
