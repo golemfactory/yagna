@@ -1,3 +1,4 @@
+use std::env;
 use structopt::{clap, StructOpt};
 
 mod execution;
@@ -12,6 +13,7 @@ use startup_config::StartupConfig;
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
     env_logger::init();
 
     let app_name = clap::crate_name!();
