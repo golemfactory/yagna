@@ -1,4 +1,3 @@
-use actix_rt;
 use bigdecimal::BigDecimal;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -58,7 +57,7 @@ async fn show_balance(gnt_driver: &GntDriver, address: &str) {
     println!("{:?}", balance);
 }
 
-#[actix_rt::main]
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
     dotenv::dotenv().expect("Failed to read .env file");
@@ -70,12 +69,12 @@ async fn main() -> anyhow::Result<()> {
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
     ya_payment_driver::dao::init(&db).await?;
 
-    let gnt_driver = GntDriver::new(db)?;
+    let mut gnt_driver = GntDriver::new(db)?;
 
-    // gnt_driver
-    //     .init(AccountMode::SEND, address.as_str(), &sign_tx)
-    //     .await
-    //     .unwrap();
+    gnt_driver
+        .init(AccountMode::SEND, address.as_str(), &sign_tx)
+        .await
+        .unwrap();
 
     show_balance(&gnt_driver, address.as_str()).await;
 

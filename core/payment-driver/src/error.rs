@@ -12,7 +12,7 @@ pub enum PaymentDriverError {
     PaymentNotFound(String),
     #[error("Connection refused")]
     ConnectionRefused,
-    #[error("Library error")]
+    #[error("Library error: {0}")]
     LibraryError(String),
     #[error("Ethereum client error: {0}")]
     EthereumClientError(#[from] web3::Error),

@@ -19,19 +19,18 @@ use crate::account::{AccountBalance, Balance, Currency};
 use crate::dao::payment::PaymentDao;
 use crate::dao::transaction::TransactionDao;
 use crate::error::{DbResult, PaymentDriverError};
-use crate::ethereum::EthereumClient;
+use crate::ethereum::{Chain, EthereumClient};
 use crate::models::{PaymentEntity, TransactionEntity};
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
-use actix_rt::Arbiter;
+
 use futures3::compat::*;
 
+use crate::utils;
 use futures3::future;
+use std::env;
 use std::future::Future;
 use std::pin::Pin;
-
-use crate::utils;
-use std::env;
 const GNT_TRANSFER_GAS: u32 = 55000;
 const GNT_FAUCET_GAS: u32 = 90000;
 
@@ -195,10 +194,59 @@ fn build_payment_details(receipt: &TransactionReceipt) -> PaymentDriverResult<Pa
     })
 }
 
+async fn request_eth_from_faucet(address: Address) -> PaymentDriverResult<()> {
+    log::info!("Requesting Eth from Faucet...");
+    let sleep_time = time::Duration::from_secs(ETH_FAUCET_SLEEP_SECONDS);
+    let mut counter = 0;
+    let eth_faucet_address = env::var(ETH_FAUCET_ADDRESS_ENV_KEY)?;
+    while counter < MAX_ETH_FAUCET_REQUESTS {
+        let res = request_eth(address, &eth_faucet_address).await;
+        if res.is_ok() {
+            break;
+        } else {
+            log::error!("Failed to request Eth from Faucet: {:?}", res);
+        }
+        thread::sleep(sleep_time);
+        counter += 1;
+    }
+
+    if counter < MAX_ETH_FAUCET_REQUESTS {
+        Ok(())
+    } else {
+        Err(PaymentDriverError::LibraryError(format!(
+            "Cannot request Eth from Faucet"
+        )))
+    }
+}
+
+async fn request_eth(address: Address, eth_faucet_address: &String) -> PaymentDriverResult<()> {
+    let uri = format!(
+        "{}/{}",
+        eth_faucet_address.clone(),
+        utils::addr_to_str(address)
+    );
+
+    ureq::get(uri.as_str()).call().into_string().map_or_else(
+        |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
+        |resp| {
+            log::debug!("{}", resp);
+            // Sufficient funds
+            if resp.contains("sufficient funds") {
+                Ok(())
+            }
+            // Funds requested
+            else if resp.contains("txhash") {
+                Ok(())
+            } else {
+                Err(PaymentDriverError::LibraryError(resp))
+            }
+        },
+    )
+}
+
 pub struct GntDriver {
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
-    eth_faucet_address: String,
     gnt_faucet_address: Address,
     db: DbExecutor,
 }
@@ -208,7 +256,7 @@ impl GntDriver {
     pub fn new(db: DbExecutor) -> PaymentDriverResult<GntDriver> {
         // TODO
         let migrate_db = db.clone();
-        Arbiter::spawn(async move {
+        tokio::spawn(async move {
             if let Err(e) = crate::dao::init(&migrate_db).await {
                 log::error!("gnt migration error: {}", e);
             }
@@ -222,11 +270,9 @@ impl GntDriver {
             include_bytes!("./contracts/gnt.json"),
         )?;
 
-        let eth_faucet_address = env::var(ETH_FAUCET_ADDRESS_ENV_KEY)?;
         Ok(GntDriver {
             ethereum_client,
             gnt_contract,
-            eth_faucet_address,
             gnt_faucet_address: utils::str_to_addr(
                 env::var(GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY)?.as_str(),
             )?,
@@ -235,28 +281,18 @@ impl GntDriver {
     }
 
     /// Initializes testnet funds
-    pub async fn init_funds(
-        &self,
-        address: Address,
-        sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()> {
+    async fn init_funds(&mut self, address: &str, sign_tx: SignTx<'_>) -> PaymentDriverResult<()> {
+        let address = utils::str_to_addr(address)?;
         let max_testnet_balance = utils::str_to_big_dec(MAX_TESTNET_BALANCE)?;
 
-        if self.get_eth_balance(address).await?.amount < max_testnet_balance {
-            log::info!("Requesting Eth from Faucet...");
-            self.request_eth_from_faucet(address).await?;
-        } else {
-            log::info!("To much Eth...");
-        }
+        request_eth_from_faucet(address).await?;
 
-        // cannot have more than "10000000000000" Gnt
-        // blocked by Faucet contract
-        if self.get_gnt_balance(address).await?.amount < max_testnet_balance {
-            println!("Requesting Gnt from Faucet...");
-            self.request_gnt_from_faucet(address, sign_tx).await?;
-        } else {
-            println!("To much Gnt...");
-        }
+        // // cannot have more than "10000000000000" Gnt
+        // // blocked by Faucet contract
+        // if self.get_gnt_balance(address).await?.amount < max_testnet_balance {
+        //     println!("Requesting Gnt from Faucet...");
+        //     self.request_gnt_from_faucet(address, sign_tx).await?;
+        // }
 
         Ok(())
     }
@@ -328,42 +364,6 @@ impl GntDriver {
             .get_eth_balance(address, block_number)
             .await?;
         Ok(amount)
-    }
-
-    /// Requests Eth from Faucet
-    async fn request_eth_from_faucet(&self, address: Address) -> PaymentDriverResult<()> {
-        let sleep_time = time::Duration::from_secs(ETH_FAUCET_SLEEP_SECONDS);
-        let mut counter = 0;
-        while counter < MAX_ETH_FAUCET_REQUESTS {
-            if self.request_eth(address).await.is_ok() {
-                break;
-            } else {
-                println!("Failed to request Eth from Faucet...");
-            }
-            thread::sleep(sleep_time);
-            counter += 1;
-        }
-
-        if counter < MAX_ETH_FAUCET_REQUESTS {
-            Ok(())
-        } else {
-            Err(PaymentDriverError::LibraryError(format!(
-                "Cannot request Eth from Faucet"
-            )))
-        }
-    }
-
-    async fn request_eth(&self, address: Address) -> Result<(), reqwest::Error> {
-        let mut uri = self.eth_faucet_address.clone();
-        uri.push('/');
-        let addr: String = format!("{:x?}", address);
-        uri.push_str(&addr.as_str()[2..]);
-        println!("HTTP GET {:?}", uri);
-        let _body = reqwest::get(uri.as_str())
-            .await?
-            .json::<HashMap<String, String>>()
-            .await?;
-        Ok(())
     }
 
     /// Requests Gnt from Faucet
@@ -583,7 +583,14 @@ impl PaymentDriver for GntDriver {
         address: &str,
         sign_tx: SignTx,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
-        unimplemented!()
+        let result = if mode.contains(AccountMode::SEND)
+            && self.ethereum_client.get_chain_id() == Chain::Rinkeby.id()
+        {
+            futures3::executor::block_on(self.init_funds(address, sign_tx))
+        } else {
+            Ok(())
+        };
+        Box::pin(future::ready(result))
     }
 
     /// Returns account balance
