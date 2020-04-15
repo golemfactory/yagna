@@ -70,48 +70,48 @@ async fn main() -> anyhow::Result<()> {
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
     ya_payment_driver::dao::init(&db).await?;
 
-    let mut gnt_driver = GntDriver::new(db)?;
+    let gnt_driver = GntDriver::new(db)?;
 
-    gnt_driver
-        .init(AccountMode::SEND, address.as_str(), &sign_tx)
-        .await
-        .unwrap();
-
-    show_balance(&gnt_driver, address.as_str()).await;
-
-    let uuid = Uuid::new_v4().to_hyphenated().to_string();
-    let invoice_id = uuid.as_str();
-    let payment_amount = PaymentAmount {
-        base_currency_amount: BigDecimal::from_str("69").unwrap(),
-        gas_amount: None,
-    };
-    let due_date = Utc::now() + Duration::days(1i64);
-
-    println!("Scheduling payment...");
-
-    gnt_driver
-        .schedule_payment(
-            invoice_id,
-            payment_amount,
-            address.as_str(),
-            address.as_str(),
-            due_date,
-            &sign_tx,
-        )
-        .await
-        .unwrap();
-
-    println!("Gnt transferred!");
+    // gnt_driver
+    //     .init(AccountMode::SEND, address.as_str(), &sign_tx)
+    //     .await
+    //     .unwrap();
 
     show_balance(&gnt_driver, address.as_str()).await;
 
-    match gnt_driver.get_payment_status(invoice_id).await? {
-        PaymentStatus::Ok(confirmation) => {
-            let details = gnt_driver.verify_payment(&confirmation).await?;
-            println!("{:?}", details);
-        }
-        _status => println!("{:?}", _status),
-    }
+    // let uuid = Uuid::new_v4().to_hyphenated().to_string();
+    // let invoice_id = uuid.as_str();
+    // let payment_amount = PaymentAmount {
+    //     base_currency_amount: BigDecimal::from_str("69").unwrap(),
+    //     gas_amount: None,
+    // };
+    // let due_date = Utc::now() + Duration::days(1i64);
+
+    // println!("Scheduling payment...");
+
+    // gnt_driver
+    //     .schedule_payment(
+    //         invoice_id,
+    //         payment_amount,
+    //         address.as_str(),
+    //         address.as_str(),
+    //         due_date,
+    //         &sign_tx,
+    //     )
+    //     .await
+    //     .unwrap();
+
+    // println!("Gnt transferred!");
+
+    // show_balance(&gnt_driver, address.as_str()).await;
+
+    // match gnt_driver.get_payment_status(invoice_id).await? {
+    //     PaymentStatus::Ok(confirmation) => {
+    //         let details = gnt_driver.verify_payment(&confirmation).await?;
+    //         println!("{:?}", details);
+    //     }
+    //     _status => println!("{:?}", _status),
+    // }
 
     Ok(())
 }

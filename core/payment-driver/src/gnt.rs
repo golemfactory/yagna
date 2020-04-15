@@ -52,6 +52,67 @@ const GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY: &str = "FAUCET_CONTRACT_ADDRESS";
 
 const ETH_FAUCET_ADDRESS_ENV_KEY: &str = "ETH_FAUCET_ADDRESS";
 
+async fn get_eth_balance(
+    ethereum_client: &EthereumClient,
+    address: Address,
+) -> PaymentDriverResult<Balance> {
+    let block_number = None;
+    let amount = ethereum_client
+        .get_eth_balance(address, block_number)
+        .await?;
+    Ok(Balance::new(
+        utils::u256_to_big_dec(amount)?,
+        Currency::Eth {},
+    ))
+}
+
+async fn get_gnt_balance(
+    gnt_contract: &Contract<Http>,
+    address: Address,
+) -> PaymentDriverResult<Balance> {
+    gnt_contract
+        .query("balanceOf", (address,), None, Options::default(), None)
+        .compat()
+        .await
+        .map_or_else(
+            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
+            |amount| {
+                Ok(Balance::new(
+                    utils::u256_to_big_dec(amount)?,
+                    Currency::Gnt {},
+                ))
+            },
+        )
+}
+
+fn prepare_gnt_contract(ethereum_client: &EthereumClient) -> PaymentDriverResult<Contract<Http>> {
+    let contract_address = get_gnt_contract_address()?;
+    prepare_contract(
+        ethereum_client,
+        contract_address,
+        include_bytes!("./contracts/gnt.json"),
+    )
+}
+
+fn get_gnt_contract_address() -> PaymentDriverResult<Address> {
+    get_contract_address(GNT_CONTRACT_ADDRESS_ENV_KEY)
+}
+
+fn get_contract_address(env_key: &str) -> PaymentDriverResult<Address> {
+    let contract_address: Address = utils::str_to_addr(env::var(env_key)?.as_str())?;
+
+    Ok(contract_address)
+}
+
+fn prepare_contract(
+    ethereum_client: &EthereumClient,
+    address: Address,
+    json_abi: &[u8],
+) -> PaymentDriverResult<Contract<Http>> {
+    let contract = ethereum_client.get_contract(address, json_abi)?;
+    Ok(contract)
+}
+
 pub struct GntDriver {
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
@@ -545,7 +606,15 @@ impl PaymentDriver for GntDriver {
         &'a self,
         address: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>> {
-        unimplemented!()
+        let address: String = address.into();
+        Box::pin(async move {
+            let address = utils::str_to_addr(address.as_str())?;
+            let ethereum_client = EthereumClient::new()?;
+            let gnt_contract = prepare_gnt_contract(&ethereum_client)?;
+            let eth_balance = get_eth_balance(&ethereum_client, address).await?;
+            let gnt_balance = get_gnt_balance(&gnt_contract, address).await?;
+            Ok(AccountBalance::new(gnt_balance, Some(eth_balance)))
+        })
     }
 
     /// Schedules payment
@@ -660,23 +729,23 @@ mod tests {
         Ok(())
     }
 
-    // #[tokio::test]
-    // async fn test_get_account_balance() -> anyhow::Result<()> {
-    //     init_env();
-    //     let driver = GntDriver::new(DbExecutor::new(":memory:")?).unwrap();
+    #[tokio::test]
+    async fn test_get_account_balance() -> anyhow::Result<()> {
+        init_env();
+        let driver = GntDriver::new(DbExecutor::new(":memory:")?).unwrap();
 
-    //     let balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
+        let balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
 
-    //     let gnt_balance = balance.base_currency;
-    //     assert_eq!(gnt_balance.currency, Currency::Gnt {});
-    //     assert!(gnt_balance.amount >= utils::str_to_big_dec("0")?);
+        let gnt_balance = balance.base_currency;
+        assert_eq!(gnt_balance.currency, Currency::Gnt {});
+        assert!(gnt_balance.amount >= utils::str_to_big_dec("0")?);
 
-    //     let some_eth_balance = balance.gas;
-    //     assert!(some_eth_balance.is_some());
+        let some_eth_balance = balance.gas;
+        assert!(some_eth_balance.is_some());
 
-    //     let eth_balance = some_eth_balance.unwrap();
-    //     assert_eq!(eth_balance.currency, Currency::Eth {});
-    //     assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
-    //     Ok(())
-    // }
+        let eth_balance = some_eth_balance.unwrap();
+        assert_eq!(eth_balance.currency, Currency::Eth {});
+        assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
+        Ok(())
+    }
 }
