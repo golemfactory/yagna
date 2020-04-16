@@ -380,7 +380,7 @@ impl GntDriver {
         func: &str,
         tokens: P,
         sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()>
+    ) -> PaymentDriverResult<String>
     where
         P: Tokenize,
     {
@@ -388,13 +388,15 @@ impl GntDriver {
         let raw_tx = self
             .prepare_raw_tx(sender, gas, contract, func, tokens)
             .await?;
-        let signature = sign_tx(raw_tx.hash(chain_id)).await;
+        let tx_hash = raw_tx.hash(chain_id);
+        let signature = sign_tx(tx_hash.clone()).await;
         // increment nonce
         (*self.nonces.entry(sender).or_insert(raw_tx.nonce)) += U256::from(1u64);
         log::debug!("{:?}", raw_tx);
         self.save_transaction(&raw_tx, sender, &signature).await?;
         self.send_tx(raw_tx.encode_signed_tx(signature, chain_id))
-            .await
+            .await?;
+        Ok(hex::encode(&tx_hash))
     }
 
     async fn prepare_raw_tx<P>(
@@ -509,29 +511,31 @@ impl GntDriver {
             tx_id: None,
         };
 
-        self.transfer_gnt(
-            gnt_amount,
-            gas_amount,
-            utils::str_to_addr(sender)?,
-            utils::str_to_addr(recipient)?,
-            sign_tx,
-        )
-        .await
-        .map_or_else(
-            |error| match error {
-                PaymentDriverError::InsufficientFunds => {
-                    payment.status = PaymentStatus::NotEnoughFunds.to_i32();
-                }
-                PaymentDriverError::InsufficientGas => {
-                    payment.status = PaymentStatus::NotEnoughGas.to_i32();
-                }
-                _ => {
-                    payment.status = PaymentStatus::Failed.to_i32();
-                }
-            },
-            |_| {},
-        );
+        let (status, tx_id) = self
+            .transfer_gnt(
+                gnt_amount,
+                gas_amount,
+                utils::str_to_addr(sender)?,
+                utils::str_to_addr(recipient)?,
+                sign_tx,
+            )
+            .await
+            .map_or_else(
+                |error| {
+                    let status = match error {
+                        PaymentDriverError::InsufficientFunds => {
+                            PaymentStatus::NotEnoughFunds.to_i32()
+                        }
+                        PaymentDriverError::InsufficientGas => PaymentStatus::NotEnoughGas.to_i32(),
+                        _ => PaymentStatus::Failed.to_i32(),
+                    };
+                    (status, None)
+                },
+                |tx_id| (PaymentStatus::NotYet.to_i32(), Some(tx_id)),
+            );
 
+        payment.status = status;
+        payment.tx_id = tx_id;
         let dao: PaymentDao = self.db.as_dao();
         dao.insert(payment).await?;
         Ok(())
@@ -544,7 +548,7 @@ impl GntDriver {
         sender: Address,
         recipient: Address,
         sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()> {
+    ) -> PaymentDriverResult<String> {
         if gnt_amount
             > utils::big_dec_to_u256(get_gnt_balance(&self.gnt_contract, sender).await?.amount)?
         {
@@ -559,8 +563,7 @@ impl GntDriver {
             (recipient, gnt_amount),
             sign_tx,
         )
-        .await?;
-        Ok(())
+        .await
     }
 
     async fn get_payment_from_db(
@@ -618,6 +621,69 @@ impl GntDriver {
         let tx_entity = dao.get(tx_id).await?;
         Ok(tx_entity)
     }
+
+    async fn retry_payment(
+        &mut self,
+        invoice_id: &str,
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<()> {
+        match self.get_payment_from_db(invoice_id.into()).await? {
+            None => Err(PaymentDriverError::UnknownPayment(invoice_id.into())),
+            Some(payment) => {
+                let gnt_amount = utils::u256_from_big_endian_hex(payment.amount);
+                let gas_amount = utils::u256_from_big_endian_hex(payment.gas);
+                let sender = utils::str_to_addr(payment.sender.as_str())?;
+                let recipient = utils::str_to_addr(payment.recipient.as_str())?;
+                let result = self
+                    .transfer_gnt(gnt_amount, gas_amount, sender, recipient, sign_tx)
+                    .await;
+                match result {
+                    Err(error) => {
+                        let status = match error {
+                            PaymentDriverError::InsufficientFunds => {
+                                PaymentStatus::NotEnoughFunds.to_i32()
+                            }
+                            PaymentDriverError::InsufficientGas => {
+                                PaymentStatus::NotEnoughGas.to_i32()
+                            }
+                            _ => PaymentStatus::Failed.to_i32(),
+                        };
+                        self.update_payment_status(invoice_id.into(), status)
+                            .await?;
+                    }
+                    Ok(tx_id) => {
+                        self.update_payment_status(
+                            invoice_id.into(),
+                            PaymentStatus::NotYet.to_i32(),
+                        )
+                        .await?;
+                        self.update_payment_tx_id(invoice_id.into(), tx_id).await?;
+                    }
+                };
+                Ok(())
+            }
+        }
+    }
+
+    async fn update_payment_status(
+        &self,
+        invoice_id: String,
+        status: i32,
+    ) -> PaymentDriverResult<()> {
+        let dao: PaymentDao = self.db.as_dao();
+        dao.update_status(invoice_id, status).await?;
+        Ok(())
+    }
+
+    async fn update_payment_tx_id(
+        &self,
+        invoice_id: String,
+        tx_id: String,
+    ) -> PaymentDriverResult<()> {
+        let dao: PaymentDao = self.db.as_dao();
+        dao.update_tx_id(invoice_id, Some(tx_id)).await?;
+        Ok(())
+    }
 }
 
 impl PaymentDriver for GntDriver {
@@ -669,13 +735,14 @@ impl PaymentDriver for GntDriver {
         Box::pin(future::ready(result))
     }
 
-    /// Schedules payment
+    /// Reschedules payment
     fn reschedule_payment<'a>(
         &'a mut self,
         invoice_id: &str,
         sign_tx: SignTx,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
-        unimplemented!()
+        let result = futures3::executor::block_on(self.retry_payment(invoice_id, sign_tx));
+        Box::pin(future::ready(result))
     }
 
     /// Returns payment status

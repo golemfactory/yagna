@@ -8,6 +8,8 @@ pub enum PaymentDriverError {
     InsufficientFunds,
     #[error("Payment: {0} already scheduled")]
     PaymentAlreadyScheduled(String),
+    #[error("Unknown payment: {0}")]
+    UnknownPayment(String),
     #[error("Payment: {0} not found")]
     PaymentNotFound(String),
     #[error("Connection refused")]

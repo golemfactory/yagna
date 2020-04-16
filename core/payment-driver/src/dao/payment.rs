@@ -42,15 +42,20 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn update_status(
-        &self,
-        invoice_id: String,
-        status: i32,
-        tx_id: Option<String>,
-    ) -> DbResult<()> {
+    pub async fn update_status(&self, invoice_id: String, status: i32) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::gnt_driver_payment.find(invoice_id.clone()))
-                .set((dsl::status.eq(status), dsl::tx_id.eq(tx_id)))
+                .set(dsl::status.eq(status))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn update_tx_id(&self, invoice_id: String, tx_id: Option<String>) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::gnt_driver_payment.find(invoice_id.clone()))
+                .set(dsl::tx_id.eq(tx_id))
                 .execute(conn)?;
             Ok(())
         })
