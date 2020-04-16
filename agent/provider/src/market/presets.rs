@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 /// Preset describing offer, that can be saved and loaded from disk.
 pub struct Preset {
@@ -132,10 +132,30 @@ impl Preset {
     }
 
     pub fn list_readable_metrics(&self) -> Vec<String> {
-        vec!["Duration", "CPU usage"]
+        vec!["Duration", "CPU"]
             .into_iter()
             .map(ToString::to_string)
             .collect()
+    }
+
+    pub fn update_price(&mut self, metric: &str, price: f64) -> Result<()> {
+        let idx = self.list_readable_metrics()
+            .iter()
+            .position(|name| name == metric)
+            .ok_or(anyhow!("Metric [{}] not found.", metric))?;
+        self.usage_coeffs[idx] = price;
+        Ok(())
+    }
+}
+
+impl Default for Preset {
+    fn default() -> Self {
+        Preset {
+            name: "".to_string(),
+            exeunit_name: "".to_string(),
+            pricing_model: "".to_string(),
+            usage_coeffs: vec![0.0, 0.0, 0.0],
+        }
     }
 }
 

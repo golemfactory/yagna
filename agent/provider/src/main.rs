@@ -9,7 +9,7 @@ mod startup_config;
 
 use provider_agent::ProviderAgent;
 use startup_config::{Commands, ExeUnitsConfig, PresetsConfig, StartupConfig};
-use std::path::PathBuf;
+
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -31,19 +31,23 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Preset(presets_cmd) => match presets_cmd {
             PresetsConfig::List => {
-                ProviderAgent::list_presets(config, PathBuf::from("presets.json"))
+                ProviderAgent::list_presets(config)
             }
-            PresetsConfig::Create => {
-                ProviderAgent::create_preset(config, PathBuf::from("presets.json"))
+            PresetsConfig::Create{nointeractive, params} => {
+                if nointeractive {
+                    ProviderAgent::create_preset(config, params)
+                } else {
+                    ProviderAgent::create_preset_interactive(config)
+                }
             }
             PresetsConfig::Remove { name } => {
-                ProviderAgent::remove_preset(config, PathBuf::from("presets.json"), name)
+                ProviderAgent::remove_preset(config, name)
             }
             PresetsConfig::Update { name } => {
-                ProviderAgent::update_preset(config, PathBuf::from("presets.json"), name)
+                ProviderAgent::update_preset_interactive(config, name)
             }
             PresetsConfig::ListMetrics => {
-                ProviderAgent::list_metrics(config, PathBuf::from("presets.json"))
+                ProviderAgent::list_metrics(config)
             }
         },
         Commands::ExeUnit(exeunit_cmd) => match exeunit_cmd {

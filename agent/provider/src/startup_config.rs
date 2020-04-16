@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -7,6 +8,7 @@ use ya_client::{
     payment::provider::ProviderApi as PaymentProviderApi, web::WebClient, web::WebInterface,
     Result,
 };
+
 
 /// Common configuration for all Provider commands.
 #[derive(StructOpt)]
@@ -18,6 +20,8 @@ pub struct ProviderConfig {
         default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
     )]
     pub exe_unit_path: PathBuf,
+    #[structopt(skip = "presets.json")]
+    pub presets_file: PathBuf,
 }
 
 #[derive(StructOpt)]
@@ -48,10 +52,27 @@ pub struct RunConfig {
 }
 
 #[derive(StructOpt)]
+pub struct PresetNoInteractive {
+    #[structopt(long)]
+    pub name: Option<String>,
+    #[structopt(long)]
+    pub exeunit: Option<String>,
+    #[structopt(long)]
+    pub pricing: Option<String>,
+    #[structopt(long, parse(try_from_str = parse_key_val))]
+    pub price: Vec<(String, f64)>,
+}
+
+#[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum PresetsConfig {
     List,
-    Create,
+    Create {
+        #[structopt(long = "nointeractive")]
+        nointeractive: bool,
+        #[structopt(flatten)]
+        params: PresetNoInteractive,
+    },
     Remove { name: String },
     Update { name: String },
     ListMetrics,
@@ -105,4 +126,19 @@ impl RunConfig {
             Ok(client.interface()?)
         }
     }
+}
+
+/// Structopt key-value example:
+/// https://github.com/TeXitoi/structopt/blob/master/examples/keyvalue.rs
+fn parse_key_val<T, U>(s: &str) -> std::result::Result<(T, U), Box<dyn Error>>
+    where
+        T: std::str::FromStr,
+        T::Err: Error + 'static,
+        U: std::str::FromStr,
+        U::Err: Error + 'static,
+{
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
+    Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
 }

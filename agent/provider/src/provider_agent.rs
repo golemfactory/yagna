@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -17,7 +17,7 @@ use crate::market::{
 };
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
-use crate::startup_config::{ProviderConfig, RunConfig};
+use crate::startup_config::{ProviderConfig, RunConfig, PresetNoInteractive};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -186,8 +186,8 @@ impl ProviderAgent {
         Ok(())
     }
 
-    pub fn list_presets(_: ProviderConfig, presets_path: PathBuf) -> anyhow::Result<()> {
-        let presets = Presets::from_file(&presets_path)?;
+    pub fn list_presets(config: ProviderConfig) -> anyhow::Result<()> {
+        let presets = Presets::from_file(&config.presets_file)?;
         println!("Available Presets:");
 
         let presets_list = presets.list();
@@ -198,7 +198,7 @@ impl ProviderAgent {
         Ok(())
     }
 
-    pub fn list_metrics(_: ProviderConfig, _presets_path: PathBuf) -> anyhow::Result<()> {
+    pub fn list_metrics(_: ProviderConfig) -> anyhow::Result<()> {
         let preset = Preset::default();
         let metrics_names = preset.list_readable_metrics();
         let metrics = preset.list_usage_metrics();
@@ -209,8 +209,36 @@ impl ProviderAgent {
         Ok(())
     }
 
-    pub fn create_preset(config: ProviderConfig, presets_path: PathBuf) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&presets_path)?;
+    pub fn create_preset(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
+        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+
+        let mut preset = Preset::default();
+        preset.name = params.name.ok_or(anyhow!("Preset name is required."))?;
+        preset.exeunit_name = params.exeunit.ok_or(anyhow!("ExeUnit is required."))?;
+        preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
+
+        for (name, price) in params.price.iter() {
+            preset.update_price(name, *price)?;
+        }
+
+        // Validate ExeUnit existence.
+        registry.find_exeunit(&preset.exeunit_name)?;
+        if !(preset.pricing_model == "linear") {
+            bail!("Not supported pricing model.")
+        }
+
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&config.presets_file)?;
+
+        println!();
+        println!("Preset created:");
+        println!("{}", preset);
+        Ok(())
+    }
+
+    pub fn create_preset_interactive(config: ProviderConfig) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
         let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
 
         let exeunits = registry
@@ -223,7 +251,7 @@ impl ProviderAgent {
         let preset = PresetUpdater::new(Preset::default(), exeunits, pricing_models).interact()?;
 
         presets.add_preset(preset.clone())?;
-        presets.save_to_file(&presets_path)?;
+        presets.save_to_file(&config.presets_file)?;
 
         println!();
         println!("Preset created:");
@@ -232,22 +260,20 @@ impl ProviderAgent {
     }
 
     pub fn remove_preset(
-        _config: ProviderConfig,
-        presets_path: PathBuf,
+        config: ProviderConfig,
         name: String,
     ) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&presets_path)?;
+        let mut presets = Presets::from_file(&config.presets_file)?;
 
         presets.remove_preset(&name)?;
-        presets.save_to_file(&presets_path)
+        presets.save_to_file(&config.presets_file)
     }
 
-    pub fn update_preset(
+    pub fn update_preset_interactive(
         config: ProviderConfig,
-        presets_path: PathBuf,
         name: String,
     ) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&presets_path)?;
+        let mut presets = Presets::from_file(&config.presets_file)?;
         let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
 
         let exeunits = registry
@@ -262,7 +288,7 @@ impl ProviderAgent {
 
         presets.remove_preset(&name)?;
         presets.add_preset(preset.clone())?;
-        presets.save_to_file(&presets_path)?;
+        presets.save_to_file(&config.presets_file)?;
 
         println!();
         println!("Preset updated:");
