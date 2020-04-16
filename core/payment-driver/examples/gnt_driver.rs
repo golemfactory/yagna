@@ -57,6 +57,17 @@ async fn show_balance(gnt_driver: &GntDriver, address: &str) {
     println!("{:?}", balance);
 }
 
+async fn show_payment_status(gnt_driver: &GntDriver, invoice_id: &str) {
+    match gnt_driver.get_payment_status(invoice_id).await.unwrap() {
+        PaymentStatus::Ok(confirmation) => {
+            println!("Payment status of: {} is Ok", invoice_id);
+            let details = gnt_driver.verify_payment(&confirmation).await.unwrap();
+            println!("{:?}", details);
+        }
+        _status => println!("Payment status of: {} is {:?}", invoice_id, _status),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -103,14 +114,10 @@ async fn main() -> anyhow::Result<()> {
     println!("Gnt transferred!");
 
     show_balance(&gnt_driver, address.as_str()).await;
+    show_payment_status(&gnt_driver, invoice_id).await;
 
-    match gnt_driver.get_payment_status(invoice_id).await? {
-        PaymentStatus::Ok(confirmation) => {
-            let details = gnt_driver.verify_payment(&confirmation).await?;
-            println!("{:?}", details);
-        }
-        _status => println!("Payment status: {:?}", _status),
-    }
+    let hardcoded: &str = "7e6fe400-92ba-4f93-960d-cc0720cf19e3";
+    show_payment_status(&gnt_driver, hardcoded).await;
 
     println!("Waiting for Ctr+C...");
     tokio::signal::ctrl_c()

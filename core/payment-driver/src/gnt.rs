@@ -20,7 +20,7 @@ use crate::dao::payment::PaymentDao;
 use crate::dao::transaction::TransactionDao;
 use crate::error::{DbResult, PaymentDriverError};
 use crate::ethereum::{Chain, EthereumClient};
-use crate::models::{PaymentEntity, TransactionEntity};
+use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus};
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
 
@@ -51,6 +51,8 @@ const GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY: &str = "FAUCET_CONTRACT_ADDRESS";
 const ETH_FAUCET_ADDRESS_ENV_KEY: &str = "ETH_FAUCET_ADDRESS";
 
 const TX_SENDER_BUFFER: usize = 100;
+
+const REQUIRED_CONFIRMATIONS: usize = 5;
 
 async fn get_eth_balance(
     ethereum_client: &EthereumClient,
@@ -285,12 +287,70 @@ fn prepare_payment_amounts(amount: PaymentAmount) -> PaymentDriverResult<(U256, 
     ))
 }
 
+async fn confirm_tx(db: &DbExecutor, tx: RawTransaction, tx_hash: H256) -> PaymentDriverResult<()> {
+    let ethereum_client = EthereumClient::new().expect("Failed to start ethereum client");
+    ethereum_client
+        .wait_for_confirmations(tx_hash, REQUIRED_CONFIRMATIONS)
+        .await?;
+    let receipt = ethereum_client.get_transaction_receipt(tx_hash).await?;
+    let (tx_status, payment_status) =
+        if receipt.unwrap().status.unwrap() == U64::from(ETH_TX_SUCCESS) {
+            log::error!("Tx: {:?} confirmed", tx_hash);
+            (
+                TransactionStatus::Confirmed.into(),
+                PaymentStatus::Ok(PaymentConfirmation {
+                    confirmation: vec![0],
+                })
+                .to_i32(),
+            )
+        } else {
+            log::error!("Tx: {:?} failed", tx_hash);
+            (
+                TransactionStatus::Failed.into(),
+                PaymentStatus::Failed.to_i32(),
+            )
+        };
+    let tx_id = tx.hash(ethereum_client.get_chain_id());
+    update_tx_status(db, &tx_id, tx_status).await?;
+    update_payment_status_by_tx_id(db, &tx_id, payment_status).await
+}
+
+async fn update_tx_status(
+    db: &DbExecutor,
+    tx_id: &Vec<u8>,
+    tx_status: i32,
+) -> PaymentDriverResult<()> {
+    let dao: TransactionDao = db.as_dao();
+    dao.update_tx_status(hex::encode(tx_id), tx_status).await?;
+    Ok(())
+}
+
+async fn update_payment_status_by_tx_id(
+    db: &DbExecutor,
+    tx_id: &Vec<u8>,
+    status: i32,
+) -> PaymentDriverResult<()> {
+    let dao: PaymentDao = db.as_dao();
+    dao.update_status_by_tx_id(hex::encode(tx_id), status)
+        .await?;
+    Ok(())
+}
+async fn update_tx_sent(db: &DbExecutor, tx_id: Vec<u8>, tx_hash: H256) -> PaymentDriverResult<()> {
+    let dao: TransactionDao = db.as_dao();
+    dao.update_tx_sent(hex::encode(tx_id), hex::encode(&tx_hash))
+        .await?;
+    Ok(())
+}
+
 pub struct GntDriver {
     db: Arc<DbExecutor>,
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
     nonces: HashMap<Address, U256>,
-    tx_sender: mpsc::Sender<(Vec<u8>, oneshot::Sender<PaymentDriverResult<H256>>)>,
+    tx_sender: mpsc::Sender<(
+        (RawTransaction, Vec<u8>),
+        oneshot::Sender<PaymentDriverResult<H256>>,
+    )>,
 }
 
 impl GntDriver {
@@ -310,17 +370,29 @@ impl GntDriver {
         let gnt_contract = prepare_gnt_contract(&ethereum_client)?;
 
         let (tx_sender, mut tx_sender_service) = mpsc::channel::<(
-            Vec<u8>,
+            (RawTransaction, Vec<u8>),
             oneshot::Sender<PaymentDriverResult<H256>>,
         )>(TX_SENDER_BUFFER);
 
+        let sender_db = db.clone();
         tokio::spawn(async move {
+            let db = sender_db;
             let ethereum_client = EthereumClient::new().expect("Failed to prepare Ethereum client");
-            while let Some((tx, response)) = tx_sender_service.recv().await {
-                let result = ethereum_client.send_tx(tx).await;
+            let chain_id: u64 = ethereum_client.get_chain_id();
+            while let Some(((raw_tx, signature), response)) = tx_sender_service.recv().await {
+                let result = ethereum_client
+                    .send_tx(raw_tx.encode_signed_tx(signature, chain_id))
+                    .await;
                 response.send(result.clone()).unwrap();
                 match result {
                     Ok(tx_hash) => {
+                        let db = db.clone();
+                        tokio::spawn(async move {
+                            let _ = update_tx_sent(&db, raw_tx.hash(chain_id), tx_hash)
+                                .await
+                                .unwrap();
+                            let _ = confirm_tx(&db, raw_tx, tx_hash).await.unwrap();
+                        });
                         log::error!("Tx hash: {:?}", tx_hash);
                     }
                     Err(e) => {
@@ -394,8 +466,7 @@ impl GntDriver {
         (*self.nonces.entry(sender).or_insert(raw_tx.nonce)) += U256::from(1u64);
         log::debug!("{:?}", raw_tx);
         self.save_transaction(&raw_tx, sender, &signature).await?;
-        self.send_tx(raw_tx.encode_signed_tx(signature, chain_id))
-            .await?;
+        self.send_tx(raw_tx, signature).await?;
         Ok(hex::encode(&tx_hash))
     }
 
@@ -468,11 +539,15 @@ impl GntDriver {
         Ok(())
     }
 
-    async fn send_tx(&self, tx: Vec<u8>) -> PaymentDriverResult<()> {
+    async fn send_tx(&self, raw_tx: RawTransaction, signature: Vec<u8>) -> PaymentDriverResult<()> {
         let mut tx_sender = self.tx_sender.clone();
         tokio::spawn(async move {
             let (resp_tx, resp_rx) = oneshot::channel();
-            tx_sender.send((tx, resp_tx)).await.ok().unwrap();
+            tx_sender
+                .send(((raw_tx, signature), resp_tx))
+                .await
+                .ok()
+                .unwrap();
             let tx_hash = resp_rx.await.unwrap().unwrap();
             log::info!("Sent tx: {:?}", tx_hash);
         });

@@ -32,6 +32,16 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
+    pub async fn update_status_by_tx_id(&self, tx_id: String, status: i32) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::gnt_driver_payment.filter(dsl::tx_id.eq(Some(tx_id))))
+                .set(dsl::status.eq(status))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn insert(&self, payment: PaymentEntity) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::gnt_driver_payment)

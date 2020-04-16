@@ -64,11 +64,10 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn update_tx_confirmed(&self, tx_id: String) -> DbResult<()> {
+    pub async fn update_tx_status(&self, tx_id: String, status: i32) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            let confirmed_status: i32 = TransactionStatus::Confirmed.into();
             diesel::update(dsl::gnt_driver_transaction.find(tx_id.clone()))
-                .set(dsl::status.eq(confirmed_status))
+                .set(dsl::status.eq(status))
                 .execute(conn)?;
             Ok(())
         })
