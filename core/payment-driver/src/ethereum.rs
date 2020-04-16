@@ -5,13 +5,13 @@ use crate::error::PaymentDriverError;
 use futures3::compat::*;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use web3::confirm::{wait_for_confirmations, TransactionReceiptBlockNumberCheck};
 use web3::contract::Contract;
 use web3::transports::EventLoopHandle;
 use web3::transports::Http;
 use web3::types::{BlockNumber, Bytes, TransactionReceipt};
 use web3::Web3;
 
-const REQUIRED_CONFIRMATIONS: usize = 5;
 const POLL_INTERVAL_SECS: u64 = 1;
 const POLL_INTERVAL_NANOS: u32 = 0;
 
@@ -96,16 +96,32 @@ impl EthereumClient {
     }
 
     pub async fn send_tx(&self, signed_tx: Vec<u8>) -> EthereumClientResult<H256> {
-        let confirmation = web3::confirm::send_raw_transaction_with_confirmation(
-            &self.web3.transport(),
-            Bytes::from(signed_tx),
+        let tx_hash = self
+            .web3
+            .eth()
+            .send_raw_transaction(Bytes::from(signed_tx))
+            .compat()
+            .await?;
+        Ok(tx_hash)
+    }
+
+    pub async fn wait_for_confirmations(
+        &self,
+        tx_hash: H256,
+        confirmations: usize,
+    ) -> EthereumClientResult<()> {
+        let eth_filter = self.web3.eth_filter();
+        let check = TransactionReceiptBlockNumberCheck::new(self.web3.eth(), tx_hash);
+        wait_for_confirmations(
+            self.web3.eth(),
+            eth_filter,
             Duration::new(POLL_INTERVAL_SECS, POLL_INTERVAL_NANOS),
-            REQUIRED_CONFIRMATIONS,
+            confirmations,
+            check,
         )
         .compat()
         .await?;
-
-        Ok(confirmation.transaction_hash)
+        Ok(())
     }
 
     pub fn get_chain_id(&self) -> u64 {

@@ -112,5 +112,10 @@ async fn main() -> anyhow::Result<()> {
     //     _status => println!("{:?}", _status),
     // }
 
+    println!("Waiting for Ctr+C...");
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to listen for event");
+
     Ok(())
 }

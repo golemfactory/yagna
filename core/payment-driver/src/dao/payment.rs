@@ -46,11 +46,11 @@ impl<'c> PaymentDao<'c> {
         &self,
         invoice_id: String,
         status: i32,
-        tx_hash: Option<String>,
+        tx_id: Option<String>,
     ) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::gnt_driver_payment.find(invoice_id.clone()))
-                .set((dsl::status.eq(status), dsl::tx_hash.eq(tx_hash)))
+                .set((dsl::status.eq(status), dsl::tx_id.eq(tx_id)))
                 .execute(conn)?;
             Ok(())
         })

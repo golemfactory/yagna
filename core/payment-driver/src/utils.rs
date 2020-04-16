@@ -1,12 +1,16 @@
 use crate::error::PaymentDriverError;
 use crate::PaymentDriverResult;
 
+use crate::models::{TransactionEntity, TransactionStatus};
 use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
+use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H160, H256, U256};
 use num_bigint::ToBigInt;
 use std::str::FromStr;
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
+
 pub fn str_to_addr(addr: &str) -> PaymentDriverResult<Address> {
     match addr.trim_start_matches("0x").parse() {
         Ok(addr) => Ok(addr),
@@ -41,6 +45,36 @@ pub fn topic_to_address(topic: &H256) -> Address {
 
 pub fn u256_from_big_endian(bytes: &Vec<u8>) -> U256 {
     U256::from_big_endian(bytes)
+}
+
+pub fn u256_to_big_endian_hex(value: U256) -> String {
+    let mut bytes = [0u8; 32];
+    value.to_big_endian(&mut bytes);
+    hex::encode(&bytes)
+}
+
+pub fn u256_from_big_endian_hex(bytes: String) -> U256 {
+    let bytes = hex::decode(&bytes).unwrap();
+    U256::from_big_endian(&bytes)
+}
+
+pub fn raw_tx_to_entity(
+    raw_tx: &RawTransaction,
+    sender: Address,
+    chain_id: u64,
+    timestamp: DateTime<Utc>,
+    signature: &Vec<u8>,
+) -> TransactionEntity {
+    TransactionEntity {
+        tx_id: hex::encode(raw_tx.hash(chain_id)),
+        sender: addr_to_str(sender),
+        nonce: u256_to_big_endian_hex(raw_tx.nonce),
+        timestamp: timestamp.naive_utc(),
+        encoded: serde_json::to_string(raw_tx).unwrap(),
+        status: TransactionStatus::Created.into(),
+        signature: hex::encode(signature),
+        tx_hash: None,
+    }
 }
 
 #[cfg(test)]

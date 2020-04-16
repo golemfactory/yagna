@@ -2,15 +2,49 @@ use chrono::NaiveDateTime;
 
 use crate::schema::*;
 
-#[derive(Queryable, Debug, Identifiable, Insertable, PartialEq)]
+const TX_CREATED: i32 = 0;
+const TX_SENT: i32 = 1;
+const TX_CONFIRMED: i32 = 2;
+
+pub enum TransactionStatus {
+    Created,
+    Sent,
+    Confirmed,
+}
+
+impl From<i32> for TransactionStatus {
+    fn from(status: i32) -> Self {
+        match status {
+            TX_CREATED => TransactionStatus::Created,
+            TX_SENT => TransactionStatus::Sent,
+            TX_CONFIRMED => TransactionStatus::Confirmed,
+            _ => panic!("Unknown tx status"),
+        }
+    }
+}
+
+impl Into<i32> for TransactionStatus {
+    fn into(self) -> i32 {
+        match &self {
+            TransactionStatus::Created => TX_CREATED,
+            TransactionStatus::Sent => TX_SENT,
+            TransactionStatus::Confirmed => TX_CONFIRMED,
+        }
+    }
+}
+
+#[derive(Clone, Queryable, Debug, Identifiable, Insertable, PartialEq)]
 #[primary_key(tx_hash)]
 #[table_name = "gnt_driver_transaction"]
 pub struct TransactionEntity {
-    pub tx_hash: String,
+    pub tx_id: String,
     pub sender: String,
-    pub chain: i32,
     pub nonce: String,
     pub timestamp: NaiveDateTime,
+    pub status: i32,
+    pub encoded: String,
+    pub signature: String,
+    pub tx_hash: Option<String>,
 }
 
 #[derive(Queryable, Debug, Identifiable, Insertable, PartialEq)]
@@ -23,5 +57,5 @@ pub struct PaymentEntity {
     pub recipient: String,
     pub payment_due_date: NaiveDateTime,
     pub status: i32,
-    pub tx_hash: Option<String>,
+    pub tx_id: Option<String>,
 }

@@ -46,21 +46,22 @@ impl PaymentStatus {
 
 impl From<PaymentEntity> for PaymentStatus {
     fn from(payment: PaymentEntity) -> Self {
-        match payment.status {
-            PAYMENT_STATUS_OK => {
-                let confirmation: Vec<u8> = match payment.tx_hash {
-                    None => Vec::new(),
-                    Some(tx_hash) => hex::decode(tx_hash).unwrap(),
-                };
-                PaymentStatus::Ok(PaymentConfirmation {
-                    confirmation: confirmation,
-                })
-            }
-            PAYMENT_STATUS_NOT_YET => PaymentStatus::NotYet,
-            PAYMENT_STATUS_NOT_ENOUGH_FUNDS => PaymentStatus::NotEnoughFunds,
-            PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
-            _ => PaymentStatus::Unknown,
-        }
+        // match payment.status {
+        //     PAYMENT_STATUS_OK => {
+        //         let confirmation: Vec<u8> = match payment.tx_hash {
+        //             None => Vec::new(),
+        //             Some(tx_hash) => hex::decode(tx_hash).unwrap(),
+        //         };
+        //         PaymentStatus::Ok(PaymentConfirmation {
+        //             confirmation: confirmation,
+        //         })
+        //     }
+        //     PAYMENT_STATUS_NOT_YET => PaymentStatus::NotYet,
+        //     PAYMENT_STATUS_NOT_ENOUGH_FUNDS => PaymentStatus::NotEnoughFunds,
+        //     PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
+        //     _ => PaymentStatus::Unknown,
+        // }
+        unimplemented!()
     }
 }
 

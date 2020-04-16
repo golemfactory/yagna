@@ -6,7 +6,7 @@ table! {
         recipient -> Text,
         payment_due_date -> Timestamp,
         status -> Integer,
-        tx_hash -> Nullable<Text>,
+        tx_id -> Nullable<Text>,
     }
 }
 
@@ -18,17 +18,20 @@ table! {
 }
 
 table! {
-    gnt_driver_transaction (tx_hash) {
-        tx_hash -> Text,
+    gnt_driver_transaction (tx_id) {
+        tx_id -> Text,
         sender -> Text,
-        chain -> Integer,
         nonce -> Text,
         timestamp -> Timestamp,
+        status -> Integer,
+        encoded -> Text,
+        signature -> Text,
+        tx_hash -> Nullable<Text>,
     }
 }
 
 joinable!(gnt_driver_payment -> gnt_driver_payment_status (status));
-joinable!(gnt_driver_payment -> gnt_driver_transaction (tx_hash));
+joinable!(gnt_driver_payment -> gnt_driver_transaction (tx_id));
 
 allow_tables_to_appear_in_same_query!(
     gnt_driver_payment,

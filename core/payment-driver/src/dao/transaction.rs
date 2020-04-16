@@ -1,7 +1,7 @@
-use diesel::{self, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use crate::error::DbResult;
-use crate::models::TransactionEntity;
+use crate::models::{TransactionEntity, TransactionStatus};
 use crate::schema::gnt_driver_transaction::dsl;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
@@ -18,10 +18,10 @@ impl<'c> AsDao<'c> for TransactionDao<'c> {
 }
 
 impl<'c> TransactionDao<'c> {
-    pub async fn get(&self, tx_hash: String) -> DbResult<Option<TransactionEntity>> {
+    pub async fn get(&self, tx_id: String) -> DbResult<Option<TransactionEntity>> {
         do_with_transaction(self.pool, move |conn| {
             let tx: Option<TransactionEntity> = dsl::gnt_driver_transaction
-                .find(tx_hash.clone())
+                .find(tx_id.clone())
                 .first(conn)
                 .optional()?;
             match tx {
@@ -36,6 +36,39 @@ impl<'c> TransactionDao<'c> {
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::gnt_driver_transaction)
                 .values(tx)
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn get_used_nonces(&self, address: String) -> DbResult<Vec<String>> {
+        do_with_transaction(self.pool, move |conn| {
+            let nonces: Vec<String> = dsl::gnt_driver_transaction
+                .filter(dsl::sender.eq(address.clone()))
+                .select(dsl::nonce)
+                .load(conn)?;
+            Ok(nonces)
+        })
+        .await
+    }
+
+    pub async fn update_tx_sent(&self, tx_id: String, tx_hash: String) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let sent_status: i32 = TransactionStatus::Sent.into();
+            diesel::update(dsl::gnt_driver_transaction.find(tx_id.clone()))
+                .set((dsl::status.eq(sent_status), dsl::tx_hash.eq(tx_hash)))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn update_tx_confirmed(&self, tx_id: String) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let confirmed_status: i32 = TransactionStatus::Confirmed.into();
+            diesel::update(dsl::gnt_driver_transaction.find(tx_id.clone()))
+                .set(dsl::status.eq(confirmed_status))
                 .execute(conn)?;
             Ok(())
         })
