@@ -76,20 +76,37 @@ The result will be something like this:
 ```
 Available Presets:
 
-Name: amazing-offer
-ExeUnit: wasmtime
-Pricing model: linear
-Coefficients: [0.1, 0.2, 1.0]
+Name:               wasm-preset
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        1.4 GNT
+    CPU             3.5 GNT
+    Init price      0.3 GNT
 
-Name: high-cpu
-ExeUnit: wasmtime
-Pricing model: linear
-Coefficients: [0.01, 1.2, 1.5]
+Name:               amazing-offer
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        0.1 GNT
+    CPU             0.2 GNT
+    Init price      1 GNT
 
-Name: lame-offer
-ExeUnit: wasmtime
-Pricing model: linear
-Coefficients: [0.0, 0.0, 0.0]
+Name:               lame-offer
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        0 GNT
+    CPU             0 GNT
+    Init price      0 GNT
+
+Name:               high-cpu
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        0.01 GNT
+    CPU             1.2 GNT
+    Init price      1.5 GNT
 ```
 
 Coefficients describe unit price of ExeUnit metrics:
@@ -129,6 +146,20 @@ You can omit some parameters and the will be filled with previous values.
 
 `cargo run --bin ya-provider preset remove new-preset`
 
+### Listing metrics
+
+You can list available metrics with command:
+
+`cargo run --bin ya-provider preset list-metrics`
+
+You will get something like this:
+
+```
+Duration       golem.usage.duration_sec
+CPU            golem.usage.cpu_sec
+```
+Left column is name of preset that should be used in commands. On the right side
+you can see agreement property, that will be set in usage vector.
 
 ## Running the Provider Agent
 
@@ -184,4 +215,22 @@ cargo run --bin yagna payment status
 
 ```
 cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
+```
+
+## ExeUnits
+
+You can list available ExeUnits with command:
+
+`cargo run --bin ya-provider exe-unit list`
+Result:
+```
+Available ExeUnits:
+
+Name:          wasmtime
+Version:       0.1.0
+Supervisor:    /home/nieznanysprawiciel/Repos/Golem/yagna/target/debug/exe-unit
+Runtime:       /home/nieznanysprawiciel/Repos/Golem/yagna/target/debug/wasmtime-exeunit
+Description:   This is just a sample descriptor for wasmtime exeunit used by ya-provider
+Properties:
+    wasm.wasi.version@v           "0.9.0"
 ```
