@@ -26,7 +26,7 @@ jobs:
         run: docker build . -f build-deb-router.Dockerfile -t build-deb-router
 
       - name: Copy ya-sb-router.deb file
-        run: docker run build-deb bash -c "cat /src/target/debian/ya-sb-router*.deb" > ya-sb-router.deb
+        run: docker run build-deb-router bash -c "cat /src/target/debian/ya-sb-router*.deb" > ya-sb-router.deb
 
       - name: Upload .deb
         uses: actions/upload-artifact@v1
