@@ -43,8 +43,12 @@ async fn main() -> anyhow::Result<()> {
             PresetsConfig::Remove { name } => {
                 ProviderAgent::remove_preset(config, name)
             }
-            PresetsConfig::Update { name } => {
-                ProviderAgent::update_preset_interactive(config, name)
+            PresetsConfig::Update { nointeractive, params, name } => {
+                if nointeractive {
+                    ProviderAgent::update_preset(config, name, params)
+                } else {
+                    ProviderAgent::update_preset_interactive(config, name)
+                }
             }
             PresetsConfig::ListMetrics => {
                 ProviderAgent::list_metrics(config)

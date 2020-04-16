@@ -54,7 +54,7 @@ pub struct RunConfig {
 #[derive(StructOpt)]
 pub struct PresetNoInteractive {
     #[structopt(long)]
-    pub name: Option<String>,
+    pub preset_name: Option<String>,
     #[structopt(long)]
     pub exeunit: Option<String>,
     #[structopt(long)]
@@ -74,7 +74,13 @@ pub enum PresetsConfig {
         params: PresetNoInteractive,
     },
     Remove { name: String },
-    Update { name: String },
+    Update {
+        name: String,
+        #[structopt(long = "nointeractive")]
+        nointeractive: bool,
+        #[structopt(flatten)]
+        params: PresetNoInteractive,
+    },
     ListMetrics,
 }
 

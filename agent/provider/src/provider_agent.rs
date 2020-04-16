@@ -214,7 +214,7 @@ impl ProviderAgent {
         let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
 
         let mut preset = Preset::default();
-        preset.name = params.name.ok_or(anyhow!("Preset name is required."))?;
+        preset.name = params.preset_name.ok_or(anyhow!("Preset name is required."))?;
         preset.exeunit_name = params.exeunit.ok_or(anyhow!("ExeUnit is required."))?;
         preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
 
@@ -222,7 +222,7 @@ impl ProviderAgent {
             preset.update_price(name, *price)?;
         }
 
-        // Validate ExeUnit existence.
+        // Validate ExeUnit existence and pricing model.
         registry.find_exeunit(&preset.exeunit_name)?;
         if !(preset.pricing_model == "linear") {
             bail!("Not supported pricing model.")
@@ -285,6 +285,47 @@ impl ProviderAgent {
 
         let preset =
             PresetUpdater::new(presets.get(&name)?, exeunits, pricing_models).interact()?;
+
+        presets.remove_preset(&name)?;
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&config.presets_file)?;
+
+        println!();
+        println!("Preset updated:");
+        println!("{}", preset);
+        Ok(())
+    }
+
+    pub fn update_preset(
+        config: ProviderConfig,
+        name: String,
+        params: PresetNoInteractive,
+    ) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
+        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+
+        let mut preset = presets.get(&name)?;
+
+        // All values are optional. If not set, previous value will remain.
+        if let Some(name) = params.preset_name {
+            preset.name = name;
+        }
+        if let Some(exeunit) = params.exeunit {
+            preset.exeunit_name = exeunit;
+        }
+        if let Some(pricing) = params.pricing {
+            preset.pricing_model = pricing;
+        }
+
+        for (name, price) in params.price.iter() {
+            preset.update_price(name, *price)?;
+        }
+
+        // Validate ExeUnit existence and pricing model.
+        registry.find_exeunit(&preset.exeunit_name)?;
+        if !(preset.pricing_model == "linear") {
+            bail!("Not supported pricing model.")
+        }
 
         presets.remove_preset(&name)?;
         presets.add_preset(preset.clone())?;
