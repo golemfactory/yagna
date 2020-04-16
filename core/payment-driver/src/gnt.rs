@@ -335,11 +335,37 @@ async fn update_payment_status_by_tx_id(
         .await?;
     Ok(())
 }
+
 async fn update_tx_sent(db: &DbExecutor, tx_id: Vec<u8>, tx_hash: H256) -> PaymentDriverResult<()> {
     let dao: TransactionDao = db.as_dao();
     dao.update_tx_sent(hex::encode(tx_id), hex::encode(&tx_hash))
         .await?;
     Ok(())
+}
+
+async fn confirm_sent_txs(db: Arc<DbExecutor>) -> PaymentDriverResult<()> {
+    let txs = get_unconfirmed_txs(&db).await?;
+    log::error!("Trying to confirm {:?} transactions", txs.len());
+    for tx in txs.iter() {
+        let _ = confirm_sent_tx(&db, tx)
+            .await
+            .expect("Failed to confirm sent tx...");
+    }
+    Ok(())
+}
+
+async fn get_unconfirmed_txs(db: &DbExecutor) -> PaymentDriverResult<Vec<TransactionEntity>> {
+    let dao: TransactionDao = db.as_dao();
+    let txs = dao.get_unconfirmed_txs().await?;
+    Ok(txs)
+}
+
+async fn confirm_sent_tx(db: &DbExecutor, tx: &TransactionEntity) -> PaymentDriverResult<()> {
+    log::error!("Trying to confirm: {:?}", tx);
+    let raw_tx: RawTransaction = serde_json::from_str(tx.encoded.as_str()).unwrap();
+    let tx_hash = utils::h256_from_hex(tx.tx_hash.clone().unwrap());
+
+    confirm_tx(db, raw_tx, tx_hash).await
 }
 
 pub struct GntDriver {
@@ -402,6 +428,12 @@ impl GntDriver {
             }
         });
 
+        let confirmator_db = db.clone();
+        tokio::spawn(async move {
+            let _ = confirm_sent_txs(confirmator_db)
+                .await
+                .expect("Failed to confirm sent transactions");
+        });
         Ok(GntDriver {
             db,
             ethereum_client,

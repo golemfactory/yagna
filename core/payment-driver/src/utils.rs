@@ -58,6 +58,11 @@ pub fn u256_from_big_endian_hex(bytes: String) -> U256 {
     U256::from_big_endian(&bytes)
 }
 
+pub fn h256_from_hex(bytes: String) -> H256 {
+    let bytes = hex::decode(&bytes).unwrap();
+    H256::from_slice(&bytes)
+}
+
 pub fn raw_tx_to_entity(
     raw_tx: &RawTransaction,
     sender: Address,

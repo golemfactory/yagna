@@ -53,6 +53,24 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
+    pub async fn get_created_txs(&self) -> DbResult<Vec<TransactionEntity>> {
+        self.get_by_status(TransactionStatus::Created.into()).await
+    }
+
+    pub async fn get_unconfirmed_txs(&self) -> DbResult<Vec<TransactionEntity>> {
+        self.get_by_status(TransactionStatus::Sent.into()).await
+    }
+
+    pub async fn get_by_status(&self, status: i32) -> DbResult<Vec<TransactionEntity>> {
+        do_with_transaction(self.pool, move |conn| {
+            let txs: Vec<TransactionEntity> = dsl::gnt_driver_transaction
+                .filter(dsl::status.eq(status))
+                .load(conn)?;
+            Ok(txs)
+        })
+        .await
+    }
+
     pub async fn update_tx_sent(&self, tx_id: String, tx_hash: String) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             let sent_status: i32 = TransactionStatus::Sent.into();
