@@ -38,7 +38,7 @@ pub struct Cli {
     #[structopt(long, default_value = "target/debug/wasmtime-exeunit")]
     pub runtime: PathBuf,
     /// Agreement file path (JSON)
-    #[structopt(long, short, default_value = "exe-unit/examples/local_agreement.json")]
+    #[structopt(long, short, default_value = "exe-unit/examples/agreement.json")]
     pub agreement: PathBuf,
     /// Working directory
     #[structopt(long, short, default_value = ".")]
@@ -47,7 +47,7 @@ pub struct Cli {
     #[structopt(long, short, default_value = ".")]
     pub cache_dir: PathBuf,
     /// Exe script to run file path (JSON)
-    #[structopt(long, default_value = "exe-unit/examples/local_commands.json")]
+    #[structopt(long, default_value = "exe-unit/examples/commands.json")]
     pub script: PathBuf,
     /// Wait strategy. By default this example waits for each consecutive command.
     /// Other strategy is to wait once for the whole script to complete.
