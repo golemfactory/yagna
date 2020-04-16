@@ -51,7 +51,7 @@ pub struct TransactionEntity {
     pub tx_hash: Option<String>,
 }
 
-#[derive(Queryable, Debug, Identifiable, Insertable, PartialEq)]
+#[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
 #[primary_key(invoice_id)]
 #[table_name = "gnt_driver_payment"]
 pub struct PaymentEntity {

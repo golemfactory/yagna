@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use ethereum_types::{Address, H160, H256, U256, U64};
+use ethereum_types::{Address, H256, U256, U64};
 
 use ethereum_tx_sign::RawTransaction;
 
@@ -562,21 +562,6 @@ impl GntDriver {
         .await?;
         Ok(())
     }
-    // async fn update_payment_status<S>(&self, invoice_id: S, status: PaymentStatus) -> DbResult<()>
-    // where
-    //     S: Into<String>,
-    // {
-    //     let tx_hash = match &status {
-    //         PaymentStatus::Ok(confirmation) => Some(hex::encode(&confirmation.confirmation)),
-    //         _ => None,
-    //     };
-
-    //     let dao: PaymentDao = self.db.as_dao();
-    //     dao.update_status(invoice_id.into(), status.to_i32(), tx_hash)
-    //         .await?;
-
-    //     Ok(())
-    // }
 
     async fn get_payment_from_db(
         &self,
@@ -585,6 +570,53 @@ impl GntDriver {
         let dao: PaymentDao = self.db.as_dao();
         let payment = dao.get(invoice_id).await?;
         Ok(payment)
+    }
+
+    async fn fetch_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus> {
+        match self.get_payment_from_db(invoice_id.into()).await? {
+            Some(payment) => self.map_payment_to_payment_status(payment).await,
+            None => Ok(PaymentStatus::Unknown),
+        }
+    }
+
+    async fn map_payment_to_payment_status(
+        &self,
+        payment: PaymentEntity,
+    ) -> PaymentDriverResult<PaymentStatus> {
+        let tx_id = payment.tx_id.clone();
+        let tx = if tx_id.is_some() {
+            self.get_tx_from_db(tx_id.unwrap()).await?
+        } else {
+            None
+        };
+        let tx_hash = match tx {
+            None => None,
+            Some(tx) => tx.tx_hash,
+        };
+
+        let status: PaymentStatus = payment.into();
+        match status {
+            PaymentStatus::Ok(_) => match tx_hash {
+                Some(tx_hash) => {
+                    let hash: Vec<u8> = hex::decode(tx_hash).unwrap();
+                    Ok(PaymentStatus::Ok(PaymentConfirmation {
+                        confirmation: hash,
+                    }))
+                }
+                // tx hash cannot be empty
+                None => Ok(PaymentStatus::Failed),
+            },
+            status => Ok(status),
+        }
+    }
+
+    async fn get_tx_from_db(
+        &self,
+        tx_id: String,
+    ) -> PaymentDriverResult<Option<TransactionEntity>> {
+        let dao: TransactionDao = self.db.as_dao();
+        let tx_entity = dao.get(tx_id).await?;
+        Ok(tx_entity)
     }
 }
 
@@ -651,7 +683,8 @@ impl PaymentDriver for GntDriver {
         &'a self,
         invoice_id: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>> {
-        unimplemented!()
+        let result = futures3::executor::block_on(self.fetch_payment_status(invoice_id));
+        Box::pin(future::ready(result))
     }
 
     /// Verifies payment

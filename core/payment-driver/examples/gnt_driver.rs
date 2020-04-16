@@ -104,13 +104,13 @@ async fn main() -> anyhow::Result<()> {
 
     show_balance(&gnt_driver, address.as_str()).await;
 
-    // match gnt_driver.get_payment_status(invoice_id).await? {
-    //     PaymentStatus::Ok(confirmation) => {
-    //         let details = gnt_driver.verify_payment(&confirmation).await?;
-    //         println!("{:?}", details);
-    //     }
-    //     _status => println!("{:?}", _status),
-    // }
+    match gnt_driver.get_payment_status(invoice_id).await? {
+        PaymentStatus::Ok(confirmation) => {
+            let details = gnt_driver.verify_payment(&confirmation).await?;
+            println!("{:?}", details);
+        }
+        _status => println!("Payment status: {:?}", _status),
+    }
 
     println!("Waiting for Ctr+C...");
     tokio::signal::ctrl_c()
