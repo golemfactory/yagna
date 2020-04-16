@@ -139,10 +139,14 @@ impl Preset {
     }
 
     pub fn update_price(&mut self, metric: &str, price: f64) -> Result<()> {
-        let idx = self.list_readable_metrics()
-            .iter()
-            .position(|name| name == metric)
-            .ok_or(anyhow!("Metric [{}] not found.", metric))?;
+        let idx = if metric == "Init price" {
+            self.list_readable_metrics().len()
+        } else {
+            self.list_readable_metrics()
+                .iter()
+                .position(|name| name == metric)
+                .ok_or(anyhow!("Metric [{}] not found.", metric))?
+        };
         self.usage_coeffs[idx] = price;
         Ok(())
     }

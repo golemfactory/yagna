@@ -102,11 +102,23 @@ When running provider, you must list all presets, that you want to use.
 
 ### Creating presets
 
+You can create preset in interactive mode:
+
 `cargo run --bin ya-provider preset create`
+
+or set all parameters using parameters:
+
+`cargo run --bin ya-provider preset create --nointeractive --name sp-wasm --exeunit wasm-spider-monkey --price Duration=1.2 --price CPU=3.4 "Init price"=0.2`
+
+If you don't specify any of price values, it will be defaulted to 0.0.  
+
 
 ### Updating presets
 
+Updating in interactive mode:
+
 `cargo run --bin ya-provider preset update new-preset`
+
 
 ### Removing presets
 
