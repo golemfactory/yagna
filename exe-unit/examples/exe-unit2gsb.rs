@@ -131,7 +131,7 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
     let contents = std::fs::read_to_string(&args.script)?;
     let exe_script: Vec<ExeScriptCommand> = serde_json::from_str(&contents)?;
     let exe_len = exe_script.len();
-    log::warn!("executing script with {} commands", exe_len);
+    log::warn!("executing script with {} command(s)", exe_len);
 
     let exe_unit_url = activity::exeunit::bus_id(ACTIVITY_ID);
     let exe_unit_service = actix_rpc::service(&exe_unit_url);
@@ -161,10 +161,12 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    for i in 0..exe_len {
-        log::warn!("waiting at most {:?}s for {} command", args.timeout, i);
+    msg.timeout = msg.timeout.or(Some(10.));
 
+    for i in 0..exe_len {
         msg.command_index = Some(i);
+        log::warn!("waiting at most {:?}s for {}. command", msg.timeout, i);
+
         let results = exe_unit_service.send(msg.clone()).await?;
 
         log::warn!("Command {} result: {:#?}", i, results);
