@@ -19,21 +19,14 @@ jobs:
       - name: Build the Docker image
         run: docker build . -f build-deb.Dockerfile -t build-deb
 
-      - name: Copy .deb file
-        run: docker run build-deb bash -c "cat /src/target/debian/*.deb" > yagna.deb
+      - name: Copy yagna.deb file
+        run: docker run build-deb bash -c "cat /src/target/debian/yagna*.deb" > yagna.deb
 
       - name: Build the router
         run: docker build . -f build-deb-router.Dockerfile -t build-deb-router
-      - name: create folder for deb extraction
-        run: mkdir yagna_with_router
-      - name: unpack yagna.deb
-        run: dpkg-deb -R yagna.deb yagna_with_router/
-      - name: Copy ya_sb_router binary file
-        run: docker run build-deb-router bash -c "cat /src/target/release/examples/ya_sb_router" > yagna_with_router/usr/bin/ya_sb_router
-      - name: Make sure all binaries are executable
-        run: chmod +x yagna_with_router/usr/bin/*
-      - name: Create second .deb file including router
-        run: dpkg-deb -b yagna_with_router
+
+      - name: Copy ya-sb-router.deb file
+        run: docker run build-deb bash -c "cat /src/target/debian/ya-sb-router*.deb" > ya-sb-router.deb
 
       - name: Upload .deb
         uses: actions/upload-artifact@v1
@@ -44,5 +37,5 @@ jobs:
       - name: Upload .deb with router
         uses: actions/upload-artifact@v1
         with:
-          name: yagna_with_router.deb
-          path: yagna_with_router.deb
+          name: ya-sb-router.deb
+          path: ya-sb-router.deb

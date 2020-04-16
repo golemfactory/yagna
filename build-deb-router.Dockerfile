@@ -1,3 +1,3 @@
 FROM build-deb
 
-RUN cargo build --release --example ya_sb_router
+RUN cargo deb -p ya-sb-router -- --example ya_sb_router

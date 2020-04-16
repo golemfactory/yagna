@@ -1,7 +1,8 @@
 [package]
 name = "yagna"
 version = "0.3.0"
-description = "Yagna server daemon and CLI"
+description = "Yagna Service and CLI"
+readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
 homepage = "https://github.com/golemfactory/yagna/core/serv"
 repository = "https://github.com/golemfactory/yagna"
