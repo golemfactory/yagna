@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - mwu/dev-with-router
+      # - <your-branch>    # put your branch name here to test it @ GH Actions
 
 jobs:
 
