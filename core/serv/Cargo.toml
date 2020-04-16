@@ -2,7 +2,7 @@
 name = "yagna"
 version = "0.3.0"
 description = "Yagna Service and CLI"
-readme = "core/serv/README.md"
+readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
 homepage = "https://github.com/golemfactory/yagna/core/serv"
 repository = "https://github.com/golemfactory/yagna"
@@ -45,6 +45,8 @@ assets = [
     ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
     ["target/release/wasmtime-exeunit", "usr/lib/yagna/plugins/", "755"],
     ["../../exe-unit/resources/exeunits-descriptor.json", "usr/lib/yagna/plugins/", "644"],
-    ["README.md", "usr/share/doc/yagna/", "644"],
+    ["../../README.md", "usr/share/doc/yagna/", "644"],
+    ["README.md", "usr/share/doc/yagna/service.md", "644"],
+    ["../../agent/provider/readme.md", "usr/share/doc/yagna/ya-provider.md", "644"],
 ]
 
