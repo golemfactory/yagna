@@ -5,7 +5,7 @@ use ethereum_types::{Address, H160, H256, U256, U64};
 use ethereum_tx_sign::RawTransaction;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{thread, time};
 use tokio::sync::{mpsc, oneshot};
 use web3::contract::tokens::Tokenize;
@@ -274,11 +274,21 @@ async fn check_gas_amount(
     }
 }
 
+fn prepare_payment_amounts(amount: PaymentAmount) -> PaymentDriverResult<(U256, U256)> {
+    let gas_amount = match amount.gas_amount {
+        Some(gas_amount) => utils::big_dec_to_u256(gas_amount)?,
+        None => U256::from(GNT_TRANSFER_GAS),
+    };
+    Ok((
+        utils::big_dec_to_u256(amount.base_currency_amount)?,
+        gas_amount,
+    ))
+}
+
 pub struct GntDriver {
     db: Arc<DbExecutor>,
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
-    mutex: Arc<Mutex<()>>,
     nonces: HashMap<Address, U256>,
     tx_sender: mpsc::Sender<(Vec<u8>, oneshot::Sender<PaymentDriverResult<H256>>)>,
 }
@@ -324,7 +334,6 @@ impl GntDriver {
             db,
             ethereum_client,
             gnt_contract,
-            mutex: Arc::new(Mutex::new(())),
             nonces: HashMap::new(),
             tx_sender,
         })
@@ -337,34 +346,6 @@ impl GntDriver {
         self.request_gnt_from_faucet(address, sign_tx).await?;
         Ok(())
     }
-
-    // /// Transfers Gnt
-    // pub async fn transfer_gnt(
-    //     &self,
-    //     amount: PaymentAmount,
-    //     sender: Address,
-    //     recipient: Address,
-    //     sign_tx: SignTx<'_>,
-    // ) -> PaymentDriverResult<H256> {
-    //     let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount)?;
-
-    //     if gnt_amount > self.get_gnt_amount(sender).await? {
-    //         return Err(PaymentDriverError::InsufficientFunds);
-    //     }
-
-    //     let tx = self
-    //         .prepare_raw_tx(
-    //             sender,
-    //             gas_amount,
-    //             &self.gnt_contract,
-    //             "transfer",
-    //             (recipient, gnt_amount),
-    //         )
-    //         .await?;
-
-    //     let tx_hash = self.send_and_save_raw_tx(&tx, sender, sign_tx).await?;
-    //     Ok(tx_hash)
-    // }
 
     /// Requests Gnt from Faucet
     async fn request_gnt_from_faucet(
@@ -404,7 +385,6 @@ impl GntDriver {
         P: Tokenize,
     {
         let chain_id = self.get_chain_id();
-        let mut _lock = self.mutex.lock().unwrap();
         let raw_tx = self
             .prepare_raw_tx(sender, gas, contract, func, tokens)
             .await?;
@@ -501,44 +481,87 @@ impl GntDriver {
         self.ethereum_client.get_chain_id()
     }
 
-    // fn prepare_payment_amounts(&self, amount: PaymentAmount) -> PaymentDriverResult<(U256, U256)> {
-    //     let gas_amount = match amount.gas_amount {
-    //         Some(gas_amount) => utils::big_dec_to_u256(gas_amount)?,
-    //         None => U256::from(GNT_TRANSFER_GAS),
-    //     };
-    //     Ok((
-    //         utils::big_dec_to_u256(amount.base_currency_amount)?,
-    //         gas_amount,
-    //     ))
-    // }
+    async fn add_payment(
+        &mut self,
+        invoice_id: &str,
+        amount: PaymentAmount,
+        sender: &str,
+        recipient: &str,
+        due_date: DateTime<Utc>,
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<()> {
+        if self.get_payment_from_db(invoice_id.into()).await?.is_some() {
+            return Err(PaymentDriverError::PaymentAlreadyScheduled(
+                invoice_id.into(),
+            ));
+        }
 
-    // async fn add_payment<S>(
-    //     &self,
-    //     invoice_id: S,
-    //     amount: PaymentAmount,
-    //     due_date: DateTime<Utc>,
-    //     recipient: Address,
-    // ) -> PaymentDriverResult<()>
-    // where
-    //     S: Into<String>,
-    // {
-    //     let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount)?;
+        let (gnt_amount, gas_amount) = prepare_payment_amounts(amount)?;
 
-    //     let payment = PaymentEntity {
-    //         amount: GntDriver::to_big_endian_hex(gnt_amount),
-    //         gas: GntDriver::to_big_endian_hex(gas_amount),
-    //         invoice_id: invoice_id.into(),
-    //         payment_due_date: due_date.naive_utc(),
-    //         recipient: hex::encode(recipient),
-    //         status: PaymentStatus::NotYet.to_i32(),
-    //         tx_hash: None,
-    //     };
+        let mut payment = PaymentEntity {
+            amount: utils::u256_to_big_endian_hex(gnt_amount),
+            gas: utils::u256_to_big_endian_hex(gas_amount),
+            invoice_id: invoice_id.into(),
+            payment_due_date: due_date.naive_utc(),
+            sender: sender.into(),
+            recipient: recipient.into(),
+            status: PaymentStatus::NotYet.to_i32(),
+            tx_id: None,
+        };
 
-    //     let dao: PaymentDao = self.db.as_dao();
-    //     dao.insert(payment).await?;
-    //     Ok(())
-    // }
+        self.transfer_gnt(
+            gnt_amount,
+            gas_amount,
+            utils::str_to_addr(sender)?,
+            utils::str_to_addr(recipient)?,
+            sign_tx,
+        )
+        .await
+        .map_or_else(
+            |error| match error {
+                PaymentDriverError::InsufficientFunds => {
+                    payment.status = PaymentStatus::NotEnoughFunds.to_i32();
+                }
+                PaymentDriverError::InsufficientGas => {
+                    payment.status = PaymentStatus::NotEnoughGas.to_i32();
+                }
+                _ => {
+                    payment.status = PaymentStatus::Failed.to_i32();
+                }
+            },
+            |_| {},
+        );
 
+        let dao: PaymentDao = self.db.as_dao();
+        dao.insert(payment).await?;
+        Ok(())
+    }
+
+    async fn transfer_gnt(
+        &mut self,
+        gnt_amount: U256,
+        gas_amount: U256,
+        sender: Address,
+        recipient: Address,
+        sign_tx: SignTx<'_>,
+    ) -> PaymentDriverResult<()> {
+        if gnt_amount
+            > utils::big_dec_to_u256(get_gnt_balance(&self.gnt_contract, sender).await?.amount)?
+        {
+            return Err(PaymentDriverError::InsufficientFunds);
+        }
+
+        self.add_tx(
+            sender,
+            gas_amount,
+            &self.gnt_contract.clone(),
+            "transfer",
+            (recipient, gnt_amount),
+            sign_tx,
+        )
+        .await?;
+        Ok(())
+    }
     // async fn update_payment_status<S>(&self, invoice_id: S, status: PaymentStatus) -> DbResult<()>
     // where
     //     S: Into<String>,
@@ -555,10 +578,14 @@ impl GntDriver {
     //     Ok(())
     // }
 
-    // async fn get_payment_from_db(&self, invoice_id: String) -> DbResult<Option<PaymentEntity>> {
-    //     let dao: PaymentDao = self.db.as_dao();
-    //     dao.get(invoice_id).await
-    // }
+    async fn get_payment_from_db(
+        &self,
+        invoice_id: String,
+    ) -> PaymentDriverResult<Option<PaymentEntity>> {
+        let dao: PaymentDao = self.db.as_dao();
+        let payment = dao.get(invoice_id).await?;
+        Ok(payment)
+    }
 }
 
 impl PaymentDriver for GntDriver {
@@ -604,7 +631,10 @@ impl PaymentDriver for GntDriver {
         due_date: DateTime<Utc>,
         sign_tx: SignTx,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
-        unimplemented!()
+        let result = futures3::executor::block_on(
+            self.add_payment(invoice_id, amount, sender, recipient, due_date, sign_tx),
+        );
+        Box::pin(future::ready(result))
     }
 
     /// Schedules payment

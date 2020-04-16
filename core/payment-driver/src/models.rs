@@ -2,14 +2,16 @@ use chrono::NaiveDateTime;
 
 use crate::schema::*;
 
-const TX_CREATED: i32 = 0;
-const TX_SENT: i32 = 1;
-const TX_CONFIRMED: i32 = 2;
+const TX_CREATED: i32 = 1;
+const TX_SENT: i32 = 2;
+const TX_CONFIRMED: i32 = 3;
+const TX_FAILED: i32 = 0;
 
 pub enum TransactionStatus {
     Created,
     Sent,
     Confirmed,
+    Failed,
 }
 
 impl From<i32> for TransactionStatus {
@@ -18,6 +20,7 @@ impl From<i32> for TransactionStatus {
             TX_CREATED => TransactionStatus::Created,
             TX_SENT => TransactionStatus::Sent,
             TX_CONFIRMED => TransactionStatus::Confirmed,
+            TX_FAILED => TransactionStatus::Failed,
             _ => panic!("Unknown tx status"),
         }
     }
@@ -29,6 +32,7 @@ impl Into<i32> for TransactionStatus {
             TransactionStatus::Created => TX_CREATED,
             TransactionStatus::Sent => TX_SENT,
             TransactionStatus::Confirmed => TX_CONFIRMED,
+            TransactionStatus::Failed => TX_FAILED,
         }
     }
 }
@@ -54,6 +58,7 @@ pub struct PaymentEntity {
     pub invoice_id: String,
     pub amount: String,
     pub gas: String,
+    pub sender: String,
     pub recipient: String,
     pub payment_due_date: NaiveDateTime,
     pub status: i32,
