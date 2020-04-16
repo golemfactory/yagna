@@ -111,8 +111,6 @@ async fn main() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    println!("Gnt transferred!");
-
     show_balance(&gnt_driver, address.as_str()).await;
     show_payment_status(&gnt_driver, invoice_id).await;
 

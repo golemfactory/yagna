@@ -20,7 +20,7 @@ use crate::dao::payment::PaymentDao;
 use crate::dao::transaction::TransactionDao;
 use crate::error::{DbResult, PaymentDriverError};
 use crate::ethereum::{Chain, EthereumClient};
-use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus};
+use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus, TxType};
 use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
 
@@ -36,6 +36,7 @@ const GNT_FAUCET_GAS: u32 = 90000;
 
 const MAX_ETH_FAUCET_REQUESTS: u32 = 10;
 const ETH_FAUCET_SLEEP_SECONDS: u64 = 1;
+const INIT_ETH_SLEEP: u64 = 15;
 
 const MAX_TESTNET_BALANCE: &str = "1000";
 
@@ -229,6 +230,8 @@ async fn request_eth_from_faucet(address: Address) -> PaymentDriverResult<()> {
     }
 
     if counter < MAX_ETH_FAUCET_REQUESTS {
+        // Wait for eth funds initialization
+        thread::sleep(time::Duration::from_secs(INIT_ETH_SLEEP));
         Ok(())
     } else {
         Err(PaymentDriverError::LibraryError(format!(
@@ -295,7 +298,7 @@ async fn confirm_tx(db: &DbExecutor, tx: RawTransaction, tx_hash: H256) -> Payme
     let receipt = ethereum_client.get_transaction_receipt(tx_hash).await?;
     let (tx_status, payment_status) =
         if receipt.unwrap().status.unwrap() == U64::from(ETH_TX_SUCCESS) {
-            log::error!("Tx: {:?} confirmed", tx_hash);
+            log::info!("Tx: {:?} confirmed", tx_hash);
             (
                 TransactionStatus::Confirmed.into(),
                 PaymentStatus::Ok(PaymentConfirmation {
@@ -304,7 +307,7 @@ async fn confirm_tx(db: &DbExecutor, tx: RawTransaction, tx_hash: H256) -> Payme
                 .to_i32(),
             )
         } else {
-            log::error!("Tx: {:?} failed", tx_hash);
+            log::info!("Tx: {:?} is failed", tx_hash);
             (
                 TransactionStatus::Failed.into(),
                 PaymentStatus::Failed.to_i32(),
@@ -345,7 +348,7 @@ async fn update_tx_sent(db: &DbExecutor, tx_id: Vec<u8>, tx_hash: H256) -> Payme
 
 async fn confirm_sent_txs(db: Arc<DbExecutor>) -> PaymentDriverResult<()> {
     let txs = get_unconfirmed_txs(&db).await?;
-    log::error!("Trying to confirm {:?} transactions", txs.len());
+    log::info!("Trying to confirm {:?} sent transactions...", txs.len());
     for tx in txs.iter() {
         let _ = confirm_sent_tx(&db, tx)
             .await
@@ -361,11 +364,60 @@ async fn get_unconfirmed_txs(db: &DbExecutor) -> PaymentDriverResult<Vec<Transac
 }
 
 async fn confirm_sent_tx(db: &DbExecutor, tx: &TransactionEntity) -> PaymentDriverResult<()> {
-    log::error!("Trying to confirm: {:?}", tx);
+    log::debug!("Trying to confirm: {:?}", tx);
     let raw_tx: RawTransaction = serde_json::from_str(tx.encoded.as_str()).unwrap();
     let tx_hash = utils::h256_from_hex(tx.tx_hash.clone().unwrap());
 
     confirm_tx(db, raw_tx, tx_hash).await
+}
+
+async fn send_created_txs(
+    db: Arc<DbExecutor>,
+    tx_sender: mpsc::Sender<(
+        (RawTransaction, Vec<u8>),
+        oneshot::Sender<PaymentDriverResult<H256>>,
+    )>,
+) -> PaymentDriverResult<()> {
+    let tx_sender = tx_sender;
+    let txs = get_created_txs(&db).await?;
+    log::info!("Trying to send {:?} created transactions...", txs.len());
+    for tx in txs.iter() {
+        log::debug!("Trying to send: {:?}", tx);
+        let raw_tx: RawTransaction = serde_json::from_str(tx.encoded.as_str()).unwrap();
+        let signature = hex::decode(&tx.signature).unwrap();
+        let _ = send_created_tx(tx_sender.clone(), raw_tx, signature)
+            .await
+            .expect("Failed to send tx...");
+    }
+    Ok(())
+}
+
+async fn get_created_txs(db: &DbExecutor) -> PaymentDriverResult<Vec<TransactionEntity>> {
+    let dao: TransactionDao = db.as_dao();
+    let txs = dao.get_created_txs().await?;
+    Ok(txs)
+}
+
+async fn send_created_tx(
+    tx_sender: mpsc::Sender<(
+        (RawTransaction, Vec<u8>),
+        oneshot::Sender<PaymentDriverResult<H256>>,
+    )>,
+    raw_tx: RawTransaction,
+    signature: Vec<u8>,
+) -> PaymentDriverResult<()> {
+    let mut tx_sender = tx_sender;
+    tokio::spawn(async move {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        tx_sender
+            .send(((raw_tx, signature), resp_tx))
+            .await
+            .ok()
+            .unwrap();
+        let tx_hash = resp_rx.await.unwrap().unwrap();
+        log::info!("Sent tx: {:?}", tx_hash);
+    });
+    Ok(())
 }
 
 pub struct GntDriver {
@@ -400,9 +452,9 @@ impl GntDriver {
             oneshot::Sender<PaymentDriverResult<H256>>,
         )>(TX_SENDER_BUFFER);
 
-        let sender_db = db.clone();
+        let service_db = db.clone();
         tokio::spawn(async move {
-            let db = sender_db;
+            let db = service_db;
             let ethereum_client = EthereumClient::new().expect("Failed to prepare Ethereum client");
             let chain_id: u64 = ethereum_client.get_chain_id();
             while let Some(((raw_tx, signature), response)) = tx_sender_service.recv().await {
@@ -419,7 +471,7 @@ impl GntDriver {
                                 .unwrap();
                             let _ = confirm_tx(&db, raw_tx, tx_hash).await.unwrap();
                         });
-                        log::error!("Tx hash: {:?}", tx_hash);
+                        log::info!("Sent tx: {:?}", tx_hash);
                     }
                     Err(e) => {
                         log::error!("Failed to send tx: {:?}", e);
@@ -428,12 +480,23 @@ impl GntDriver {
             }
         });
 
+        // Confirm old sent txs
         let confirmator_db = db.clone();
         tokio::spawn(async move {
             let _ = confirm_sent_txs(confirmator_db)
                 .await
                 .expect("Failed to confirm sent transactions");
         });
+
+        // Send old created txs
+        let sender_db = db.clone();
+        let sender_tx_sender = tx_sender.clone();
+        tokio::spawn(async move {
+            let _ = send_created_txs(sender_db, sender_tx_sender)
+                .await
+                .expect("Failed to send created transactions");
+        });
+
         Ok(GntDriver {
             db,
             ethereum_client,
@@ -470,6 +533,7 @@ impl GntDriver {
                 "create",
                 (),
                 sign_tx,
+                TxType::Faucet,
             )
             .await?;
         }
@@ -484,6 +548,7 @@ impl GntDriver {
         func: &str,
         tokens: P,
         sign_tx: SignTx<'_>,
+        tx_type: TxType,
     ) -> PaymentDriverResult<String>
     where
         P: Tokenize,
@@ -497,7 +562,8 @@ impl GntDriver {
         // increment nonce
         (*self.nonces.entry(sender).or_insert(raw_tx.nonce)) += U256::from(1u64);
         log::debug!("{:?}", raw_tx);
-        self.save_transaction(&raw_tx, sender, &signature).await?;
+        self.save_transaction(&raw_tx, sender, &signature, tx_type)
+            .await?;
         self.send_tx(raw_tx, signature).await?;
         Ok(hex::encode(&tx_hash))
     }
@@ -563,27 +629,23 @@ impl GntDriver {
         raw_tx: &RawTransaction,
         sender: Address,
         signature: &Vec<u8>,
+        tx_type: TxType,
     ) -> DbResult<()> {
-        let entity =
-            utils::raw_tx_to_entity(raw_tx, sender, self.get_chain_id(), Utc::now(), signature);
+        let entity = utils::raw_tx_to_entity(
+            raw_tx,
+            sender,
+            self.get_chain_id(),
+            Utc::now(),
+            signature,
+            tx_type,
+        );
         let dao: TransactionDao = self.db.as_dao();
         dao.insert(entity).await?;
         Ok(())
     }
 
     async fn send_tx(&self, raw_tx: RawTransaction, signature: Vec<u8>) -> PaymentDriverResult<()> {
-        let mut tx_sender = self.tx_sender.clone();
-        tokio::spawn(async move {
-            let (resp_tx, resp_rx) = oneshot::channel();
-            tx_sender
-                .send(((raw_tx, signature), resp_tx))
-                .await
-                .ok()
-                .unwrap();
-            let tx_hash = resp_rx.await.unwrap().unwrap();
-            log::info!("Sent tx: {:?}", tx_hash);
-        });
-        Ok(())
+        send_created_tx(self.tx_sender.clone(), raw_tx, signature).await
     }
 
     fn get_chain_id(&self) -> u64 {
@@ -669,6 +731,7 @@ impl GntDriver {
             "transfer",
             (recipient, gnt_amount),
             sign_tx,
+            TxType::Transfer,
         )
         .await
     }

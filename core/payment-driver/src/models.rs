@@ -7,6 +7,23 @@ const TX_SENT: i32 = 2;
 const TX_CONFIRMED: i32 = 3;
 const TX_FAILED: i32 = 0;
 
+const TRANSFER_TX: i32 = 1;
+const FAUCET_TX: i32 = 0;
+
+pub enum TxType {
+    Transfer,
+    Faucet,
+}
+
+impl Into<i32> for TxType {
+    fn into(self) -> i32 {
+        match &self {
+            TxType::Transfer => TRANSFER_TX,
+            TxType::Faucet => FAUCET_TX,
+        }
+    }
+}
+
 pub enum TransactionStatus {
     Created,
     Sent,
@@ -46,6 +63,7 @@ pub struct TransactionEntity {
     pub nonce: String,
     pub timestamp: NaiveDateTime,
     pub status: i32,
+    pub tx_type: i32,
     pub encoded: String,
     pub signature: String,
     pub tx_hash: Option<String>,

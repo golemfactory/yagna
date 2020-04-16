@@ -1,7 +1,7 @@
 use crate::error::PaymentDriverError;
 use crate::PaymentDriverResult;
 
-use crate::models::{TransactionEntity, TransactionStatus};
+use crate::models::{TransactionEntity, TransactionStatus, TxType};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
@@ -69,6 +69,7 @@ pub fn raw_tx_to_entity(
     chain_id: u64,
     timestamp: DateTime<Utc>,
     signature: &Vec<u8>,
+    tx_type: TxType,
 ) -> TransactionEntity {
     TransactionEntity {
         tx_id: hex::encode(raw_tx.hash(chain_id)),
@@ -77,6 +78,7 @@ pub fn raw_tx_to_entity(
         timestamp: timestamp.naive_utc(),
         encoded: serde_json::to_string(raw_tx).unwrap(),
         status: TransactionStatus::Created.into(),
+        tx_type: tx_type.into(),
         signature: hex::encode(signature),
         tx_hash: None,
     }

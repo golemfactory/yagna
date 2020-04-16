@@ -41,6 +41,19 @@ INSERT INTO "gnt_driver_transaction_status"
 VALUES(0, "FAILED");
 
 
+CREATE TABLE "gnt_driver_transaction_type"
+(
+	"type_id" INTEGER NOT NULL PRIMARY KEY,
+	"tx_type" VARCHAR(50) NOT NULL
+);
+
+INSERT INTO "gnt_driver_transaction_type"
+	("type_id", "tx_type")
+VALUES(0, "FAUCET");
+INSERT INTO "gnt_driver_transaction_type"
+	("type_id", "tx_type")
+VALUES(1, "TRANSFER");
+
 CREATE TABLE "gnt_driver_transaction"
 (
 	-- H256 in hex
@@ -50,10 +63,12 @@ CREATE TABLE "gnt_driver_transaction"
 	"nonce" VARCHAR(64) NOT NULL,
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	"status" INTEGER NOT NULL,
+	"tx_type" INTEGER NOT NULL,
 	"encoded" VARCHAR (8000) NOT NULL,
 	"signature" VARCHAR (130) NOT NULL,
 	"tx_hash" VARCHAR(64),
-	FOREIGN KEY("status") REFERENCES "gnt_driver_transaction_status" ("status_id")
+	FOREIGN KEY("status") REFERENCES "gnt_driver_transaction_status" ("status_id"),
+	FOREIGN KEY("tx_type") REFERENCES "gnt_driver_transaction_type" ("type_id")
 );
 
 CREATE TABLE "gnt_driver_payment"

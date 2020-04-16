@@ -1,7 +1,7 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use crate::error::DbResult;
-use crate::models::{TransactionEntity, TransactionStatus};
+use crate::models::{TransactionEntity, TransactionStatus, TxType};
 use crate::schema::gnt_driver_transaction::dsl;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
@@ -54,7 +54,16 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn get_created_txs(&self) -> DbResult<Vec<TransactionEntity>> {
-        self.get_by_status(TransactionStatus::Created.into()).await
+        do_with_transaction(self.pool, move |conn| {
+            let status: i32 = TransactionStatus::Created.into();
+            let tx_type: i32 = TxType::Transfer.into();
+            let txs: Vec<TransactionEntity> = dsl::gnt_driver_transaction
+                .filter(dsl::status.eq(status))
+                .filter(dsl::tx_type.eq(tx_type))
+                .load(conn)?;
+            Ok(txs)
+        })
+        .await
     }
 
     pub async fn get_unconfirmed_txs(&self) -> DbResult<Vec<TransactionEntity>> {
