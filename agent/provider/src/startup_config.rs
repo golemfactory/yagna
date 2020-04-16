@@ -54,6 +54,7 @@ pub enum PresetsConfig {
     Create,
     Remove { name: String },
     Update { name: String },
+    ListMetrics,
 }
 
 #[derive(StructOpt)]

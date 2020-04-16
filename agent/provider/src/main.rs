@@ -42,6 +42,9 @@ async fn main() -> anyhow::Result<()> {
             PresetsConfig::Update { name } => {
                 ProviderAgent::update_preset(config, PathBuf::from("presets.json"), name)
             }
+            PresetsConfig::ListMetrics => {
+                ProviderAgent::list_metrics(config, PathBuf::from("presets.json"))
+            }
         },
         Commands::ExeUnit(exeunit_cmd) => match exeunit_cmd {
             ExeUnitsConfig::List => ProviderAgent::list_exeunits(config),

@@ -198,6 +198,17 @@ impl ProviderAgent {
         Ok(())
     }
 
+    pub fn list_metrics(_: ProviderConfig, _presets_path: PathBuf) -> anyhow::Result<()> {
+        let preset = Preset::default();
+        let metrics_names = preset.list_readable_metrics();
+        let metrics = preset.list_usage_metrics();
+
+        for (metric, name) in metrics.iter().zip(metrics_names.iter()) {
+            println!("{:15}{}", name, metric);
+        }
+        Ok(())
+    }
+
     pub fn create_preset(config: ProviderConfig, presets_path: PathBuf) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&presets_path)?;
         let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;

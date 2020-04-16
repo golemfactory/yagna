@@ -31,6 +31,7 @@ This can be displayed using `--help`
 | credit-address | Ethereum account for payments (should match NodeId). Overrides `CREDIT_ADDRESS`
 | exe-unit-path  | Path to JSON descriptor file for ExeUnits. Overrides `EXE_UNIT_PATH`
 | node-name      | Node name to use in agreements.
+| subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes.
 
 ### Creating app-key authentication token
 
@@ -98,6 +99,19 @@ Coefficients describe unit price of ExeUnit metrics:
 * [3] constant price per created activity 
 
 When running provider, you must list all presets, that you want to use.
+
+### Creating presets
+
+`cargo run --bin ya-provider preset create`
+
+### Updating presets
+
+`cargo run --bin ya-provider preset update new-preset`
+
+### Removing presets
+
+`cargo run --bin ya-provider preset remove new-preset`
+
 
 ## Running the Provider Agent
 
