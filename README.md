@@ -12,11 +12,14 @@ basic wasm provider and simple wasm requestor.
 * [exe-unit](exe-unit) -  ExeUnit Supervisor.
     * [wasm-mozjs](exe-unit/wasm-mozjs) - [SpiderMonkey](https://github.com/servo/rust-mozjs) based ExeUnit.
     * [wasmtime](exe-unit/wasmtime) - [Wasmtime](https://github.com/bytecodealliance/wasmtime) based ExeUnit.
-* [ya-client](https://github.com/golemfactory/ya-client) - public API for core services and data model.
 * [service-bus](service-bus) - portable, rust-oriented service bus for IPC.
 * [test-utils](test-utils) - some helpers for testing purposes
 * [utils](utils) - trash bin for all other stuff ;)
 * [docs](docs) - project documentation including analysis and specifications.
+
+## Public API
+Public API binding with data model is in 
+[ya-client](https://github.com/golemfactory/ya-client) repo.
 
 ## Requirements
 
