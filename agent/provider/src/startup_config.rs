@@ -9,7 +9,6 @@ use ya_client::{
     Result,
 };
 
-
 /// Common configuration for all Provider commands.
 #[derive(StructOpt)]
 pub struct ProviderConfig {
@@ -27,12 +26,12 @@ pub struct ProviderConfig {
 #[derive(StructOpt)]
 pub struct RunConfig {
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
-    pub auth: String,
+    pub app_key: String,
     #[structopt(long = "node-name", env = "NODE_NAME", hide_env_values = true)]
     pub node_name: String,
     /// Market API URL
     #[structopt(long = "market-url", env = MarketProviderApi::API_URL_ENV_VAR)]
-    market_url: Url,
+    market_url: Option<Url>,
     /// Activity API URL
     #[structopt(long = "activity-url", env = ActivityProviderApi::API_URL_ENV_VAR)]
     activity_url: Option<Url>,
@@ -73,7 +72,9 @@ pub enum PresetsConfig {
         #[structopt(flatten)]
         params: PresetNoInteractive,
     },
-    Remove { name: String },
+    Remove {
+        name: String,
+    },
     Update {
         name: String,
         #[structopt(long = "nointeractive")]
@@ -112,24 +113,22 @@ pub enum Commands {
 
 impl RunConfig {
     pub fn market_client(&self) -> Result<MarketProviderApi> {
-        Ok(WebClient::with_token(&self.auth)?.interface_at(self.market_url.clone()))
+        self.api_client(&self.market_url)
     }
 
     pub fn activity_client(&self) -> Result<ActivityProviderApi> {
-        let client = WebClient::with_token(&self.auth)?;
-        if let Some(url) = &self.activity_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
-        }
+        self.api_client(&self.activity_url)
     }
 
     pub fn payment_client(&self) -> Result<PaymentProviderApi> {
-        let client = WebClient::with_token(&self.auth)?;
-        if let Some(url) = &self.payment_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
+        self.api_client(&self.payment_url)
+    }
+
+    pub fn api_client<T: WebInterface>(&self, url: &Option<Url>) -> Result<T> {
+        let client = WebClient::with_token(&self.app_key)?;
+        match url.as_ref() {
+            Some(url) => Ok(client.interface_at(url.clone())),
+            None => Ok(client.interface()?),
         }
     }
 }
@@ -137,11 +136,11 @@ impl RunConfig {
 /// Structopt key-value example:
 /// https://github.com/TeXitoi/structopt/blob/master/examples/keyvalue.rs
 fn parse_key_val<T, U>(s: &str) -> std::result::Result<(T, U), Box<dyn Error>>
-    where
-        T: std::str::FromStr,
-        T::Err: Error + 'static,
-        U: std::str::FromStr,
-        U::Err: Error + 'static,
+where
+    T: std::str::FromStr,
+    T::Err: Error + 'static,
+    U: std::str::FromStr,
+    U::Err: Error + 'static,
 {
     let pos = s
         .find('=')

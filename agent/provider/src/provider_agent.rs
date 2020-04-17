@@ -17,7 +17,7 @@ use crate::market::{
 };
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
-use crate::startup_config::{ProviderConfig, RunConfig, PresetNoInteractive};
+use crate::startup_config::{PresetNoInteractive, ProviderConfig, RunConfig};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -209,12 +209,17 @@ impl ProviderAgent {
         Ok(())
     }
 
-    pub fn create_preset(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Result<()> {
+    pub fn create_preset(
+        config: ProviderConfig,
+        params: PresetNoInteractive,
+    ) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&config.presets_file)?;
         let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
 
         let mut preset = Preset::default();
-        preset.name = params.preset_name.ok_or(anyhow!("Preset name is required."))?;
+        preset.name = params
+            .preset_name
+            .ok_or(anyhow!("Preset name is required."))?;
         preset.exeunit_name = params.exeunit.ok_or(anyhow!("ExeUnit is required."))?;
         preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
 
@@ -259,20 +264,14 @@ impl ProviderAgent {
         Ok(())
     }
 
-    pub fn remove_preset(
-        config: ProviderConfig,
-        name: String,
-    ) -> anyhow::Result<()> {
+    pub fn remove_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&config.presets_file)?;
 
         presets.remove_preset(&name)?;
         presets.save_to_file(&config.presets_file)
     }
 
-    pub fn update_preset_interactive(
-        config: ProviderConfig,
-        name: String,
-    ) -> anyhow::Result<()> {
+    pub fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&config.presets_file)?;
         let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
 
