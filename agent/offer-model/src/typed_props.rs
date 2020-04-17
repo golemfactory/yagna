@@ -178,9 +178,9 @@ mod test {
     fn test_wasm_1() {
         let offer = OfferDefinition {
             node_info: NodeInfo::with_name("dany"),
-            service: ServiceInfo::Wasm {
+            service: ServiceInfo {
                 inf: InfNodeInfo::default().with_mem(5.0).with_storage(50.0),
-                wasi_version: "0.0".to_string(),
+                exeunit_info: serde_json::json!({"wasm.wasi.version@v".to_string(): "0.9.0".to_string()}),
             },
             com_info: Default::default(),
             constraints: "()".to_string(),
