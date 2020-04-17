@@ -68,7 +68,7 @@ CREATE TABLE "pay_payment"(
 	"timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	"allocation_id" VARCHAR(50) NULL,
 	"details" BLOB NOT NULL,
-	FOREIGN KEY("allocation_id") REFERENCES "pay_allocation" ("id")
+	FOREIGN KEY("allocation_id") REFERENCES "pay_allocation" ("id") ON DELETE SET NULL
 );
 
 CREATE TABLE "pay_payment_x_debit_note"(
