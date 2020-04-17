@@ -112,6 +112,7 @@ pub struct GetExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
     pub timeout: Option<f32>,
+    pub command_index: Option<usize>,
 }
 
 impl RpcMessage for GetExecBatchResults {

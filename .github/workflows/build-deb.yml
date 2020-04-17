@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      # - <your-branch>    # put your branch name here to test it @ GH Actions
 
 jobs:
 
@@ -18,11 +19,23 @@ jobs:
       - name: Build the Docker image
         run: docker build . -f build-deb.Dockerfile -t build-deb
 
-      - name: Copy .deb file
-        run: docker run build-deb bash -c "cat /src/target/debian/*.deb" > yagna.deb
+      - name: Copy yagna.deb file
+        run: docker run build-deb bash -c "cat /src/target/debian/yagna*.deb" > yagna.deb
+
+      - name: Build the router
+        run: docker build . -f build-deb-router.Dockerfile -t build-deb-router
+
+      - name: Copy ya-sb-router.deb file
+        run: docker run build-deb-router bash -c "cat /src/target/debian/ya-sb-router*.deb" > ya-sb-router.deb
 
       - name: Upload .deb
         uses: actions/upload-artifact@v1
         with:
           name: yagna.deb
           path: yagna.deb
+
+      - name: Upload .deb with router
+        uses: actions/upload-artifact@v1
+        with:
+          name: ya-sb-router.deb
+          path: ya-sb-router.deb

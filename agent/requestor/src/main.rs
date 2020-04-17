@@ -1,6 +1,6 @@
-use actix_rt::Arbiter;
+use actix_rt::{signal, Arbiter};
 use chrono::{DateTime, Utc};
-use futures::{channel::mpsc, prelude::*};
+use futures::{channel::mpsc, channel::oneshot, future, prelude::*};
 use std::{path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use url::Url;
@@ -9,7 +9,7 @@ use ya_client::payment::requestor::RequestorApi as PaymentRequestorApi;
 use ya_client::{
     activity::ActivityRequestorApi,
     market::MarketRequestorApi,
-    web::{WebAuth, WebClient, WebInterface},
+    web::{WebClient, WebInterface},
 };
 use ya_model::{
     activity::ExeScriptRequest,
@@ -27,7 +27,7 @@ struct AppSettings {
 
     /// Market API URL
     #[structopt(long = "market-url", env = MarketRequestorApi::API_URL_ENV_VAR)]
-    market_url: Url,
+    market_url: Option<Url>,
 
     /// Activity API URL
     #[structopt(long = "activity-url", env = ActivityRequestorApi::API_URL_ENV_VAR)]
@@ -42,27 +42,22 @@ struct AppSettings {
 
 impl AppSettings {
     fn market_api(&self) -> anyhow::Result<MarketRequestorApi> {
-        Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
+        self.api_client(&self.market_url)
     }
 
     fn activity_api(&self) -> anyhow::Result<ActivityRequestorApi> {
-        let client = WebClient::with_token(&self.app_key)?;
-        if let Some(url) = &self.activity_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
-        }
+        self.api_client(&self.activity_url)
     }
 
     fn payment_api(&self) -> anyhow::Result<PaymentRequestorApi> {
-        let client = WebClient::builder()
-            .auth(WebAuth::Bearer(self.app_key.clone()))
-            .timeout(Duration::from_secs(60)) // more than default accept invoice timeout which is 50s
-            .build()?;
-        if let Some(url) = &self.payment_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
+        self.api_client(&self.payment_url)
+    }
+
+    pub fn api_client<T: WebInterface>(&self, url: &Option<Url>) -> anyhow::Result<T> {
+        let client = WebClient::with_token(&self.app_key)?;
+        match url.as_ref() {
+            Some(url) => Ok(client.interface_at(url.clone())),
+            None => Ok(client.interface()?),
         }
     }
 }
@@ -97,13 +92,13 @@ async fn process_offer(
         Utc::now() + chrono::Duration::hours(2),
     );
     let _ack = requestor_api.create_agreement(&new_agreement).await?;
-    log::info!("confirm agreement = {}", new_agreement_id);
+    log::info!("\n\nconfirming agreement = {}", new_agreement_id);
     requestor_api.confirm_agreement(&new_agreement_id).await?;
-    log::info!("wait for agreement = {}", new_agreement_id);
+    log::info!("\n\nwaiting for agreement = {}", new_agreement_id);
     requestor_api
         .wait_for_approval(&new_agreement_id, Some(7.879))
         .await?;
-    log::info!("agreement = {} CONFIRMED!", new_agreement_id);
+    log::info!("\n\nagreement = {} CONFIRMED!", new_agreement_id);
 
     Ok(ProcessOfferResult::AgreementId(new_agreement_id))
 }
@@ -116,13 +111,11 @@ async fn spawn_workers(
 ) -> anyhow::Result<()> {
     loop {
         let events = requestor_api
-            .collect(&subscription_id, Some(2.0), Some(5))
+            .collect(&subscription_id, Some(5.0), Some(5))
             .await?;
 
         if !events.is_empty() {
             log::debug!("got {} market events", events.len());
-        } else {
-            tokio::time::delay_for(Duration::from_millis(3000)).await;
         }
         for event in events {
             match event {
@@ -131,11 +124,11 @@ async fn spawn_workers(
                     proposal,
                 } => {
                     log::debug!(
-                        "processing ProposalEvent [{:?}] with state: {:?}",
-                        proposal.proposal_id,
+                        "\n\n got ProposalEvent [{}]; state: {:?}",
+                        proposal.proposal_id()?,
                         proposal.state
                     );
-                    log::trace!("processing proposal {:?}", proposal);
+                    log::trace!("proposal: {:#?}", proposal);
                     let mut agreement_tx = agreement_tx.clone();
                     let requestor_api = requestor_api.clone();
                     let my_subs_id = subscription_id.to_string();
@@ -143,7 +136,7 @@ async fn spawn_workers(
                     Arbiter::spawn(async move {
                         match process_offer(requestor_api, proposal, &my_subs_id, my_demand).await {
                             Ok(ProcessOfferResult::ProposalId(id)) => {
-                                log::info!("responded with counter proposal (id: {})", id)
+                                log::info!("\n\n responded with counter proposal [{}]", id)
                             }
                             Ok(ProcessOfferResult::AgreementId(id)) => {
                                 agreement_tx.send(id).await.unwrap()
@@ -163,7 +156,7 @@ async fn spawn_workers(
     }
 }
 
-fn build_demand(node_name: &str) -> Demand {
+fn build_demand(node_name: &str, task_package: &str) -> Demand {
     Demand {
         properties: serde_json::json!({
             "golem": {
@@ -176,7 +169,7 @@ fn build_demand(node_name: &str) -> Demand {
                 "srv": {
                     "comp":{
                         "wasm": {
-                            "task_package": "http://34.244.4.185:8000/rust-wasi-tutorial.zip"
+                            "task_package": task_package
                         }
                     }
                 }
@@ -210,7 +203,7 @@ async fn process_agreement(
     let contents = std::fs::read_to_string(&exe_script)?;
     let commands_cnt = match serde_json::from_str(&contents)? {
         serde_json::Value::Array(arr) => {
-            log::info!("\n\n Executing script {} commands", arr.len());
+            log::info!("\n\n Executing script: {} commands", arr.len());
             arr.len()
         }
         _ => 0,
@@ -229,22 +222,21 @@ async fn process_agreement(
             break;
         }
 
-        log::info!("activity {} state: {:?}", act_id, state);
+        log::info!(
+            "Activity state: {:?}. Waiting for batch to complete...",
+            state
+        );
         let results = activity_api
             .control()
-            .get_exec_batch_results(&act_id, &batch_id, Some(7))
+            .get_exec_batch_results(&act_id, &batch_id, Some(7.), None)
             .await?;
 
-        log::info!("batch results {:?}", results);
+        log::info!("Batch results {:#?}", results);
 
         if results.len() >= commands_cnt {
             break;
         }
-
-        tokio::time::delay_for(Duration::from_millis(700)).await;
     }
-
-    //    tokio::time::delay_for(Duration::from_millis(7000)).await;
 
     log::info!("\n\n AGRRR! destroying activity: {}; ", act_id);
     activity_api.control().destroy_activity(&act_id).await?;
@@ -256,7 +248,7 @@ async fn process_agreement(
 /// MOCK: fixed price allocation
 async fn allocate_funds_for_task(payment_api: &PaymentRequestorApi) -> anyhow::Result<Allocation> {
     let new_allocation = NewAllocation {
-        total_amount: 10.into(),
+        total_amount: 100.into(),
         timeout: None,
         make_deposit: false,
     };
@@ -353,27 +345,17 @@ async fn main() -> anyhow::Result<()> {
 
     let payment_api = settings.payment_api()?;
     let allocation = allocate_funds_for_task(&payment_api).await?;
+    let allocation_id = allocation.allocation_id.clone();
 
     let node_name = "test1";
-    let my_demand = build_demand(node_name);
+    let task_package = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip";
+    let my_demand = build_demand(node_name, task_package);
     //(golem.runtime.wasm.wasi.version@v=*)
 
     let market_api = settings.market_api()?;
     let subscription_id = market_api.subscribe(&my_demand).await?;
 
     log::info!("sub_id={}", subscription_id);
-
-    // mount signal handler to unsubscribe from the market
-    {
-        let market_api = market_api.clone();
-        let sub_id = subscription_id.clone();
-        Arbiter::spawn(async move {
-            tokio::signal::ctrl_c().await.unwrap();
-            market_api.unsubscribe(&sub_id).await.unwrap();
-            // TODO: destroy running activity
-            // TODO: process (accept / reject) incoming payments
-        });
-    }
 
     let mkt_api = market_api.clone();
     let sub_id = subscription_id.clone();
@@ -386,10 +368,16 @@ async fn main() -> anyhow::Result<()> {
 
     let activity_api = settings.activity_api()?;
     let exe_script = settings.exe_script.clone();
+    let (shutdown_tx, shutdown_rx) = oneshot::channel();
+
     Arbiter::spawn(async move {
         while let Some(id) = agreement_rx.next().await {
-            if let Err(e) = process_agreement(&activity_api, id.clone(), &exe_script).await {
-                log::error!("processing agreement id {} error: {}", id, e);
+            match process_agreement(&activity_api, id.clone(), &exe_script).await {
+                Ok(_) => {
+                    shutdown_tx.send(()).unwrap();
+                    break;
+                }
+                Err(e) => log::error!("processing agreement id {} error: {}", id, e),
             }
             // TODO: Market doesn't support agreement termination yet.
             // let terminate_result = market_api.terminate_agreement(&id).await;
@@ -402,9 +390,18 @@ async fn main() -> anyhow::Result<()> {
         started_at.clone(),
     ));
 
-    Arbiter::spawn(process_payments(payment_api, allocation, started_at));
+    Arbiter::spawn(process_payments(
+        payment_api.clone(),
+        allocation,
+        started_at,
+    ));
 
-    tokio::signal::ctrl_c().await?;
+    future::select(signal::ctrl_c().boxed_local(), shutdown_rx).await;
+
     market_api.unsubscribe(&subscription_id).await?;
+    payment_api.release_allocation(&allocation_id).await?;
+    // TODO: process (accept / reject) incoming payments
+
+    Arbiter::current().stop();
     Ok(())
 }

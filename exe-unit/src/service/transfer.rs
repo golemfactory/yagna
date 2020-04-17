@@ -177,9 +177,10 @@ impl Handler<DeployImage> for TransferService {
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
         let source_url = actor_try!(TransferUrl::parse_with_hash(&self.task_package, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
+        let temp_path = self.cache.to_temp_path(&cache_name);
         let cache_path = self.cache.to_cache_path(&cache_name);
         let final_path = self.cache.to_final_path(&cache_name);
-        let cache_url = actor_try!(TransferUrl::try_from(cache_path.clone()));
+        let temp_url = actor_try!(TransferUrl::try_from(temp_path.clone()));
 
         log::info!(
             "Deploying from {:?} to {:?}",
@@ -188,7 +189,7 @@ impl Handler<DeployImage> for TransferService {
         );
 
         let source = actor_try!(self.source(&source_url));
-        let dest = actor_try!(self.destination(&cache_url));
+        let dest = actor_try!(self.destination(&temp_url));
 
         let address = ctx.address();
         let (handle, reg) = AbortHandle::new_pair();
@@ -196,7 +197,12 @@ impl Handler<DeployImage> for TransferService {
 
         let fut = async move {
             let final_path = final_path.to_path_buf();
-            if final_path.exists() {
+            let temp_path = temp_path.to_path_buf();
+            let cache_path = cache_path.to_path_buf();
+
+            if cache_path.exists() {
+                log::info!("Deploying cached image: {:?}", cache_path);
+                std::fs::copy(cache_path, &final_path)?;
                 return Ok(final_path);
             }
 
@@ -206,7 +212,8 @@ impl Handler<DeployImage> for TransferService {
                 .map_err(TransferError::from)??;
             address.send(RemoveAbortHandle(abort)).await?;
 
-            std::fs::rename(cache_path.to_path_buf(), &final_path)?;
+            std::fs::rename(temp_path, &cache_path)?;
+            std::fs::copy(cache_path, &final_path)?;
 
             log::info!("Deployment from {:?} finished", source_url.url);
             Ok(final_path)
@@ -303,18 +310,7 @@ impl Cache {
             None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
         };
 
-        let path = transfer_url.url.path();
-        let name = match path.rfind("/") {
-            Some(idx) => {
-                if idx + 1 < path.len() - 1 {
-                    &path[idx + 1..]
-                } else {
-                    path
-                }
-            }
-            None => path,
-        };
-
+        let name = transfer_url.file_name();
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -322,6 +318,11 @@ impl Cache {
             .to_string();
 
         Ok(CachePath::new(name.into(), hash.val.clone(), nonce))
+    }
+
+    #[inline(always)]
+    fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
+        ProjectedPath::local(self.tmp_dir.clone(), path.temp_path_buf())
     }
 
     #[inline(always)]
