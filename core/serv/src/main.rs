@@ -70,7 +70,7 @@ struct CliArgs {
     interactive: bool,
 
     /// Log verbosity level
-    #[structopt(long, default_value = "debug")]
+    #[structopt(long, default_value = "info")]
     log_level: String,
 
     #[structopt(subcommand)]

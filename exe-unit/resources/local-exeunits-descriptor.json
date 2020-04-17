@@ -1,7 +1,7 @@
 [
     {
         "name": "wasmtime",
-        "supervisor-path": "../../target/release/exe-unit",
-        "runtime-path": "../../target/release/wasmtime-exeunit"
+        "supervisor-path": "../target/release/exe-unit",
+        "runtime-path": "../target/release/wasmtime-exeunit"
     }
 ]

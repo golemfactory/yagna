@@ -104,3 +104,34 @@ impl RpcMessage for Remove {
     type Item = ();
     type Error = Error;
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subscribe {
+    pub endpoint: String,
+}
+
+impl RpcMessage for Subscribe {
+    const ID: &'static str = "Subscribe";
+    type Item = u64;
+    type Error = Error;
+}
+
+pub mod event {
+    use super::Error;
+    use crate::ethaddr::NodeId;
+    use serde::{Deserialize, Serialize};
+    use ya_service_bus::RpcMessage;
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Event {
+        NewKey { identity: NodeId },
+    }
+
+    impl RpcMessage for Event {
+        const ID: &'static str = "AppKey__Event";
+        type Item = ();
+        type Error = Error;
+    }
+}

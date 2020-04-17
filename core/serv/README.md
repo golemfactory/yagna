@@ -1,10 +1,10 @@
-# Yagna Daemon & CLI
+# Yagna Service & CLI
 
-The main control module for interaction of a host node (either Requestor or Provider) with the Golem Network.
+The entrypoint for the Yagna Network.
+Yagna Service serves public REST API and internal GSB API.
+The same binary acts as a command line interface for the service.
 
-TODO: place crate dependency diagram here?
-
-## Yagna Daemon 
+## Yagna Service 
 
 ### Configuration
 
@@ -17,5 +17,5 @@ TODO: place crate dependency diagram here?
 
 ## Yagna CLI
 
-### Commands
+Invoke `yagna --help` to see what is possible.
 

@@ -7,8 +7,8 @@ use std::{convert::TryInto, path::PathBuf, time::Duration};
 use structopt::{clap, StructOpt};
 
 use ya_client::{
-    activity::ActivityRequestorApi, cli::ApiOpts, market::MarketRequestorApi,
-    payment::requestor::RequestorApi as PaymentRequestorApi, Error, RequestorApi,
+    activity::ActivityRequestorApi, cli::ApiOpts, cli::RequestorApi, market::MarketRequestorApi,
+    payment::requestor::RequestorApi as PaymentRequestorApi, Error,
 };
 use ya_model::{
     activity::ExeScriptRequest,

@@ -56,11 +56,18 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    pub async fn insert(&self, invoice: Invoice) -> DbResult<()> {
+    pub async fn insert(&self, mut invoice: Invoice) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             // TODO: Check last_debit_note_id
             let activity_ids = invoice.activity_ids;
             let invoice_id = invoice.invoice.id.clone();
+            // TODO: Move last_debit_note_id assignment to database trigger
+            invoice.invoice.last_debit_note_id = debit_note_dsl::pay_debit_note
+                .select(debit_note_dsl::id)
+                .filter(debit_note_dsl::agreement_id.eq(&invoice.invoice.agreement_id))
+                .order_by(debit_note_dsl::timestamp.desc())
+                .first(conn)
+                .optional()?;
             diesel::insert_into(dsl::pay_invoice)
                 .values(invoice.invoice)
                 .execute(conn)?;

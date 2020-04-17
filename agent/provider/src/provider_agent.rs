@@ -2,7 +2,7 @@ use actix::{prelude::*, utils::IntervalFunc};
 use std::{convert::TryInto, path::PathBuf, time::Duration};
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
-use ya_client::ProviderApi;
+use ya_client::cli::ProviderApi;
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{

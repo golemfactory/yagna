@@ -30,7 +30,7 @@ impl MarketService {
             .build()?;
 
         let _ = bus::bind(market::BUS_ID, move |get: market::GetAgreement| {
-            let market_api: MarketProviderApi = client.interface(None).unwrap();
+            let market_api: MarketProviderApi = client.interface().unwrap();
             let db = db.clone();
 
             async move {
@@ -59,6 +59,21 @@ impl MarketService {
         tmp_send_keys()
             .await
             .unwrap_or_else(|e| log::error!("app-key export error: {}", e));
+
+        let event_addr = "/events/market";
+        let _ = bus::bind(event_addr, |_: appkey::event::Event| async move {
+            let _ = tmp_send_keys().await;
+            Ok(())
+        });
+
+        if let Err(e) = bus::service(appkey::BUS_ID)
+            .send(appkey::Subscribe {
+                endpoint: event_addr.into(),
+            })
+            .await
+        {
+            log::error!("init app-key listener error: {}", e)
+        }
 
         Ok(())
     }
