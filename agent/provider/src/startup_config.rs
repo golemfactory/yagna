@@ -13,10 +13,10 @@ use ya_client::{
 pub struct StartupConfig {
     /// Yagna daemon application key
     #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
-    pub auth: String,
+    pub app_key: String,
     /// Market API URL
     #[structopt(long = "market-url", env = MarketProviderApi::API_URL_ENV_VAR)]
-    market_url: Url,
+    market_url: Option<Url>,
     /// Activity API URL
     #[structopt(long = "activity-url", env = ActivityProviderApi::API_URL_ENV_VAR)]
     activity_url: Option<Url>,
@@ -38,24 +38,22 @@ pub struct StartupConfig {
 
 impl StartupConfig {
     pub fn market_client(&self) -> Result<MarketProviderApi> {
-        Ok(WebClient::with_token(&self.auth)?.interface_at(self.market_url.clone()))
+        self.api_client(&self.market_url)
     }
 
     pub fn activity_client(&self) -> Result<ActivityProviderApi> {
-        let client = WebClient::with_token(&self.auth)?;
-        if let Some(url) = &self.activity_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
-        }
+        self.api_client(&self.activity_url)
     }
 
     pub fn payment_client(&self) -> Result<PaymentProviderApi> {
-        let client = WebClient::with_token(&self.auth)?;
-        if let Some(url) = &self.payment_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
+        self.api_client(&self.payment_url)
+    }
+
+    pub fn api_client<T: WebInterface>(&self, url: &Option<Url>) -> Result<T> {
+        let client = WebClient::with_token(&self.app_key)?;
+        match url.as_ref() {
+            Some(url) => Ok(client.interface_at(url.clone())),
+            None => Ok(client.interface()?),
         }
     }
 }
