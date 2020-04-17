@@ -456,8 +456,9 @@ impl Handler<CreateOffer> for ProviderMarket {
 
     fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
         log::info!(
-            "Creating offer for preset [{}]. Usage coeffs: {:?}",
+            "Creating offer for preset [{}] and ExeUnit [{}]. Usage coeffs: {:?}",
             msg.preset.name,
+            msg.preset.exeunit_name,
             msg.preset.usage_coeffs
         );
 

@@ -11,7 +11,10 @@ pub struct AcceptAllNegotiator;
 
 impl Negotiator for AcceptAllNegotiator {
     fn create_offer(&mut self, offer: &OfferDefinition) -> Result<Offer> {
-        Ok(Offer::new(offer.clone().into_json(), "()".into()))
+        Ok(Offer::new(
+            offer.clone().into_json(),
+            offer.constraints.clone(),
+        ))
     }
 
     fn react_to_proposal(
