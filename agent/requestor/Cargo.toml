@@ -1,11 +1,14 @@
 [package]
 name = "ya-requestor"
+description = """Sample Yagna Requesor Agent implemntation.
+Accepts all proposals, processes single Agreement and single Activity, accepts the Invoice.
+"""
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client="0.1"
+ya-client= { version = "0.1", features = ["cli"] }
 ya-model = "0.1"
 
 actix-rt = "1.0"
