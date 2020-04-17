@@ -1,7 +1,0 @@
-[package]
-name = "wasm-mozjs-exeunit"
-version = "0.1.0"
-authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
-
-[dependencies]

@@ -24,6 +24,19 @@ pub struct ExeUnitDesc {
     description: String,
 }
 
+impl ExeUnitDesc {
+    pub fn absolute_paths(self, base_path: &std::path::Path) -> std::io::Result<Self> {
+        let mut desc = self;
+        if desc.supervisor_path.is_relative() {
+            desc.supervisor_path = base_path.join(&desc.supervisor_path);
+        }
+        if desc.runtime_path.is_relative() {
+            desc.runtime_path = base_path.join(&desc.runtime_path);
+        }
+        Ok(desc)
+    }
+}
+
 fn default_description() -> String {
     "No description provided.".to_string()
 }
@@ -94,6 +107,8 @@ impl ExeUnitsRegistry {
     }
 
     pub fn register_exeunits_from_file(&mut self, path: &Path) -> Result<()> {
+        let current_dir = std::env::current_dir()?;
+        let base_path = path.parent().unwrap_or_else(|| &current_dir);
         let file = File::open(path).map_err(|error| {
             anyhow!(
                 "Can't load ExeUnits to registry from file {}, error: {}.",
@@ -112,7 +127,7 @@ impl ExeUnitsRegistry {
         })?;
 
         for desc in descs.into_iter() {
-            self.register_exeunit(desc)?
+            self.register_exeunit(desc.absolute_paths(base_path)?)?
         }
         Ok(())
     }

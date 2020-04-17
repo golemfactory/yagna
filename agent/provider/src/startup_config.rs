@@ -27,7 +27,7 @@ pub struct StartupConfig {
     #[structopt(
         long = "exe-unit-path",
         env = "EXE_UNIT_PATH",
-        default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
+        default_value = "/usr/lib/yagna/plugins/ya-runtime-*.json"
     )]
     pub exe_unit_path: String,
     /// Credit address. Can be set same as default identity

@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
@@ -68,10 +68,44 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         // Load ExeUnits descriptors from file.
-        let msg = InitializeExeUnits {
-            file: PathBuf::from(&self.exe_unit_path),
-        };
-        self.runner.send(msg).await??;
+        fn expand_filename(exeunit_path: &str) -> anyhow::Result<Vec<PathBuf>> {
+            use std::fs::read_dir;
+
+            let path: &Path = exeunit_path.as_ref();
+            let (base_dir, file_name) = match (path.parent(), path.file_name()) {
+                (Some(base_dir), Some(file_name)) => (base_dir, file_name),
+                _ => return Ok(vec![PathBuf::from(exeunit_path)]),
+            };
+            let file_name = match file_name.to_str() {
+                Some(f) => f,
+                None => anyhow::bail!("not utf-8 filename"),
+            };
+
+            if let Some(pos) = file_name.find("*") {
+                let (prefix, suffix) = file_name.split_at(pos);
+                let suffix = &suffix[1..];
+
+                Ok(read_dir(base_dir)?
+                    .filter_map(|ent| {
+                        let ent = ent.ok()?;
+                        let os_file_name = ent.file_name();
+                        let file_name = os_file_name.to_str()?;
+                        if file_name.starts_with(prefix) && file_name.ends_with(suffix) {
+                            Some(ent.path())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect())
+            } else {
+                Ok(vec![PathBuf::from(exeunit_path)])
+            }
+        }
+
+        for file in expand_filename(&self.exe_unit_path)? {
+            let msg = InitializeExeUnits { file };
+            self.runner.send(msg).await??;
+        }
 
         // Create simple offer on market.
         let create_offer_message = CreateOffer {
