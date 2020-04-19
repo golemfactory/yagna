@@ -5904,6 +5904,7 @@ dependencies = [
  "ethkey",
  "futures 0.3.4",
  "hex",
+ "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
  "num-bigint",

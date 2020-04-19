@@ -31,7 +31,7 @@ pub enum PaymentDriverError {
     #[error("Missing envirnonment variable: {0}")]
     MissingEnvironmentVariable(#[from] std::env::VarError),
     #[error("Unknown chain: {0}")]
-    UnknownChain(u64),
+    UnknownChain(String),
 }
 
 impl From<secp256k1::Error> for PaymentDriverError {

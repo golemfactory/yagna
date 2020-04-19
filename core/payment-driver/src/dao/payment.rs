@@ -21,7 +21,7 @@ impl<'c> PaymentDao<'c> {
     pub async fn get(&self, invoice_id: String) -> DbResult<Option<PaymentEntity>> {
         do_with_transaction(self.pool, move |conn| {
             let payment: Option<PaymentEntity> = dsl::gnt_driver_payment
-                .find(invoice_id.clone())
+                .find(invoice_id)
                 .first(conn)
                 .optional()?;
             match payment {
@@ -54,7 +54,7 @@ impl<'c> PaymentDao<'c> {
 
     pub async fn update_status(&self, invoice_id: String, status: i32) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            diesel::update(dsl::gnt_driver_payment.find(invoice_id.clone()))
+            diesel::update(dsl::gnt_driver_payment.find(invoice_id))
                 .set(dsl::status.eq(status))
                 .execute(conn)?;
             Ok(())
@@ -64,7 +64,7 @@ impl<'c> PaymentDao<'c> {
 
     pub async fn update_tx_id(&self, invoice_id: String, tx_id: Option<String>) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            diesel::update(dsl::gnt_driver_payment.find(invoice_id.clone()))
+            diesel::update(dsl::gnt_driver_payment.find(invoice_id))
                 .set(dsl::tx_id.eq(tx_id))
                 .execute(conn)?;
             Ok(())

@@ -4,16 +4,16 @@ use chrono::{DateTime, Utc};
 extern crate diesel;
 
 mod dummy;
+mod ethereum;
+mod models;
+mod schema;
 mod utils;
 
 pub mod account;
 pub mod dao;
 pub mod error;
-pub mod ethereum;
 pub mod gnt;
-pub mod models;
 pub mod payment;
-pub mod schema;
 
 pub use account::{AccountBalance, Balance, Currency};
 use bitflags::bitflags;

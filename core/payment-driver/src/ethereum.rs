@@ -1,9 +1,9 @@
-use ethereum_types::{Address, H256, U256};
-use std::env;
-
 use crate::error::PaymentDriverError;
+use ethereum_types::{Address, H256, U256};
 use futures3::compat::*;
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::time::Duration;
 use web3::confirm::{wait_for_confirmations, TransactionReceiptBlockNumberCheck};
 use web3::contract::Contract;
@@ -18,8 +18,19 @@ const POLL_INTERVAL_NANOS: u32 = 0;
 const MAINNET_ID: u64 = 1;
 const RINKEBY_ID: u64 = 4;
 
-const CHAIN_ID_ENV_KEY: &str = "CHAIN_ID";
+const MAINNET_NAME: &str = "mainnet";
+const RINKEBY_NAME: &str = "rinkeby";
+
+const CHAIN_ENV_KEY: &str = "CHAIN";
 const GETH_ADDRESS_ENV_KEY: &str = "GETH_ADDRESS";
+
+lazy_static! {
+    pub static ref CHAIN: String = env::var(CHAIN_ENV_KEY)
+        .expect(format!("Missing {} env variable...", CHAIN_ENV_KEY).as_str())
+        .to_ascii_lowercase();
+    pub static ref GETH_ADDRESS: String = env::var(GETH_ADDRESS_ENV_KEY)
+        .expect(format!("Missing {} env variable...", GETH_ADDRESS_ENV_KEY).as_str());
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Chain {
@@ -29,11 +40,10 @@ pub enum Chain {
 
 impl Chain {
     pub fn from_env() -> Result<Chain, PaymentDriverError> {
-        let chain_id = std::env::var(CHAIN_ID_ENV_KEY)?;
-        match chain_id.parse::<u64>().unwrap() {
-            MAINNET_ID => Ok(Chain::Mainnet),
-            RINKEBY_ID => Ok(Chain::Rinkeby),
-            _chain => Err(PaymentDriverError::UnknownChain(_chain)),
+        match (*CHAIN).as_str() {
+            MAINNET_NAME => Ok(Chain::Mainnet),
+            RINKEBY_NAME => Ok(Chain::Rinkeby),
+            _chain => Err(PaymentDriverError::UnknownChain(_chain.into())),
         }
     }
 
@@ -55,8 +65,7 @@ pub struct EthereumClient {
 
 impl EthereumClient {
     pub fn new() -> EthereumClientResult<EthereumClient> {
-        let (eloop, transport) =
-            web3::transports::Http::new(env::var(GETH_ADDRESS_ENV_KEY)?.as_str())?;
+        let (eloop, transport) = web3::transports::Http::new((*GETH_ADDRESS).as_str())?;
 
         Ok(EthereumClient {
             chain: Chain::from_env()?,
@@ -166,8 +175,8 @@ mod tests {
 
     fn init_env() {
         INIT.call_once(|| {
-            std::env::set_var("GETH_ADDRESS", "http://1.geth.testnet.golem.network:55555");
-            std::env::set_var("CHAIN_ID", format!("{:?}", Chain::Rinkeby.id()))
+            std::env::set_var(GETH_ADDRESS_ENV_KEY, "http://1.geth.testnet.golem.network:55555");
+            std::env::set_var(CHAIN_ENV_KEY, "rinkeby")
         });
     }
 

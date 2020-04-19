@@ -1,11 +1,10 @@
 use chrono::{DateTime, Utc};
-
 use ethereum_types::{Address, H256, U256, U64};
+use lazy_static::lazy_static;
 
 use ethereum_tx_sign::RawTransaction;
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::{thread, time};
 use tokio::sync::{mpsc, oneshot};
 use web3::contract::tokens::Tokenize;
@@ -31,6 +30,7 @@ use futures3::future;
 use std::env;
 use std::future::Future;
 use std::pin::Pin;
+
 const GNT_TRANSFER_GAS: u32 = 55000;
 const GNT_FAUCET_GAS: u32 = 90000;
 
@@ -47,13 +47,50 @@ const TX_LOG_TOPICS_LENGTH: usize = 3;
 const TRANSFER_CANONICAL_SIGNATURE: &str =
     "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-const GNT_CONTRACT_ADDRESS_ENV_KEY: &str = "GNT_CONTRACT_ADDRESS";
-const GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY: &str = "FAUCET_CONTRACT_ADDRESS";
-const ETH_FAUCET_ADDRESS_ENV_KEY: &str = "ETH_FAUCET_ADDRESS";
-
 const TX_SENDER_BUFFER: usize = 100;
 
-const REQUIRED_CONFIRMATIONS: usize = 5;
+const GNT_CONTRACT_ADDRESS_ENV_KEY: &str = "GNT_CONTRACT_ADDRESS";
+const GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY: &str = "GNT_FAUCET_CONTRACT_ADDRESS";
+const ETH_FAUCET_ADDRESS_ENV_KEY: &str = "ETH_FAUCET_ADDRESS";
+const REQUIRED_CONFIRMATIONS_ENV_KEY: &str = "REQUIRED_CONFIRMATIONS";
+
+lazy_static! {
+    pub static ref GNT_CONTRACT_ADDRESS: Address = utils::str_to_addr(
+        env::var(GNT_CONTRACT_ADDRESS_ENV_KEY)
+            .expect(format!("Missing {} env variable...", GNT_CONTRACT_ADDRESS_ENV_KEY).as_str())
+            .as_str()
+    )
+    .unwrap();
+    pub static ref GNT_FAUCET_CONTRACT_ADDRESS: Address = utils::str_to_addr(
+        env::var(GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY)
+            .expect(
+                format!(
+                    "Missing {} env variable...",
+                    GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY
+                )
+                .as_str()
+            )
+            .as_str()
+    )
+    .unwrap();
+    pub static ref ETH_FAUCET_ADDRESS: String = env::var(ETH_FAUCET_ADDRESS_ENV_KEY)
+        .expect(format!("Missing {} env variable...", ETH_FAUCET_ADDRESS_ENV_KEY).as_str());
+    pub static ref REQUIRED_CONFIRMATIONS: usize = env::var(REQUIRED_CONFIRMATIONS_ENV_KEY)
+        .expect(format!("Missing {} env variable...", REQUIRED_CONFIRMATIONS_ENV_KEY).as_str())
+        .parse()
+        .expect(
+            format!(
+                "Incorrect {} env variable...",
+                REQUIRED_CONFIRMATIONS_ENV_KEY
+            )
+            .as_str()
+        );
+}
+
+type TxSender = mpsc::Sender<(
+    (RawTransaction, Vec<u8>),
+    oneshot::Sender<PaymentDriverResult<H256>>,
+)>;
 
 async fn get_eth_balance(
     ethereum_client: &EthereumClient,
@@ -74,7 +111,7 @@ async fn get_gnt_balance(
     address: Address,
 ) -> PaymentDriverResult<Balance> {
     gnt_contract
-        .query("balanceOf", (address,), None, Options::default(), None)
+        .query("balanceOf", (address, ), None, Options::default(), None)
         .compat()
         .await
         .map_or_else(
@@ -89,21 +126,11 @@ async fn get_gnt_balance(
 }
 
 fn prepare_gnt_contract(ethereum_client: &EthereumClient) -> PaymentDriverResult<Contract<Http>> {
-    let contract_address = get_gnt_contract_address()?;
     prepare_contract(
         ethereum_client,
-        contract_address,
+        *GNT_CONTRACT_ADDRESS,
         include_bytes!("./contracts/gnt.json"),
     )
-}
-
-fn get_gnt_contract_address() -> PaymentDriverResult<Address> {
-    get_contract_address(GNT_CONTRACT_ADDRESS_ENV_KEY)
-}
-
-fn get_contract_address(env_key: &str) -> PaymentDriverResult<Address> {
-    let contract_address: Address = utils::str_to_addr(env::var(env_key)?.as_str())?;
-    Ok(contract_address)
 }
 
 fn prepare_contract(
@@ -118,16 +145,11 @@ fn prepare_contract(
 fn prepare_gnt_faucet_contract(
     ethereum_client: &EthereumClient,
 ) -> PaymentDriverResult<Contract<Http>> {
-    let contract_address = get_gnt_faucet_contract_address()?;
     prepare_contract(
         ethereum_client,
-        contract_address,
+        *GNT_FAUCET_CONTRACT_ADDRESS,
         include_bytes!("./contracts/faucet.json"),
     )
-}
-
-fn get_gnt_faucet_contract_address() -> PaymentDriverResult<Address> {
-    get_contract_address(GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY)
 }
 
 fn verify_gnt_tx(receipt: &TransactionReceipt) -> PaymentDriverResult<()> {
@@ -165,7 +187,7 @@ fn verify_gnt_tx_log(log: &Log) -> PaymentDriverResult<()> {
 }
 
 fn verify_gnt_tx_log_contract_address(contract_address: &Address) -> PaymentDriverResult<()> {
-    if *contract_address != get_gnt_contract_address()? {
+    if *contract_address != *GNT_CONTRACT_ADDRESS {
         return Err(PaymentDriverError::UnknownTransaction);
     }
     Ok(())
@@ -217,9 +239,8 @@ async fn request_eth_from_faucet(address: Address) -> PaymentDriverResult<()> {
     log::info!("Requesting Eth from Faucet...");
     let sleep_time = time::Duration::from_secs(ETH_FAUCET_SLEEP_SECONDS);
     let mut counter = 0;
-    let eth_faucet_address = env::var(ETH_FAUCET_ADDRESS_ENV_KEY)?;
     while counter < MAX_ETH_FAUCET_REQUESTS {
-        let res = request_eth(address, &eth_faucet_address).await;
+        let res = request_eth(address).await;
         if res.is_ok() {
             break;
         } else {
@@ -240,12 +261,8 @@ async fn request_eth_from_faucet(address: Address) -> PaymentDriverResult<()> {
     }
 }
 
-async fn request_eth(address: Address, eth_faucet_address: &String) -> PaymentDriverResult<()> {
-    let uri = format!(
-        "{}/{}",
-        eth_faucet_address.clone(),
-        utils::addr_to_str(address)
-    );
+async fn request_eth(address: Address) -> PaymentDriverResult<()> {
+    let uri = format!("{}/{}", *ETH_FAUCET_ADDRESS, utils::addr_to_str(address));
 
     ureq::get(uri.as_str()).call().into_string().map_or_else(
         |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
@@ -293,26 +310,45 @@ fn prepare_payment_amounts(amount: PaymentAmount) -> PaymentDriverResult<(U256, 
 async fn confirm_tx(db: &DbExecutor, tx: RawTransaction, tx_hash: H256) -> PaymentDriverResult<()> {
     let ethereum_client = EthereumClient::new().expect("Failed to start ethereum client");
     ethereum_client
-        .wait_for_confirmations(tx_hash, REQUIRED_CONFIRMATIONS)
+        .wait_for_confirmations(tx_hash, *REQUIRED_CONFIRMATIONS)
         .await?;
     let receipt = ethereum_client.get_transaction_receipt(tx_hash).await?;
-    let (tx_status, payment_status) =
-        if receipt.unwrap().status.unwrap() == U64::from(ETH_TX_SUCCESS) {
-            log::info!("Tx: {:?} confirmed", tx_hash);
-            (
-                TransactionStatus::Confirmed.into(),
-                PaymentStatus::Ok(PaymentConfirmation {
-                    confirmation: vec![0],
-                })
-                .to_i32(),
-            )
-        } else {
-            log::info!("Tx: {:?} is failed", tx_hash);
+    let (tx_status, payment_status) = match receipt {
+        None => {
+            log::info!("Missing tx receipt, tx: {:?}", tx_hash);
             (
                 TransactionStatus::Failed.into(),
                 PaymentStatus::Failed.to_i32(),
             )
-        };
+        }
+        Some(receipt) => match receipt.status {
+            None => {
+                log::info!("Missing tx status, tx: {:?}", tx_hash);
+                (
+                    TransactionStatus::Failed.into(),
+                    PaymentStatus::Failed.to_i32(),
+                )
+            }
+            Some(status) => {
+                if status == U64::from(ETH_TX_SUCCESS) {
+                    log::info!("Tx: {:?} confirmed", tx_hash);
+                    (
+                        TransactionStatus::Confirmed.into(),
+                        PaymentStatus::Ok(PaymentConfirmation {
+                            confirmation: vec![0],
+                        })
+                            .to_i32(),
+                    )
+                } else {
+                    log::info!("Tx: {:?} is failed", tx_hash);
+                    (
+                        TransactionStatus::Failed.into(),
+                        PaymentStatus::Failed.to_i32(),
+                    )
+                }
+            }
+        },
+    };
     let tx_id = tx.hash(ethereum_client.get_chain_id());
     update_tx_status(db, &tx_id, tx_status).await?;
     update_payment_status_by_tx_id(db, &tx_id, payment_status).await
@@ -346,7 +382,7 @@ async fn update_tx_sent(db: &DbExecutor, tx_id: Vec<u8>, tx_hash: H256) -> Payme
     Ok(())
 }
 
-async fn confirm_sent_txs(db: Arc<DbExecutor>) -> PaymentDriverResult<()> {
+async fn confirm_sent_txs(db: DbExecutor) -> PaymentDriverResult<()> {
     let txs = get_unconfirmed_txs(&db).await?;
     log::info!("Trying to confirm {:?} sent transactions...", txs.len());
     for tx in txs.iter() {
@@ -371,13 +407,7 @@ async fn confirm_sent_tx(db: &DbExecutor, tx: &TransactionEntity) -> PaymentDriv
     confirm_tx(db, raw_tx, tx_hash).await
 }
 
-async fn send_created_txs(
-    db: Arc<DbExecutor>,
-    tx_sender: mpsc::Sender<(
-        (RawTransaction, Vec<u8>),
-        oneshot::Sender<PaymentDriverResult<H256>>,
-    )>,
-) -> PaymentDriverResult<()> {
+async fn send_created_txs(db: DbExecutor, tx_sender: TxSender) -> PaymentDriverResult<()> {
     let tx_sender = tx_sender;
     let txs = get_created_txs(&db).await?;
     log::info!("Trying to send {:?} created transactions...", txs.len());
@@ -399,10 +429,7 @@ async fn get_created_txs(db: &DbExecutor) -> PaymentDriverResult<Vec<Transaction
 }
 
 async fn send_created_tx(
-    tx_sender: mpsc::Sender<(
-        (RawTransaction, Vec<u8>),
-        oneshot::Sender<PaymentDriverResult<H256>>,
-    )>,
+    tx_sender: TxSender,
     raw_tx: RawTransaction,
     signature: Vec<u8>,
 ) -> PaymentDriverResult<()> {
@@ -421,20 +448,16 @@ async fn send_created_tx(
 }
 
 pub struct GntDriver {
-    db: Arc<DbExecutor>,
+    db: DbExecutor,
     ethereum_client: EthereumClient,
     gnt_contract: Contract<Http>,
     nonces: HashMap<Address, U256>,
-    tx_sender: mpsc::Sender<(
-        (RawTransaction, Vec<u8>),
-        oneshot::Sender<PaymentDriverResult<H256>>,
-    )>,
+    tx_sender: TxSender,
 }
 
 impl GntDriver {
     /// Creates new driver
     pub fn new(db: DbExecutor) -> PaymentDriverResult<GntDriver> {
-        let db = Arc::new(db);
         // TODO
         let migrate_db = db.clone();
         tokio::spawn(async move {
@@ -535,7 +558,7 @@ impl GntDriver {
                 sign_tx,
                 TxType::Faucet,
             )
-            .await?;
+                .await?;
         }
         Ok(())
     }
@@ -550,8 +573,8 @@ impl GntDriver {
         sign_tx: SignTx<'_>,
         tx_type: TxType,
     ) -> PaymentDriverResult<String>
-    where
-        P: Tokenize,
+        where
+            P: Tokenize,
     {
         let chain_id = self.get_chain_id();
         let raw_tx = self
@@ -576,8 +599,8 @@ impl GntDriver {
         func: &str,
         tokens: P,
     ) -> PaymentDriverResult<RawTransaction>
-    where
-        P: Tokenize,
+        where
+            P: Tokenize,
     {
         let tx = RawTransaction {
             nonce: self.get_next_nonce(sender).await?,
@@ -612,7 +635,7 @@ impl GntDriver {
             .get_used_nonces(utils::addr_to_str(address))
             .await?
             .into_iter()
-            .map(|nonce| utils::u256_from_big_endian_hex(nonce))
+            .map(utils::u256_from_big_endian_hex)
             .collect();
         match nonces.iter().max() {
             None => Ok(U256::from(0)),
@@ -733,7 +756,7 @@ impl GntDriver {
             sign_tx,
             TxType::Transfer,
         )
-        .await
+            .await
     }
 
     async fn get_payment_from_db(
@@ -826,7 +849,7 @@ impl GntDriver {
                             invoice_id.into(),
                             PaymentStatus::NotYet.to_i32(),
                         )
-                        .await?;
+                            .await?;
                         self.update_payment_tx_id(invoice_id.into(), tx_id).await?;
                     }
                 };
@@ -862,7 +885,7 @@ impl PaymentDriver for GntDriver {
         mode: AccountMode,
         address: &str,
         sign_tx: SignTx,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<()>> + 'static>> {
         let result = if mode.contains(AccountMode::SEND)
             && self.ethereum_client.get_chain_id() == Chain::Rinkeby.id()
         {
@@ -877,7 +900,7 @@ impl PaymentDriver for GntDriver {
     fn get_account_balance<'a>(
         &'a self,
         address: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<AccountBalance>> + 'static>> {
         let address: String = address.into();
         Box::pin(async move {
             let address = utils::str_to_addr(address.as_str())?;
@@ -898,7 +921,7 @@ impl PaymentDriver for GntDriver {
         recipient: &str,
         due_date: DateTime<Utc>,
         sign_tx: SignTx,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<()>> + 'static>> {
         let result = futures3::executor::block_on(
             self.add_payment(invoice_id, amount, sender, recipient, due_date, sign_tx),
         );
@@ -910,7 +933,7 @@ impl PaymentDriver for GntDriver {
         &'a mut self,
         invoice_id: &str,
         sign_tx: SignTx,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<()>> + 'static>> {
         let result = futures3::executor::block_on(self.retry_payment(invoice_id, sign_tx));
         Box::pin(future::ready(result))
     }
@@ -919,7 +942,7 @@ impl PaymentDriver for GntDriver {
     fn get_payment_status<'a>(
         &'a self,
         invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<PaymentStatus>> + 'static>> {
         let result = futures3::executor::block_on(self.fetch_payment_status(invoice_id));
         Box::pin(future::ready(result))
     }
@@ -928,7 +951,7 @@ impl PaymentDriver for GntDriver {
     fn verify_payment<'a>(
         &'a self,
         confirmation: &PaymentConfirmation,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<PaymentDetails>> + 'static>> {
         let tx_hash: H256 = H256::from_slice(&confirmation.confirmation);
         Box::pin(async move {
             let ethereum_client = EthereumClient::new()?;
@@ -947,7 +970,7 @@ impl PaymentDriver for GntDriver {
         &'a self,
         _payer: &str,
         _payee: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<Balance>> + 'static>> {
         // TODO: Get real transaction balance
         Box::pin(future::ready(Ok(Balance {
             currency: Currency::Gnt,
@@ -960,7 +983,6 @@ impl PaymentDriver for GntDriver {
 mod tests {
     use super::*;
     use crate::account::Currency;
-    use crate::ethereum::Chain;
     use crate::utils;
     use std::sync::Once;
 
@@ -971,16 +993,19 @@ mod tests {
     fn init_env() {
         INIT.call_once(|| {
             std::env::set_var("GETH_ADDRESS", "http://1.geth.testnet.golem.network:55555");
-            std::env::set_var("CHAIN_ID", format!("{:?}", Chain::Rinkeby.id()));
+            std::env::set_var("CHAIN_ID", "rinkeby");
             std::env::set_var(
-                "GNT_CONTRACT_ADDRESS",
+                GNT_CONTRACT_ADDRESS_ENV_KEY,
                 "0x924442A66cFd812308791872C4B242440c108E19",
             );
             std::env::set_var(
-                "FAUCET_CONTRACT_ADDRESS",
+                GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY,
                 "0x77b6145E853dfA80E8755a4e824c4F510ac6692e",
             );
-            std::env::set_var("ETH_FAUCET_ADDRESS", "http://faucet.testnet.golem.network:4000/donate");
+            std::env::set_var(
+                ETH_FAUCET_ADDRESS_ENV_KEY,
+                "http://faucet.testnet.golem.network:4000/donate",
+            );
         });
     }
 
