@@ -11,20 +11,37 @@ use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, Req
 
 use crate::payment::allocate_funds;
 
-pub(crate) fn build_demand(node_name: &str, task_package: &str) -> Demand {
+pub(crate) fn build_demand(node_name: &str, task_package: &str, subnet: &Option<String>) -> Demand {
+    let mut properties = serde_json::json!({
+        "golem": {
+            "node.id.name": node_name,
+            "srv.comp.wasm.task_package": task_package,
+        },
+    });
+
+    let subnet_constraint = match subnet {
+        Some(subnet) => {
+            properties.as_object_mut().unwrap().insert(
+                "golem.node.debug.subnet".to_string(),
+                serde_json::Value::String(subnet.clone()),
+            );
+            format!("(golem.node.debug.subnet={})", subnet.clone())
+        }
+        None => "".to_string(),
+    };
+
     Demand {
-        properties: serde_json::json!({
-            "golem": {
-                "node.id.name": node_name,
-                "srv.comp.wasm.task_package": task_package,
-            },
-        }),
-        constraints: r#"(&
+        properties,
+        constraints: format!(
+            "(&
             (golem.inf.mem.gib>0.5)
             (golem.inf.storage.gib>1)
             (golem.com.pricing.model=linear)
-        )"#
-        .to_string(),
+            {}
+        )",
+            subnet_constraint
+        ),
+
         demand_id: Default::default(),
         requestor_id: Default::default(),
     }
