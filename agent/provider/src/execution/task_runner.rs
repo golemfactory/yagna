@@ -1,8 +1,10 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
+use chrono::{DateTime, TimeZone, Utc};
 use derive_more::Display;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
+use std::fs::{create_dir_all, File};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,7 +22,6 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
-use std::fs::{create_dir_all, File};
 
 // =========================================== //
 // Public exposed messages
@@ -44,6 +45,21 @@ pub struct InitializeExeUnits {
 #[rtype(result = "Result<ExeUnitDesc>")]
 pub struct GetExeUnit {
     pub name: String,
+}
+
+/// Event forces agreement termination, what includes killing ExeUnit.
+/// Sending this event indicates, that agreement conditions were broken
+/// somehow. Normally Requestor is responsible for agreement termination.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct BreakAgreement {
+    pub agreement_id: String,
+    pub reason: BreakAgreementReason,
+}
+
+#[derive(Display)]
+pub enum BreakAgreementReason {
+    Expired,
 }
 
 // =========================================== //
@@ -149,7 +165,6 @@ impl TaskRunner {
     pub fn new(client: ActivityProviderApi) -> Result<TaskRunner> {
         let current_dir = std::env::current_dir()?;
         let tasks_dir = current_dir.join("exe-unit").join("work");
-
         let cache_dir = current_dir.join("exe-unit").join("cache");
 
         create_dir_all(&tasks_dir).map_err(|error| {
@@ -370,12 +385,52 @@ impl TaskRunner {
     pub fn on_agreement_approved(
         &mut self,
         msg: AgreementApproved,
-        _ctx: &mut Context<Self>,
+        ctx: &mut Context<Self>,
     ) -> Result<()> {
+        let agreement_id = msg.agreement.agreement_id.clone();
+        let expiration = agreement_expiration_from(&msg.agreement)?;
+        let duration = (expiration - Utc::now()).to_std()?;
+
+        ctx.run_later(duration, move |_, ctx| {
+            let msg = BreakAgreement {
+                agreement_id: agreement_id.clone(),
+                reason: BreakAgreementReason::Expired,
+            };
+            ctx.address().do_send(msg);
+        });
+
         // Agreement waits for first create activity event.
         // FIXME: clean-up agreements upon TTL or maybe payments
         let agreement_id = msg.agreement.agreement_id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
+        Ok(())
+    }
+
+    pub fn on_break_agreement(
+        &mut self,
+        msg: BreakAgreement,
+        ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        let agreement_id = msg.agreement_id.clone();
+        log::warn!(
+            "Breaking agreement [{}], reason: {}.",
+            agreement_id,
+            msg.reason
+        );
+
+        self.tasks
+            .iter()
+            .filter(|task| task.agreement_id == agreement_id)
+            .for_each(|task| {
+                log::warn!(
+                    "Activity [{}] will be destroyed, because of broken agreement [{}].",
+                    task.activity_id,
+                    agreement_id,
+                );
+
+                let addr = ctx.address().clone();
+                addr.do_send(DestroyActivity::new(&task.activity_id, &agreement_id));
+            });
         Ok(())
     }
 
@@ -485,6 +540,12 @@ fn task_package_from(agreement: &ParsedAgreement) -> Result<String> {
     Ok(agreement.pointer_typed::<String>(runtime_key_str)?)
 }
 
+fn agreement_expiration_from(agreement: &ParsedAgreement) -> Result<DateTime<Utc>> {
+    let expiration_key_str = "/demand/properties/golem/srv/comp/expiration";
+    let timestamp = agreement.pointer_typed::<i64>(expiration_key_str)?;
+    Ok(Utc.timestamp_millis(timestamp))
+}
+
 // =========================================== //
 // Actix stuff
 // =========================================== //
@@ -499,6 +560,7 @@ forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
+forward_actix_handler!(TaskRunner, BreakAgreement, on_break_agreement);
 
 forward_actix_handler!(
     TaskRunner,
