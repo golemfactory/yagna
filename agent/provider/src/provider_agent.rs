@@ -20,7 +20,6 @@ use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
 use crate::startup_config::{PresetNoInteractive, ProviderConfig, RunConfig};
 
-
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
@@ -52,7 +51,11 @@ impl ProviderAgent {
         Ok(provider)
     }
 
-    pub async fn initialize(&mut self, run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<()> {
+    pub async fn initialize(
+        &mut self,
+        run_args: RunConfig,
+        config: ProviderConfig,
+    ) -> anyhow::Result<()> {
         // Forward AgreementApproved event to TaskRunner actor.
         let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
         self.market.send(msg).await??;
@@ -148,9 +151,13 @@ impl ProviderAgent {
         match self.node_info.subnet.clone() {
             Some(subnet) => Ok(format!(
                 "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration<{}))",
-                subnet, expires.timestamp_millis()
+                subnet,
+                expires.timestamp_millis()
             )),
-            None => Ok(format!("(golem.srv.comp.expiration<{})", expires.timestamp_millis())),
+            None => Ok(format!(
+                "(golem.srv.comp.expiration<{})",
+                expires.timestamp_millis()
+            )),
         }
     }
 

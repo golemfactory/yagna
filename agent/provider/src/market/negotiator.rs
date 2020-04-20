@@ -1,5 +1,6 @@
 use ya_agreement_utils::OfferDefinition;
-use ya_model::market::{Agreement, Offer, Proposal};
+use ya_agreement_utils::ParsedAgreement;
+use ya_model::market::{Offer, Proposal};
 
 use anyhow::Result;
 use derive_more::Display;
@@ -31,5 +32,5 @@ pub trait Negotiator: std::fmt::Debug {
     /// information about this offer, that are necessary for negotiations.
     fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<Offer>;
     fn react_to_proposal(&mut self, offer: &Offer, demand: &Proposal) -> Result<ProposalResponse>;
-    fn react_to_agreement(&mut self, agreement: &Agreement) -> Result<AgreementResponse>;
+    fn react_to_agreement(&mut self, agreement: &ParsedAgreement) -> Result<AgreementResponse>;
 }

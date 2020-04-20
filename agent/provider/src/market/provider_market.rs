@@ -1,8 +1,9 @@
 use actix::prelude::*;
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Error, Result};
 use derive_more::Display;
 use futures::future::join_all;
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use ya_client::market::MarketProviderApi;
@@ -18,7 +19,7 @@ use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use super::Preset;
 
 // Temporrary
-use ya_agreement_utils::OfferDefinition;
+use ya_agreement_utils::{OfferDefinition, ParsedAgreement};
 
 // =========================================== //
 // Public exposed messages
@@ -41,6 +42,14 @@ pub struct UpdateMarket;
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct OnShutdown;
+
+/// Async code emits this event to ProviderMarket, which reacts to it
+/// and broadcasts same event to external world.
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct AgreementApproved {
+    pub agreement: ParsedAgreement,
+}
 
 // =========================================== //
 // Internal messages
@@ -66,15 +75,7 @@ pub struct GotProposal {
 #[rtype(result = "Result<AgreementResponse>")]
 pub struct GotAgreement {
     subscription: OfferSubscription,
-    agreement: Agreement,
-}
-
-/// Async code emits this event to ProviderMarket, which reacts to it
-/// and broadcasts same event to external world.
-#[derive(Clone, Debug, Message)]
-#[rtype(result = "Result<()>")]
-pub struct AgreementApproved {
-    pub agreement: Agreement,
+    agreement: ParsedAgreement,
 }
 
 // =========================================== //
@@ -314,6 +315,9 @@ impl ProviderMarket {
             subscription.preset.name,
         );
 
+        let agreement = ParsedAgreement::try_from(agreement)
+            .map_err(|error| anyhow!("Invalid agreement. Error: {}", error))?;
+
         let response = addr
             .send(GotAgreement::new(subscription, agreement.clone()))
             .await?;
@@ -378,11 +382,7 @@ impl ProviderMarket {
         msg: GotAgreement,
         _ctx: &mut Context<Self>,
     ) -> Result<AgreementResponse> {
-        log::debug!(
-            "Got agreement event {:?} with state {:?}",
-            msg.agreement.agreement_id,
-            msg.agreement.state
-        );
+        log::debug!("Got agreement event {:?}.", msg.agreement.agreement_id,);
         let response = self.negotiator.react_to_agreement(&msg.agreement)?;
 
         log::info!(
@@ -399,11 +399,7 @@ impl ProviderMarket {
         msg: AgreementApproved,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
-        log::info!(
-            "Got approved agreement {:?} with state {:?}",
-            msg.agreement.agreement_id,
-            msg.agreement.state
-        );
+        log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(AgreementApproved {
             agreement: msg.agreement,
@@ -542,7 +538,7 @@ impl GotProposal {
 }
 
 impl GotAgreement {
-    fn new(subscription: OfferSubscription, agreement: Agreement) -> Self {
+    fn new(subscription: OfferSubscription, agreement: ParsedAgreement) -> Self {
         Self {
             subscription,
             agreement,

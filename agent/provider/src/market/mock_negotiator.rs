@@ -1,5 +1,6 @@
 use ya_agreement_utils::OfferDefinition;
-use ya_model::market::{Agreement, Offer, Proposal};
+use ya_agreement_utils::ParsedAgreement;
+use ya_model::market::{Offer, Proposal};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, ProposalResponse};
@@ -25,7 +26,7 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(ProposalResponse::AcceptProposal)
     }
 
-    fn react_to_agreement(&mut self, _agreement: &Agreement) -> Result<AgreementResponse> {
+    fn react_to_agreement(&mut self, _agreement: &ParsedAgreement) -> Result<AgreementResponse> {
         Ok(AgreementResponse::ApproveAgreement)
     }
 }

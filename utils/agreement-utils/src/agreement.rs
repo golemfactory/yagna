@@ -1,8 +1,66 @@
+use ya_model::market::Agreement;
+
+use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::convert::TryFrom;
 use std::path::PathBuf;
 
 pub const PROPERTY_TAG: &str = "@tag";
 const DEFAULT_FORMAT: &str = "json";
+
+#[derive(Clone, Debug)]
+pub struct ParsedAgreement {
+    pub json: Value,
+    pub agreement_id: String,
+}
+
+impl ParsedAgreement {
+    pub fn pointer(&self, pointer: &str) -> Option<&Value> {
+        self.json.pointer(pointer)
+    }
+
+    pub fn pointer_typed<'a, Type: Deserialize<'a>>(&self, pointer: &str) -> Result<Type, Error> {
+        let value = self
+            .json
+            .pointer(pointer)
+            .ok_or(Error::NoKey(pointer.to_string()))?
+            .clone();
+        Ok(<Type as Deserialize>::deserialize(value)
+            .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))?)
+    }
+}
+
+impl TryFrom<Value> for ParsedAgreement {
+    type Error = Error;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        let agreement_id = value
+            .pointer("/agreementId")
+            .as_typed(Value::as_str)?
+            .to_owned();
+
+        Ok(ParsedAgreement {
+            json: value,
+            agreement_id,
+        })
+    }
+}
+
+impl TryFrom<&PathBuf> for ParsedAgreement {
+    type Error = Error;
+
+    fn try_from(path: &PathBuf) -> Result<Self, Self::Error> {
+        Self::try_from(try_from_path(path)?)
+    }
+}
+
+impl TryFrom<&Agreement> for ParsedAgreement {
+    type Error = Error;
+
+    fn try_from(agreement: &Agreement) -> Result<Self, Self::Error> {
+        Self::try_from(expand(serde_json::to_value(agreement)?))
+    }
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -16,6 +74,10 @@ pub enum Error {
     UnsupportedFormat(String),
     #[error("Invalid value: {0}")]
     InvalidValue(String),
+    #[error("Key '{0}' doesn't exist")]
+    NoKey(String),
+    #[error("Key '{0}' has invalid type. Error: {1}")]
+    UnexpectedType(String, serde_json::Error),
 }
 
 pub trait TypedPointer {

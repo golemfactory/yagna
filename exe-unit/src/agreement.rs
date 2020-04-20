@@ -1,11 +1,10 @@
-use ya_agreement_utils::agreement::{try_from_path, Error, TypedPointer, TypedArrayPointer};
+use ya_agreement_utils::agreement::{try_from_path, Error, TypedArrayPointer, TypedPointer};
 
 use crate::metrics::MemMetric;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::PathBuf;
-
 
 #[derive(Clone, Debug)]
 pub struct Agreement {
@@ -44,8 +43,8 @@ impl TryFrom<Value> for Agreement {
                 .pointer("/offer/properties/golem/inf/mem/gib")
                 .as_typed(Value::as_f64)?,
         )]
-            .into_iter()
-            .collect();
+        .into_iter()
+        .collect();
 
         Ok(Agreement {
             json: value,
@@ -67,8 +66,8 @@ impl TryFrom<&PathBuf> for Agreement {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn example_agreement() {

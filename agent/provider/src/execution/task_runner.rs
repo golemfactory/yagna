@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+use ya_agreement_utils::ParsedAgreement;
 use ya_client::activity::ActivityProviderApi;
 use ya_core_model::activity;
 use ya_model::activity::ProviderEvent;
-use ya_model::market::Agreement;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
@@ -133,7 +133,7 @@ pub struct TaskRunner {
     /// Spawned tasks.
     tasks: Vec<Task>,
     /// Agreements, that wait for CreateActivity event.
-    active_agreements: HashMap<String, Agreement>,
+    active_agreements: HashMap<String, ParsedAgreement>,
 
     /// External actors can listen on these signals.
     pub activity_created: SignalSlot<ActivityCreated>,
@@ -453,7 +453,7 @@ impl TaskRunner {
             )
         })?;
 
-        serde_json::to_writer_pretty(&agreement_file, &agreement).map_err(|error| {
+        serde_json::to_writer_pretty(&agreement_file, &agreement.json).map_err(|error| {
             anyhow!(
                 "Failed to serialize agreement [{}]. Error: {}",
                 agreement_id,
@@ -480,20 +480,9 @@ impl TaskRunner {
     }
 }
 
-fn task_package_from(agreement: &Agreement) -> Result<String> {
-    let props = &agreement.offer.properties;
-    let runtime_key_str = "golem.runtime.name";
-    let runtime_name = props
-        .as_object()
-        .ok_or(anyhow!("Agreement properties has unexpected format."))?
-        .iter()
-        .find(|(key, _)| key == &runtime_key_str)
-        .ok_or(anyhow!("Can't find key '{}'.", runtime_key_str))?
-        .1
-        .as_str()
-        .ok_or(anyhow!("'{}' is not a string.", runtime_key_str))?;
-
-    Ok(runtime_name.to_string())
+fn task_package_from(agreement: &ParsedAgreement) -> Result<String> {
+    let runtime_key_str = "/offer/properties/golem/runtime/name";
+    Ok(agreement.pointer_typed::<String>(runtime_key_str)?)
 }
 
 // =========================================== //

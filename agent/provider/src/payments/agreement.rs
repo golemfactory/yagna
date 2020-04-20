@@ -7,8 +7,8 @@ use std::time::Duration;
 use super::factory::PaymentModelFactory;
 use super::model::{PaymentDescription, PaymentModel};
 
+use ya_agreement_utils::ParsedAgreement;
 use ya_client::activity::ActivityProviderApi;
-use ya_model::market::Agreement;
 
 #[derive(Clone, PartialEq)]
 pub struct CostInfo {
@@ -43,7 +43,7 @@ pub struct AgreementPayment {
 }
 
 impl AgreementPayment {
-    pub fn new(agreement: &Agreement) -> Result<AgreementPayment> {
+    pub fn new(agreement: &ParsedAgreement) -> Result<AgreementPayment> {
         let payment_description = PaymentDescription::new(agreement)?;
         let update_interval = payment_description.get_update_interval()?;
         let payment_model = PaymentModelFactory::create(payment_description)?;
