@@ -180,8 +180,7 @@ impl ProviderAgent {
 
         let exeunits = registry.list_exeunits();
         for exeunit in exeunits.iter() {
-            println!(); // Enter
-            println!("{}", exeunit);
+            println!("\n{}", exeunit);
         }
         Ok(())
     }
