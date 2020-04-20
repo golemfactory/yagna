@@ -94,10 +94,9 @@ impl Presets {
     }
 
     pub fn remove_preset(&mut self, name: &str) -> Result<()> {
-        if !self.presets.contains_key(name) {
-            return Err(anyhow!("Preset [{}] doesn't exists.", &name));
-        }
-        self.presets.remove(name);
+        self.presets
+            .remove(name)
+            .ok_or(anyhow!("Preset [{}] doesn't exists.", name))?;
         Ok(())
     }
 

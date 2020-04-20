@@ -1,11 +1,13 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
-use chrono::{DateTime, Utc};
+use chrono::{Utc, DateTime};
+use std::convert::TryInto;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
+use ya_client::cli::ProviderApi;
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
@@ -18,7 +20,8 @@ use crate::market::{
 };
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
-use crate::startup_config::{PresetNoInteractive, ProviderConfig, RunConfig};
+use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
+
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -29,16 +32,13 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let market = ProviderMarket::new(run_args.market_client()?, "AcceptAll").start();
-        let runner = TaskRunner::new(run_args.activity_client()?)?.start();
-        let payments = Payments::new(
-            run_args.activity_client()?,
-            run_args.payment_client()?,
-            &run_args.credit_address,
-        )
-        .start();
+        let api: ProviderApi = run_args.api.try_into()?;
+        let market = ProviderMarket::new(api.market, "AcceptAll").start();
+        let runner = TaskRunner::new(api.activity.clone())?.start();
+        let payments =
+            Payments::new(api.activity, api.payment, &run_args.node.credit_address).start();
 
-        let node_info = ProviderAgent::create_node_info(&run_args).await;
+        let node_info = ProviderAgent::create_node_info(&run_args.node).await;
 
         let mut provider = ProviderAgent {
             market,
@@ -46,15 +46,16 @@ impl ProviderAgent {
             payments,
             node_info,
         };
-        provider.initialize(run_args, config).await?;
+        provider.initialize(run_args.presets, config, *run_args.shutdown).await?;
 
         Ok(provider)
     }
 
     pub async fn initialize(
         &mut self,
-        run_args: RunConfig,
+        presets_names: Vec<String>,
         config: ProviderConfig,
+        expires: Duration,
     ) -> anyhow::Result<()> {
         // Forward AgreementApproved event to TaskRunner actor.
         let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
@@ -77,7 +78,7 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         Ok(self
-            .create_offers(run_args.presets, config, *run_args.shutdown)
+            .create_offers(presets_names, config, expires)
             .await?)
     }
 
@@ -166,7 +167,7 @@ impl ProviderAgent {
         send_message(self.market.clone(), UpdateMarket);
     }
 
-    async fn create_node_info(config: &RunConfig) -> NodeInfo {
+    async fn create_node_info(config: &NodeConfig) -> NodeInfo {
         // TODO: Get node name from identity API.
         let mut node_info = NodeInfo::with_name(&config.node_name);
 
@@ -208,8 +209,7 @@ impl ProviderAgent {
 
         let exeunits = registry.list_exeunits();
         for exeunit in exeunits.iter() {
-            println!(); // Enter
-            println!("{}", exeunit);
+            println!("\n{}", exeunit);
         }
         Ok(())
     }
@@ -218,10 +218,8 @@ impl ProviderAgent {
         let presets = Presets::from_file(&config.presets_file)?;
         println!("Available Presets:");
 
-        let presets_list = presets.list();
-        for preset in presets_list.iter() {
-            println!(); // Enter
-            println!("{}", preset);
+        for preset in presets.list().iter() {
+            println!("\n{}", preset);
         }
         Ok(())
     }
@@ -334,15 +332,9 @@ impl ProviderAgent {
         let mut preset = presets.get(&name)?;
 
         // All values are optional. If not set, previous value will remain.
-        if let Some(name) = params.preset_name {
-            preset.name = name;
-        }
-        if let Some(exeunit) = params.exeunit {
-            preset.exeunit_name = exeunit;
-        }
-        if let Some(pricing) = params.pricing {
-            preset.pricing_model = pricing;
-        }
+        preset.name = params.preset_name.unwrap_or(preset.name);
+        preset.exeunit_name = params.exeunit.unwrap_or(preset.exeunit_name);
+        preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
 
         for (name, price) in params.price.iter() {
             preset.update_price(name, *price)?;
