@@ -349,7 +349,7 @@ async fn confirm_tx(db: &DbExecutor, tx: RawTransaction, tx_hash: H256) -> Payme
             }
         },
     };
-    let tx_id = tx.hash(ethereum_client.get_chain_id());
+    let tx_id = tx.hash(ethereum_client.chain_id());
     update_tx_status(db, &tx_id, tx_status).await?;
     update_payment_status_by_tx_id(db, &tx_id, payment_status).await
 }
@@ -479,7 +479,7 @@ impl GntDriver {
         tokio::spawn(async move {
             let db = service_db;
             let ethereum_client = EthereumClient::new().expect("Failed to prepare Ethereum client");
-            let chain_id: u64 = ethereum_client.get_chain_id();
+            let chain_id: u64 = ethereum_client.chain_id();
             while let Some(((raw_tx, signature), response)) = tx_sender_service.recv().await {
                 let result = ethereum_client
                     .send_tx(raw_tx.encode_signed_tx(signature, chain_id))
@@ -576,7 +576,7 @@ impl GntDriver {
         where
             P: Tokenize,
     {
-        let chain_id = self.get_chain_id();
+        let chain_id = self.chain_id();
         let raw_tx = self
             .prepare_raw_tx(sender, gas, contract, func, tokens)
             .await?;
@@ -657,7 +657,7 @@ impl GntDriver {
         let entity = utils::raw_tx_to_entity(
             raw_tx,
             sender,
-            self.get_chain_id(),
+            self.chain_id(),
             Utc::now(),
             signature,
             tx_type,
@@ -671,8 +671,8 @@ impl GntDriver {
         send_created_tx(self.tx_sender.clone(), raw_tx, signature).await
     }
 
-    fn get_chain_id(&self) -> u64 {
-        self.ethereum_client.get_chain_id()
+    fn chain_id(&self) -> u64 {
+        self.ethereum_client.chain_id()
     }
 
     async fn add_payment(
@@ -887,7 +887,7 @@ impl PaymentDriver for GntDriver {
         sign_tx: SignTx,
     ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<()>> + 'static>> {
         let result = if mode.contains(AccountMode::SEND)
-            && self.ethereum_client.get_chain_id() == Chain::Rinkeby.id()
+            && self.ethereum_client.chain_id() == Chain::Rinkeby.id()
         {
             futures3::executor::block_on(self.init_funds(address, sign_tx))
         } else {

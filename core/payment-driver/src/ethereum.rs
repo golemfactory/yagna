@@ -133,7 +133,7 @@ impl EthereumClient {
         Ok(())
     }
 
-    pub fn get_chain_id(&self) -> u64 {
+    pub fn chain_id(&self) -> u64 {
         self.chain.id()
     }
 
@@ -184,7 +184,7 @@ mod tests {
     fn test_get_rinkeby_chain_id() -> anyhow::Result<()> {
         init_env();
         let ethereum_client = EthereumClient::new()?;
-        assert_eq!(ethereum_client.get_chain_id(), Chain::Rinkeby.id());
+        assert_eq!(ethereum_client.chain_id(), Chain::Rinkeby.id());
         Ok(())
     }
 
