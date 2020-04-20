@@ -1,10 +1,12 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
+use std::convert::TryInto;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
+use ya_client::cli::ProviderApi;
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
@@ -17,7 +19,7 @@ use crate::market::{
 };
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
-use crate::startup_config::{PresetNoInteractive, ProviderConfig, RunConfig};
+use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -29,16 +31,13 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let market = ProviderMarket::new(run_args.market_client()?, "AcceptAll").start();
-        let runner = TaskRunner::new(run_args.activity_client()?)?.start();
-        let payments = Payments::new(
-            run_args.activity_client()?,
-            run_args.payment_client()?,
-            &run_args.credit_address,
-        )
-        .start();
+        let api: ProviderApi = run_args.api.try_into()?;
+        let market = ProviderMarket::new(api.market, "AcceptAll").start();
+        let runner = TaskRunner::new(api.activity.clone())?.start();
+        let payments =
+            Payments::new(api.activity, api.payment, &run_args.node.credit_address).start();
 
-        let node_info = ProviderAgent::create_node_info(&run_args).await;
+        let node_info = ProviderAgent::create_node_info(&run_args.node).await;
 
         let mut provider = ProviderAgent {
             market,
@@ -138,7 +137,7 @@ impl ProviderAgent {
         send_message(self.market.clone(), UpdateMarket);
     }
 
-    async fn create_node_info(config: &RunConfig) -> NodeInfo {
+    async fn create_node_info(config: &NodeConfig) -> NodeInfo {
         // TODO: Get node name from identity API.
         let mut node_info = NodeInfo::with_name(&config.node_name);
 
