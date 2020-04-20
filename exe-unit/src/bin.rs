@@ -2,7 +2,7 @@ use actix::{Actor, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf, Prefix};
 use structopt::StructOpt;
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -43,6 +43,37 @@ pub enum Command {
     },
 }
 
+fn remove_prefix(path: PathBuf) -> PathBuf {
+    let mut disk_letter = None;
+
+    // There seems to be no easy way to replace one prefix with another...
+    let result = path
+        .components()
+        .into_iter()
+        .filter(|c| match c {
+            Component::Prefix(prefix) => match prefix.kind() {
+                Prefix::Verbatim(_) => false,
+                Prefix::VerbatimDisk(disk) => {
+                    disk_letter = Some(disk);
+                    false
+                }
+                _ => true,
+            },
+            _ => true,
+        })
+        .collect::<PathBuf>();
+
+    // ...so in case a VerbatimDisk letter was found - prepend it in front of the path
+    match disk_letter {
+        Some(letter) => {
+            let mut aggr = PathBuf::from(format!("{}:", char::from(letter)));
+            aggr.push(result);
+            aggr
+        }
+        None => result,
+    }
+}
+
 fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     if let Err(error) = std::fs::create_dir_all(path) {
         match &error.kind() {
@@ -50,7 +81,7 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
             _ => bail!("Can't create directory: {}, {}", path.display(), error),
         }
     }
-    Ok(path.canonicalize()?)
+    Ok(remove_prefix(path.canonicalize()?))
 }
 
 fn run() -> anyhow::Result<()> {
@@ -131,4 +162,14 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(result?)
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_remove_verbatim_prefix() {
+        let path = Path::new(r"\\?\c:\you\later\").to_path_buf();
+
+        assert_eq!(PathBuf::from(r"c:\you\later"), remove_prefix(path));
+    }
 }

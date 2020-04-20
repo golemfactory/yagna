@@ -65,13 +65,7 @@ impl TransferUrl {
     {
         let scheme = self.url.scheme().to_owned();
         let new_scheme = f(&scheme);
-        let replaced_url = &self
-            .url
-            .as_str()
-            .replacen(&scheme, new_scheme, 1)
-            .replace("\\\\%3F", "");
-
-        self.url = { Url::parse(replaced_url)? };
+        self.url = { Url::parse(&self.url.as_str().replacen(&scheme, new_scheme, 1))? };
         Ok(self)
     }
 
@@ -164,6 +158,7 @@ mod test {
         should_succeed!("/dir");
         should_succeed!("dir/sub/file");
         should_succeed!("/dir/sub/file");
+        should_succeed!("C:/");
 
         should_succeed!("/");
         should_succeed!("file:/");

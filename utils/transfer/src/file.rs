@@ -12,16 +12,6 @@ use url::Url;
 
 pub struct FileTransferProvider;
 
-impl FileTransferProvider {
-    fn sanitize_file_urls(url: &Url) -> String {
-        url.as_str()
-            .replace("file:///?\\", "")
-            .replace("file:///%3F/", "")
-            .replace("file:///", "")
-            .to_owned()
-    }
-}
-
 impl Default for FileTransferProvider {
     fn default() -> Self {
         FileTransferProvider {}
@@ -34,7 +24,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     }
 
     fn source(&self, url: &Url) -> TransferStream<TransferData, Error> {
-        let url = FileTransferProvider::sanitize_file_urls(url);
+        let url = url.path().to_owned();
 
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
@@ -61,7 +51,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     }
 
     fn destination(&self, url: &Url) -> TransferSink<TransferData, Error> {
-        let url = FileTransferProvider::sanitize_file_urls(url);
+        let url = url.path().to_owned();
 
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
