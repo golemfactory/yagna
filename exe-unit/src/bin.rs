@@ -2,7 +2,7 @@ use actix::{Actor, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
-use std::path::{Component, Path, PathBuf, Prefix};
+use std::path::{Component, PathBuf, Prefix};
 use structopt::StructOpt;
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -43,7 +43,7 @@ pub enum Command {
     },
 }
 
-fn remove_prefix(path: PathBuf) -> PathBuf {
+pub fn remove_prefix(path: PathBuf) -> PathBuf {
     let mut disk_letter = None;
 
     // There seems to be no easy way to replace one prefix with another...
@@ -166,6 +166,9 @@ fn main() -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
     #[test]
     fn test_remove_verbatim_prefix() {
         let path = Path::new(r"\\?\c:\you\later\").to_path_buf();
