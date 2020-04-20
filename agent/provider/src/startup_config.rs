@@ -1,3 +1,4 @@
+use humantime::Duration;
 use std::error::Error;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
@@ -38,6 +39,10 @@ pub struct RunConfig {
     /// Payment API URL
     #[structopt(long = "payment-url", env = PaymentProviderApi::API_URL_ENV_VAR)]
     payment_url: Option<Url>,
+    /// Estimated time of shutting down provider. Provider won't take any proposal,
+    /// that expires after this time point.
+    #[structopt(long)]
+    pub shutdown: Duration,
     /// Credit address. Can be set same as default identity
     /// (will be removed in future release)
     #[structopt(long = "credit-address", env = "CREDIT_ADDRESS")]

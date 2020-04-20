@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
+use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -18,6 +19,7 @@ use crate::market::{
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
 use crate::startup_config::{PresetNoInteractive, ProviderConfig, RunConfig};
+
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
@@ -45,14 +47,14 @@ impl ProviderAgent {
             runner,
             payments,
             node_info,
-            exe_unit_path: config.exe_unit_path,
+            exe_unit_path: config.exe_unit_path.clone(),
         };
-        provider.initialize(run_args.presets).await?;
+        provider.initialize(run_args, config).await?;
 
         Ok(provider)
     }
 
-    pub async fn initialize(&mut self, presets: Vec<String>) -> anyhow::Result<()> {
+    pub async fn initialize(&mut self, run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<()> {
         // Forward AgreementApproved event to TaskRunner actor.
         let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
         self.market.send(msg).await??;
@@ -73,19 +75,33 @@ impl ProviderAgent {
         };
         self.runner.send(msg).await??;
 
-        Ok(self.create_offers(presets).await?)
+        Ok(self
+            .create_offers(run_args.presets, config, *run_args.shutdown)
+            .await?)
     }
 
-    async fn create_offers(&mut self, presets_names: Vec<String>) -> anyhow::Result<()> {
+    async fn create_offers(
+        &mut self,
+        presets_names: Vec<String>,
+        config: ProviderConfig,
+        expires: Duration,
+    ) -> anyhow::Result<()> {
         log::debug!("Presets names: {:?}", presets_names);
 
         if presets_names.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
         }
 
-        // TODO: Hardcoded presets file path.
-        let presets =
-            Presets::from_file(&PathBuf::from("presets.json"))?.list_matching(&presets_names)?;
+        let presets = Presets::from_file(&config.presets_file)?.list_matching(&presets_names)?;
+
+        // Compute expected shutdown of provider. This time value will be added as constraint
+        // to offers to avoid taking offers, that will last longer, than user wants to
+        // provider his computing power.
+        let expires = Utc::now() + chrono::Duration::from_std(expires)?;
+        log::info!(
+            "Preparing offers. Provider will take only offers, that expire before {}.",
+            expires
+        );
 
         for preset in presets.into_iter() {
             let com_info = match preset.pricing_model.as_str() {
@@ -111,14 +127,8 @@ impl ProviderAgent {
                 )
             })?;
 
-            // If user set subnet name, we should add constraint for filtering
-            // nodes that didn't set the same nam in properties.
-            let constraints = match self.node_info.subnet.clone() {
-                Some(subnet) => format!("(golem.node.debug.subnet={})", subnet),
-                None => "()".to_string(),
-            };
-
             // Create simple offer on market.
+            let constraints = self.build_constraints(expires)?;
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
@@ -131,6 +141,19 @@ impl ProviderAgent {
             self.market.send(create_offer_message).await??
         }
         Ok(())
+    }
+
+    fn build_constraints(&self, expires: DateTime<Utc>) -> anyhow::Result<String> {
+        // If user set subnet name, we should add constraint for filtering
+        // nodes that didn't set the same name in properties.
+        // TODO: Write better constraints building.
+        match self.node_info.subnet.clone() {
+            Some(subnet) => Ok(format!(
+                "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration<{}))",
+                subnet, expires.timestamp_millis()
+            )),
+            None => Ok(format!("(golem.srv.comp.expiration<{})", expires.timestamp_millis())),
+        }
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {

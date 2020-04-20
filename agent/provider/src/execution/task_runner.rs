@@ -188,13 +188,14 @@ impl TaskRunner {
         })
     }
 
-    #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?} {:?}")]
     #[logfn(ok = "INFO", err = "ERROR", fmt = "ExeUnits initialized: {:?}")]
     pub fn initialize_exeunits(
         &mut self,
         msg: InitializeExeUnits,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
+        log::info!("Initializing ExeUnits from file: [{}]", msg.file.display());
+
         self.registry.register_exeunits_from_file(&msg.file)?;
         Ok(self.registry.validate()?)
     }

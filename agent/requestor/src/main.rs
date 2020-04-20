@@ -162,6 +162,8 @@ async fn spawn_workers(
 }
 
 fn build_demand(node_name: &str, task_package: &str, subnet: &Option<String>) -> Demand {
+    // Task should expire in 10 minutes.
+    let expiration = Utc::now() + chrono::Duration::minutes(10);
     let mut properties = serde_json::json!({
         "golem": {
             "node": {
@@ -174,7 +176,8 @@ fn build_demand(node_name: &str, task_package: &str, subnet: &Option<String>) ->
                 "comp":{
                     "wasm": {
                         "task_package": task_package
-                    }
+                    },
+                    "expiration": expiration.timestamp_millis()
                 }
             }
         }
