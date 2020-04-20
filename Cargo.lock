@@ -5451,11 +5451,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-agent-offer-model"
+name = "ya-agreement-utils"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "serde_yaml",
+ "thiserror",
 ]
 
 [[package]]
@@ -5527,6 +5529,7 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.1.1",
  "winapi 0.3.8",
+ "ya-agreement-utils",
  "ya-core-model",
  "ya-model",
  "ya-sb-router",
@@ -5756,7 +5759,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.16",
  "url 2.1.1",
- "ya-agent-offer-model",
+ "ya-agreement-utils",
  "ya-client",
  "ya-core-model",
  "ya-model",

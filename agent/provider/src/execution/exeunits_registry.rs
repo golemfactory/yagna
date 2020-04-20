@@ -13,7 +13,7 @@ use thiserror::Error;
 
 use super::exeunit_instance::ExeUnitInstance;
 use serde_json::Value;
-use ya_agent_offer_model::OfferBuilder;
+use ya_agreement_utils::OfferBuilder;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]

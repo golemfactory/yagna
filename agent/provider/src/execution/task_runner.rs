@@ -372,7 +372,7 @@ impl TaskRunner {
         msg: AgreementApproved,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
-        // Agreement waits for first create activity.
+        // Agreement waits for first create activity event.
         // FIXME: clean-up agreements upon TTL or maybe payments
         let agreement_id = msg.agreement.agreement_id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);

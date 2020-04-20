@@ -1,5 +1,5 @@
 [package]
-name = "ya-agent-offer-model"
+name = "ya-agreement-utils"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
@@ -7,3 +7,5 @@ edition = "2018"
 [dependencies]
 serde="1.0"
 serde_json="1.0"
+serde_yaml = "0.8.11"
+thiserror = "1.0.10"

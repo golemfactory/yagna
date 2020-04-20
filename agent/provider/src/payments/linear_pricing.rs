@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde_json::json;
 
-use ya_agent_offer_model::ComInfo;
+use ya_agreement_utils::ComInfo;
 
 use super::model::{PaymentDescription, PaymentModel};
 use crate::market::presets::Preset;

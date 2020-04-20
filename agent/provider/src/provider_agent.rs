@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
+use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
@@ -26,7 +26,6 @@ pub struct ProviderAgent {
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
     node_info: NodeInfo,
-    exe_unit_path: PathBuf,
 }
 
 impl ProviderAgent {
@@ -47,7 +46,6 @@ impl ProviderAgent {
             runner,
             payments,
             node_info,
-            exe_unit_path: config.exe_unit_path.clone(),
         };
         provider.initialize(run_args, config).await?;
 
@@ -71,7 +69,7 @@ impl ProviderAgent {
 
         // Load ExeUnits descriptors from file.
         let msg = InitializeExeUnits {
-            file: PathBuf::from(&self.exe_unit_path),
+            file: PathBuf::from(&config.exe_unit_path),
         };
         self.runner.send(msg).await??;
 
@@ -81,7 +79,7 @@ impl ProviderAgent {
     }
 
     async fn create_offers(
-        &mut self,
+        &self,
         presets_names: Vec<String>,
         config: ProviderConfig,
         expires: Duration,

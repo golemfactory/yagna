@@ -18,7 +18,7 @@ use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
 use super::Preset;
 
 // Temporrary
-use ya_agent_offer_model::OfferDefinition;
+use ya_agreement_utils::OfferDefinition;
 
 // =========================================== //
 // Public exposed messages

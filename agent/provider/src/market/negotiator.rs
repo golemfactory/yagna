@@ -1,4 +1,4 @@
-use ya_agent_offer_model::OfferDefinition;
+use ya_agreement_utils::OfferDefinition;
 use ya_model::market::{Agreement, Offer, Proposal};
 
 use anyhow::Result;
