@@ -303,15 +303,9 @@ impl ProviderAgent {
         let mut preset = presets.get(&name)?;
 
         // All values are optional. If not set, previous value will remain.
-        if let Some(name) = params.preset_name {
-            preset.name = name;
-        }
-        if let Some(exeunit) = params.exeunit {
-            preset.exeunit_name = exeunit;
-        }
-        if let Some(pricing) = params.pricing {
-            preset.pricing_model = pricing;
-        }
+        preset.name = params.preset_name.unwrap_or(preset.name);
+        preset.exeunit_name = params.exeunit.unwrap_or(preset.exeunit_name);
+        preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
 
         for (name, price) in params.price.iter() {
             preset.update_price(name, *price)?;
