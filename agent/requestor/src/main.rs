@@ -114,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
 
     let started_at = Utc::now();
     let settings = AppSettings::from_args();
-    let api: RequestorApi = settings.api.try_into()?;
+    let api: RequestorApi = (&settings.api).try_into()?;
 
     let exe_script = std::fs::read_to_string(&settings.exe_script)?;
     let commands_cnt = match serde_json::from_str(&exe_script)? {
