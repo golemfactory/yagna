@@ -1,6 +1,7 @@
 [
     {
         "name": "wasmtime",
+        "version": "0.1.0",
         "supervisor-path": "/usr/lib/yagna/plugins/exe-unit",
         "runtime-path": "/usr/lib/yagna/plugins/wasmtime-exeunit",
         "description" : "this is just a sample descriptor for wasmtime exeunit used by ya-provider",

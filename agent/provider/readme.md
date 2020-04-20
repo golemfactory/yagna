@@ -30,6 +30,8 @@ This can be displayed using `--help`
 | payment-url    | Payment api address. Overrides `YAGNA_PAYMENT_URL`
 | credit-address | Ethereum account for payments (should match NodeId). Overrides `CREDIT_ADDRESS`
 | exe-unit-path  | Path to JSON descriptor file for ExeUnits. Overrides `EXE_UNIT_PATH`
+| node-name      | Node name to use in agreements.
+| subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes.
 
 ### Creating app-key authentication token
 
@@ -61,15 +63,114 @@ $ cargo run --bin yagna -- app-key create "provider-agent"
 
 4. Restart yagna daemon (Ctrl+C, then repeat step 1)
 
+## Presets
+
+Provider uses presets to create market offers. In current version presets are
+defined in presets.json file, that should be placed in working directory.
+You can copy example presets from `agent/provider/examples/presets.json`.
+
+You can list presets by running command:
+`cargo run --bin ya-provider preset list`
+
+The result will be something like this:
+```
+Available Presets:
+
+Name:               wasm-preset
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        1.4 GNT
+    CPU             3.5 GNT
+    Init price      0.3 GNT
+
+Name:               amazing-offer
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        0.1 GNT
+    CPU             0.2 GNT
+    Init price      1 GNT
+
+Name:               lame-offer
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        0 GNT
+    CPU             0 GNT
+    Init price      0 GNT
+
+Name:               high-cpu
+ExeUnit:            wasmtime
+Pricing model:      linear
+Coefficients:
+    Duration        0.01 GNT
+    CPU             1.2 GNT
+    Init price      1.5 GNT
+```
+
+Coefficients describe unit price of ExeUnit metrics:
+
+* [1] `golem.usage.duration_sec`
+* [2] `golem.usage.cpu_sec`
+* [3] constant price per created activity 
+
+When running provider, you must list all presets, that you want to use.
+
+### Creating presets
+
+You can create preset in interactive mode:
+
+`cargo run --bin ya-provider preset create`
+
+or set all parameters using parameters:
+
+`cargo run --bin ya-provider preset create --nointeractive --preset-name wasm-offer --exeunit wasmtime --pricing linear --price Duration=1.2 --price CPU=3.4 "Init price"=0.2`
+
+If you don't specify any of price values, it will be defaulted to 0.0.  
+
+
+### Updating presets
+
+Updating in interactive mode:
+
+`cargo run --bin ya-provider preset update new-preset`
+
+or using command line parameters:
+
+`cargo run --bin ya-provider preset update wasm-preset --nointeractive --exeunit wasmtime --pricing linear --price Duration=1.3 --price CPU=3.5 "Init price"=0.3`
+
+You can omit some parameters and the will be filled with previous values.
+
+### Removing presets
+
+`cargo run --bin ya-provider preset remove new-preset`
+
+### Listing metrics
+
+You can list available metrics with command:
+
+`cargo run --bin ya-provider preset list-metrics`
+
+You will get something like this:
+
+```
+Duration       golem.usage.duration_sec
+CPU            golem.usage.cpu_sec
+```
+Left column is name of preset that should be used in commands. On the right side
+you can see agreement property, that will be set in usage vector.
+
 ## Running the Provider Agent
 
 Make sure you have compiled latest changes to exe-init binaries:
 
 `cargo build --release --bin exe-unit --bin wasmtime-exeunit`
 
-While the yagna daemon is still running (and you are in the `ya-prov` directory) you can now start Provider Agent:
+While the yagna daemon is still running (and you are in the `ya-prov` directory) you can now start Provider Agent.
+You should list all presets, provider should use to create offers:
 
-`cargo run --release --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json`
+`cargo run --release --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json run high-cpu amazing-offer`
 
 
 ## Mock requestor
@@ -114,4 +215,22 @@ cargo run --bin yagna payment status
 
 ```
 cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
+```
+
+## ExeUnits
+
+You can list available ExeUnits with command:
+
+`cargo run --bin ya-provider exe-unit list`
+Result:
+```
+Available ExeUnits:
+
+Name:          wasmtime
+Version:       0.1.0
+Supervisor:    /home/nieznanysprawiciel/Repos/Golem/yagna/target/debug/exe-unit
+Runtime:       /home/nieznanysprawiciel/Repos/Golem/yagna/target/debug/wasmtime-exeunit
+Description:   This is just a sample descriptor for wasmtime exeunit used by ya-provider
+Properties:
+    wasm.wasi.version@v           "0.9.0"
 ```

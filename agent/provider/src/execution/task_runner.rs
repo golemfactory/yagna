@@ -17,7 +17,7 @@ use ya_utils_actix::forward_actix_handler;
 use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
 
-use super::exeunits_registry::ExeUnitsRegistry;
+use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
 use std::fs::{create_dir_all, File};
@@ -37,6 +37,13 @@ pub struct UpdateActivity;
 #[rtype(result = "Result<()>")]
 pub struct InitializeExeUnits {
     pub file: PathBuf,
+}
+
+/// Finds ExeUnit in registry and returns it's descriptor.
+#[derive(Message)]
+#[rtype(result = "Result<ExeUnitDesc>")]
+pub struct GetExeUnit {
+    pub name: String,
 }
 
 // =========================================== //
@@ -188,7 +195,16 @@ impl TaskRunner {
         msg: InitializeExeUnits,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
-        self.registry.register_exeunits_from_file(&msg.file)
+        self.registry.register_exeunits_from_file(&msg.file)?;
+        Ok(self.registry.validate()?)
+    }
+
+    pub fn get_exeunit(
+        &mut self,
+        msg: GetExeUnit,
+        _ctx: &mut Context<Self>,
+    ) -> Result<ExeUnitDesc> {
+        self.registry.find_exeunit(&msg.name)
     }
 
     pub async fn collect_events(
@@ -492,6 +508,7 @@ forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
+forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 
 forward_actix_handler!(
     TaskRunner,
