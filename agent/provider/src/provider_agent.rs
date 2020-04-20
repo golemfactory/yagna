@@ -190,10 +190,8 @@ impl ProviderAgent {
         let presets = Presets::from_file(&config.presets_file)?;
         println!("Available Presets:");
 
-        let presets_list = presets.list();
-        for preset in presets_list.iter() {
-            println!(); // Enter
-            println!("{}", preset);
+        for preset in presets.list().iter() {
+            println!("\n{}", preset);
         }
         Ok(())
     }
