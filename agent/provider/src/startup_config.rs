@@ -90,8 +90,8 @@ pub enum ExeUnitsConfig {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(about = clap::crate_description!())]
-#[structopt(setting = clap::AppSettings::ColoredHelp)]
-#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(global_setting = clap::AppSettings::ColoredHelp)]
+#[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 pub struct StartupConfig {
     #[structopt(flatten)]
     pub config: ProviderConfig,
