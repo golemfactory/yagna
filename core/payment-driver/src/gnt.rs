@@ -111,7 +111,7 @@ async fn get_gnt_balance(
     address: Address,
 ) -> PaymentDriverResult<Balance> {
     gnt_contract
-        .query("balanceOf", (address, ), None, Options::default(), None)
+        .query("balanceOf", (address,), None, Options::default(), None)
         .compat()
         .await
         .map_or_else(
@@ -337,7 +337,7 @@ async fn confirm_tx(db: &DbExecutor, tx: RawTransaction, tx_hash: H256) -> Payme
                         PaymentStatus::Ok(PaymentConfirmation {
                             confirmation: vec![0],
                         })
-                            .to_i32(),
+                        .to_i32(),
                     )
                 } else {
                     log::info!("Tx: {:?} is failed", tx_hash);
@@ -558,7 +558,7 @@ impl GntDriver {
                 sign_tx,
                 TxType::Faucet,
             )
-                .await?;
+            .await?;
         }
         Ok(())
     }
@@ -573,8 +573,8 @@ impl GntDriver {
         sign_tx: SignTx<'_>,
         tx_type: TxType,
     ) -> PaymentDriverResult<String>
-        where
-            P: Tokenize,
+    where
+        P: Tokenize,
     {
         let chain_id = self.chain_id();
         let raw_tx = self
@@ -599,8 +599,8 @@ impl GntDriver {
         func: &str,
         tokens: P,
     ) -> PaymentDriverResult<RawTransaction>
-        where
-            P: Tokenize,
+    where
+        P: Tokenize,
     {
         let tx = RawTransaction {
             nonce: self.get_next_nonce(sender).await?,
@@ -756,7 +756,7 @@ impl GntDriver {
             sign_tx,
             TxType::Transfer,
         )
-            .await
+        .await
     }
 
     async fn get_payment_from_db(
@@ -849,7 +849,7 @@ impl GntDriver {
                             invoice_id.into(),
                             PaymentStatus::NotYet.to_i32(),
                         )
-                            .await?;
+                        .await?;
                         self.update_payment_tx_id(invoice_id.into(), tx_id).await?;
                     }
                 };
@@ -885,7 +885,7 @@ impl PaymentDriver for GntDriver {
         mode: AccountMode,
         address: &str,
         sign_tx: SignTx,
-    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<()>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
         let result = if mode.contains(AccountMode::SEND)
             && self.ethereum_client.chain_id() == Chain::Rinkeby.id()
         {
@@ -900,7 +900,7 @@ impl PaymentDriver for GntDriver {
     fn get_account_balance<'a>(
         &'a self,
         address: &str,
-    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<AccountBalance>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>> {
         let address: String = address.into();
         Box::pin(async move {
             let address = utils::str_to_addr(address.as_str())?;
@@ -921,7 +921,7 @@ impl PaymentDriver for GntDriver {
         recipient: &str,
         due_date: DateTime<Utc>,
         sign_tx: SignTx,
-    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<()>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
         let result = futures3::executor::block_on(
             self.add_payment(invoice_id, amount, sender, recipient, due_date, sign_tx),
         );
@@ -933,7 +933,7 @@ impl PaymentDriver for GntDriver {
         &'a mut self,
         invoice_id: &str,
         sign_tx: SignTx,
-    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<()>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>> {
         let result = futures3::executor::block_on(self.retry_payment(invoice_id, sign_tx));
         Box::pin(future::ready(result))
     }
@@ -942,7 +942,7 @@ impl PaymentDriver for GntDriver {
     fn get_payment_status<'a>(
         &'a self,
         invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<PaymentStatus>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>> {
         let result = futures3::executor::block_on(self.fetch_payment_status(invoice_id));
         Box::pin(future::ready(result))
     }
@@ -951,7 +951,7 @@ impl PaymentDriver for GntDriver {
     fn verify_payment<'a>(
         &'a self,
         confirmation: &PaymentConfirmation,
-    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<PaymentDetails>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>> {
         let tx_hash: H256 = H256::from_slice(&confirmation.confirmation);
         Box::pin(async move {
             let ethereum_client = EthereumClient::new()?;
@@ -970,7 +970,7 @@ impl PaymentDriver for GntDriver {
         &'a self,
         _payer: &str,
         _payee: &str,
-    ) -> Pin<Box<dyn Future<Output=PaymentDriverResult<Balance>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>> {
         // TODO: Get real transaction balance
         Box::pin(future::ready(Ok(Balance {
             currency: Currency::Gnt,

@@ -175,7 +175,10 @@ mod tests {
 
     fn init_env() {
         INIT.call_once(|| {
-            std::env::set_var(GETH_ADDRESS_ENV_KEY, "http://1.geth.testnet.golem.network:55555");
+            std::env::set_var(
+                GETH_ADDRESS_ENV_KEY,
+                "http://1.geth.testnet.golem.network:55555",
+            );
             std::env::set_var(CHAIN_ENV_KEY, "rinkeby")
         });
     }
