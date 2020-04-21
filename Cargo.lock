@@ -5921,6 +5921,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-constraints"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "ya-utils-path"
 version = "0.1.0"
 
