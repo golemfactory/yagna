@@ -122,7 +122,7 @@ You can create preset in interactive mode:
 
 or set all parameters non interactively:
 
-`cargo run --bin ya-provider preset create --nointeractive --preset-name wasm-offer --exeunit wasmtime --pricing linear --price Duration=1.2 --price CPU=3.4 "Init price"=0.2`
+`cargo run --bin ya-provider preset create --no-interactive --preset-name wasm-offer --exe-unit wasmtime --pricing linear --price Duration=1.2 --price CPU=3.4 "Init price"=0.2`
 
 If you don't specify any of price values, it will be defaulted to 0.0.  
 
@@ -135,7 +135,7 @@ Updating in interactive mode:
 
 or using command line parameters:
 
-`cargo run --bin ya-provider preset update wasm-preset --nointeractive --exeunit wasmtime --pricing linear --price Duration=1.3 --price CPU=3.5 "Init price"=0.3`
+`cargo run --bin ya-provider preset update wasm-preset --no-interactive --exe-unit wasmtime --pricing linear --price Duration=1.3 --price CPU=3.5 "Init price"=0.3`
 
 You can omit some parameters and the will be filled with previous values.
 

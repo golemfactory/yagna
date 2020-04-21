@@ -33,10 +33,10 @@ async fn main() -> anyhow::Result<()> {
         Commands::Preset(presets_cmd) => match presets_cmd {
             PresetsConfig::List => ProviderAgent::list_presets(config),
             PresetsConfig::Create {
-                nointeractive,
+                no_interactive,
                 params,
             } => {
-                if nointeractive {
+                if no_interactive {
                     ProviderAgent::create_preset(config, params)
                 } else {
                     ProviderAgent::create_preset_interactive(config)
@@ -44,11 +44,11 @@ async fn main() -> anyhow::Result<()> {
             }
             PresetsConfig::Remove { name } => ProviderAgent::remove_preset(config, name),
             PresetsConfig::Update {
-                nointeractive,
+                no_interactive,
                 params,
                 name,
             } => {
-                if nointeractive {
+                if no_interactive {
                     ProviderAgent::update_preset(config, name, params)
                 } else {
                     ProviderAgent::update_preset_interactive(config, name)
