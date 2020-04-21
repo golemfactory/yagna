@@ -31,7 +31,7 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let api: ProviderApi = run_args.api.try_into()?;
+        let api: ProviderApi = (&run_args.api).try_into()?;
         let market = ProviderMarket::new(api.market, "AcceptAll").start();
         let runner = TaskRunner::new(api.activity.clone())?.start();
         let payments =
