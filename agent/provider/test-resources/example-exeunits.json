@@ -1,11 +1,13 @@
 [
   {
     "name": "dummy",
+    "version": "0.1.0",
     "supervisor-path": "dummy.exe",
     "runtime-path": ""
   },
   {
     "name": "wasm",
+    "version": "0.1.0",
     "supervisor-path": "wasm.exe",
     "runtime-path": ""
   }

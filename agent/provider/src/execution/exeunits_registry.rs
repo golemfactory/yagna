@@ -1,31 +1,44 @@
 use anyhow::{anyhow, Result};
-use log::info;
 use path_clean::PathClean;
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fmt,
     fs::File,
     io::BufReader,
     path::{Path, PathBuf},
 };
+use thiserror::Error;
 
 use super::exeunit_instance::ExeUnitInstance;
+use serde_json::Value;
+use ya_agent_offer_model::OfferBuilder;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExeUnitDesc {
-    name: String,
-    supervisor_path: PathBuf,
-    runtime_path: PathBuf,
+    pub name: String,
+    pub version: Version,
+    pub supervisor_path: PathBuf,
+    pub runtime_path: PathBuf,
+
+    // ExeUnit defined properties, that will be appended to offer.
+    #[serde(default = "empty_properties")]
+    pub properties: serde_json::Map<String, Value>,
 
     // Here other capabilities and exe units metadata.
     #[serde(default = "default_description")]
-    description: String,
+    pub description: String,
 }
 
 fn default_description() -> String {
     "No description provided.".to_string()
+}
+
+fn empty_properties() -> serde_json::Map<String, Value> {
+    serde_json::Map::<String, Value>::new()
 }
 
 /// Responsible for creating ExeUnits.
@@ -39,6 +52,13 @@ impl ExeUnitsRegistry {
         ExeUnitsRegistry {
             descriptors: HashMap::new(),
         }
+    }
+
+    pub fn from_file(path: &Path) -> Result<ExeUnitsRegistry> {
+        let mut registry = ExeUnitsRegistry::new();
+        registry.register_exeunits_from_file(&path)?;
+
+        Ok(registry)
     }
 
     pub fn spawn_exeunit(
@@ -83,7 +103,7 @@ impl ExeUnitsRegistry {
         desc.supervisor_path = normalize_path(&desc.supervisor_path)?;
         desc.runtime_path = normalize_path(&desc.runtime_path)?;
 
-        info!(
+        log::info!(
             "Added [{}] ExeUnit to registry. Supervisor path: [{}], Runtime path: [{}].",
             desc.name,
             desc.supervisor_path.display(),
@@ -124,6 +144,76 @@ impl ExeUnitsRegistry {
             .ok_or(anyhow!("ExeUnit [{}] doesn't exist in registry.", name))?
             .clone())
     }
+
+    pub fn list_exeunits(&self) -> Vec<ExeUnitDesc> {
+        self.descriptors
+            .iter()
+            .map(|(_, desc)| desc.clone())
+            .collect()
+    }
+
+    pub fn validate(&self) -> Result<(), RegistryError> {
+        let errors = self
+            .descriptors
+            .iter()
+            .map(|(_, desc)| desc.validate())
+            .filter_map(|result| match result {
+                Err(error) => Some(error),
+                Ok(_) => None,
+            })
+            .collect::<Vec<ExeUnitValidation>>();
+
+        if errors.is_empty() {
+            return Ok(());
+        }
+        return Err(RegistryError(errors));
+    }
+}
+
+#[derive(Error, Debug)]
+pub struct RegistryError(Vec<ExeUnitValidation>);
+
+impl fmt::Display for RegistryError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for v in &self.0 {
+            write!(f, "{}\n", v)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ExeUnitValidation {
+    #[error("ExeUnit [{}] Supervisor binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
+    SupervisorNotFound { desc: ExeUnitDesc },
+    #[error("ExeUnit [{}] Runtime binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
+    RuntimeNotFound { desc: ExeUnitDesc },
+}
+
+impl ExeUnitDesc {
+    pub fn validate(&self) -> Result<(), ExeUnitValidation> {
+        if !self.supervisor_path.exists() {
+            return Err(ExeUnitValidation::SupervisorNotFound { desc: self.clone() });
+        }
+        // I'm not sure we should force it's existence.
+        if !self.runtime_path.exists() {
+            return Err(ExeUnitValidation::RuntimeNotFound { desc: self.clone() });
+        }
+        Ok(())
+    }
+}
+
+impl OfferBuilder for ExeUnitDesc {
+    fn build(&self) -> Value {
+        let mut common = serde_json::json!({
+            "name": self.name,
+            "version": self.version.to_string()
+        });
+        let mut offer_part = self.properties.clone();
+        offer_part.append(common.as_object_mut().unwrap());
+
+        return serde_json::Value::Object(offer_part);
+    }
 }
 
 fn normalize_path(path: &Path) -> Result<PathBuf> {
@@ -135,6 +225,45 @@ fn normalize_path(path: &Path) -> Result<PathBuf> {
     }
 
     Ok(path.clean())
+}
+
+impl fmt::Display for ExeUnitDesc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let align = 15;
+        let align_prop = 30;
+
+        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
+        write!(f, "{:width$}{}\n", "Version:", self.version, width = align)?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Supervisor:",
+            self.supervisor_path.display(),
+            width = align
+        )?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Runtime:",
+            self.runtime_path.display(),
+            width = align
+        )?;
+        write!(
+            f,
+            "{:width$}{}\n",
+            "Description:",
+            self.description,
+            width = align
+        )?;
+
+        if !self.properties.is_empty() {
+            write!(f, "Properties:\n")?;
+            for (key, value) in self.properties.iter() {
+                write!(f, "    {:width$}{}\n", key, value, width = align_prop)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
