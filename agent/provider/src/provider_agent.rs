@@ -23,6 +23,7 @@ use crate::preset_cli::PresetUpdater;
 use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
 
 
+
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
@@ -31,14 +32,14 @@ pub struct ProviderAgent {
 }
 
 impl ProviderAgent {
-    pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let api: ProviderApi = run_args.api.try_into()?;
+    pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+        let api: ProviderApi = (&args.api).try_into()?;
         let market = ProviderMarket::new(api.market, "AcceptAll").start();
         let runner = TaskRunner::new(api.activity.clone())?.start();
         let payments =
-            Payments::new(api.activity, api.payment, &run_args.node.credit_address).start();
+            Payments::new(api.activity, api.payment, &args.node.credit_address).start();
 
-        let node_info = ProviderAgent::create_node_info(&run_args.node).await;
+        let node_info = ProviderAgent::create_node_info(&args.node).await;
 
         let mut provider = ProviderAgent {
             market,
@@ -46,16 +47,15 @@ impl ProviderAgent {
             payments,
             node_info,
         };
-        provider.initialize(run_args.presets, config, *run_args.shutdown).await?;
+        provider.initialize(args, config).await?;
 
         Ok(provider)
     }
 
     pub async fn initialize(
         &mut self,
-        presets_names: Vec<String>,
+        args: RunConfig,
         config: ProviderConfig,
-        expires: Duration,
     ) -> anyhow::Result<()> {
         // Forward AgreementApproved event to TaskRunner actor.
         let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
@@ -78,7 +78,7 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         Ok(self
-            .create_offers(presets_names, config, expires)
+            .create_offers(args.presets, config, *args.shutdown)
             .await?)
     }
 
