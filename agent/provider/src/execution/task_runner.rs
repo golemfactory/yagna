@@ -22,6 +22,7 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
+use crate::task_manager::{BreakAgreement, BreakAgreementReason};
 
 // =========================================== //
 // Public exposed messages
@@ -45,21 +46,6 @@ pub struct InitializeExeUnits {
 #[rtype(result = "Result<ExeUnitDesc>")]
 pub struct GetExeUnit {
     pub name: String,
-}
-
-/// Event forces agreement termination, what includes killing ExeUnit.
-/// Sending this event indicates, that agreement conditions were broken
-/// somehow. Normally Requestor is responsible for agreement termination.
-#[derive(Message)]
-#[rtype(result = "Result<()>")]
-pub struct BreakAgreement {
-    pub agreement_id: String,
-    pub reason: BreakAgreementReason,
-}
-
-#[derive(Display)]
-pub enum BreakAgreementReason {
-    Expired,
 }
 
 // =========================================== //

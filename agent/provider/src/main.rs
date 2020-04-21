@@ -7,6 +7,7 @@ mod payments;
 mod preset_cli;
 mod provider_agent;
 mod startup_config;
+mod task_manager;
 
 use provider_agent::ProviderAgent;
 use startup_config::{Commands, ExeUnitsConfig, PresetsConfig, StartupConfig};

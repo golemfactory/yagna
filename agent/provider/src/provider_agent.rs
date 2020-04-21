@@ -1,33 +1,33 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
-use chrono::{Utc, DateTime};
+use chrono::{DateTime, Utc};
 use std::convert::TryInto;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
 use ya_client::cli::ProviderApi;
-use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
+use ya_utils_actix::actix_handler::send_message;
 
 use crate::execution::{
-    ActivityCreated, ActivityDestroyed, ExeUnitDesc, ExeUnitsRegistry, GetExeUnit,
+    ExeUnitDesc, ExeUnitsRegistry, GetExeUnit,
     InitializeExeUnits, TaskRunner, UpdateActivity,
 };
 use crate::market::{
-    provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
+    provider_market::{OnShutdown, UpdateMarket},
     CreateOffer, Preset, Presets, ProviderMarket,
 };
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
 use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
-
-
+use crate::task_manager::{TaskManager, InitializeTaskManager};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
+    task_manager: Addr<TaskManager>,
     node_info: NodeInfo,
 }
 
@@ -36,8 +36,9 @@ impl ProviderAgent {
         let api: ProviderApi = (&args.api).try_into()?;
         let market = ProviderMarket::new(api.market, "AcceptAll").start();
         let runner = TaskRunner::new(api.activity.clone())?.start();
-        let payments =
-            Payments::new(api.activity, api.payment, &args.node.credit_address).start();
+        let payments = Payments::new(api.activity, api.payment, &args.node.credit_address).start();
+        let task_manager =
+            TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
 
         let node_info = ProviderAgent::create_node_info(&args.node).await;
 
@@ -45,6 +46,7 @@ impl ProviderAgent {
             market,
             runner,
             payments,
+            task_manager,
             node_info,
         };
         provider.initialize(args, config).await?;
@@ -57,19 +59,7 @@ impl ProviderAgent {
         args: RunConfig,
         config: ProviderConfig,
     ) -> anyhow::Result<()> {
-        // Forward AgreementApproved event to TaskRunner actor.
-        let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
-        self.market.send(msg).await??;
-
-        let msg = Subscribe::<AgreementApproved>(self.payments.clone().recipient());
-        self.market.send(msg).await??;
-
-        //
-        let msg = Subscribe::<ActivityCreated>(self.payments.clone().recipient());
-        self.runner.send(msg).await??;
-
-        let msg = Subscribe::<ActivityDestroyed>(self.payments.clone().recipient());
-        self.runner.send(msg).await??;
+        self.task_manager.send(InitializeTaskManager{}).await??;
 
         // Load ExeUnits descriptors from file.
         let msg = InitializeExeUnits {
