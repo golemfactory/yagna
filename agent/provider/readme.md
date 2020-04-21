@@ -20,7 +20,7 @@ Create separate working dir for the Provider Agent (please create `ya-prov` in t
 
 ### Command line parameters
 
-This can be displayed using `--help`
+This can be displayed using `cargo run --bin ya-provider run --help`
 
 | Parameter      | Description   
 | -------------- |------------------------------------------------|
@@ -28,45 +28,42 @@ This can be displayed using `--help`
 | market-url     | Market api address. Overrides `YAGNA_MARKET_URL`
 | activity-url   | Activity api address. Overrides `YAGNA_ACTIVITY_URL`
 | payment-url    | Payment api address. Overrides `YAGNA_PAYMENT_URL`
-| credit-address | Ethereum account for payments (should match NodeId). Overrides `CREDIT_ADDRESS`
 | exe-unit-path  | Path to JSON descriptor file for ExeUnits. Overrides `EXE_UNIT_PATH`
 | node-name      | Node name to use in agreements.
 | subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes.
+| credit-address | Ethereum account for payments (should match NodeId). Overrides `CREDIT_ADDRESS`(it will be removed in next release).
 
 ### Creating app-key authentication token
 
-To use Provider Agent we nedd to provide afromentioned `YAGNA_APPKEY`.
-To obtain it we need to be in this newly created workdir `cd ya-prov`:
+To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov`:
 
-1. Run [yagna daemon](https://github.com/golemfactory/yagna/blob/master/core/serv/README.md):
-```
-cargo run --bin yagna -- service run
-```
-When enabling `debug` log level or higher its good to filter out core crates to `info`:
-```
-RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info cargo run --bin yagna -- service run
-```
+1. Run [yagna service](https://github.com/golemfactory/yagna/blob/master/core/serv/README.md):
+    ```
+    cargo run --bin yagna -- service run
+    ```
+    If you want to set `debug` log level or higher its good to filter out core crates to `info`:
+    ```
+    RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info cargo run --bin yagna -- service run
+    ```
 
-2. Create token:
+2. Create app-key token
 
-In another console, go to the same directory and run:
-```
-cargo run --bin yagna -- app-key create "provider-agent"
-```
-it will display newly created app-key eg.
-```
-$ cargo run --bin yagna -- app-key create "provider-agent"
-58cffa9aa1e74811b223b627c7f87aac
-```
+    In another console, go to the same directory and run:
+    ```
+    cargo run --bin yagna -- app-key create "provider-agent"
+    ```
+    it will display newly created app-key eg.
+    ```
+    $ cargo run --bin yagna -- app-key create "provider-agent"
+    58cffa9aa1e74811b223b627c7f87aac
+    ```
 
 3. Put this app-key into your `.env` file as a value for variable `YAGNA_APPKEY`.
-
-4. Restart yagna daemon (Ctrl+C, then repeat step 1)
 
 ## Presets
 
 Provider uses presets to create market offers. In current version presets are
-defined in presets.json file, that should be placed in working directory.
+defined in `presets.json` file, that should be placed in working directory.
 You can copy example presets from `agent/provider/examples/presets.json`.
 
 You can list presets by running command:
@@ -123,7 +120,7 @@ You can create preset in interactive mode:
 
 `cargo run --bin ya-provider preset create`
 
-or set all parameters using parameters:
+or set all parameters non interactively:
 
 `cargo run --bin ya-provider preset create --nointeractive --preset-name wasm-offer --exeunit wasmtime --pricing linear --price Duration=1.2 --price CPU=3.4 "Init price"=0.2`
 
@@ -163,30 +160,30 @@ you can see agreement property, that will be set in usage vector.
 
 ## Running the Provider Agent
 
-Make sure you have compiled latest changes to exe-init binaries:
+Make sure you have compiled latest changes to exe-unit binaries:
 
 `cargo build --release --bin exe-unit --bin wasmtime-exeunit`
 
-While the yagna daemon is still running (and you are in the `ya-prov` directory) you can now start Provider Agent.
-You should list all presets, provider should use to create offers:
+While the yagna service is still running (and you are in the `ya-prov` directory) you can now start Provider Agent.
+You must enumerate all presets, you want Provider Agent to publish as Offers on the Market:
 
 `cargo run --release --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json run high-cpu amazing-offer`
 
-
 ## Mock requestor
 
-Run `ya-requestor` app to mock negotiations and activity.
+Run `ya-requestor` app to mock negotiations, activity and payments.
 
-1. Configure requestor
+### Configure requestor
 
 You need to run a separate yagna service with a different identity,
 if you want to run requestor on the same machine. The best way is to create
-a separate directory (please use `ya-requestor` in the main yagna
-source directory) with a new `.env` copied from .env-template. You must change port
-numbers in `YAGNA_API_URL`, and `YAGNA_ACTIVITY_URL` to e.g. 7768,
-and the port number in `GSB_URL` to e.g. 7465 in your new `.env` file.
+a separate directory (e.g. `ya-req` in the main yagna
+source directory) with a new `.env` copied from `.env-template`. 
+In this `.env` file you must change port numbers not to interfere with provider: 
+ * `GSB_URL` to e.g. 7474
+ * `YAGNA_API_URL` to e.g. 7475
 
-2. Run yagna daemon:
+### Run yagna service:
 ```
 cargo run --bin yagna -- service run
 ```
@@ -196,12 +193,10 @@ cargo run --bin yagna -- service run
 cargo run --bin yagna -- app-key create "requestor-agent"
 ```
 
-4. Set the result of `app-key create` as YAGNA_APPKEY in your .env file.
+4. Set the result as `YAGNA_APPKEY` value in your `.env` file.
 
-5. Stop yagna daemon and run it again.
-
-6. Get some ETH and GNT from faucet on testnet.
-This can last a little bit long! If it doesn't work, try again.
+6. Get some ETH and GNT from faucet on testnet (rinkeby).
+This can last a little bit long! Retry if not succeed at first.
 ```
 cargo run --bin yagna payment init -r
 ```
@@ -210,6 +205,8 @@ cargo run --bin yagna payment init -r
 ```
 cargo run --bin yagna payment status
 ```
+Or go to the Rinkeby's etherscan: https://rinkeby.etherscan.io/address/0xdeadbeef00000000000000000000000000000000
+(Replace the address with the generated node id for the requestor agent -- a result of `cargo run --bin yagna id show`)
 
 8. Run requestor (commands.json contains commands to be executed on the provider):
 
