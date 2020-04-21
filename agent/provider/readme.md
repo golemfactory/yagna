@@ -173,7 +173,7 @@ You must enumerate all presets, you want Provider Agent to publish as Offers on 
 
 Run `ya-requestor` app to mock negotiations, activity and payments.
 
-### Configure requestor
+#### 0. Configure Requestor
 
 You need to run a separate yagna service with a different identity,
 if you want to run requestor on the same machine. The best way is to create
@@ -183,32 +183,35 @@ In this `.env` file you must change port numbers not to interfere with provider:
  * `GSB_URL` to e.g. 7474
  * `YAGNA_API_URL` to e.g. 7475
 
-### Run yagna service:
+#### 1. Run yagna service
+Start requestor-side yagna service
 ```
 cargo run --bin yagna -- service run
 ```
 
-3. Create app-key in a new console:
-```
-cargo run --bin yagna -- app-key create "requestor-agent"
-```
+#### 2. Create app-key
+1. In a new console run:
+    ```
+    cargo run --bin yagna -- app-key create "requestor-agent"
+    ```
 
-4. Set the result as `YAGNA_APPKEY` value in your `.env` file.
+2. Set the result as `YAGNA_APPKEY` value in your `.env` file.
 
-6. Get some ETH and GNT from faucet on testnet (rinkeby).
-This can last a little bit long! Retry if not succeed at first.
-```
-cargo run --bin yagna payment init -r
-```
+#### 3. Get some ETH and GNT
+1. We need to acquire funds from faucet on testnet (rinkeby).
+This can last a little bit long. Retry if not succeed at first.
+    ```
+    cargo run --bin yagna payment init -r
+    ```
+2. Check if you got credit on your account:
+    ```
+    cargo run --bin yagna payment status
+    ```
+    Or go to the Rinkeby's etherscan: https://rinkeby.etherscan.io/address/0xdeadbeef00000000000000000000000000000000
+    (Replace the address with the generated node id for the requestor agent -- a result of `cargo run --bin yagna id show`)
 
-7. Check if you got credit on your account:
-```
-cargo run --bin yagna payment status
-```
-Or go to the Rinkeby's etherscan: https://rinkeby.etherscan.io/address/0xdeadbeef00000000000000000000000000000000
-(Replace the address with the generated node id for the requestor agent -- a result of `cargo run --bin yagna id show`)
-
-8. Run requestor (commands.json contains commands to be executed on the provider):
+#### 4. Run Requestor Agent
+You need `commands.json` file which contains commands to be executed on the provider:
 
 ```
 cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
