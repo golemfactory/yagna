@@ -24,6 +24,10 @@ struct AppSettings {
     api: ApiOpts,
     #[structopt(long = "exe-script")]
     exe_script: PathBuf,
+    /// Subnetwork identifier. You can set this value to filter nodes
+    /// with other identifiers than selected. Useful for test purposes.
+    #[structopt(long = "subnet", env = "SUBNET")]
+    pub subnet: Option<String>,
     #[structopt(long = "node-name", default_value = DEFAULT_NODE_NAME)]
     node_name: String,
     #[structopt(long = "task-package", default_value = DEFAULT_TASK_PACKAGE)]
@@ -124,7 +128,11 @@ async fn main() -> anyhow::Result<()> {
 
     let activities = Arc::new(Mutex::new(HashSet::new()));
     let agreement_allocation = Arc::new(Mutex::new(HashMap::new()));
-    let my_demand = market::build_demand(&settings.node_name, &settings.task_package);
+    let my_demand = market::build_demand(
+        &settings.node_name,
+        &settings.task_package,
+        &settings.subnet,
+    );
 
     let subscription_id = api.market.subscribe(&my_demand).await?;
     log::info!("\n\n DEMAND SUBSCRIBED: {}", subscription_id);
