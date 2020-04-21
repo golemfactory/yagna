@@ -21,8 +21,6 @@ members = [
     "exe-unit",
     "exe-unit/wasm-mozjs",
     "exe-unit/wasmtime",
-    "interfaces/client",
-    "interfaces/model",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
@@ -60,10 +58,10 @@ ya-sb-util = { path = "service-bus/util" }
 ## OTHERS
 gftp = { path = "core/gftp" }
 ya-agent-offer-model = { path = "agent/offer-model" }
-ya-client = { path = "interfaces/client" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git" }
 ya-core-model = { path = "core/model" }
 ya-exe-unit = { path = "exe-unit" }
-ya-model = { path = "interfaces/model" }
+ya-model = { git = "https://github.com/golemfactory/ya-client.git" }
 ya-payment-driver = { path = "core/payment-driver" }
 ya-persistence = { path = "core/persistence" }
 ya-transfer = { path = "utils/transfer" }

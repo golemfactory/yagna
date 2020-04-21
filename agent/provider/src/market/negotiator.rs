@@ -2,11 +2,13 @@ use ya_agent_offer_model::OfferDefinition;
 use ya_model::market::{Agreement, Offer, Proposal};
 
 use anyhow::Result;
+use derive_more::Display;
 
 /// Response for requestor proposals.
-#[derive(Debug)]
+#[derive(Debug, Display)]
 #[allow(dead_code)]
 pub enum ProposalResponse {
+    #[display(fmt = "CounterProposal")]
     CounterProposal {
         offer: Proposal,
     },
@@ -17,7 +19,7 @@ pub enum ProposalResponse {
 }
 
 /// Response for requestor agreements.
-#[derive(Debug)]
+#[derive(Debug, Display)]
 #[allow(dead_code)]
 pub enum AgreementResponse {
     ApproveAgreement,
@@ -25,7 +27,8 @@ pub enum AgreementResponse {
 }
 
 pub trait Negotiator: std::fmt::Debug {
-    //TODO: We should add some parameters for offer creation.
+    /// Negotiator can modify offer, that was generated for him. He can save
+    /// information about this offer, that are necessary for negotiations.
     fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<Offer>;
     fn react_to_proposal(&mut self, offer: &Offer, demand: &Proposal) -> Result<ProposalResponse>;
     fn react_to_agreement(&mut self, agreement: &Agreement) -> Result<AgreementResponse>;
