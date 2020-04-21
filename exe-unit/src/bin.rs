@@ -164,6 +164,7 @@ fn main() -> anyhow::Result<()> {
     Ok(result?)
 }
 
+#[cfg(windows)]
 #[cfg(test)]
 mod test {
     use super::*;
