@@ -216,7 +216,7 @@ impl ProviderAgent {
         preset.name = params
             .preset_name
             .ok_or(anyhow!("Preset name is required."))?;
-        preset.exeunit_name = params.exeunit.ok_or(anyhow!("ExeUnit is required."))?;
+        preset.exeunit_name = params.exe_unit.ok_or(anyhow!("ExeUnit is required."))?;
         preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
 
         for (name, price) in params.price.iter() {
@@ -303,7 +303,7 @@ impl ProviderAgent {
 
         // All values are optional. If not set, previous value will remain.
         preset.name = params.preset_name.unwrap_or(preset.name);
-        preset.exeunit_name = params.exeunit.unwrap_or(preset.exeunit_name);
+        preset.exeunit_name = params.exe_unit.unwrap_or(preset.exeunit_name);
         preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
 
         for (name, price) in params.price.iter() {
