@@ -2,13 +2,13 @@ use crate::error::TransferError;
 use regex::Regex;
 use url::{ParseError, Url};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransferHash {
     pub alg: String,
     pub val: Vec<u8>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransferUrl {
     pub hash: Option<TransferHash>,
     pub url: Url,
@@ -39,7 +39,11 @@ impl TransferUrl {
 
         let (hash, url) = parse_hash(url)?;
         let parsed = match Url::parse(url) {
-            Ok(url) => url,
+            Ok(parsed_url) => match parsed_url.scheme().len() {
+                // now this is dumb... Url::parse() will accept Windows absolute path, taking drive letter for scheme!
+                1 => Url::parse(&format!("{}:{}", fallback_scheme, url))?,
+                _ => parsed_url,
+            },
             Err(error) => match error {
                 ParseError::RelativeUrlWithoutBase => {
                     Url::parse(&format!("{}:{}", fallback_scheme, url))?
@@ -105,6 +109,7 @@ fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), TransferError> 
 #[cfg(test)]
 mod test {
     use super::TransferUrl;
+    use url::{Url};
 
     macro_rules! should_fail {
         ($str:expr) => {
@@ -173,5 +178,16 @@ mod test {
 
         should_succeed!("http://location.com");
         should_succeed!("http:location.com");
+    }
+
+    #[test]
+    fn fallback_to_file_on_windows_path() {
+        assert_eq!(
+            TransferUrl::parse("C:\\Users", "file").unwrap(),
+            TransferUrl {
+                hash: None,
+                url: Url::parse("file://C:/Users").unwrap()
+            }
+        );
     }
 }
