@@ -12,11 +12,12 @@ use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo
 use super::model::PaymentModel;
 use crate::execution::{ActivityCreated, ActivityDestroyed};
 use crate::market::provider_market::AgreementApproved;
+use crate::task_manager::{AgreementClosed, AgreementBroken};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::payment::provider::ProviderApi;
 use ya_model::payment::{DebitNote, Invoice, InvoiceStatus, NewDebitNote, NewInvoice, Payment};
-use ya_utils_actix::actix_handler::{send_message, ResultTypeGetter};
+use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
 
 // =========================================== //
@@ -38,15 +39,6 @@ pub struct UpdateCost {
 pub struct FinalizeActivity {
     pub debit_info: DebitNoteInfo,
     pub cost_summary: CostInfo,
-}
-
-/// TODO: We should get this message from external world.
-///       Current code assumes, that we have only one activity per agreement.
-/// Computes costs for all activities and sends invoice to Requestor.
-#[derive(Message, Clone)]
-#[rtype(result = "Result<()>")]
-pub struct AgreementClosed {
-    pub agreement_id: String,
 }
 
 /// Checks if requestor accepted Invoice.
@@ -476,21 +468,11 @@ impl Handler<UpdateCost> for Payments {
 impl Handler<FinalizeActivity> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: FinalizeActivity, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: FinalizeActivity, _ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.debit_info.agreement_id) {
             log::info!("Activity [{}] finished.", &msg.debit_info.activity_id);
 
             let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_summary);
-
-            // Temporary. Requestor should close agreement, but for now we
-            // treat destroying activity as closing agreement.
-            send_message(
-                ctx.address(),
-                AgreementClosed {
-                    agreement_id: msg.debit_info.agreement_id.clone(),
-                },
-            );
-
             return ActorResponse::reply(result);
         } else {
             log::warn!(
@@ -502,6 +484,7 @@ impl Handler<FinalizeActivity> for Payments {
     }
 }
 
+/// Computes costs for all activities and sends invoice to Requestor.
 impl Handler<AgreementClosed> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
@@ -549,6 +532,20 @@ impl Handler<AgreementClosed> for Payments {
         }
 
         return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
+    }
+}
+
+/// If Agreement was broken, we should behave like it was closed.
+impl Handler<AgreementBroken> for Payments {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
+        let address = ctx.address().clone();
+        let future = async move {
+            Ok(address.send(AgreementClosed{ agreement_id: msg.agreement_id }).await??)
+        };
+
+        return ActorResponse::r#async(future.into_actor(self));
     }
 }
 

@@ -1,6 +1,5 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
-use chrono::{DateTime, TimeZone, Utc};
 use derive_more::Display;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -22,7 +21,7 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
-use crate::task_manager::{BreakAgreement, BreakAgreementReason};
+use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // =========================================== //
 // Public exposed messages
@@ -371,53 +370,46 @@ impl TaskRunner {
     pub fn on_agreement_approved(
         &mut self,
         msg: AgreementApproved,
-        ctx: &mut Context<Self>,
+        _ctx: &mut Context<Self>,
     ) -> Result<()> {
-        let agreement_id = msg.agreement.agreement_id.clone();
-        let expiration = agreement_expiration_from(&msg.agreement)?;
-        let duration = (expiration - Utc::now()).to_std()?;
-
-        ctx.run_later(duration, move |_, ctx| {
-            let msg = BreakAgreement {
-                agreement_id: agreement_id.clone(),
-                reason: BreakAgreementReason::Expired,
-            };
-            ctx.address().do_send(msg);
-        });
-
         // Agreement waits for first create activity event.
-        // FIXME: clean-up agreements upon TTL or maybe payments
         let agreement_id = msg.agreement.agreement_id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
     }
 
-    pub fn on_break_agreement(
+    pub fn on_agreement_broken(
         &mut self,
-        msg: BreakAgreement,
+        msg: AgreementBroken,
         ctx: &mut Context<Self>,
     ) -> Result<()> {
         let agreement_id = msg.agreement_id.clone();
-        log::warn!(
-            "Breaking agreement [{}], reason: {}.",
-            agreement_id,
-            msg.reason
-        );
+        self.remove_remaining_tasks(&agreement_id, ctx.address().clone());
+        Ok(())
+    }
 
+    fn on_agreement_closed(
+        &mut self,
+        msg: AgreementClosed,
+        ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        self.active_agreements.remove(&msg.agreement_id);
+        self.remove_remaining_tasks(&msg.agreement_id, ctx.address().clone());
+        Ok(())
+    }
+
+    fn remove_remaining_tasks(&mut self, agreement_id: &str, addr: Addr<Self>) {
         self.tasks
             .iter()
             .filter(|task| task.agreement_id == agreement_id)
             .for_each(|task| {
                 log::warn!(
-                    "Activity [{}] will be destroyed, because of broken agreement [{}].",
+                    "Activity [{}] will be destroyed, because of terminated agreement [{}].",
                     task.activity_id,
                     agreement_id,
                 );
-
-                let addr = ctx.address().clone();
                 addr.do_send(DestroyActivity::new(&task.activity_id, &agreement_id));
             });
-        Ok(())
     }
 
     #[logfn(Debug, fmt = "Task created: {}")]
@@ -526,12 +518,6 @@ fn task_package_from(agreement: &ParsedAgreement) -> Result<String> {
     Ok(agreement.pointer_typed::<String>(runtime_key_str)?)
 }
 
-fn agreement_expiration_from(agreement: &ParsedAgreement) -> Result<DateTime<Utc>> {
-    let expiration_key_str = "/demand/properties/golem/srv/comp/expiration";
-    let timestamp = agreement.pointer_typed::<i64>(expiration_key_str)?;
-    Ok(Utc.timestamp_millis(timestamp))
-}
-
 // =========================================== //
 // Actix stuff
 // =========================================== //
@@ -546,7 +532,8 @@ forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
-forward_actix_handler!(TaskRunner, BreakAgreement, on_break_agreement);
+forward_actix_handler!(TaskRunner, AgreementBroken, on_agreement_broken);
+forward_actix_handler!(TaskRunner, AgreementClosed, on_agreement_closed);
 
 forward_actix_handler!(
     TaskRunner,

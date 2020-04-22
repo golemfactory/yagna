@@ -11,8 +11,7 @@ use ya_client::cli::ProviderApi;
 use ya_utils_actix::actix_handler::send_message;
 
 use crate::execution::{
-    ExeUnitDesc, ExeUnitsRegistry, GetExeUnit,
-    InitializeExeUnits, TaskRunner, UpdateActivity,
+    ExeUnitDesc, ExeUnitsRegistry, GetExeUnit, InitializeExeUnits, TaskRunner, UpdateActivity,
 };
 use crate::market::{
     provider_market::{OnShutdown, UpdateMarket},
@@ -21,12 +20,11 @@ use crate::market::{
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
 use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
-use crate::task_manager::{TaskManager, InitializeTaskManager};
+use crate::task_manager::{InitializeTaskManager, TaskManager};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
-    payments: Addr<Payments>,
     task_manager: Addr<TaskManager>,
     node_info: NodeInfo,
 }
@@ -45,7 +43,6 @@ impl ProviderAgent {
         let mut provider = ProviderAgent {
             market,
             runner,
-            payments,
             task_manager,
             node_info,
         };
@@ -59,7 +56,7 @@ impl ProviderAgent {
         args: RunConfig,
         config: ProviderConfig,
     ) -> anyhow::Result<()> {
-        self.task_manager.send(InitializeTaskManager{}).await??;
+        self.task_manager.send(InitializeTaskManager {}).await??;
 
         // Load ExeUnits descriptors from file.
         let msg = InitializeExeUnits {
