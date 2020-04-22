@@ -56,9 +56,9 @@ impl std::fmt::Display for Driver {
 
 lazy_static! {
     pub static ref GETH_ADDR: String =
-        std::env::var("GETH_ADDR").unwrap_or("http://188.165.227.180:55555".into());
-    pub static ref ETH_FAUCET_ADDR: String =
-        std::env::var("ETH_FAUCET_ADDR").unwrap_or("http://188.165.227.180:4000/donate".into());
+        std::env::var("GETH_ADDR").unwrap_or("http://1.geth.testnet.golem.network:55555".into());
+    pub static ref ETH_FAUCET_ADDR: String = std::env::var("ETH_FAUCET_ADDR")
+        .unwrap_or("http://faucet.testnet.golem.network:4000/donate".into());
     pub static ref GNT_CONTRACT_ADDR: Address = std::env::var("GNT_CONTRACT_ADDR")
         .unwrap_or("924442A66cFd812308791872C4B242440c108E19".into())
         .parse()

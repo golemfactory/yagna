@@ -60,7 +60,7 @@ ya-agent-offer-model = { path = "agent/offer-model" }
 ya-client = { git = "https://github.com/golemfactory/ya-client.git" }
 ya-core-model = { path = "core/model" }
 ya-exe-unit = { path = "exe-unit" }
-ya-model = { git = "https://github.com/golemfactory/ya-client.git" }
+ya-model = { git = "https://github.com/golemfactory/ya-client.git"}
 ya-payment-driver = { path = "core/payment-driver" }
 ya-persistence = { path = "core/persistence" }
 ya-transfer = { path = "utils/transfer" }
