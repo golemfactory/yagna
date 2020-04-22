@@ -107,13 +107,6 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
             return ActorResponse::reply(Err(err.into()));
         }
 
-        if msg.command_index.is_some() && msg.timeout.is_none() {
-            let err = Err(RpcMessageError::BadRequest("Timeout required".to_owned()));
-            return ActorResponse::reply(err);
-        }
-
-        let address = ctx.address();
-        let idx_requested = msg.command_index.is_some();
         let idx = match self.state.batches.get(&msg.batch_id) {
             Some(exec) => match exec.exe_script.len() {
                 0 => return ActorResponse::reply(Ok(Vec::new())),
@@ -125,31 +118,22 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
             }
         };
 
+        let address = ctx.address();
+        let duration = Duration::from_secs_f32(msg.timeout.unwrap_or(0.));
         let notifier = self.state.notifier(&msg.batch_id).clone();
         let fut = async move {
-            match msg.timeout {
-                Some(t) => {
-                    let dur = Duration::from_secs_f64(t as f64);
-                    if let Err(_) = timeout(dur, notifier.when(move |i| i >= idx)).await {
-                        if idx_requested {
-                            return Err(RpcMessageError::Timeout);
-                        }
-                    }
-
-                    let results = address
-                        .send(GetBatchResults(msg.batch_id.clone()))
-                        .await
-                        .map(|mut m| {
-                            m.0.truncate(idx + 1);
-                            m.0
-                        })
-                        .unwrap_or(Vec::new());
-                    Ok(results)
+            if let Err(_) = timeout(duration, notifier.when(move |i| i >= idx)).await {
+                if msg.command_index.is_some() {
+                    return Err(RpcMessageError::Timeout);
                 }
-                None => match address.send(GetBatchResults(msg.batch_id.clone())).await {
-                    Ok(results) => Ok(results.0),
-                    _ => Ok(Vec::new()),
-                },
+            }
+
+            match address.send(GetBatchResults(msg.batch_id.clone())).await {
+                Ok(mut results) => {
+                    results.0.truncate(idx + 1);
+                    Ok(results.0)
+                }
+                _ => Ok(Vec::new()),
             }
         };
 
