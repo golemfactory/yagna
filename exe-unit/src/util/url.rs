@@ -109,7 +109,7 @@ fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), TransferError> 
 #[cfg(test)]
 mod test {
     use super::TransferUrl;
-    use url::{Url};
+    use url::Url;
 
     macro_rules! should_fail {
         ($str:expr) => {
