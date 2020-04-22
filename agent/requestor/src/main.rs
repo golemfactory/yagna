@@ -2,10 +2,11 @@ use actix_rt::{signal, Arbiter};
 use chrono::Utc;
 use futures::{channel::mpsc, prelude::*};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::{convert::TryInto, path::PathBuf};
 use structopt::{clap, StructOpt};
 
+use std::convert::TryFrom;
 use ya_client::{cli::ApiOpts, cli::RequestorApi, Error};
 
 mod activity;
@@ -118,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
 
     let started_at = Utc::now();
     let settings = AppSettings::from_args();
-    let api: RequestorApi = (&settings.api).try_into()?;
+    let api = RequestorApi::try_from(&settings.api)?;
 
     let exe_script = std::fs::read_to_string(&settings.exe_script)?;
     let commands_cnt = match serde_json::from_str(&exe_script)? {

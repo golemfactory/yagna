@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
-use std::convert::TryInto;
+use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let api: ProviderApi = (&run_args.api).try_into()?;
+        let api = ProviderApi::try_from(&run_args.api)?;
         let market = ProviderMarket::new(api.market, "AcceptAll").start();
         let runner = TaskRunner::new(api.activity.clone())?.start();
         let payments =
