@@ -272,15 +272,23 @@ impl Handler<ActivityDestroyed> for TaskManager {
 
     fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.agreement_id.clone();
-        // Forward information to Payments to send last DebitNote in activity.
-        self.payments.do_send(msg);
+        let payments = self.payments.clone();
+        let myself = ctx.address().clone();
 
-        // Temporary. Requestor should close agreement, but now we assume,
-        // there's only one activity and destroying it means closing agreement.
-        ctx.address().do_send(CloseAgreement {
-            agreement_id: agreement_id.to_string(),
-        });
-        ActorResponse::reply(Ok(()))
+        let future = async move {
+            // Forward information to Payments to send last DebitNote in activity.
+            // TODO: What can we do in case of fail? Payments are expected to retry
+            // after they will succeed.
+            payments.send(msg).await??;
+
+            // Temporary. Requestor should close agreement, but now we assume,
+            // there's only one activity and destroying it means closing agreement.
+            myself.do_send(CloseAgreement {
+                agreement_id: agreement_id.to_string(),
+            });
+            Ok(())
+        };
+        ActorResponse::r#async(future.into_actor(self))
     }
 }
 

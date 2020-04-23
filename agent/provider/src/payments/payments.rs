@@ -35,7 +35,7 @@ pub struct UpdateCost {
 /// Changes activity state to Finalized and computes final cost.
 /// Sent by ActivityDestroyed handler after last debit note was sent to Requestor.
 #[derive(Message, Clone)]
-#[rtype(result = "Result<()>")]
+#[rtype("()")]
 pub struct FinalizeActivity {
     pub debit_info: DebitNoteInfo,
     pub cost_summary: CostInfo,
@@ -396,7 +396,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 debit_info: debit_note_info,
             };
 
-            address.do_send(msg);
+            let _ = address.send(msg).await;
         }
         .into_actor(self);
 
@@ -466,20 +466,21 @@ impl Handler<UpdateCost> for Payments {
 }
 
 impl Handler<FinalizeActivity> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = <FinalizeActivity as Message>::Result;
 
     fn handle(&mut self, msg: FinalizeActivity, _ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.debit_info.agreement_id) {
             log::info!("Activity [{}] finished.", &msg.debit_info.activity_id);
 
             let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_summary);
-            return ActorResponse::reply(result);
+            if let Err(error) = result {
+                log::error!("Finalizing activity failed. Error: {}", error);
+            }
         } else {
             log::warn!(
                 "Not my activity - agreement [{}].",
                 &msg.debit_info.agreement_id
             );
-            return ActorResponse::reply(Err(anyhow!("")));
         }
     }
 }
