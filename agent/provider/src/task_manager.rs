@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result};
 use chrono::{DateTime, TimeZone, Utc};
 
 use ya_agreement_utils::ParsedAgreement;
@@ -10,17 +10,18 @@ use ya_utils_actix::forward_actix_handler;
 use crate::execution::{ActivityCreated, ActivityDestroyed, TaskRunner};
 use crate::market::provider_market::{AgreementApproved, ProviderMarket};
 use crate::payments::Payments;
-use crate::task_state::{AgreementState, BreakReason, TaskStates};
+use crate::task_state::{AgreementState, BreakReason, TasksStates};
 
 // =========================================== //
 // Messages modifying agreement state
 // =========================================== //
 
-/// These events can be send to TaskManager:
+/// These events can be sent to TaskManager:
 /// - AgreementApproved
 /// - ActivityCreated
 /// - ActivityDestroyed
 /// - BreakAgreement
+/// - CloseAgreement
 
 /// Event forces agreement termination, what includes killing ExeUnit.
 /// Sending this event indicates, that agreement conditions were broken
@@ -30,6 +31,13 @@ use crate::task_state::{AgreementState, BreakReason, TaskStates};
 pub struct BreakAgreement {
     pub agreement_id: String,
     pub reason: BreakReason,
+}
+
+/// Notifies TaskManager that Requestor close agreement.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct CloseAgreement {
+    pub agreement_id: String,
 }
 
 // =========================================== //
@@ -88,7 +96,7 @@ pub struct TaskManager {
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
 
-    tasks: TaskStates,
+    tasks: TasksStates,
 }
 
 impl TaskManager {
@@ -101,7 +109,7 @@ impl TaskManager {
             market,
             runner,
             payments,
-            tasks: TaskStates::new(),
+            tasks: TasksStates::new(),
         })
     }
 
@@ -115,12 +123,14 @@ impl TaskManager {
         let duration = (expiration - Utc::now()).to_std()?;
 
         // Schedule agreement termination after expiration time.
-        ctx.run_later(duration, move |_, ctx| {
-            let msg = BreakAgreement {
-                agreement_id: agreement_id.clone(),
-                reason: BreakReason::Expired,
-            };
-            ctx.address().do_send(msg);
+        ctx.run_later(duration, move |myself, ctx| {
+            if !myself.tasks.is_agreement_finalized(&agreement_id) {
+                let msg = BreakAgreement {
+                    agreement_id: agreement_id.clone(),
+                    reason: BreakReason::Expired,
+                };
+                ctx.address().do_send(msg);
+            }
         });
         Ok(())
     }
@@ -130,7 +140,8 @@ impl TaskManager {
         msg: UpdateAgreementState,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
-        self.tasks.finish_transition(&msg.agreement_id, msg.new_state)?;
+        self.tasks
+            .finish_transition(&msg.agreement_id, msg.new_state)?;
         Ok(())
     }
 }
@@ -206,12 +217,9 @@ impl Handler<AgreementApproved> for TaskManager {
             runner.send(msg.clone()).await??;
             payments.send(msg.clone()).await??;
 
-            self_address
-                .send(UpdateAgreementState::new(
-                    &msg.agreement.agreement_id,
-                    AgreementState::Initialized,
-                ))
-                .await??;
+            let msg =
+                UpdateAgreementState::new(&msg.agreement.agreement_id, AgreementState::Initialized);
+            self_address.send(msg).await??;
             Ok(())
         }
         .into_actor(self)
@@ -238,8 +246,23 @@ impl Handler<ActivityCreated> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: ActivityCreated, _ctx: &mut Context<Self>) -> Self::Result {
-        // Forward information to Payments for cost computing.
-        self.payments.do_send(msg);
+        // TODO: Consider different flow: TaskRunner sends us request for creating activity
+        //       and TaskManager is responsible for sending CreateActivity to runner.
+        let result: Result<(), anyhow::Error> = (|| {
+            let agreement_id = msg.agreement_id.clone();
+            self.tasks
+                .start_transition(&agreement_id, AgreementState::Computing)?;
+            // Forward information to Payments for cost computing.
+            self.payments.do_send(msg);
+            self.tasks
+                .finish_transition(&agreement_id, AgreementState::Computing)?;
+            Ok(())
+        })();
+
+        if let Err(error) = result {
+            log::error!("{}", error);
+        }
+
         ActorResponse::reply(Ok(()))
     }
 }
@@ -247,18 +270,15 @@ impl Handler<ActivityCreated> for TaskManager {
 impl Handler<ActivityDestroyed> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: ActivityDestroyed, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.agreement_id.clone();
         // Forward information to Payments to send last DebitNote in activity.
         self.payments.do_send(msg);
 
         // Temporary. Requestor should close agreement, but now we assume,
         // there's only one activity and destroying it means closing agreement.
-        self.payments.do_send(AgreementClosed {
-            agreement_id: agreement_id.clone(),
-        });
-        self.runner.do_send(AgreementClosed {
-            agreement_id: agreement_id.clone(),
+        ctx.address().do_send(CloseAgreement {
+            agreement_id: agreement_id.to_string(),
         });
         ActorResponse::reply(Ok(()))
     }
@@ -267,7 +287,21 @@ impl Handler<ActivityDestroyed> for TaskManager {
 impl Handler<BreakAgreement> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: BreakAgreement, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: BreakAgreement, ctx: &mut Context<Self>) -> Self::Result {
+        let reason = msg.reason.clone();
+        let result = self
+            .tasks
+            .start_transition(&msg.agreement_id, AgreementState::Broken { reason });
+
+        if let Err(error) = result {
+            log::error!(
+                "Can't break agreement [{}]. Error: {}",
+                msg.agreement_id,
+                error
+            );
+            return ActorResponse::reply(Ok(()));
+        }
+
         log::warn!(
             "Breaking agreement [{}], reason: {}.",
             msg.agreement_id,
@@ -276,13 +310,46 @@ impl Handler<BreakAgreement> for TaskManager {
 
         let runner = self.runner.clone();
         let payments = self.payments.clone();
+        let self_address = ctx.address().clone();
 
         let future = async move {
             runner.send(AgreementBroken::from(msg.clone())).await??;
             payments.send(AgreementBroken::from(msg.clone())).await??;
+
+            let msg = UpdateAgreementState::new(
+                &msg.agreement_id,
+                AgreementState::Broken {
+                    reason: msg.reason.clone(),
+                },
+            );
+            self_address.send(msg).await??;
             Ok(())
         };
         ActorResponse::r#async(future.into_actor(self))
+    }
+}
+
+impl Handler<CloseAgreement> for TaskManager {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: CloseAgreement, _ctx: &mut Context<Self>) -> Self::Result {
+        let agreement_id = msg.agreement_id.clone();
+        let result: Result<(), anyhow::Error> = (|| {
+            self.tasks
+                .start_transition(&agreement_id, AgreementState::Closed)?;
+
+            self.payments.do_send(AgreementClosed::new(&agreement_id));
+            self.runner.do_send(AgreementClosed::new(&agreement_id));
+
+            self.tasks
+                .finish_transition(&agreement_id, AgreementState::Closed)?;
+            Ok(())
+        })();
+
+        if let Err(error) = result {
+            log::error!("{}", error);
+        }
+        ActorResponse::reply(Ok(()))
     }
 }
 
@@ -304,6 +371,14 @@ impl UpdateAgreementState {
         UpdateAgreementState {
             agreement_id: agreement_id.to_string(),
             new_state,
+        }
+    }
+}
+
+impl AgreementClosed {
+    pub fn new<StrType: AsRef<str>>(agreement_id: StrType) -> AgreementClosed {
+        AgreementClosed {
+            agreement_id: agreement_id.as_ref().to_string()
         }
     }
 }
