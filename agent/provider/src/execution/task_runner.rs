@@ -388,12 +388,9 @@ impl TaskRunner {
         Ok(())
     }
 
-    fn on_agreement_closed(
-        &mut self,
-        msg: AgreementClosed,
-        ctx: &mut Context<Self>,
-    ) -> Result<()> {
+    fn on_agreement_closed(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Result<()> {
         self.active_agreements.remove(&msg.agreement_id);
+        // All activities should be destroyed by now, so it is only sanity call.
         self.remove_remaining_tasks(&msg.agreement_id, ctx.address().clone());
         Ok(())
     }

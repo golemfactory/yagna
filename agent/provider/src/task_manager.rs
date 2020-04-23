@@ -1,18 +1,16 @@
 use actix::prelude::*;
-use anyhow::{Error, Result};
-use chrono::{Utc, DateTime, TimeZone};
-use derive_more::Display;
-use futures_util::FutureExt;
+use anyhow::{anyhow, Error, Result};
+use chrono::{DateTime, TimeZone, Utc};
 
-use ya_utils_actix::forward_actix_handler;
+use ya_agreement_utils::ParsedAgreement;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::Subscribe;
-use ya_agreement_utils::ParsedAgreement;
+use ya_utils_actix::forward_actix_handler;
 
 use crate::execution::{ActivityCreated, ActivityDestroyed, TaskRunner};
 use crate::market::provider_market::{AgreementApproved, ProviderMarket};
 use crate::payments::Payments;
-
+use crate::task_state::{AgreementState, BreakReason, TaskStates};
 
 // =========================================== //
 // Messages modifying agreement state
@@ -31,12 +29,7 @@ use crate::payments::Payments;
 #[rtype(result = "Result<()>")]
 pub struct BreakAgreement {
     pub agreement_id: String,
-    pub reason: BreakAgreementReason,
-}
-
-#[derive(Display, Clone)]
-pub enum BreakAgreementReason {
-    Expired,
+    pub reason: BreakReason,
 }
 
 // =========================================== //
@@ -49,7 +42,7 @@ pub enum BreakAgreementReason {
 #[rtype(result = "Result<()>")]
 pub struct AgreementBroken {
     pub agreement_id: String,
-    pub reason: BreakAgreementReason,
+    pub reason: BreakReason,
 }
 
 /// Agreement is finished by Requestor. This is proper way to close Agreement.
@@ -57,18 +50,6 @@ pub struct AgreementBroken {
 #[rtype(result = "Result<()>")]
 pub struct AgreementClosed {
     pub agreement_id: String,
-}
-
-// =========================================== //
-// Agreement state
-// =========================================== //
-
-enum AgreementState {
-    Approved,
-    Computing,
-    Closed,
-    Failed,
-    Broken,
 }
 
 // =========================================== //
@@ -86,7 +67,14 @@ pub struct InitializeTaskManager;
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
-pub struct ScheduleExpiration(ParsedAgreement);
+struct ScheduleExpiration(ParsedAgreement);
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+struct UpdateAgreementState {
+    pub agreement_id: String,
+    pub new_state: AgreementState,
+}
 
 // =========================================== //
 // TaskManager implementation
@@ -99,6 +87,8 @@ pub struct TaskManager {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
+
+    tasks: TaskStates,
 }
 
 impl TaskManager {
@@ -111,6 +101,7 @@ impl TaskManager {
             market,
             runner,
             payments,
+            tasks: TaskStates::new(),
         })
     }
 
@@ -127,10 +118,19 @@ impl TaskManager {
         ctx.run_later(duration, move |_, ctx| {
             let msg = BreakAgreement {
                 agreement_id: agreement_id.clone(),
-                reason: BreakAgreementReason::Expired,
+                reason: BreakReason::Expired,
             };
             ctx.address().do_send(msg);
         });
+        Ok(())
+    }
+
+    fn update_agreement_state(
+        &mut self,
+        msg: UpdateAgreementState,
+        _ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        self.tasks.finish_transition(&msg.agreement_id, msg.new_state)?;
         Ok(())
     }
 }
@@ -146,6 +146,7 @@ impl Actor for TaskManager {
 }
 
 forward_actix_handler!(TaskManager, ScheduleExpiration, schedule_expiration);
+forward_actix_handler!(TaskManager, UpdateAgreementState, update_agreement_state);
 
 impl Handler<InitializeTaskManager> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
@@ -181,29 +182,55 @@ impl Handler<AgreementApproved> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: AgreementApproved, ctx: &mut Context<Self>) -> Self::Result {
+        // Add new agreement with it's state.
         let agreement_id = msg.agreement.agreement_id.clone();
+        if let Err(error) = (|| {
+            self.tasks.new_agreement(&agreement_id)?;
+            self.tasks
+                .start_transition(&agreement_id, AgreementState::Initialized)?;
+            Ok(())
+        })() {
+            log::error!("{}", error);
+            return ActorResponse::reply(Err(error));
+        }
+
         let runner = self.runner.clone();
         let payments = self.payments.clone();
         let self_address = ctx.address().clone();
 
         let future = async move {
-            // TODO: Handle fails.
-            self_address.send(ScheduleExpiration(msg.agreement.clone())).await??;
+            self_address
+                .send(ScheduleExpiration(msg.agreement.clone()))
+                .await??;
+
             runner.send(msg.clone()).await??;
             payments.send(msg.clone()).await??;
+
+            self_address
+                .send(UpdateAgreementState::new(
+                    &msg.agreement.agreement_id,
+                    AgreementState::Initialized,
+                ))
+                .await??;
             Ok(())
         }
-        .inspect(move |result| match result {
-            Err(error) => log::error!(
-                "Failed to initialize agreement [{}]. Error: {}",
-                agreement_id,
-                error
-            ),
-            Ok(_) => (),
-        })
-        .into_actor(self);
+        .into_actor(self)
+        .map(
+            move |result: Result<(), anyhow::Error>, _, context: &mut Context<Self>| {
+                if let Err(error) = result {
+                    // If initialization failed, the only thing, we can do is breaking agreement.
+                    let msg = BreakAgreement {
+                        agreement_id: agreement_id.clone(),
+                        reason: BreakReason::InitializationError {
+                            error: format!("{}", error),
+                        },
+                    };
+                    context.address().do_send(msg);
+                }
+            },
+        );
 
-        ActorResponse::r#async(future)
+        ActorResponse::r#async(future.map(|_, _, _| Ok(())))
     }
 }
 
@@ -225,10 +252,14 @@ impl Handler<ActivityDestroyed> for TaskManager {
         // Forward information to Payments to send last DebitNote in activity.
         self.payments.do_send(msg);
 
-        // Temporary. Requestor should close agreement, but for now we
-        // treat destroying activity as closing agreement.
-        self.payments.do_send(AgreementClosed{agreement_id: agreement_id.clone()});
-        self.runner.do_send(AgreementClosed{agreement_id: agreement_id.clone()});
+        // Temporary. Requestor should close agreement, but now we assume,
+        // there's only one activity and destroying it means closing agreement.
+        self.payments.do_send(AgreementClosed {
+            agreement_id: agreement_id.clone(),
+        });
+        self.runner.do_send(AgreementClosed {
+            agreement_id: agreement_id.clone(),
+        });
         ActorResponse::reply(Ok(()))
     }
 }
@@ -255,11 +286,24 @@ impl Handler<BreakAgreement> for TaskManager {
     }
 }
 
+// =========================================== //
+// Helper implementations - no need to read below
+// =========================================== //
+
 impl From<BreakAgreement> for AgreementBroken {
     fn from(msg: BreakAgreement) -> Self {
         AgreementBroken {
             agreement_id: msg.agreement_id,
             reason: msg.reason,
+        }
+    }
+}
+
+impl UpdateAgreementState {
+    pub fn new(agreement_id: &str, new_state: AgreementState) -> UpdateAgreementState {
+        UpdateAgreementState {
+            agreement_id: agreement_id.to_string(),
+            new_state,
         }
     }
 }

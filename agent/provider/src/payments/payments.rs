@@ -12,7 +12,7 @@ use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo
 use super::model::PaymentModel;
 use crate::execution::{ActivityCreated, ActivityDestroyed};
 use crate::market::provider_market::AgreementApproved;
-use crate::task_manager::{AgreementClosed, AgreementBroken};
+use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::payment::provider::ProviderApi;
@@ -542,7 +542,11 @@ impl Handler<AgreementBroken> for Payments {
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let address = ctx.address().clone();
         let future = async move {
-            Ok(address.send(AgreementClosed{ agreement_id: msg.agreement_id }).await??)
+            Ok(address
+                .send(AgreementClosed {
+                    agreement_id: msg.agreement_id,
+                })
+                .await??)
         };
 
         return ActorResponse::r#async(future.into_actor(self));
