@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
-use std::convert::TryInto;
+use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -31,7 +31,7 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let api: ProviderApi = run_args.api.try_into()?;
+        let api = ProviderApi::try_from(&run_args.api)?;
         let market = ProviderMarket::new(api.market, "AcceptAll").start();
         let runner = TaskRunner::new(api.activity.clone())?.start();
         let payments =
@@ -216,7 +216,7 @@ impl ProviderAgent {
         preset.name = params
             .preset_name
             .ok_or(anyhow!("Preset name is required."))?;
-        preset.exeunit_name = params.exeunit.ok_or(anyhow!("ExeUnit is required."))?;
+        preset.exeunit_name = params.exe_unit.ok_or(anyhow!("ExeUnit is required."))?;
         preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
 
         for (name, price) in params.price.iter() {
@@ -303,7 +303,7 @@ impl ProviderAgent {
 
         // All values are optional. If not set, previous value will remain.
         preset.name = params.preset_name.unwrap_or(preset.name);
-        preset.exeunit_name = params.exeunit.unwrap_or(preset.exeunit_name);
+        preset.exeunit_name = params.exe_unit.unwrap_or(preset.exeunit_name);
         preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
 
         for (name, price) in params.price.iter() {

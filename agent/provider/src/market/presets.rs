@@ -35,13 +35,13 @@ impl Presets {
     }
 
     pub fn load_from_file(&mut self, presets_file: &Path) -> Result<&mut Presets> {
-        let file = File::open(presets_file).map_err(|error| {
-            anyhow!(
-                "Can't load Presets from file {}, error: {}.",
-                presets_file.display(),
-                error
-            )
-        })?;
+        let file = match File::open(presets_file) {
+            Ok(file) => file,
+            Err(_) => {
+                self.save_to_file(presets_file)?;
+                File::open(presets_file)?
+            }
+        };
 
         let reader = BufReader::new(file);
         let presets: Vec<Preset> = serde_json::from_reader(reader).map_err(|error| {
