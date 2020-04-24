@@ -1,7 +1,7 @@
 use actix_web::Scope;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use ya_model::payment::PAYMENT_API_PATH;
+use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 

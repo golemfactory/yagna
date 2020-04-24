@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
+use ya_client::model::activity::ExeScriptRequest;
 use ya_client::{activity::ActivityRequestorApi, cli::RequestorApi};
-use ya_model::activity::ExeScriptRequest;
 
 pub(crate) async fn spawn_activity(
     api: RequestorApi,

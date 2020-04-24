@@ -1,7 +1,7 @@
 use actix_web::{error::ResponseError, HttpResponse};
 
+use ya_client::model::ErrorMessage;
 use ya_core_model::{appkey, market::RpcMessageError};
-use ya_model::ErrorMessage;
 
 use crate::db::models::ConversionError;
 

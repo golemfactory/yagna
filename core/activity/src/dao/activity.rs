@@ -2,7 +2,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use serde_json;
 
-use ya_model::activity::{State, StatePair};
+use ya_client_model::activity::{State, StatePair};
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::schema;
 

@@ -3,11 +3,11 @@ use futures::TryFutureExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_core_model::activity;
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{
+use ya_client_model::activity::activity_state::StatePair;
+use ya_client_model::activity::{
     ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
 };
+use ya_core_model::activity;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::agreement::Agreement;

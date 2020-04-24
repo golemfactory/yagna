@@ -6,8 +6,8 @@ use actix::prelude::*;
 use chrono::Utc;
 use std::time::Duration;
 use tokio::time::timeout;
+use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_core_model::activity::*;
-use ya_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_service_bus::RpcEnvelope;
 
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
