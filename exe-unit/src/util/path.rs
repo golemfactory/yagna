@@ -85,26 +85,33 @@ impl CachePath {
         CachePath { path, hash, nonce }
     }
 
-    /// Creates the long version of path, including the "random" token.
+    /// Creates the long version of path, including hash and the "random" token.
+    pub fn temp_path_buf(&self) -> PathBuf {
+        self.to_path_buf(true, true)
+    }
+
+    /// Creates the long version of path, including hash and the "random" token.
     pub fn cache_path_buf(&self) -> PathBuf {
-        self.to_path_buf(true)
+        self.to_path_buf(true, false)
     }
 
     /// Creates a shorter version of path, excluding the "random" token.
     pub fn final_path_buf(&self) -> PathBuf {
-        self.to_path_buf(false)
+        self.to_path_buf(false, false)
     }
 
-    fn to_path_buf(&self, with_nonce: bool) -> PathBuf {
+    fn to_path_buf(&self, with_hash: bool, with_nonce: bool) -> PathBuf {
         let stem = self.path.file_stem().unwrap();
         let extension = self.path.extension();
         let hash = hex::encode(&self.hash);
 
         let mut file_name = stem.to_os_string();
 
-        if with_nonce {
+        if with_hash {
             file_name.push("_");
             file_name.push(hash);
+        }
+        if with_nonce {
             file_name.push("_");
             file_name.push(&self.nonce);
         }

@@ -17,6 +17,20 @@ pub struct TransferUrl {
 unsafe impl Send for TransferUrl {}
 
 impl TransferUrl {
+    pub fn file_name(&self) -> &str {
+        let path = self.url.path();
+        match path.rfind("/") {
+            Some(idx) => {
+                if idx + 1 < path.len() - 1 {
+                    &path[idx + 1..]
+                } else {
+                    path
+                }
+            }
+            None => path,
+        }
+    }
+
     pub fn parse(url: &str, fallback_scheme: &str) -> Result<Self, TransferError> {
         let url = url.trim();
         if url.len() == 0 {
@@ -35,6 +49,14 @@ impl TransferUrl {
         };
 
         Ok(TransferUrl { hash, url: parsed })
+    }
+
+    pub fn parse_with_hash(url: &str, fallback_scheme: &str) -> Result<Self, TransferError> {
+        let parsed = Self::parse(url, fallback_scheme)?;
+        match &parsed.hash {
+            Some(_) => Ok(parsed),
+            None => Err(TransferError::InvalidUrlError("Missing hash".to_owned())),
+        }
     }
 
     pub fn map_scheme<F>(mut self, f: F) -> Result<Self, TransferError>

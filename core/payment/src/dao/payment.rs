@@ -93,7 +93,9 @@ impl<'c> PaymentDao<'c> {
         later_than: Option<NaiveDateTime>,
     ) -> DbResult<Vec<Payment>> {
         do_with_transaction(self.pool, move |conn| {
-            let query = dsl::pay_payment.filter(dsl::payer_id.eq(payer_id.clone()));
+            let query = dsl::pay_payment
+                .filter(dsl::payer_id.eq(payer_id.clone()))
+                .order_by(dsl::timestamp.asc());
             let payments = match later_than {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,
@@ -123,7 +125,9 @@ impl<'c> PaymentDao<'c> {
         later_than: Option<NaiveDateTime>,
     ) -> DbResult<Vec<Payment>> {
         do_with_transaction(self.pool, move |conn| {
-            let query = dsl::pay_payment.filter(dsl::payee_id.eq(payee_id.clone()));
+            let query = dsl::pay_payment
+                .filter(dsl::payee_id.eq(payee_id.clone()))
+                .order_by(dsl::timestamp.asc());
             let payments = match later_than {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,

@@ -5,14 +5,14 @@ use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
-use ya_core_model::activity::SetActivityState;
+use ya_core_model::activity::local::SetState as SetActivityState;
 use ya_model::activity::ActivityState;
 
 impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
     type Result = <GetState as Message>::Result;
 
     fn handle(&mut self, _: GetState, _: &mut Context<Self>) -> Self::Result {
-        GetStateResult(self.state.inner.clone())
+        GetStateResponse(self.state.inner.clone())
     }
 }
 
@@ -20,35 +20,46 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     type Result = <SetState as Message>::Result;
 
     fn handle(&mut self, msg: SetState, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(state) = &msg.state {
-            if &self.state.inner != state {
-                log::debug!("Entering state: {:?}", state);
-                self.state.inner = state.clone();
+        if let Some(update) = msg.running_command {
+            self.state.running_command = update.cmd;
+        }
 
-                if let Some(id) = &self.ctx.service_id {
-                    ctx.spawn(
-                        report(
-                            self.ctx.report_url.clone().unwrap(),
-                            SetActivityState {
-                                activity_id: id.clone(),
-                                state: ActivityState::from(state),
-                                timeout: None,
+        if let Some(update) = msg.batch_result {
+            self.state.push_batch_result(update.batch_id, update.result);
+        }
+
+        if let Some(update) = msg.state {
+            if self.state.inner != update.state {
+                log::debug!("Entering state: {:?}", update.state);
+                log::debug!("Report: {}", self.state.report());
+
+                self.state.inner = update.state.clone();
+
+                if let Some(id) = &self.ctx.activity_id {
+                    let fut = report(
+                        self.ctx.report_url.clone().unwrap(),
+                        SetActivityState {
+                            activity_id: id.clone(),
+                            state: ActivityState {
+                                state: update.state,
+                                reason: update.reason,
+                                error_message: None,
                             },
-                        )
-                        .into_actor(self),
+                            timeout: None,
+                        },
                     );
+                    ctx.spawn(fut.into_actor(self));
                 }
             }
         }
+    }
+}
 
-        if let Some(running_command) = &msg.running_command {
-            self.state.running_command = running_command.clone();
-        }
+impl<R: Runtime> Handler<GetBatchResults> for ExeUnit<R> {
+    type Result = <GetBatchResults as Message>::Result;
 
-        if let Some(batch_result) = &msg.batch_result {
-            self.state
-                .push_batch_result(batch_result.0.to_owned(), batch_result.1.to_owned());
-        }
+    fn handle(&mut self, msg: GetBatchResults, _: &mut Context<Self>) -> Self::Result {
+        GetBatchResultsResponse(self.state.batch_results(&msg.0))
     }
 }
 
@@ -76,6 +87,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         let runtime = self.runtime.clone();
         let services = std::mem::replace(&mut self.services, Vec::new());
         let state = self.state.inner.to_pending(State::Terminated);
+        let reason = format!("{}: {}", msg.0, self.state.report());
 
         let fut = async move {
             log::info!("Shutting down ...");
@@ -86,7 +98,9 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
                 service.stop().await;
             }
 
-            let _ = address.send(SetState::from(State::Terminated)).await;
+            let _ = address
+                .send(SetState::default().state_reason(State::Terminated.into(), reason))
+                .await;
 
             System::current().stop();
 

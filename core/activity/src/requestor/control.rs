@@ -1,24 +1,20 @@
 use actix_web::{web, Responder};
-use futures::prelude::*;
 use serde::Deserialize;
-use std::str::FromStr;
 
-use ya_core_model::{
-    activity::{CreateActivity, DestroyActivity, Exec, GetExecBatchResults},
-    ethaddr::NodeId,
-};
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{ExeScriptCommand, ExeScriptRequest, State};
+use ya_core_model::activity;
+use ya_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
+use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, PathActivity, QueryTimeout,
+    get_activity_agreement, get_agreement, set_persisted_state, PathActivity, QueryTimeout,
+    QueryTimeoutCommandIndex,
 };
-use crate::dao::{ActivityDao, ActivityStateDao};
+use crate::dao::ActivityDao;
 use crate::error::Error;
-use crate::requestor::provider_activity_service_id;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope
@@ -42,24 +38,23 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id).await?;
     log::trace!("agreement: {:#?}", agreement);
 
-    let msg = CreateActivity {
-        // TODO: fix this
-        provider_id: NodeId::from_str(agreement.offer.provider_id.as_ref().unwrap()).unwrap(),
+    let msg = activity::Create {
+        provider_id: agreement.provider_id()?.parse()?,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
-    let caller = Some(format!("/net/{:?}", id.identity));
-    let uri = provider_activity_service_id(&agreement)?;
-
-    log::debug!("creating activity at: {}, caller: {:?}", uri, caller);
-    let activity_id = gsb_send!(caller, msg, &uri, query.timeout)?;
+    let activity_id = agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
     log::debug!("activity created: {}, inserting", activity_id);
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &agreement_id)
-        .await
-        .map_err(Error::from)?;
+        .await?;
 
     Ok::<_, Error>(web::Json(activity_id))
 }
@@ -74,26 +69,31 @@ async fn destroy_activity(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = DestroyActivity {
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    let msg = activity::Destroy {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
-    let _ = gsb_send!(None, msg, &uri, query.timeout)?;
-    db.as_dao::<ActivityStateDao>()
-        .set(
-            &path.activity_id,
-            StatePair(State::Terminated, None),
-            None,
-            None,
-        )
-        .await
-        .map_err(Error::from)?;
+    agreement
+        .provider_id()?
+        .try_service(activity::BUS_ID)?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
-    Ok::<_, Error>(web::Json(()))
+    set_persisted_state(
+        &db,
+        &path.activity_id,
+        ActivityState {
+            state: State::Terminated.into(),
+            reason: None,
+            error_message: None,
+        },
+    )
+    .await
+    .map(|_| web::Json(()))
 }
 
 /// Executes an ExeScript batch within a given Activity.
@@ -109,17 +109,21 @@ async fn exec(
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let batch_id = generate_id();
-    let msg = Exec {
+    let msg = activity::Exec {
         activity_id: path.activity_id.clone(),
         batch_id: batch_id.clone(),
         exe_script: commands,
         timeout: query.timeout.clone(),
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
-    gsb_send!(None, msg, &uri, query.timeout)?;
+    agreement
+        .provider_id()?
+        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
     Ok::<_, Error>(web::Json(batch_id))
 }
@@ -129,22 +133,31 @@ async fn exec(
 async fn get_batch_results(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
-    query: web::Query<QueryTimeout>,
+    query: web::Query<QueryTimeoutCommandIndex>,
     id: Identity,
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, query.timeout.clone()).await?;
-    let msg = GetExecBatchResults {
+    if query.command_index.is_some() && query.timeout.is_none() {
+        return Err(Error::BadRequest("Timeout required".to_owned()));
+    }
+
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
+        command_index: query.command_index,
     };
 
-    let uri = provider_activity_service_id(&agreement)?;
-    let results = gsb_send!(None, msg, &uri, query.timeout)?;
+    let results = agreement
+        .provider_id()?
+        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
 
-    Ok::<_, Error>(web::Json(results))
+    Ok(web::Json(results))
 }
 
 #[derive(Deserialize)]

@@ -17,37 +17,85 @@ pub struct SetTaskPackagePath(pub PathBuf);
 pub struct GetMetrics;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "GetStateResult")]
+#[rtype(result = "GetStateResponse")]
 pub struct GetState;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
-pub struct GetStateResult(pub StatePair);
+pub struct GetStateResponse(pub StatePair);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[rtype(result = "GetBatchResultsResponse")]
+pub struct GetBatchResults(pub String);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
+pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub struct SetState {
-    pub state: Option<StatePair>,
-    pub running_command: Option<Option<ExeScriptCommandState>>,
-    pub batch_result: Option<(String, ExeScriptCommandResult)>,
+    pub state: Option<StateUpdate>,
+    pub running_command: Option<CommandUpdate>,
+    pub batch_result: Option<ResultUpdate>,
 }
 
-impl From<StatePair> for SetState {
-    fn from(state: StatePair) -> Self {
-        SetState {
-            state: Some(state),
-            running_command: None,
-            batch_result: None,
-        }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StateUpdate {
+    pub state: StatePair,
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CommandUpdate {
+    pub cmd: Option<ExeScriptCommandState>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ResultUpdate {
+    pub batch_id: String,
+    pub result: ExeScriptCommandResult,
+}
+
+impl SetState {
+    pub fn state(mut self, state: StatePair) -> Self {
+        self.state = Some(StateUpdate {
+            state,
+            reason: None,
+        });
+        self
+    }
+
+    pub fn state_reason(mut self, state: StatePair, reason: String) -> Self {
+        self.state = Some(StateUpdate {
+            state,
+            reason: Some(reason),
+        });
+        self
+    }
+
+    pub fn cmd(mut self, command: Option<ExeScriptCommand>) -> Self {
+        self.running_command = Some(CommandUpdate {
+            cmd: command.map(|c| c.into()),
+        });
+        self
+    }
+
+    pub fn result(mut self, batch_id: String, result: ExeScriptCommandResult) -> Self {
+        self.batch_result = Some(ResultUpdate { batch_id, result });
+        self
     }
 }
 
 impl From<State> for SetState {
+    #[inline]
     fn from(state: State) -> Self {
-        SetState {
-            state: Some(StatePair::from(state)),
-            running_command: None,
-            batch_result: None,
-        }
+        Self::from(StatePair::from(state))
+    }
+}
+
+impl From<StatePair> for SetState {
+    #[inline]
+    fn from(state: StatePair) -> Self {
+        Self::default().state(state)
     }
 }
 
@@ -63,15 +111,11 @@ pub struct ExecCmdResult {
 }
 
 impl ExecCmdResult {
-    pub fn into_exe_result(self, index: usize) -> ExeScriptCommandResult {
-        let message = match self.result {
-            CommandResult::Ok => self.stdout,
-            CommandResult::Error => self.stderr,
-        };
-        ExeScriptCommandResult {
-            index: index as u32,
-            result: Some(self.result),
-            message,
+    pub fn error(err: impl ToString) -> Self {
+        ExecCmdResult {
+            result: CommandResult::Error,
+            stdout: None,
+            stderr: Some(err.to_string()),
         }
     }
 }
