@@ -191,6 +191,9 @@ mod test {
             win_canonicalize_workaround(path)
         );
 
-        assert_eq!(PathBuf::from(r"c:\you\later"), win_canonicalize_workaround(path));
+        assert_eq!(
+            PathBuf::from(r"c:\you\later"),
+            win_canonicalize_workaround(path)
+        );
     }
 }
