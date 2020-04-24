@@ -154,16 +154,14 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
     };
 
     if args.wait_once {
-        log::warn!(
-            "waiting at most {:?}s for exe script to complete",
-            args.timeout
-        );
+        match args.timeout {
+            Some(t) => log::warn!("waiting at most {:?}s for exe script to complete", t),
+            None => log::warn!("Immediately requesting full exe script result"),
+        };
         let results = exe_unit_service.send(msg).await?;
         log::warn!("Exe script results: {:#?}", results);
         return Ok(());
     }
-
-    msg.timeout = msg.timeout.or(Some(10.));
 
     for i in 0..exe_len {
         msg.command_index = Some(i);
