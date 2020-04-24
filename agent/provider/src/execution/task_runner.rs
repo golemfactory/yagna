@@ -332,7 +332,7 @@ impl TaskRunner {
         // Remove task from list and destroy everything related with it.
         let task = self.tasks.swap_remove(task_position);
         let termination_timeout = self.config.process_termination_timeout;
-        let set_state_retry = self.config.exeunit_state_retry_interval;
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
         let api = self.api.clone();
 
         Arbiter::spawn(async move {
@@ -352,13 +352,13 @@ impl TaskRunner {
                         "Can't set terminated state for activity [{}]. Error: {}. Retry after: {:#?}",
                         &task.activity_id,
                         error,
-                        set_state_retry
+                        state_retry_interval
                     );
-                    tokio::time::delay_for(set_state_retry).await;
+                    tokio::time::delay_for(state_retry_interval).await;
                 }
             }
 
-            log::info!("Activity destroyed: [{}].", msg.activity_id);
+            log::info!("ExeUnit for activity terminated: [{}].", msg.activity_id);
         });
         Ok(())
     }
