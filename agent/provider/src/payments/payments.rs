@@ -543,11 +543,10 @@ impl Handler<AgreementBroken> for Payments {
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let address = ctx.address().clone();
         let future = async move {
-            Ok(address
-                .send(AgreementClosed {
-                    agreement_id: msg.agreement_id,
-                })
-                .await??)
+            let msg = AgreementClosed {
+                agreement_id: msg.agreement_id,
+            };
+            Ok(address.send(msg).await??)
         };
 
         return ActorResponse::r#async(future.into_actor(self));

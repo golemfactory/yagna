@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fmt;
 use thiserror;
 
-
 #[derive(Display, Debug, Clone, PartialEq)]
 pub enum BreakReason {
     InitializationError { error: String },
@@ -68,10 +67,7 @@ impl TaskState {
         }
     }
 
-    pub fn allowed_transition(
-        &self,
-        new_state: &AgreementState,
-    ) -> Result<(), StateError> {
+    pub fn allowed_transition(&self, new_state: &AgreementState) -> Result<(), StateError> {
         let is_allowed = match self.state {
             Transition(AgreementState::New, _) => match new_state {
                 AgreementState::Initialized
@@ -99,7 +95,7 @@ impl TaskState {
                 AgreementState::Closed => true,
                 _ => false,
             },
-            _ => false
+            _ => false,
         };
 
         match is_allowed {
@@ -112,19 +108,13 @@ impl TaskState {
         }
     }
 
-    pub fn start_transition(
-        &mut self,
-        new_state: AgreementState,
-    ) -> Result<(), StateError> {
+    pub fn start_transition(&mut self, new_state: AgreementState) -> Result<(), StateError> {
         self.allowed_transition(&new_state)?;
         self.state = Transition(self.state.0.clone(), Some(new_state));
         Ok(())
     }
 
-    pub fn finish_transition(
-        &mut self,
-        new_state: AgreementState,
-    ) -> Result<(), StateError> {
+    pub fn finish_transition(&mut self, new_state: AgreementState) -> Result<(), StateError> {
         self.allowed_transition(&new_state)?;
         self.state = Transition(new_state, None);
         Ok(())
@@ -145,10 +135,8 @@ impl TasksStates {
                 agreement_id
             ));
         }
-        self.tasks.insert(
-            agreement_id.to_string(),
-            TaskState::new(agreement_id),
-        );
+        self.tasks
+            .insert(agreement_id.to_string(), TaskState::new(agreement_id));
         Ok(())
     }
 
@@ -158,8 +146,8 @@ impl TasksStates {
             match task_state.state {
                 Transition(AgreementState::Closed, _) => true,
                 Transition(_, Some(AgreementState::Closed)) => true,
-                Transition(AgreementState::Broken {..}, _) => true,
-                Transition(_, Some(AgreementState::Broken {..})) => true,
+                Transition(AgreementState::Broken { .. }, _) => true,
+                Transition(_, Some(AgreementState::Broken { .. })) => true,
                 _ => false,
             }
         } else {
@@ -188,14 +176,18 @@ impl TasksStates {
     fn get_mut_state(&mut self, agreement_id: &str) -> Result<&mut TaskState, StateError> {
         match self.tasks.get_mut(agreement_id) {
             Some(state) => Ok(state),
-            None => Err(StateError::NoAgreement{ agreement_id: agreement_id.to_string() })
+            None => Err(StateError::NoAgreement {
+                agreement_id: agreement_id.to_string(),
+            }),
         }
     }
 
     fn get_state(&self, agreement_id: &str) -> Result<&TaskState, StateError> {
         match self.tasks.get(agreement_id) {
             Some(state) => Ok(state),
-            None => Err(StateError::NoAgreement{ agreement_id: agreement_id.to_string() })
+            None => Err(StateError::NoAgreement {
+                agreement_id: agreement_id.to_string(),
+            }),
         }
     }
 }

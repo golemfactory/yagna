@@ -22,6 +22,7 @@ pub struct ProviderConfig {
 
 #[derive(StructOpt)]
 pub struct NodeConfig {
+    /// Your human readable identity in the network.
     #[structopt(long = "node-name", env = "NODE_NAME", hide_env_values = true)]
     pub node_name: String,
     /// Credit address. Can be set same as default identity.
