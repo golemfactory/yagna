@@ -138,10 +138,6 @@ async fn get_batch_results(
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
 
-    if query.command_index.is_some() && query.timeout.is_none() {
-        return Err(Error::BadRequest("Timeout required".to_owned()));
-    }
-
     let agreement = get_activity_agreement(&db, &path.activity_id).await?;
     let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
@@ -157,7 +153,7 @@ async fn get_batch_results(
         .timeout(query.timeout)
         .await???;
 
-    Ok(web::Json(results))
+    Ok::<_, Error>(web::Json(results))
 }
 
 #[derive(Deserialize)]
