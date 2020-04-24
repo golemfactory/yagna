@@ -5,13 +5,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::process::Command;
-use ya_core_model::activity::{
-    self,
-    local::{SetState, SetUsage},
-    Exec, GetExecBatchResults,
-};
+use ya_core_model::activity::{self, Exec, GetExecBatchResults};
 use ya_model::activity::ExeScriptCommand;
-use ya_service_bus::{actix_rpc, RpcEnvelope};
+use ya_service_bus::actix_rpc;
 
 const ACTIVITY_BUS_ID: &str = "activity";
 const ACTIVITY_ID: &str = "fake_activity_id";
@@ -58,33 +54,39 @@ pub struct Cli {
     pub timeout: Option<f32>,
 }
 
-struct MockActivityService;
+mod mock_activity {
+    use actix::prelude::*;
+    use ya_core_model::activity::local::{SetState, SetUsage};
+    use ya_service_bus::{actix_rpc, RpcEnvelope};
 
-impl Actor for MockActivityService {
-    type Context = Context<Self>;
+    pub struct MockActivityService;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
-        let addr = ctx.address();
-        actix_rpc::bind::<SetState>(&ACTIVITY_BUS_ID, addr.clone().recipient());
-        actix_rpc::bind::<SetUsage>(&ACTIVITY_BUS_ID, addr.clone().recipient());
+    impl Actor for MockActivityService {
+        type Context = Context<Self>;
+
+        fn started(&mut self, ctx: &mut Self::Context) {
+            let addr = ctx.address();
+            actix_rpc::bind::<SetState>(&super::ACTIVITY_BUS_ID, addr.clone().recipient());
+            actix_rpc::bind::<SetUsage>(&super::ACTIVITY_BUS_ID, addr.clone().recipient());
+        }
     }
-}
 
-impl Handler<RpcEnvelope<SetState>> for MockActivityService {
-    type Result = <RpcEnvelope<SetState> as Message>::Result;
+    impl Handler<RpcEnvelope<SetState>> for MockActivityService {
+        type Result = <RpcEnvelope<SetState> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<SetState>, _: &mut Self::Context) -> Self::Result {
-        log::info!("STATE update: {:?}", msg.into_inner());
-        Ok(())
+        fn handle(&mut self, msg: RpcEnvelope<SetState>, _: &mut Self::Context) -> Self::Result {
+            log::info!("STATE update: {:?}", msg.into_inner());
+            Ok(())
+        }
     }
-}
 
-impl Handler<RpcEnvelope<SetUsage>> for MockActivityService {
-    type Result = <RpcEnvelope<SetUsage> as Message>::Result;
+    impl Handler<RpcEnvelope<SetUsage>> for MockActivityService {
+        type Result = <RpcEnvelope<SetUsage> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<SetUsage>, _: &mut Self::Context) -> Self::Result {
-        log::info!("USAGE update: {:?}", msg.into_inner());
-        Ok(())
+        fn handle(&mut self, msg: RpcEnvelope<SetUsage>, _: &mut Self::Context) -> Self::Result {
+            log::info!("USAGE update: {:?}", msg.into_inner());
+            Ok(())
+        }
     }
 }
 
@@ -97,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
 
     ya_sb_router::bind_gsb_router(None).await?;
 
-    let activity = MockActivityService {};
+    let activity = mock_activity::MockActivityService {};
     activity.start();
 
     let child_args = vec![
