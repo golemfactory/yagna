@@ -167,6 +167,7 @@ async fn main() -> anyhow::Result<()> {
         committed_signature: None,
     };
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
+    utils::fake_get_agreement_id(args.agreement_id.clone());
 
     let identity = Identity {
         identity: NodeId::from_str(&node_id).unwrap(),

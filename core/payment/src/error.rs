@@ -16,6 +16,8 @@ pub type DbResult<T> = Result<T, DbError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ExternalServiceError {
+    #[error("Activity service error: {0}")]
+    Activity(#[from] ya_core_model::activity::RpcMessageError),
     #[error("Market service error: {0}")]
     Market(#[from] ya_core_model::market::RpcMessageError),
 }
@@ -54,6 +56,12 @@ pub enum Error {
     Rpc(#[from] RpcMessageError),
     #[error("Timeout")]
     Timeout(#[from] tokio::time::Elapsed),
+}
+
+impl From<ya_core_model::activity::RpcMessageError> for Error {
+    fn from(e: ya_core_model::activity::RpcMessageError) -> Self {
+        Into::<ExternalServiceError>::into(e).into()
+    }
 }
 
 impl From<ya_core_model::market::RpcMessageError> for Error {

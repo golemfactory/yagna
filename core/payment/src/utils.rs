@@ -43,6 +43,71 @@ pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Er
     }
 }
 
+pub mod provider {
+    use crate::error::{Error, ExternalServiceError};
+    use ya_client_model::market::Agreement;
+    use ya_core_model::{activity, market};
+    use ya_service_bus::{typed as bus, RpcEndpoint};
+
+    pub fn fake_get_agreement_id(agreement_id: String) {
+        bus::bind(
+            activity::local::BUS_ID,
+            move |msg: activity::local::GetAgreementId| {
+                let agreement_id = agreement_id.clone();
+                async move { Ok(agreement_id) }
+            },
+        );
+    }
+
+    pub async fn get_agreement_id(activity_id: String) -> Result<Option<String>, Error> {
+        match async move {
+            let agreement_id = bus::service(activity::local::BUS_ID)
+                .send(activity::local::GetAgreementId {
+                    activity_id,
+                    timeout: None,
+                })
+                .await??;
+            Ok(agreement_id)
+        }
+        .await
+        {
+            Ok(agreement_id) => Ok(Some(agreement_id)),
+            Err(Error::ExtService(ExternalServiceError::Activity(
+                activity::RpcMessageError::NotFound(_),
+            ))) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn get_agreement_for_activity(
+        activity_id: String,
+    ) -> Result<Option<Agreement>, Error> {
+        match async move {
+            let agreement_id = bus::service(activity::local::BUS_ID)
+                .send(activity::local::GetAgreementId {
+                    activity_id,
+                    timeout: None,
+                })
+                .await??;
+            let agreement = bus::service(market::BUS_ID)
+                .send(market::GetAgreement::with_id(agreement_id.clone()))
+                .await??;
+            Ok(agreement)
+        }
+        .await
+        {
+            Ok(agreement_id) => Ok(Some(agreement_id)),
+            Err(Error::ExtService(ExternalServiceError::Activity(
+                activity::RpcMessageError::NotFound(_),
+            ))) => Ok(None),
+            Err(Error::ExtService(ExternalServiceError::Market(
+                market::RpcMessageError::NotFound(_),
+            ))) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 pub fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
     let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> = sign_tx.into();
     bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
