@@ -2,7 +2,9 @@ use actix::{Actor, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
-use std::path::{Component, PathBuf, Prefix};
+use std::path::PathBuf;
+#[cfg(windows)]
+use std::path::{Component, Prefix};
 use structopt::StructOpt;
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -43,7 +45,14 @@ pub enum Command {
     },
 }
 
-pub fn remove_prefix(path: PathBuf) -> PathBuf {
+#[cfg(not(windows))]
+pub fn win_canonicalize_workaround(path: PathBuf) -> PathBuf {
+    path
+}
+
+// canonicalize on Windows adds `\\?` (or `%3f` when url-encoded) prefix
+#[cfg(windows)]
+pub fn win_canonicalize_workaround(path: PathBuf) -> PathBuf {
     let mut disk_letter = None;
 
     // There seems to be no easy way to replace one prefix with another...
@@ -81,7 +90,7 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
             _ => bail!("Can't create directory: {}, {}", path.display(), error),
         }
     }
-    Ok(remove_prefix(path.canonicalize()?))
+    Ok(win_canonicalize_workaround(path.canonicalize()?))
 }
 
 fn run() -> anyhow::Result<()> {
@@ -172,7 +181,15 @@ mod test {
 
     #[test]
     fn test_remove_verbatim_prefix() {
-        let path = Path::new(r"\\?\c:\you\later\").to_path_buf();
+        let path = Path::new(r"\c:\you\later\")
+            .to_path_buf()
+            .canonicalize()
+            .expect("should canonicalize: \\c:\\you\\later\\");
+
+        assert_eq!(
+            PathBuf::from(r"c:\you\later"),
+            win_canonicalize_workaround(path)
+        );
 
         assert_eq!(PathBuf::from(r"c:\you\later"), remove_prefix(path));
     }

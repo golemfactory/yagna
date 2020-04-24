@@ -41,6 +41,7 @@ impl TransferUrl {
         let parsed = match Url::parse(url) {
             Ok(parsed_url) => match parsed_url.scheme().len() {
                 // now this is dumb... Url::parse() will accept Windows absolute path, taking drive letter for scheme!
+                #[cfg(windows)]
                 1 => Url::parse(&format!("{}:{}", fallback_scheme, url))?,
                 _ => parsed_url,
             },
@@ -109,7 +110,6 @@ fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), TransferError> 
 #[cfg(test)]
 mod test {
     use super::TransferUrl;
-    use url::Url;
 
     macro_rules! should_fail {
         ($str:expr) => {
@@ -181,12 +181,13 @@ mod test {
     }
 
     #[test]
+    #[cfg(windows)]
     fn fallback_to_file_on_windows_path() {
         assert_eq!(
             TransferUrl::parse("C:\\Users", "file").unwrap(),
             TransferUrl {
                 hash: None,
-                url: Url::parse("file://C:/Users").unwrap()
+                url: url::Url::parse("file://C:/Users").unwrap()
             }
         );
     }
