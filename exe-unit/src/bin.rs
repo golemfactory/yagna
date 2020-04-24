@@ -181,13 +181,13 @@ mod test {
 
     #[test]
     fn test_remove_verbatim_prefix() {
-        let path = Path::new(r"c:\")
+        let path = Path::new(r"c:\windows\System32")
             .to_path_buf()
             .canonicalize()
             .expect("should canonicalize: c:\\");
 
         assert_eq!(
-            PathBuf::from(r"c:\you\later"),
+            PathBuf::from(r"C:\Windows\System32"),
             win_canonicalize_workaround(path)
         );
     }
