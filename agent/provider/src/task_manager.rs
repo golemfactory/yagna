@@ -154,7 +154,7 @@ impl TaskManager {
     ) -> Result<()> {
         Ok(self
             .tasks
-            .finish_transition(&msg.agreement_id, msg.new_state)?)
+            .start_transition(&msg.agreement_id, msg.new_state)?)
     }
 
     fn finish_update_agreement_state(

@@ -10,7 +10,8 @@ use ya_client::cli::ApiOpts;
 pub struct ProviderConfig {
     /// Descriptor file (JSON) for available ExeUnits
     #[structopt(
-        long = "exe-unit-path",
+        long,
+        set = clap::ArgSettings::Global,
         env = "EXE_UNIT_PATH",
         hide_env_values = true,
         default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
@@ -22,20 +23,15 @@ pub struct ProviderConfig {
 
 #[derive(StructOpt)]
 pub struct NodeConfig {
-    /// Your human readable identity in the network.
-    #[structopt(long = "node-name", env = "NODE_NAME", hide_env_values = true)]
+    #[structopt(long, env = "NODE_NAME", hide_env_values = true)]
     pub node_name: String,
     /// Credit address. Can be set same as default identity.
     /// It will be removed in future release -- agreement will specify it.
-    #[structopt(
-        long = "credit-address",
-        env = "CREDIT_ADDRESS",
-        hide_env_values = true
-    )]
+    #[structopt(long, env = "CREDIT_ADDRESS", hide_env_values = true)]
     pub credit_address: String,
     /// Subnetwork identifier. You can set this value to filter nodes
     /// with other identifiers than selected. Useful for test purposes.
-    #[structopt(long = "subnet", env = "SUBNET")]
+    #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
 }
 
@@ -58,7 +54,7 @@ pub struct PresetNoInteractive {
     #[structopt(long)]
     pub preset_name: Option<String>,
     #[structopt(long)]
-    pub exeunit: Option<String>,
+    pub exe_unit: Option<String>,
     #[structopt(long)]
     pub pricing: Option<String>,
     #[structopt(long, parse(try_from_str = parse_key_val))]
@@ -70,8 +66,8 @@ pub struct PresetNoInteractive {
 pub enum PresetsConfig {
     List,
     Create {
-        #[structopt(long = "nointeractive")]
-        nointeractive: bool,
+        #[structopt(long)]
+        no_interactive: bool,
         #[structopt(flatten)]
         params: PresetNoInteractive,
     },
@@ -80,8 +76,8 @@ pub enum PresetsConfig {
     },
     Update {
         name: String,
-        #[structopt(long = "nointeractive")]
-        nointeractive: bool,
+        #[structopt(long)]
+        no_interactive: bool,
         #[structopt(flatten)]
         params: PresetNoInteractive,
     },
@@ -99,8 +95,8 @@ pub enum ExeUnitsConfig {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(about = clap::crate_description!())]
-#[structopt(setting = clap::AppSettings::ColoredHelp)]
-#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(global_setting = clap::AppSettings::ColoredHelp)]
+#[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 pub struct StartupConfig {
     #[structopt(flatten)]
     pub config: ProviderConfig,
