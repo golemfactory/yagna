@@ -181,16 +181,16 @@ mod test {
 
     #[test]
     fn test_remove_verbatim_prefix() {
-        let path = Path::new(r"\c:\you\later\")
+        let path = Path::new(r"c:\you\later\")
             .to_path_buf()
             .canonicalize()
-            .expect("should canonicalize: \\c:\\you\\later\\");
+            .expect("should canonicalize: c:\\you\\later\\");
 
         assert_eq!(
             PathBuf::from(r"c:\you\later"),
             win_canonicalize_workaround(path)
         );
 
-        assert_eq!(PathBuf::from(r"c:\you\later"), remove_prefix(path));
+        assert_eq!(PathBuf::from(r"c:\you\later"), win_canonicalize_workaround(path));
     }
 }
