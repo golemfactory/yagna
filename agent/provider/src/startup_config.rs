@@ -1,4 +1,3 @@
-use humantime::Duration;
 use std::error::Error;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
@@ -23,6 +22,7 @@ pub struct ProviderConfig {
 
 #[derive(StructOpt)]
 pub struct NodeConfig {
+    /// Your human readable identity in the network.
     #[structopt(long, env = "NODE_NAME", hide_env_values = true)]
     pub node_name: String,
     /// Credit address. Can be set same as default identity.
@@ -41,10 +41,6 @@ pub struct RunConfig {
     pub api: ApiOpts,
     #[structopt(flatten)]
     pub node: NodeConfig,
-    /// Estimated time of shutting down provider. Provider won't take any proposal,
-    /// that expires after this time point.
-    #[structopt(long)]
-    pub shutdown: Duration,
     /// Offer presets, that will be sent to market.
     pub presets: Vec<String>,
 }

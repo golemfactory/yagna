@@ -1,6 +1,7 @@
 use actix_rt::{signal, Arbiter};
 use chrono::Utc;
 use futures::{channel::mpsc, prelude::*};
+use humantime::Duration;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -17,24 +18,30 @@ const DEFAULT_NODE_NAME: &str = "test1";
 const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip";
 
 #[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 #[structopt(about = clap::crate_description!())]
 #[structopt(setting = clap::AppSettings::ColoredHelp)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,
-    #[structopt(long = "exe-script")]
+    #[structopt(long)]
     exe_script: PathBuf,
     /// Subnetwork identifier. You can set this value to filter nodes
     /// with other identifiers than selected. Useful for test purposes.
-    #[structopt(long = "subnet", env = "SUBNET")]
+    #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
-    #[structopt(long = "node-name", default_value = DEFAULT_NODE_NAME)]
+    #[structopt(long, default_value = DEFAULT_NODE_NAME)]
     node_name: String,
-    #[structopt(long = "task-package", default_value = DEFAULT_TASK_PACKAGE)]
+    #[structopt(long, default_value = DEFAULT_TASK_PACKAGE)]
     task_package: String,
-    #[structopt(long = "allocation-size", default_value = "100")]
+    #[structopt(long, default_value = "100")]
     allocation_size: i64,
+    /// Estimated time limit for agreement duration. All agreements will expire
+    /// after specified time computed from demand subscription. Provider is allowed
+    /// to break agreement after this time.
+    #[structopt(long, default_value = "15min")]
+    pub task_expiration: Duration,
 }
 
 /// if needed unsubscribes from the market and releases allocation
@@ -132,6 +139,7 @@ async fn main() -> anyhow::Result<()> {
     let my_demand = market::build_demand(
         &settings.node_name,
         &settings.task_package,
+        chrono::Duration::from_std(*settings.task_expiration)?,
         &settings.subnet,
     );
 

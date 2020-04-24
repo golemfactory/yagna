@@ -1,5 +1,5 @@
 use actix_rt::Arbiter;
-use chrono::Utc;
+use chrono::{Utc};
 use futures::{channel::mpsc, prelude::*};
 use std::{
     collections::HashMap,
@@ -11,10 +11,8 @@ use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, Req
 
 use crate::payment::allocate_funds;
 
-pub(crate) fn build_demand(node_name: &str, task_package: &str, subnet: &Option<String>) -> Demand {
-    // Task should expire in 10 minutes.
-    let expiration = Utc::now() + chrono::Duration::minutes(10);
-
+pub(crate) fn build_demand(node_name: &str, task_package: &str, expires: chrono::Duration, subnet: &Option<String>) -> Demand {
+    let expiration = Utc::now() + expires;
     let mut properties = serde_json::json!({
         "golem": {
             "node.id.name": node_name,

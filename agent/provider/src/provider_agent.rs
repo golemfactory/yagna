@@ -1,7 +1,6 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
-use chrono::{DateTime, Utc};
 use std::convert::TryInto;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -65,7 +64,7 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         Ok(self
-            .create_offers(args.presets, config, *args.shutdown)
+            .create_offers(args.presets, config)
             .await?)
     }
 
@@ -73,7 +72,6 @@ impl ProviderAgent {
         &self,
         presets_names: Vec<String>,
         config: ProviderConfig,
-        expires: Duration,
     ) -> anyhow::Result<()> {
         log::debug!("Presets names: {:?}", presets_names);
 
@@ -82,16 +80,6 @@ impl ProviderAgent {
         }
 
         let presets = Presets::from_file(&config.presets_file)?.list_matching(&presets_names)?;
-
-        // Compute expected shutdown of provider. This time value will be added as constraint
-        // to offers to avoid taking offers, that will last longer, than user wants to
-        // provider his computing power.
-        let expires = Utc::now() + chrono::Duration::from_std(expires)?;
-        log::info!(
-            "Preparing offers. Provider will take only offers, that expire before {}.",
-            expires
-        );
-
         for preset in presets.into_iter() {
             let com_info = match preset.pricing_model.as_str() {
                 "linear" => LinearPricingOffer::from_preset(&preset)?
@@ -117,7 +105,7 @@ impl ProviderAgent {
             })?;
 
             // Create simple offer on market.
-            let constraints = self.build_constraints(expires)?;
+            let constraints = self.build_constraints()?;
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
@@ -132,20 +120,18 @@ impl ProviderAgent {
         Ok(())
     }
 
-    fn build_constraints(&self, expires: DateTime<Utc>) -> anyhow::Result<String> {
+    fn build_constraints(&self) -> anyhow::Result<String> {
+        // Provider requires expiration property from Requestor.
+
         // If user set subnet name, we should add constraint for filtering
         // nodes that didn't set the same name in properties.
         // TODO: Write better constraints building.
         match self.node_info.subnet.clone() {
             Some(subnet) => Ok(format!(
-                "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration<{}))",
+                "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration>0))",
                 subnet,
-                expires.timestamp_millis()
             )),
-            None => Ok(format!(
-                "(golem.srv.comp.expiration<{})",
-                expires.timestamp_millis()
-            )),
+            None => Ok(format!("(golem.srv.comp.expiration>0)")),
         }
     }
 

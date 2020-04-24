@@ -352,7 +352,6 @@ impl Handler<BreakAgreement> for TaskManager {
         let runner = self.runner.clone();
         let payments = self.payments.clone();
         let myself = ctx.address().clone();
-        let agreement_id = msg.agreement_id.clone();
 
         let future = async move {
             let new_state = AgreementState::Broken {
@@ -372,7 +371,7 @@ impl Handler<BreakAgreement> for TaskManager {
             finish_transition(&myself, &msg.agreement_id, new_state).await
         }
         .map_err(move |error| {
-            log::error!("Can't break agreement [{}]. Error: {}", agreement_id, error)
+            log::error!("Can't break agreement. Error: {}", error)
         });
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
@@ -383,7 +382,6 @@ impl Handler<CloseAgreement> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: CloseAgreement, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.clone();
         let runner = self.runner.clone();
         let payments = self.payments.clone();
         let myself = ctx.address().clone();
@@ -401,7 +399,7 @@ impl Handler<CloseAgreement> for TaskManager {
             finish_transition(&myself, &msg.agreement_id, AgreementState::Closed).await
         }
         .map_err(move |error| {
-            log::error!("Can't close agreement [{}]. Error: {}", agreement_id, error)
+            log::error!("Can't close agreement. Error: {}", error)
         });
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
