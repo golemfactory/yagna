@@ -1,3 +1,3 @@
 set RUST_LOG=info
-curl -X POST "http://localhost:5001/admin/import-key" -H "accept: application/json" -H "Content-Type: application/json-patch+json" -d "[ { \"key\": \"45910305c4f3437fb3dd64031975b817\", \"nodeId\": \"0x07c492fe0a903c582b59dab769876df686641670\" }]"
-cargo run --bin ya-provider -- --activity-url http://127.0.0.1:6001/activity-api/v1/ --app-key 45910305c4f3437fb3dd64031975b817 --market-url http://127.0.0.1:5001/market-api/v1/ --exe-unit-path ..\..\..\exe-unit
+set GSB_URL=tcp://127.0.0.1:6011
+cargo run --bin ya-provider -- --exe-unit-path local-exeunits-descriptor.json run amazing-offer --credit-address 0x213123123 --payment-url http://127.0.0.1:6001/payment-api/v1/ --activity-url http://127.0.0.1:6001/activity-api/v1/ --app-key 8fec2b8fce0f471ea7182fe76b6781f2 --market-url http://127.0.0.1:5001/market-api/v1/ --node-name Provider_Node 

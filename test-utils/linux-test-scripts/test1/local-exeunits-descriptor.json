@@ -1,0 +1,7 @@
+[
+    {
+        "name": "wasmtime",
+        "supervisor-path": "../../../target/debug/exe-unit",
+        "runtime-path": "../../../target/debug/wasmtime-exeunit"
+    }
+]
