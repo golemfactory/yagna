@@ -370,9 +370,7 @@ impl Handler<BreakAgreement> for TaskManager {
 
             finish_transition(&myself, &msg.agreement_id, new_state).await
         }
-        .map_err(move |error| {
-            log::error!("Can't break agreement. Error: {}", error)
-        });
+        .map_err(move |error| log::error!("Can't break agreement. Error: {}", error));
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
     }
@@ -398,9 +396,7 @@ impl Handler<CloseAgreement> for TaskManager {
 
             finish_transition(&myself, &msg.agreement_id, AgreementState::Closed).await
         }
-        .map_err(move |error| {
-            log::error!("Can't close agreement. Error: {}", error)
-        });
+        .map_err(move |error| log::error!("Can't close agreement. Error: {}", error));
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
     }

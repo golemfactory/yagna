@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use derive_more::Display;
 use futures::future::join_all;
+use futures_util::TryFutureExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -212,22 +213,17 @@ impl ProviderMarket {
                     subscription.clone(),
                     event,
                 )
-            })
-            .collect::<Vec<_>>();
-
-        let _ = join_all(dispatch_futures)
-            .await
-            .iter()
-            .map(|result| {
-                if let Err(error) = result {
+                .map_err(|error| {
                     log::error!(
                         "Error processing event: {}, subscription_id: {}.",
                         error,
                         subscription.subscription_id
                     );
-                }
+                })
             })
             .collect::<Vec<_>>();
+
+        let _ = join_all(dispatch_futures).await;
     }
 
     async fn dispatch_event(

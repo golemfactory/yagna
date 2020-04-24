@@ -63,9 +63,7 @@ impl ProviderAgent {
         };
         self.runner.send(msg).await??;
 
-        Ok(self
-            .create_offers(args.presets, config)
-            .await?)
+        Ok(self.create_offers(args.presets, config).await?)
     }
 
     async fn create_offers(

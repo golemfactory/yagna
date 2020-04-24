@@ -11,7 +11,7 @@ use std::time::Duration;
 use ya_agreement_utils::ParsedAgreement;
 use ya_client::activity::ActivityProviderApi;
 use ya_core_model::activity;
-use ya_model::activity::ProviderEvent;
+use ya_model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
@@ -111,12 +111,14 @@ struct ExeUnitProcessFinished {
 /// TODO: Load configuration from somewhere.
 pub struct TaskRunnerConfig {
     pub process_termination_timeout: Duration,
+    pub exeunit_state_retry_interval: Duration,
 }
 
 impl Default for TaskRunnerConfig {
     fn default() -> Self {
         TaskRunnerConfig {
             process_termination_timeout: Duration::from_secs(5),
+            exeunit_state_retry_interval: Duration::from_secs(10),
         }
     }
 }
@@ -330,6 +332,8 @@ impl TaskRunner {
         // Remove task from list and destroy everything related with it.
         let task = self.tasks.swap_remove(task_position);
         let termination_timeout = self.config.process_termination_timeout;
+        let set_state_retry = self.config.exeunit_state_retry_interval;
+        let api = self.api.clone();
 
         Arbiter::spawn(async move {
             if let Err(error) = task.exeunit.terminate(termination_timeout).await {
@@ -339,6 +343,19 @@ impl TaskRunner {
                     error
                 );
                 task.exeunit.kill();
+
+                // It was brutal termination and ExeUnit probably didn't set state.
+                // We must do it instead of him. Repeat until it will succeed.
+                let state = ActivityState::from(StatePair(State::Terminated, None));
+                while let Err(error) = api.set_activity_state(&task.activity_id, &state).await {
+                    log::warn!(
+                        "Can't set terminated state for activity [{}]. Error: {}. Retry after: {:#?}",
+                        &task.activity_id,
+                        error,
+                        set_state_retry
+                    );
+                    tokio::time::delay_for(set_state_retry).await;
+                }
             }
 
             log::info!("Activity destroyed: [{}].", msg.activity_id);
