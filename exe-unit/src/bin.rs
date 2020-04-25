@@ -3,6 +3,8 @@ use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::path::{Component, Prefix};
 use structopt::StructOpt;
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -43,6 +45,44 @@ pub enum Command {
     },
 }
 
+#[cfg(not(windows))]
+pub fn win_canonicalize_workaround(path: PathBuf) -> PathBuf {
+    path
+}
+
+// canonicalize on Windows adds `\\?` (or `%3f` when url-encoded) prefix
+#[cfg(windows)]
+pub fn win_canonicalize_workaround(path: PathBuf) -> PathBuf {
+    let mut disk_letter = None;
+
+    // There seems to be no easy way to replace one prefix with another...
+    let result = path
+        .components()
+        .into_iter()
+        .filter(|c| match c {
+            Component::Prefix(prefix) => match prefix.kind() {
+                Prefix::Verbatim(_) => false,
+                Prefix::VerbatimDisk(disk) => {
+                    disk_letter = Some(disk);
+                    false
+                }
+                _ => true,
+            },
+            _ => true,
+        })
+        .collect::<PathBuf>();
+
+    // ...so in case a VerbatimDisk letter was found - prepend it in front of the path
+    match disk_letter {
+        Some(letter) => {
+            let mut aggr = PathBuf::from(format!("{}:", char::from(letter)));
+            aggr.push(result);
+            aggr
+        }
+        None => result,
+    }
+}
+
 fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     if let Err(error) = std::fs::create_dir_all(path) {
         match &error.kind() {
@@ -50,7 +90,7 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
             _ => bail!("Can't create directory: {}, {}", path.display(), error),
         }
     }
-    Ok(path.canonicalize()?)
+    Ok(win_canonicalize_workaround(path.canonicalize()?))
 }
 
 fn run() -> anyhow::Result<()> {
@@ -65,6 +105,9 @@ fn run() -> anyhow::Result<()> {
         work_dir: create_path(&cli.work_dir)?,
         cache_dir: create_path(&cli.cache_dir)?,
     };
+
+    log::debug!("CLI args: {:?}", cli);
+    log::debug!("ExeUnitContext args: {:?}", ctx);
 
     match cli.command {
         Command::FromFile { input } => {
@@ -128,4 +171,24 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(result?)
+}
+
+#[cfg(windows)]
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn test_remove_verbatim_prefix() {
+        let path = Path::new(r"c:\windows\System32")
+            .to_path_buf()
+            .canonicalize()
+            .expect("should canonicalize: c:\\");
+
+        assert_eq!(
+            PathBuf::from(r"C:\Windows\System32"),
+            win_canonicalize_workaround(path)
+        );
+    }
 }
