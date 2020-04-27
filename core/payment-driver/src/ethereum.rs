@@ -116,7 +116,7 @@ mod tests {
 
     use crate::account::Chain;
 
-    const GETH_ADDRESS: &str = "http://188.165.227.180:55555";
+    const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
     const GNT_CONTRACT_ADDRESS: &str = "924442A66cFd812308791872C4B242440c108E19";
 

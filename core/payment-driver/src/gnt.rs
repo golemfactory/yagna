@@ -608,11 +608,11 @@ mod tests {
     use super::*;
     use crate::account::{Chain, Currency};
 
-    const GETH_ADDRESS: &str = "http://188.165.227.180:55555";
+    const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
     const GNT_CONTRACT_ADDRESS: &str = "924442A66cFd812308791872C4B242440c108E19";
 
-    const ETH_FAUCET_ADDRESS: &str = "http://188.165.227.180:4000/donate";
+    const ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
     const GNT_FAUCET_ADDRESS: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
 
     fn to_address(address: &str) -> Address {
