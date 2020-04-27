@@ -118,3 +118,60 @@ where
             .fold(BigDecimal::zero(), <BigDecimal as Add<BigDecimal>>::add)
     }
 }
+
+#[derive(Debug, Clone, AsExpression, FromSqlRow)]
+#[sql_type = "Text"]
+pub enum Role {
+    Provider,
+    Requestor,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid role string: {0}")]
+pub struct RoleParseError(pub String);
+
+impl ToString for Role {
+    fn to_string(&self) -> String {
+        match self {
+            Role::Provider => "P".to_string(),
+            Role::Requestor => "R".to_string(),
+        }
+    }
+}
+
+impl FromStr for Role {
+    type Err = RoleParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "P" => Ok(Role::Provider),
+            "R" => Ok(Role::Requestor),
+            _ => Err(RoleParseError(s.to_string())),
+        }
+    }
+}
+
+impl<DB> ToSql<Text, DB> for Role
+where
+    DB: Backend,
+    String: ToSql<Text, DB>,
+{
+    fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
+        let s = self.to_string();
+        s.to_sql(out)
+    }
+}
+
+impl<DB> FromSql<Text, DB> for Role
+where
+    DB: Backend,
+    String: FromSql<Text, DB>,
+{
+    fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
+        let s = String::from_sql(bytes)?;
+        match Role::from_str(&s) {
+            Ok(x) => Ok(x),
+            Err(e) => Err(e.into()),
+        }
+    }
+}
