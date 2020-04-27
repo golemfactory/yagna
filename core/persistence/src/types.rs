@@ -3,11 +3,12 @@ use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::io::Write;
-use std::ops::Add;
+use std::ops::{Add, Sub};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, AsExpression, FromSqlRow, Default)]
+#[derive(Debug, Clone, AsExpression, FromSqlRow, Default, PartialEq, PartialOrd, Eq, Ord)]
 #[sql_type = "Text"]
 pub struct BigDecimalField(pub BigDecimal);
 
@@ -20,6 +21,60 @@ impl From<BigDecimalField> for BigDecimal {
 impl From<BigDecimal> for BigDecimalField {
     fn from(x: BigDecimal) -> Self {
         Self(x)
+    }
+}
+
+impl Display for BigDecimalField {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Add<BigDecimalField> for BigDecimalField {
+    type Output = BigDecimalField;
+
+    fn add(self, rhs: BigDecimalField) -> Self::Output {
+        (self.0 + rhs.0).into()
+    }
+}
+
+impl<'a> Add<&'a BigDecimalField> for BigDecimalField {
+    type Output = BigDecimalField;
+
+    fn add(self, rhs: &'a BigDecimalField) -> Self::Output {
+        (self.0 + &rhs.0).into()
+    }
+}
+
+impl<'a, 'b> Add<&'b BigDecimalField> for &'a BigDecimalField {
+    type Output = BigDecimalField;
+
+    fn add(self, rhs: &'b BigDecimalField) -> Self::Output {
+        (&self.0 + &rhs.0).into()
+    }
+}
+
+impl Sub<BigDecimalField> for BigDecimalField {
+    type Output = BigDecimalField;
+
+    fn sub(self, rhs: BigDecimalField) -> Self::Output {
+        (self.0 - rhs.0).into()
+    }
+}
+
+impl<'a> Sub<&'a BigDecimalField> for BigDecimalField {
+    type Output = BigDecimalField;
+
+    fn sub(self, rhs: &'a BigDecimalField) -> Self::Output {
+        (self.0 - &rhs.0).into()
+    }
+}
+
+impl<'a, 'b> Sub<&'b BigDecimalField> for &'a BigDecimalField {
+    type Output = BigDecimalField;
+
+    fn sub(self, rhs: &'b BigDecimalField) -> Self::Output {
+        (&self.0 - &rhs.0).into()
     }
 }
 
