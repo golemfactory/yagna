@@ -149,8 +149,7 @@ async fn send_debit_note(
                 .try_service(BUS_ID)?
                 .call(SendDebitNote(debit_note))
                 .await??;
-            dao.update_status(debit_note_id, node_id, InvoiceStatus::Received)
-                .await?;
+            dao.mark_received(debit_note_id, node_id).await?;
             Ok(())
         }
         .await

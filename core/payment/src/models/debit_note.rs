@@ -40,12 +40,12 @@ impl WriteObj {
         }
     }
 
-    pub fn received(debit_note: DebitNote) -> Self {
+    pub fn received(debit_note: DebitNote, previous_debit_note_id: Option<String>) -> Self {
         Self {
             id: debit_note.debit_note_id,
             owner_id: debit_note.recipient_id.parse().unwrap(),
             role: Role::Requestor,
-            previous_debit_note_id: debit_note.previous_debit_note_id,
+            previous_debit_note_id,
             activity_id: debit_note.activity_id,
             status: InvoiceStatus::Received.into(),
             total_amount_due: debit_note.total_amount_due.into(),

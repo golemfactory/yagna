@@ -1,4 +1,4 @@
-use crate::dao::activity;
+use crate::dao::{activity, debit_note_event};
 use crate::error::DbResult;
 use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
@@ -9,7 +9,7 @@ use diesel::{
     RunQueryDsl,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{DebitNote, InvoiceStatus, NewDebitNote};
+use ya_client_model::payment::{DebitNote, EventType, InvoiceStatus, NewDebitNote};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -115,7 +115,6 @@ impl<'c> DebitNoteDao<'c> {
         issuer_id: NodeId,
     ) -> DbResult<String> {
         do_with_transaction(self.pool, move |conn| {
-            // TODO: Move previous_debit_note_id assignment to database trigger
             let previous_debit_note_id = dsl::pay_debit_note
                 .select(dsl::id)
                 .filter(dsl::activity_id.eq(&debit_note.activity_id))
@@ -140,9 +139,16 @@ impl<'c> DebitNoteDao<'c> {
     }
 
     pub async fn insert_received(&self, debit_note: DebitNote) -> DbResult<()> {
-        let debit_note = WriteObj::received(debit_note);
         do_with_transaction(self.pool, move |conn| {
-            // TODO: Check previous_debit_note_id
+            let previous_debit_note_id = dsl::pay_debit_note
+                .select(dsl::id)
+                .filter(dsl::activity_id.eq(&debit_note.activity_id))
+                .order_by(dsl::timestamp.desc())
+                .first(conn)
+                .optional()?;
+            let debit_note = WriteObj::received(debit_note, previous_debit_note_id);
+            let debit_note_id = debit_note.id.clone();
+            let owner_id = debit_note.owner_id.clone();
             activity::set_amount_due(
                 &debit_note.activity_id,
                 &debit_note.owner_id,
@@ -152,7 +158,13 @@ impl<'c> DebitNoteDao<'c> {
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;
-            // TODO: Emit event in the same transaction
+            debit_note_event::create::<()>(
+                debit_note_id,
+                owner_id,
+                EventType::Received,
+                None,
+                conn,
+            )?;
             Ok(())
         })
         .await
@@ -201,16 +213,10 @@ impl<'c> DebitNoteDao<'c> {
         self.get_for_role(node_id, Role::Requestor).await
     }
 
-    pub async fn update_status(
-        &self,
-        debit_note_id: String,
-        owner_id: NodeId,
-        status: InvoiceStatus,
-    ) -> DbResult<()> {
-        // TODO: Remove, use specialized methods
+    pub async fn mark_received(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::pay_debit_note.find((debit_note_id, owner_id)))
-                .set(dsl::status.eq(status.to_string()))
+                .set(dsl::status.eq(InvoiceStatus::Received.to_string()))
                 .execute(conn)?;
             Ok(())
         })
@@ -219,18 +225,52 @@ impl<'c> DebitNoteDao<'c> {
 
     pub async fn accept(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            let (activity_id, amount): (String, BigDecimalField) = dsl::pay_debit_note
+            let (activity_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_debit_note
                 .find((&debit_note_id, &owner_id))
-                .select((dsl::activity_id, dsl::total_amount_due))
+                .select((dsl::activity_id, dsl::total_amount_due, dsl::role))
                 .first(conn)?;
             update_status(
-                &vec![debit_note_id],
+                &vec![debit_note_id.clone()],
                 &owner_id,
                 &InvoiceStatus::Accepted,
                 conn,
             )?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
-            // TODO: Emit event if role == Provider
+            if let Role::Provider = role {
+                debit_note_event::create::<()>(
+                    debit_note_id,
+                    owner_id,
+                    EventType::Accepted,
+                    None,
+                    conn,
+                )?;
+            }
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let (activity_id, role): (String, Role) = dsl::pay_debit_note
+                .find((&debit_note_id, &owner_id))
+                .select((dsl::activity_id, dsl::role))
+                .first(conn)?;
+            update_status(
+                &vec![debit_note_id.clone()],
+                &owner_id,
+                &InvoiceStatus::Rejected,
+                conn,
+            )?;
+            if let Role::Provider = role {
+                debit_note_event::create::<()>(
+                    debit_note_id,
+                    owner_id,
+                    EventType::Rejected,
+                    None,
+                    conn,
+                )?;
+            }
             Ok(())
         })
         .await

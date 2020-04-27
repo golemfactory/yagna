@@ -7,8 +7,24 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 use ya_client_model::payment::{DebitNoteEvent, EventType};
 use ya_core_model::ethaddr::NodeId;
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 use ya_persistence::types::Role;
+
+pub fn create<T: Serialize>(
+    debit_note_id: String,
+    owner_id: NodeId,
+    event_type: EventType,
+    details: Option<T>,
+    conn: &ConnType,
+) -> DbResult<()> {
+    let event = WriteObj::new(debit_note_id, owner_id, event_type, details);
+    diesel::insert_into(dsl::pay_debit_note_event)
+        .values(event)
+        .execute(conn)?;
+    Ok(())
+}
 
 pub struct DebitNoteEventDao<'c> {
     pool: &'c PoolType,

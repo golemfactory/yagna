@@ -119,8 +119,7 @@ async fn accept_debit_note(
         let msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
         match async move {
             issuer_id.try_service(PUBLIC_SERVICE)?.call(msg).await??;
-            dao.update_status(debit_note_id, node_id, InvoiceStatus::Accepted)
-                .await?;
+            dao.accept(debit_note_id, node_id).await?;
             Ok(())
         }
         .await
