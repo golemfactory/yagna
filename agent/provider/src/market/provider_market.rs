@@ -16,10 +16,12 @@ use ya_utils_actix::{
 };
 
 use super::mock_negotiator::AcceptAllNegotiator;
-use super::negotiator::{AgreementResponse, Negotiator, ProposalResponse};
+use super::negotiator::{AgreementResponse, AgreementResult, Negotiator, ProposalResponse};
 use super::Preset;
+use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // Temporrary
+use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use ya_agreement_utils::{OfferDefinition, ParsedAgreement};
 
 // =========================================== //
@@ -77,6 +79,13 @@ pub struct GotProposal {
 pub struct GotAgreement {
     subscription: OfferSubscription,
     agreement: ParsedAgreement,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct AgreementFinalized {
+    agreement_id: String,
+    result: AgreementResult,
 }
 
 // =========================================== //
@@ -320,9 +329,21 @@ impl ProviderMarket {
         match response {
             Ok(action) => match action {
                 AgreementResponse::ApproveAgreement => {
-                    market_api
+                    // TODO: We should retry approval, but only a few times, than we should
+                    //       give up since it's better to tak another agreement.
+                    let result = market_api
                         .approve_agreement(&agreement.agreement_id, Some(10.0))
-                        .await?;
+                        .await;
+
+                    if let Err(error) = result {
+                        // Notify negotiator, that we couldn't approve.
+                        let msg = AgreementFinalized {
+                            agreement_id: agreement.agreement_id.clone(),
+                            result: AgreementResult::ApprovalFailed,
+                        };
+                        let _ = addr.send(msg).await;
+                        return Err(anyhow!("{}", error));
+                    }
 
                     // We negotiated agreement and here responsibility of ProviderMarket ends.
                     // Notify outside world about agreement for further processing.
@@ -489,6 +510,47 @@ impl Handler<CreateOffer> for ProviderMarket {
     }
 }
 
+impl Handler<AgreementFinalized> for ProviderMarket {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementFinalized, _ctx: &mut Context<Self>) -> Self::Result {
+        if let Err(error) = self
+            .negotiator
+            .agreement_finalized(&msg.agreement_id, msg.result)
+        {
+            log::warn!(
+                "Negotiator failed while handling agreement [{}] finalize. Error: {}",
+                &msg.agreement_id,
+                error,
+            );
+        }
+        // Don't forward error.
+        ActorResponse::reply(Ok(()))
+    }
+}
+
+impl Handler<AgreementClosed> for ProviderMarket {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
+        let msg = AgreementFinalized::from(msg);
+        let myself = ctx.address().clone();
+
+        ActorResponse::r#async(async move { myself.send(msg).await? }.into_actor(self))
+    }
+}
+
+impl Handler<AgreementBroken> for ProviderMarket {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
+        let msg = AgreementFinalized::from(msg);
+        let myself = ctx.address().clone();
+
+        ActorResponse::r#async(async move { myself.send(msg).await? }.into_actor(self))
+    }
+}
+
 impl Handler<OnShutdown> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
@@ -513,6 +575,7 @@ forward_actix_handler!(ProviderMarket, AgreementApproved, on_agreement_approved)
 fn create_negotiator(name: &str) -> Box<dyn Negotiator> {
     match name {
         "AcceptAll" => Box::new(AcceptAllNegotiator::new()),
+        "LimitAgreements" => Box::new(LimitAgreementsNegotiator::new(1)),
         _ => {
             log::warn!("Unknown negotiator type {}. Using default: AcceptAll", name);
             Box::new(AcceptAllNegotiator::new())
@@ -538,6 +601,24 @@ impl GotAgreement {
         Self {
             subscription,
             agreement,
+        }
+    }
+}
+
+impl From<AgreementBroken> for AgreementFinalized {
+    fn from(msg: AgreementBroken) -> Self {
+        AgreementFinalized {
+            agreement_id: msg.agreement_id,
+            result: AgreementResult::Broken { reason: msg.reason },
+        }
+    }
+}
+
+impl From<AgreementClosed> for AgreementFinalized {
+    fn from(msg: AgreementClosed) -> Self {
+        AgreementFinalized {
+            agreement_id: msg.agreement_id,
+            result: AgreementResult::Closed,
         }
     }
 }

@@ -351,6 +351,7 @@ impl Handler<BreakAgreement> for TaskManager {
     fn handle(&mut self, msg: BreakAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let runner = self.runner.clone();
         let payments = self.payments.clone();
+        let market = self.market.clone();
         let myself = ctx.address().clone();
 
         let future = async move {
@@ -368,9 +369,15 @@ impl Handler<BreakAgreement> for TaskManager {
             runner.send(AgreementBroken::from(msg.clone())).await??;
             payments.send(AgreementBroken::from(msg.clone())).await??;
 
-            finish_transition(&myself, &msg.agreement_id, new_state).await
+            finish_transition(&myself, &msg.agreement_id, new_state).await?;
+
+            // Notify market, but we don't care about result.
+            // TODO: Breaking agreement shouldn't fail at anytime. But in current code we can
+            //       return early, before we notify market.
+            market.do_send(AgreementBroken::from(msg.clone()));
+            Ok(())
         }
-        .map_err(move |error| log::error!("Can't break agreement. Error: {}", error));
+        .map_err(move |error: Error| log::error!("Can't break agreement. Error: {}", error));
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
     }
@@ -382,8 +389,11 @@ impl Handler<CloseAgreement> for TaskManager {
     fn handle(&mut self, msg: CloseAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let runner = self.runner.clone();
         let payments = self.payments.clone();
+        let market = self.market.clone();
         let myself = ctx.address().clone();
 
+        // TODO: Probably if closing agreement fails, we should break agreement.
+        //       Here lacks this error handling, we just log message.
         let future = async move {
             start_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
 
@@ -394,9 +404,13 @@ impl Handler<CloseAgreement> for TaskManager {
                 .send(AgreementClosed::new(&msg.agreement_id))
                 .await??;
 
-            finish_transition(&myself, &msg.agreement_id, AgreementState::Closed).await
+            finish_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
+
+            // Notify market, but we don't care about result.
+            market.do_send(AgreementClosed::new(&msg.agreement_id));
+            Ok(())
         }
-        .map_err(move |error| log::error!("Can't close agreement. Error: {}", error));
+        .map_err(move |error: Error| log::error!("Can't close agreement. Error: {}", error));
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
     }

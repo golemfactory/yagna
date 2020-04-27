@@ -180,10 +180,20 @@ async fn negotiate_offer(
     }
 
     log::info!("\n\n waiting for agreement approval: {}", new_agreement_id);
-    api.market
+    let result = api
+        .market
         .wait_for_approval(&new_agreement_id, Some(7.879))
         .await?;
-    log::info!("\n\n AGREEMENT APPROVED: {} !", new_agreement_id);
 
-    Ok(ProcessOfferResult::AgreementId(new_agreement_id))
+    match &result[..] {
+        "Approved" => {
+            log::info!("\n\n AGREEMENT APPROVED: {} !", new_agreement_id);
+            Ok(ProcessOfferResult::AgreementId(new_agreement_id))
+        }
+        "Rejected" => {
+            log::info!("\n\n AGREEMENT REJECTED: {} !", new_agreement_id);
+            anyhow::bail!("Agreement rejected by provider: {} !", new_agreement_id)
+        }
+        _ => anyhow::bail!("Unknown response for agreement: {} !", new_agreement_id),
+    }
 }
