@@ -346,16 +346,7 @@ impl TaskRunner {
 
                 // It was brutal termination and ExeUnit probably didn't set state.
                 // We must do it instead of him. Repeat until it will succeed.
-                let state = ActivityState::from(StatePair(State::Terminated, None));
-                while let Err(error) = api.set_activity_state(&task.activity_id, &state).await {
-                    log::warn!(
-                        "Can't set terminated state for activity [{}]. Error: {}. Retry after: {:#?}",
-                        &task.activity_id,
-                        error,
-                        state_retry_interval
-                    );
-                    tokio::time::delay_for(state_retry_interval).await;
-                }
+                set_activity_terminated(api, &task.activity_id, state_retry_interval).await;
             }
 
             log::info!("ExeUnit for activity terminated: [{}].", msg.activity_id);
@@ -532,6 +523,23 @@ fn task_package_from(agreement: &ParsedAgreement) -> Result<String> {
     Ok(agreement.pointer_typed::<String>(runtime_key_str)?)
 }
 
+async fn set_activity_terminated(
+    api: Arc<ActivityProviderApi>,
+    activity_id: &str,
+    retry_interval: Duration,
+) {
+    let state = ActivityState::from(StatePair(State::Terminated, None));
+    while let Err(error) = api.set_activity_state(activity_id, &state).await {
+        log::warn!(
+            "Can't set terminated state for activity [{}]. Error: {}. Retry after: {:#?}",
+            &activity_id,
+            error,
+            retry_interval
+        );
+        tokio::time::delay_for(retry_interval).await;
+    }
+}
+
 // =========================================== //
 // Actix stuff
 // =========================================== //
@@ -542,7 +550,6 @@ impl Actor for TaskRunner {
 
 forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
-forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
@@ -570,6 +577,28 @@ impl Handler<UpdateActivity> for TaskRunner {
         ActorResponse::r#async(
             async move { TaskRunner::collect_events(client, addr).await }.into_actor(self),
         )
+    }
+}
+
+impl Handler<CreateActivity> for TaskRunner {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
+        let api = self.api.clone();
+        let activity_id = msg.activity_id.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+
+        let result = self.on_create_activity(msg, ctx);
+
+        let on_error_future = async move {
+            set_activity_terminated(api, &activity_id, state_retry_interval).await;
+        }
+        .into_actor(self);
+
+        match result {
+            Ok(_) => ActorResponse::reply(result),
+            Err(error) => ActorResponse::r#async(on_error_future.map(|_, _, _| Err(error))),
+        }
     }
 }
 
