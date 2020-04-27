@@ -186,7 +186,7 @@ impl fmt::Display for RegistryError {
 pub enum ExeUnitValidation {
     #[error("ExeUnit [{}] Supervisor binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
     SupervisorNotFound { desc: ExeUnitDesc },
-    #[error("ExeUnit [{}] Runtime binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
+    #[error("ExeUnit [{}] Runtime binary [{}] doesn't exist.", .desc.name, .desc.runtime_path.display())]
     RuntimeNotFound { desc: ExeUnitDesc },
 }
 
