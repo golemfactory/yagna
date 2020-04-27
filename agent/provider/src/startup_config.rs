@@ -12,9 +12,8 @@ pub struct ProviderConfig {
         long,
         set = clap::ArgSettings::Global,
         env = "EXE_UNIT_PATH",
-        default_value = "/usr/lib/yagna/plugins/ya-runtime-*.json"
+        default_value = "/usr/lib/yagna/plugins/ya-runtime-*.json",
         hide_env_values = true,
-        default_value = "/usr/lib/yagna/plugins/exeunits-descriptor.json"
     )]
     pub exe_unit_path: PathBuf,
     #[structopt(skip = "presets.json")]

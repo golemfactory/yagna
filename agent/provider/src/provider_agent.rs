@@ -1,9 +1,8 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail};
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
@@ -68,7 +67,7 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         // Load ExeUnits descriptors from file.
-        fn expand_filename(exeunit_path: &str) -> anyhow::Result<Vec<PathBuf>> {
+        fn expand_filename(exeunit_path: &Path) -> anyhow::Result<Vec<PathBuf>> {
             use std::fs::read_dir;
 
             let path: &Path = exeunit_path.as_ref();
