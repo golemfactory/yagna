@@ -1,4 +1,4 @@
-use ya_agreement_utils::agreement::{try_from_path, Error, TypedArrayPointer, TypedPointer};
+use ya_agreement_utils::agreement::{try_from_path, Error, ParsedAgreement};
 
 use crate::metrics::MemMetric;
 use serde_json::Value;
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct Agreement {
-    pub json: Value,
+    pub agreement: ParsedAgreement,
     pub agreement_id: String,
     pub task_package: String,
     pub usage_vector: Vec<String>,
@@ -17,7 +17,7 @@ pub struct Agreement {
 
 impl Agreement {
     pub fn pointer(&self, pointer: &str) -> Option<&Value> {
-        self.json.pointer(pointer)
+        self.agreement.pointer(pointer)
     }
 }
 
@@ -25,29 +25,23 @@ impl TryFrom<Value> for Agreement {
     type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let agreement_id = value
-            .pointer("/agreementId")
-            .as_typed(Value::as_str)?
-            .to_owned();
-        let task_package = value
-            .pointer("/demand/properties/golem/srv/comp/wasm/task_package")
-            .as_typed(Value::as_str)?
-            .to_owned();
-        let usage_vector = value
-            .pointer("/offer/properties/golem/com/usage/vector")
-            .as_typed_array(|v| v.as_str().map(|s| s.to_owned()))?;
+        let agreement = ParsedAgreement::try_from(value)?;
+
+        let agreement_id = agreement.agreement_id.clone();
+        let task_package = agreement
+            .pointer_typed::<String>("/demand/properties/golem/srv/comp/wasm/task_package")?;
+        let usage_vector =
+            agreement.pointer_typed::<Vec<String>>("/offer/properties/golem/com/usage/vector")?;
 
         let limits = vec![(
             MemMetric::ID.to_owned(),
-            value
-                .pointer("/offer/properties/golem/inf/mem/gib")
-                .as_typed(Value::as_f64)?,
+            agreement.pointer_typed::<f64>("/offer/properties/golem/inf/mem/gib")?,
         )]
         .into_iter()
         .collect();
 
         Ok(Agreement {
-            json: value,
+            agreement,
             agreement_id,
             task_package,
             usage_vector,
