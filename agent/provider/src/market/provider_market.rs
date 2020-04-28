@@ -330,7 +330,7 @@ impl ProviderMarket {
             Ok(action) => match action {
                 AgreementResponse::ApproveAgreement => {
                     // TODO: We should retry approval, but only a few times, than we should
-                    //       give up since it's better to tak another agreement.
+                    //       give up since it's better to take another agreement.
                     let result = market_api
                         .approve_agreement(&agreement.agreement_id, Some(10.0))
                         .await;
