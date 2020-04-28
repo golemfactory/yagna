@@ -1,12 +1,14 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use derive_more::Display;
+use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use structopt::StructOpt;
 
 use ya_agreement_utils::ParsedAgreement;
 use ya_client::activity::ActivityProviderApi;
@@ -108,19 +110,12 @@ struct ExeUnitProcessFinished {
 // =========================================== //
 
 /// Configuration for TaskRunner actor.
-/// TODO: Load configuration from somewhere.
+#[derive(StructOpt, Clone, Debug)]
 pub struct TaskRunnerConfig {
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5s")]
     pub process_termination_timeout: Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10s")]
     pub exeunit_state_retry_interval: Duration,
-}
-
-impl Default for TaskRunnerConfig {
-    fn default() -> Self {
-        TaskRunnerConfig {
-            process_termination_timeout: Duration::from_secs(5),
-            exeunit_state_retry_interval: Duration::from_secs(10),
-        }
-    }
 }
 
 // =========================================== //
@@ -148,10 +143,12 @@ pub struct TaskRunner {
 }
 
 impl TaskRunner {
-    pub fn new(client: ActivityProviderApi) -> Result<TaskRunner> {
+    pub fn new(client: ActivityProviderApi, config: TaskRunnerConfig) -> Result<TaskRunner> {
         let current_dir = std::env::current_dir()?;
         let tasks_dir = current_dir.join("exe-unit").join("work");
         let cache_dir = current_dir.join("exe-unit").join("cache");
+
+        log::info!("Config: {:?}", config);
 
         create_dir_all(&tasks_dir).map_err(|error| {
             anyhow!(
@@ -183,7 +180,7 @@ impl TaskRunner {
             active_agreements: HashMap::new(),
             activity_created: SignalSlot::<ActivityCreated>::new(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
-            config: Arc::new(TaskRunnerConfig::default()),
+            config: Arc::new(config),
             tasks_dir,
             cache_dir,
         })

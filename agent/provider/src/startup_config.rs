@@ -2,6 +2,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 
+use crate::execution::TaskRunnerConfig;
 use ya_client::cli::ApiOpts;
 
 /// Common configuration for all Provider commands.
@@ -41,6 +42,8 @@ pub struct RunConfig {
     pub api: ApiOpts,
     #[structopt(flatten)]
     pub node: NodeConfig,
+    #[structopt(flatten)]
+    pub runner_config: TaskRunnerConfig,
     /// Offer presets, that will be sent to market.
     pub presets: Vec<String>,
 }

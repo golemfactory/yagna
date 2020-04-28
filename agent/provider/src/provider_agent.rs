@@ -32,7 +32,7 @@ impl ProviderAgent {
     pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let api: ProviderApi = (&args.api).try_into()?;
         let market = ProviderMarket::new(api.market, "LimitAgreements").start();
-        let runner = TaskRunner::new(api.activity.clone())?.start();
+        let runner = TaskRunner::new(api.activity.clone(), args.runner_config.clone())?.start();
         let payments = Payments::new(api.activity, api.payment, &args.node.credit_address).start();
         let task_manager =
             TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
