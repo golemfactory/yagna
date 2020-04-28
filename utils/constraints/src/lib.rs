@@ -1,66 +1,71 @@
 use serde::export::Formatter;
-use serde::Serialize;
 use std::fmt;
-//use std::ops::{Index, IndexMut};
+use std::ops::{Index, IndexMut};
 
-#[derive(Clone, Serialize)]
-pub enum Constraints {
-    Single(ConstraintExpr),
-    Clause(ConstraintClause),
+#[derive(Clone)]
+pub struct Constraints {
+    constraints: Vec<ConstraintExpr>,
+    operator: ClauseOperator,
 }
-
-type ConstraintKey = serde_json::Value;
-type ConstraintValue = serde_json::Value;
 
 impl Constraints {
-    pub fn new_clause<T: Into<Constraints>>(op: ClauseOperator, v: Vec<T>) -> Constraints {
-        Constraints::Clause(ConstraintClause {
+    pub fn new_clause<T: Into<ConstraintExpr>>(op: ClauseOperator, v: Vec<T>) -> Constraints {
+        Constraints {
             constraints: v.into_iter().map(|x| x.into()).collect(),
             operator: op,
-        })
+        }
     }
     pub fn new_single<T: Into<ConstraintExpr>>(el: T) -> Constraints {
-        Constraints::Single(el.into())
+        Constraints {
+            constraints: vec![el.into()],
+            operator: ClauseOperator::And,
+        }
     }
-}
-
-//v: &[T],; where for<'a> Constraints : From<&'a T> {
-
-impl<T: Into<ConstraintExpr>> From<T> for Constraints {
-    fn from(c: T) -> Self {
-        Constraints::Single(c.into())
+    pub fn or(self, c: Constraints) -> Constraints {
+        self.operation(ClauseOperator::Or, c)
+    }
+    pub fn and(self, c: Constraints) -> Constraints {
+        self.operation(ClauseOperator::And, c)
+    }
+    fn operation(self, operator: ClauseOperator, c: Constraints) -> Constraints {
+        if c.operator == operator && self.operator == operator {
+            Constraints {
+                constraints: [&self.constraints[..], &c.constraints[..]].concat(),
+                operator: self.operator,
+            }
+        } else {
+            Constraints::new_clause(operator, vec![self, c])
+        }
     }
 }
 
 impl fmt::Display for Constraints {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Constraints::Single(expr) => expr.to_string(),
-                Constraints::Clause(clause) => clause.to_string(),
+        match self.constraints.len() {
+            0 => Ok(()),
+            1 => write!(f, "{}", self.constraints[0]),
+            _ => {
+                write!(f, "({}\n", self.operator.to_string())?;
+                /* TODO do not create (...) if single expression */
+                for el in &self.constraints {
+                    write!(f, "  {}\n", el.to_string().replace("\n", "\n  "))?;
+                }
+                write!(f, ")")
             }
-        )
+        }
     }
 }
 
-impl<T: Into<ConstraintKey>, U: Into<ConstraintValue>> From<(T, ConstraintOperator, U)>
-    for ConstraintExpr
-{
-    fn from((key, operator, value): (T, ConstraintOperator, U)) -> Self {
-        ConstraintExpr::with_key_op_value(key.into(), operator, value.into())
+impl std::iter::IntoIterator for Constraints {
+    type Item = ConstraintExpr;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.constraints.into_iter()
     }
 }
 
-/*impl<T: Into<ConstraintKey>> From<T> for ConstraintExpr
-{
-    fn from(key: T) -> Self {
-        ConstraintExpr::with_key(key.into())
-    }
-}*/
-
-#[derive(Copy, Clone, Serialize)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum ClauseOperator {
     And,
     Or,
@@ -79,45 +84,26 @@ impl fmt::Display for ClauseOperator {
     }
 }
 
-#[derive(Clone, Serialize)]
-pub struct ConstraintClause {
-    constraints: Vec<Constraints>,
-    operator: ClauseOperator,
-}
-
-impl fmt::Display for ConstraintClause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({}\n", self.operator.to_string())?;
-        for el in &self.constraints {
-            write!(f, "  {}\n", el.to_string().replace("\n", "\n  "))?;
-        }
-        write!(f, ")")
-    }
-}
-
-/*
-impl Index<&str> for ConstraintClause {
+impl Index<&str> for Constraints {
     type Output = ();
     fn index(&self, index: &str) -> &Self::Output {
         unimplemented!()
     }
 }
 
-impl IndexMut<&str> for ConstraintClause {
+impl IndexMut<&str> for Constraints {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
         unimplemented!()
     }
-}*/
+}
 
-#[derive(Copy, Clone, Serialize)]
+#[derive(Copy, Clone)]
 pub enum ConstraintOperator {
     Equal,
     NotEqual,
     LessThan,
     GreaterThan,
 }
-
-impl ConstraintOperator {}
 
 impl fmt::Display for ConstraintOperator {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -134,70 +120,83 @@ impl fmt::Display for ConstraintOperator {
     }
 }
 
-#[derive(Clone, Serialize)]
-pub struct ConstraintExpr {
-    key: ConstraintKey,
-    operator: Option<ConstraintOperator>,
-    value: Option<ConstraintValue>,
+#[derive(Clone)]
+pub struct ConstraintKey(serde_json::Value);
+
+impl ConstraintKey {
+    pub fn new<T: Into<serde_json::Value>>(key: T) -> Self {
+        ConstraintKey(key.into())
+    }
 }
 
-impl ConstraintExpr {
-    pub fn with_key(key: ConstraintKey) -> ConstraintExpr {
-        ConstraintExpr {
+pub type ConstraintValue = ConstraintKey;
+
+#[derive(Clone)]
+pub enum ConstraintExpr {
+    KeyValue {
+        key: ConstraintKey,
+        ops_values: Vec<(ConstraintOperator, ConstraintValue)>,
+    },
+    Constraints(Constraints),
+}
+
+impl From<ConstraintKey> for ConstraintExpr {
+    fn from(key: ConstraintKey) -> Self {
+        ConstraintExpr::KeyValue {
             key,
-            operator: None,
-            value: None,
+            ops_values: vec![],
         }
     }
-    pub fn with_key_op_value(
-        key: ConstraintKey,
-        operator: ConstraintOperator,
-        value: ConstraintValue,
-    ) -> ConstraintExpr {
-        ConstraintExpr {
-            key,
-            operator: Some(operator),
-            value: Some(value),
-        }
+}
+
+impl From<Constraints> for ConstraintExpr {
+    fn from(key: Constraints) -> Self {
+        ConstraintExpr::Constraints(key)
     }
 }
 
 impl fmt::Display for ConstraintExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({}", self.key.as_str().unwrap_or(&self.key.to_string()))?;
-        if let Some(operator) = &self.operator {
-            write!(f, "{}", operator.to_string())?;
+        match self {
+            ConstraintExpr::KeyValue { key, ops_values } => {
+                if ops_values.len() == 0 {
+                    write!(f, "({})", key.0.as_str().unwrap_or(&key.0.to_string()))
+                } else {
+                    for (op, val) in ops_values {
+                        write!(f, "({}", key.0.as_str().unwrap_or(&key.0.to_string()))?;
+                        write!(f, "{}", op.to_string())?;
+                        write!(f, "{}", val.0.as_str().unwrap_or(&val.0.to_string()))?;
+                        write!(f, ")")?
+                    }
+                    Ok(())
+                }
+            }
+            ConstraintExpr::Constraints(c) => write!(f, "{}", c.to_string()),
         }
-        if let Some(value) = &self.value {
-            write!(f, "{}", value.as_str().unwrap_or(&value.to_string()))?
-        }
-        write!(f, ")")
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_constraints() {
-        use ClauseOperator::*;
-        use ConstraintOperator::*;
-        let c = Constraints::new_clause(
-            And,
-            vec![
-                ("golem.inf.mem.gib", GreaterThan, 0.5).into(),
-                ("golem.inf.storage.gib", GreaterThan, 1.0).into(),
-                ("golem.com.pricing.model", Equal, "linear").into(),
-                Constraints::new_clause(
-                    Or,
-                    vec![
-                        ("golem.inf.storage.gib", GreaterThan, 1.0),
-                        ("golem.inf.storage.gib", GreaterThan, 2.0),
-                    ],
-                ),
-            ],
-        );
-        println!("{}", c.to_string());
+impl ConstraintKey {
+    fn with_operator_value(
+        self,
+        operator: ConstraintOperator,
+        value: ConstraintValue,
+    ) -> ConstraintExpr {
+        ConstraintExpr::KeyValue {
+            key: self,
+            ops_values: vec![(operator, value)],
+        }
+    }
+    pub fn greater_than(self, value: ConstraintValue) -> ConstraintExpr {
+        self.with_operator_value(ConstraintOperator::GreaterThan, value)
+    }
+    pub fn less_than(self, value: ConstraintValue) -> ConstraintExpr {
+        self.with_operator_value(ConstraintOperator::LessThan, value)
+    }
+    pub fn equal_to(self, value: ConstraintValue) -> ConstraintExpr {
+        self.with_operator_value(ConstraintOperator::Equal, value)
+    }
+    pub fn not_equal_to(self, value: ConstraintValue) -> ConstraintExpr {
+        self.with_operator_value(ConstraintOperator::NotEqual, value)
     }
 }

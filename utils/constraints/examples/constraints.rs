@@ -1,0 +1,39 @@
+use ya_utils_constraints::{
+    ClauseOperator::{And, Or},
+    ConstraintKey, ConstraintValue, Constraints,
+};
+
+fn main() {
+    let constraints_1 = Constraints::new_clause(
+        And,
+        vec![
+            ConstraintKey::new("golem.inf.mem.gib").greater_than(ConstraintValue::new(0.5)),
+            ConstraintKey::new("golem.inf.storage.gib").equal_to(ConstraintValue::new(1.0)),
+            Constraints::new_clause(
+                Or,
+                vec![
+                    ConstraintKey::new("golem.inf.mem.gib").greater_than(ConstraintValue::new(0.5)),
+                    ConstraintKey::new("golem.inf.storage.gib")
+                        .less_than(ConstraintValue::new(0.5)),
+                    ConstraintKey::new("golem.single.key").into(),
+                ],
+            )
+            .into(),
+        ],
+    )
+    .and(Constraints::new_single(
+        ConstraintKey::new("a").greater_than(ConstraintValue::new(100)),
+    ));
+    let constraints_2 = Constraints::new_clause(
+        And,
+        vec![
+            ConstraintKey::new("golem.inf.mem.gib.a.b.c").greater_than(ConstraintValue::new(0.5)),
+            ConstraintKey::new("golem.inf.storage.d.e").not_equal_to(ConstraintValue::new("abc")),
+        ],
+    );
+    let constraints_and = constraints_1.clone().and(constraints_2.clone());
+    let constraints_or = constraints_1.or(constraints_2);
+
+    println!("And:\n{}", constraints_and.to_string());
+    println!("Or:\n{}", constraints_or.to_string());
+}
