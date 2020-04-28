@@ -32,8 +32,13 @@ fn main() {
         ],
     );
     let constraints_and = constraints_1.clone().and(constraints_2.clone());
-    let constraints_or = constraints_1.or(constraints_2);
+    let constraints_or = constraints_1.clone().or(constraints_2);
 
     println!("And:\n{}", constraints_and.to_string());
     println!("Or:\n{}", constraints_or.to_string());
+
+    println!("Iteration:");
+    for expr in constraints_1 {
+        println!("-> {}", expr)
+    }
 }

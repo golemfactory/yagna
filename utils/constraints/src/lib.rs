@@ -86,13 +86,13 @@ impl fmt::Display for ClauseOperator {
 
 impl Index<&str> for Constraints {
     type Output = ();
-    fn index(&self, index: &str) -> &Self::Output {
+    fn index(&self, _index: &str) -> &Self::Output {
         unimplemented!()
     }
 }
 
 impl IndexMut<&str> for Constraints {
-    fn index_mut(&mut self, index: &str) -> &mut Self::Output {
+    fn index_mut(&mut self, _index: &str) -> &mut Self::Output {
         unimplemented!()
     }
 }
