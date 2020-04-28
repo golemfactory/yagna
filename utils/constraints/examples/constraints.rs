@@ -32,7 +32,7 @@ fn main() {
         ],
     );
     let constraints_and = constraints_1.clone().and(constraints_2.clone());
-    let constraints_or = constraints_1.clone().or(constraints_2);
+    let constraints_or = constraints_1.clone().or(constraints_2.clone());
 
     println!("And:\n{}", constraints_and.to_string());
     println!("Or:\n{}", constraints_or.to_string());
@@ -41,4 +41,9 @@ fn main() {
     for expr in constraints_1 {
         println!("-> {}", expr)
     }
+
+    println!(
+        "And without golem.inf.mem.gib: {}",
+        constraints_and.without_key(&ConstraintKey::new("golem.inf.mem.gib"))
+    );
 }

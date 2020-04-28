@@ -22,12 +22,12 @@ impl Constraints {
         }
     }
     pub fn or(self, c: Constraints) -> Constraints {
-        self.operation(ClauseOperator::Or, c)
+        self.joined_with(c, ClauseOperator::Or)
     }
     pub fn and(self, c: Constraints) -> Constraints {
-        self.operation(ClauseOperator::And, c)
+        self.joined_with(c, ClauseOperator::And)
     }
-    fn operation(self, operator: ClauseOperator, c: Constraints) -> Constraints {
+    fn joined_with(self, c: Constraints, operator: ClauseOperator) -> Constraints {
         if c.operator == operator && self.operator == operator {
             Constraints {
                 constraints: [&self.constraints[..], &c.constraints[..]].concat(),
@@ -35,6 +35,19 @@ impl Constraints {
             }
         } else {
             Constraints::new_clause(operator, vec![self, c])
+        }
+    }
+    pub fn without_key(self, removed_key: &ConstraintKey) -> Constraints {
+        let op = self.operator;
+        Constraints {
+            constraints: self
+                .into_iter()
+                .filter(|c| match c {
+                    ConstraintExpr::KeyValue { key, .. } => key != removed_key,
+                    _ => true,
+                })
+                .collect(),
+            operator: op,
         }
     }
 }
@@ -46,7 +59,6 @@ impl fmt::Display for Constraints {
             1 => write!(f, "{}", self.constraints[0]),
             _ => {
                 write!(f, "({}\n", self.operator.to_string())?;
-                /* TODO do not create (...) if single expression */
                 for el in &self.constraints {
                     write!(f, "  {}\n", el.to_string().replace("\n", "\n  "))?;
                 }
@@ -120,7 +132,7 @@ impl fmt::Display for ConstraintOperator {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ConstraintKey(serde_json::Value);
 
 impl ConstraintKey {
