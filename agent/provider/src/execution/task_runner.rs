@@ -148,7 +148,7 @@ impl TaskRunner {
         let tasks_dir = current_dir.join("exe-unit").join("work");
         let cache_dir = current_dir.join("exe-unit").join("cache");
 
-        log::info!("Config: {:?}", config);
+        log::debug!("TaskRunner config: {:?}", config);
 
         create_dir_all(&tasks_dir).map_err(|error| {
             anyhow!(
