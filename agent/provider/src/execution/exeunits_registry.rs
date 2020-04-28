@@ -291,7 +291,6 @@ impl fmt::Display for ExeUnitDesc {
     }
 }
 
-// Load ExeUnits descriptors from file.
 fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> {
     use std::fs::read_dir;
 
