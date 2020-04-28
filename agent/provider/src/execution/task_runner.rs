@@ -276,7 +276,7 @@ impl TaskRunner {
             Some(agreement) => agreement,
         };
 
-        let exeunit_name = task_package_from(&agreement)?;
+        let exeunit_name = exe_unit_name_from(&agreement)?;
 
         let task = match self.create_task(&exeunit_name, &msg.activity_id, &msg.agreement_id) {
             Ok(task) => task,
@@ -514,7 +514,7 @@ impl TaskRunner {
     }
 }
 
-fn task_package_from(agreement: &ParsedAgreement) -> Result<String> {
+fn exe_unit_name_from(agreement: &ParsedAgreement) -> Result<String> {
     let runtime_key_str = "/offer/properties/golem/runtime/name";
     Ok(agreement.pointer_typed::<String>(runtime_key_str)?)
 }
