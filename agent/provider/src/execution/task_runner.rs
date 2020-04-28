@@ -387,8 +387,8 @@ impl TaskRunner {
         msg: AgreementBroken,
         ctx: &mut Context<Self>,
     ) -> Result<()> {
-        let agreement_id = msg.agreement_id.clone();
-        self.remove_remaining_tasks(&agreement_id, ctx.address().clone());
+        self.active_agreements.remove(&msg.agreement_id);
+        self.remove_remaining_tasks(&msg.agreement_id, ctx.address().clone());
         Ok(())
     }
 
