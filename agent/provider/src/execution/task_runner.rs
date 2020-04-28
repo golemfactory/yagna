@@ -32,13 +32,6 @@ use std::fs::{create_dir_all, File};
 #[rtype(result = "Result<()>")]
 pub struct UpdateActivity;
 
-/// Loads ExeUnits descriptors from file.
-#[derive(Message, Debug)]
-#[rtype(result = "Result<()>")]
-pub struct InitializeExeUnits {
-    pub file: PathBuf,
-}
-
 /// Finds ExeUnit in registry and returns it's descriptor.
 #[derive(Message)]
 #[rtype(result = "Result<ExeUnitDesc>")]
@@ -146,7 +139,7 @@ pub struct TaskRunner {
 }
 
 impl TaskRunner {
-    pub fn new(client: ActivityProviderApi) -> Result<TaskRunner> {
+    pub fn new(client: ActivityProviderApi, registry: ExeUnitsRegistry) -> Result<TaskRunner> {
         let current_dir = std::env::current_dir()?;
         let tasks_dir = current_dir.join("exe-unit").join("work");
 
@@ -177,7 +170,7 @@ impl TaskRunner {
 
         Ok(TaskRunner {
             api: Arc::new(client),
-            registry: ExeUnitsRegistry::new(),
+            registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
             activity_created: SignalSlot::<ActivityCreated>::new(),
@@ -186,17 +179,6 @@ impl TaskRunner {
             tasks_dir,
             cache_dir,
         })
-    }
-
-    #[logfn_inputs(Info, fmt = "{}Initializing ExeUnit: {:?} {:?}")]
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "ExeUnits initialized: {:?}")]
-    pub fn initialize_exeunits(
-        &mut self,
-        msg: InitializeExeUnits,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.registry.register_exeunits_from_file(&msg.file)?;
-        Ok(self.registry.validate()?)
     }
 
     pub fn get_exeunit(
@@ -504,7 +486,6 @@ impl Actor for TaskRunner {
 }
 
 forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
-forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, CreateActivity, on_create_activity);
 forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
