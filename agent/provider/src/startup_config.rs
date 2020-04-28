@@ -2,6 +2,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 
+use crate::execution::ExeUnitsRegistry;
 use ya_client::cli::ApiOpts;
 
 /// Common configuration for all Provider commands.
@@ -18,6 +19,14 @@ pub struct ProviderConfig {
     pub exe_unit_path: PathBuf,
     #[structopt(skip = "presets.json")]
     pub presets_file: PathBuf,
+}
+
+impl ProviderConfig {
+    pub fn registry(&self) -> anyhow::Result<ExeUnitsRegistry> {
+        let mut r = ExeUnitsRegistry::new();
+        r.register_from_file_pattern(&self.exe_unit_path)?;
+        Ok(r)
+    }
 }
 
 #[derive(StructOpt)]
