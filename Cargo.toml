@@ -2,7 +2,6 @@
 members = [
     "agent/provider",
     "agent/requestor",
-    "utils/agreement-utils",
     "core/activity",
     "core/gftp",
     "core/identity",
@@ -26,6 +25,7 @@ members = [
     "service-bus/proto",
     "service-bus/router",
     "service-bus/util",
+    "utils/agreement-utils",
     "utils/scheduler",
     "utils/actix_utils",
     "utils/process",

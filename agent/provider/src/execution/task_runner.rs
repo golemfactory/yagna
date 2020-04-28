@@ -135,7 +135,6 @@ pub struct TaskRunner {
     registry: ExeUnitsRegistry,
     /// Spawned tasks.
     tasks: Vec<Task>,
-    /// Agreements, that wait for CreateActivity event.
     active_agreements: HashMap<String, ParsedAgreement>,
 
     /// External actors can listen on these signals.
@@ -338,7 +337,7 @@ impl TaskRunner {
         Arbiter::spawn(async move {
             if let Err(error) = task.exeunit.terminate(termination_timeout).await {
                 log::warn!(
-                    "Could not terminate ExeUnit for activity: [{}]. Error: {}",
+                    "Could not terminate ExeUnit for activity: [{}]. Error: {}. Killing instead.",
                     msg.activity_id,
                     error
                 );
