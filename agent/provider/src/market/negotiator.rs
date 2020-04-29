@@ -1,5 +1,5 @@
-use ya_agreement_utils::OfferDefinition;
 use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::OfferDefinition;
 use ya_model::market::{Offer, Proposal};
 
 use anyhow::Result;

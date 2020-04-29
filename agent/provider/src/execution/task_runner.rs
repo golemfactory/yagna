@@ -6,6 +6,7 @@ use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
+use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -235,7 +236,7 @@ impl TaskRunner {
         // FIXME: Create activity arrives together with destroy, and destroy is being processed first
         let futures = events
             .into_iter()
-            .zip(vec![myself.clone()].into_iter().cycle())
+            .zip(iter::repeat(myself))
             .map(|(event, myself)| async move {
                 let _ = match event {
                     ProviderEvent::CreateActivity {
@@ -314,45 +315,6 @@ impl TaskRunner {
         Ok(())
     }
 
-    fn on_destroy_activity(
-        &mut self,
-        msg: DestroyActivity,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        log::info!("Destroying activity [{}].", msg.activity_id);
-
-        let task_position = match self.tasks.iter().position(|task| {
-            task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
-        }) {
-            None => bail!("Can't destroy not existing activity [{:?}]", msg),
-            Some(task_position) => task_position,
-        };
-
-        // Remove task from list and destroy everything related with it.
-        let task = self.tasks.swap_remove(task_position);
-        let termination_timeout = self.config.process_termination_timeout;
-        let state_retry_interval = self.config.exeunit_state_retry_interval;
-        let api = self.api.clone();
-
-        Arbiter::spawn(async move {
-            if let Err(error) = task.exeunit.terminate(termination_timeout).await {
-                log::warn!(
-                    "Could not terminate ExeUnit for activity: [{}]. Error: {}. Killing instead.",
-                    msg.activity_id,
-                    error
-                );
-                task.exeunit.kill();
-
-                // It was brutal termination and ExeUnit probably didn't set state.
-                // We must do it instead of him. Repeat until it will succeed.
-                set_activity_terminated(api, &task.activity_id, state_retry_interval).await;
-            }
-
-            log::info!("ExeUnit for activity terminated: [{}].", msg.activity_id);
-        });
-        Ok(())
-    }
-
     fn on_exeunit_exited(
         &mut self,
         msg: ExeUnitProcessFinished,
@@ -383,37 +345,6 @@ impl TaskRunner {
         let agreement_id = msg.agreement.agreement_id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
-    }
-
-    pub fn on_agreement_broken(
-        &mut self,
-        msg: AgreementBroken,
-        ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.active_agreements.remove(&msg.agreement_id);
-        self.remove_remaining_tasks(&msg.agreement_id, ctx.address().clone());
-        Ok(())
-    }
-
-    fn on_agreement_closed(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Result<()> {
-        self.active_agreements.remove(&msg.agreement_id);
-        // All activities should be destroyed by now, so it is only sanity call.
-        self.remove_remaining_tasks(&msg.agreement_id, ctx.address().clone());
-        Ok(())
-    }
-
-    fn remove_remaining_tasks(&mut self, agreement_id: &str, addr: Addr<Self>) {
-        self.tasks
-            .iter()
-            .filter(|task| task.agreement_id == agreement_id)
-            .for_each(|task| {
-                log::warn!(
-                    "Activity [{}] will be destroyed, because of terminated agreement [{}].",
-                    task.activity_id,
-                    agreement_id,
-                );
-                addr.do_send(DestroyActivity::new(&task.activity_id, &agreement_id));
-            });
     }
 
     #[logfn(Debug, fmt = "Task created: {}")]
@@ -515,6 +446,14 @@ impl TaskRunner {
     ) -> Result<()> {
         Ok(self.activity_destroyed.on_subscribe(msg))
     }
+
+    fn list_activities(&self, agreement_id: &str) -> Vec<String> {
+        self.tasks
+            .iter()
+            .filter(|task| task.agreement_id == agreement_id)
+            .map(|task| task.activity_id.to_string())
+            .collect()
+    }
 }
 
 fn exe_unit_name_from(agreement: &AgreementView) -> Result<String> {
@@ -545,6 +484,28 @@ async fn set_activity_terminated(
     }
 }
 
+async fn remove_remaining_tasks(
+    activities: Vec<String>,
+    agreement_id: String,
+    myself: Addr<TaskRunner>,
+) {
+    let destroy_futures = activities
+        .iter()
+        .zip(iter::repeat((myself, agreement_id)))
+        .map(|(activity_id, (myself, agreement_id))| async move {
+            log::warn!(
+                "Activity [{}] will be destroyed, because of terminated agreement [{}].",
+                activity_id,
+                agreement_id,
+            );
+            myself
+                .send(DestroyActivity::new(&activity_id, &agreement_id))
+                .await
+        })
+        .collect::<Vec<_>>();
+    let _ = join_all(destroy_futures).await;
+}
+
 // =========================================== //
 // Actix stuff
 // =========================================== //
@@ -555,11 +516,8 @@ impl Actor for TaskRunner {
 
 forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
-forward_actix_handler!(TaskRunner, DestroyActivity, on_destroy_activity);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
-forward_actix_handler!(TaskRunner, AgreementBroken, on_agreement_broken);
-forward_actix_handler!(TaskRunner, AgreementClosed, on_agreement_closed);
 
 forward_actix_handler!(
     TaskRunner,
@@ -604,6 +562,91 @@ impl Handler<CreateActivity> for TaskRunner {
             Ok(_) => ActorResponse::reply(result),
             Err(error) => ActorResponse::r#async(on_error_future.map(|_, _, _| Err(error))),
         }
+    }
+}
+
+impl Handler<DestroyActivity> for TaskRunner {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: DestroyActivity, _ctx: &mut Context<Self>) -> Self::Result {
+        log::info!("Destroying activity [{}].", msg.activity_id);
+
+        let task_position = match self.tasks.iter().position(|task| {
+            task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
+        }) {
+            None => {
+                return ActorResponse::reply(Err(anyhow!(
+                    "Can't destroy not existing activity [{}]",
+                    msg.activity_id
+                )))
+            }
+            Some(task_position) => task_position,
+        };
+
+        // Remove task from list and destroy everything related with it.
+        let task = self.tasks.swap_remove(task_position);
+        let termination_timeout = self.config.process_termination_timeout;
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
+        let api = self.api.clone();
+
+        let terminate = async move {
+            if let Err(error) = task.exeunit.terminate(termination_timeout).await {
+                log::warn!(
+                    "Could not terminate ExeUnit for activity: [{}]. Error: {}. Killing instead.",
+                    msg.activity_id,
+                    error
+                );
+                task.exeunit.kill();
+
+                // It was brutal termination and ExeUnit probably didn't set state.
+                // We must do it instead of him. Repeat until it will succeed.
+                set_activity_terminated(api, &task.activity_id, state_retry_interval).await;
+            }
+
+            log::info!("ExeUnit for activity terminated: [{}].", msg.activity_id);
+            Ok(())
+        };
+
+        ActorResponse::r#async(terminate.into_actor(self))
+    }
+}
+
+impl Handler<AgreementClosed> for TaskRunner {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
+        let agreement_id = msg.agreement_id.to_string();
+        let myself = ctx.address().clone();
+        let activities = self.list_activities(&agreement_id);
+
+        self.active_agreements.remove(&agreement_id);
+
+        // All activities should be destroyed by now, so it is only sanity call.
+        let remove_future = async move {
+            remove_remaining_tasks(activities, agreement_id, myself).await;
+            Ok(())
+        };
+
+        ActorResponse::r#async(remove_future.into_actor(self))
+    }
+}
+
+impl Handler<AgreementBroken> for TaskRunner {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
+        let agreement_id = msg.agreement_id.to_string();
+        let myself = ctx.address().clone();
+        let activities = self.list_activities(&agreement_id);
+
+        self.active_agreements.remove(&agreement_id);
+
+        let remove_future = async move {
+            remove_remaining_tasks(activities, agreement_id, myself).await;
+            Ok(())
+        };
+
+        ActorResponse::r#async(remove_future.into_actor(self))
     }
 }
 

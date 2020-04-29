@@ -1,4 +1,4 @@
-use ya_agreement_utils::agreement::{try_from_path, Error, AgreementView};
+use ya_agreement_utils::agreement::{try_from_path, AgreementView, Error};
 
 use crate::metrics::MemMetric;
 use serde_json::Value;

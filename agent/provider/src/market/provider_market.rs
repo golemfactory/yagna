@@ -22,7 +22,7 @@ use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // Temporrary
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
-use ya_agreement_utils::{OfferDefinition, AgreementView};
+use ya_agreement_utils::{AgreementView, OfferDefinition};
 
 // =========================================== //
 // Public exposed messages
