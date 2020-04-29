@@ -308,8 +308,7 @@ async fn send_invoice(
                 .try_service(BUS_ID)?
                 .call(SendInvoice(invoice))
                 .await??;
-            dao.update_status(invoice_id, node_id, InvoiceStatus::Received)
-                .await?;
+            dao.mark_received(invoice_id, node_id).await?;
             Ok(())
         }
         .await

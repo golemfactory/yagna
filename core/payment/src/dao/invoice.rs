@@ -1,4 +1,4 @@
-use crate::dao::agreement;
+use crate::dao::{agreement, invoice_event};
 use crate::error::DbResult;
 use crate::models::invoice::{InvoiceXActivity, ReadObj, WriteObj};
 use crate::schema::pay_agreement::dsl as agreement_dsl;
@@ -9,7 +9,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{Invoice, InvoiceStatus, NewInvoice};
+use ya_client_model::payment::{EventType, Invoice, InvoiceStatus, NewInvoice};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -71,6 +71,7 @@ impl<'c> InvoiceDao<'c> {
     async fn insert(&self, invoice: WriteObj, activity_ids: Vec<String>) -> DbResult<()> {
         let invoice_id = invoice.id.clone();
         let owner_id = invoice.owner_id.clone();
+        let role = invoice.role.clone();
         do_with_transaction(self.pool, move |conn| {
             agreement::set_amount_due(&invoice.agreement_id, &owner_id, &invoice.amount, conn)?;
 
@@ -91,6 +92,10 @@ impl<'c> InvoiceDao<'c> {
                     .execute(conn)
                     .map(|_| ())
             })?;
+
+            if let Role::Requestor = role {
+                invoice_event::create::<()>(invoice_id, owner_id, EventType::Received, None, conn)?;
+            }
 
             Ok(())
         })
@@ -178,17 +183,17 @@ impl<'c> InvoiceDao<'c> {
         self.get_for_role(node_id, Role::Requestor).await
     }
 
-    pub async fn update_status(
-        &self,
-        invoice_id: String,
-        owner_id: NodeId,
-        status: InvoiceStatus,
-    ) -> DbResult<()> {
-        // TODO: Remove, use specialized methods
+    pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            diesel::update(dsl::pay_invoice.find((invoice_id, owner_id)))
-                .set(dsl::status.eq(status.to_string()))
-                .execute(conn)?;
+            update_status(&vec![invoice_id], &owner_id, &InvoiceStatus::Received, conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn mark_failed(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            update_status(&vec![invoice_id], &owner_id, &InvoiceStatus::Failed, conn)?;
             Ok(())
         })
         .await
@@ -196,13 +201,40 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn accept(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            let (agreement_id, amount): (String, BigDecimalField) = dsl::pay_invoice
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
                 .find((&invoice_id, &owner_id))
-                .select((dsl::agreement_id, dsl::amount))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
                 .first(conn)?;
-            update_status(&vec![invoice_id], &owner_id, &InvoiceStatus::Accepted, conn)?;
+            update_status(
+                &vec![invoice_id.clone()],
+                &owner_id,
+                &InvoiceStatus::Accepted,
+                conn,
+            )?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
-            // TODO: Emit event if role == Provider
+            if let Role::Provider = role {
+                invoice_event::create::<()>(invoice_id, owner_id, EventType::Accepted, None, conn)?;
+            }
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+            update_status(
+                &vec![invoice_id.clone()],
+                &owner_id,
+                &InvoiceStatus::Accepted,
+                conn,
+            )?;
+            if let Role::Provider = role {
+                invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected, None, conn)?;
+            }
             Ok(())
         })
         .await

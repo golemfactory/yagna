@@ -316,9 +316,6 @@ mod public {
             }
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
-            db.as_dao::<InvoiceEventDao>()
-                .create::<()>(invoice_id, node_id, EventType::Received, None)
-                .await?;
             Ok(())
         }
         .await
@@ -368,17 +365,7 @@ mod public {
             _ => (),
         }
 
-        let event_dao: InvoiceEventDao = db.as_dao();
-        match async move {
-            dao.update_status(invoice_id.clone(), node_id, InvoiceStatus::Accepted)
-                .await?;
-            event_dao
-                .create::<()>(invoice_id, node_id, EventType::Accepted, None)
-                .await?;
-            Ok(())
-        }
-        .await
-        {
+        match dao.accept(invoice_id, node_id).await {
             Ok(_) => Ok(Ack {}),
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),

@@ -248,8 +248,7 @@ async fn accept_invoice(
                 .call(accept_msg)
                 .await??;
             bus::service(LOCAL_SERVICE).send(schedule_msg).await??;
-            dao.update_status(invoice_id, node_id, InvoiceStatus::Accepted)
-                .await?;
+            dao.accept(invoice_id, node_id).await?;
             Ok(())
         }
         .await
