@@ -52,6 +52,7 @@ fn main() {
     .and(constraints_and![
         "golem.macro.one" = 1,
         "golem.macro.two" = 2
-    ]).without_key("c.macro");
+    ])
+    .without_key("c.macro");
     println!("Created with macro:\n{}", c);
 }
