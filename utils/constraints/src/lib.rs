@@ -37,13 +37,14 @@ impl Constraints {
             Constraints::new_clause(operator, vec![self, c])
         }
     }
-    pub fn without_key(self, removed_key: &ConstraintKey) -> Constraints {
+    pub fn without_key<T: Into<ConstraintKey>>(self, removed_key: T) -> Constraints {
         let op = self.operator;
+        let del_key = removed_key.into();
         Constraints {
             constraints: self
                 .into_iter()
                 .filter(|c| match c {
-                    ConstraintExpr::KeyValue { key, .. } => key != removed_key,
+                    ConstraintExpr::KeyValue { key, .. } => *key != del_key,
                     _ => true,
                 })
                 .collect(),
@@ -136,16 +137,24 @@ impl fmt::Display for ConstraintOperator {
 pub struct ConstraintKey(serde_json::Value);
 
 impl ConstraintKey {
-    pub fn new<T: Into<serde_json::Value>>(key: T) -> Self {
-        ConstraintKey(key.into())
+    pub fn new<T: Into<serde_json::Value>>(v: T) -> Self {
+        ConstraintKey(v.into())
+    }
+}
+
+impl From<&str> for ConstraintKey {
+    fn from(key: &str) -> Self {
+        ConstraintKey::new(serde_json::Value::String(key.to_string()))
     }
 }
 
 pub type ConstraintValue = ConstraintKey;
 
+/* expression, e.g. key > value */
 #[derive(Clone)]
 pub enum ConstraintExpr {
     KeyValue {
+        /* ops_values length is 0 or 1 now, but it's ready for expressions like k: > v1, < v2 */
         key: ConstraintKey,
         ops_values: Vec<(ConstraintOperator, ConstraintValue)>,
     },
@@ -212,3 +221,28 @@ impl ConstraintKey {
         self.with_operator_value(ConstraintOperator::NotEqual, value)
     }
 }
+
+#[macro_export]
+macro_rules! constraints_and [
+    ( $($key:tt $( $op:tt $val:tt )? ),* ) => {{
+        Constraints::new_clause::<ConstraintExpr>(ClauseOperator::And, vec![
+            $({
+                let c = ConstraintKey::new($key);
+                let mut e: Option<ConstraintExpr> = Option::None;
+                $(
+                    let val = ConstraintValue::new($val);
+                    let c2 = c.clone();
+                    e = Some(match stringify!($op) {
+                        ">" => c2.greater_than(val),
+                        "<" => c2.less_than(val),
+                        "=" => c2.equal_to(val),
+                        "!=" => c2.not_equal_to(val),
+                        e => panic!("expected >, <, =, !=, got {}", e)
+                    });
+                )?
+                e.unwrap_or(c.into())
+            },
+            )*
+        ])
+    }};
+];

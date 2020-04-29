@@ -1,6 +1,7 @@
 use ya_utils_constraints::{
-    ClauseOperator::{And, Or},
-    ConstraintKey, ConstraintValue, Constraints,
+    constraints_and,
+    ClauseOperator::{self, And, Or},
+    ConstraintExpr, ConstraintKey, ConstraintValue, Constraints,
 };
 
 fn main() {
@@ -44,6 +45,14 @@ fn main() {
 
     println!(
         "And without golem.inf.mem.gib: {}",
-        constraints_and.without_key(&ConstraintKey::new("golem.inf.mem.gib"))
+        constraints_and.without_key("golem.inf.mem.gib")
     );
+
+    let c = constraints_and![
+        "golem.inf.mem.gib.macro" = 1,
+        "c.macro" != 3,
+        "d.macro" > 20,
+        "e.macro" < 10
+    ];
+    println!("Created with macro: {}", c);
 }
