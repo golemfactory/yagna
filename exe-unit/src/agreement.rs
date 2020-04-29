@@ -1,4 +1,4 @@
-use ya_agreement_utils::agreement::{try_from_path, Error, ParsedAgreement};
+use ya_agreement_utils::agreement::{try_from_path, Error, AgreementView};
 
 use crate::metrics::MemMetric;
 use serde_json::Value;
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct Agreement {
-    pub agreement: ParsedAgreement,
+    pub agreement: AgreementView,
     pub agreement_id: String,
     pub task_package: String,
     pub usage_vector: Vec<String>,
@@ -25,7 +25,7 @@ impl TryFrom<Value> for Agreement {
     type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        let agreement = ParsedAgreement::try_from(value)?;
+        let agreement = AgreementView::try_from(value)?;
 
         let agreement_id = agreement.agreement_id.clone();
         let task_package = agreement

@@ -1,5 +1,5 @@
 use ya_agreement_utils::OfferDefinition;
-use ya_agreement_utils::ParsedAgreement;
+use ya_agreement_utils::AgreementView;
 use ya_model::market::{Offer, Proposal};
 
 use super::negotiator::Negotiator;
@@ -31,7 +31,7 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(ProposalResponse::AcceptProposal)
     }
 
-    fn react_to_agreement(&mut self, _agreement: &ParsedAgreement) -> Result<AgreementResponse> {
+    fn react_to_agreement(&mut self, _agreement: &AgreementView) -> Result<AgreementResponse> {
         Ok(AgreementResponse::ApproveAgreement)
     }
 }
@@ -89,7 +89,7 @@ impl Negotiator for LimitAgreementsNegotiator {
         }
     }
 
-    fn react_to_agreement(&mut self, agreement: &ParsedAgreement) -> Result<AgreementResponse> {
+    fn react_to_agreement(&mut self, agreement: &AgreementView) -> Result<AgreementResponse> {
         if self.has_free_slot() {
             self.active_agreements
                 .insert(agreement.agreement_id.clone());

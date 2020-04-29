@@ -22,7 +22,7 @@ use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // Temporrary
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
-use ya_agreement_utils::{OfferDefinition, ParsedAgreement};
+use ya_agreement_utils::{OfferDefinition, AgreementView};
 
 // =========================================== //
 // Public exposed messages
@@ -51,7 +51,7 @@ pub struct OnShutdown;
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct AgreementApproved {
-    pub agreement: ParsedAgreement,
+    pub agreement: AgreementView,
 }
 
 // =========================================== //
@@ -78,7 +78,7 @@ pub struct GotProposal {
 #[rtype(result = "Result<AgreementResponse>")]
 pub struct GotAgreement {
     subscription: OfferSubscription,
-    agreement: ParsedAgreement,
+    agreement: AgreementView,
 }
 
 #[derive(Message)]
@@ -320,7 +320,7 @@ impl ProviderMarket {
             subscription.preset.name,
         );
 
-        let agreement = ParsedAgreement::try_from(agreement)
+        let agreement = AgreementView::try_from(agreement)
             .map_err(|error| anyhow!("Invalid agreement. Error: {}", error))?;
 
         let response = addr
@@ -597,7 +597,7 @@ impl GotProposal {
 }
 
 impl GotAgreement {
-    fn new(subscription: OfferSubscription, agreement: ParsedAgreement) -> Self {
+    fn new(subscription: OfferSubscription, agreement: AgreementView) -> Self {
         Self {
             subscription,
             agreement,

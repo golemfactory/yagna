@@ -8,13 +8,17 @@ use std::path::PathBuf;
 pub const PROPERTY_TAG: &str = "@tag";
 const DEFAULT_FORMAT: &str = "json";
 
+// TODO: Consider different structure:
+//  - 2 fields for parsed properties (demand, offer)
+//  - other fields for agreement remain typed.
+// TODO: Move to ya-client to make it available for third party developers.
 #[derive(Clone, Debug)]
-pub struct ParsedAgreement {
+pub struct AgreementView {
     pub json: Value,
     pub agreement_id: String,
 }
 
-impl ParsedAgreement {
+impl AgreementView {
     pub fn pointer(&self, pointer: &str) -> Option<&Value> {
         self.json.pointer(pointer)
     }
@@ -30,7 +34,7 @@ impl ParsedAgreement {
     }
 }
 
-impl TryFrom<Value> for ParsedAgreement {
+impl TryFrom<Value> for AgreementView {
     type Error = Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
@@ -39,14 +43,14 @@ impl TryFrom<Value> for ParsedAgreement {
             .as_typed(Value::as_str)?
             .to_owned();
 
-        Ok(ParsedAgreement {
+        Ok(AgreementView {
             json: value,
             agreement_id,
         })
     }
 }
 
-impl TryFrom<&PathBuf> for ParsedAgreement {
+impl TryFrom<&PathBuf> for AgreementView {
     type Error = Error;
 
     fn try_from(path: &PathBuf) -> Result<Self, Self::Error> {
@@ -54,7 +58,7 @@ impl TryFrom<&PathBuf> for ParsedAgreement {
     }
 }
 
-impl TryFrom<&Agreement> for ParsedAgreement {
+impl TryFrom<&Agreement> for AgreementView {
     type Error = Error;
 
     fn try_from(agreement: &Agreement) -> Result<Self, Self::Error> {

@@ -1,5 +1,5 @@
 use ya_agreement_utils::OfferDefinition;
-use ya_agreement_utils::ParsedAgreement;
+use ya_agreement_utils::AgreementView;
 use ya_model::market::{Offer, Proposal};
 
 use anyhow::Result;
@@ -49,5 +49,5 @@ pub trait Negotiator {
 
     /// Reactions to events from market. These function make market decisions.
     fn react_to_proposal(&mut self, offer: &Offer, demand: &Proposal) -> Result<ProposalResponse>;
-    fn react_to_agreement(&mut self, agreement: &ParsedAgreement) -> Result<AgreementResponse>;
+    fn react_to_agreement(&mut self, agreement: &AgreementView) -> Result<AgreementResponse>;
 }

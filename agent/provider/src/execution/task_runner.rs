@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
 
-use ya_agreement_utils::ParsedAgreement;
+use ya_agreement_utils::AgreementView;
 use ya_client::activity::ActivityProviderApi;
 use ya_core_model::activity;
 use ya_model::activity::{ActivityState, ProviderEvent, State, StatePair};
@@ -131,7 +131,7 @@ pub struct TaskRunner {
     registry: ExeUnitsRegistry,
     /// Spawned tasks.
     tasks: Vec<Task>,
-    active_agreements: HashMap<String, ParsedAgreement>,
+    active_agreements: HashMap<String, AgreementView>,
 
     /// External actors can listen on these signals.
     pub activity_created: SignalSlot<ActivityCreated>,
@@ -225,7 +225,7 @@ impl TaskRunner {
     // TaskRunner internals - events dispatching
     // =========================================== //
 
-    async fn dispatch_events(events: &Vec<ProviderEvent>, notify: Addr<TaskRunner>) {
+    async fn dispatch_events(events: &Vec<ProviderEvent>, myself: Addr<TaskRunner>) {
         if events.len() == 0 {
             return;
         };
@@ -235,14 +235,14 @@ impl TaskRunner {
         // FIXME: Create activity arrives together with destroy, and destroy is being processed first
         let futures = events
             .into_iter()
-            .zip(vec![notify.clone()].into_iter().cycle())
-            .map(|(event, notify)| async move {
+            .zip(vec![myself.clone()].into_iter().cycle())
+            .map(|(event, myself)| async move {
                 let _ = match event {
                     ProviderEvent::CreateActivity {
                         activity_id,
                         agreement_id,
                     } => {
-                        notify
+                        myself
                             .send(CreateActivity::new(activity_id, agreement_id))
                             .await?
                     }
@@ -250,7 +250,7 @@ impl TaskRunner {
                         activity_id,
                         agreement_id,
                     } => {
-                        notify
+                        myself
                             .send(DestroyActivity::new(activity_id, agreement_id))
                             .await?
                     }
@@ -517,7 +517,7 @@ impl TaskRunner {
     }
 }
 
-fn exe_unit_name_from(agreement: &ParsedAgreement) -> Result<String> {
+fn exe_unit_name_from(agreement: &AgreementView) -> Result<String> {
     let runtime_key_str = "/offer/properties/golem/runtime/name";
     Ok(agreement.pointer_typed::<String>(runtime_key_str)?)
 }

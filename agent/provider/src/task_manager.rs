@@ -3,7 +3,7 @@ use anyhow::{Error, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use futures::future::TryFutureExt;
 
-use ya_agreement_utils::ParsedAgreement;
+use ya_agreement_utils::AgreementView;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::Subscribe;
 use ya_utils_actix::forward_actix_handler;
@@ -80,7 +80,7 @@ pub struct InitializeTaskManager;
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
-struct ScheduleExpiration(ParsedAgreement);
+struct ScheduleExpiration(AgreementView);
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
@@ -168,7 +168,7 @@ impl TaskManager {
     }
 }
 
-fn agreement_expiration_from(agreement: &ParsedAgreement) -> Result<DateTime<Utc>> {
+fn agreement_expiration_from(agreement: &AgreementView) -> Result<DateTime<Utc>> {
     let expiration_key_str = "/demand/properties/golem/srv/comp/expiration";
     let timestamp = agreement.pointer_typed::<i64>(expiration_key_str)?;
     Ok(Utc.timestamp_millis(timestamp))

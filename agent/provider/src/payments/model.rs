@@ -3,7 +3,7 @@ use bigdecimal::BigDecimal;
 use serde_json::json;
 use std::time::Duration;
 
-use ya_agreement_utils::ParsedAgreement;
+use ya_agreement_utils::AgreementView;
 
 /// Implementation of payment model which knows, how to compute amount
 /// of money, that requestor should pay for computations.
@@ -14,11 +14,11 @@ pub trait PaymentModel {
 
 /// Extracted commercial part of agreement.
 pub struct PaymentDescription {
-    pub commercial_agreement: ParsedAgreement,
+    pub commercial_agreement: AgreementView,
 }
 
 impl PaymentDescription {
-    pub fn new(agreement: &ParsedAgreement) -> Result<PaymentDescription> {
+    pub fn new(agreement: &AgreementView) -> Result<PaymentDescription> {
         log::debug!("Agreement: {:?}", agreement.json);
 
         // Get rid of non commercial part of agreement.
@@ -41,7 +41,7 @@ impl PaymentDescription {
         log::debug!("Commercial properties:\n{:#?}", &commercial);
 
         Ok(PaymentDescription {
-            commercial_agreement: ParsedAgreement {
+            commercial_agreement: AgreementView {
                 json: commercial,
                 agreement_id: agreement.agreement_id.clone(),
             },

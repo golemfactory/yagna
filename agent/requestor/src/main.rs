@@ -37,9 +37,10 @@ struct AppSettings {
     task_package: String,
     #[structopt(long, default_value = "100")]
     allocation_size: i64,
-    /// Estimated time limit for agreement duration. All agreements will expire
-    /// after specified time computed from demand subscription. Provider is allowed
-    /// to break agreement after this time.
+    /// Estimated time limit for requested task completion. All agreements will expire
+    /// after specified time counted from demand subscription. All activities will
+    /// be destroyed, when agreement expires.
+    /// TODO: Consider provider side regarding activity and payments.
     #[structopt(long, default_value = "15min")]
     pub task_expiration: Duration,
 }

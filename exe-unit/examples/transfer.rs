@@ -11,7 +11,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tempdir::TempDir;
-use ya_agreement_utils::ParsedAgreement;
+use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::error::Error;
 use ya_exe_unit::service::transfer::{DeployImage, TransferResource, TransferService};
@@ -154,7 +154,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let agreement = Agreement {
-        agreement: ParsedAgreement {
+        agreement: AgreementView {
             agreement_id: String::new(),
             json: Value::Null,
         },
