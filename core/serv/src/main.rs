@@ -145,7 +145,7 @@ enum Services {
     Net(ya_net::Net),
     #[enable(gsb, rest)]
     Activity(ya_activity::service::Activity),
-    #[enable(gsb)]
+    #[enable(gsb, rest)]
     Market(ya_market::service::MarketService),
     #[enable(gsb, rest, cli)]
     Payment(ya_payment::PaymentService),
