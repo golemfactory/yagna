@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use derive_more::Display;
+use futures::future::join_all;
 use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -232,32 +233,34 @@ impl TaskRunner {
         log::info!("Collected {} activity events. Processing...", events.len());
 
         // FIXME: Create activity arrives together with destroy, and destroy is being processed first
-        for event in events.iter() {
-            match event {
-                ProviderEvent::CreateActivity {
-                    activity_id,
-                    agreement_id,
-                } => {
-                    if let Err(error) = notify
-                        .send(CreateActivity::new(activity_id, agreement_id))
-                        .await
-                    {
-                        log::warn!("{}", error);
+        let futures = events
+            .into_iter()
+            .zip(vec![notify.clone()].into_iter().cycle())
+            .map(|(event, notify)| async move {
+                let _ = match event {
+                    ProviderEvent::CreateActivity {
+                        activity_id,
+                        agreement_id,
+                    } => {
+                        notify
+                            .send(CreateActivity::new(activity_id, agreement_id))
+                            .await?
+                    }
+                    ProviderEvent::DestroyActivity {
+                        activity_id,
+                        agreement_id,
+                    } => {
+                        notify
+                            .send(DestroyActivity::new(activity_id, agreement_id))
+                            .await?
                     }
                 }
-                ProviderEvent::DestroyActivity {
-                    activity_id,
-                    agreement_id,
-                } => {
-                    if let Err(error) = notify
-                        .send(DestroyActivity::new(activity_id, agreement_id))
-                        .await
-                    {
-                        log::warn!("{}", error);
-                    }
-                }
-            }
-        }
+                .map_err(|error| log::warn!("{}", error));
+                Result::<(), anyhow::Error>::Ok(())
+            })
+            .collect::<Vec<_>>();
+
+        let _ = join_all(futures).await;
     }
 
     async fn query_events(client: Arc<ActivityProviderApi>) -> Result<Vec<ProviderEvent>> {
