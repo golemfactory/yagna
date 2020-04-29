@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use anyhow::{anyhow, Result};
 use path_clean::PathClean;
 use semver::Version;
@@ -20,12 +22,13 @@ use ya_agent_offer_model::OfferBuilder;
 #[serde(rename_all = "kebab-case")]
 pub struct ExeUnitDesc {
     pub name: String,
+    #[serde(default = "default_version")]
     pub version: Version,
     pub supervisor_path: PathBuf,
     pub runtime_path: PathBuf,
 
     // ExeUnit defined properties, that will be appended to offer.
-    #[serde(default = "empty_properties")]
+    #[serde(default)]
     pub properties: serde_json::Map<String, Value>,
 
     // Here other capabilities and exe units metadata.
@@ -33,12 +36,25 @@ pub struct ExeUnitDesc {
     pub description: String,
 }
 
+impl ExeUnitDesc {
+    pub fn absolute_paths(self, base_path: &std::path::Path) -> std::io::Result<Self> {
+        let mut desc = self;
+        if desc.supervisor_path.is_relative() {
+            desc.supervisor_path = base_path.join(&desc.supervisor_path);
+        }
+        if desc.runtime_path.is_relative() {
+            desc.runtime_path = base_path.join(&desc.runtime_path);
+        }
+        Ok(desc)
+    }
+}
+
 fn default_description() -> String {
     "No description provided.".to_string()
 }
 
-fn empty_properties() -> serde_json::Map<String, Value> {
-    serde_json::Map::<String, Value>::new()
+fn default_version() -> Version {
+    Version::new(0, 0, 0)
 }
 
 /// Responsible for creating ExeUnits.
@@ -113,7 +129,16 @@ impl ExeUnitsRegistry {
         Ok(())
     }
 
+    pub fn register_from_file_pattern(&mut self, pattern: &Path) -> Result<()> {
+        for file in expand_filename(pattern)? {
+            self.register_exeunits_from_file(&file)?;
+        }
+        Ok(())
+    }
+
     pub fn register_exeunits_from_file(&mut self, path: &Path) -> Result<()> {
+        let current_dir = std::env::current_dir()?;
+        let base_path = path.parent().unwrap_or_else(|| &current_dir);
         let file = File::open(path).map_err(|error| {
             anyhow!(
                 "Can't load ExeUnits to registry from file {}, error: {}.",
@@ -132,7 +157,7 @@ impl ExeUnitsRegistry {
         })?;
 
         for desc in descs.into_iter() {
-            self.register_exeunit(desc)?
+            self.register_exeunit(desc.absolute_paths(base_path)?)?
         }
         Ok(())
     }
@@ -141,7 +166,7 @@ impl ExeUnitsRegistry {
         Ok(self
             .descriptors
             .get(name)
-            .ok_or(anyhow!("ExeUnit [{}] doesn't exist in registry.", name))?
+            .ok_or_else(|| anyhow!("ExeUnit [{}] doesn't exist in registry.", name))?
             .clone())
     }
 
@@ -263,6 +288,40 @@ impl fmt::Display for ExeUnitDesc {
             }
         }
         Ok(())
+    }
+}
+
+fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> {
+    use std::fs::read_dir;
+
+    let path: &Path = pattern.as_ref();
+    let (base_dir, file_name) = match (path.parent(), path.file_name()) {
+        (Some(base_dir), Some(file_name)) => (base_dir, file_name),
+        _ => return Ok(vec![PathBuf::from(pattern)]),
+    };
+    let file_name = match file_name.to_str() {
+        Some(f) => f,
+        None => anyhow::bail!("not utf-8 filename"),
+    };
+
+    if let Some(pos) = file_name.find("*") {
+        let (prefix, suffix) = file_name.split_at(pos);
+        let suffix = &suffix[1..];
+
+        Ok(read_dir(base_dir)?
+            .filter_map(|ent| {
+                let ent = ent.ok()?;
+                let os_file_name = ent.file_name();
+                let file_name = os_file_name.to_str()?;
+                if file_name.starts_with(prefix) && file_name.ends_with(suffix) {
+                    Some(ent.path())
+                } else {
+                    None
+                }
+            })
+            .collect())
+    } else {
+        Ok(vec![PathBuf::from(pattern)])
     }
 }
 

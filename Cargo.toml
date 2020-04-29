@@ -19,8 +19,6 @@ members = [
     "core/serv-api/web",
     "core/serv-api/derive",
     "exe-unit",
-    "exe-unit/wasm-mozjs",
-    "exe-unit/wasmtime",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
@@ -42,6 +40,9 @@ ya-market = { path = "core/market" }
 ya-net = { path = "core/net" }
 
 ## CORE UTILS
+ya-core-model = { path = "core/model" }
+ya-payment-driver = { path = "core/payment-driver" }
+ya-persistence = { path = "core/persistence" }
 ya-service-api = { path = "core/serv-api" }
 ya-service-api-cache = { path = "core/serv-api/cache" }
 ya-service-api-derive = { path = "core/serv-api/derive" }
@@ -54,16 +55,15 @@ ya-sb-proto = { path = "service-bus/proto" }
 ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
+## CLIENT
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
+
 ## OTHERS
 gftp = { path = "core/gftp" }
 ya-agent-offer-model = { path = "agent/offer-model" }
-ya-client = { git = "https://github.com/golemfactory/ya-client.git" }
-ya-core-model = { path = "core/model" }
 ya-exe-unit = { path = "exe-unit" }
-ya-model = { git = "https://github.com/golemfactory/ya-client.git"}
-ya-payment-driver = { path = "core/payment-driver" }
-ya-persistence = { path = "core/persistence" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
-ya-utils-process = { path = "utils/process"}
 ya-utils-path = { path = "utils/path"}
+ya-utils-process = { path = "utils/process"}

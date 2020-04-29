@@ -111,8 +111,8 @@ mod public {
     use crate::utils::*;
 
     use crate::dao::DebitNoteEventDao;
+    use ya_client_model::payment::*;
     use ya_core_model::payment::public::*;
-    use ya_model::payment::*;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment public service to service bus");

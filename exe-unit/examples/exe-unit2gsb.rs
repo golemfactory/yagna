@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::process::Command;
+use ya_client_model::activity::ExeScriptCommand;
 use ya_core_model::activity::{self, Exec, GetExecBatchResults};
-use ya_model::activity::ExeScriptCommand;
 use ya_service_bus::actix_rpc;
 
 const ACTIVITY_BUS_ID: &str = "activity";

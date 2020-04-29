@@ -1,8 +1,8 @@
 use actix_web::{web, Responder};
 use serde::Deserialize;
 
+use ya_client_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_core_model::activity;
-use ya_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;

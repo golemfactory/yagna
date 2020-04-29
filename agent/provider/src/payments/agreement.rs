@@ -8,7 +8,7 @@ use super::factory::PaymentModelFactory;
 use super::model::{PaymentDescription, PaymentModel};
 
 use ya_client::activity::ActivityProviderApi;
-use ya_model::market::Agreement;
+use ya_client::model::market::Agreement;
 
 #[derive(Clone, PartialEq)]
 pub struct CostInfo {

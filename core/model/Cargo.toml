@@ -18,7 +18,7 @@ payment=['bigdecimal']
 with-diesel=['diesel']
 
 [dependencies]
-ya-model = "0.1"
+ya-client-model = "0.1"
 ya-service-bus = "0.2"
 
 bigdecimal = { version = "0.1.0", optional = true }

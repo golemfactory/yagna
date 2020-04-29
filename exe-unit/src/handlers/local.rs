@@ -5,8 +5,8 @@ use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
+use ya_client_model::activity::ActivityState;
 use ya_core_model::activity::local::SetState as SetActivityState;
-use ya_model::activity::ActivityState;
 
 impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
     type Result = <GetState as Message>::Result;

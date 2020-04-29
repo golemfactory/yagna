@@ -6,11 +6,11 @@ use std::{
     time::Duration,
 };
 
-use ya_client::payment::requestor::RequestorApi;
-use ya_model::payment;
+use ya_client::model::payment;
+use ya_client::payment::PaymentRequestorApi;
 
 pub(crate) async fn allocate_funds(
-    api: &RequestorApi,
+    api: &PaymentRequestorApi,
     allocation_size: i64,
 ) -> anyhow::Result<payment::Allocation> {
     let new_allocation = payment::NewAllocation {
@@ -33,7 +33,7 @@ pub(crate) async fn allocate_funds(
 
 /// MOCK: log incoming debit notes, and... ignore them
 pub(crate) async fn log_and_ignore_debit_notes(
-    payment_api: RequestorApi,
+    payment_api: PaymentRequestorApi,
     started_at: DateTime<Utc>,
 ) {
     // FIXME: should be persisted and restored upon next ya-requestor start
@@ -56,7 +56,7 @@ pub(crate) async fn log_and_ignore_debit_notes(
 }
 
 pub(crate) async fn process_payments(
-    payment_api: RequestorApi,
+    payment_api: PaymentRequestorApi,
     started_at: DateTime<Utc>,
     agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
 ) {
@@ -94,7 +94,7 @@ pub(crate) async fn process_payments(
 }
 
 async fn process_invoice(
-    payment_api: RequestorApi,
+    payment_api: PaymentRequestorApi,
     invoice_id: String,
     agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
 ) {

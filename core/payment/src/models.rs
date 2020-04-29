@@ -13,7 +13,7 @@ use diesel::sql_types::Integer;
 use serde::Serialize;
 use std::convert::TryInto;
 use uuid::Uuid;
-use ya_model::payment as api_model;
+use ya_client_model::payment as api_model;
 use ya_persistence::types::BigDecimalField;
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
