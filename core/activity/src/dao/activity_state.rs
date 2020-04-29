@@ -5,7 +5,7 @@ use serde_json;
 use std::{convert::TryInto, time::Duration};
 use tokio::time::delay_for;
 
-use ya_model::activity::activity_state::{ActivityState, StatePair};
+use ya_client_model::activity::activity_state::{ActivityState, StatePair};
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::models::ActivityState as DbActivityState;
 use ya_persistence::schema;

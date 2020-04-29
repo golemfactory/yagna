@@ -1,5 +1,5 @@
 use ya_agent_offer_model::OfferDefinition;
-use ya_model::market::{Agreement, Offer, Proposal};
+use ya_client::model::market::{Agreement, Offer, Proposal};
 
 use anyhow::Result;
 use derive_more::Display;

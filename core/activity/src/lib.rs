@@ -12,4 +12,4 @@ pub mod service;
 
 pub type Result<T> = std::result::Result<T, error::Error>;
 
-pub use ya_model::activity::ACTIVITY_API_PATH;
+pub use ya_client_model::activity::ACTIVITY_API_PATH;

@@ -1,5 +1,5 @@
 use ya_agent_offer_model::OfferDefinition;
-use ya_model::market::{Agreement, Offer, Proposal};
+use ya_client::model::market::{Agreement, Offer, Proposal};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, ProposalResponse};
