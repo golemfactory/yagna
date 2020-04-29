@@ -40,7 +40,12 @@ struct AppSettings {
     /// Estimated time limit for requested task completion. All agreements will expire
     /// after specified time counted from demand subscription. All activities will
     /// be destroyed, when agreement expires.
-    /// TODO: Consider provider side regarding activity and payments.
+    ///
+    /// It is not well specified, what to do with payment after agreement expiration.
+    /// There are many scenarios, eg.:
+    /// - Requestor requested bigger work than feasible to compute within this limit
+    ///
+    /// - Provider was not as performant as he declared
     #[structopt(long, default_value = "15min")]
     pub task_expiration: Duration,
 }
@@ -127,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
 
     let started_at = Utc::now();
     let settings = AppSettings::from_args();
-    let api: RequestorApi = RequestorApi::try_from(&settings.api)?;
+    let api = RequestorApi::try_from(&settings.api)?;
 
     let exe_script = std::fs::read_to_string(&settings.exe_script)?;
     let commands_cnt = match serde_json::from_str(&exe_script)? {

@@ -325,10 +325,9 @@ impl Handler<ActivityCreated> for Payments {
 
             ActorResponse::reply(Ok(()))
         } else {
-            ActorResponse::reply(Err(anyhow!(
-                "Agreement [{}] wasn't registered.",
-                &msg.agreement_id
-            )))
+            let error = format!("Agreement [{}] wasn't registered.", &msg.agreement_id);
+            log::warn!("{}", error);
+            ActorResponse::reply(Err(anyhow!(error)))
         }
     }
 }

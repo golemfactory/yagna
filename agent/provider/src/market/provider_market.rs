@@ -120,7 +120,7 @@ impl ProviderMarket {
     }
 
     async fn create_offer(
-        addr: Addr<ProviderMarket>,
+        myself: Addr<ProviderMarket>,
         market_api: Arc<MarketProviderApi>,
         offer: Offer,
         preset: Preset,
@@ -132,7 +132,7 @@ impl ProviderMarket {
             preset,
         };
 
-        let _ = addr.send(sub).await?;
+        let _ = myself.send(sub).await?;
         Ok(())
     }
 
@@ -236,24 +236,24 @@ impl ProviderMarket {
     }
 
     async fn dispatch_event(
-        addr: Addr<ProviderMarket>,
+        myself: Addr<ProviderMarket>,
         market_api: Arc<MarketProviderApi>,
         subscription: OfferSubscription,
         event: &ProviderEvent,
     ) -> Result<()> {
         match event {
             ProviderEvent::ProposalEvent { proposal, .. } => {
-                ProviderMarket::process_proposal(addr, market_api, subscription, proposal).await
+                ProviderMarket::process_proposal(myself, market_api, subscription, proposal).await
             }
             ProviderEvent::AgreementEvent { agreement, .. } => {
-                ProviderMarket::process_agreement(addr, market_api, subscription, agreement).await
+                ProviderMarket::process_agreement(myself, market_api, subscription, agreement).await
             }
             _ => unimplemented!(),
         }
     }
 
     async fn process_proposal(
-        addr: Addr<ProviderMarket>,
+        myself: Addr<ProviderMarket>,
         market_api: Arc<MarketProviderApi>,
         subscription: OfferSubscription,
         demand: &Proposal,
@@ -269,7 +269,7 @@ impl ProviderMarket {
             subscription.preset.name,
         );
 
-        match addr
+        match myself
             .send(GotProposal::new(subscription, demand.clone()))
             .await?
         {
@@ -304,7 +304,7 @@ impl ProviderMarket {
     }
 
     async fn process_agreement(
-        addr: Addr<ProviderMarket>,
+        myself: Addr<ProviderMarket>,
         market_api: Arc<MarketProviderApi>,
         subscription: OfferSubscription,
         agreement: &Agreement,
@@ -323,7 +323,7 @@ impl ProviderMarket {
         let agreement = AgreementView::try_from(agreement)
             .map_err(|error| anyhow!("Invalid agreement. Error: {}", error))?;
 
-        let response = addr
+        let response = myself
             .send(GotAgreement::new(subscription, agreement.clone()))
             .await?;
         match response {
@@ -341,8 +341,12 @@ impl ProviderMarket {
                             agreement_id: agreement.agreement_id.clone(),
                             result: AgreementResult::ApprovalFailed,
                         };
-                        let _ = addr.send(msg).await;
-                        return Err(anyhow!("{}", error));
+                        let _ = myself.send(msg).await;
+                        return Err(anyhow!(
+                            "Failed to approve agreement [{}]. Error: {}",
+                            agreement.agreement_id,
+                            error
+                        ));
                     }
 
                     // We negotiated agreement and here responsibility of ProviderMarket ends.
@@ -351,7 +355,7 @@ impl ProviderMarket {
                         agreement: agreement.clone(),
                     };
 
-                    let _ = addr.send(message).await?;
+                    let _ = myself.send(message).await?;
                 }
                 AgreementResponse::RejectAgreement => {
                     market_api.reject_agreement(&agreement.agreement_id).await?;
@@ -457,9 +461,9 @@ impl Handler<UpdateMarket> for ProviderMarket {
 
     fn handle(&mut self, _msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
         let client = self.market_api.clone();
-        let address = ctx.address();
+        let myself = ctx.address();
 
-        let fut = ProviderMarket::run_step(address, client, self.offer_subscriptions.clone());
+        let fut = ProviderMarket::run_step(myself, client, self.offer_subscriptions.clone());
         ActorResponse::r#async(fut.into_actor(self))
     }
 }
@@ -487,14 +491,14 @@ impl Handler<CreateOffer> for ProviderMarket {
             }
         };
 
-        let addr = ctx.address();
+        let myself = ctx.address();
         let client = self.market_api.clone();
 
         log::info!("Subscribing to events... [{}]", msg.preset.name);
 
         let future = async move {
             let preset_name = msg.preset.name.clone();
-            ProviderMarket::create_offer(addr, client, offer, msg.preset)
+            ProviderMarket::create_offer(myself, client, offer, msg.preset)
                 .await
                 .map_err(|error| {
                     log::error!(

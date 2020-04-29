@@ -214,20 +214,20 @@ impl Handler<InitializeTaskManager> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, _msg: InitializeTaskManager, ctx: &mut Context<Self>) -> Self::Result {
-        let self_address = ctx.address().clone();
+        let myself = ctx.address().clone();
         let runner = self.runner.clone();
         let market = self.market.clone();
 
         let future = async move {
             // Listen to AgreementApproved event.
-            let msg = Subscribe::<AgreementApproved>(self_address.clone().recipient());
+            let msg = Subscribe::<AgreementApproved>(myself.clone().recipient());
             market.send(msg).await??;
 
             // Get info about Activity creation and destruction.
-            let msg = Subscribe::<ActivityCreated>(self_address.clone().recipient());
+            let msg = Subscribe::<ActivityCreated>(myself.clone().recipient());
             runner.send(msg).await??;
 
-            let msg = Subscribe::<ActivityDestroyed>(self_address.clone().recipient());
+            let msg = Subscribe::<ActivityDestroyed>(myself.clone().recipient());
             Ok(runner.send(msg).await??)
         }
         .into_actor(self);
@@ -397,10 +397,10 @@ impl Handler<CloseAgreement> for TaskManager {
         let future = async move {
             start_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
 
-            payments
+            runner
                 .send(AgreementClosed::new(&msg.agreement_id))
                 .await??;
-            runner
+            payments
                 .send(AgreementClosed::new(&msg.agreement_id))
                 .await??;
 
