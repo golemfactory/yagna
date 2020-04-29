@@ -528,6 +528,12 @@ async fn set_activity_terminated(
     retry_interval: Duration,
 ) {
     let state = ActivityState::from(StatePair(State::Terminated, None));
+
+    // Potentially infinite loop. This is done intentionally.
+    // Possible fail reasons:
+    // - Lost network connection with yagna daemon ==> We should wait until yagna will be available.
+    // - Wrong credentials => Probably we will face this problem on previous stages (create activity).
+    // - Internal errors in yagna daemon => yagna needs restart/fix.
     while let Err(error) = api.set_activity_state(activity_id, &state).await {
         log::warn!(
             "Can't set terminated state for activity [{}]. Error: {}. Retry after: {:#?}",
