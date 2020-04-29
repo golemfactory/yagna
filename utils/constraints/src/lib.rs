@@ -37,7 +37,7 @@ impl Constraints {
             Constraints::new_clause(operator, vec![self, c])
         }
     }
-    pub fn without_key<T: Into<ConstraintKey>>(self, removed_key: T) -> Constraints {
+    pub fn without<T: Into<ConstraintKey>>(self, removed_key: T) -> Constraints {
         let op = self.operator;
         let del_key = removed_key.into();
         Constraints {

@@ -53,6 +53,6 @@ fn main() {
         "golem.macro.one" = 1,
         "golem.macro.two" = 2
     ])
-    .without_key("c.macro");
+    .without("c.macro");
     println!("Created with macro:\n{}", c);
 }
