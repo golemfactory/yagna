@@ -19,8 +19,6 @@ members = [
     "core/serv-api/web",
     "core/serv-api/derive",
     "exe-unit",
-    "exe-unit/wasm-mozjs",
-    "exe-unit/wasmtime",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",

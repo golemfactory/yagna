@@ -10,8 +10,7 @@ use ya_client::cli::ProviderApi;
 use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
 
 use crate::execution::{
-    ActivityCreated, ActivityDestroyed, ExeUnitDesc, ExeUnitsRegistry, GetExeUnit,
-    InitializeExeUnits, TaskRunner, UpdateActivity,
+    ActivityCreated, ActivityDestroyed, ExeUnitDesc, GetExeUnit, TaskRunner, UpdateActivity,
 };
 use crate::market::{
     provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
@@ -26,14 +25,16 @@ pub struct ProviderAgent {
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
     node_info: NodeInfo,
-    exe_unit_path: PathBuf,
 }
 
 impl ProviderAgent {
     pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let api = ProviderApi::try_from(&run_args.api)?;
         let market = ProviderMarket::new(api.market, "AcceptAll").start();
-        let runner = TaskRunner::new(api.activity.clone())?.start();
+        let registry = config.registry()?;
+        registry.validate()?;
+
+        let runner = TaskRunner::new(api.activity.clone(), registry)?.start();
         let payments =
             Payments::new(api.activity, api.payment, &run_args.node.credit_address).start();
 
@@ -44,7 +45,6 @@ impl ProviderAgent {
             runner,
             payments,
             node_info,
-            exe_unit_path: config.exe_unit_path,
         };
         provider.initialize(run_args.presets).await?;
 
@@ -64,12 +64,6 @@ impl ProviderAgent {
         self.runner.send(msg).await??;
 
         let msg = Subscribe::<ActivityDestroyed>(self.payments.clone().recipient());
-        self.runner.send(msg).await??;
-
-        // Load ExeUnits descriptors from file.
-        let msg = InitializeExeUnits {
-            file: PathBuf::from(&self.exe_unit_path),
-        };
         self.runner.send(msg).await??;
 
         Ok(self.create_offers(presets).await?)
@@ -170,7 +164,7 @@ impl ProviderAgent {
     }
 
     pub fn list_exeunits(config: ProviderConfig) -> anyhow::Result<()> {
-        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+        let registry = config.registry()?;
         if let Err(errors) = registry.validate() {
             println!("Encountered errors while checking ExeUnits:\n{}", errors);
         }
@@ -210,7 +204,7 @@ impl ProviderAgent {
         params: PresetNoInteractive,
     ) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&config.presets_file)?;
-        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+        let registry = config.registry()?;
 
         let mut preset = Preset::default();
         preset.name = params
@@ -240,7 +234,7 @@ impl ProviderAgent {
 
     pub fn create_preset_interactive(config: ProviderConfig) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&config.presets_file)?;
-        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+        let registry = config.registry()?;
 
         let exeunits = registry
             .list_exeunits()
@@ -269,7 +263,7 @@ impl ProviderAgent {
 
     pub fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&config.presets_file)?;
-        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+        let registry = config.registry()?;
 
         let exeunits = registry
             .list_exeunits()
@@ -297,7 +291,7 @@ impl ProviderAgent {
         params: PresetNoInteractive,
     ) -> anyhow::Result<()> {
         let mut presets = Presets::from_file(&config.presets_file)?;
-        let registry = ExeUnitsRegistry::from_file(&config.exe_unit_path)?;
+        let registry = config.registry()?;
 
         let mut preset = presets.get(&name)?;
 
