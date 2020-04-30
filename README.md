@@ -1,4 +1,4 @@
-# Project YAGNA
+# The Next Milestone (dubbed internally as YAGNA)
 
 ![CI](https://github.com/golemfactory/yagna/workflows/CI/badge.svg)
 
@@ -6,8 +6,8 @@ An open platform and marketplace for distributed computations.
 
 ## Project Layout
 
-* [agent](agent) - applications based on core services. In MVP there are
-* [core](core) - core services for open computation market.
+* [agent](agent) - applications based on core services. 
+* [core](core) - core services for the open computation marketplace.
 basic wasm provider and simple wasm requestor.
 * [exe-unit](exe-unit) -  ExeUnit Supervisor.
     * [wasm-mozjs](exe-unit/wasm-mozjs) - [SpiderMonkey](https://github.com/servo/rust-mozjs) based ExeUnit.
@@ -21,14 +21,14 @@ basic wasm provider and simple wasm requestor.
 Public API binding with data model is in 
 [ya-client](https://github.com/golemfactory/ya-client) repo.
 
-## Requirements
+## MVP Requirements
 
-* Clean and easy UX, especially during onboarding.
-* Tokenocentric (GNT).
+* Clean and easy UX, most specifically during onboarding.
+* Token-centric (new GNT - ticker to be defined).
 * Production-ready, modular and easy to maintain architecture and code base.  
-_Modular_ means that all building blocks are to be easily replaceable.
+_Modular_ means that all the building blocks can be easily replaceable.
 * Documentation and SDK for developers.
-* Binaries with small footprint.
+* Small footprint binaries.
 
 ### Functional 
 
@@ -54,7 +54,7 @@ _Modular_ means that all building blocks are to be easily replaceable.
 1. Verification
     * [ ] **Verification by redundancy**
     * [ ] **No verification**
-    * [ ] Verification by human _(optional)_
+    * [ ] Verification by humans _(optional)_
 1. Back compatibility
     * [ ] Golem Brass interoperability _(optional)_
 
