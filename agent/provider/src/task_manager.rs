@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use anyhow::{Error, Result};
+use anyhow::{Error, Result, bail};
 use chrono::{DateTime, TimeZone, Utc};
 use futures::future::TryFutureExt;
 
@@ -132,9 +132,13 @@ impl TaskManager {
     ) -> Result<()> {
         let agreement_id = msg.0.agreement_id.clone();
         let expiration = agreement_expiration_from(&msg.0)?;
-        let duration = (expiration - Utc::now()).to_std()?;
+
+        if Utc::now() > expiration {
+            bail!("Agreement expired before start. Expiration {:#?}", expiration);
+        }
 
         // Schedule agreement termination after expiration time.
+        let duration = (expiration - Utc::now()).to_std()?;
         ctx.run_later(duration, move |myself, ctx| {
             if !myself.tasks.is_agreement_finalized(&agreement_id) {
                 let msg = BreakAgreement {
@@ -398,8 +402,8 @@ impl Handler<CloseAgreement> for TaskManager {
             start_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
 
             runner
-                .send(AgreementClosed::new(&msg.agreement_id))
-                .await??;
+                .do_send(AgreementClosed::new(&msg.agreement_id));
+                //.await??;
             payments
                 .send(AgreementClosed::new(&msg.agreement_id))
                 .await??;
