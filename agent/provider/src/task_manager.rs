@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use anyhow::{Error, Result, bail};
+use anyhow::{bail, Error, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use futures::future::TryFutureExt;
 
@@ -134,7 +134,10 @@ impl TaskManager {
         let expiration = agreement_expiration_from(&msg.0)?;
 
         if Utc::now() > expiration {
-            bail!("Agreement expired before start. Expiration {:#?}", expiration);
+            bail!(
+                "Agreement expired before start. Expiration {:#?}",
+                expiration
+            );
         }
 
         // Schedule agreement termination after expiration time.
@@ -332,6 +335,11 @@ impl Handler<ActivityDestroyed> for TaskManager {
         let payments = self.payments.clone();
         let myself = ctx.address().clone();
 
+        let need_close = self
+            .tasks
+            .allowed_transition(&agreement_id, &AgreementState::Closed)
+            .is_ok();
+
         let future = async move {
             // Forward information to Payments to send last DebitNote in activity.
             // TODO: What can we do in case of fail? Payments are expected to retry
@@ -340,9 +348,11 @@ impl Handler<ActivityDestroyed> for TaskManager {
 
             // Temporary. Requestor should close agreement, but now we assume,
             // there's only one activity and destroying it means closing agreement.
-            myself.do_send(CloseAgreement {
-                agreement_id: agreement_id.to_string(),
-            });
+            if need_close {
+                myself.do_send(CloseAgreement {
+                    agreement_id: agreement_id.to_string(),
+                });
+            }
             Ok(())
         };
         ActorResponse::r#async(future.into_actor(self))
@@ -401,9 +411,8 @@ impl Handler<CloseAgreement> for TaskManager {
         let future = async move {
             start_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
 
-            runner
-                .do_send(AgreementClosed::new(&msg.agreement_id));
-                //.await??;
+            runner.do_send(AgreementClosed::new(&msg.agreement_id));
+            //.await??;
             payments
                 .send(AgreementClosed::new(&msg.agreement_id))
                 .await??;

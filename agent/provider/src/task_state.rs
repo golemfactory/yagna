@@ -28,7 +28,7 @@ pub enum StateError {
     },
 }
 
-#[derive(Clone, Display, Debug)]
+#[derive(Clone, Display, Debug, PartialEq)]
 pub enum AgreementState {
     /// We got agreement from market.
     New,
@@ -49,7 +49,7 @@ pub enum AgreementState {
 pub struct Transition(AgreementState, Option<AgreementState>);
 
 /// Responsible for state of single task.
-pub struct TaskState {
+struct TaskState {
     agreement_id: String,
     state: Transition,
 }
@@ -69,45 +69,29 @@ impl TaskState {
 
     pub fn allowed_transition(&self, new_state: &AgreementState) -> Result<(), StateError> {
         let is_allowed = match self.state {
+            Transition(_, Some(AgreementState::Broken {..})) => false,
+            // TODO: Consider what to do when payment wasn't accepted.
+            Transition(_, Some(AgreementState::Closed)) => false,
             Transition(AgreementState::New, None) => match new_state {
                 AgreementState::Initialized
-                | AgreementState::Closed
-                | AgreementState::Broken { .. } => true,
-                _ => false
-            },
-            Transition(AgreementState::New, _) => match new_state {
-                AgreementState::Initialized
-                | AgreementState::Broken { .. } => true,
+                | AgreementState::Broken { .. }
+                | AgreementState::Closed => true,
                 _ => false,
             },
             Transition(AgreementState::Initialized, None) => match new_state {
                 AgreementState::Computing
-                | AgreementState::Closed
-                | AgreementState::Broken { .. } => true,
-                _ => false
-            },
-            Transition(AgreementState::Initialized, _) => match new_state {
-                AgreementState::Computing
-                | AgreementState::Broken { .. } => true,
+                | AgreementState::Broken { .. }
+                | AgreementState::Closed => true,
                 _ => false,
             },
             Transition(AgreementState::Computing, None) => match new_state {
                 AgreementState::Computing
-                | AgreementState::Closed
-                | AgreementState::Broken { .. } => true,
-                _ => false
-            },
-            Transition(AgreementState::Computing, _) => match new_state {
-                AgreementState::Computing
-                | AgreementState::Broken { .. } => true,
+                | AgreementState::Broken { .. }
+                | AgreementState::Closed => true,
                 _ => false,
             },
-            Transition(_, Some(AgreementState::Broken { .. })) => match new_state {
+            Transition(_, Some(_)) => match new_state {
                 AgreementState::Broken { .. } => true,
-                _ => false,
-            },
-            Transition(_, Some(AgreementState::Closed)) => match new_state {
-                AgreementState::Closed => true,
                 _ => false,
             },
             _ => false,
@@ -130,9 +114,16 @@ impl TaskState {
     }
 
     pub fn finish_transition(&mut self, new_state: AgreementState) -> Result<(), StateError> {
-        self.allowed_transition(&new_state)?;
-        self.state = Transition(new_state, None);
-        Ok(())
+        if self.state.1.as_ref() == Some(&new_state) {
+            self.state = Transition(new_state, None);
+            Ok(())
+        } else {
+            return Err(StateError::InvalidTransition {
+                agreement_id: self.agreement_id.to_string(),
+                current_state: self.state.clone(),
+                new_state,
+            })
+        }
     }
 }
 
@@ -168,6 +159,15 @@ impl TasksStates {
         } else {
             false
         }
+    }
+
+    pub fn allowed_transition(
+        &self,
+        agreement_id: &str,
+        new_state: &AgreementState,
+    ) -> Result<(), StateError> {
+        let task_state = self.get_state(agreement_id)?;
+        task_state.allowed_transition(new_state)
     }
 
     pub fn start_transition(
