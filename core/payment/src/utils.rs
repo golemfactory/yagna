@@ -215,7 +215,9 @@ pub mod response {
     }
 
     pub fn server_error(e: &impl ToString) -> HttpResponse {
-        HttpResponse::InternalServerError().json(ErrorMessage::new(e.to_string()))
+        let e = e.to_string();
+        log::error!("Payment API server error: {}", e);
+        HttpResponse::InternalServerError().json(ErrorMessage::new(e))
     }
 
     pub fn bad_request(e: &impl ToString) -> HttpResponse {

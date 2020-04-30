@@ -128,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Node ID: {}", node_id);
     let sign_tx = get_sign_tx(account);
 
-    let database_url = format!("file:{}?mode=memory&cache=shared", &node_id);
+    let database_url = format!("file:{}.db", &node_id);
     let db = DbExecutor::new(database_url)?;
     db.apply_migration(migrations::run_with_output)?;
 
@@ -167,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
         committed_signature: None,
     };
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
-    utils::fake_get_agreement_id(args.agreement_id.clone());
+    utils::provider::fake_get_agreement_id(args.agreement_id.clone());
 
     let identity = Identity {
         identity: NodeId::from_str(&node_id).unwrap(),
