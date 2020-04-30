@@ -66,6 +66,20 @@ struct InvoicesPaid {
     pub payment: Payment,
 }
 
+/// Gets costs summary for agreement.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<CostsSummary>")]
+struct GetAgreementSummary {
+    pub agreement_id: String,
+}
+
+/// Cost summary for agreement.
+struct CostsSummary {
+    pub agreement_id: String,
+    pub cost_summary: CostInfo,
+    pub activities: Vec<String>,
+}
+
 // =========================================== //
 // Payments implementation
 // =========================================== //
@@ -490,24 +504,45 @@ impl Handler<FinalizeActivity> for Payments {
 impl Handler<AgreementClosed> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: AgreementClosed, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
             log::info!(
                 "Payments - agreement [{}] closed. Computing cost summary...",
                 &msg.agreement_id
             );
 
-            let cost_summary = agreement.cost_summary();
-            let activities = agreement.list_activities();
+            let activities_watch = agreement.activities_watch.clone();
             let provider_context = self.context.clone();
             let agreement_id = msg.agreement_id.clone();
+            let myself = ctx.address().clone();
 
             let future = async move {
+                activities_watch.wait_for_finish().await;
+
+                let summary = async move {
+                    let msg = GetAgreementSummary { agreement_id };
+                    myself.send(msg).await?
+                }
+                .await
+                .map_err(|error| log::error!("Shouldn't happen: {}", error))
+                .unwrap_or(CostsSummary::invalid());
+
+                let CostsSummary {
+                    cost_summary,
+                    activities,
+                    ..
+                } = summary;
+
                 // Resend invoice until it will reach provider.
                 // Note: that we don't remove invoices that were issued but not sent.
                 loop {
-                    match send_invoice(&provider_context, &agreement_id, &cost_summary, &activities)
-                        .await
+                    match send_invoice(
+                        &provider_context,
+                        &msg.agreement_id,
+                        &cost_summary,
+                        &activities,
+                    )
+                    .await
                     {
                         Ok(invoice) => return invoice,
                         Err(error) => {
@@ -680,6 +715,38 @@ impl Handler<InvoicesPaid> for Payments {
         log::info!("Invoices waiting for payment: {:#?}", left_to_pay);
 
         return ActorResponse::reply(Ok(()));
+    }
+}
+
+impl Handler<GetAgreementSummary> for Payments {
+    type Result = ActorResponse<Self, CostsSummary, Error>;
+
+    fn handle(&mut self, msg: GetAgreementSummary, _ctx: &mut Context<Self>) -> Self::Result {
+        if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
+            let cost_summary = agreement.cost_summary();
+            let activities = agreement.list_activities();
+
+            let summary = CostsSummary {
+                agreement_id: msg.agreement_id,
+                cost_summary,
+                activities,
+            };
+            return ActorResponse::reply(Ok(summary));
+        }
+        return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
+    }
+}
+
+impl CostsSummary {
+    pub fn invalid() -> CostsSummary {
+        CostsSummary {
+            agreement_id: "".to_string(),
+            cost_summary: CostInfo {
+                cost: BigDecimal::from(0),
+                usage: vec![],
+            },
+            activities: vec![],
+        }
     }
 }
 
