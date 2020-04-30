@@ -215,9 +215,9 @@ pub async fn compute_cost(
 
 impl ActivitiesWaiter {
     pub async fn wait_for_finish(mut self) {
-        log::info!("Waiting for all activities to finish.");
+        log::debug!("Waiting for all activities to finish.");
         while let Some(value) = self.watch_receiver.recv().await {
-            log::info!("Num active activities: {}.", value);
+            log::debug!("Num active activities left: {}.", value);
             if value == 0 {
                 break;
             }
