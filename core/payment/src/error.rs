@@ -7,9 +7,15 @@ pub enum DbError {
     #[error("Database connection error: {0}")]
     Connection(#[from] r2d2::Error),
     #[error("Database query error: {0}")]
-    Query(#[from] diesel::result::Error),
+    Query(String),
     #[error("Runtime error: {0}")]
     Runtime(#[from] tokio::task::JoinError),
+}
+
+impl From<diesel::result::Error> for DbError {
+    fn from(e: diesel::result::Error) -> Self {
+        DbError::Query(e.to_string())
+    }
 }
 
 pub type DbResult<T> = Result<T, DbError>;
