@@ -69,22 +69,37 @@ impl TaskState {
 
     pub fn allowed_transition(&self, new_state: &AgreementState) -> Result<(), StateError> {
         let is_allowed = match self.state {
+            Transition(AgreementState::New, None) => match new_state {
+                AgreementState::Initialized
+                | AgreementState::Closed
+                | AgreementState::Broken { .. } => true,
+                _ => false
+            },
             Transition(AgreementState::New, _) => match new_state {
                 AgreementState::Initialized
-                | AgreementState::Broken { .. }
-                | AgreementState::Closed => true,
+                | AgreementState::Broken { .. } => true,
                 _ => false,
+            },
+            Transition(AgreementState::Initialized, None) => match new_state {
+                AgreementState::Computing
+                | AgreementState::Closed
+                | AgreementState::Broken { .. } => true,
+                _ => false
             },
             Transition(AgreementState::Initialized, _) => match new_state {
                 AgreementState::Computing
-                | AgreementState::Broken { .. }
-                | AgreementState::Closed => true,
+                | AgreementState::Broken { .. } => true,
                 _ => false,
+            },
+            Transition(AgreementState::Computing, None) => match new_state {
+                AgreementState::Computing
+                | AgreementState::Closed
+                | AgreementState::Broken { .. } => true,
+                _ => false
             },
             Transition(AgreementState::Computing, _) => match new_state {
                 AgreementState::Computing
-                | AgreementState::Broken { .. }
-                | AgreementState::Closed => true,
+                | AgreementState::Broken { .. } => true,
                 _ => false,
             },
             Transition(_, Some(AgreementState::Broken { .. })) => match new_state {
