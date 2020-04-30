@@ -7,7 +7,9 @@ use std::{
 };
 
 use ya_client::cli::RequestorApi;
-use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
+use ya_client::model::market::{
+    proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent,
+};
 
 use crate::payment::allocate_funds;
 

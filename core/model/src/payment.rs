@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use ya_model::payment::*;
+use ya_client_model::payment::*;
 use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]

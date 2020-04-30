@@ -5,7 +5,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-model = "0.1"
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
 
 serde="1.0"
 serde_json="1.0"

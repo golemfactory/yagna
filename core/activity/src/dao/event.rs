@@ -10,7 +10,7 @@ use ya_persistence::models::ActivityEventType;
 use ya_persistence::schema;
 
 use crate::dao::Result;
-use ya_model::activity::ProviderEvent;
+use ya_client_model::activity::ProviderEvent;
 
 pub const MAX_EVENTS: u32 = 100;
 

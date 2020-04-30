@@ -1,4 +1,4 @@
-use ya_model::market::Agreement;
+use ya_client_model::market::Agreement;
 
 use serde::Deserialize;
 use serde_json::{Map, Value};

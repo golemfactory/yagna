@@ -3,8 +3,8 @@ use crate::Result;
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use ya_model::activity::activity_state::{State, StatePair};
-use ya_model::activity::{
+use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::{
     CommandResult, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 

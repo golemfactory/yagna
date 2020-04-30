@@ -1,6 +1,6 @@
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
-use ya_model::market::{Offer, Proposal};
+use ya_client_model::market::{Offer, Proposal};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, AgreementResult, ProposalResponse};

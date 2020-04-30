@@ -14,8 +14,8 @@ use structopt::StructOpt;
 
 use ya_agreement_utils::AgreementView;
 use ya_client::activity::ActivityProviderApi;
+use ya_client_model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_core_model::activity;
-use ya_model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;
@@ -36,13 +36,6 @@ use crate::task_manager::{AgreementBroken, AgreementClosed};
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateActivity;
-
-/// Loads ExeUnits descriptors from file.
-#[derive(Message, Debug)]
-#[rtype(result = "Result<()>")]
-pub struct InitializeExeUnits {
-    pub file: PathBuf,
-}
 
 /// Finds ExeUnit in registry and returns it's descriptor.
 #[derive(Message)]
@@ -145,7 +138,11 @@ pub struct TaskRunner {
 }
 
 impl TaskRunner {
-    pub fn new(client: ActivityProviderApi, config: TaskRunnerConfig) -> Result<TaskRunner> {
+    pub fn new(
+        client: ActivityProviderApi,
+        config: TaskRunnerConfig,
+        registry: ExeUnitsRegistry,
+    ) -> Result<TaskRunner> {
         let current_dir = std::env::current_dir()?;
         let tasks_dir = current_dir.join("exe-unit").join("work");
         let cache_dir = current_dir.join("exe-unit").join("cache");
@@ -177,7 +174,7 @@ impl TaskRunner {
 
         Ok(TaskRunner {
             api: Arc::new(client),
-            registry: ExeUnitsRegistry::new(),
+            registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
             activity_created: SignalSlot::<ActivityCreated>::new(),
@@ -186,18 +183,6 @@ impl TaskRunner {
             tasks_dir,
             cache_dir,
         })
-    }
-
-    #[logfn(ok = "INFO", err = "ERROR", fmt = "ExeUnits initialized: {:?}")]
-    pub fn initialize_exeunits(
-        &mut self,
-        msg: InitializeExeUnits,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        log::info!("Initializing ExeUnits from file: [{}]", msg.file.display());
-
-        self.registry.register_exeunits_from_file(&msg.file)?;
-        Ok(self.registry.validate()?)
     }
 
     pub fn get_exeunit(
@@ -515,7 +500,6 @@ impl Actor for TaskRunner {
 }
 
 forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
-forward_actix_handler!(TaskRunner, InitializeExeUnits, initialize_exeunits);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 

@@ -15,8 +15,10 @@ use crate::market::provider_market::AgreementApproved;
 use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 use ya_client::activity::ActivityProviderApi;
-use ya_client::payment::provider::ProviderApi;
-use ya_model::payment::{DebitNote, Invoice, InvoiceStatus, NewDebitNote, NewInvoice, Payment};
+use ya_client::model::payment::{
+    DebitNote, Invoice, InvoiceStatus, NewDebitNote, NewInvoice, Payment,
+};
+use ya_client::payment::PaymentProviderApi;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
 
@@ -77,7 +79,7 @@ pub struct DebitNoteInfo {
 /// Yagna APIs and payments information about provider.
 struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
-    payment_api: Arc<ProviderApi>,
+    payment_api: Arc<PaymentProviderApi>,
 
     credit_account: String,
 
@@ -99,7 +101,7 @@ pub struct Payments {
 impl Payments {
     pub fn new(
         activity_api: ActivityProviderApi,
-        payment_api: ProviderApi,
+        payment_api: PaymentProviderApi,
         credit_address: &str,
     ) -> Payments {
         log::info!(
