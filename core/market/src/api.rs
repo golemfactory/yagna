@@ -17,9 +17,6 @@ pub fn web_scope(db: &DbExecutor) -> Scope {
         .data(db.clone())
         .extend(requestor::extend_web_scope)
         .extend(provider::extend_web_scope)
-
-    //.service(provider_scope())
-    //.service(requestor_scope())
 }
 
 pub const DEFAULT_ACK_TIMEOUT: u32 = 60; // seconds
