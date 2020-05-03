@@ -1,26 +1,23 @@
 use super::{
-    forward_web_request, PathAgreement, PathSubscription, PathSubscriptionProposal,
-    QueryTimeoutMaxEvents, QueryTimeout
+    resolve_web_error, PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout,
+    QueryTimeoutMaxEvents,
 };
-use awc::http::StatusCode;
-use std::future::Future;
-use std::{convert::TryInto, rc::Rc, time::Duration};
+use crate::utils::response;
+use actix_web::web::{Data, Json, Path, Query};
+use actix_web::HttpResponse;
+use std::time::Duration;
 use ya_client::{
-    error::Error,
     market::MarketRequestorApi,
-    web::{WebAuth, WebClient, WebInterface},
+    web::{WebAuth, WebClient},
     Result,
 };
-
-use crate::utils::response;
-use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
-use actix_web::{HttpResponse, Scope};
-use ya_model::market::*;
+use ya_client_model::market::*;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
-    scope.service(subscribe)
+    scope
+        .service(subscribe)
         .service(get_demands)
         .service(unsubscribe)
         .service(collect)
@@ -35,7 +32,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         .service(terminate_agreement)
 }
 
-// **************************  **************************
+// ****************************************************
 
 fn build_market_api(id: Identity) -> Result<MarketRequestorApi> {
     let client_result = WebClient::builder()
@@ -49,20 +46,32 @@ fn build_market_api(id: Identity) -> Result<MarketRequestorApi> {
     }
 }
 
-fn resolve_web_error(err: Error) -> HttpResponse
-{
-    match err {
-        Error::HttpStatusCode{code, url, msg, bt} => 
-        {
-            match code {
-                StatusCode::UNAUTHORIZED => response::unauthorized(),
-                StatusCode::NOT_FOUND => response::not_found(),
-                _ => response::server_error(&msg)
-            }
-        },
-        _ => response::server_error(&err)
-    }
-}
+// Failed experiments with passing the Api call as closure...
+//
+// async fn forward_web_request<T, R, F: Future<Output = Result<T>>>(
+//     db: Data<DbExecutor>,
+//     f: impl FnOnce(MarketRequestorApi, Json<R>) -> F,
+//     id: Identity,
+//     body: Json<R>,
+// ) -> HttpResponse
+// where T : Serialize {
+//     match build_market_api(id) {
+//         Ok(market_api) => {
+//             let subscription_id_result = f(market_api, body).await;
+
+//             match subscription_id_result {
+//                 Ok(subscription_id) => response::created(subscription_id),
+//                 Err(err) => resolve_web_error(err),
+//             }
+//         }
+//         Err(err) => response::server_error(&err),
+//     }
+// }
+
+// #[actix_web::post("/demands")]
+// async fn subscribe(_db: Data<DbExecutor>, body: Json<Demand>, id: Identity) -> HttpResponse {
+//     forward_web_request(_db, move |market_api, body_parm| market_api.subscribe(&body_parm.into_inner().clone()), id, body).await
+// }
 
 #[actix_web::post("/demands")]
 async fn subscribe(_db: Data<DbExecutor>, body: Json<Demand>, id: Identity) -> HttpResponse {
@@ -105,7 +114,7 @@ async fn unsubscribe(
             let subscription_id_result = market_api.unsubscribe(&path.subscription_id).await;
 
             match subscription_id_result {
-                Ok(subscription_id) => response::no_content(),
+                Ok(_subscription_id) => response::no_content(),
                 Err(err) => resolve_web_error(err),
                 //response::server_error(&err),
             }
@@ -227,9 +236,7 @@ async fn get_agreement(
 ) -> HttpResponse {
     match build_market_api(id) {
         Ok(market_api) => {
-            let agreement_result = market_api
-                .get_agreement(&path.agreement_id)
-                .await;
+            let agreement_result = market_api.get_agreement(&path.agreement_id).await;
 
             match agreement_result {
                 Ok(agreement) => response::ok(agreement),
@@ -268,7 +275,9 @@ async fn wait_for_approval(
 ) -> HttpResponse {
     match build_market_api(id) {
         Ok(market_api) => {
-            let approval_result = market_api.wait_for_approval(&path.agreement_id, query.timeout).await;
+            let approval_result = market_api
+                .wait_for_approval(&path.agreement_id, query.timeout)
+                .await;
 
             match approval_result {
                 Ok(approval) => response::ok(approval),
@@ -299,7 +308,7 @@ async fn cancel_agreement(
 }
 
 #[actix_web::delete("/agreements/{agreement_id}/terminate")]
-async fn terminate_agreement(    
+async fn terminate_agreement(
     _db: Data<DbExecutor>,
     path: Path<PathAgreement>,
     id: Identity,

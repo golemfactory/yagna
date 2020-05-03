@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 ya-client = "0.3"
+ya-client-model = "0.1"
 ya-core-model = { version = "0.1", features = ["market"] }
 ya-persistence = "0.2"
 ya-service-api = "0.1"

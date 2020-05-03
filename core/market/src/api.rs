@@ -1,19 +1,10 @@
-use std::future::Future;
-use std::time::Duration;
-use ya_client::{
-    error::Error,
-    market::MarketRequestorApi,
-    web::{WebAuth, WebClient, WebInterface},
-    Result,
-};
-
 use crate::utils::response;
-
-use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
-use jsonwebtoken::{decode, encode, Algorithm, Header, Validation};
+use awc::http::StatusCode;
+use jsonwebtoken::{encode, Header};
 use serde::{Deserialize, Serialize};
-use ya_model::market::MARKET_API_PATH;
+use ya_client::error::Error;
+use ya_client_model::market::MARKET_API_PATH;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
@@ -25,14 +16,14 @@ pub fn web_scope(db: &DbExecutor) -> Scope {
     Scope::new(MARKET_API_PATH)
         .data(db.clone())
         .extend(requestor::extend_web_scope)
-        .extend(provider::register_endpoints)
+        .extend(provider::extend_web_scope)
 
     //.service(provider_scope())
     //.service(requestor_scope())
 }
 
 pub const DEFAULT_ACK_TIMEOUT: u32 = 60; // seconds
-pub const DEFAULT_EVENT_TIMEOUT: u32 = 0; // seconds
+pub const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
 pub const DEFAULT_REQUEST_TIMEOUT: f32 = 12.0;
 
 /// Our claims struct, it needs to derive `Serialize` and/or `Deserialize`
@@ -51,19 +42,21 @@ pub(crate) fn encode_jwt(id: Identity) -> String {
     encode(&Header::default(), &claims, "secret".as_ref()).unwrap_or(String::from("error"))
 }
 
-pub(crate) fn forward_web_request<F: Future>(
-    db: Data<DbExecutor>,
-    f: impl FnOnce(WebClient) -> F,
-    id: Identity,
-) -> Result<F> {
-    let client_result = WebClient::builder()
-        .auth(WebAuth::Bearer(encode_jwt(id)))
-        .timeout(Duration::from_secs(5))
-        .build();
-
-    match client_result {
-        Ok(client) => Ok(f(client)),
-        Err(err) => Err(err),
+pub(crate) fn resolve_web_error(err: Error) -> HttpResponse {
+    match err {
+        Error::HttpStatusCode {
+            code,
+            url: _,
+            msg,
+            bt: _,
+        } => match code {
+            StatusCode::UNAUTHORIZED => response::unauthorized(),
+            StatusCode::NOT_FOUND => response::not_found(),
+            StatusCode::CONFLICT => response::conflict(),
+            StatusCode::GONE => response::gone(),
+            _ => response::server_error(&msg),
+        },
+        _ => response::server_error(&err),
     }
 }
 
@@ -100,7 +93,7 @@ pub struct QueryTimeoutCommandIndex {
 #[derive(Deserialize, Debug)]
 pub struct QueryTimeoutMaxEvents {
     /// number of milliseconds to wait
-    #[serde(rename = "timeout", default = "default_query_timeout")]
+    #[serde(rename = "timeout", default = "default_event_timeout")]
     pub timeout: Option<f32>,
     /// maximum count of events to return
     #[serde(rename = "maxEvents", default)]
@@ -118,8 +111,8 @@ pub(crate) fn default_ack_timeout() -> u32 {
 }
 
 #[inline(always)]
-pub(crate) fn default_event_timeout() -> u32 {
-    DEFAULT_EVENT_TIMEOUT
+pub(crate) fn default_event_timeout() -> Option<f32> {
+    Some(DEFAULT_EVENT_TIMEOUT)
 }
 
 #[derive(Deserialize)]

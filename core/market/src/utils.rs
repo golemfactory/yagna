@@ -1,7 +1,7 @@
 pub mod response {
     use actix_web::HttpResponse;
     use serde::Serialize;
-    use ya_model::ErrorMessage;
+    use ya_client_model::ErrorMessage;
 
     pub fn ok<T: Serialize>(t: T) -> HttpResponse {
         HttpResponse::Ok().json(t)
@@ -13,6 +13,14 @@ pub mod response {
 
     pub fn no_content() -> HttpResponse {
         HttpResponse::NoContent().finish()
+    }
+
+    pub fn conflict() -> HttpResponse {
+        HttpResponse::Conflict().finish()
+    }
+
+    pub fn gone() -> HttpResponse {
+        HttpResponse::Gone().finish()
     }
 
     pub fn not_implemented() -> HttpResponse {
