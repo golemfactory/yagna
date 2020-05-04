@@ -282,19 +282,26 @@ impl TaskRunner {
 
         // We need to discover that ExeUnit process finished.
         // We can't be sure that Requestor will send DestroyActivity.
-        let self_addr = ctx.address();
+        let myself = ctx.address();
         let activity_id = msg.activity_id.clone();
         let agreement_id = msg.agreement_id.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
+        let api = self.api.clone();
 
         Arbiter::spawn(async move {
             let status = process.wait_until_finished().await;
+
+            // If it was brutal termination than ExeUnit probably didn't set state.
+            // We must do it instead of him. Repeat until it will succeed.
+            set_activity_terminated(api, &activity_id, state_retry_interval).await;
+
             let msg = ExeUnitProcessFinished {
                 activity_id,
                 agreement_id,
                 status,
             };
 
-            self_addr.do_send(msg);
+            myself.do_send(msg);
         });
 
         Ok(())
@@ -570,8 +577,6 @@ impl Handler<DestroyActivity> for TaskRunner {
         // Remove task from list and destroy everything related with it.
         let task = self.tasks.swap_remove(task_position);
         let termination_timeout = self.config.process_termination_timeout;
-        let state_retry_interval = self.config.exeunit_state_retry_interval;
-        let api = self.api.clone();
 
         let terminate = async move {
             if let Err(error) = task.exeunit.terminate(termination_timeout).await {
@@ -581,10 +586,6 @@ impl Handler<DestroyActivity> for TaskRunner {
                     error
                 );
                 task.exeunit.kill();
-
-                // It was brutal termination and ExeUnit probably didn't set state.
-                // We must do it instead of him. Repeat until it will succeed.
-                set_activity_terminated(api, &task.activity_id, state_retry_interval).await;
             }
 
             log::info!("ExeUnit for activity terminated: [{}].", msg.activity_id);
