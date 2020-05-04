@@ -295,6 +295,7 @@ impl TaskRunner {
             // We must do it instead of him. Repeat until it will succeed.
             match &status {
                 ExeUnitExitStatus::Aborted { .. } | ExeUnitExitStatus::Error { .. } => {
+                    log::warn!("ExeUnit [{}] have not finished cleanly. Setting activity [{}] state to Terminated", exeunit_name, activity_id);
                     set_activity_terminated(api, &activity_id, state_retry_interval).await;
                 }
                 _ => (),

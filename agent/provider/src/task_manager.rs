@@ -144,6 +144,11 @@ impl TaskManager {
         let duration = (expiration - Utc::now()).to_std()?;
         ctx.run_later(duration, move |myself, ctx| {
             if !myself.tasks.is_agreement_finalized(&agreement_id) {
+                log::warn!(
+                    "Agreement [{}] expired @ {}. Breaking",
+                    agreement_id,
+                    expiration
+                );
                 let msg = BreakAgreement {
                     agreement_id: agreement_id.clone(),
                     reason: BreakReason::Expired,
