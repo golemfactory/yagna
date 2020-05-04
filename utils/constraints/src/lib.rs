@@ -233,6 +233,8 @@ macro_rules! constraints [
     ($key:tt < $value:expr , $($r:tt)*) => {{ Constraints::new_single(ConstraintKey::new($key).less_than(ConstraintKey::new($value))).and(constraints!( $($r)* )) }};
     ($key:tt > $value:expr $(,)*) => {{ Constraints::new_single(ConstraintKey::new($key).greater_than(ConstraintKey::new($value))) }};
     ($key:tt > $value:expr , $($r:tt)*) => {{ Constraints::new_single(ConstraintKey::new($key).greater_than(ConstraintKey::new($value))).and(constraints!( $($r)* )) }};
+    ($key:tt $(,)*) => {{ Constraints::new_single(ConstraintKey::new($key)) }};
+    ($key:tt , $($r:tt)*) => {{ Constraints::new_single(ConstraintKey::new($key)).and(constraints!( $($r)* )) }};
     ($t:expr $(,)*) => { $t };
     ($t:expr , $($r:tt)*) => {
         $t.and(constraints!( $($r)* ))

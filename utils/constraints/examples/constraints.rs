@@ -45,6 +45,7 @@ fn main() {
 
     let c = constraints![
         "golem.inf.mem.gib.macro" == 1,
+        "only.key",
         "c.macro" < 3,
         constraints!["test.1" > 1, "test.2" != 2],
         "d.macro" == 20,
