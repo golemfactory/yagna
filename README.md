@@ -63,7 +63,3 @@ _Modular_ means that all the building blocks can be easily replaceable.
 1. Back compatibility
     * [ ] Golem Brass interoperability _(optional)_
 
-## References
-
-- [MVP Requirements](https://docs.google.com/document/d/1GZnZ725E_OIRkXzYJNlmafNGDDvR88LFaDpzAmio_nQ)
-- [Technical Concept](https://docs.google.com/document/d/1Sdk-N_CmsXcxpXi1dQVSmbiQwxMF3w1nF82Xv0Vjw08)
