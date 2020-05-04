@@ -577,6 +577,14 @@ impl Handler<AgreementBroken> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
+        if !self.agreements.contains_key(&msg.agreement_id) {
+            log::warn!(
+                "Payments - agreement [{}] does not exist -- not broken.",
+                &msg.agreement_id
+            );
+            return ActorResponse::reply(Ok(()));
+        }
+
         let address = ctx.address().clone();
         let future = async move {
             let msg = AgreementClosed {

@@ -30,6 +30,7 @@ pub(crate) fn build_demand(
 
     let subnet_constraint = match subnet {
         Some(subnet) => {
+            log::info!("Using subnet: {}", subnet);
             properties.as_object_mut().unwrap().insert(
                 "golem.node.debug.subnet".to_string(),
                 serde_json::Value::String(subnet.clone()),

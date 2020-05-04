@@ -128,6 +128,10 @@ async fn shutdown_handler(
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+    std::env::set_var(
+        "RUST_LOG",
+        std::env::var("RUST_LOG").unwrap_or("info".into()),
+    );
     env_logger::init();
 
     let started_at = Utc::now();

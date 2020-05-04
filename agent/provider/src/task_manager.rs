@@ -380,16 +380,22 @@ impl Handler<BreakAgreement> for TaskManager {
                 msg.reason
             );
 
-            runner.send(AgreementBroken::from(msg.clone())).await??;
-            payments.send(AgreementBroken::from(msg.clone())).await??;
+            let msg1 = msg.clone();
+            let result = async move {
+                runner.send(AgreementBroken::from(msg1.clone())).await??;
+                payments.send(AgreementBroken::from(msg1.clone())).await??;
 
-            finish_transition(&myself, &msg.agreement_id, new_state).await?;
+                finish_transition(&myself, &msg1.agreement_id, new_state).await?;
+                Ok(())
+            }
+            .await;
 
             // Notify market, but we don't care about result.
             // TODO: Breaking agreement shouldn't fail at anytime. But in current code we can
             //       return early, before we notify market.
             market.do_send(AgreementBroken::from(msg.clone()));
-            Ok(())
+
+            result
         }
         .map_err(move |error: Error| log::error!("Can't break agreement. Error: {}", error));
 

@@ -139,6 +139,7 @@ impl ProviderAgent {
 
         // Debug subnet to filter foreign nodes.
         if let Some(subnet) = config.subnet.clone() {
+            log::info!("Using subnet: {}", subnet);
             node_info.with_subnet(subnet.clone());
         }
         node_info

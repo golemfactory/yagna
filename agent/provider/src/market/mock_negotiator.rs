@@ -73,7 +73,7 @@ impl Negotiator for LimitAgreementsNegotiator {
         self.active_agreements.remove(agreement_id);
 
         let free_slots = self.max_agreements as usize - self.active_agreements.len();
-        log::info!("Negotiator: {} free slots for agreements.", free_slots);
+        log::info!("Negotiator: {} free slot(s) for agreements.", free_slots);
         Ok(())
     }
 
