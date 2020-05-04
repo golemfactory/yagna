@@ -9,7 +9,8 @@ use diesel::{
     RunQueryDsl,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{DebitNote, EventType, InvoiceStatus, NewDebitNote};
+use std::convert::TryInto;
+use ya_client_model::payment::{DebitNote, DocumentStatus, EventType, NewDebitNote};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -62,7 +63,7 @@ macro_rules! query {
 pub fn update_status(
     debit_note_ids: &Vec<String>,
     owner_id: &NodeId,
-    status: &InvoiceStatus,
+    status: &DocumentStatus,
     conn: &ConnType,
 ) -> DbResult<()> {
     diesel::update(
@@ -181,7 +182,10 @@ impl<'c> DebitNoteDao<'c> {
                 .filter(dsl::owner_id.eq(owner_id))
                 .first(conn)
                 .optional()?;
-            Ok(debit_note.map(Into::into))
+            match debit_note {
+                Some(debit_note) => Ok(Some(debit_note.try_into()?)),
+                None => Ok(None),
+            }
         })
         .await
     }
@@ -189,7 +193,7 @@ impl<'c> DebitNoteDao<'c> {
     pub async fn get_all(&self) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
             let debit_notes: Vec<ReadObj> = query!().load(conn)?;
-            Ok(debit_notes.into_iter().map(Into::into).collect())
+            debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
     }
@@ -200,7 +204,7 @@ impl<'c> DebitNoteDao<'c> {
                 .filter(dsl::owner_id.eq(node_id))
                 .filter(dsl::role.eq(role))
                 .load(conn)?;
-            Ok(debit_notes.into_iter().map(Into::into).collect())
+            debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
     }
@@ -216,7 +220,7 @@ impl<'c> DebitNoteDao<'c> {
     pub async fn mark_received(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::pay_debit_note.find((debit_note_id, owner_id)))
-                .set(dsl::status.eq(InvoiceStatus::Received.to_string()))
+                .set(dsl::status.eq(DocumentStatus::Received.to_string()))
                 .execute(conn)?;
             Ok(())
         })
@@ -232,7 +236,7 @@ impl<'c> DebitNoteDao<'c> {
             update_status(
                 &vec![debit_note_id.clone()],
                 &owner_id,
-                &InvoiceStatus::Accepted,
+                &DocumentStatus::Accepted,
                 conn,
             )?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
@@ -259,7 +263,7 @@ impl<'c> DebitNoteDao<'c> {
             update_status(
                 &vec![debit_note_id.clone()],
                 &owner_id,
-                &InvoiceStatus::Rejected,
+                &DocumentStatus::Rejected,
                 conn,
             )?;
             if let Role::Provider = role {

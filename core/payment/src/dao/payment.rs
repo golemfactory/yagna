@@ -15,7 +15,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{InvoiceStatus, Payment};
+use ya_client_model::payment::{DocumentStatus, Payment};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 use ya_persistence::types::Role;
@@ -118,8 +118,8 @@ impl<'c> PaymentDao<'c> {
             activity::set_amounts_paid(&amounts, &owner_id, conn)?;
 
             // Set 'SETTLED' status for all invoices and debit notes
-            debit_note::update_status(&debit_note_ids, &owner_id, &InvoiceStatus::Settled, conn)?;
-            invoice::update_status(&invoice_ids, &owner_id, &InvoiceStatus::Settled, conn)?;
+            debit_note::update_status(&debit_note_ids, &owner_id, &DocumentStatus::Settled, conn)?;
+            invoice::update_status(&invoice_ids, &owner_id, &DocumentStatus::Settled, conn)?;
 
             Ok(())
         })

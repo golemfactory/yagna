@@ -1,6 +1,7 @@
-use crate::error::{DbResult, Error, ExternalServiceError};
+use crate::error::{DbError, DbResult, Error, ExternalServiceError};
 use actix_web::HttpResponse;
 use futures::{Future, FutureExt};
+use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -223,4 +224,17 @@ pub mod response {
     pub fn bad_request(e: &impl ToString) -> HttpResponse {
         HttpResponse::BadRequest().json(ErrorMessage::new(e.to_string()))
     }
+}
+
+// These JSON methods exist for the sole purpose of converting error type. It cannot be done by
+// implementing From<> because serde_json has a single error type for serialization and deserialization.
+
+pub fn json_to_string<T: Serialize>(t: &T) -> DbResult<String> {
+    serde_json::to_string(t)
+        .map_err(|e| DbError::Query(format!("JSON serialization failed: {}", e)))
+}
+
+pub fn json_from_str<'a, T: Deserialize<'a>>(s: &'a str) -> DbResult<T> {
+    serde_json::from_str(s)
+        .map_err(|e| DbError::Integrity(format!("JSON deserialization failed: {}", e)))
 }

@@ -9,7 +9,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{EventType, Invoice, InvoiceStatus, NewInvoice};
+use ya_client_model::payment::{DocumentStatus, EventType, Invoice, NewInvoice};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -54,7 +54,7 @@ macro_rules! query {
 pub fn update_status(
     invoice_ids: &Vec<String>,
     owner_id: &NodeId,
-    status: &InvoiceStatus,
+    status: &DocumentStatus,
     conn: &ConnType,
 ) -> DbResult<()> {
     diesel::update(
@@ -130,7 +130,7 @@ impl<'c> InvoiceDao<'c> {
                         .filter(activity_dsl::invoice_id.eq(invoice_id))
                         .filter(activity_dsl::owner_id.eq(owner_id))
                         .load(conn)?;
-                    Ok(Some(invoice.into_api_model(activity_ids)))
+                    Ok(Some(invoice.into_api_model(activity_ids)?))
                 }
                 None => Ok(None),
             }
@@ -149,7 +149,7 @@ impl<'c> InvoiceDao<'c> {
                 .filter(dsl::owner_id.eq(owner_id))
                 .load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity.load(conn)?;
-            Ok(join_invoices_with_activities(invoices, activities))
+            join_invoices_with_activities(invoices, activities)
         })
         .await
     }
@@ -170,7 +170,7 @@ impl<'c> InvoiceDao<'c> {
                 .filter(dsl::role.eq(role))
                 .select(crate::schema::pay_invoice_x_activity::all_columns)
                 .load(conn)?;
-            Ok(join_invoices_with_activities(invoices, activities))
+            join_invoices_with_activities(invoices, activities)
         })
         .await
     }
@@ -185,7 +185,12 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            update_status(&vec![invoice_id], &owner_id, &InvoiceStatus::Received, conn)?;
+            update_status(
+                &vec![invoice_id],
+                &owner_id,
+                &DocumentStatus::Received,
+                conn,
+            )?;
             Ok(())
         })
         .await
@@ -193,7 +198,7 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn mark_failed(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            update_status(&vec![invoice_id], &owner_id, &InvoiceStatus::Failed, conn)?;
+            update_status(&vec![invoice_id], &owner_id, &DocumentStatus::Failed, conn)?;
             Ok(())
         })
         .await
@@ -208,7 +213,7 @@ impl<'c> InvoiceDao<'c> {
             update_status(
                 &vec![invoice_id.clone()],
                 &owner_id,
-                &InvoiceStatus::Accepted,
+                &DocumentStatus::Accepted,
                 conn,
             )?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
@@ -229,7 +234,7 @@ impl<'c> InvoiceDao<'c> {
             update_status(
                 &vec![invoice_id.clone()],
                 &owner_id,
-                &InvoiceStatus::Accepted,
+                &DocumentStatus::Accepted,
                 conn,
             )?;
             if let Role::Provider = role {
@@ -260,7 +265,7 @@ impl<'c> InvoiceDao<'c> {
 fn join_invoices_with_activities(
     invoices: Vec<ReadObj>,
     activities: Vec<InvoiceXActivity>,
-) -> Vec<Invoice> {
+) -> DbResult<Vec<Invoice>> {
     let mut activities_map = activities
         .into_iter()
         .fold(HashMap::new(), |mut map, activity| {

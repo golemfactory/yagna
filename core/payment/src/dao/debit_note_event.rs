@@ -5,6 +5,7 @@ use crate::schema::pay_event_type::dsl as event_type_dsl;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
+use std::convert::TryInto;
 use ya_client_model::payment::{DebitNoteEvent, EventType};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::{
@@ -19,7 +20,7 @@ pub fn create<T: Serialize>(
     details: Option<T>,
     conn: &ConnType,
 ) -> DbResult<()> {
-    let event = WriteObj::new(debit_note_id, owner_id, event_type, details);
+    let event = WriteObj::new(debit_note_id, owner_id, event_type, details)?;
     diesel::insert_into(dsl::pay_debit_note_event)
         .values(event)
         .execute(conn)?;
@@ -44,7 +45,7 @@ impl<'c> DebitNoteEventDao<'c> {
         event_type: EventType,
         details: Option<T>,
     ) -> DbResult<()> {
-        let event = WriteObj::new(debit_note_id, owner_id, event_type, details);
+        let event = WriteObj::new(debit_note_id, owner_id, event_type, details)?;
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::pay_debit_note_event)
                 .values(event)
@@ -71,7 +72,7 @@ impl<'c> DebitNoteEventDao<'c> {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,
             };
-            Ok(events.into_iter().map(Into::into).collect())
+            events.into_iter().map(TryInto::try_into).collect()
         })
         .await
     }

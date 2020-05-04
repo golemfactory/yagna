@@ -138,7 +138,7 @@ async fn send_debit_note(
         Err(e) => return response::server_error(&e),
     };
 
-    if debit_note.status != InvoiceStatus::Issued {
+    if debit_note.status != DocumentStatus::Issued {
         return response::ok(Null); // Debit note has been already sent
     }
 
@@ -297,7 +297,7 @@ async fn send_invoice(
         Err(e) => return response::server_error(&e),
     };
 
-    if invoice.status != InvoiceStatus::Issued {
+    if invoice.status != DocumentStatus::Issued {
         return response::ok(Null); // Invoice has been already sent
     }
 

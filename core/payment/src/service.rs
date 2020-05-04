@@ -208,9 +208,9 @@ mod public {
         }
 
         match debit_note.status {
-            InvoiceStatus::Accepted => return Ok(Ack {}),
-            InvoiceStatus::Settled => return Ok(Ack {}),
-            InvoiceStatus::Cancelled => {
+            DocumentStatus::Accepted => return Ok(Ack {}),
+            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled debit note".to_owned(),
                 ))
@@ -355,9 +355,9 @@ mod public {
         }
 
         match invoice.status {
-            InvoiceStatus::Accepted => return Ok(Ack {}),
-            InvoiceStatus::Settled => return Ok(Ack {}),
-            InvoiceStatus::Cancelled => {
+            DocumentStatus::Accepted => return Ok(Ack {}),
+            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled invoice".to_owned(),
                 ))

@@ -16,7 +16,7 @@ use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{
-    DebitNote, Invoice, InvoiceStatus, NewDebitNote, NewInvoice, Payment,
+    DebitNote, DocumentStatus, Invoice, NewDebitNote, NewInvoice, Payment,
 };
 use ya_client::payment::PaymentProviderApi;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
@@ -591,20 +591,20 @@ impl Handler<CheckInvoiceAcceptance> for Payments {
                 match result {
                     Ok(invoice) => {
                         match invoice.status {
-                            InvoiceStatus::Accepted => {
+                            DocumentStatus::Accepted => {
                                 log::info!("Invoice [{}] accepted by requestor.", &msg.invoice_id);
 
                                 // Wait for payment to be settled.
                                 myself.invoices_to_pay.push(invoice);
                                 return Ok(());
                             }
-                            InvoiceStatus::Rejected => {
+                            DocumentStatus::Rejected => {
                                 log::warn!("Invoice [{}] rejected by requestor.", &msg.invoice_id);
                                 //TODO: Send signal to other provider's modules to react to this situation.
                                 //      Probably we don't want to cooperate with this Requestor anymore.
                                 return Ok(());
                             }
-                            //TODO: What means InvoiceStatus::Failed? How should we handle it?
+                            //TODO: What means DocumentStatus::Failed? How should we handle it?
                             _ => (),
                         }
                     }
