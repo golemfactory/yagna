@@ -223,26 +223,18 @@ impl ConstraintKey {
 }
 
 #[macro_export]
-macro_rules! constraints_and [
-    ( $($key:tt $( $op:tt $val:tt )? ),* ) => {{
-        Constraints::new_clause::<ConstraintExpr>(ClauseOperator::And, vec![
-            $({
-                let c = ConstraintKey::new($key);
-                let mut e: Option<ConstraintExpr> = Option::None;
-                $(
-                    let val = ConstraintValue::new($val);
-                    let c2 = c.clone();
-                    e = Some(match stringify!($op) {
-                        ">" => c2.greater_than(val),
-                        "<" => c2.less_than(val),
-                        "=" => c2.equal_to(val),
-                        "!=" => c2.not_equal_to(val),
-                        e => panic!("expected >, <, =, !=, got {}", e)
-                    });
-                )?
-                e.unwrap_or(c.into())
-            },
-            )*
-        ])
-    }};
+macro_rules! constraints [
+    () => {};
+    ($key:tt == $value:expr $(,)*) => {{ Constraints::new_single(ConstraintKey::new($key).equal_to(ConstraintKey::new($value))) }};
+    ($key:tt == $value:expr , $($r:tt)*) => {{ Constraints::new_single(ConstraintKey::new($key).equal_to(ConstraintKey::new($value))).and(constraints!( $($r)* )) }};
+    ($key:tt != $value:expr $(,)*) => {{ Constraints::new_single(ConstraintKey::new($key).not_equal_to(ConstraintKey::new($value))) }};
+    ($key:tt != $value:expr , $($r:tt)*) => {{ Constraints::new_single(ConstraintKey::new($key).not_equal_to(ConstraintKey::new($value))).and(constraints!( $($r)* )) }};
+    ($key:tt < $value:expr $(,)*) => {{ Constraints::new_single(ConstraintKey::new($key).less_than(ConstraintKey::new($value))) }};
+    ($key:tt < $value:expr , $($r:tt)*) => {{ Constraints::new_single(ConstraintKey::new($key).less_than(ConstraintKey::new($value))).and(constraints!( $($r)* )) }};
+    ($key:tt > $value:expr $(,)*) => {{ Constraints::new_single(ConstraintKey::new($key).greater_than(ConstraintKey::new($value))) }};
+    ($key:tt > $value:expr , $($r:tt)*) => {{ Constraints::new_single(ConstraintKey::new($key).greater_than(ConstraintKey::new($value))).and(constraints!( $($r)* )) }};
+    ($t:expr $(,)*) => { $t };
+    ($t:expr , $($r:tt)*) => {
+        $t.and(constraints!( $($r)* ))
+    };
 ];
