@@ -8,9 +8,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ya_client::activity::ActivityProviderApi;
+use ya_client::model::activity::ProviderEvent;
+use ya_client::model::market::Agreement;
 use ya_core_model::activity;
-use ya_model::activity::ProviderEvent;
-use ya_model::market::Agreement;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::forward_actix_handler;

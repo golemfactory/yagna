@@ -1,8 +1,8 @@
 use serde_json;
 use std::{thread, time::Duration};
 
+use ya_client::model::market::{AgreementProposal, Demand, RequestorEvent};
 use ya_client::{market::MarketRequestorApi, web::WebClient, Error, Result};
-use ya_model::market::{AgreementProposal, Demand, RequestorEvent};
 
 async fn query_events(
     client: &MarketRequestorApi,

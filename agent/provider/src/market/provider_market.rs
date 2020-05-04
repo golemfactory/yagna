@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ya_client::market::MarketProviderApi;
-use ya_model::market::{Agreement, Offer, Proposal, ProviderEvent};
+use ya_client::model::market::{Agreement, Offer, Proposal, ProviderEvent};
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
