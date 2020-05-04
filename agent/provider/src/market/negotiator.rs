@@ -1,8 +1,11 @@
-use ya_agent_offer_model::OfferDefinition;
-use ya_client::model::market::{Agreement, Offer, Proposal};
+use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::OfferDefinition;
+use ya_client_model::market::{Offer, Proposal};
 
 use anyhow::Result;
 use derive_more::Display;
+
+use crate::task_state::BreakReason;
 
 /// Response for requestor proposals.
 #[derive(Debug, Display)]
@@ -26,10 +29,25 @@ pub enum AgreementResponse {
     RejectAgreement,
 }
 
-pub trait Negotiator: std::fmt::Debug {
+/// Result of agreement execution.
+pub enum AgreementResult {
+    /// Failed to approve agreement.
+    ApprovalFailed,
+    /// Agreement was finished with success.
+    Closed,
+    /// Agreement was broken by us.
+    Broken { reason: BreakReason },
+}
+
+pub trait Negotiator {
     /// Negotiator can modify offer, that was generated for him. He can save
     /// information about this offer, that are necessary for negotiations.
     fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<Offer>;
+
+    /// Agreement notifications. Negotiator can adjust his strategy based on it.
+    fn agreement_finalized(&mut self, agreement_id: &str, result: AgreementResult) -> Result<()>;
+
+    /// Reactions to events from market. These function make market decisions.
     fn react_to_proposal(&mut self, offer: &Offer, demand: &Proposal) -> Result<ProposalResponse>;
-    fn react_to_agreement(&mut self, agreement: &Agreement) -> Result<AgreementResponse>;
+    fn react_to_agreement(&mut self, agreement: &AgreementView) -> Result<AgreementResponse>;
 }

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use path_clean::PathClean;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use thiserror::Error;
 
 use super::exeunit_instance::ExeUnitInstance;
 use serde_json::Value;
-use ya_agent_offer_model::OfferBuilder;
+use ya_agreement_utils::OfferBuilder;
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -301,14 +301,20 @@ fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> 
     };
     let file_name = match file_name.to_str() {
         Some(f) => f,
-        None => anyhow::bail!("not utf-8 filename"),
+        None => anyhow::bail!("Not utf-8 filename: {:?}", file_name),
     };
 
     if let Some(pos) = file_name.find("*") {
         let (prefix, suffix) = file_name.split_at(pos);
         let suffix = &suffix[1..];
 
-        Ok(read_dir(base_dir)?
+        Ok(read_dir(base_dir)
+            .with_context(|| {
+                format!(
+                    "Looking for ExeUnit descriptors in dir: {}",
+                    base_dir.display()
+                )
+            })?
             .filter_map(|ent| {
                 let ent = ent.ok()?;
                 let os_file_name = ent.file_name();
