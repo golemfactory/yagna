@@ -293,7 +293,12 @@ impl TaskRunner {
 
             // If it was brutal termination than ExeUnit probably didn't set state.
             // We must do it instead of him. Repeat until it will succeed.
-            set_activity_terminated(api, &activity_id, state_retry_interval).await;
+            match &status {
+                ExeUnitExitStatus::Aborted { .. } | ExeUnitExitStatus::Error { .. } => {
+                    set_activity_terminated(api, &activity_id, state_retry_interval).await;
+                }
+                _ => (),
+            }
 
             let msg = ExeUnitProcessFinished {
                 activity_id,
