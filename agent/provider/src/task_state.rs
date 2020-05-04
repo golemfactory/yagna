@@ -69,7 +69,7 @@ impl TaskState {
 
     pub fn allowed_transition(&self, new_state: &AgreementState) -> Result<(), StateError> {
         let is_allowed = match self.state {
-            Transition(_, Some(AgreementState::Broken {..})) => false,
+            Transition(_, Some(AgreementState::Broken { .. })) => false,
             // TODO: Consider what to do when payment wasn't accepted.
             Transition(_, Some(AgreementState::Closed)) => false,
             Transition(AgreementState::New, None) => match new_state {
@@ -122,7 +122,7 @@ impl TaskState {
                 agreement_id: self.agreement_id.to_string(),
                 current_state: self.state.clone(),
                 new_state,
-            })
+            });
         }
     }
 }
