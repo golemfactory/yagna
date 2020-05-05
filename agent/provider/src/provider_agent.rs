@@ -2,84 +2,77 @@ use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, bail};
 use std::convert::TryFrom;
-use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
+use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
 use ya_client::cli::ProviderApi;
-use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
+use ya_utils_actix::actix_handler::send_message;
 
-use crate::execution::{
-    ActivityCreated, ActivityDestroyed, ExeUnitDesc, GetExeUnit, TaskRunner, UpdateActivity,
-};
+use crate::execution::{ExeUnitDesc, GetExeUnit, TaskRunner, UpdateActivity};
 use crate::market::{
-    provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
+    provider_market::{OnShutdown, UpdateMarket},
     CreateOffer, Preset, Presets, ProviderMarket,
 };
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
 use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
+use crate::task_manager::{InitializeTaskManager, TaskManager};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
-    payments: Addr<Payments>,
+    task_manager: Addr<TaskManager>,
     node_info: NodeInfo,
 }
 
 impl ProviderAgent {
-    pub async fn new(run_args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let api = ProviderApi::try_from(&run_args.api)?;
-        let market = ProviderMarket::new(api.market, "AcceptAll").start();
+    pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+        let api = ProviderApi::try_from(&args.api)?;
+
         let registry = config.registry()?;
         registry.validate()?;
 
-        let runner = TaskRunner::new(api.activity.clone(), registry)?.start();
-        let payments =
-            Payments::new(api.activity, api.payment, &run_args.node.credit_address).start();
+        let market = ProviderMarket::new(api.market, "LimitAgreements").start();
+        let runner =
+            TaskRunner::new(api.activity.clone(), args.runner_config.clone(), registry)?.start();
+        let payments = Payments::new(api.activity, api.payment, &args.node.credit_address).start();
+        let task_manager =
+            TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
 
-        let node_info = ProviderAgent::create_node_info(&run_args.node).await;
+        let node_info = ProviderAgent::create_node_info(&args.node).await;
 
         let mut provider = ProviderAgent {
             market,
             runner,
-            payments,
+            task_manager,
             node_info,
         };
-        provider.initialize(run_args.presets).await?;
+        provider.initialize(args, config).await?;
 
         Ok(provider)
     }
 
-    pub async fn initialize(&mut self, presets: Vec<String>) -> anyhow::Result<()> {
-        // Forward AgreementApproved event to TaskRunner actor.
-        let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
-        self.market.send(msg).await??;
-
-        let msg = Subscribe::<AgreementApproved>(self.payments.clone().recipient());
-        self.market.send(msg).await??;
-
-        //
-        let msg = Subscribe::<ActivityCreated>(self.payments.clone().recipient());
-        self.runner.send(msg).await??;
-
-        let msg = Subscribe::<ActivityDestroyed>(self.payments.clone().recipient());
-        self.runner.send(msg).await??;
-
-        Ok(self.create_offers(presets).await?)
+    pub async fn initialize(
+        &mut self,
+        args: RunConfig,
+        config: ProviderConfig,
+    ) -> anyhow::Result<()> {
+        self.task_manager.send(InitializeTaskManager {}).await??;
+        Ok(self.create_offers(args.presets, config).await?)
     }
 
-    async fn create_offers(&mut self, presets_names: Vec<String>) -> anyhow::Result<()> {
+    async fn create_offers(
+        &self,
+        presets_names: Vec<String>,
+        config: ProviderConfig,
+    ) -> anyhow::Result<()> {
         log::debug!("Presets names: {:?}", presets_names);
 
         if presets_names.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
         }
 
-        // TODO: Hardcoded presets file path.
-        let presets =
-            Presets::from_file(&PathBuf::from("presets.json"))?.list_matching(&presets_names)?;
-
+        let presets = Presets::from_file(&config.presets_file)?.list_matching(&presets_names)?;
         for preset in presets.into_iter() {
             let com_info = match preset.pricing_model.as_str() {
                 "linear" => LinearPricingOffer::from_preset(&preset)?
@@ -104,14 +97,8 @@ impl ProviderAgent {
                 )
             })?;
 
-            // If user set subnet name, we should add constraint for filtering
-            // nodes that didn't set the same nam in properties.
-            let constraints = match self.node_info.subnet.clone() {
-                Some(subnet) => format!("(golem.node.debug.subnet={})", subnet),
-                None => "()".to_string(),
-            };
-
             // Create simple offer on market.
+            let constraints = self.build_constraints()?;
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
@@ -126,6 +113,21 @@ impl ProviderAgent {
         Ok(())
     }
 
+    fn build_constraints(&self) -> anyhow::Result<String> {
+        // Provider requires expiration property from Requestor.
+
+        // If user set subnet name, we should add constraint for filtering
+        // nodes that didn't set the same name in properties.
+        // TODO: Write better constraints building.
+        match self.node_info.subnet.clone() {
+            Some(subnet) => Ok(format!(
+                "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration>0))",
+                subnet,
+            )),
+            None => Ok(format!("(golem.srv.comp.expiration>0)")),
+        }
+    }
+
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
         send_message(self.runner.clone(), UpdateActivity);
         send_message(self.market.clone(), UpdateMarket);
@@ -137,6 +139,7 @@ impl ProviderAgent {
 
         // Debug subnet to filter foreign nodes.
         if let Some(subnet) = config.subnet.clone() {
+            log::info!("Using subnet: {}", subnet);
             node_info.with_subnet(subnet.clone());
         }
         node_info
