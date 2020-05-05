@@ -5,6 +5,7 @@ use ya_utils_constraints::{
 };
 
 fn main() {
+    /* without macro */
     let constraints_1 = Constraints::new_clause(
         And,
         vec![
@@ -43,6 +44,13 @@ fn main() {
         println!("-> {}", expr)
     }
 
+    let test_get = constraints!["a.b.c" > 3, "hello.world" == 10, "a.b.c" < 10];
+    println!(
+        "Get constraints filtered by key: {}",
+        test_get.filter_by_key("a.b.c").unwrap()
+    );
+
+    /* with macro */
     let c = constraints![
         "golem.inf.mem.gib.macro" == 1,
         "only.key",

@@ -1,11 +1,10 @@
 use serde::export::Formatter;
 use std::fmt;
-use std::ops::{Index, IndexMut};
 
 #[derive(Clone)]
 pub struct Constraints {
-    constraints: Vec<ConstraintExpr>,
-    operator: ClauseOperator,
+    pub constraints: Vec<ConstraintExpr>,
+    pub operator: ClauseOperator,
 }
 
 impl Constraints {
@@ -51,6 +50,23 @@ impl Constraints {
             operator: op,
         }
     }
+    pub fn filter_by_key<T: Into<ConstraintKey>>(&self, get_key: T) -> Option<Constraints> {
+        let k = get_key.into();
+        let v: Vec<_> = self
+            .constraints
+            .iter()
+            .cloned()
+            .filter(|e| match e {
+                ConstraintExpr::KeyValue { key, .. } => *key == k,
+                ConstraintExpr::Constraints(_) => false,
+            })
+            .collect();
+        match v.len() {
+            0 => None,
+            1 => Some(Self::new_single(v[0].clone())),
+            _ => Some(Self::new_clause(self.operator, v)),
+        }
+    }
 }
 
 impl fmt::Display for Constraints {
@@ -94,19 +110,6 @@ impl fmt::Display for ClauseOperator {
                 ClauseOperator::Or => "|",
             }
         )
-    }
-}
-
-impl Index<&str> for Constraints {
-    type Output = ();
-    fn index(&self, _index: &str) -> &Self::Output {
-        unimplemented!()
-    }
-}
-
-impl IndexMut<&str> for Constraints {
-    fn index_mut(&mut self, _index: &str) -> &mut Self::Output {
-        unimplemented!()
     }
 }
 
