@@ -6,6 +6,7 @@ members = [
     "core/gftp",
     "core/identity",
     "core/market",
+    "core/market-decentralized",
     "core/model",
     "core/net",
     "core/payment",
