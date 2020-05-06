@@ -8,7 +8,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client= { version = "0.1", features = ["cli"] }
+ya-client = { version = "0.2", features = ["cli"] }
 ya-model = "0.1"
 
 actix-rt = "1.0"

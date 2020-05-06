@@ -46,8 +46,9 @@ mod local {
         _caller: String,
         init: Init,
     ) -> Result<(), GenericError> {
+        let addr = init.identity.to_string();
         pp.init(
-            hex::encode(&init.identity.into_array()),
+            addr,
             init.requestor,
             init.provider,
         )
@@ -67,12 +68,10 @@ mod local {
                 .as_dao::<dao::DebitNoteDao>()
                 .status_report(req.identity())
                 .await?;
-            log::info!("!!!! s2");
             let (incoming2, outgoing2) = db
                 .as_dao::<dao::InvoiceDao>()
                 .status_report(req.identity())
                 .await?;
-            log::info!("!!!! s3");
             Ok((incoming1 + incoming2, outgoing1 + outgoing2))
         }
         .map_err(|e: DbError| GenericError::new(e));
