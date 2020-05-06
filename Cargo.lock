@@ -2205,6 +2205,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "market-decentralized"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "futures 0.3.4",
+ "log 0.4.8",
+ "thiserror",
+ "tokio 0.2.20",
+ "ya-client",
+ "ya-core-model",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

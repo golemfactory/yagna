@@ -1,0 +1,21 @@
+[package]
+name = "market-decentralized"
+version = "0.1.0"
+authors = ["nieznanysprawiciel <nieznany.sprawiciel@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ya-client = "0.3"
+ya-core-model = { version = "0.1", features = ["market"] }
+ya-service-api = "0.1"
+ya-service-bus = "0.2"
+ya-service-api-interfaces = "0.1"
+
+actix-web = "2.0"
+futures = "0.3"
+log = "0.4"
+thiserror = "1.0"
+tokio = { version = "0.2", features = ["time"] }
+
