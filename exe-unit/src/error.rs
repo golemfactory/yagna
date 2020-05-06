@@ -1,12 +1,12 @@
-use crate::agreement;
-use crate::metrics::error::MetricError;
-use crate::state::StateError;
-use thiserror::Error;
+use ya_agreement_utils::agreement;
 use ya_core_model::activity::RpcMessageError as RpcError;
-use ya_model::activity::ExeScriptCommand;
 pub use ya_transfer::error::Error as TransferError;
 
-#[derive(Error, Debug)]
+use crate::message::ExecCmdResult;
+use crate::metrics::error::MetricError;
+use crate::state::StateError;
+
+#[derive(thiserror::Error, Debug)]
 pub enum LocalServiceError {
     #[error("State error: {0}")]
     StateError(#[from] StateError),
@@ -16,20 +16,14 @@ pub enum LocalServiceError {
     TransferError(#[from] TransferError),
 }
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum SignalError {
     #[error("Unsupported signal: {0}")]
     Unsupported(i32),
 }
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ChannelError {
-    #[error("Receive error: {0}")]
-    ReceiveError(#[from] crossbeam_channel::RecvError),
-    #[error("Receive error: {0}")]
-    TryReceiveError(#[from] crossbeam_channel::TryRecvError),
-    #[error("Receive timeout error: {0}")]
-    ReceiveTimeoutError(#[from] crossbeam_channel::RecvTimeoutError),
     #[error("Send error: {0}")]
     SendError(String),
     #[error("Send error: {0}")]
@@ -38,25 +32,7 @@ pub enum ChannelError {
     SendTimeoutError(String),
 }
 
-impl<T> From<crossbeam_channel::SendError<T>> for ChannelError {
-    fn from(err: crossbeam_channel::SendError<T>) -> Self {
-        ChannelError::SendError(err.to_string())
-    }
-}
-
-impl<T> From<crossbeam_channel::TrySendError<T>> for ChannelError {
-    fn from(err: crossbeam_channel::TrySendError<T>) -> Self {
-        ChannelError::TrySendError(err.to_string())
-    }
-}
-
-impl<T> From<crossbeam_channel::SendTimeoutError<T>> for ChannelError {
-    fn from(err: crossbeam_channel::SendTimeoutError<T>) -> Self {
-        ChannelError::SendTimeoutError(err.to_string())
-    }
-}
-
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Signal error: {0}")]
     SignalError(#[from] SignalError),
@@ -70,8 +46,8 @@ pub enum Error {
     JsonError(#[from] serde_json::Error),
     #[error("Gsb error: {0}")]
     GsbError(String),
-    #[error("{0}")]
-    CommandError(String),
+    #[error("Exe script command error: {0:?}")]
+    CommandError(ExecCmdResult),
     #[error("Local service error: {0}")]
     LocalServiceError(#[from] LocalServiceError),
     #[error("Remote service error: {0}")]
@@ -90,14 +66,6 @@ impl Error {
         LocalServiceError: From<E>,
     {
         Error::from(LocalServiceError::from(err))
-    }
-
-    pub fn command(cmd: &ExeScriptCommand, stderr: Option<String>) -> Self {
-        Error::CommandError(format!(
-            "{:?} command error: {}",
-            cmd,
-            stderr.unwrap_or("<no stderr output>".to_owned())
-        ))
     }
 }
 
@@ -136,7 +104,7 @@ impl From<Error> for RpcError {
             Error::LocalServiceError(e) => RpcError::Activity(e.to_string()),
             Error::RuntimeError(e) => RpcError::Activity(e),
             Error::AgreementError(e) => RpcError::Service(e.to_string()),
-            Error::CommandError(e) => RpcError::Service(e),
+            Error::CommandError(_) => RpcError::Service(e.to_string()),
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),

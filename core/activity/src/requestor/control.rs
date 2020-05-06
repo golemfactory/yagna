@@ -1,8 +1,8 @@
 use actix_web::{web, Responder};
 use serde::Deserialize;
 
+use ya_client_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_core_model::activity;
-use ya_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -11,6 +11,7 @@ use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
     get_activity_agreement, get_agreement, set_persisted_state, PathActivity, QueryTimeout,
+    QueryTimeoutCommandIndex,
 };
 use crate::dao::ActivityDao;
 use crate::error::Error;
@@ -132,7 +133,7 @@ async fn exec(
 async fn get_batch_results(
     db: web::Data<DbExecutor>,
     path: web::Path<PathActivityBatch>,
-    query: web::Query<QueryTimeout>,
+    query: web::Query<QueryTimeoutCommandIndex>,
     id: Identity,
 ) -> impl Responder {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
@@ -141,7 +142,8 @@ async fn get_batch_results(
     let msg = activity::GetExecBatchResults {
         activity_id: path.activity_id.to_string(),
         batch_id: path.batch_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
+        command_index: query.command_index,
     };
 
     let results = agreement

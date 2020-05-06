@@ -18,13 +18,26 @@ impl Default for FileTransferProvider {
     }
 }
 
+#[cfg(windows)]
+fn extract_file_url(url: &Url) -> String {
+    // On Windows, Rust implementation of Url::parse() adds a third '/' after the 'file://' indicator,
+    // thus making .path() method unusable for the purposes of file creation (because File::create() will not accept that),
+    // and therefore - Url hardly usable for carrying absolute file paths...
+    url.as_str().to_owned().replace("file:///", "")
+}
+
+#[cfg(not(windows))]
+fn extract_file_url(url: &Url) -> String {
+    url.path().to_owned()
+}
+
 impl TransferProvider<TransferData, Error> for FileTransferProvider {
     fn schemes(&self) -> Vec<&'static str> {
         vec!["file"]
     }
 
     fn source(&self, url: &Url) -> TransferStream<TransferData, Error> {
-        let url = url.path().to_owned();
+        let url = extract_file_url(url);
 
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
@@ -51,7 +64,9 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     }
 
     fn destination(&self, url: &Url) -> TransferSink<TransferData, Error> {
-        let url = url.path().to_owned();
+        let url = extract_file_url(url);
+
+        log::info!("destination url: {}", url);
 
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 

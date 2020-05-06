@@ -27,8 +27,8 @@ use data_dir::DataDir;
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
-#[structopt(setting = clap::AppSettings::ColoredHelp)]
-#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(global_setting = clap::AppSettings::ColoredHelp)]
+#[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
     /// Daemon data dir
     #[structopt(
@@ -70,7 +70,7 @@ struct CliArgs {
     interactive: bool,
 
     /// Log verbosity level
-    #[structopt(long, default_value = "debug")]
+    #[structopt(long, default_value = "info")]
     log_level: String,
 
     #[structopt(subcommand)]

@@ -37,9 +37,15 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    pub async fn insert(&self, debit_note: DebitNote) -> DbResult<()> {
+    pub async fn insert(&self, mut debit_note: DebitNote) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            // TODO: Check previous_debit_note_id
+            // TODO: Move previous_debit_note_id assignment to database trigger
+            debit_note.previous_debit_note_id = dsl::pay_debit_note
+                .select(dsl::id)
+                .filter(dsl::agreement_id.eq(&debit_note.agreement_id))
+                .order_by(dsl::timestamp.desc())
+                .first(conn)
+                .optional()?;
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;

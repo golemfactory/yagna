@@ -2,13 +2,13 @@ use crate::error::TransferError;
 use regex::Regex;
 use url::{ParseError, Url};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransferHash {
     pub alg: String,
     pub val: Vec<u8>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransferUrl {
     pub hash: Option<TransferHash>,
     pub url: Url,
@@ -17,6 +17,20 @@ pub struct TransferUrl {
 unsafe impl Send for TransferUrl {}
 
 impl TransferUrl {
+    pub fn file_name(&self) -> &str {
+        let path = self.url.path();
+        match path.rfind("/") {
+            Some(idx) => {
+                if idx + 1 < path.len() - 1 {
+                    &path[idx + 1..]
+                } else {
+                    path
+                }
+            }
+            None => path,
+        }
+    }
+
     pub fn parse(url: &str, fallback_scheme: &str) -> Result<Self, TransferError> {
         let url = url.trim();
         if url.len() == 0 {
@@ -25,7 +39,12 @@ impl TransferUrl {
 
         let (hash, url) = parse_hash(url)?;
         let parsed = match Url::parse(url) {
-            Ok(url) => url,
+            Ok(parsed_url) => match parsed_url.scheme().len() {
+                // now this is dumb... Url::parse() will accept Windows absolute path, taking drive letter for scheme!
+                #[cfg(windows)]
+                1 => Url::parse(&format!("{}:{}", fallback_scheme, url))?,
+                _ => parsed_url,
+            },
             Err(error) => match error {
                 ParseError::RelativeUrlWithoutBase => {
                     Url::parse(&format!("{}:{}", fallback_scheme, url))?
@@ -144,6 +163,7 @@ mod test {
         should_succeed!("/dir");
         should_succeed!("dir/sub/file");
         should_succeed!("/dir/sub/file");
+        should_succeed!("C:/");
 
         should_succeed!("/");
         should_succeed!("file:/");
@@ -158,5 +178,17 @@ mod test {
 
         should_succeed!("http://location.com");
         should_succeed!("http:location.com");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn fallback_to_file_on_windows_path() {
+        assert_eq!(
+            TransferUrl::parse("C:\\Users", "file").unwrap(),
+            TransferUrl {
+                hash: None,
+                url: url::Url::parse("file://C:/Users").unwrap()
+            }
+        );
     }
 }

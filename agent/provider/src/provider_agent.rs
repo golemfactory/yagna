@@ -1,87 +1,131 @@
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
-use std::path::PathBuf;
+use anyhow::{anyhow, bail};
+use std::convert::TryFrom;
 use std::time::Duration;
 
-use ya_agent_offer_model::{InfNodeInfo, NodeInfo, OfferDefinition, ServiceInfo};
-use ya_utils_actix::{actix_handler::send_message, actix_signal::Subscribe};
+use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
+use ya_client::cli::ProviderApi;
+use ya_utils_actix::actix_handler::send_message;
 
-use crate::execution::{
-    ActivityCreated, ActivityDestroyed, InitializeExeUnits, TaskRunner, UpdateActivity,
-};
+use crate::execution::{ExeUnitDesc, GetExeUnit, TaskRunner, UpdateActivity};
 use crate::market::{
-    provider_market::{AgreementApproved, OnShutdown, UpdateMarket},
-    CreateOffer, ProviderMarket,
+    provider_market::{OnShutdown, UpdateMarket},
+    CreateOffer, Preset, Presets, ProviderMarket,
 };
-use crate::payments::Payments;
-use crate::startup_config::StartupConfig;
+use crate::payments::{LinearPricingOffer, Payments};
+use crate::preset_cli::PresetUpdater;
+use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
+use crate::task_manager::{InitializeTaskManager, TaskManager};
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
-    payments: Addr<Payments>,
+    task_manager: Addr<TaskManager>,
     node_info: NodeInfo,
-    service_info: ServiceInfo,
-    exe_unit_path: String,
 }
 
 impl ProviderAgent {
-    pub async fn new(config: StartupConfig) -> anyhow::Result<ProviderAgent> {
-        let market = ProviderMarket::new(config.market_client()?, "AcceptAll").start();
-        let runner = TaskRunner::new(config.activity_client()?).start();
-        let payments = Payments::new(
-            config.activity_client()?,
-            config.payment_client()?,
-            &config.credit_address,
-        )
-        .start();
+    pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+        let api = ProviderApi::try_from(&args.api)?;
 
-        let node_info = ProviderAgent::create_node_info();
-        let service_info = ProviderAgent::create_service_info();
+        let registry = config.registry()?;
+        registry.validate()?;
+
+        let market = ProviderMarket::new(api.market, "LimitAgreements").start();
+        let runner =
+            TaskRunner::new(api.activity.clone(), args.runner_config.clone(), registry)?.start();
+        let payments = Payments::new(api.activity, api.payment, &args.node.credit_address).start();
+        let task_manager =
+            TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
+
+        let node_info = ProviderAgent::create_node_info(&args.node).await;
 
         let mut provider = ProviderAgent {
             market,
             runner,
-            payments,
+            task_manager,
             node_info,
-            service_info,
-            exe_unit_path: config.exe_unit_path,
         };
-        provider.initialize().await?;
+        provider.initialize(args, config).await?;
 
         Ok(provider)
     }
 
-    pub async fn initialize(&mut self) -> anyhow::Result<()> {
-        // Forward AgreementApproved event to TaskRunner actor.
-        let msg = Subscribe::<AgreementApproved>(self.runner.clone().recipient());
-        self.market.send(msg).await??;
+    pub async fn initialize(
+        &mut self,
+        args: RunConfig,
+        config: ProviderConfig,
+    ) -> anyhow::Result<()> {
+        self.task_manager.send(InitializeTaskManager {}).await??;
+        Ok(self.create_offers(args.presets, config).await?)
+    }
 
-        let msg = Subscribe::<AgreementApproved>(self.payments.clone().recipient());
-        self.market.send(msg).await??;
+    async fn create_offers(
+        &self,
+        presets_names: Vec<String>,
+        config: ProviderConfig,
+    ) -> anyhow::Result<()> {
+        log::debug!("Presets names: {:?}", presets_names);
 
-        //
-        let msg = Subscribe::<ActivityCreated>(self.payments.clone().recipient());
-        self.runner.send(msg).await??;
+        if presets_names.is_empty() {
+            return Err(anyhow!("No Presets were selected. Can't create offers."));
+        }
 
-        let msg = Subscribe::<ActivityDestroyed>(self.payments.clone().recipient());
-        self.runner.send(msg).await??;
+        let presets = Presets::from_file(&config.presets_file)?.list_matching(&presets_names)?;
+        for preset in presets.into_iter() {
+            let com_info = match preset.pricing_model.as_str() {
+                "linear" => LinearPricingOffer::from_preset(&preset)?
+                    .interval(6.0)
+                    .build(),
+                _ => {
+                    return Err(anyhow!(
+                        "Unsupported pricing model: {}.",
+                        preset.pricing_model
+                    ))
+                }
+            };
 
-        // Load ExeUnits descriptors from file.
-        let msg = InitializeExeUnits {
-            file: PathBuf::from(&self.exe_unit_path),
-        };
-        self.runner.send(msg).await??;
+            let msg = GetExeUnit {
+                name: preset.exeunit_name.clone(),
+            };
+            let exeunit_desc = self.runner.send(msg).await?.map_err(|error| {
+                anyhow!(
+                    "Failed to create offer for preset [{}]. Error: {}",
+                    preset.name,
+                    error
+                )
+            })?;
 
-        // Create simple offer on market.
-        let create_offer_message = CreateOffer {
-            offer_definition: OfferDefinition {
-                node_info: self.node_info.clone(),
-                service: self.service_info.clone(),
-                com_info: Default::default(),
-            },
-        };
-        Ok(self.market.send(create_offer_message).await??)
+            // Create simple offer on market.
+            let constraints = self.build_constraints()?;
+            let create_offer_message = CreateOffer {
+                preset,
+                offer_definition: OfferDefinition {
+                    node_info: self.node_info.clone(),
+                    service: Self::create_service_info(&exeunit_desc),
+                    com_info,
+                    constraints,
+                },
+            };
+            self.market.send(create_offer_message).await??
+        }
+        Ok(())
+    }
+
+    fn build_constraints(&self) -> anyhow::Result<String> {
+        // Provider requires expiration property from Requestor.
+
+        // If user set subnet name, we should add constraint for filtering
+        // nodes that didn't set the same name in properties.
+        // TODO: Write better constraints building.
+        match self.node_info.subnet.clone() {
+            Some(subnet) => Ok(format!(
+                "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration>0))",
+                subnet,
+            )),
+            None => Ok(format!("(golem.srv.comp.expiration>0)")),
+        }
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
@@ -89,15 +133,22 @@ impl ProviderAgent {
         send_message(self.market.clone(), UpdateMarket);
     }
 
-    fn create_node_info() -> NodeInfo {
-        // TODO: Get node name from intentity API.
-        NodeInfo::with_name("")
+    async fn create_node_info(config: &NodeConfig) -> NodeInfo {
+        // TODO: Get node name from identity API.
+        let mut node_info = NodeInfo::with_name(&config.node_name);
+
+        // Debug subnet to filter foreign nodes.
+        if let Some(subnet) = config.subnet.clone() {
+            log::info!("Using subnet: {}", subnet);
+            node_info.with_subnet(subnet.clone());
+        }
+        node_info
     }
 
-    fn create_service_info() -> ServiceInfo {
+    fn create_service_info(exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
         let inf = InfNodeInfo::new().with_mem(1.0).with_storage(10.0);
-        let wasi_version = "0.0.0".into();
-        ServiceInfo::Wasm { inf, wasi_version }
+
+        ServiceInfo::new(inf, exeunit_desc.build())
     }
 
     pub async fn wait_for_ctrl_c(self) -> anyhow::Result<()> {
@@ -113,6 +164,163 @@ impl ProviderAgent {
         );
 
         market.send(OnShutdown {}).await?
+    }
+
+    pub fn list_exeunits(config: ProviderConfig) -> anyhow::Result<()> {
+        let registry = config.registry()?;
+        if let Err(errors) = registry.validate() {
+            println!("Encountered errors while checking ExeUnits:\n{}", errors);
+        }
+
+        println!("Available ExeUnits:");
+
+        let exeunits = registry.list_exeunits();
+        for exeunit in exeunits.iter() {
+            println!("\n{}", exeunit);
+        }
+        Ok(())
+    }
+
+    pub fn list_presets(config: ProviderConfig) -> anyhow::Result<()> {
+        let presets = Presets::from_file(&config.presets_file)?;
+        println!("Available Presets:");
+
+        for preset in presets.list().iter() {
+            println!("\n{}", preset);
+        }
+        Ok(())
+    }
+
+    pub fn list_metrics(_: ProviderConfig) -> anyhow::Result<()> {
+        let preset = Preset::default();
+        let metrics_names = preset.list_readable_metrics();
+        let metrics = preset.list_usage_metrics();
+
+        for (metric, name) in metrics.iter().zip(metrics_names.iter()) {
+            println!("{:15}{}", name, metric);
+        }
+        Ok(())
+    }
+
+    pub fn create_preset(
+        config: ProviderConfig,
+        params: PresetNoInteractive,
+    ) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
+        let registry = config.registry()?;
+
+        let mut preset = Preset::default();
+        preset.name = params
+            .preset_name
+            .ok_or(anyhow!("Preset name is required."))?;
+        preset.exeunit_name = params.exe_unit.ok_or(anyhow!("ExeUnit is required."))?;
+        preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
+
+        for (name, price) in params.price.iter() {
+            preset.update_price(name, *price)?;
+        }
+
+        // Validate ExeUnit existence and pricing model.
+        registry.find_exeunit(&preset.exeunit_name)?;
+        if !(preset.pricing_model == "linear") {
+            bail!("Not supported pricing model.")
+        }
+
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&config.presets_file)?;
+
+        println!();
+        println!("Preset created:");
+        println!("{}", preset);
+        Ok(())
+    }
+
+    pub fn create_preset_interactive(config: ProviderConfig) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
+        let registry = config.registry()?;
+
+        let exeunits = registry
+            .list_exeunits()
+            .into_iter()
+            .map(|desc| desc.name)
+            .collect();
+        let pricing_models = vec!["linear".to_string()];
+
+        let preset = PresetUpdater::new(Preset::default(), exeunits, pricing_models).interact()?;
+
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&config.presets_file)?;
+
+        println!();
+        println!("Preset created:");
+        println!("{}", preset);
+        Ok(())
+    }
+
+    pub fn remove_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
+
+        presets.remove_preset(&name)?;
+        presets.save_to_file(&config.presets_file)
+    }
+
+    pub fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
+        let registry = config.registry()?;
+
+        let exeunits = registry
+            .list_exeunits()
+            .into_iter()
+            .map(|desc| desc.name)
+            .collect();
+        let pricing_models = vec!["linear".to_string()];
+
+        let preset =
+            PresetUpdater::new(presets.get(&name)?, exeunits, pricing_models).interact()?;
+
+        presets.remove_preset(&name)?;
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&config.presets_file)?;
+
+        println!();
+        println!("Preset updated:");
+        println!("{}", preset);
+        Ok(())
+    }
+
+    pub fn update_preset(
+        config: ProviderConfig,
+        name: String,
+        params: PresetNoInteractive,
+    ) -> anyhow::Result<()> {
+        let mut presets = Presets::from_file(&config.presets_file)?;
+        let registry = config.registry()?;
+
+        let mut preset = presets.get(&name)?;
+
+        // All values are optional. If not set, previous value will remain.
+        preset.name = params.preset_name.unwrap_or(preset.name);
+        preset.exeunit_name = params.exe_unit.unwrap_or(preset.exeunit_name);
+        preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
+
+        for (name, price) in params.price.iter() {
+            preset.update_price(name, *price)?;
+        }
+
+        // Validate ExeUnit existence and pricing model.
+        registry.find_exeunit(&preset.exeunit_name)?;
+        if !(preset.pricing_model == "linear") {
+            bail!("Not supported pricing model.")
+        }
+
+        presets.remove_preset(&name)?;
+        presets.add_preset(preset.clone())?;
+        presets.save_to_file(&config.presets_file)?;
+
+        println!();
+        println!("Preset updated:");
+        println!("{}", preset);
+        Ok(())
     }
 }
 

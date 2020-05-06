@@ -4,7 +4,7 @@
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
 
-use ya_model::activity::{
+use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 use ya_service_bus::RpcMessage;
@@ -112,6 +112,7 @@ pub struct GetExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
     pub timeout: Option<f32>,
+    pub command_index: Option<usize>,
 }
 
 impl RpcMessage for GetExecBatchResults {

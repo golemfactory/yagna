@@ -3,8 +3,8 @@ use crate::Result;
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use ya_model::activity::activity_state::{State, StatePair};
-use ya_model::activity::{
+use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::{
     CommandResult, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 
@@ -17,11 +17,18 @@ pub struct SetTaskPackagePath(pub PathBuf);
 pub struct GetMetrics;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "GetStateResult")]
+#[rtype(result = "GetStateResponse")]
 pub struct GetState;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
-pub struct GetStateResult(pub StatePair);
+pub struct GetStateResponse(pub StatePair);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[rtype(result = "GetBatchResultsResponse")]
+pub struct GetBatchResults(pub String);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
+pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
@@ -104,15 +111,11 @@ pub struct ExecCmdResult {
 }
 
 impl ExecCmdResult {
-    pub fn into_exe_result(self, index: usize) -> ExeScriptCommandResult {
-        let message = match self.result {
-            CommandResult::Ok => self.stdout,
-            CommandResult::Error => self.stderr,
-        };
-        ExeScriptCommandResult {
-            index: index as u32,
-            result: Some(self.result),
-            message,
+    pub fn error(err: impl ToString) -> Self {
+        ExecCmdResult {
+            result: CommandResult::Error,
+            stdout: None,
+            stderr: Some(err.to_string()),
         }
     }
 }

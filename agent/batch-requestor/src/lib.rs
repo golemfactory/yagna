@@ -4,9 +4,11 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::{str::FromStr, time::Duration};
 use url::Url;
 use ya_client::{
-    activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
+    activity::ActivityRequestorControlApi,
+    market::MarketRequestorApi,
+    model::market::{AgreementProposal, Demand, Proposal, RequestorEvent},
+    web::WebClient,
 };
-use ya_model::market::{AgreementProposal, Demand, Proposal, RequestorEvent};
 
 #[derive(Clone)]
 pub enum WasmRuntime {
@@ -169,10 +171,12 @@ impl Actor for TaskSession {
         let activity_url = Url::from_str("http://127.0.0.1:7465/activity-api/v1/").unwrap();
         let market_api: MarketRequestorApi = WebClient::with_token(app_key)
             .unwrap()
-            .interface_at(market_url);
+            .interface_at(market_url)
+            .unwrap();
         let activity_api: ActivityRequestorControlApi = WebClient::with_token(app_key)
             .unwrap()
-            .interface_at(activity_url);
+            .interface_at(activity_url)
+            .unwrap();
 
         let demand: Demand = self.demand.clone().unwrap().into();
         /* TODO 1. download image spec (demand.spec) 2. market api -> subscribe 3. activity_api */

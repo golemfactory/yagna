@@ -1,11 +1,13 @@
 use crate::error::Error;
-use crate::message::GetMetrics;
+use crate::message::{GetBatchResults, GetMetrics};
 use crate::runtime::Runtime;
 use crate::ExeUnit;
 use actix::prelude::*;
 use chrono::Utc;
+use std::time::Duration;
+use tokio::time::timeout;
+use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_core_model::activity::*;
-use ya_model::activity::{ActivityState, ActivityUsage};
 use ya_service_bus::RpcEnvelope;
 
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
@@ -94,15 +96,47 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
-    type Result = <RpcEnvelope<GetExecBatchResults> as Message>::Result;
+    type Result = ActorResponse<Self, Vec<ExeScriptCommandResult>, RpcMessageError>;
 
     fn handle(
         &mut self,
         msg: RpcEnvelope<GetExecBatchResults>,
-        _: &mut Self::Context,
+        ctx: &mut Self::Context,
     ) -> Self::Result {
-        self.ctx.verify_activity_id(&msg.activity_id)?;
+        if let Err(err) = self.ctx.verify_activity_id(&msg.activity_id) {
+            return ActorResponse::reply(Err(err.into()));
+        }
 
-        Ok(self.state.batch_results(&msg.batch_id))
+        let idx = match self.state.batches.get(&msg.batch_id) {
+            Some(exec) => match exec.exe_script.len() {
+                0 => return ActorResponse::reply(Ok(Vec::new())),
+                len => msg.command_index.unwrap_or(len - 1),
+            },
+            None => {
+                let err = RpcMessageError::NotFound(format!("batch_id = {}", msg.batch_id));
+                return ActorResponse::reply(Err(err));
+            }
+        };
+
+        let address = ctx.address();
+        let duration = Duration::from_secs_f32(msg.timeout.unwrap_or(0.));
+        let notifier = self.state.notifier(&msg.batch_id).clone();
+        let fut = async move {
+            if let Err(_) = timeout(duration, notifier.when(move |i| i >= idx)).await {
+                if msg.command_index.is_some() {
+                    return Err(RpcMessageError::Timeout);
+                }
+            }
+
+            match address.send(GetBatchResults(msg.batch_id.clone())).await {
+                Ok(mut results) => {
+                    results.0.truncate(idx + 1);
+                    Ok(results.0)
+                }
+                _ => Ok(Vec::new()),
+            }
+        };
+
+        ActorResponse::r#async(fut.into_actor(self))
     }
 }

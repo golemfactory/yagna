@@ -5,14 +5,14 @@ use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
+use ya_client_model::activity::ActivityState;
 use ya_core_model::activity::local::SetState as SetActivityState;
-use ya_model::activity::ActivityState;
 
 impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
     type Result = <GetState as Message>::Result;
 
     fn handle(&mut self, _: GetState, _: &mut Context<Self>) -> Self::Result {
-        GetStateResult(self.state.inner.clone())
+        GetStateResponse(self.state.inner.clone())
     }
 }
 
@@ -52,6 +52,14 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 }
             }
         }
+    }
+}
+
+impl<R: Runtime> Handler<GetBatchResults> for ExeUnit<R> {
+    type Result = <GetBatchResults as Message>::Result;
+
+    fn handle(&mut self, msg: GetBatchResults, _: &mut Context<Self>) -> Self::Result {
+        GetBatchResultsResponse(self.state.batch_results(&msg.0))
     }
 }
 

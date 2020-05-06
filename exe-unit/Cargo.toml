@@ -12,25 +12,30 @@ path = "src/lib.rs"
 name = "exe-unit"
 path = "src/bin.rs"
 
-[target.'cfg(not(windows))'.dependencies]
-nix = { version = "0.17.0" }
+[target.'cfg(target_family = "unix")'.dependencies]
+nix = "0.17.0"
 
-[target.'cfg(windows)'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = "0.7.8"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libproc = "0.7.1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.8", features = ["jobapi2"] }
 
 [dependencies]
 ya-core-model = { version = "0.1", features = ["activity", "appkey"] }
-ya-model = "0.1"
+ya-client-model = "0.1"
 ya-service-bus = "0.2"
 ya-transfer = "0.1"
+ya-agreement-utils = "0.1"
 
 actix = "0.9"
 anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
-crossbeam-channel = "0.3"
 dotenv = "0.15.0"
-env_logger = "0.7"
 flexi_logger = { version = "0.15", features = ["colors"] }
 futures = "0.3"
 hex = "0.4.2"
@@ -44,15 +49,17 @@ serde_yaml = "0.8.11"
 signal-hook = { version = "0.1.13", features = ["tokio-support"] }
 structopt = "0.3"
 thiserror = "1.0.10"
-tokio = { version = "0.2.11", features = ["process", "signal"] }
+tokio = { version = "0.2.11", features = ["process", "signal", "time"] }
 tokio-util = { version = "0.2", features = ["codec"] }
 url = "2.1.1"
 
 [dev-dependencies]
+ya-sb-router = "0.1"
+
 actix-files = "0.2.1"
 actix-rt = "1.0.0"
 actix-web = "2.0.0"
+env_logger = "0.7"
 rand = "0.7.3"
 sha3 = "0.8.2"
 tempdir = "0.3.7"
-tokio = { version = "0.2.11", features = ["process", "signal", "time"] }

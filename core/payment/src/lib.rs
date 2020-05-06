@@ -23,10 +23,10 @@ pub mod migrations {
     struct _Dummy;
 }
 
-const GETH_ADDRESS: &str = "http://188.165.227.180:55555";
+const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
 const GNT_RINKEBY_CONTRACT: &str = "924442A66cFd812308791872C4B242440c108E19";
 
-const ETH_FAUCET_ADDRESS: &str = "http://188.165.227.180:4000/donate";
+const ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
 const GNT_FAUCET_CONTRACT: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
 
 #[cfg(feature = "dummy-driver")]

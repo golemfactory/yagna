@@ -3,11 +3,11 @@ use futures::TryFutureExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_core_model::activity;
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{
+use ya_client_model::activity::activity_state::StatePair;
+use ya_client_model::activity::{
     ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
 };
+use ya_core_model::activity;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::agreement::Agreement;
@@ -25,6 +25,7 @@ pub mod error;
 mod handlers;
 pub mod message;
 pub mod metrics;
+mod notify;
 pub mod runtime;
 pub mod service;
 pub mod state;
@@ -104,8 +105,34 @@ impl<R: Runtime> ExeUnit<R> {
 #[derive(Clone, Debug)]
 struct ExecCtx {
     batch_id: String,
+    batch_size: usize,
     idx: usize,
     cmd: ExeScriptCommand,
+}
+
+impl ExecCtx {
+    pub fn cmd_result(&self, exec_result: ExecCmdResult) -> ExeScriptCommandResult {
+        let stdout = exec_result
+            .stdout
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stdout: {}", s));
+        let stderr = exec_result
+            .stderr
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stderr: {}", s));
+        let message = match (stdout, stderr) {
+            (None, None) => None,
+            (Some(stdout), None) => Some(stdout),
+            (None, Some(stderr)) => Some(stderr),
+            (Some(stdout), Some(stderr)) => Some(format!("{}\n{}", stdout, stderr)),
+        };
+        ExeScriptCommandResult {
+            index: self.idx as u32,
+            result: exec_result.result,
+            is_batch_finished: self.idx == self.batch_size - 1,
+            message,
+        }
+    }
 }
 
 impl<R: Runtime> ExeUnit<R> {
@@ -115,9 +142,11 @@ impl<R: Runtime> ExeUnit<R> {
         transfers: Addr<TransferService>,
         exec: activity::Exec,
     ) {
+        let batch_size = exec.exe_script.len();
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
                 batch_id: exec.batch_id.clone(),
+                batch_size,
                 idx,
                 cmd,
             };
@@ -130,11 +159,7 @@ impl<R: Runtime> ExeUnit<R> {
             )
             .await
             {
-                let cmd_result = ExeScriptCommandResult {
-                    index: ctx.idx as u32,
-                    result: Some(ya_model::activity::CommandResult::Error),
-                    message: Some(error.to_string()),
-                };
+                let cmd_result = ctx.cmd_result(ExecCmdResult::error(&error));
                 let set_state = SetState::default()
                     .cmd(None)
                     .result(ctx.batch_id, cmd_result);
@@ -200,7 +225,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
         if let CommandResult::Error = exec_result.result {
-            return Err(Error::command(&ctx.cmd, exec_result.stderr.clone()));
+            return Err(Error::CommandError(exec_result));
         }
 
         let sanity_state = addr.send(GetState {}).await?.0;
@@ -212,11 +237,12 @@ impl<R: Runtime> ExeUnit<R> {
             .into());
         }
 
+        let cmd_result = ctx.cmd_result(exec_result);
         addr.send(
             SetState::default()
                 .state(exec_state.1.unwrap().into())
                 .cmd(None)
-                .result(ctx.batch_id, exec_result.into_exe_result(ctx.idx)),
+                .result(ctx.batch_id, cmd_result),
         )
         .await?;
 

@@ -8,7 +8,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Output, Stdio};
 use tokio::process::Command;
-use ya_model::activity::{CommandResult, ExeScriptCommand};
+use ya_client_model::activity::{CommandResult, ExeScriptCommand};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
@@ -104,7 +104,13 @@ impl Handler<ExecCmd> for RuntimeProcess {
             Some(cmd_args) => {
                 let binary = self.binary.clone();
                 let args = self.args(cmd_args);
-                log::info!("Executing {:?} with {:?}", binary, args);
+                let current_path = std::env::current_dir();
+                log::info!(
+                    "Executing {:?} with {:?} from path {:?}",
+                    binary,
+                    args,
+                    current_path
+                );
 
                 let fut = async move {
                     let child = Command::new(binary)
