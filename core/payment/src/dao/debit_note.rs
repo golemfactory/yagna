@@ -11,7 +11,7 @@ use diesel::{
 use std::collections::HashMap;
 use std::convert::TryInto;
 use ya_client_model::payment::{DebitNote, DocumentStatus, EventType, NewDebitNote};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };

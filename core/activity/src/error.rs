@@ -81,8 +81,8 @@ impl From<ya_net::NetApiError> for Error {
     }
 }
 
-impl From<ya_core_model::ethaddr::ParseError> for Error {
-    fn from(err: ya_core_model::ethaddr::ParseError) -> Self {
+impl From<ya_client_model::node_id::ParseError> for Error {
+    fn from(err: ya_client_model::node_id::ParseError) -> Self {
         Error::BadRequest(err.to_string())
     }
 }

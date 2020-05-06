@@ -7,7 +7,6 @@ use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
-use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::public::{SendDebitNote, SendError, SendInvoice, BUS_ID};
 use ya_core_model::payment::RpcMessageError;
 use ya_net::TryRemoteEndpoint;
@@ -144,8 +143,8 @@ async fn send_debit_note(
 
     with_timeout(query.timeout, async move {
         match async move {
-            let recipient_id: NodeId = debit_note.recipient_id.parse().unwrap();
-            recipient_id
+            debit_note
+                .recipient_id
                 .try_service(BUS_ID)?
                 .call(SendDebitNote(debit_note))
                 .await??;
@@ -302,9 +301,9 @@ async fn send_invoice(
     }
 
     with_timeout(query.timeout, async move {
-        let recipient_id: NodeId = invoice.recipient_id.parse().unwrap();
         match async move {
-            recipient_id
+            invoice
+                .recipient_id
                 .try_service(BUS_ID)?
                 .call(SendInvoice(invoice))
                 .await??;

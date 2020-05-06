@@ -5,17 +5,15 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [features]
-default = ['ethaddr', 'with-diesel']
+default = []
 full = ['activity', 'appkey', 'identity', 'market', 'net', 'payment', 'gftp']
-activity = ['ethaddr']
+activity = []
 appkey = []
-ethaddr=[]
 gftp = []
-identity = ['ethaddr']
+identity = []
 market=[]
 net=[]
 payment=['bigdecimal']
-with-diesel=['diesel']
 
 [dependencies]
 ya-client-model = "0.1"
@@ -25,5 +23,4 @@ bigdecimal = { version = "0.1.0", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }
 serde_bytes = "0.11.3"
-diesel = { version = "1.4", optional = true }
 thiserror = "1.0.9"

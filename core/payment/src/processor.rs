@@ -5,7 +5,6 @@ use bigdecimal::BigDecimal;
 use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::payment::{Invoice, Payment};
-use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::TryRemoteEndpoint;
 use ya_payment_driver::{
@@ -43,8 +42,8 @@ impl PaymentProcessor {
 
     async fn process_payment(&self, invoice: Invoice, allocation_id: String) {
         let invoice_id = invoice.invoice_id.clone();
-        let payer_id: NodeId = invoice.recipient_id.parse().unwrap();
-        let payee_id: NodeId = invoice.issuer_id.parse().unwrap();
+        let payer_id = invoice.recipient_id;
+        let payee_id = invoice.issuer_id;
 
         let result: Result<(), Error> = async move {
             // ************************************** BEGIN **************************************
@@ -143,7 +142,7 @@ impl PaymentProcessor {
         let agreement_id = payment.agreement_id.clone();
         let invoice_ids = payment.invoice_ids.clone().unwrap_or_default();
         let debit_note_ids = payment.debit_note_ids.clone().unwrap_or_default();
-        let payee_id: NodeId = payment.payee_id.clone().parse().unwrap();
+        let payee_id = payment.payee_id;
 
         let invoice_dao: InvoiceDao = self.db_executor.as_dao();
         let invoices = invoice_dao.get_many(invoice_ids, payee_id).await?;

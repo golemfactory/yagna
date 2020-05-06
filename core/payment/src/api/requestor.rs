@@ -6,7 +6,6 @@ use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
-use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE,
@@ -115,7 +114,7 @@ async fn accept_debit_note(
     }
 
     with_timeout(query.timeout, async move {
-        let issuer_id: NodeId = debit_note.issuer_id.parse().unwrap();
+        let issuer_id = debit_note.issuer_id;
         let msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
         match async move {
             issuer_id.try_service(PUBLIC_SERVICE)?.call(msg).await??;
@@ -239,7 +238,7 @@ async fn accept_invoice(
     }
 
     with_timeout(query.timeout, async move {
-        let issuer_id: NodeId = invoice.issuer_id.parse().unwrap();
+        let issuer_id = invoice.issuer_id;
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::new(invoice, allocation_id);
         match async move {

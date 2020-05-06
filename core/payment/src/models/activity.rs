@@ -1,5 +1,5 @@
 use crate::schema::pay_activity;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
 #[derive(Debug, Insertable)]

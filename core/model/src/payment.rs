@@ -18,9 +18,9 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
-    use crate::ethaddr::NodeId;
     use bigdecimal::BigDecimal;
     use std::fmt::Display;
+    use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
 
@@ -139,7 +139,7 @@ pub mod local {
 
 pub mod public {
     use super::*;
-    use crate::ethaddr::NodeId;
+    use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/public/payment";
 

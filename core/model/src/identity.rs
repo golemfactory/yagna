@@ -1,6 +1,6 @@
-use crate::ethaddr::NodeId;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
 pub const BUS_ID: &'static str = "/private/identity";

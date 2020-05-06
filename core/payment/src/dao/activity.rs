@@ -5,7 +5,7 @@ use crate::schema::pay_activity::dsl;
 use bigdecimal::{BigDecimal, Zero};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 use ya_persistence::types::{BigDecimalField, Role};
 

@@ -1,5 +1,6 @@
 use structopt::*;
-use ya_core_model::{ethaddr::NodeId, identity as id_api, payment::local as pay};
+use ya_client_model::NodeId;
+use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 

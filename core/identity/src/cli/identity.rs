@@ -5,7 +5,7 @@ use structopt::*;
 
 use ethsign::Protected;
 use std::cmp::Reverse;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_core_model::identity::{self};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::typed as bus;

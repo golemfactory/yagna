@@ -99,7 +99,7 @@ mod public {
     use crate::utils::*;
 
     use ya_client_model::payment::*;
-    use ya_core_model::ethaddr::NodeId;
+    use ya_client_model::NodeId;
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
@@ -146,7 +146,7 @@ mod public {
         };
 
         let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
-        let issuer_id = debit_note.issuer_id.clone();
+        let issuer_id = debit_note.issuer_id.to_string();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
@@ -195,7 +195,7 @@ mod public {
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
 
-        if sender_id != debit_note.recipient_id {
+        if sender_id != debit_note.recipient_id.to_string() {
             return Err(AcceptRejectError::Forbidden);
         }
 
@@ -286,7 +286,7 @@ mod public {
         }
 
         let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
-        let issuer_id = invoice.issuer_id.clone();
+        let issuer_id = invoice.issuer_id.to_string();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
@@ -342,7 +342,7 @@ mod public {
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
 
-        if sender_id != invoice.recipient_id {
+        if sender_id != invoice.recipient_id.to_string() {
             return Err(AcceptRejectError::Forbidden);
         }
 
@@ -397,7 +397,7 @@ mod public {
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
         let payment = msg.0;
-        if sender_id != payment.payer_id {
+        if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
 
