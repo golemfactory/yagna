@@ -7,8 +7,17 @@
 mod market;
 mod matcher;
 mod negotiation;
+mod db;
 
 pub mod protocol;
 pub use market::MarketService;
 
 pub use ya_client::model::market::MARKET_API_PATH;
+
+#[macro_use]
+extern crate diesel;
+
+pub mod migrations {
+    #[derive(diesel_migrations::EmbedMigrations)]
+    struct _Dummy;
+}

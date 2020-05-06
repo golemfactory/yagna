@@ -20,9 +20,13 @@ anyhow = "1.0"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.5"
+diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
+diesel_migrations = "1.4"
 futures = "0.3"
 lazy_static = "1.4"
+libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 log = "0.4"
+r2d2 = "0.8"
 serde = { version = "^1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["time"] }

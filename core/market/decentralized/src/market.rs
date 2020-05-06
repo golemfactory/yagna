@@ -4,17 +4,26 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::matcher::{Matcher, MatcherInitError};
-use crate::negotiation::NegotiationInitError;
+use crate::matcher::{Matcher, MatcherInitError, MatcherError};
+use crate::negotiation::{NegotiationInitError, NegotiationError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
+use crate::migrations;
 
 use ya_core_model::market::BUS_ID;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
+use ya_client::model::market::{Offer, Demand};
+
+
 
 #[derive(Error, Debug)]
-pub enum MarketError {}
+pub enum MarketError {
+    #[error(transparent)]
+    Matcher(#[from] MatcherError),
+    #[error(transparent)]
+    Negotiation(#[from] NegotiationError),
+}
 
 #[derive(Error, Debug)]
 pub enum MarketInitError {
@@ -22,6 +31,8 @@ pub enum MarketInitError {
     Matcher(#[from] MatcherInitError),
     #[error("Failed to initialize negotiation engine. Error: {}.", .0)]
     Negotiation(#[from] NegotiationInitError),
+    #[error("Failed to migrate market database. Error: {}.", .0)]
+    Migration(#[from] anyhow::Error),
 }
 
 /// Structure connecting all market objects.
@@ -71,6 +82,16 @@ impl MarketService {
             }
         };
         actix_web::web::scope(crate::MARKET_API_PATH).data(market)
+    }
+
+    pub async fn subscribe_offer(&self, offer: Offer) -> Result<(), MarketError> {
+        self.provider_negotiation_engine.subscribe_offer(&offer).await?;
+        self.matcher.subscribe_offer(&offer).await?;
+        Ok(())
+    }
+
+    pub async fn subscribe_demand(&self, demand: Demand) -> Result<(), MarketError> {
+        unimplemented!();
     }
 }
 

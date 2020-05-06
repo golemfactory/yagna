@@ -69,23 +69,23 @@ impl Matcher {
         Ok(self.discovery.bind_gsb(prefix).await?)
     }
 
-    async fn add_offer(&self, offer: Offer) {
+    pub async fn add_offer(&self, offer: Offer) {
         unimplemented!();
     }
 
-    async fn subscribe_offer(&self, offer: Offer) {
+    pub async fn subscribe_offer(&self, offer: &Offer) -> Result<(), MatcherError> {
         unimplemented!();
     }
 
-    async fn subscribe_demand(&self, subscription_id: String) {
+    pub async fn subscribe_demand(&self, demand: &Demand) -> Result<(), MatcherError> {
         unimplemented!();
     }
 
-    async fn unsubscribe_offer(&self, offer: Demand) {
+    pub async fn unsubscribe_offer(&self, subscription_id: String) -> Result<(), MatcherError> {
         unimplemented!();
     }
 
-    async fn unsubscribe_demand(&self, subscription_id: String) {
+    pub async fn unsubscribe_demand(&self, subscription_id: String) -> Result<(), MatcherError> {
         unimplemented!();
     }
 }
