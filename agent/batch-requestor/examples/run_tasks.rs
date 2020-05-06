@@ -21,7 +21,7 @@ async fn main() -> Result<(), ()> {
             commands! {
                 deploy;
                 start;
-                run(&["abc", arg]);
+                run("abc", arg);
                 stop;
             }
         }))

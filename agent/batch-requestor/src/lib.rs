@@ -151,14 +151,43 @@ impl From<WasmDemand> for Demand {
 }
 
 #[macro_export]
+macro_rules! expand_cmd {
+    (deploy) => { ya_batch_requestor::Command::Deploy };
+    (start) => { ya_batch_requestor::Command::Start };
+    (stop) => { ya_batch_requestor::Command::Stop };
+    (run ( $($e:expr)* )) => {{
+        ya_batch_requestor::Command::Run(vec![ $($e.to_string()),* ])
+    }};
+}
+
+#[macro_export]
+macro_rules! commands_helper {
+    () => {};
+    ( $i:ident ( $($param:expr),* ) $(;)* ) => {{
+        vec![$crate::expand_cmd!($i ( $($param)* ))]
+    }};
+    ( $i:tt $(;)* ) => {{
+        vec![$crate::expand_cmd!($i)]
+    }};
+    ( $i:ident ( $($param:expr),* ) ; $( $t:tt )* ) => {{
+        let mut tail = $crate::commands_helper!( $($t)* );
+        tail.push($crate::expand_cmd!($i ( $($param)* )));
+        tail
+    }};
+    ( $i:tt ; $( $t:tt )* ) => {{
+        let mut tail = $crate::commands_helper!( $($t)* );
+        tail.push($crate::expand_cmd!($i));
+        tail
+    }};
+}
+
+#[macro_export]
 macro_rules! commands {
-    ( $( $cmd:expr );* ; ) => {{
-        let mut v = Vec::new();
-        $(
-            v.push($cmd);
-        )*
+    ( $( $t:tt )* ) => {{
+        let mut v = $crate::commands_helper!( $($t)* );
+        v.reverse();
         CommandList::new(v)
-    }}
+    }};
 }
 
 impl Actor for TaskSession {
