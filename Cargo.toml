@@ -29,7 +29,6 @@ members = [
     "utils/process",
     "utils/transfer",
     "utils/path",
-    "utils/constraints",
 ]
 
 [patch.crates-io]

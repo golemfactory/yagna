@@ -1,4 +1,4 @@
-use ya_utils_constraints::{
+use ya_agreement_utils::{
     constraints,
     ClauseOperator::{And, Or},
     ConstraintKey, ConstraintValue, Constraints,
