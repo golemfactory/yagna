@@ -1,4 +1,4 @@
 
 
 
-struct NegotiationEngine;
+pub struct RequestorNegotiationEngine;
