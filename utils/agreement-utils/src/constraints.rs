@@ -145,9 +145,9 @@ impl ConstraintKey {
     }
 }
 
-impl From<&str> for ConstraintKey {
-    fn from(key: &str) -> Self {
-        ConstraintKey::new(serde_json::Value::String(key.to_string()))
+impl<T: AsRef<str>> From<T> for ConstraintKey {
+    fn from(key: T) -> Self {
+        ConstraintKey::new(serde_json::Value::String(key.as_ref().to_string()))
     }
 }
 
