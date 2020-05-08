@@ -1,13 +1,7 @@
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
 use ethereum_types::{Address, H256, U256, U64};
-use lazy_static::lazy_static;
 
-use ethereum_tx_sign::RawTransaction;
-
-use std::{thread, time};
-use tokio::sync::{mpsc, oneshot};
-use web3::contract::tokens::Tokenize;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{Bytes, Log, TransactionReceipt};
@@ -16,10 +10,10 @@ use ya_persistence::executor::DbExecutor;
 
 use crate::account::{AccountBalance, Balance, Currency};
 use crate::dao::payment::PaymentDao;
-use crate::dao::transaction::TransactionDao;
-use crate::error::{DbResult, PaymentDriverError};
+
+use crate::error::PaymentDriverError;
 use crate::ethereum::{Chain, EthereumClient, EthereumClientBuilder};
-use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus, TxType};
+use crate::models::{PaymentEntity, TxType};
 use crate::payment::{
     PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus, PAYMENT_STATUS_FAILED,
     PAYMENT_STATUS_NOT_ENOUGH_FUNDS, PAYMENT_STATUS_NOT_ENOUGH_GAS,
@@ -29,13 +23,11 @@ use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
 use futures3::compat::*;
 use futures3::prelude::*;
 
-use crate::gnt::sender::TxSave;
 use crate::utils;
 
-use std::env;
 use std::future::Future;
 use std::pin::Pin;
-use std::rc::Rc;
+
 use std::sync::Arc;
 
 mod config;
@@ -246,7 +238,8 @@ impl GntDriver {
             if balance.amount < max_testnet_balance {
                 log::info!("Requesting Gnt from Faucet...");
                 let gas_price = client.get_gas_price().await?;
-                let mut b = sender::Builder::new(address, gas_price, client.chain_id());
+                let mut b = sender::Builder::new(address, gas_price, client.chain_id())
+                    .with_tx_type(TxType::Faucet);
                 b.push(&faucet_contract, "create", (), GNT_FAUCET_GAS.into());
                 let resp = b.send_to(sender.clone(), sign_tx).await?;
                 log::info!("send new tx: {:?}", resp);
@@ -328,7 +321,7 @@ impl PaymentDriver for GntDriver {
         let gnt_contract = self.gnt_contract.clone();
         let tx_sender = self.tx_sender.clone();
 
-        let mut payment = PaymentEntity {
+        let payment = PaymentEntity {
             amount: utils::u256_to_big_endian_hex(gnt_amount),
             gas: utils::u256_to_big_endian_hex(gas_amount),
             invoice_id: invoice_id.clone(),
@@ -388,7 +381,7 @@ impl PaymentDriver for GntDriver {
     fn reschedule_payment<'a>(
         &self,
         invoice_id: &str,
-        sign_tx: SignTx<'a>,
+        _sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
         let db = self.db.clone();
         let tx_sender = self.tx_sender.clone();
@@ -517,7 +510,7 @@ mod tests {
             assert!(driver.is_ok());
         }
 
-        tokio::time::delay_for(time::Duration::from_millis(5)).await;
+        tokio::time::delay_for(std::time::Duration::from_millis(5)).await;
         Ok(())
     }
 

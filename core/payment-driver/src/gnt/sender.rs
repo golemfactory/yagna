@@ -1,10 +1,9 @@
-use crate::dao::payment::PaymentDao;
 use crate::dao::transaction::TransactionDao;
 use crate::ethereum::EthereumClient;
-use crate::models::{TransactionEntity, TransactionStatus, TxType};
-use crate::utils::{h256_from_hex, u256_from_big_endian_hex};
+use crate::models::{TransactionStatus, TxType};
+use crate::utils::u256_from_big_endian_hex;
 use crate::{utils, PaymentDriverError, SignTx};
-use actix::fut::Either;
+
 use actix::prelude::*;
 use chrono::Utc;
 use ethereum_tx_sign::RawTransaction;
@@ -221,14 +220,14 @@ impl TransactionSender {
     fn wake_pending_reservation(&mut self, ctx: &mut Context<Self>) {
         assert!(self.reservation.is_none());
 
-        if let Some((tx, mut r)) = self.pending_reservations.pop() {
+        if let Some((tx, r)) = self.pending_reservations.pop() {
             let next_nonce = self.nonces.get(&tx.address).unwrap().clone();
             let reservation = self
                 .new_reservation(tx.address, tx.count, next_nonce)
                 .clone();
             let _ = ctx.spawn(
                 async move {
-                    if let Err(e) = r.send(reservation) {
+                    if let Err(_e) = r.send(reservation) {
                         log::error!("reservation lost");
                         true
                     } else {
@@ -252,9 +251,9 @@ impl TransactionSender {
 impl Handler<TxReq> for TransactionSender {
     type Result = ActorResponse<Self, Reservation, PaymentDriverError>;
 
-    fn handle(&mut self, msg: TxReq, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: TxReq, _ctx: &mut Self::Context) -> Self::Result {
         let address = msg.address.clone();
-        let fut = self.nonce(address).then(move |r, act, ctx| {
+        let fut = self.nonce(address).then(move |r, act, _ctx| {
             let next_nonce = match r {
                 Ok(v) => v,
                 Err(e) => return fut::Either::Right(fut::err(e)),
@@ -283,7 +282,7 @@ impl Handler<TxReq> for TransactionSender {
 impl Handler<TxSave> for TransactionSender {
     type Result = ActorResponse<Self, Vec<String>, PaymentDriverError>;
 
-    fn handle(&mut self, msg: TxSave, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: TxSave, _ctx: &mut Self::Context) -> Self::Result {
         fn transaction_error(
             msg: &str,
         ) -> ActorResponse<TransactionSender, Vec<String>, PaymentDriverError> {
@@ -354,7 +353,7 @@ impl Handler<TxSave> for TransactionSender {
         .into_actor(self)
         .then(move |r, act, ctx| {
             let reservation = act.reservation.take().unwrap();
-            let transactions = match r {
+            let _transactions = match r {
                 Err(e) => return fut::Either::Right(fut::err(e)),
                 Ok(v) => v,
             };
@@ -379,7 +378,7 @@ impl Handler<TxSave> for TransactionSender {
                                 confirmations: 5,
                             });
                         }
-                        Err(e) => {
+                        Err(_e) => {
                             db.as_dao::<TransactionDao>()
                                 .update_tx_status(tx_id, TransactionStatus::Failed.into())
                                 .await
@@ -400,7 +399,7 @@ impl Handler<TxSave> for TransactionSender {
 impl Handler<Retry> for TransactionSender {
     type Result = ActorResponse<Self, bool, PaymentDriverError>;
 
-    fn handle(&mut self, msg: Retry, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Retry, _ctx: &mut Self::Context) -> Self::Result {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
         let chain_id = client.chain_id();
@@ -427,18 +426,26 @@ pub struct Builder {
     address: Address,
     gas_price: U256,
     chain_id: u64,
+    tx_type: TxType,
     tx: Vec<RawTransaction>,
 }
 
 impl Builder {
     pub fn new(address: Address, gas_price: U256, chain_id: u64) -> Self {
         let tx = Default::default();
+        let tx_type = TxType::Transfer;
         Builder {
             chain_id,
             address,
             gas_price,
             tx,
+            tx_type,
         }
+    }
+
+    pub fn with_tx_type(mut self, tx_type: TxType) -> Self {
+        self.tx_type = tx_type;
+        self
     }
 
     pub fn push<T: Transport, P: Tokenize>(
@@ -468,7 +475,7 @@ impl Builder {
         sender: Addr<TransactionSender>,
         sign_tx: SignTx<'a>,
     ) -> impl Future<Output = Result<Vec<String>, PaymentDriverError>> + 'a {
-        let mut me = self;
+        let me = self;
         async move {
             let r = sender
                 .send(TxReq {
@@ -478,6 +485,7 @@ impl Builder {
                 .await??;
             let mut nx = r.nonces.clone();
             let mut tx_save = TxSave::from_reservation(r);
+            tx_save.tx_type = me.tx_type;
             for mut tx in me.tx {
                 tx.nonce = nx.start;
                 nx.start += 1.into();
@@ -508,7 +516,7 @@ impl Message for PendingConfirmation {
 impl Handler<PendingConfirmation> for TransactionSender {
     type Result = ();
 
-    fn handle(&mut self, msg: PendingConfirmation, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: PendingConfirmation, _ctx: &mut Context<Self>) -> Self::Result {
         self.pending_confirmations.push(msg);
     }
 }
@@ -619,11 +627,11 @@ impl TransactionSender {
             Some((pending_confirmation.tx_id, confirmation))
         }
         .into_actor(self)
-        .then(|r, act, ctx| {
+        .then(|r, act, _ctx| {
             if let Some((tx_id, confirmation)) = r {
                 log::info!("tx_id={}, processed", &tx_id);
                 if let Some(sender) = act.receipt_queue.remove(&tx_id) {
-                    if let Err(e) = sender.send(confirmation) {
+                    if let Err(_e) = sender.send(confirmation) {
                         log::warn!("send tx_id={}, receipt failed", tx_id);
                     }
                 }
@@ -638,7 +646,7 @@ impl TransactionSender {
 impl Handler<WaitForTx> for TransactionSender {
     type Result = ActorResponse<Self, TransactionReceipt, PaymentDriverError>;
 
-    fn handle(&mut self, msg: WaitForTx, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: WaitForTx, _ctx: &mut Self::Context) -> Self::Result {
         if self
             .pending_confirmations
             .iter()

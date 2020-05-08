@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::error::PaymentDriverError;
 use ethereum_types::{Address, H256, U256};
 use futures3::compat::*;
@@ -5,7 +6,7 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::env;
-use std::process::Output;
+
 use std::time::Duration;
 use web3::confirm::{wait_for_confirmations, TransactionReceiptBlockNumberCheck};
 use web3::contract::Contract;
@@ -249,7 +250,7 @@ mod tests {
 
     use super::*;
     use crate::utils;
-    use std::sync::Once;
+
     const GNT_CONTRACT_ADDRESS: &str = "0x924442A66cFd812308791872C4B242440c108E19";
     const ETH_ADDRESS: &str = "0x2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 

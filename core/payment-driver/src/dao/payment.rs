@@ -1,12 +1,10 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use crate::error::{DbError, DbResult};
-use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus, TX_CONFIRMED};
+use crate::models::{PaymentEntity, TransactionEntity, TX_CONFIRMED};
 use crate::schema::gnt_driver_payment::dsl;
 
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
-
-use diesel::sql_types::{Integer, Text};
 
 use crate::payment::PAYMENT_STATUS_OK;
 use crate::{PaymentConfirmation, PaymentStatus};
