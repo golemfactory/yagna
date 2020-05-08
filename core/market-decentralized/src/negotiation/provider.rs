@@ -1,4 +1,13 @@
+use std::sync::Arc;
+
+use ya_persistence::executor::DbExecutor;
+
+use crate::protocol::Negotiation;
 
 
 
-pub struct ProviderNegotiationEngine;
+/// Provider part of negotiation logic.
+pub struct ProviderNegotiationEngine {
+    db: DbExecutor,
+    protocol: Arc<dyn Negotiation>,
+}

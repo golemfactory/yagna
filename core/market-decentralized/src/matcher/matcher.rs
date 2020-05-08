@@ -1,9 +1,11 @@
 use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Arc;
 
 use ya_client_model::market::{Offer, Demand, Proposal};
 use ya_persistence::executor::DbExecutor;
 
+use crate::protocol::Discovery;
 
 
 #[derive(Error, Debug)]
@@ -21,6 +23,7 @@ pub struct Emitters {
 /// Responsible for storing Offers and matching them with demands.
 pub struct Matcher {
     db: DbExecutor,
+    discovery: Arc<dyn Discovery>,
     proposal_emitter: Sender<Proposal>,
 }
 
