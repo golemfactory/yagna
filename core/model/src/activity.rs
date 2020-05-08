@@ -4,7 +4,7 @@
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
 
-use ya_model::activity::{
+use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 use ya_service_bus::RpcMessage;

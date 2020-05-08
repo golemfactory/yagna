@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use serde_json;
 use std::convert::TryInto;
 
-use ya_model::activity::activity_usage::ActivityUsage;
+use ya_client_model::activity::activity_usage::ActivityUsage;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use ya_persistence::models::ActivityUsage as DbActivityUsage;
 use ya_persistence::schema;

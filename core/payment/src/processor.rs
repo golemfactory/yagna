@@ -7,9 +7,9 @@ use futures::lock::Mutex;
 use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
+use ya_client_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
-use ya_model::payment::{Invoice, InvoiceStatus, Payment};
 use ya_net::TryRemoteEndpoint;
 use ya_payment_driver::{
     AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,

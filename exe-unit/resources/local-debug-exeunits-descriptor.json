@@ -2,7 +2,11 @@
     {
         "name": "wasmtime",
         "version": "0.1.0",
-        "supervisor-path": "../target/debug/exe-unit",
-        "runtime-path": "../target/debug/wasmtime-exeunit"
+        "supervisor-path": "../../target/debug/exe-unit",
+        "runtime-path": "../../target/debug/wasmtime-exeunit",
+        "description": "This is just a sample descriptor for wasmtime exeunit used by ya-provider",
+        "properties": {
+            "wasm.wasi.version@v": "0.9.0"
+        }
     }
 ]

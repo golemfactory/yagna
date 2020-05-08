@@ -1,8 +1,8 @@
 use actix_web::{error::ResponseError, HttpResponse};
 
+use ya_client_model::ErrorMessage;
 use ya_core_model::activity::RpcMessageError;
 use ya_core_model::market::RpcMessageError as MarketRpcMessageError;
-use ya_model::ErrorMessage;
 
 use crate::dao::DaoError;
 

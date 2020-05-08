@@ -1,9 +1,0 @@
-[package]
-name = "ya-agent-offer-model"
-version = "0.1.0"
-authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
-
-[dependencies]
-serde="1.0"
-serde_json="1.0"

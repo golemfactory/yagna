@@ -2,9 +2,9 @@ use crate::notify::Notify;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
+pub use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::{ExeScriptCommandResult, ExeScriptCommandState};
 use ya_core_model::activity::Exec;
-pub use ya_model::activity::activity_state::{State, StatePair};
-use ya_model::activity::{ExeScriptCommandResult, ExeScriptCommandState};
 
 #[derive(Error, Debug, Serialize)]
 pub enum StateError {

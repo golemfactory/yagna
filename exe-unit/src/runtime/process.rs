@@ -8,7 +8,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::process::{Output, Stdio};
 use tokio::process::Command;
-use ya_model::activity::{CommandResult, ExeScriptCommand};
+use ya_client_model::activity::{CommandResult, ExeScriptCommand};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;

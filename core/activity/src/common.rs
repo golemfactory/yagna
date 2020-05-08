@@ -1,11 +1,11 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use ya_core_model::{ethaddr::NodeId, market};
-use ya_model::{
+use ya_client_model::{
     activity::{ActivityState, ActivityUsage},
     market::Agreement,
 };
+use ya_core_model::{ethaddr::NodeId, market};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 

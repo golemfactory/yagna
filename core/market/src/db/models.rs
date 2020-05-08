@@ -6,10 +6,10 @@ use diesel::{
 };
 use std::convert::TryFrom;
 
-use ya_model::market::agreement::{Agreement as ApiAgreement, State as ApiAgreementState};
+use ya_client::model::market::agreement::{Agreement as ApiAgreement, State as ApiAgreementState};
 
 use crate::db::schema::agreement;
-use ya_model::market::{Demand, Offer};
+use ya_client::model::market::{Demand, Offer};
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "agreement"]
