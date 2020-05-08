@@ -1,7 +1,7 @@
 use crate::ethereum::Chain;
-use crate::{utils, PaymentDriverResult};
+use crate::{utils, PaymentDriverError, PaymentDriverResult};
 use ethereum_types::{Address, H160};
-use lazy_static::*;
+
 use std::env;
 
 pub(crate) const MAX_TESTNET_BALANCE: &str = "1000";
@@ -50,45 +50,22 @@ impl EnvConfiguration {
             Chain::Rinkeby => CFG_TESTNET,
             Chain::Mainnet => CFG_MAINNET,
         };
-        if let Some(gnt_contract_address) = env::var(GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY).ok() {
+        if let Some(gnt_contract_address) = env::var(GNT_CONTRACT_ADDRESS_ENV_KEY).ok() {
             base.gnt_contract_address = utils::str_to_addr(&gnt_contract_address)?;
         }
         if let Some(gnt_faucet_address) = env::var(GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY).ok() {
             base.gnt_faucet_address = Some(utils::str_to_addr(&gnt_faucet_address)?);
         }
+        if let Some(required_confirmations) = env::var(REQUIRED_CONFIRMATIONS_ENV_KEY).ok() {
+            base.required_confirmations = required_confirmations.parse().map_err(|_| {
+                PaymentDriverError::library_err_msg(format!(
+                    "invalid {} value: {}",
+                    REQUIRED_CONFIRMATIONS_ENV_KEY, required_confirmations
+                ))
+            })?;
+        }
         Ok(base)
     }
-}
-
-lazy_static! {
-    pub static ref GNT_CONTRACT_ADDRESS: Address = utils::str_to_addr(
-        env::var(GNT_CONTRACT_ADDRESS_ENV_KEY)
-            .expect(format!("Missing {} env variable...", GNT_CONTRACT_ADDRESS_ENV_KEY).as_str())
-            .as_str()
-    )
-    .unwrap();
-    pub static ref GNT_FAUCET_CONTRACT_ADDRESS: Address = utils::str_to_addr(
-        env::var(GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY)
-            .expect(
-                format!(
-                    "Missing {} env variable...",
-                    GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY
-                )
-                .as_str()
-            )
-            .as_str()
-    )
-    .unwrap();
-    pub static ref REQUIRED_CONFIRMATIONS: usize = env::var(REQUIRED_CONFIRMATIONS_ENV_KEY)
-        .expect(format!("Missing {} env variable...", REQUIRED_CONFIRMATIONS_ENV_KEY).as_str())
-        .parse()
-        .expect(
-            format!(
-                "Incorrect {} env variable...",
-                REQUIRED_CONFIRMATIONS_ENV_KEY
-            )
-            .as_str()
-        );
 }
 
 #[cfg(test)]

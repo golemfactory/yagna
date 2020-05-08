@@ -29,6 +29,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use std::sync::Arc;
+use web3::Transport;
 
 mod config;
 mod faucet;
@@ -105,8 +106,11 @@ fn prepare_gnt_faucet_contract(
     }
 }
 
-fn verify_gnt_tx(receipt: &TransactionReceipt) -> PaymentDriverResult<()> {
-    verify_gnt_tx_logs(&receipt.logs)?;
+fn verify_gnt_tx<T: Transport>(
+    receipt: &TransactionReceipt,
+    contract: &Contract<T>,
+) -> PaymentDriverResult<()> {
+    verify_gnt_tx_logs(&receipt.logs, contract)?;
     verify_gnt_tx_status(&receipt.status)?;
     Ok(())
 }
@@ -124,25 +128,23 @@ fn verify_gnt_tx_status(status: &Option<U64>) -> PaymentDriverResult<()> {
     }
 }
 
-fn verify_gnt_tx_logs(logs: &Vec<Log>) -> PaymentDriverResult<()> {
+fn verify_gnt_tx_logs<T: Transport>(
+    logs: &Vec<Log>,
+    contract: &Contract<T>,
+) -> PaymentDriverResult<()> {
     if logs.len() != config::TRANSFER_LOGS_LENGTH {
         return Err(PaymentDriverError::UnknownTransaction);
     }
-    verify_gnt_tx_log(&logs[0])?;
+    verify_gnt_tx_log(&logs[0], contract)?;
     Ok(())
 }
 
-fn verify_gnt_tx_log(log: &Log) -> PaymentDriverResult<()> {
-    verify_gnt_tx_log_contract_address(&log.address)?;
-    verify_gnt_tx_log_topics(&log.topics)?;
-    verify_gnt_tx_log_data(&log.data)?;
-    Ok(())
-}
-
-fn verify_gnt_tx_log_contract_address(contract_address: &Address) -> PaymentDriverResult<()> {
-    if *contract_address != *config::GNT_CONTRACT_ADDRESS {
+fn verify_gnt_tx_log<T: Transport>(log: &Log, contract: &Contract<T>) -> PaymentDriverResult<()> {
+    if log.address != contract.address() {
         return Err(PaymentDriverError::UnknownTransaction);
     }
+    verify_gnt_tx_log_topics(&log.topics)?;
+    verify_gnt_tx_log_data(&log.data)?;
     Ok(())
 }
 
@@ -427,11 +429,12 @@ impl PaymentDriver for GntDriver {
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>> {
         let tx_hash: H256 = H256::from_slice(&confirmation.confirmation);
         let ethereum_client = self.ethereum_client.clone();
+        let gnt_contract = self.gnt_contract.clone();
         Box::pin(async move {
             match ethereum_client.get_transaction_receipt(tx_hash).await? {
                 None => Err(PaymentDriverError::UnknownTransaction),
                 Some(receipt) => {
-                    verify_gnt_tx(&receipt)?;
+                    verify_gnt_tx(&receipt, &gnt_contract)?;
                     build_payment_details(&receipt)
                 }
             }
@@ -483,28 +486,11 @@ mod tests {
     use super::*;
     use crate::account::Currency;
     use crate::utils;
-    use std::sync::Once;
-
-    static INIT: Once = Once::new();
 
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 
-    fn init_env() {
-        INIT.call_once(|| {
-            std::env::set_var(
-                config::GNT_CONTRACT_ADDRESS_ENV_KEY,
-                "0x924442A66cFd812308791872C4B242440c108E19",
-            );
-            std::env::set_var(
-                config::GNT_FAUCET_CONTRACT_ADDRESS_ENV_KEY,
-                "0x77b6145E853dfA80E8755a4e824c4F510ac6692e",
-            );
-        });
-    }
-
     #[actix_rt::test]
     async fn test_new_driver() -> anyhow::Result<()> {
-        init_env();
         {
             let driver = GntDriver::new(DbExecutor::new(":memory:").unwrap()).await;
             assert!(driver.is_ok());
@@ -526,7 +512,6 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
-        init_env();
         let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
         let gnt_contract = prepare_gnt_contract(&ethereum_client, &config::CFG_TESTNET)?;
         let gnt_balance = get_gnt_balance(&gnt_contract, utils::str_to_addr(ETH_ADDRESS)?).await?;
@@ -537,7 +522,6 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_get_account_balance() -> anyhow::Result<()> {
-        init_env();
         let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
 
         let balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
@@ -557,7 +541,6 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_verify_payment() -> anyhow::Result<()> {
-        init_env();
         let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
         let tx_hash: Vec<u8> =
             hex::decode("df06916d8a8fe218e6261d3e811b1d9aee9cf8e07fb539431f0433abcdd9a8c2")
