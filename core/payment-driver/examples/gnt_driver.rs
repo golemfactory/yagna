@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
     ya_payment_driver::dao::init(&db).await?;
 
-    let mut gnt_driver = GntDriver::new(db)?;
+    let gnt_driver = GntDriver::new(db)?;
 
     gnt_driver
         .init(AccountMode::SEND, address.as_str(), &sign_tx)

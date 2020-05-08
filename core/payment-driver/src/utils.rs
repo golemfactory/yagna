@@ -18,8 +18,8 @@ pub fn str_to_addr(addr: &str) -> PaymentDriverResult<Address> {
     }
 }
 
-pub fn addr_to_str(addr: Address) -> String {
-    format!("0x{}", hex::encode(addr.to_fixed_bytes()))
+pub fn addr_to_str(addr: impl std::borrow::Borrow<Address>) -> String {
+    format!("0x{}", hex::encode(addr.borrow()))
 }
 
 pub fn big_dec_to_u256(v: BigDecimal) -> PaymentDriverResult<U256> {

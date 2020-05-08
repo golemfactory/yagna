@@ -28,6 +28,8 @@ uint = "0.7"
 ureq = { version = "0.11.0", features = ["charset"] }
 web3 = { git = "https://github.com/bidzyyys/rust-web3" }
 ya-persistence = "0.2"
+actix="0.9"
+awc = "1.0.1"
 
 [dev-dependencies]
 dotenv = "0.15.0"

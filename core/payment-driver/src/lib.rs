@@ -44,51 +44,51 @@ pub mod migrations {
 
 pub trait PaymentDriver {
     fn init<'a>(
-        &'a mut self,
+        &self,
         mode: AccountMode,
         address: &str,
-        sign_tx: SignTx<'_>,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>>;
+        sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Returns account balance
-    fn get_account_balance<'a>(
-        &'a self,
+    fn get_account_balance(
+        &self,
         address: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>>;
 
     /// Schedules payment
     fn schedule_payment<'a>(
-        &'a mut self,
+        &self,
         invoice_id: &str,
         amount: PaymentAmount,
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-        sign_tx: SignTx<'_>,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>>;
+        sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Schedules payment
     fn reschedule_payment<'a>(
-        &'a mut self,
+        &self,
         invoice_id: &str,
-        sign_tx: SignTx<'_>,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'static>>;
+        sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Returns payment status
-    fn get_payment_status<'a>(
-        &'a self,
+    fn get_payment_status(
+        &self,
         invoice_id: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>>;
 
     /// Verifies payment
-    fn verify_payment<'a>(
-        &'a self,
+    fn verify_payment(
+        &self,
         confirmation: &PaymentConfirmation,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>>;
 
     /// Returns sum of transactions from payer addr to payee addr
-    fn get_transaction_balance<'a>(
-        &'a self,
+    fn get_transaction_balance(
+        &self,
         payer: &str,
         payee: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>>;

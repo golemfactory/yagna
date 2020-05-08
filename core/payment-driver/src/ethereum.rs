@@ -9,8 +9,9 @@ use web3::confirm::{wait_for_confirmations, TransactionReceiptBlockNumberCheck};
 use web3::contract::Contract;
 use web3::transports::EventLoopHandle;
 use web3::transports::Http;
-use web3::types::{BlockNumber, Bytes, TransactionReceipt};
+use web3::types::{BlockNumber, Bytes, TransactionReceipt, TransactionId};
 use web3::Web3;
+use std::process::Output;
 
 const POLL_INTERVAL_SECS: u64 = 1;
 const POLL_INTERVAL_NANOS: u32 = 0;
@@ -131,6 +132,26 @@ impl EthereumClient {
         .compat()
         .await?;
         Ok(())
+    }
+
+    pub async fn blocks(&self) -> EthereumClientResult<impl futures3::stream::Stream<Item=EthereumClientResult<H256>>> {
+        use futures3::compat::Stream01CompatExt;
+        use futures3::prelude::*;
+        let f= self.web3.eth_filter().create_blocks_filter().compat().await?;
+        Ok(f.stream(Duration::from_secs(30)).compat().map(|v| v.map_err(From::from)))
+    }
+
+    pub async fn block_number(&self) -> EthereumClientResult<U256> {
+        Ok(self.web3.eth().block_number().compat().await?)
+    }
+
+    pub async fn tx_block_number(&self, tx_hash : H256) -> EthereumClientResult<Option<U256>> {
+        if let Some(tx) = self.web3.eth().transaction(TransactionId::Hash(tx_hash)).compat().await? {
+            Ok(tx.block_number)
+        }
+        else {
+            Ok(None)
+        }
     }
 
     pub fn chain_id(&self) -> u64 {

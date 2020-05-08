@@ -238,13 +238,24 @@ impl PaymentProcessor {
         }
         let node_id = addr.parse().unwrap();
         let sign_tx = get_sign_tx(node_id);
-        Ok({ self.driver.lock().await.init(mode, addr.as_str(), &sign_tx) }.await?)
+        Ok({
+            let l = self.driver.lock().await;
+            let fut = l.init(mode, addr.as_str(), &sign_tx);
+            fut
+        }
+        .await?)
     }
 
     pub async fn get_status(&self, addr: &str) -> PaymentResult<BigDecimal> {
-        let balance: AccountBalance =
-            { self.driver.lock().await.get_account_balance(addr) }.await?;
-
+        let balance: AccountBalance = {
+            let l = self.driver.lock().await;
+            log::info!("lock");
+            let fut = l.get_account_balance(addr);
+            log::info!("balance");
+            fut
+        }
+        .await?;
+        log::info!("balance done");
         Ok(balance.base_currency.amount)
     }
 }

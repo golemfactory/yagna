@@ -47,13 +47,9 @@ mod local {
         init: Init,
     ) -> Result<(), GenericError> {
         let addr = init.identity.to_string();
-        pp.init(
-            addr,
-            init.requestor,
-            init.provider,
-        )
-        .await
-        .map_err(GenericError::new)
+        pp.init(addr, init.requestor, init.provider)
+            .await
+            .map_err(GenericError::new)
     }
 
     async fn on_status(

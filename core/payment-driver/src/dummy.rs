@@ -3,30 +3,32 @@ use crate::{
     PaymentDetails, PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
 };
 use chrono::{DateTime, Utc};
-use futures3::future;
+use futures3::lock::Mutex;
+use futures3::prelude::*;
 use serde_json;
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct DummyDriver {
-    payments: HashMap<String, PaymentDetails>,
+    payments: Arc<Mutex<HashMap<String, PaymentDetails>>>,
 }
 
 impl DummyDriver {
     pub fn new() -> Self {
         Self {
-            payments: HashMap::new(),
+            payments: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
 
 impl PaymentDriver for DummyDriver {
-    fn init<'a>(
-        &'a mut self,
+    fn init(
+        &self,
         _mode: AccountMode,
         _address: &str,
         _sign_tx: SignTx<'_>,
@@ -52,54 +54,65 @@ impl PaymentDriver for DummyDriver {
     }
 
     fn schedule_payment<'a>(
-        &'a mut self,
+        &self,
         invoice_id: &str,
         amount: PaymentAmount,
         sender: &str,
         recipient: &str,
         _due_date: DateTime<Utc>,
-        _sign_tx: SignTx<'_>,
+        _sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
-        let result = match self.payments.entry(invoice_id.to_string()) {
-            Entry::Occupied(_) => Err(PaymentDriverError::PaymentAlreadyScheduled(
-                invoice_id.to_string(),
-            )),
-            Entry::Vacant(entry) => {
-                entry.insert(PaymentDetails {
-                    recipient: recipient.to_string(),
-                    sender: sender.to_string(),
-                    amount: amount.base_currency_amount,
-                    date: Some(Utc::now()),
-                });
-                Ok(())
-            }
+        let payments = self.payments.clone();
+        let details = PaymentDetails {
+            recipient: recipient.to_string(),
+            sender: sender.to_string(),
+            amount: amount.base_currency_amount,
+            date: Some(Utc::now()),
         };
-        Box::pin(future::ready(result))
+        let invoice_id = invoice_id.to_string();
+
+        Box::pin(async move {
+            match payments.lock().await.entry(invoice_id.clone()) {
+                Entry::Occupied(_) => Err(PaymentDriverError::PaymentAlreadyScheduled(invoice_id)),
+                Entry::Vacant(entry) => {
+                    entry.insert(details);
+                    Ok(())
+                }
+            }
+        })
     }
 
     fn reschedule_payment<'a>(
-        &'a mut self,
+        &self,
         invoice_id: &str,
-        _sign_tx: SignTx<'_>,
+        _sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
-        let result = match self.payments.get(invoice_id) {
-            Some(_) => Ok(()),
-            None => Err(PaymentDriverError::PaymentNotFound(invoice_id.to_string())),
-        };
-        Box::pin(future::ready(result))
+        let invoice_id = invoice_id.to_owned();
+        let payments = self.payments.clone();
+
+        Box::pin(async move {
+            match payments.lock().await.get(&invoice_id) {
+                Some(_) => Ok(()),
+                None => Err(PaymentDriverError::PaymentNotFound(invoice_id)),
+            }
+        })
     }
 
-    fn get_payment_status<'a>(
-        &'a self,
+    fn get_payment_status(
+        &self,
         invoice_id: &str,
     ) -> Pin<Box<dyn Future<Output = Result<PaymentStatus, PaymentDriverError>> + 'static>> {
-        let result = match self.payments.get(invoice_id) {
-            Some(details) => Ok(PaymentStatus::Ok(PaymentConfirmation::from(
-                serde_json::to_string(details).unwrap().as_bytes(),
-            ))),
-            None => Err(PaymentDriverError::PaymentNotFound(invoice_id.to_string())),
-        };
-        Box::pin(future::ready(result))
+        let payments = self.payments.clone();
+        let invoice_id = invoice_id.to_owned();
+
+        Box::pin(async move {
+            match payments.lock().await.get(&invoice_id) {
+                Some(details) => Ok(PaymentStatus::Ok(PaymentConfirmation::from(
+                    serde_json::to_string(details).unwrap().as_bytes(),
+                ))),
+                None => Err(PaymentDriverError::PaymentNotFound(invoice_id)),
+            }
+        })
     }
 
     fn verify_payment<'a>(

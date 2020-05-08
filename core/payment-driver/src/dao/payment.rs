@@ -1,10 +1,16 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use crate::error::DbResult;
-use crate::models::PaymentEntity;
+use crate::error::{DbError, DbResult};
+use crate::models::{PaymentEntity, TransactionEntity};
 use crate::schema::gnt_driver_payment::dsl;
 
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
+
+use diesel::sql_types::{Integer, Text};
+
+use crate::payment::PAYMENT_STATUS_OK;
+use crate::{PaymentConfirmation, PaymentStatus};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 #[allow(unused)]
 pub struct PaymentDao<'c> {
@@ -28,6 +34,47 @@ impl<'c> PaymentDao<'c> {
                 Some(payment) => Ok(Some(payment)),
                 None => Ok(None),
             }
+        })
+        .await
+    }
+
+    pub async fn get_payment_status(&self, invoice_id: String) -> DbResult<Option<PaymentStatus>> {
+        //
+        readonly_transaction(self.pool, move |conn| {
+            let payment: PaymentEntity = match dsl::gnt_driver_payment
+                .find(&invoice_id)
+                .first(conn)
+                .optional()?
+            {
+                Some(v) => v,
+                None => return Ok(None),
+            };
+            let tx_id = payment.tx_id.clone();
+            let mut status = payment.into();
+            if let PaymentStatus::Ok(ref mut confirmation) = &mut status {
+                let tx_id = match tx_id {
+                    Some(v) => v,
+                    None => {
+                        log::error!("invalid payment state (invoice={})", invoice_id);
+                        return Ok(Some(PaymentStatus::Unknown));
+                    }
+                };
+
+                let tx: TransactionEntity =
+                    tx_dsl::gnt_driver_transaction.find(&tx_id).first(conn)?;
+                let tx_hash = match tx.tx_hash {
+                    Some(h) => hex::decode(h).map_err(|e| DbError::InvalidData(e.to_string()))?,
+                    None => {
+                        log::error!("invalid payment state (invoice={})", invoice_id);
+                        return Ok(Some(PaymentStatus::Unknown));
+                    }
+                };
+                *confirmation = PaymentConfirmation {
+                    confirmation: tx_hash,
+                };
+            }
+
+            Ok(Some(status))
         })
         .await
     }
@@ -62,10 +109,10 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn update_tx_id(&self, invoice_id: String, tx_id: Option<String>) -> DbResult<()> {
+    pub async fn update_tx_id(&self, invoice_id: String, tx_id: String) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::gnt_driver_payment.find(invoice_id))
-                .set(dsl::tx_id.eq(tx_id))
+                .set((dsl::tx_id.eq(tx_id), dsl::status.eq(PAYMENT_STATUS_OK)))
                 .execute(conn)?;
             Ok(())
         })

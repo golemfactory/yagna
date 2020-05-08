@@ -34,6 +34,12 @@ pub enum PaymentDriverError {
     UnknownChain(String),
 }
 
+impl PaymentDriverError {
+    pub fn library_err_msg<D: std::fmt::Display>(msg: D) -> Self {
+        PaymentDriverError::LibraryError(msg.to_string())
+    }
+}
+
 impl From<secp256k1::Error> for PaymentDriverError {
     fn from(e: secp256k1::Error) -> Self {
         PaymentDriverError::LibraryError(e.to_string())
@@ -58,6 +64,12 @@ impl From<bigdecimal::ParseBigDecimalError> for PaymentDriverError {
     }
 }
 
+impl From<actix::MailboxError> for PaymentDriverError {
+    fn from(e: actix::MailboxError) -> Self {
+        PaymentDriverError::LibraryError(e.to_string())
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
     #[error("Database connection error: {0}")]
@@ -66,6 +78,8 @@ pub enum DbError {
     Query(#[from] diesel::result::Error),
     #[error("Runtime error: {0}")]
     Runtime(#[from] tokio::task::JoinError),
+    #[error("{0}")]
+    InvalidData(String),
 }
 
 pub type DbResult<T> = Result<T, DbError>;
