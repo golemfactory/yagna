@@ -38,6 +38,7 @@ ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
 ya-identity = { path = "core/identity" }
 ya-market = { path = "core/market" }
+ya-market-decentralized = { path = "core/market-decentralized" }
 ya-net = { path = "core/net" }
 
 ## CORE UTILS

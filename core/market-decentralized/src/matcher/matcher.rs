@@ -1,24 +1,19 @@
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::Arc;
 
-use ya_client_model::market::{Offer, Demand, Proposal};
+use ya_client_model::market::{Demand, Offer, Proposal};
 use ya_persistence::executor::DbExecutor;
 
 use crate::protocol::Discovery;
 
-
 #[derive(Error, Debug)]
-pub enum MatcherError {
-
-}
-
+pub enum MatcherError {}
 
 /// Receivers for events, that can be emitted from Matcher.
 pub struct Emitters {
     proposal_emitter: Receiver<Proposal>,
 }
-
 
 /// Responsible for storing Offers and matching them with demands.
 pub struct Matcher {
@@ -28,7 +23,6 @@ pub struct Matcher {
 }
 
 impl Matcher {
-
     pub fn new() -> Result<(Matcher, Emitters), MatcherError> {
         unimplemented!();
     }

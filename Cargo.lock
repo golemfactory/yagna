@@ -2165,27 +2165,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "market-decentralized"
-version = "0.1.0"
-dependencies = [
- "actix-web",
- "async-trait",
- "derive_more 0.99.5",
- "futures 0.3.4",
- "log 0.4.8",
- "serde",
- "thiserror",
- "tokio 0.2.20",
- "ya-client",
- "ya-client-model",
- "ya-core-model",
- "ya-persistence",
- "ya-service-api",
- "ya-service-api-interfaces",
- "ya-service-bus",
-]
-
-[[package]]
 name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5003,6 +4982,32 @@ dependencies = [
  "tokio 0.2.20",
  "url 2.1.1",
  "ya-client",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
+name = "ya-market-decentralized"
+version = "0.1.0"
+dependencies = [
+ "actix-rt",
+ "actix-web",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "derive_more 0.99.5",
+ "env_logger 0.7.1",
+ "futures 0.3.4",
+ "log 0.4.8",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio 0.2.20",
+ "ya-client",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api",

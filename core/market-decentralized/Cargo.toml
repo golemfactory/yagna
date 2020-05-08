@@ -1,5 +1,5 @@
 [package]
-name = "market-decentralized"
+name = "ya-market-decentralized"
 version = "0.1.0"
 authors = ["nieznanysprawiciel <nieznany.sprawiciel@gmail.com>"]
 edition = "2018"
@@ -17,6 +17,7 @@ ya-service-api-interfaces = "0.1"
 
 actix-web = "2.0"
 async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.5"
 futures = "0.3"
 log = "0.4"
@@ -24,3 +25,8 @@ serde = { version = "^1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["time"] }
 
+[dev-dependencies]
+actix-rt = "1.0.0"
+anyhow = "1.0"
+env_logger = "0.7"
+serde_json = "1.0"

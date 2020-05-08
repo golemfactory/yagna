@@ -1,19 +1,28 @@
 use futures::prelude::*;
 use std::pin::Pin;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use ya_service_bus::RpcMessage;
 
-
 /// Object for storing callback functions.
-pub struct HandlerSlot<MsgType: RpcMessage>
-{
-    slot: Box<dyn CallbackHandler<MsgType>>,
+pub struct HandlerSlot<MsgType: RpcMessage> {
+    slot: Arc<Mutex<Box<dyn CallbackHandler<MsgType>>>>,
 }
 
-impl<MsgType: RpcMessage> HandlerSlot<MsgType>
-{
+impl<MsgType: RpcMessage> HandlerSlot<MsgType> {
     pub fn new(callback: impl CallbackHandler<MsgType>) -> HandlerSlot<MsgType> {
-        HandlerSlot{ slot: Box::new(callback) }
+        HandlerSlot {
+            slot: Arc::new(Mutex::new(Box::new(callback))),
+        }
+    }
+
+    pub async fn call(&self, caller: String, msg: MsgType) -> CallbackResult<MsgType> {
+        // Handle will return future under lock. It shouldn't take to much time.
+        let future = { self.slot.lock().await.handle(caller, msg) };
+        // The biggest work is done here in this await. But we already
+        // freed lock.
+        future.await
     }
 }
 
@@ -31,36 +40,42 @@ impl<MsgType: RpcMessage> HandlerSlot<MsgType>
 ///
 /// fn bind(callback: impl CallbackHandler<GenericMessage>) {
 ///     let slot = HandlerSlot::<GenericMessage>::new(callback);
+///     // Slot can be called later like this:
+///     //slot.call(format!("caller-id"), GenericMessage{}).await
 /// }
 /// ```
-pub trait CallbackHandler<MsgType: RpcMessage>: 'static {
-    fn handle(&mut self, caller: String, msg: MsgType) -> CallbackResult<MsgType>;
+pub trait CallbackHandler<MsgType: RpcMessage>: Send + Sync + 'static {
+    fn handle(&mut self, caller: String, msg: MsgType) -> CallbackFuture<MsgType>;
 }
 
-pub type CallbackResult<MsgType> = Pin<Box<dyn OutputFuture<MsgType>>>;
+pub type CallbackFuture<MsgType> = Pin<Box<dyn OutputFuture<MsgType>>>;
+pub type CallbackResult<MsgType> =
+    Result<<MsgType as RpcMessage>::Item, <MsgType as RpcMessage>::Error>;
 
 /// Implements callback handler for FnMut to enable passing
 /// lambdas and other functions to handlers.
 impl<
-    MsgType: RpcMessage,
-    Output: Future<Output = Result<MsgType::Item, MsgType::Error>> + 'static,
-    F: FnMut(MsgType) -> Output + 'static,
-> CallbackHandler<MsgType> for F
+        MsgType: RpcMessage,
+        Output: OutputFuture<MsgType>,
+        F: FnMut(MsgType) -> Output + Send + Sync + 'static,
+    > CallbackHandler<MsgType> for F
 {
-    fn handle(&mut self, _caller: String, msg: MsgType) -> CallbackResult<MsgType> {
+    fn handle(&mut self, _caller: String, msg: MsgType) -> CallbackFuture<MsgType> {
         Box::pin(self(msg))
     }
 }
 
 /// Shortcut for writing complicated Future signature.
-pub trait OutputFuture<MsgType: RpcMessage>
-    where
-        Self: Future<Output = Result<<MsgType as RpcMessage>::Item, <MsgType as RpcMessage>::Error>> + 'static
-{}
+pub trait OutputFuture<MsgType: RpcMessage>: Send + Sync + 'static
+where
+    Self: Future<Output = CallbackResult<MsgType>> + Send + Sync + 'static,
+{
+}
 
 /// All futures will implement OutputFuture.
 impl<T, MsgType> OutputFuture<MsgType> for T
-    where
-        MsgType: RpcMessage,
-        T: Future<Output = Result<<MsgType as RpcMessage>::Item, <MsgType as RpcMessage>::Error>> + 'static
-{}
+where
+    MsgType: RpcMessage,
+    T: Future<Output = CallbackResult<MsgType>> + Send + Sync + 'static,
+{
+}
