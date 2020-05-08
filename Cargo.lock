@@ -2170,8 +2170,10 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "async-trait",
+ "derive_more 0.99.5",
  "futures 0.3.4",
  "log 0.4.8",
+ "serde",
  "thiserror",
  "tokio 0.2.20",
  "ya-client",
