@@ -1,6 +1,5 @@
 mod market;
-mod negotiation;
-mod protocol;
 mod matcher;
+mod negotiation;
 
-
+pub mod protocol;

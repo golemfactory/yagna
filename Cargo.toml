@@ -37,6 +37,7 @@ members = [
 ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
 ya-identity = { path = "core/identity" }
+ya-market-decentralized = { path = "core/market-decentralized" }
 ya-market-forwarding = { path = "core/market-forwarding" }
 ya-net = { path = "core/net" }
 
