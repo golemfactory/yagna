@@ -5011,6 +5011,7 @@ name = "ya-payment-driver"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-rt",
  "anyhow",
  "awc",
  "bigdecimal 0.1.2",

@@ -24,17 +24,17 @@ pub mod migrations {
 }
 
 #[cfg(feature = "dummy-driver")]
-fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
+async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
     use ya_payment_driver::DummyDriver;
 
     Ok(DummyDriver::new())
 }
 
 #[cfg(feature = "gnt-driver")]
-fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
+async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
     use ya_payment_driver::GntDriver;
 
-    Ok(GntDriver::new(db.clone())?)
+    Ok(GntDriver::new(db.clone()).await?)
 }
 
 pub struct PaymentService;
@@ -47,7 +47,7 @@ impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db: DbExecutor = context.component();
         db.apply_migration(migrations::run_with_output)?;
-        let driver = payment_driver_factory(&db)?;
+        let driver = payment_driver_factory(&db).await?;
         let processor = PaymentProcessor::new(driver, db.clone());
         self::service::bind_service(&db, processor);
         Ok(())

@@ -1,7 +1,7 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use crate::error::{DbError, DbResult};
-use crate::models::{PaymentEntity, TransactionEntity};
+use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus, TX_CONFIRMED};
 use crate::schema::gnt_driver_payment::dsl;
 
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
@@ -62,6 +62,9 @@ impl<'c> PaymentDao<'c> {
 
                 let tx: TransactionEntity =
                     tx_dsl::gnt_driver_transaction.find(&tx_id).first(conn)?;
+                if tx.status != TX_CONFIRMED {
+                    return Ok(Some(PaymentStatus::NotYet));
+                }
                 let tx_hash = match tx.tx_hash {
                     Some(h) => hex::decode(h).map_err(|e| DbError::InvalidData(e.to_string()))?,
                     None => {

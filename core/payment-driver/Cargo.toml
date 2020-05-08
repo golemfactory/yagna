@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+default=[]
+integration-tests=[]
+
 [dependencies]
 anyhow = "1.0"
 bigdecimal = "0.1.0"
@@ -29,6 +33,7 @@ ureq = { version = "0.11.0", features = ["charset"] }
 web3 = { git = "https://github.com/bidzyyys/rust-web3" }
 ya-persistence = "0.2"
 actix="0.9"
+actix-rt="1.0"
 awc = "1.0.1"
 
 [dev-dependencies]

@@ -3,7 +3,6 @@ use crate::error::{Error, PaymentError, PaymentResult};
 use crate::models as db_models;
 use crate::utils::get_sign_tx;
 use bigdecimal::BigDecimal;
-use futures::lock::Mutex;
 use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
@@ -19,7 +18,7 @@ use ya_persistence::executor::DbExecutor;
 
 #[derive(Clone)]
 pub struct PaymentProcessor {
-    driver: Arc<Mutex<Box<dyn PaymentDriver + Send + Sync + 'static>>>,
+    driver: Arc<dyn PaymentDriver + Send + Sync + 'static>,
     db_executor: DbExecutor,
 }
 
@@ -29,20 +28,14 @@ impl PaymentProcessor {
         D: PaymentDriver + Send + Sync + 'static,
     {
         Self {
-            driver: Arc::new(Mutex::new(Box::new(driver))),
+            driver: Arc::new(driver),
             db_executor,
         }
     }
 
     async fn wait_for_payment(&self, invoice_id: &str) -> PaymentResult<PaymentConfirmation> {
         loop {
-            match self
-                .driver
-                .lock()
-                .await
-                .get_payment_status(&invoice_id)
-                .await?
-            {
+            match self.driver.get_payment_status(&invoice_id).await? {
                 PaymentStatus::Ok(confirmation) => return Ok(confirmation),
                 PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
                 _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),
@@ -67,8 +60,6 @@ impl PaymentProcessor {
             let recipient = invoice.credit_account_id.as_str();
             let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
             self.driver
-                .lock()
-                .await
                 .schedule_payment(
                     &invoice_id,
                     amount,
@@ -144,12 +135,7 @@ impl PaymentProcessor {
         let confirmation = PaymentConfirmation {
             confirmation: payment.payment.details.clone(),
         };
-        let details = self
-            .driver
-            .lock()
-            .await
-            .verify_payment(&confirmation)
-            .await?;
+        let details = self.driver.verify_payment(&confirmation).await?;
 
         let actual_amount = details.amount;
         let declared_amount: BigDecimal = payment.payment.amount.clone().into();
@@ -200,8 +186,6 @@ impl PaymentProcessor {
             .await?;
         let bc_balance = self
             .driver
-            .lock()
-            .await
             .get_transaction_balance(details.sender.as_str(), details.recipient.as_str())
             .await?;
         let bc_balance = bc_balance.amount;
@@ -238,24 +222,11 @@ impl PaymentProcessor {
         }
         let node_id = addr.parse().unwrap();
         let sign_tx = get_sign_tx(node_id);
-        Ok({
-            let l = self.driver.lock().await;
-            let fut = l.init(mode, addr.as_str(), &sign_tx);
-            fut
-        }
-        .await?)
+        Ok(self.driver.init(mode, addr.as_str(), &sign_tx).await?)
     }
 
     pub async fn get_status(&self, addr: &str) -> PaymentResult<BigDecimal> {
-        let balance: AccountBalance = {
-            let l = self.driver.lock().await;
-            log::info!("lock");
-            let fut = l.get_account_balance(addr);
-            log::info!("balance");
-            fut
-        }
-        .await?;
-        log::info!("balance done");
+        let balance: AccountBalance = self.driver.get_account_balance(addr).await?;
         Ok(balance.base_currency.amount)
     }
 }
