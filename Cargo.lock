@@ -2016,6 +2016,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "6.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a81d1812d731546d2614737bee92aa071d37e9afa1409bc374da9e5e70e70b22"
+dependencies = [
+ "base64 0.10.1",
+ "chrono",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "untrusted",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4939,6 +4954,7 @@ dependencies = [
  "diesel_migrations",
  "env_logger 0.7.1",
  "futures 0.3.4",
+ "jsonwebtoken",
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
@@ -4950,9 +4966,11 @@ dependencies = [
  "url 2.1.1",
  "ya-client",
  "ya-core-model",
+ "ya-net",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
+ "ya-service-api-web",
  "ya-service-bus",
 ]
 

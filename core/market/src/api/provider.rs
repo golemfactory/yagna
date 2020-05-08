@@ -6,12 +6,12 @@ use crate::utils::*;
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::HttpResponse;
 use std::time::Duration;
+use ya_client::model::market::*;
 use ya_client::{
     market::MarketProviderApi,
     web::{WebAuth, WebClient},
     Result,
 };
-use ya_client_model::market::*;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 

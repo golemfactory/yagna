@@ -16,3 +16,5 @@ pub mod service;
 pub mod utils;
 
 pub use error::Error;
+
+pub use ya_client::model::market::MARKET_API_PATH;

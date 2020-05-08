@@ -1,7 +1,7 @@
 pub mod response {
     use actix_web::HttpResponse;
     use serde::Serialize;
-    use ya_client_model::ErrorMessage;
+    use ya_client::model::ErrorMessage;
 
     pub fn ok<T: Serialize>(t: T) -> HttpResponse {
         HttpResponse::Ok().json(t)
