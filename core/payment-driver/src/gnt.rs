@@ -1,699 +1,560 @@
-use async_trait::async_trait;
-
+use actix::prelude::*;
 use chrono::{DateTime, Utc};
+use ethereum_types::{Address, H256, U256, U64};
 
-use ethereum_types::{Address, H160, H256, U256, U64};
-
-use ethereum_tx_sign::RawTransaction;
-
-use std::collections::HashMap;
-
-use std::{thread, time};
-
-use web3::contract::tokens::Tokenize;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{Bytes, Log, TransactionReceipt};
 
 use ya_persistence::executor::DbExecutor;
 
-use crate::account::{AccountBalance, Balance, Chain, Currency};
+use crate::account::{AccountBalance, Balance, Currency};
 use crate::dao::payment::PaymentDao;
-use crate::dao::transaction::TransactionDao;
-use crate::error::{DbResult, PaymentDriverError};
-use crate::ethereum::EthereumClient;
-use crate::models::{PaymentEntity, TransactionEntity};
-use crate::payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
+
+use crate::error::PaymentDriverError;
+use crate::ethereum::{Chain, EthereumClient, EthereumClientBuilder};
+use crate::models::{PaymentEntity, TxType};
+use crate::payment::{
+    PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus, PAYMENT_STATUS_FAILED,
+    PAYMENT_STATUS_NOT_ENOUGH_FUNDS, PAYMENT_STATUS_NOT_ENOUGH_GAS,
+};
 use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
-use actix_rt::Arbiter;
+
 use futures3::compat::*;
+use futures3::prelude::*;
+
+use crate::utils;
+
+use std::future::Future;
+use std::pin::Pin;
+
+use std::sync::Arc;
+use web3::Transport;
+
+mod config;
+mod faucet;
+mod sender;
 
 const GNT_TRANSFER_GAS: u32 = 55000;
 const GNT_FAUCET_GAS: u32 = 90000;
 
-const MAX_ETH_FAUCET_REQUESTS: u32 = 10;
-const ETH_FAUCET_SLEEP_SECONDS: u64 = 1;
+async fn get_eth_balance(
+    ethereum_client: &EthereumClient,
+    address: Address,
+) -> PaymentDriverResult<Balance> {
+    let block_number = None;
+    let amount = ethereum_client
+        .get_eth_balance(address, block_number)
+        .await?;
+    Ok(Balance::new(
+        utils::u256_to_big_dec(amount)?,
+        Currency::Eth {},
+    ))
+}
 
-const MAX_TESTNET_BALANCE: &str = "10000000000000";
+async fn get_gnt_balance(
+    gnt_contract: &Contract<Http>,
+    address: Address,
+) -> PaymentDriverResult<Balance> {
+    gnt_contract
+        .query("balanceOf", (address,), None, Options::default(), None)
+        .compat()
+        .await
+        .map_or_else(
+            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
+            |amount| {
+                Ok(Balance::new(
+                    utils::u256_to_big_dec(amount)?,
+                    Currency::Gnt {},
+                ))
+            },
+        )
+}
 
-const ETH_TX_SUCCESS: u64 = 1;
-const TRANSFER_LOGS_LENGTH: usize = 1;
-const TX_LOG_DATA_LENGTH: usize = 32;
-const TX_LOG_TOPICS_LENGTH: usize = 3;
-const TRANSFER_CANONICAL_SIGNATURE: &str =
-    "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+fn prepare_gnt_contract(
+    ethereum_client: &EthereumClient,
+    env: &config::EnvConfiguration,
+) -> PaymentDriverResult<Contract<Http>> {
+    prepare_contract(
+        ethereum_client,
+        env.gnt_contract_address,
+        include_bytes!("./contracts/gnt.json"),
+    )
+}
+
+fn prepare_contract(
+    ethereum_client: &EthereumClient,
+    address: Address,
+    json_abi: &[u8],
+) -> PaymentDriverResult<Contract<Http>> {
+    let contract = ethereum_client.get_contract(address, json_abi)?;
+    Ok(contract)
+}
+
+fn prepare_gnt_faucet_contract(
+    ethereum_client: &EthereumClient,
+    env: &config::EnvConfiguration,
+) -> PaymentDriverResult<Option<Contract<Http>>> {
+    if let Some(gnt_faucet_address) = env.gnt_faucet_address {
+        Ok(Some(prepare_contract(
+            ethereum_client,
+            gnt_faucet_address,
+            include_bytes!("./contracts/faucet.json"),
+        )?))
+    } else {
+        Ok(None)
+    }
+}
+
+fn verify_gnt_tx<T: Transport>(
+    receipt: &TransactionReceipt,
+    contract: &Contract<T>,
+) -> PaymentDriverResult<()> {
+    verify_gnt_tx_logs(&receipt.logs, contract)?;
+    verify_gnt_tx_status(&receipt.status)?;
+    Ok(())
+}
+
+fn verify_gnt_tx_status(status: &Option<U64>) -> PaymentDriverResult<()> {
+    match status {
+        None => Err(PaymentDriverError::UnknownTransaction),
+        Some(status) => {
+            if *status == U64::from(config::ETH_TX_SUCCESS) {
+                Ok(())
+            } else {
+                Err(PaymentDriverError::FailedTransaction)
+            }
+        }
+    }
+}
+
+fn verify_gnt_tx_logs<T: Transport>(
+    logs: &Vec<Log>,
+    contract: &Contract<T>,
+) -> PaymentDriverResult<()> {
+    if logs.len() != config::TRANSFER_LOGS_LENGTH {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    verify_gnt_tx_log(&logs[0], contract)?;
+    Ok(())
+}
+
+fn verify_gnt_tx_log<T: Transport>(log: &Log, contract: &Contract<T>) -> PaymentDriverResult<()> {
+    if log.address != contract.address() {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    verify_gnt_tx_log_topics(&log.topics)?;
+    verify_gnt_tx_log_data(&log.data)?;
+    Ok(())
+}
+
+fn verify_gnt_tx_log_topics(topics: &Vec<H256>) -> PaymentDriverResult<()> {
+    if topics.len() != config::TX_LOG_TOPICS_LENGTH {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    // topics[0] is the keccak-256 of the Transfer(address,address,uint256) canonical signature
+    verify_gnt_tx_log_canonical_signature(&topics[0])?;
+    Ok(())
+}
+
+fn verify_gnt_tx_log_canonical_signature(canonical_signature: &H256) -> PaymentDriverResult<()> {
+    if *canonical_signature
+        != H256::from_slice(&hex::decode(config::TRANSFER_CANONICAL_SIGNATURE).unwrap())
+    {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    Ok(())
+}
+
+fn verify_gnt_tx_log_data(data: &Bytes) -> PaymentDriverResult<()> {
+    if data.0.len() != config::TX_LOG_DATA_LENGTH {
+        return Err(PaymentDriverError::UnknownTransaction);
+    }
+    Ok(())
+}
+
+fn build_payment_details(receipt: &TransactionReceipt) -> PaymentDriverResult<PaymentDetails> {
+    // topics[1] is the value of the _from address as H256
+    let sender = utils::topic_to_address(&receipt.logs[0].topics[1]);
+    // topics[2] is the value of the _to address as H256
+    let recipient = utils::topic_to_address(&receipt.logs[0].topics[2]);
+    // The data field from the returned Log struct contains the transferred token amount value
+    let amount: U256 = utils::u256_from_big_endian(&receipt.logs[0].data.0);
+    // Do not have any info about date in receipt
+    let date = None;
+
+    Ok(PaymentDetails {
+        recipient: utils::addr_to_str(recipient).into(),
+        sender: utils::addr_to_str(sender).into(),
+        amount: utils::u256_to_big_dec(amount)?,
+        date,
+    })
+}
 
 pub struct GntDriver {
-    ethereum_client: EthereumClient,
-    gnt_contract: Contract<Http>,
-    eth_faucet_address: String,
-    gnt_faucet_address: Address,
     db: DbExecutor,
+    ethereum_client: Arc<EthereumClient>,
+    gnt_contract: Arc<Contract<Http>>,
+    faucet_contract: Option<Arc<Contract<Http>>>,
+    tx_sender: Addr<sender::TransactionSender>,
 }
 
 impl GntDriver {
     /// Creates new driver
-    pub fn new(
-        chain: Chain,
-        geth_address: &str,
-        gnt_contract_address: Address,
-        eth_faucet_address: impl Into<String>,
-        gnt_faucet_address: Address,
-        db: DbExecutor,
-    ) -> PaymentDriverResult<GntDriver> {
-        // TODO
-        let migrate_db = db.clone();
-        Arbiter::spawn(async move {
-            if let Err(e) = crate::dao::init(&migrate_db).await {
-                log::error!("gnt migration error: {}", e);
-            }
-        });
+    pub async fn new(db: DbExecutor) -> PaymentDriverResult<GntDriver> {
+        crate::dao::init(&db)
+            .await
+            .map_err(PaymentDriverError::library_err_msg)?;
+        let chain = Chain::from_env()?;
+        let ethereum_client = Arc::new(EthereumClientBuilder::from_env()?.build()?);
+        let env = config::EnvConfiguration::from_env(chain)?;
 
-        let ethereum_client = EthereumClient::new(chain, geth_address)?;
+        let gnt_contract = Arc::new(prepare_gnt_contract(&ethereum_client, &env)?);
+        let faucet_contract = prepare_gnt_faucet_contract(&ethereum_client, &env)?.map(Arc::new);
+        let tx_sender = sender::TransactionSender::new(ethereum_client.clone(), db.clone());
 
-        let gnt_contract = GntDriver::prepare_contract(
-            &ethereum_client,
-            gnt_contract_address,
-            include_bytes!("./contracts/gnt.json"),
-        )?;
-
-        let eth_faucet_address = eth_faucet_address.into();
         Ok(GntDriver {
+            db,
             ethereum_client,
             gnt_contract,
-            eth_faucet_address,
-            gnt_faucet_address,
-            db,
+            faucet_contract,
+            tx_sender,
         })
-    }
-
-    /// Initializes testnet funds
-    pub async fn init_funds(
-        &self,
-        address: Address,
-        sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()> {
-        let max_testnet_balance = U256::from_dec_str(MAX_TESTNET_BALANCE).unwrap();
-
-        if self.get_eth_balance(address).await?.amount < max_testnet_balance {
-            log::info!("Requesting Eth from Faucet...");
-            self.request_eth_from_faucet(address).await?;
-        } else {
-            log::info!("To much Eth...");
-        }
-
-        // cannot have more than "10000000000000" Gnt
-        // blocked by Faucet contract
-        if self.get_gnt_balance(address).await?.amount < max_testnet_balance {
-            println!("Requesting Gnt from Faucet...");
-            self.request_gnt_from_faucet(address, sign_tx).await?;
-        } else {
-            println!("To much Gnt...");
-        }
-
-        Ok(())
-    }
-
-    /// Transfers Gnt
-    pub async fn transfer_gnt(
-        &self,
-        amount: &PaymentAmount,
-        sender: Address,
-        recipient: Address,
-        sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<H256> {
-        let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount);
-
-        if gnt_amount > self.get_gnt_balance(sender).await?.amount {
-            return Err(PaymentDriverError::InsufficientFunds);
-        }
-
-        let tx = self
-            .prepare_raw_tx(
-                sender,
-                gas_amount,
-                &self.gnt_contract,
-                "transfer",
-                (recipient, gnt_amount),
-            )
-            .await?;
-
-        let tx_hash = self.send_and_save_raw_tx(&tx, sender, sign_tx).await?;
-        Ok(tx_hash)
-    }
-
-    /// Returns Gnt balance
-    pub async fn get_gnt_balance(
-        &self,
-        address: ethereum_types::Address,
-    ) -> PaymentDriverResult<Balance> {
-        self.gnt_contract
-            .query("balanceOf", (address,), None, Options::default(), None)
-            .compat()
-            .await
-            .map_or_else(
-                |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
-                |balance| Ok(Balance::new(balance, Currency::Gnt {})),
-            )
-    }
-
-    /// Returns ether balance
-    pub async fn get_eth_balance(&self, address: Address) -> PaymentDriverResult<Balance> {
-        let block_number = None;
-        let amount = self
-            .ethereum_client
-            .get_eth_balance(address, block_number)
-            .await?;
-        Ok(Balance::new(amount, Currency::Eth {}))
-    }
-
-    /// Requests Eth from Faucet
-    async fn request_eth_from_faucet(&self, address: Address) -> PaymentDriverResult<()> {
-        let sleep_time = time::Duration::from_secs(ETH_FAUCET_SLEEP_SECONDS);
-        let mut counter = 0;
-        while counter < MAX_ETH_FAUCET_REQUESTS {
-            if self.request_eth(address).await.is_ok() {
-                break;
-            } else {
-                println!("Failed to request Eth from Faucet...");
-            }
-            thread::sleep(sleep_time);
-            counter += 1;
-        }
-
-        if counter < MAX_ETH_FAUCET_REQUESTS {
-            Ok(())
-        } else {
-            Err(PaymentDriverError::LibraryError(format!(
-                "Cannot request Eth from Faucet"
-            )))
-        }
-    }
-
-    async fn request_eth(&self, address: Address) -> Result<(), reqwest::Error> {
-        let mut uri = self.eth_faucet_address.clone();
-        uri.push('/');
-        let addr: String = format!("{:x?}", address);
-        uri.push_str(&addr.as_str()[2..]);
-        println!("HTTP GET {:?}", uri);
-        let _body = reqwest::get(uri.as_str())
-            .await?
-            .json::<HashMap<String, String>>()
-            .await?;
-        Ok(())
     }
 
     /// Requests Gnt from Faucet
-    async fn request_gnt_from_faucet(
+    fn request_gnt_from_faucet<'a>(
         &self,
         address: Address,
-        sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()> {
-        let contract = GntDriver::prepare_contract(
-            &self.ethereum_client,
-            self.gnt_faucet_address.clone(),
-            include_bytes!("./contracts/faucet.json"),
-        )?;
-
-        let tx = self
-            .prepare_raw_tx(address, U256::from(GNT_FAUCET_GAS), &contract, "create", ())
-            .await?;
-
-        let _tx_hash = self.send_and_save_raw_tx(&tx, address, sign_tx).await?;
-
-        Ok(())
-    }
-
-    async fn send_and_save_raw_tx(
-        &self,
-        raw_tx: &RawTransaction,
-        sender: Address,
-        sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<H256> {
-        let tx_hash = self.send_raw_transaction(raw_tx, sign_tx).await?;
-        // for some reason hash returned from ethereum is different than raw_tx.hash()
-        // need to find the answer
-        self.save_transaction(raw_tx, sender, tx_hash).await?;
-        Ok(tx_hash)
-    }
-
-    async fn send_raw_transaction(
-        &self,
-        raw_tx: &RawTransaction,
-        sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<H256> {
-        let chain_id = self.get_chain_id();
-        let signature = sign_tx(raw_tx.hash(chain_id)).await;
-        let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
-
-        let tx_hash = self.send_transaction(signed_tx).await?;
-        Ok(tx_hash)
-    }
-
-    async fn check_gas_amount(
-        &self,
-        raw_tx: &RawTransaction,
-        sender: Address,
-    ) -> PaymentDriverResult<()> {
-        let eth_balance = self.get_eth_balance(sender).await?;
-        if raw_tx.gas_price * raw_tx.gas > eth_balance.amount {
-            Err(PaymentDriverError::InsufficientGas)
-        } else {
+        sign_tx: SignTx<'a>,
+    ) -> impl Future<Output = PaymentDriverResult<()>> + 'a {
+        let max_testnet_balance = utils::str_to_big_dec(config::MAX_TESTNET_BALANCE).unwrap();
+        // cannot have more than "10000000000000" Gnt
+        // blocked by Faucet contract
+        let client = self.ethereum_client.clone();
+        let sender = self.tx_sender.clone();
+        let contract = self.gnt_contract.clone();
+        let faucet_contract = self.faucet_contract.clone().unwrap();
+        async move {
+            let balance = get_gnt_balance(&contract, address).await?;
+            if balance.amount < max_testnet_balance {
+                log::info!("Requesting Gnt from Faucet...");
+                let gas_price = client.get_gas_price().await?;
+                let mut b = sender::Builder::new(address, gas_price, client.chain_id())
+                    .with_tx_type(TxType::Faucet);
+                b.push(&faucet_contract, "create", (), GNT_FAUCET_GAS.into());
+                let resp = b.send_to(sender.clone(), sign_tx).await?;
+                log::info!("send new tx: {:?}", resp);
+                for tx_id in resp {
+                    let _ = sender.send(sender::WaitForTx { tx_id }).await??;
+                }
+            }
             Ok(())
         }
     }
-
-    async fn prepare_raw_tx<P>(
-        &self,
-        sender: Address,
-        gas: U256,
-        contract: &Contract<Http>,
-        func: &str,
-        tokens: P,
-    ) -> PaymentDriverResult<RawTransaction>
-    where
-        P: Tokenize,
-    {
-        let tx = RawTransaction {
-            nonce: self.get_next_nonce(sender).await?,
-            to: Some(contract.address()),
-            value: U256::from(0),
-            gas_price: self.get_gas_price().await?,
-            gas: gas,
-            data: contract.encode(func, tokens).unwrap(),
-        };
-
-        self.check_gas_amount(&tx, sender).await?;
-
-        Ok(tx)
-    }
-
-    fn prepare_contract(
-        ethereum_client: &EthereumClient,
-        address: Address,
-        json_abi: &[u8],
-    ) -> PaymentDriverResult<Contract<Http>> {
-        let contract = ethereum_client.get_contract(address, json_abi)?;
-        Ok(contract)
-    }
-
-    fn get_chain_id(&self) -> u64 {
-        self.ethereum_client.get_chain_id()
-    }
-
-    async fn send_transaction(&self, tx: Vec<u8>) -> PaymentDriverResult<H256> {
-        let tx_hash = self.ethereum_client.send_tx(tx).await?;
-        Ok(tx_hash)
-    }
-
-    async fn get_next_nonce(&self, address: Address) -> PaymentDriverResult<U256> {
-        let nonce = self.ethereum_client.get_next_nonce(address).await?;
-        Ok(nonce)
-    }
-
-    async fn get_gas_price(&self) -> PaymentDriverResult<U256> {
-        let gas_price = self.ethereum_client.get_gas_price().await?;
-        Ok(gas_price)
-    }
-
-    fn prepare_payment_amounts(&self, amount: &PaymentAmount) -> (U256, U256) {
-        let gas_amount = if amount.gas_amount.is_some() {
-            amount.gas_amount.unwrap()
-        } else {
-            U256::from(GNT_TRANSFER_GAS)
-        };
-        (amount.base_currency_amount, gas_amount)
-    }
-
-    async fn save_transaction(
-        &self,
-        raw_tx: &RawTransaction,
-        sender: Address,
-        tx_hash: H256,
-    ) -> DbResult<()> {
-        let entity = self.raw_tx_to_entity(raw_tx, sender, tx_hash);
-        let dao: TransactionDao = self.db.as_dao();
-        dao.insert(entity).await?;
-        Ok(())
-    }
-
-    fn raw_tx_to_entity(
-        &self,
-        raw_tx: &RawTransaction,
-        sender: Address,
-        tx_hash: H256,
-    ) -> TransactionEntity {
-        // chain id always below i32 max value
-        let chain_id = self.get_chain_id() as i32;
-
-        let nonce = GntDriver::to_big_endian_hex(raw_tx.nonce);
-
-        TransactionEntity {
-            tx_hash: hex::encode(tx_hash.as_bytes()),
-            sender: hex::encode(sender),
-            chain: chain_id,
-            nonce: nonce,
-            timestamp: Utc::now().naive_utc(),
-        }
-    }
-
-    async fn add_payment<S>(
-        &self,
-        invoice_id: S,
-        amount: &PaymentAmount,
-        due_date: DateTime<Utc>,
-        recipient: Address,
-    ) -> PaymentDriverResult<()>
-    where
-        S: Into<String>,
-    {
-        let (gnt_amount, gas_amount) = self.prepare_payment_amounts(amount);
-
-        let payment = PaymentEntity {
-            amount: GntDriver::to_big_endian_hex(gnt_amount),
-            gas: GntDriver::to_big_endian_hex(gas_amount),
-            invoice_id: invoice_id.into(),
-            payment_due_date: due_date.naive_utc(),
-            recipient: hex::encode(recipient),
-            status: PaymentStatus::NotYet.to_i32(),
-            tx_hash: None,
-        };
-
-        let dao: PaymentDao = self.db.as_dao();
-        dao.insert(payment).await?;
-        Ok(())
-    }
-
-    fn to_big_endian_hex(value: U256) -> String {
-        let mut bytes = [0u8; 32];
-        value.to_big_endian(&mut bytes);
-        hex::encode(&bytes)
-    }
-
-    async fn update_payment_status<S>(&self, invoice_id: S, status: PaymentStatus) -> DbResult<()>
-    where
-        S: Into<String>,
-    {
-        let tx_hash = match &status {
-            PaymentStatus::Ok(confirmation) => Some(hex::encode(&confirmation.confirmation)),
-            _ => None,
-        };
-
-        let dao: PaymentDao = self.db.as_dao();
-        dao.update_status(invoice_id.into(), status.to_i32(), tx_hash)
-            .await?;
-
-        Ok(())
-    }
-
-    async fn get_payment_from_db(&self, invoice_id: String) -> DbResult<Option<PaymentEntity>> {
-        let dao: PaymentDao = self.db.as_dao();
-        dao.get(invoice_id).await
-    }
-
-    fn verify_gnt_tx(&self, receipt: &TransactionReceipt) -> PaymentDriverResult<()> {
-        self.verify_gnt_tx_logs(&receipt.logs)?;
-        self.verify_gnt_tx_status(&receipt.status)?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_status(&self, status: &Option<U64>) -> PaymentDriverResult<()> {
-        match status {
-            None => Err(PaymentDriverError::UnknownTransaction),
-            Some(status) => {
-                if *status == U64::from(ETH_TX_SUCCESS) {
-                    Ok(())
-                } else {
-                    Err(PaymentDriverError::FailedTransaction)
-                }
-            }
-        }
-    }
-
-    fn verify_gnt_tx_logs(&self, logs: &Vec<Log>) -> PaymentDriverResult<()> {
-        if logs.len() != TRANSFER_LOGS_LENGTH {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        self.verify_gnt_tx_log(&logs[0])?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log(&self, log: &Log) -> PaymentDriverResult<()> {
-        self.verify_gnt_tx_log_contract_address(&log.address)?;
-        self.verify_gnt_tx_log_topics(&log.topics)?;
-        self.verify_gnt_tx_log_data(&log.data)?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_contract_address(
-        &self,
-        contract_address: &Address,
-    ) -> PaymentDriverResult<()> {
-        if *contract_address != self.gnt_contract.address() {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_topics(&self, topics: &Vec<H256>) -> PaymentDriverResult<()> {
-        if topics.len() != TX_LOG_TOPICS_LENGTH {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        // topics[0] is the keccak-256 of the Transfer(address,address,uint256) canonical signature
-        self.verify_gnt_tx_log_canonical_signature(&topics[0])?;
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_canonical_signature(
-        &self,
-        canonical_signature: &H256,
-    ) -> PaymentDriverResult<()> {
-        if *canonical_signature
-            != H256::from_slice(&hex::decode(TRANSFER_CANONICAL_SIGNATURE).unwrap())
-        {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        Ok(())
-    }
-
-    fn verify_gnt_tx_log_data(&self, data: &Bytes) -> PaymentDriverResult<()> {
-        if data.0.len() != TX_LOG_DATA_LENGTH {
-            return Err(PaymentDriverError::UnknownTransaction);
-        }
-        Ok(())
-    }
-
-    fn build_payment_details(&self, receipt: &TransactionReceipt) -> PaymentDetails {
-        // topics[1] is the value of the _from address as H256
-        let sender = GntDriver::topic_to_address(&receipt.logs[0].topics[1]);
-        // topics[2] is the value of the _to address as H256
-        let recipient = GntDriver::topic_to_address(&receipt.logs[0].topics[2]);
-        // The data field from the returned Log struct contains the transferred token amount value
-        let amount: U256 = U256::from_big_endian(&receipt.logs[0].data.0);
-        // Do not have any info about date in receipt
-        let date = None;
-
-        PaymentDetails {
-            recipient,
-            sender,
-            amount,
-            date,
-        }
-    }
-
-    fn topic_to_address(topic: &H256) -> Address {
-        H160::from_slice(&topic.as_bytes()[12..])
-    }
 }
 
-#[async_trait(?Send)]
 impl PaymentDriver for GntDriver {
-    async fn init(
+    fn init<'a>(
         &self,
         mode: AccountMode,
-        address: Address,
-        sign_tx: SignTx<'_>,
-    ) -> Result<(), PaymentDriverError> {
-        if mode.contains(AccountMode::SEND) {
-            self.init_funds(address, sign_tx).await?;
-        }
-        Ok(())
+        address: &str,
+        sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+        use futures3::prelude::*;
+
+        Box::pin(
+            if mode.contains(AccountMode::SEND)
+                && self.ethereum_client.chain_id() == Chain::Rinkeby.id()
+            {
+                let address = utils::str_to_addr(address).unwrap();
+                let req = self.request_gnt_from_faucet(address, sign_tx);
+                let fut = async move {
+                    faucet::EthFaucetConfig::from_env()?
+                        .request_eth(address)
+                        .await?;
+                    req.await?;
+                    Ok(())
+                };
+
+                fut.left_future()
+            } else {
+                future::ok(()).right_future()
+            },
+        )
     }
 
     /// Returns account balance
-    async fn get_account_balance(&self, address: Address) -> PaymentDriverResult<AccountBalance> {
-        let gnt_balance = self.get_gnt_balance(address).await?;
-        let eth_balance = self.get_eth_balance(address).await?;
-
-        Ok(AccountBalance::new(gnt_balance, Some(eth_balance)))
+    fn get_account_balance(
+        &self,
+        address: &str,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>> {
+        let address: String = address.into();
+        let ethereum_client = self.ethereum_client.clone();
+        let gnt_contract = self.gnt_contract.clone();
+        Box::pin(async move {
+            let address = utils::str_to_addr(address.as_str())?;
+            let (eth_balance, gnt_balance) = future::try_join(
+                get_eth_balance(&ethereum_client, address),
+                get_gnt_balance(&gnt_contract, address),
+            )
+            .await?;
+            Ok(AccountBalance::new(gnt_balance, Some(eth_balance)))
+        })
     }
 
     /// Schedules payment
-    async fn schedule_payment(
-        &mut self,
+    fn schedule_payment<'a>(
+        &self,
         invoice_id: &str,
         amount: PaymentAmount,
-        sender: Address,
-        recipient: Address,
+        sender: &str,
+        recipient: &str,
         due_date: DateTime<Utc>,
-        sign_tx: SignTx<'_>,
-    ) -> PaymentDriverResult<()> {
-        // schedule payment
-        self.add_payment(invoice_id, &amount, due_date, recipient)
-            .await?;
+        sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+        let db = self.db.clone();
+        let client = self.ethereum_client.clone();
+        let invoice_id = invoice_id.to_owned();
+        let sender = sender.to_owned();
+        let recipient = recipient.to_owned();
+        let gnt_amount = utils::big_dec_to_u256(amount.base_currency_amount).unwrap();
+        let gas_amount = Default::default();
+        let gnt_contract = self.gnt_contract.clone();
+        let tx_sender = self.tx_sender.clone();
 
-        let tx_hash = self
-            .transfer_gnt(&amount, sender, recipient, sign_tx)
-            .await?;
+        let payment = PaymentEntity {
+            amount: utils::u256_to_big_endian_hex(gnt_amount),
+            gas: utils::u256_to_big_endian_hex(gas_amount),
+            invoice_id: invoice_id.clone(),
+            payment_due_date: due_date.naive_utc(),
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            status: PaymentStatus::NotYet.to_i32(),
+            tx_id: None,
+        };
+        async move {
+            db.as_dao::<PaymentDao>().insert(payment).await?;
+            let gas_price = client.get_gas_price().await?;
+            let chain_id = client.chain_id();
+            match transfer_gnt(
+                gnt_contract,
+                tx_sender,
+                gnt_amount,
+                utils::str_to_addr(&sender)?,
+                utils::str_to_addr(&recipient)?,
+                sign_tx,
+                gas_price,
+                chain_id,
+            )
+            .await
+            {
+                Ok(tx_id) => {
+                    db.as_dao::<PaymentDao>()
+                        .update_tx_id(invoice_id, tx_id)
+                        .await?;
+                }
+                Err(e) => {
+                    db.as_dao::<PaymentDao>()
+                        .update_status(
+                            invoice_id,
+                            match e {
+                                PaymentDriverError::InsufficientFunds => {
+                                    PAYMENT_STATUS_NOT_ENOUGH_FUNDS
+                                }
+                                PaymentDriverError::InsufficientGas => {
+                                    PAYMENT_STATUS_NOT_ENOUGH_GAS
+                                }
+                                _ => PAYMENT_STATUS_FAILED,
+                            },
+                        )
+                        .await?;
+                    log::error!("gnt transfer failed: {}", e);
+                    return Err(e);
+                }
+            }
 
-        // update payment status
-        self.update_payment_status(
-            invoice_id,
-            PaymentStatus::Ok(PaymentConfirmation::from(tx_hash.as_bytes())),
-        )
-        .await?;
+            Ok(())
+        }
+        .boxed_local()
+    }
 
-        Ok(())
+    /// Reschedules payment
+    fn reschedule_payment<'a>(
+        &self,
+        invoice_id: &str,
+        _sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+        let db = self.db.clone();
+        let tx_sender = self.tx_sender.clone();
+        let invoice_id = invoice_id.to_owned();
+        async move {
+            let payment = match db.as_dao::<PaymentDao>().get(invoice_id.clone()).await? {
+                Some(v) => v,
+                None => return Err(PaymentDriverError::PaymentNotFound(invoice_id)),
+            };
+            if let Some(tx_id) = payment.tx_id {
+                tx_sender.send(sender::Retry { tx_id }).await??;
+            }
+            Ok(())
+        }
+        .boxed_local()
     }
 
     /// Returns payment status
-    async fn get_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus> {
-        let payment = match self.get_payment_from_db(invoice_id.into()).await? {
-            None => {
-                return Ok(PaymentStatus::Unknown);
+    fn get_payment_status(
+        &self,
+        invoice_id: &str,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>> {
+        let invoice_id = invoice_id.to_owned();
+        let db = self.db.clone();
+        async move {
+            if let Some(status) = db
+                .as_dao::<PaymentDao>()
+                .get_payment_status(invoice_id.clone())
+                .await?
+            {
+                Ok(status)
+            } else {
+                Err(PaymentDriverError::UnknownPayment(invoice_id))
             }
-            Some(payment) => payment,
-        };
-        Ok(PaymentStatus::from(payment))
+        }
+        .boxed_local()
     }
 
     /// Verifies payment
-    async fn verify_payment(
+    fn verify_payment(
         &self,
         confirmation: &PaymentConfirmation,
-    ) -> PaymentDriverResult<PaymentDetails> {
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>> {
         let tx_hash: H256 = H256::from_slice(&confirmation.confirmation);
-        match self
-            .ethereum_client
-            .get_transaction_receipt(tx_hash)
-            .await?
-        {
-            None => Err(PaymentDriverError::NotFound),
-            Some(receipt) => {
-                self.verify_gnt_tx(&receipt)?;
-                Ok(self.build_payment_details(&receipt))
+        let ethereum_client = self.ethereum_client.clone();
+        let gnt_contract = self.gnt_contract.clone();
+        Box::pin(async move {
+            match ethereum_client.get_transaction_receipt(tx_hash).await? {
+                None => Err(PaymentDriverError::UnknownTransaction),
+                Some(receipt) => {
+                    verify_gnt_tx(&receipt, &gnt_contract)?;
+                    build_payment_details(&receipt)
+                }
             }
-        }
+        })
     }
 
     /// Returns sum of transactions from given address
-    #[allow(unused)]
-    async fn get_transaction_balance(
+    fn get_transaction_balance(
         &self,
-        payer: Address,
-        payee: Address,
-    ) -> PaymentDriverResult<Balance> {
+        _payer: &str,
+        _payee: &str,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>> {
         // TODO: Get real transaction balance
-        Ok(Balance {
+        Box::pin(future::ready(Ok(Balance {
             currency: Currency::Gnt,
-            amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
-        })
+            amount: utils::str_to_big_dec("1000000000000000000000000").unwrap(),
+        })))
     }
 }
 
+async fn transfer_gnt(
+    gnt_contract: Arc<Contract<Http>>,
+    tx_sender: Addr<sender::TransactionSender>,
+    gnt_amount: U256,
+    address: Address,
+    recipient: Address,
+    sign_tx: SignTx<'_>,
+    gas_price: U256,
+    chain_id: u64,
+) -> PaymentDriverResult<String> {
+    if gnt_amount > utils::big_dec_to_u256(get_gnt_balance(&gnt_contract, address).await?.amount)? {
+        return Err(PaymentDriverError::InsufficientFunds);
+    }
+
+    let mut batch = sender::Builder::new(address, gas_price, chain_id);
+    batch.push(
+        &gnt_contract,
+        "transfer",
+        (recipient, gnt_amount),
+        GNT_TRANSFER_GAS.into(),
+    );
+    let r = batch.send_to(tx_sender, sign_tx).await?;
+    Ok(r.into_iter().next().unwrap())
+}
+
 #[cfg(test)]
+
 mod tests {
-    use ethereum_types::{Address, U256};
-
     use super::*;
-    use crate::account::{Chain, Currency};
+    use crate::account::Currency;
+    use crate::utils;
 
-    const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
-    const GNT_CONTRACT_ADDRESS: &str = "924442A66cFd812308791872C4B242440c108E19";
 
-    const ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
-    const GNT_FAUCET_ADDRESS: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
-
-    fn to_address(address: &str) -> Address {
-        address.parse().unwrap()
-    }
-
-    #[tokio::test]
+    #[actix_rt::test]
     async fn test_new_driver() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            to_address(GNT_CONTRACT_ADDRESS),
-            ETH_FAUCET_ADDRESS,
-            to_address(GNT_FAUCET_ADDRESS),
-            DbExecutor::new(":memory:").unwrap(),
-        );
-        assert!(driver.is_ok());
+        {
+            let driver = GntDriver::new(DbExecutor::new(":memory:").unwrap()).await;
+            assert!(driver.is_ok());
+        }
+
+        tokio::time::delay_for(std::time::Duration::from_millis(5)).await;
         Ok(())
     }
 
-    #[tokio::test]
+    #[actix_rt::test]
     async fn test_get_eth_balance() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            to_address(GNT_CONTRACT_ADDRESS),
-            ETH_FAUCET_ADDRESS,
-            to_address(GNT_FAUCET_ADDRESS),
-            DbExecutor::new(":memory:")?,
-        )
-        .unwrap();
-        let eth_balance = driver.get_eth_balance(to_address(ETH_ADDRESS)).await?;
+        let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
+        let eth_balance =
+            get_eth_balance(&ethereum_client, utils::str_to_addr(ETH_ADDRESS)?).await?;
         assert_eq!(eth_balance.currency, Currency::Eth {});
-        assert!(eth_balance.amount >= U256::from(0));
+        assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
         Ok(())
     }
 
-    #[tokio::test]
+    #[actix_rt::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            to_address(GNT_CONTRACT_ADDRESS),
-            ETH_FAUCET_ADDRESS,
-            to_address(GNT_FAUCET_ADDRESS),
-            DbExecutor::new(":memory:")?,
-        )
-        .unwrap();
-        let gnt_balance = driver.get_gnt_balance(to_address(ETH_ADDRESS)).await?;
+        let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
+        let gnt_contract = prepare_gnt_contract(&ethereum_client, &config::CFG_TESTNET)?;
+        let gnt_balance = get_gnt_balance(&gnt_contract, utils::str_to_addr(ETH_ADDRESS)?).await?;
         assert_eq!(gnt_balance.currency, Currency::Gnt {});
-        assert!(gnt_balance.amount >= U256::from(0));
+        assert!(gnt_balance.amount >= utils::str_to_big_dec("0")?);
         Ok(())
     }
 
-    #[tokio::test]
+    #[actix_rt::test]
     async fn test_get_account_balance() -> anyhow::Result<()> {
-        let driver = GntDriver::new(
-            Chain::Rinkeby,
-            GETH_ADDRESS,
-            to_address(GNT_CONTRACT_ADDRESS),
-            ETH_FAUCET_ADDRESS,
-            to_address(GNT_FAUCET_ADDRESS),
-            DbExecutor::new(":memory:")?,
-        )
-        .unwrap();
+        let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
 
-        let balance = driver
-            .get_account_balance(to_address(ETH_ADDRESS))
-            .await
-            .unwrap();
+        let balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
 
         let gnt_balance = balance.base_currency;
         assert_eq!(gnt_balance.currency, Currency::Gnt {});
-        assert!(gnt_balance.amount >= U256::from(0));
+        assert!(gnt_balance.amount >= utils::str_to_big_dec("0")?);
 
         let some_eth_balance = balance.gas;
         assert!(some_eth_balance.is_some());
 
         let eth_balance = some_eth_balance.unwrap();
         assert_eq!(eth_balance.currency, Currency::Eth {});
-        assert!(eth_balance.amount >= U256::from(0));
+        assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
+        Ok(())
+    }
+
+    #[actix_rt::test]
+    async fn test_verify_payment() -> anyhow::Result<()> {
+        let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
+        let tx_hash: Vec<u8> =
+            hex::decode("df06916d8a8fe218e6261d3e811b1d9aee9cf8e07fb539431f0433abcdd9a8c2")
+                .unwrap();
+        let confirmation = PaymentConfirmation::from(&tx_hash);
+
+        let expected = PaymentDetails {
+            recipient: String::from("0x43a5b798e0e78be13b7bc0c553e433fb5b639be5"),
+            sender: String::from("0x43a5b798e0e78be13b7bc0c553e433fb5b639be5"),
+            amount: utils::str_to_big_dec("0.00000000000001")?,
+            date: None,
+        };
+        let details = driver.verify_payment(&confirmation).await?;
+        assert_eq!(details, expected);
         Ok(())
     }
 }
