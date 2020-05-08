@@ -4,6 +4,7 @@ use chrono::Utc;
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::runtime::Runtime;
 
 use ya_client_model::market::Offer;
 use ya_market_decentralized::protocol::callbacks::HandlerSlot;
@@ -69,9 +70,24 @@ async fn main() -> anyhow::Result<()> {
             Ok(vec![])
         });
     let discovery = Arc::new(DiscoveryExample::new(builder)?);
+    let dicovery_clone = discovery.clone();
 
-    let mut offer = Offer::new(json!({}), format!(""));
-    offer.offer_id = Some(format!("Caller-1"));
+    std::thread::spawn(move || {
+        let offer = mock_offer(format!("Caller-thread"));
 
-    Ok(discovery.broadcast_offer(offer).await?)
+        let mut rt = Runtime::new().unwrap();
+        rt.block_on(dicovery_clone.broadcast_offer(offer))
+    });
+
+    let offer = mock_offer(format!("Caller-local"));
+    discovery.broadcast_offer(offer).await?;
+
+    Ok(())
 }
+
+fn mock_offer(caller: String) -> Offer {
+    let mut offer = Offer::new(json!({}), format!(""));
+    offer.offer_id = Some(caller);
+    offer
+}
+
