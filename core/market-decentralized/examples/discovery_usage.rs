@@ -3,13 +3,13 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::json;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::runtime::Runtime;
 
 use ya_client_model::market::Offer;
 use ya_market_decentralized::protocol::callbacks::HandlerSlot;
 use ya_market_decentralized::protocol::{
-    Discovery, DiscoveryBuilder, DiscoveryError, OfferReceived, RetrieveOffers,
+    Discovery, DiscoveryBuilder, DiscoveryInitError, OfferReceived, RetrieveOffers,
+    DiscoveryError, DiscoveryFactory,
 };
 
 // =========================================== //
@@ -22,15 +22,16 @@ struct DiscoveryExample {
     retrieve_offers: HandlerSlot<RetrieveOffers>,
 }
 
-impl DiscoveryExample {
-    pub fn new(mut builder: DiscoveryBuilder) -> Result<DiscoveryExample, DiscoveryError> {
+impl DiscoveryFactory for DiscoveryExample {
+    fn new(mut builder: DiscoveryBuilder) -> Result<Arc<dyn Discovery>, DiscoveryInitError> {
         let offer_received = builder.offer_received_handler()?;
         let retrieve_offers = builder.retrieve_offers_handler()?;
 
-        Ok(DiscoveryExample {
+        let discovery = DiscoveryExample {
             offer_received,
             retrieve_offers,
-        })
+        };
+        Ok(Arc::new(discovery))
     }
 }
 
@@ -69,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
             log::info!("Offers request received.");
             Ok(vec![])
         });
-    let discovery = Arc::new(DiscoveryExample::new(builder)?);
+    let discovery = DiscoveryExample::new(builder)?;
     let dicovery_clone = discovery.clone();
 
     std::thread::spawn(move || {
@@ -90,4 +91,3 @@ fn mock_offer(caller: String) -> Offer {
     offer.offer_id = Some(caller);
     offer
 }
-
