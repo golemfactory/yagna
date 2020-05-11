@@ -2,7 +2,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 
-use crate::execution::ExeUnitsRegistry;
+use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use ya_client::cli::ApiOpts;
 
 /// Common configuration for all Provider commands.
@@ -31,6 +31,7 @@ impl ProviderConfig {
 
 #[derive(StructOpt)]
 pub struct NodeConfig {
+    /// Your human readable identity in the network.
     #[structopt(long, env = "NODE_NAME", hide_env_values = true)]
     pub node_name: String,
     /// Credit address. Can be set same as default identity.
@@ -49,6 +50,8 @@ pub struct RunConfig {
     pub api: ApiOpts,
     #[structopt(flatten)]
     pub node: NodeConfig,
+    #[structopt(flatten)]
+    pub runner_config: TaskRunnerConfig,
     /// Offer presets, that will be sent to market.
     pub presets: Vec<String>,
 }

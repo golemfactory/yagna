@@ -3,12 +3,13 @@ use bigdecimal::BigDecimal;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::watch;
 
 use super::factory::PaymentModelFactory;
 use super::model::{PaymentDescription, PaymentModel};
 
+use ya_agreement_utils::AgreementView;
 use ya_client::activity::ActivityProviderApi;
-use ya_client::model::market::Agreement;
 
 #[derive(Clone, PartialEq)]
 pub struct CostInfo {
@@ -40,19 +41,36 @@ pub struct AgreementPayment {
     pub update_interval: Duration,
     pub payment_model: Arc<dyn PaymentModel>,
     pub activities: HashMap<String, ActivityPayment>,
+
+    // Watches for waiting for activities. You can await on receiver
+    // to observe changes in number of active activities.
+    pub watch_sender: watch::Sender<usize>,
+    pub activities_watch: ActivitiesWaiter,
+}
+
+#[derive(Clone)]
+pub struct ActivitiesWaiter {
+    watch_receiver: watch::Receiver<usize>,
 }
 
 impl AgreementPayment {
-    pub fn new(agreement: &Agreement) -> Result<AgreementPayment> {
+    pub fn new(agreement: &AgreementView) -> Result<AgreementPayment> {
         let payment_description = PaymentDescription::new(agreement)?;
         let update_interval = payment_description.get_update_interval()?;
         let payment_model = PaymentModelFactory::create(payment_description)?;
+
+        // Initially we have 0 activities.
+        let (sender, receiver) = watch::channel(0);
 
         Ok(AgreementPayment {
             agreement_id: agreement.agreement_id.clone(),
             activities: HashMap::new(),
             payment_model,
             update_interval,
+            watch_sender: sender,
+            activities_watch: ActivitiesWaiter {
+                watch_receiver: receiver,
+            },
         })
     }
 
@@ -61,6 +79,11 @@ impl AgreementPayment {
             activity_id: activity_id.to_string(),
         };
         self.activities.insert(activity_id.to_string(), activity);
+
+        // Send number of activities. ActivitiesWaiter can be than awaited
+        // until required condition is met.
+        let num_activities = self.count_active_activities();
+        let _ = self.watch_sender.broadcast(num_activities);
     }
 
     pub fn activity_destroyed(&mut self, activity_id: &str) -> Result<()> {
@@ -90,10 +113,26 @@ impl AgreementPayment {
                     activity_id: activity_id.clone(),
                     cost_summary: cost_info,
                 };
+
+                // Send number of activities. ActivitiesWaiter can be than awaited
+                // until required condition is met.
+                let num_activities = self.count_active_activities();
+                self.watch_sender.broadcast(num_activities)?;
+
                 return Ok(());
             }
         }
         Err(anyhow!("Activity [{}] didn't exist before.", activity_id))
+    }
+
+    pub fn count_active_activities(&self) -> usize {
+        self.activities
+            .iter()
+            .filter(|(_, activity)| match activity {
+                ActivityPayment::Finalized { .. } => false,
+                _ => true,
+            })
+            .count()
     }
 
     pub fn cost_summary(&self) -> CostInfo {
@@ -172,4 +211,16 @@ pub async fn compute_cost(
     let cost = payment_model.compute_cost(&usage)?;
 
     Ok(CostInfo { cost, usage })
+}
+
+impl ActivitiesWaiter {
+    pub async fn wait_for_finish(mut self) {
+        log::debug!("Waiting for all activities to finish.");
+        while let Some(value) = self.watch_receiver.recv().await {
+            log::debug!("Num active activities left: {}.", value);
+            if value == 0 {
+                break;
+            }
+        }
+    }
 }

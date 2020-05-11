@@ -2,7 +2,6 @@
 members = [
     "agent/provider",
     "agent/requestor",
-    "agent/offer-model",
     "core/activity",
     "core/gftp",
     "core/identity",
@@ -24,6 +23,7 @@ members = [
     "service-bus/proto",
     "service-bus/router",
     "service-bus/util",
+    "utils/agreement-utils",
     "utils/scheduler",
     "utils/actix_utils",
     "utils/process",
@@ -61,7 +61,7 @@ ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev =
 
 ## OTHERS
 gftp = { path = "core/gftp" }
-ya-agent-offer-model = { path = "agent/offer-model" }
+ya-agreement-utils = { path = "utils/agreement-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}

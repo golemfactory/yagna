@@ -1,106 +1,138 @@
 use crate::{
-    AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
+    utils, AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
     PaymentDetails, PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
 };
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use ethereum_types::{Address, U256};
+use futures3::lock::Mutex;
+use futures3::prelude::*;
 use serde_json;
+
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct DummyDriver {
-    payments: HashMap<String, PaymentDetails>,
+    payments: Arc<Mutex<HashMap<String, PaymentDetails>>>,
 }
 
 impl DummyDriver {
     pub fn new() -> Self {
         Self {
-            payments: HashMap::new(),
+            payments: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
 
-#[async_trait(?Send)]
 impl PaymentDriver for DummyDriver {
-    async fn init(
+    fn init(
         &self,
         _mode: AccountMode,
-        _address: Address,
+        _address: &str,
         _sign_tx: SignTx<'_>,
-    ) -> Result<(), PaymentDriverError> {
-        Ok(())
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+        Box::pin(future::ready(Ok(())))
     }
 
-    async fn get_account_balance(
-        &self,
-        _address: Address,
-    ) -> Result<AccountBalance, PaymentDriverError> {
-        Ok(AccountBalance {
+    fn get_account_balance<'a>(
+        &'a self,
+        _address: &str,
+    ) -> Pin<Box<dyn Future<Output = Result<AccountBalance, PaymentDriverError>> + 'static>> {
+        let amount = "1000000000000000000000000";
+        Box::pin(future::ready(Ok(AccountBalance {
             base_currency: Balance {
                 currency: Currency::Gnt,
-                amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
+                amount: utils::str_to_big_dec(&amount).unwrap(),
             },
             gas: Some(Balance {
                 currency: Currency::Eth,
-                amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
+                amount: utils::str_to_big_dec(&amount).unwrap(),
             }),
-        })
+        })))
     }
 
-    async fn schedule_payment(
-        &mut self,
+    fn schedule_payment<'a>(
+        &self,
         invoice_id: &str,
         amount: PaymentAmount,
-        sender: Address,
-        recipient: Address,
+        sender: &str,
+        recipient: &str,
         _due_date: DateTime<Utc>,
-        _sign_tx: SignTx<'_>,
-    ) -> Result<(), PaymentDriverError> {
-        match self.payments.entry(invoice_id.to_string()) {
-            Entry::Occupied(_) => Err(PaymentDriverError::AlreadyScheduled),
-            Entry::Vacant(entry) => {
-                entry.insert(PaymentDetails {
-                    recipient,
-                    sender,
-                    amount: amount.base_currency_amount,
-                    date: Some(Utc::now()),
-                });
-                Ok(())
+        _sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+        let payments = self.payments.clone();
+        let details = PaymentDetails {
+            recipient: recipient.to_string(),
+            sender: sender.to_string(),
+            amount: amount.base_currency_amount,
+            date: Some(Utc::now()),
+        };
+        let invoice_id = invoice_id.to_string();
+
+        Box::pin(async move {
+            match payments.lock().await.entry(invoice_id.clone()) {
+                Entry::Occupied(_) => Err(PaymentDriverError::PaymentAlreadyScheduled(invoice_id)),
+                Entry::Vacant(entry) => {
+                    entry.insert(details);
+                    Ok(())
+                }
             }
-        }
+        })
     }
 
-    async fn get_payment_status(
+    fn reschedule_payment<'a>(
         &self,
         invoice_id: &str,
-    ) -> Result<PaymentStatus, PaymentDriverError> {
-        match self.payments.get(invoice_id) {
-            Some(details) => Ok(PaymentStatus::Ok(PaymentConfirmation::from(
-                serde_json::to_string(details).unwrap().as_bytes(),
-            ))),
-            None => Err(PaymentDriverError::NotFound),
-        }
+        _sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+        let invoice_id = invoice_id.to_owned();
+        let payments = self.payments.clone();
+
+        Box::pin(async move {
+            match payments.lock().await.get(&invoice_id) {
+                Some(_) => Ok(()),
+                None => Err(PaymentDriverError::PaymentNotFound(invoice_id)),
+            }
+        })
     }
 
-    async fn verify_payment(
+    fn get_payment_status(
         &self,
+        invoice_id: &str,
+    ) -> Pin<Box<dyn Future<Output = Result<PaymentStatus, PaymentDriverError>> + 'static>> {
+        let payments = self.payments.clone();
+        let invoice_id = invoice_id.to_owned();
+
+        Box::pin(async move {
+            match payments.lock().await.get(&invoice_id) {
+                Some(details) => Ok(PaymentStatus::Ok(PaymentConfirmation::from(
+                    serde_json::to_string(details).unwrap().as_bytes(),
+                ))),
+                None => Err(PaymentDriverError::PaymentNotFound(invoice_id)),
+            }
+        })
+    }
+
+    fn verify_payment<'a>(
+        &'a self,
         confirmation: &PaymentConfirmation,
-    ) -> Result<PaymentDetails, PaymentDriverError> {
+    ) -> Pin<Box<dyn Future<Output = Result<PaymentDetails, PaymentDriverError>> + 'static>> {
         let json_str = std::str::from_utf8(confirmation.confirmation.as_slice()).unwrap();
         let details = serde_json::from_str(&json_str).unwrap();
-        Ok(details)
+        Box::pin(future::ready(Ok(details)))
     }
 
-    async fn get_transaction_balance(
-        &self,
-        _payer: Address,
-        _payee: Address,
-    ) -> Result<Balance, PaymentDriverError> {
-        Ok(Balance {
+    fn get_transaction_balance<'a>(
+        &'a self,
+        _payer: &str,
+        _payee: &str,
+    ) -> Pin<Box<dyn Future<Output = Result<Balance, PaymentDriverError>> + 'static>> {
+        let amount = "1000000000000000000000000";
+        Box::pin(future::ready(Ok(Balance {
             currency: Currency::Gnt,
-            amount: U256::from_dec_str("1000000000000000000000000").unwrap(),
-        })
+            amount: utils::str_to_big_dec(&amount).unwrap(),
+        })))
     }
 }

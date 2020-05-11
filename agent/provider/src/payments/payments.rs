@@ -12,13 +12,14 @@ use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo
 use super::model::PaymentModel;
 use crate::execution::{ActivityCreated, ActivityDestroyed};
 use crate::market::provider_market::AgreementApproved;
+use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{
     DebitNote, Invoice, InvoiceStatus, NewDebitNote, NewInvoice, Payment,
 };
 use ya_client::payment::PaymentProviderApi;
-use ya_utils_actix::actix_handler::{send_message, ResultTypeGetter};
+use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
 
 // =========================================== //
@@ -36,19 +37,10 @@ pub struct UpdateCost {
 /// Changes activity state to Finalized and computes final cost.
 /// Sent by ActivityDestroyed handler after last debit note was sent to Requestor.
 #[derive(Message, Clone)]
-#[rtype(result = "Result<()>")]
+#[rtype("()")]
 pub struct FinalizeActivity {
     pub debit_info: DebitNoteInfo,
     pub cost_summary: CostInfo,
-}
-
-/// TODO: We should get this message from external world.
-///       Current code assumes, that we have only one activity per agreement.
-/// Computes costs for all activities and sends invoice to Requestor.
-#[derive(Message, Clone)]
-#[rtype(result = "Result<()>")]
-pub struct AgreementClosed {
-    pub agreement_id: String,
 }
 
 /// Checks if requestor accepted Invoice.
@@ -72,6 +64,20 @@ struct CheckInvoicePayments {
 struct InvoicesPaid {
     pub invoices: Vec<String>,
     pub payment: Payment,
+}
+
+/// Gets costs summary for agreement.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<CostsSummary>")]
+struct GetAgreementSummary {
+    pub agreement_id: String,
+}
+
+/// Cost summary for agreement.
+struct CostsSummary {
+    pub agreement_id: String,
+    pub cost_summary: CostInfo,
+    pub activities: Vec<String>,
 }
 
 // =========================================== //
@@ -335,10 +341,9 @@ impl Handler<ActivityCreated> for Payments {
 
             ActorResponse::reply(Ok(()))
         } else {
-            ActorResponse::reply(Err(anyhow!(
-                "Agreement [{}] wasn't registered.",
-                &msg.agreement_id
-            )))
+            let error = format!("Agreement [{}] wasn't registered.", &msg.agreement_id);
+            log::warn!("{}", error);
+            ActorResponse::reply(Err(anyhow!(error)))
         }
     }
 }
@@ -406,7 +411,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 debit_info: debit_note_info,
             };
 
-            address.do_send(msg);
+            let _ = address.send(msg).await;
         }
         .into_actor(self);
 
@@ -476,55 +481,68 @@ impl Handler<UpdateCost> for Payments {
 }
 
 impl Handler<FinalizeActivity> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = <FinalizeActivity as Message>::Result;
 
-    fn handle(&mut self, msg: FinalizeActivity, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: FinalizeActivity, _ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.debit_info.agreement_id) {
             log::info!("Activity [{}] finished.", &msg.debit_info.activity_id);
 
             let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_summary);
-
-            // Temporary. Requestor should close agreement, but for now we
-            // treat destroying activity as closing agreement.
-            send_message(
-                ctx.address(),
-                AgreementClosed {
-                    agreement_id: msg.debit_info.agreement_id.clone(),
-                },
-            );
-
-            return ActorResponse::reply(result);
+            if let Err(error) = result {
+                log::error!("Finalizing activity failed. Error: {}", error);
+            }
         } else {
             log::warn!(
                 "Not my activity - agreement [{}].",
                 &msg.debit_info.agreement_id
             );
-            return ActorResponse::reply(Err(anyhow!("")));
         }
     }
 }
 
+/// Computes costs for all activities and sends invoice to Requestor.
 impl Handler<AgreementClosed> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: AgreementClosed, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
             log::info!(
                 "Payments - agreement [{}] closed. Computing cost summary...",
                 &msg.agreement_id
             );
 
-            let cost_summary = agreement.cost_summary();
-            let activities = agreement.list_activities();
+            let activities_watch = agreement.activities_watch.clone();
             let provider_context = self.context.clone();
             let agreement_id = msg.agreement_id.clone();
+            let myself = ctx.address().clone();
 
             let future = async move {
+                activities_watch.wait_for_finish().await;
+
+                let summary = async move {
+                    let msg = GetAgreementSummary { agreement_id };
+                    myself.send(msg).await?
+                }
+                .await
+                .map_err(|error| log::error!("Shouldn't happen: {}", error))
+                .unwrap_or(CostsSummary::invalid());
+
+                let CostsSummary {
+                    cost_summary,
+                    activities,
+                    ..
+                } = summary;
+
                 // Resend invoice until it will reach provider.
                 // Note: that we don't remove invoices that were issued but not sent.
                 loop {
-                    match send_invoice(&provider_context, &agreement_id, &cost_summary, &activities)
-                        .await
+                    match send_invoice(
+                        &provider_context,
+                        &msg.agreement_id,
+                        &cost_summary,
+                        &activities,
+                    )
+                    .await
                     {
                         Ok(invoice) => return invoice,
                         Err(error) => {
@@ -551,6 +569,31 @@ impl Handler<AgreementClosed> for Payments {
         }
 
         return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
+    }
+}
+
+/// If Agreement was broken, we should behave like it was closed.
+impl Handler<AgreementBroken> for Payments {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
+        if !self.agreements.contains_key(&msg.agreement_id) {
+            log::warn!(
+                "Payments - agreement [{}] does not exist -- not broken.",
+                &msg.agreement_id
+            );
+            return ActorResponse::reply(Ok(()));
+        }
+
+        let address = ctx.address().clone();
+        let future = async move {
+            let msg = AgreementClosed {
+                agreement_id: msg.agreement_id,
+            };
+            Ok(address.send(msg).await??)
+        };
+
+        return ActorResponse::r#async(future.into_actor(self));
     }
 }
 
@@ -680,6 +723,38 @@ impl Handler<InvoicesPaid> for Payments {
         log::info!("Invoices waiting for payment: {:#?}", left_to_pay);
 
         return ActorResponse::reply(Ok(()));
+    }
+}
+
+impl Handler<GetAgreementSummary> for Payments {
+    type Result = ActorResponse<Self, CostsSummary, Error>;
+
+    fn handle(&mut self, msg: GetAgreementSummary, _ctx: &mut Context<Self>) -> Self::Result {
+        if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
+            let cost_summary = agreement.cost_summary();
+            let activities = agreement.list_activities();
+
+            let summary = CostsSummary {
+                agreement_id: msg.agreement_id,
+                cost_summary,
+                activities,
+            };
+            return ActorResponse::reply(Ok(summary));
+        }
+        return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
+    }
+}
+
+impl CostsSummary {
+    pub fn invalid() -> CostsSummary {
+        CostsSummary {
+            agreement_id: "".to_string(),
+            cost_summary: CostInfo {
+                cost: BigDecimal::from(0),
+                usage: vec![],
+            },
+            activities: vec![],
+        }
     }
 }
 

@@ -6,9 +6,10 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client = { version = "0.3", features = ['cli'] }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
 ya-core-model = { version = "0.1", features = ['activity'] }
-ya-agent-offer-model="0.1.0"
+ya-agreement-utils = "0.1"
 ya-utils-actix = "0.1"
 ya-utils-process = "0.1"
 ya-utils-path = "0.1"
@@ -22,9 +23,10 @@ derive_more = "0.99.3"
 dialoguer = "0.5.0"
 dotenv = "0.15.0"
 env_logger = "0.7"
-libc = "0.2"
 futures = "0.3"
 futures-util = "0.3.4"
+humantime = "2.0.0"
+libc = "0.2"
 log = "0.4.8"
 log-derive = "0.4"
 path-clean = "0.1.0"

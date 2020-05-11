@@ -3,9 +3,6 @@ use crate::error::{Error, PaymentError, PaymentResult};
 use crate::models as db_models;
 use crate::utils::get_sign_tx;
 use bigdecimal::BigDecimal;
-use ethereum_types::{Address, U256};
-use futures::lock::Mutex;
-use num_bigint::ToBigInt;
 use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
@@ -19,56 +16,10 @@ use ya_payment_driver::{
 };
 use ya_persistence::executor::DbExecutor;
 
-const PRECISION: u64 = 1_000_000_000_000_000_000;
-const GAS_LIMIT: u64 = 1_000_000_000_000_000_000; // TODO: Handle gas limits otherwise
-
 #[derive(Clone)]
 pub struct PaymentProcessor {
-    driver: Arc<Mutex<Box<dyn PaymentDriver + Send + Sync + 'static>>>,
+    driver: Arc<dyn PaymentDriver + Send + Sync + 'static>,
     db_executor: DbExecutor,
-}
-
-fn str_to_addr(addr: &str) -> PaymentResult<Address> {
-    match addr.trim_start_matches("0x").parse() {
-        Ok(addr) => Ok(addr),
-        Err(e) => Err(PaymentError::Address(addr.to_string())),
-    }
-}
-
-fn addr_to_str(addr: Address) -> String {
-    format!("0x{}", hex::encode(addr.to_fixed_bytes()))
-}
-
-fn big_dec_to_u256(v: BigDecimal) -> PaymentResult<U256> {
-    let v = v * Into::<BigDecimal>::into(PRECISION);
-    let v = v.to_bigint().unwrap();
-    let v = &v.to_string();
-    Ok(U256::from_dec_str(v)?)
-}
-
-fn u256_to_big_dec(v: U256) -> PaymentResult<BigDecimal> {
-    let v: BigDecimal = v.to_string().parse()?;
-    Ok(v / Into::<BigDecimal>::into(PRECISION))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_currency_conversion() {
-        let amount_str = "10000.123456789012345678";
-        let big_dec: BigDecimal = amount_str.parse().unwrap();
-        let u256 = big_dec_to_u256(big_dec.clone()).unwrap();
-        assert_eq!(big_dec, u256_to_big_dec(u256).unwrap());
-    }
-
-    #[test]
-    fn test_address_conversion() {
-        let addr_str = "0xd39a168f0480b8502c2531b2ffd8588c592d713a";
-        let addr = str_to_addr(addr_str).unwrap();
-        assert_eq!(addr_str, addr_to_str(addr));
-    }
 }
 
 impl PaymentProcessor {
@@ -77,20 +28,14 @@ impl PaymentProcessor {
         D: PaymentDriver + Send + Sync + 'static,
     {
         Self {
-            driver: Arc::new(Mutex::new(Box::new(driver))),
+            driver: Arc::new(driver),
             db_executor,
         }
     }
 
     async fn wait_for_payment(&self, invoice_id: &str) -> PaymentResult<PaymentConfirmation> {
         loop {
-            match self
-                .driver
-                .lock()
-                .await
-                .get_payment_status(&invoice_id)
-                .await?
-            {
+            match self.driver.get_payment_status(&invoice_id).await? {
                 PaymentStatus::Ok(confirmation) => return Ok(confirmation),
                 PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
                 _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),
@@ -107,16 +52,14 @@ impl PaymentProcessor {
             // FIXME: Move code below back to PaymentProcessor.schedule_payment
             let invoice_id = invoice.invoice_id.clone();
             let amount = PaymentAmount {
-                base_currency_amount: big_dec_to_u256(invoice.amount.clone())?,
+                base_currency_amount: invoice.amount.clone(),
                 gas_amount: None,
             };
             // TODO: Allow signing transactions with different key than node ID
-            let sender = str_to_addr(&invoice.recipient_id)?;
-            let recipient = str_to_addr(&invoice.credit_account_id)?;
+            let sender = invoice.recipient_id.as_str();
+            let recipient = invoice.credit_account_id.as_str();
             let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
             self.driver
-                .lock()
-                .await
                 .schedule_payment(
                     &invoice_id,
                     amount,
@@ -192,14 +135,9 @@ impl PaymentProcessor {
         let confirmation = PaymentConfirmation {
             confirmation: payment.payment.details.clone(),
         };
-        let details = self
-            .driver
-            .lock()
-            .await
-            .verify_payment(&confirmation)
-            .await?;
+        let details = self.driver.verify_payment(&confirmation).await?;
 
-        let actual_amount = u256_to_big_dec(details.amount)?;
+        let actual_amount = details.amount;
         let declared_amount: BigDecimal = payment.payment.amount.clone().into();
         if actual_amount != declared_amount {
             let msg = format!(
@@ -223,7 +161,7 @@ impl PaymentProcessor {
         }
 
         // Translate account ids to lower case, because recipient will be address without checksum.
-        let recipient = addr_to_str(details.recipient);
+        let recipient = details.recipient.clone();
         let account_ids = invoice_dao
             .get_accounts_ids(invoice_ids.clone())
             .await?
@@ -248,11 +186,9 @@ impl PaymentProcessor {
             .await?;
         let bc_balance = self
             .driver
-            .lock()
-            .await
-            .get_transaction_balance(details.sender, details.recipient)
+            .get_transaction_balance(details.sender.as_str(), details.recipient.as_str())
             .await?;
-        let bc_balance = u256_to_big_dec(bc_balance.amount)?;
+        let bc_balance = bc_balance.amount;
 
         if bc_balance < db_balance + actual_amount {
             let msg = "Transaction balance too low (probably tx hash re-used)".to_string();
@@ -276,7 +212,7 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn init(&self, addr: Address, requestor: bool, provider: bool) -> PaymentResult<()> {
+    pub async fn init(&self, addr: String, requestor: bool, provider: bool) -> PaymentResult<()> {
         let mut mode = AccountMode::NONE;
         if requestor {
             mode |= AccountMode::SEND;
@@ -284,15 +220,13 @@ impl PaymentProcessor {
         if provider {
             mode |= AccountMode::RECV;
         }
-        let node_id = addr_to_str(addr).parse().unwrap();
+        let node_id = addr.parse().unwrap();
         let sign_tx = get_sign_tx(node_id);
-        Ok({ self.driver.lock().await.init(mode, addr, &sign_tx) }.await?)
+        Ok(self.driver.init(mode, addr.as_str(), &sign_tx).await?)
     }
 
-    pub async fn get_status(&self, addr: Address) -> PaymentResult<BigDecimal> {
-        let balance: AccountBalance =
-            { self.driver.lock().await.get_account_balance(addr) }.await?;
-
-        Ok(u256_to_big_dec(balance.base_currency.amount)?)
+    pub async fn get_status(&self, addr: &str) -> PaymentResult<BigDecimal> {
+        let balance: AccountBalance = self.driver.get_account_balance(addr).await?;
+        Ok(balance.base_currency.amount)
     }
 }

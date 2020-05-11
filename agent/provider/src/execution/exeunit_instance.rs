@@ -42,7 +42,7 @@ impl ExeUnitInstance {
             )
         })?;
 
-        log::debug!("Exeunit process spawned, pid: {}", child.pid());
+        log::info!("Exeunit process spawned, pid: {}", child.pid());
 
         let instance = ExeUnitInstance {
             name: name.to_string(),

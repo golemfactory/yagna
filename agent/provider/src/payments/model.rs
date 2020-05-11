@@ -1,10 +1,9 @@
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
-use serde_json::Value;
-use std::collections::HashMap;
+use serde_json::json;
 use std::time::Duration;
 
-use ya_client::model::market::Agreement;
+use ya_agreement_utils::AgreementView;
 
 /// Implementation of payment model which knows, how to compute amount
 /// of money, that requestor should pay for computations.
@@ -15,60 +14,52 @@ pub trait PaymentModel {
 
 /// Extracted commercial part of agreement.
 pub struct PaymentDescription {
-    pub commercial_agreement: HashMap<String, Value>,
+    pub commercial_agreement: AgreementView,
 }
 
 impl PaymentDescription {
-    pub fn new(agreement: &Agreement) -> Result<PaymentDescription> {
-        let properties = &agreement.offer.properties;
+    pub fn new(agreement: &AgreementView) -> Result<PaymentDescription> {
+        log::debug!("Agreement: {:?}", agreement.json);
 
-        let commercial = properties
-            .as_object()
-            .ok_or(anyhow!("Agreement properties has unexpected format."))?
-            .iter()
-            .filter(|(key, _)| key.starts_with("golem.com."))
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect::<HashMap<String, Value>>();
+        // Get rid of non commercial part of agreement.
+        let commercial = agreement
+            .pointer("/offer/properties/golem/com")
+            .ok_or(anyhow!("No commercial properties."))?
+            .clone();
+
+        // Rebuild structure. Properties will be still visible under full paths.
+        let commercial = json!({
+            "offer": {
+                "properties": {
+                    "golem": {
+                        "com": commercial
+                    }
+                }
+            }
+        });
 
         log::debug!("Commercial properties:\n{:#?}", &commercial);
 
         Ok(PaymentDescription {
-            commercial_agreement: commercial.clone(),
+            commercial_agreement: AgreementView {
+                json: commercial,
+                agreement_id: agreement.agreement_id.clone(),
+            },
         })
     }
 
     pub fn get_update_interval(&self) -> Result<Duration> {
-        let interval_addr = "golem.com.scheme.payu.interval_sec";
-        let interval = self.commercial_agreement.get(interval_addr).ok_or(anyhow!(
-            "Can't get payment update interval '{}'.",
-            interval_addr
-        ))?;
-        let interval = interval.as_f64().ok_or(anyhow!(
-            "Can't parse payment update interval '{}' to u64.",
-            interval_addr
-        ))?;
+        let interval_addr = "/offer/properties/golem/com/scheme/payu/interval_sec";
+        let interval = self
+            .commercial_agreement
+            .pointer_typed::<f64>(interval_addr)?;
         Ok(Duration::from_secs_f64(interval))
     }
 
     pub fn get_usage_coefficients(&self) -> Result<Vec<f64>> {
-        let coeffs_addr = "golem.com.pricing.model.linear.coeffs";
-        let usage_vec = self
+        let coeffs_addr = "/offer/properties/golem/com/pricing/model/linear/coeffs";
+        Ok(self
             .commercial_agreement
-            .get(coeffs_addr)
-            .ok_or(anyhow!(
-                "Can't find usage coefficients in agreement ('{}').",
-                coeffs_addr
-            ))?
-            .clone();
-
-        let usage: Vec<f64> = serde_json::from_value(usage_vec).map_err(|error| {
-            anyhow!(
-                "Can't parse usage vector '{}'. Error: {}",
-                coeffs_addr,
-                error
-            )
-        })?;
-
-        Ok(usage)
+            .pointer_typed::<Vec<f64>>(coeffs_addr)?)
     }
 }

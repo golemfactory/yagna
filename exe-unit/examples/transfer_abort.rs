@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tempdir::TempDir;
 use tokio::time::delay_for;
+use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::service::transfer::{AbortTransfers, TransferResource, TransferService};
@@ -140,7 +141,10 @@ async fn main() -> anyhow::Result<()> {
     let src_size = std::fs::metadata(&src_file)?.len();
 
     let agreement = Agreement {
-        json: serde_json::Value::Null,
+        agreement: AgreementView {
+            agreement_id: String::new(),
+            json: serde_json::Value::Null,
+        },
         agreement_id: String::new(),
         task_package: "".to_string(),
         usage_vector: Vec::new(),
