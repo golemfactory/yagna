@@ -29,8 +29,8 @@ async fn subscribe(
     body: Json<Offer>,
     id: Identity,
 ) -> HttpResponse {
-    let api = client_cache.get_privider_api(id.identity).await;
-    match api.subscribe(&body.into_inner()).await {
+    let api = client_cache.get_provider_api(id.identity).await;
+    match api.get(&id.identity).unwrap().subscribe(&body.into_inner()).await {
         Ok(subscription_id) => response::created(subscription_id),
         Err(err) => resolve_web_error(err),
     }

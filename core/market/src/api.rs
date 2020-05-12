@@ -1,6 +1,6 @@
-use actix_web::{HttpResponse, Scope};
+use actix_web::{HttpResponse, Scope, web};
 use awc::http::StatusCode;
-use futures::lock::Mutex;
+use futures::lock::{Mutex, MutexGuard};
 use jsonwebtoken::{encode, Header};
 use serde::{Deserialize, Serialize};
 use std::collections::{
@@ -8,6 +8,7 @@ use std::collections::{
     HashMap,
 };
 use std::time::Duration;
+use tokio::sync::{RwLock, RwLockReadGuard};
 
 use ya_client::{
     error::Error,
@@ -25,38 +26,47 @@ mod provider;
 mod requestor;
 
 #[derive(Default)]
-struct ClientCache {
+pub struct ClientCache {
     clients: Mutex<HashMap<NodeId, WebClient>>,
-    providers: Mutex<HashMap<NodeId, MarketProviderApi>>,
+    providers: RwLock<HashMap<NodeId, MarketProviderApi>>,
     requestors: Mutex<HashMap<NodeId, MarketRequestorApi>>,
 }
 
 impl ClientCache {
-    async fn get_api<T: WebInterface>(&self, node_id: NodeId) -> T {
+    async fn get_client<'a>(&'a self, node_id: NodeId) -> MutexGuard<'a, HashMap<NodeId, WebClient>> {
         let mut clients = self.clients.lock().await;
         log::warn!("clients: {}", clients.len());
         clients
             .entry(node_id)
-            .or_insert_with(|| build_web_client(node_id))
-            .interface()
-            .unwrap()
+            .or_insert_with(|| build_web_client(node_id));
+        clients
+    }
+
+    async fn get_provider_api<'a>(&'a self, node_id: NodeId) -> RwLockReadGuard<'a, HashMap<NodeId, MarketProviderApi>>  {
+        {
+            let apis = self.providers.read().await;
+            if apis.get(&node_id).is_some() {
+                return apis;
+            }
+        }
+
+            {
+                let clients = self.get_client(node_id).await;
+                let api = clients.get(&node_id).unwrap().interface().unwrap();
+                self.providers.write().await.insert(node_id, api);
+            }
+
+        self.providers.read().await
     }
 
     //TODO: make it return reference to api, to not clone it all the time
-    async fn get_privider_api(&self, node_id: NodeId) -> MarketProviderApi {
-        let mut providers = self.providers.lock().await;
-        match providers.entry(node_id) {
-            Occupied(entry) => entry.get().clone(),
-            Vacant(entry) => entry.insert(self.get_api(node_id).await).clone(),
-        }
-    }
-
     async fn get_requestor_api(&self, node_id: NodeId) -> MarketRequestorApi {
-        let mut requestors = self.requestors.lock().await;
-        match requestors.entry(node_id) {
-            Occupied(entry) => entry.get().clone(),
-            Vacant(entry) => entry.insert(self.get_api(node_id).await).clone(),
-        }
+        unimplemented!();
+        // let mut requestors = self.requestors.lock().await;
+        // match requestors.entry(node_id) {
+        //     Occupied(entry) => entry.get().clone(),
+        //     Vacant(entry) => entry.insert(self.get_client(node_id).await).clone(),
+        // }
     }
 }
 
