@@ -30,7 +30,7 @@ async fn subscribe(
     id: Identity,
 ) -> HttpResponse {
     let api = client_cache.get_provider_api(id.identity).await;
-    match api.get(&id.identity).unwrap().subscribe(&body.into_inner()).await {
+    match api.subscribe(&body.into_inner()).await {
         Ok(subscription_id) => response::created(subscription_id),
         Err(err) => resolve_web_error(err),
     }
