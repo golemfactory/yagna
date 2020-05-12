@@ -4931,7 +4931,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-market"
+name = "ya-market-forwarding"
 version = "0.1.0"
 dependencies = [
  "actix-rt",
@@ -5377,7 +5377,7 @@ dependencies = [
  "url 2.1.1",
  "ya-activity",
  "ya-identity",
- "ya-market",
+ "ya-market-forwarding",
  "ya-net",
  "ya-payment",
  "ya-persistence",

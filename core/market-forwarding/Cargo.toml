@@ -1,19 +1,19 @@
 [package]
-name = "ya-market"
+name = "ya-market-forwarding"
 version = "0.1.0"
-description = "Market Service Mk0 tunneling facade to central instance"
+description = "Market Service Mk0 forwarding facade to central instance"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
 ya-client = "0.3"
 ya-core-model = { version = "0.1", features = ["market"] }
+ya-net = "0.1"
 ya-persistence = "0.2"
 ya-service-api = "0.1"
+ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
-ya-service-api-interfaces = "0.1"
-ya-net = "0.1"
 
 actix-web = "2.0"
 anyhow = "1.0"

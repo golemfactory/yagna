@@ -1,7 +1,7 @@
 use chrono::Utc;
 
-use ya_market::dao::{init, AgreementDao};
-use ya_market::db::models::{AgreementState, NewAgreement};
+use ya_market_forwarding::dao::{init, AgreementDao};
+use ya_market_forwarding::db::models::{AgreementState, NewAgreement};
 use ya_persistence::executor::DbExecutor;
 
 #[actix_rt::main]

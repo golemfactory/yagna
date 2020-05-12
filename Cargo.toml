@@ -5,7 +5,7 @@ members = [
     "core/activity",
     "core/gftp",
     "core/identity",
-    "core/market",
+    "core/market-forwarding",
     "core/model",
     "core/net",
     "core/payment",
@@ -36,7 +36,7 @@ members = [
 ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
 ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
+ya-market-forwarding = { path = "core/market-forwarding" }
 ya-net = { path = "core/net" }
 
 ## CORE UTILS

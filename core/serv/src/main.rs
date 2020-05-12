@@ -9,6 +9,9 @@ use std::{
 use structopt::{clap, StructOpt};
 use url::Url;
 
+#[cfg(feature = "ya-market-forwarding")]
+use ya_market_forwarding::service::MarketService;
+
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -146,7 +149,7 @@ enum Services {
     #[enable(gsb, rest)]
     Activity(ya_activity::service::Activity),
     #[enable(gsb, rest)]
-    Market(ya_market::service::MarketService),
+    Market(MarketService),
     #[enable(gsb, rest, cli)]
     Payment(ya_payment::PaymentService),
 }
