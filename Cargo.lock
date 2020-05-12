@@ -4860,6 +4860,7 @@ dependencies = [
  "serde_json",
  "tokio 0.2.20",
  "url 2.1.1",
+ "ya-agreement-utils",
  "ya-client",
 ]
 

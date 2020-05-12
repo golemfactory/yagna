@@ -3,6 +3,7 @@ use futures::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::{str::FromStr, time::Duration};
 use url::Url;
+use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_client::{
     activity::ActivityRequestorControlApi,
     market::MarketRequestorApi,
@@ -38,19 +39,6 @@ pub enum Command {
     Start,
     Run(Vec<String>),
     Stop,
-}
-
-pub mod command_helpers {
-    use crate::Command;
-    #[allow(non_upper_case_globals)]
-    pub const deploy: Command = Command::Deploy;
-    #[allow(non_upper_case_globals)]
-    pub const start: Command = Command::Start;
-    #[allow(non_upper_case_globals)]
-    pub const stop: Command = Command::Stop;
-    pub fn run(s: &[&str]) -> Command {
-        Command::Run(s.into_iter().map(|s| s.to_string()).collect())
-    }
 }
 
 pub struct CommandList(Vec<Command>);
@@ -139,13 +127,11 @@ impl From<WasmDemand> for Demand {
                     }
                 }
             }),
-            format!(
-                r#"(&
-                    (golem.inf.mem.gib>{})
-                    (golem.inf.storage.gib>{})
-                )"#,
-                wasm_demand.min_storage_gib, wasm_demand.min_ram_gib
-            ),
+            constraints![
+                "golem.inf.mem.gib" > wasm_demand.min_ram_gib,
+                "golem.inf.storage.gib" > wasm_demand.min_storage_gib,
+            ]
+            .to_string(),
         )
     }
 }
