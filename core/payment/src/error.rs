@@ -21,10 +21,6 @@ pub enum ExternalServiceError {
 }
 #[derive(thiserror::Error, Debug)]
 pub enum PaymentError {
-    #[error("Currency conversion error: {0}")]
-    Conversion(String),
-    #[error("Invalid address: {0}")]
-    Address(String),
     #[error("Verification error: {0}")]
     Verification(String),
     #[error("Payment driver error: {0}")]
@@ -33,23 +29,9 @@ pub enum PaymentError {
 
 pub type PaymentResult<T> = Result<T, PaymentError>;
 
-impl From<uint::FromDecStrErr> for PaymentError {
-    fn from(e: uint::FromDecStrErr) -> Self {
-        Self::Conversion(format!("{:?}", e))
-    }
-}
-
-impl From<bigdecimal::ParseBigDecimalError> for PaymentError {
-    fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
-        Self::Conversion(e.to_string())
-    }
-}
-
 impl From<PaymentError> for ScheduleError {
     fn from(e: PaymentError) -> Self {
         match e {
-            PaymentError::Conversion(e) => ScheduleError::Conversion(e),
-            PaymentError::Address(e) => ScheduleError::Address(e),
             PaymentError::Driver(e) => ScheduleError::Driver(e.to_string()),
             PaymentError::Verification(e) => panic!(e),
         }

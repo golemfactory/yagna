@@ -1,11 +1,5 @@
-use ethereum_types::U256;
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Chain {
-    Mainnet,
-    Rinkeby,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Currency {
@@ -15,12 +9,12 @@ pub enum Currency {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Balance {
-    pub amount: U256,
+    pub amount: BigDecimal,
     pub currency: Currency,
 }
 
 impl Balance {
-    pub fn new(amount: U256, currency: Currency) -> Balance {
+    pub fn new(amount: BigDecimal, currency: Currency) -> Balance {
         Balance {
             amount: amount,
             currency: currency,

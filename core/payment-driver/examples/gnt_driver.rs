@@ -1,112 +1,98 @@
-use actix_rt;
+use bigdecimal::BigDecimal;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 
-use ethereum_types::U256;
-
-use ethsign::{KeyFile, Protected};
-
 use ethkey::prelude::*;
 
-use futures3::future;
+use std::convert::TryInto;
+
 use std::future::Future;
 
 use std::pin::Pin;
 
 use uuid::Uuid;
-
-use ya_payment_driver::account::{AccountBalance, Chain};
+use ya_payment_driver::account::AccountBalance;
 use ya_payment_driver::gnt::GntDriver;
 use ya_payment_driver::payment::{PaymentAmount, PaymentStatus};
+use ya_payment_driver::AccountMode;
 use ya_payment_driver::PaymentDriver;
 
 use ya_persistence::executor::DbExecutor;
 
-const GETH_ADDRESS: &str = "http://1.geth.testnet.golem.network:55555";
-const GNT_RINKEBY_CONTRACT: &str = "924442A66cFd812308791872C4B242440c108E19";
-
-const ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
-const GNT_FAUCET_CONTRACT: &str = "77b6145E853dfA80E8755a4e824c4F510ac6692e";
-
 const KEYSTORE: &str = "/tmp/keystore.json";
 const PASSWORD: &str = "";
 
-fn sign_tx(bytes: Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    let secret = get_secret_key(KEYSTORE, PASSWORD);
-
-    // Sign the message
-    let signature = secret.sign(&bytes).unwrap();
-
-    // Prepare signature
-    let mut v = Vec::with_capacity(65);
-    v.push(signature.v);
-    v.extend_from_slice(&signature.r[..]);
-    v.extend_from_slice(&signature.s[..]);
-
-    Box::pin(future::ready(v))
+fn get_sign_tx(
+    account: Box<EthAccount>,
+) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+    let account: Arc<EthAccount> = account.into();
+    move |msg| {
+        let account = account.clone();
+        let fut = async move {
+            let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
+            let signature = account.sign(&msg).unwrap();
+            let mut v = Vec::with_capacity(65);
+            v.push(signature.v);
+            v.extend_from_slice(&signature.r);
+            v.extend_from_slice(&signature.s);
+            v
+        };
+        Box::pin(fut)
+    }
 }
 
-fn load_or_generate_account(keystore: &str, password: &str) {
-    let _ = EthAccount::load_or_generate(keystore, password)
-        .expect("should load or generate new eth key");
+fn get_account(keystore: &str, password: &str) -> Box<EthAccount> {
+    EthAccount::load_or_generate(keystore, password).expect("should load or generate new eth key")
 }
 
-fn get_key(keystore: &str) -> KeyFile {
-    let file = std::fs::File::open(keystore).unwrap();
-    let key: KeyFile = serde_json::from_reader(file).unwrap();
-    key
+fn get_address(key: &Box<EthAccount>) -> String {
+    hex::encode(key.address())
 }
 
-fn get_secret_key(keystore: &str, password: &str) -> SecretKey {
-    let key = get_key(keystore);
-    let pwd: Protected = password.into();
-    let secret = key.to_secret_key(&pwd).unwrap();
-    secret
-}
-
-fn get_address(key: KeyFile) -> String {
-    let address: Vec<u8> = key.address.unwrap().0;
-    hex::encode(address)
-}
-
-async fn show_balance(gnt_driver: &GntDriver, address: ethereum_types::Address) {
+async fn show_balance(gnt_driver: &GntDriver, address: &str) {
     let balance_result = gnt_driver.get_account_balance(address).await;
     let balance: AccountBalance = balance_result.unwrap();
     println!("{:?}", balance);
 }
 
-#[actix_rt::main]
+async fn show_payment_status(gnt_driver: &GntDriver, invoice_id: &str) {
+    match gnt_driver.get_payment_status(invoice_id).await.unwrap() {
+        PaymentStatus::Ok(confirmation) => {
+            println!("Payment status of: {} is Ok", invoice_id);
+            let details = gnt_driver.verify_payment(&confirmation).await.unwrap();
+            println!("{:?}", details);
+        }
+        _status => println!("Payment status of: {} is {:?}", invoice_id, _status),
+    }
+}
+
+#[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    load_or_generate_account(KEYSTORE, PASSWORD);
-    let key = get_key(KEYSTORE);
-
-    let address = get_address(key);
+    env_logger::init();
+    dotenv::dotenv().expect("Failed to read .env file");
+    let account = get_account(KEYSTORE, PASSWORD);
+    let address = get_address(&account);
     println!("Address: {:?}", address);
-
-    let address: ethereum_types::Address = address.parse().unwrap();
-    let gnt_contract_address: ethereum_types::Address = GNT_RINKEBY_CONTRACT.parse()?;
-    let gnt_faucet_address: ethereum_types::Address = GNT_FAUCET_CONTRACT.parse()?;
+    let sign_tx = get_sign_tx(account);
 
     let db = DbExecutor::new("file:/tmp/gnt_driver.db")?;
     ya_payment_driver::dao::init(&db).await?;
 
-    let mut gnt_driver = GntDriver::new(
-        Chain::Rinkeby,
-        GETH_ADDRESS,
-        gnt_contract_address,
-        ETH_FAUCET_ADDRESS,
-        gnt_faucet_address,
-        db,
-    )?;
+    let gnt_driver = GntDriver::new(db).await?;
 
-    gnt_driver.init_funds(address, &sign_tx).await.unwrap();
+    gnt_driver
+        .init(AccountMode::SEND, address.as_str(), &sign_tx)
+        .await
+        .unwrap();
 
-    show_balance(&gnt_driver, address).await;
+    show_balance(&gnt_driver, address.as_str()).await;
 
     let uuid = Uuid::new_v4().to_hyphenated().to_string();
     let invoice_id = uuid.as_str();
     let payment_amount = PaymentAmount {
-        base_currency_amount: U256::from(10000),
+        base_currency_amount: BigDecimal::from_str("69").unwrap(),
         gas_amount: None,
     };
     let due_date = Utc::now() + Duration::days(1i64);
@@ -117,25 +103,24 @@ async fn main() -> anyhow::Result<()> {
         .schedule_payment(
             invoice_id,
             payment_amount,
-            address,
-            address,
+            address.as_str(),
+            address.as_str(),
             due_date,
             &sign_tx,
         )
         .await
         .unwrap();
 
-    println!("Gnt transferred!");
+    show_balance(&gnt_driver, address.as_str()).await;
+    show_payment_status(&gnt_driver, invoice_id).await;
 
-    show_balance(&gnt_driver, address).await;
+    let hardcoded: &str = "7e6fe400-92ba-4f93-960d-cc0720cf19e3";
+    show_payment_status(&gnt_driver, hardcoded).await;
 
-    match gnt_driver.get_payment_status(invoice_id).await? {
-        PaymentStatus::Ok(confirmation) => {
-            let details = gnt_driver.verify_payment(&confirmation).await?;
-            println!("{:?}", details);
-        }
-        _status => println!("{:?}", _status),
-    }
+    println!("Waiting for Ctr+C...");
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to listen for event");
 
     Ok(())
 }
