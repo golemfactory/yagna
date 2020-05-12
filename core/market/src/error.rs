@@ -99,6 +99,9 @@ impl ResponseError for Error {
             Error::Timeout => {
                 HttpResponse::RequestTimeout().json(ErrorMessage::new(self.to_string()))
             }
+            Error::ClientError(ya_client::Error::HttpStatusCode { code, msg, .. }) => {
+                HttpResponse::build(code.clone()).json(ErrorMessage::new(msg.to_string()))
+            }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
     }

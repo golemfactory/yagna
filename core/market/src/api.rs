@@ -1,68 +1,55 @@
-use actix_web::{HttpResponse, Scope};
-use awc::http::StatusCode;
-use futures::lock::Mutex;
+use actix_web::{web, HttpResponse, Scope};
 use jsonwebtoken::{encode, Header};
 use serde::{Deserialize, Serialize};
-use std::collections::{
-    hash_map::Entry::{Occupied, Vacant},
-    HashMap,
-};
-use std::time::Duration;
+use url::Url;
 
-use ya_client::{
-    error::Error,
-    market::{MarketProviderApi, MarketRequestorApi},
-    web::{WebAuth, WebClient, WebInterface},
-    Result,
-};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::scope::ExtendableScope;
+use ya_service_api_web::middleware::Identity;
 
-use crate::utils::response;
-
-mod provider;
-mod requestor;
-
-#[derive(Default)]
-struct ClientCache {
-    clients: Mutex<HashMap<NodeId, WebClient>>,
-}
-
-impl ClientCache {
-    async fn get_api<T: WebInterface>(&self, node_id: NodeId) -> T {
-        let mut clients = self.clients.lock().await;
-        log::debug!("getting client; actual count: {}", clients.len());
-        clients
-            .entry(node_id)
-            .or_insert_with(|| build_web_client(node_id))
-            .interface()
-            .unwrap()
-    }
-
-    async fn get_provider_api(&self, node_id: NodeId) -> MarketProviderApi {
-        self.get_api(node_id).await
-    }
-
-    async fn get_requestor_api(&self, node_id: NodeId) -> MarketRequestorApi {
-        self.get_api(node_id).await
-    }
-}
-
+/// implementation note: every request will timeout after 5s.
 pub fn web_scope(_db: &DbExecutor) -> Scope {
-    let client_cache = ClientCache::default();
+    let central_market_url = ya_client::market::service_url().unwrap();
     Scope::new(crate::MARKET_API_PATH)
-        // .data(db.clone())
-        .data(client_cache)
-        .extend(requestor::extend_web_scope)
-        .extend(provider::extend_web_scope)
+        .data(central_market_url)
+        .data(awc::Client::new()) // has default timeout of 5s
+        .service(web::resource("*").to(forward))
 }
 
-pub const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
-pub const DEFAULT_REQUEST_TIMEOUT: f32 = 12.0;
-pub const AWC_CLIENT_TIMEOUT: f32 = 15.0;
+/// inspired by https://github.com/actix/examples/blob/master/http-proxy/src/main.rs
+async fn forward(
+    req: web::HttpRequest,
+    body: web::Bytes,
+    id: Identity,
+    central_market_url: web::Data<Url>,
+    client: web::Data<awc::Client>,
+) -> std::result::Result<HttpResponse, actix_web::Error> {
+    let mut forward_url = central_market_url.get_ref().clone();
+    forward_url.set_path(req.uri().path());
+    forward_url.set_query(req.uri().query());
 
-/// Our claims struct, it needs to derive `Serialize` and/or `Deserialize`
+    let forwarded_req = client
+        .request_from(forward_url.as_str(), req.head())
+        .set_header(
+            awc::http::header::AUTHORIZATION,
+            format!("Bearer {}", encode_jwt(id.identity)),
+        );
+
+    let mut res = forwarded_req
+        .send_body(body)
+        .await
+        .map_err(actix_web::Error::from)?;
+
+    let mut client_resp = HttpResponse::build(res.status());
+    // Remove `Connection` as per
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Connection#Directives
+    for (header_name, header_value) in res.headers().iter().filter(|(h, _)| *h != "connection") {
+        client_resp.header(header_name.clone(), header_value.clone());
+    }
+
+    Ok(client_resp.body(res.body().await?))
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
     aud: String,
@@ -76,82 +63,4 @@ fn encode_jwt(node_id: NodeId) -> String {
     };
 
     encode(&Header::default(), &claims, "secret".as_ref()).unwrap_or(String::from("error"))
-}
-
-fn build_web_client(node_id: NodeId) -> WebClient {
-    log::debug!("building new web client for: {}", node_id);
-    WebClient::builder()
-        .auth(WebAuth::Bearer(encode_jwt(node_id)))
-        .timeout(Duration::from_secs_f32(AWC_CLIENT_TIMEOUT))
-        .build()
-        .unwrap() // we want to panic early
-}
-
-pub(crate) fn resolve_web_error(err: Error) -> HttpResponse {
-    match err {
-        Error::HttpStatusCode {
-            code,
-            url: _,
-            msg,
-            bt: _,
-        } => match code {
-            StatusCode::UNAUTHORIZED => response::unauthorized(),
-            StatusCode::NOT_FOUND => response::not_found(),
-            StatusCode::CONFLICT => response::conflict(),
-            StatusCode::GONE => response::gone(),
-            _ => response::server_error(&msg),
-        },
-        _ => response::server_error(&err),
-    }
-}
-
-#[derive(Deserialize)]
-pub struct PathAgreement {
-    pub agreement_id: String,
-}
-
-#[derive(Deserialize)]
-pub struct PathSubscription {
-    pub subscription_id: String,
-}
-
-#[derive(Deserialize)]
-pub struct PathSubscriptionProposal {
-    pub subscription_id: String,
-    pub proposal_id: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryTimeout {
-    #[serde(default = "default_query_timeout")]
-    pub timeout: Option<f32>,
-}
-
-#[inline(always)]
-pub(crate) fn default_query_timeout() -> Option<f32> {
-    Some(DEFAULT_REQUEST_TIMEOUT)
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryTimeoutCommandIndex {
-    pub timeout: Option<f32>,
-    pub command_index: Option<usize>,
-}
-
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct QueryTimeoutMaxEvents {
-    /// number of milliseconds to wait
-    #[serde(default = "default_event_timeout")]
-    pub timeout: Option<f32>,
-    /// maximum count of events to return
-    #[serde(default)]
-    pub max_events: Option<i32>,
-}
-
-#[inline(always)]
-pub(crate) fn default_event_timeout() -> Option<f32> {
-    Some(DEFAULT_EVENT_TIMEOUT)
 }

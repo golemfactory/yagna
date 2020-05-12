@@ -13,7 +13,6 @@ pub mod dao;
 pub mod db;
 pub mod error;
 pub mod service;
-pub mod utils;
 
 pub use error::Error;
 
