@@ -27,8 +27,6 @@ mod requestor;
 #[derive(Default)]
 struct ClientCache {
     clients: Mutex<HashMap<NodeId, WebClient>>,
-    providers: Mutex<HashMap<NodeId, MarketProviderApi>>,
-    requestors: Mutex<HashMap<NodeId, MarketRequestorApi>>,
 }
 
 impl ClientCache {
@@ -43,19 +41,11 @@ impl ClientCache {
     }
 
     async fn get_provider_api(&self, node_id: NodeId) -> MarketProviderApi {
-        let mut providers = self.providers.lock().await;
-        match providers.entry(node_id) {
-            Occupied(entry) => entry.get().clone(),
-            Vacant(entry) => entry.insert(self.get_api(node_id).await).clone(),
-        }
+        self.get_api(node_id).await
     }
 
     async fn get_requestor_api(&self, node_id: NodeId) -> MarketRequestorApi {
-        let mut requestors = self.requestors.lock().await;
-        match requestors.entry(node_id) {
-            Occupied(entry) => entry.get().clone(),
-            Vacant(entry) => entry.insert(self.get_api(node_id).await).clone(),
-        }
+        self.get_api(node_id).await
     }
 }
 
