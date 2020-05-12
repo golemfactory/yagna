@@ -30,8 +30,12 @@ impl<MsgType: RpcMessage> HandlerSlot<MsgType> {
 /// Example:
 /// ```rust
 /// use ya_service_bus::RpcMessage;
+/// use ya_market_decentralized::protocol::{CallbackHandler, HandlerSlot};
+/// use serde::{Deserialize, Serialize};
 ///
+/// #[derive(Clone, Serialize, Deserialize)]
 /// struct GenericMessage;
+///
 /// impl RpcMessage for GenericMessage {
 ///     const ID :&'static str = "GenericMessage";
 ///     type Item = String;

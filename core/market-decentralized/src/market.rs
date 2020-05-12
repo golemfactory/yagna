@@ -1,13 +1,16 @@
-use std::sync::Arc;
+use lazy_static::lazy_static;
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::matcher::{Matcher, MatcherInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
-use crate::negotiation::NegotiationError;
+use crate::negotiation::NegotiationInitError;
 use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
 
+use ya_core_model::market::BUS_ID;
 use ya_persistence::executor::DbExecutor;
-use ya_persistence::executor::Error as DbError;
+use ya_service_api_interfaces::{Provider, Service};
+
 
 #[derive(Error, Debug)]
 pub enum MarketError {}
@@ -15,11 +18,9 @@ pub enum MarketError {}
 #[derive(Error, Debug)]
 pub enum MarketInitError {
     #[error("Failed to initialize Offers matcher. Error: {}.", .0)]
-    MatcherError(#[from] MatcherInitError),
-    #[error("Failed to initialize database. Error: {}.", .0)]
-    DatabaseError(#[from] DbError),
+    Matcher(#[from] MatcherInitError),
     #[error("Failed to initialize negotiation engine. Error: {}.", .0)]
-    NegotiationError(#[from] NegotiationError),
+    Negotiation(#[from] NegotiationInitError),
 }
 
 
@@ -31,16 +32,14 @@ pub struct Market {
 }
 
 impl Market {
-    pub fn new() -> Result<Self, MarketInitError> {
+    pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
-
-        let db = DbExecutor::new("[common url for all apis]")?;
 
         let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
         let requestor_engine = RequestorNegotiationEngine::new(
-            db,
+            db.clone(),
             listeners.proposal_receiver,
         )?;
 
@@ -50,4 +49,65 @@ impl Market {
             requestor_negotiation_engine: requestor_engine,
         })
     }
+
+    pub async fn bind_gsb(&self, prefix: String) -> Result<(), MarketInitError> {
+        self.matcher.bind_gsb(prefix.clone()).await?;
+        self.provider_negotiation_engine.bind_gsb(prefix.clone()).await?;
+        self.requestor_negotiation_engine.bind_gsb(prefix).await?;
+        Ok(())
+    }
+
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
+        let market = MARKET.get_or_init_market(&ctx.component())?;
+        Ok(market.bind_gsb(BUS_ID.to_string()).await?)
+    }
+
+    pub fn rest(db: &DbExecutor) -> actix_web::Scope {
+        let market = match MARKET.get_or_init_market(db) {
+            Ok(market) => market,
+            Err(error) => {
+                log::error!("{}", error);
+                panic!("Market initialization impossible. Check error logs.")
+            }
+        };
+
+        actix_web::web::scope(crate::MARKET_API_PATH)
+            .data(market)
+    }
 }
+
+impl Service for Market {
+    type Cli = ();
+}
+
+// =========================================== //
+// Awful static initialization. Necessary to
+// share Market between gsb and rest functions.
+// =========================================== //
+
+struct StaticMarket {
+    locked_market: Mutex<Option<Arc<Market>>>
+}
+
+impl StaticMarket {
+    pub fn new() -> StaticMarket {
+        StaticMarket{locked_market: Mutex::new(None)}
+    }
+
+    pub fn get_or_init_market(&self, db: &DbExecutor) -> Result<Arc<Market>, MarketInitError> {
+        let mut guarded_market = self.locked_market.lock().unwrap();
+        if let Some(market) = &*guarded_market {
+            Ok(market.clone())
+        } else {
+            let market = Arc::new(Market::new(db)?);
+            *guarded_market = Some(market.clone());
+            Ok(market)
+        }
+    }
+}
+
+
+lazy_static! {
+    static ref MARKET: StaticMarket = StaticMarket::new();
+}
+
