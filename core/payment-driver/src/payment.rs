@@ -1,14 +1,15 @@
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use ethereum_types::{Address, U256};
 use serde::{Deserialize, Serialize};
 
 use crate::models::PaymentEntity;
 
-const PAYMENT_STATUS_UNKNOWN: i32 = 0;
-const PAYMENT_STATUS_NOT_YET: i32 = 1;
-const PAYMENT_STATUS_OK: i32 = 2;
-const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
-const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
+pub const PAYMENT_STATUS_UNKNOWN: i32 = 0;
+pub const PAYMENT_STATUS_NOT_YET: i32 = 1;
+pub const PAYMENT_STATUS_OK: i32 = 2;
+pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
+pub const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
+pub const PAYMENT_STATUS_FAILED: i32 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentConfirmation {
@@ -30,6 +31,7 @@ pub enum PaymentStatus {
     NotEnoughFunds,
     NotEnoughGas,
     Unknown,
+    Failed,
 }
 
 impl PaymentStatus {
@@ -40,6 +42,7 @@ impl PaymentStatus {
             PaymentStatus::NotEnoughFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
             PaymentStatus::NotEnoughGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
             PaymentStatus::Unknown => PAYMENT_STATUS_UNKNOWN,
+            PaymentStatus::Failed => PAYMENT_STATUS_FAILED,
         }
     }
 }
@@ -48,10 +51,7 @@ impl From<PaymentEntity> for PaymentStatus {
     fn from(payment: PaymentEntity) -> Self {
         match payment.status {
             PAYMENT_STATUS_OK => {
-                let confirmation: Vec<u8> = match payment.tx_hash {
-                    None => Vec::new(),
-                    Some(tx_hash) => hex::decode(tx_hash).unwrap(),
-                };
+                let confirmation: Vec<u8> = Vec::new();
                 PaymentStatus::Ok(PaymentConfirmation {
                     confirmation: confirmation,
                 })
@@ -59,21 +59,22 @@ impl From<PaymentEntity> for PaymentStatus {
             PAYMENT_STATUS_NOT_YET => PaymentStatus::NotYet,
             PAYMENT_STATUS_NOT_ENOUGH_FUNDS => PaymentStatus::NotEnoughFunds,
             PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
+            PAYMENT_STATUS_FAILED => PaymentStatus::Failed,
             _ => PaymentStatus::Unknown,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PaymentDetails {
-    pub recipient: Address,
-    pub sender: Address,
-    pub amount: U256,
+    pub recipient: String,
+    pub sender: String,
+    pub amount: BigDecimal,
     pub date: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentAmount {
-    pub base_currency_amount: U256,
-    pub gas_amount: Option<U256>,
+    pub base_currency_amount: BigDecimal,
+    pub gas_amount: Option<BigDecimal>,
 }
