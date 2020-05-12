@@ -37,6 +37,10 @@ impl DiscoveryFactory for DiscoveryExample {
 
 #[async_trait]
 impl Discovery for DiscoveryExample {
+    async fn bind_gsb(&self) -> Result<(), DiscoveryInitError> {
+        Ok(())
+    }
+
     async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
         Ok(self
             .offer_received

@@ -16,10 +16,12 @@ ya-service-bus = "0.2"
 ya-service-api-interfaces = "0.1"
 
 actix-web = "2.0"
+anyhow = "1.0"
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.5"
 futures = "0.3"
+lazy_static = "1.4"
 log = "0.4"
 serde = { version = "^1.0", features = ["derive"] }
 thiserror = "1.0"

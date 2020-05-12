@@ -55,6 +55,10 @@ impl Matcher {
         Ok((matcher, listeners))
     }
 
+    pub async fn bind_gsb(&self) -> Result<(), MatcherInitError> {
+        Ok(self.discovery.bind_gsb().await?)
+    }
+
     async fn add_offer(&self, offer: Offer) {
         unimplemented!();
     }

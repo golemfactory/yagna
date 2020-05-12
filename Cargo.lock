@@ -5001,6 +5001,7 @@ dependencies = [
  "derive_more 0.99.5",
  "env_logger 0.7.1",
  "futures 0.3.4",
+ "lazy_static",
  "log 0.4.8",
  "serde",
  "serde_json",
