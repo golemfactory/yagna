@@ -8,8 +8,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
 use crate::protocol::{Discovery, DiscoveryBuilder, DiscoveryFactory, DiscoveryInitError};
-use crate::protocol::{OfferReceived, RetrieveOffers,};
-
+use crate::protocol::{OfferReceived, RetrieveOffers};
 
 #[derive(Error, Debug)]
 pub enum MatcherError {}
@@ -41,17 +40,13 @@ impl Matcher {
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
         let builder = builder
-            .bind_offer_received(move |msg: OfferReceived| {
-                async move {
-                    log::info!("Offer from [{}] received.", msg.offer.offer_id.unwrap());
-                    Ok(())
-                }
+            .bind_offer_received(move |msg: OfferReceived| async move {
+                log::info!("Offer from [{}] received.", msg.offer.offer_id.unwrap());
+                Ok(())
             })
-            .bind_retrieve_offers(move |msg: RetrieveOffers| {
-                async move {
-                    log::info!("Offers request received.");
-                    Ok(vec![])
-                }
+            .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
+                log::info!("Offers request received.");
+                Ok(vec![])
             });
 
         let discovery = Factory::new(builder)?;

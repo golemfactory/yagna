@@ -13,8 +13,6 @@ use ya_core_model::market::BUS_ID;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 
-
-
 #[derive(Error, Debug)]
 pub enum MarketError {}
 
@@ -59,7 +57,9 @@ impl Market {
         Ok(())
     }
 
-    pub async fn gsb<Context: Provider<Self, DbExecutor> + Provider<Self, PathBuf>>(ctx: &Context) -> anyhow::Result<()> {
+    pub async fn gsb<Context: Provider<Self, DbExecutor> + Provider<Self, PathBuf>>(
+        ctx: &Context,
+    ) -> anyhow::Result<()> {
         let db = ctx.component();
         let data_dir: PathBuf = ctx.component();
         let market = MARKET.get_or_init_market(&db, &data_dir)?;
@@ -101,7 +101,11 @@ impl StaticMarket {
         }
     }
 
-    pub fn get_or_init_market(&self, db: &DbExecutor, data_dir: &Path) -> Result<Arc<Market>, MarketInitError> {
+    pub fn get_or_init_market(
+        &self,
+        db: &DbExecutor,
+        data_dir: &Path,
+    ) -> Result<Arc<Market>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
