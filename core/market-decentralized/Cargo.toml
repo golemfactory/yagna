@@ -6,6 +6,9 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+market-test-suite = []
+
 [dependencies]
 ya-client = "0.3"
 ya-client-model = "0.1"
@@ -32,3 +35,4 @@ actix-rt = "1.0.0"
 anyhow = "1.0"
 env_logger = "0.7"
 serde_json = "1.0"
+tokio = { version = "0.2", features = ["macros"] }

@@ -36,7 +36,7 @@ pub enum DiscoveryInitError {
 /// during discovery phase.
 #[async_trait]
 pub trait Discovery: Send + Sync {
-    async fn bind_gsb(&self) -> Result<(), DiscoveryInitError>;
+    async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError>;
 
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in DiscoveryBuilder::bind_offer_received.
@@ -126,7 +126,7 @@ impl Discovery for DiscoveryGSB {
         unimplemented!()
     }
 
-    async fn bind_gsb(&self) -> Result<(), DiscoveryInitError> {
+    async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError> {
         Ok(())
     }
 }

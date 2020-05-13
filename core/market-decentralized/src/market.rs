@@ -7,6 +7,7 @@ use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::negotiation::NegotiationInitError;
 use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
 
+use ya_core_model::market::BUS_ID;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 
@@ -49,16 +50,16 @@ impl Market {
         })
     }
 
-    pub async fn bind_gsb(&self) -> Result<(), MarketInitError> {
-        self.matcher.bind_gsb().await?;
-        self.provider_negotiation_engine.bind_gsb().await?;
-        self.requestor_negotiation_engine.bind_gsb().await?;
+    pub async fn bind_gsb(&self, prefix: String) -> Result<(), MarketInitError> {
+        self.matcher.bind_gsb(prefix.clone()).await?;
+        self.provider_negotiation_engine.bind_gsb(prefix.clone()).await?;
+        self.requestor_negotiation_engine.bind_gsb(prefix).await?;
         Ok(())
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb().await?)
+        Ok(market.bind_gsb(BUS_ID.to_string()).await?)
     }
 
     pub fn rest(db: &DbExecutor) -> actix_web::Scope {
