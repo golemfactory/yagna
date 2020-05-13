@@ -38,6 +38,7 @@ struct Options {
 enum Side {
     Listener,
     Sender,
+    Other,
 }
 
 impl Options {
@@ -45,6 +46,7 @@ impl Options {
         match side {
             Side::Listener => "0xbabe000000000000000000000000000000000000",
             Side::Sender => "0xfeed000000000000000000000000000000000000",
+            Side::Other => "0xbeef000000000000000000000000000000000000",
         }
         .parse()
         .unwrap()
@@ -93,11 +95,12 @@ async fn main() -> Result<()> {
             let listener_id = Options::id(&Side::Listener);
             let r = listener_id
                 .try_service(net::PUBLIC_PREFIX)?
-                .send(Test("Test msg".into()))
+                .send_as(Options::id(&Side::Other), Test("Test msg".into()))
                 .map_err(Error::msg)
                 .await?;
             log::info!("Sending Result: {:?}", r);
         }
+        _ => unimplemented!(),
     }
 
     Ok(())
