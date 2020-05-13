@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use chrono::Utc;
 use futures::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::{str::FromStr, time::Duration};
@@ -7,7 +8,10 @@ use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_client::{
     activity::ActivityRequestorControlApi,
     market::MarketRequestorApi,
-    model::market::{AgreementProposal, Demand, Proposal, RequestorEvent},
+    model::market::{
+        proposal::State,
+        {AgreementProposal, Demand, Proposal, RequestorEvent},
+    },
     web::WebClient,
 };
 
@@ -28,6 +32,11 @@ impl ImageSpec {
             runtime: WasmRuntime::Wasi(1),
         }
         /* TODO connect and download image specification */
+    }
+    pub fn from_url<T: Into<String>>(url: T) -> Self {
+        Self {
+            runtime: WasmRuntime::Wasi(1),
+        }
     }
     pub fn runtime(self, runtime: WasmRuntime) -> Self {
         Self { runtime }
@@ -204,14 +213,49 @@ impl Actor for TaskSession {
             async move {
                 /* TODO */
                 eprintln!("subscribing");
-                let r = market_api.subscribe(&demand).await;
-                eprintln!("subscription result: {:?}", r);
-                let r2 = r.unwrap();
+                let sub_id = market_api.subscribe(&demand).await?;
+                eprintln!("subscription result: {:?}", sub_id);
                 loop {
                     eprintln!("waiting");
-                    let events = market_api.collect(&r2, Some(120.0), Some(5)).await;
-                    match events {
-                        Ok(evs) => eprintln!("received {:?}", evs),
+                    match market_api.collect(&sub_id, Some(120.0), Some(5)).await {
+                        Ok(events) => {
+                            eprintln!("received {:?}", events);
+                            for e in events {
+                                match e {
+                                    RequestorEvent::ProposalEvent {
+                                        event_date: _date,
+                                        proposal,
+                                    } => match proposal.state {
+                                        None | Some(State::Initial) => {
+                                            let counter_proposal =
+                                                proposal.counter_demand(demand.clone())?;
+                                            /* TODO spawn? */
+                                            let proposal_id = market_api
+                                                .counter_proposal(&counter_proposal, &sub_id)
+                                                .await?;
+                                        }
+                                        _ => {
+                                            let agreement_proposal = AgreementProposal::new(
+                                                proposal.proposal_id()?.clone(),
+                                                Utc::now() + chrono::Duration::hours(2),
+                                            );
+                                            let agreement_id = market_api
+                                                .create_agreement(&agreement_proposal)
+                                                .await?;
+                                            /* TODO allocate funds here using create_allocation and cancel_agreement if it's not possible */
+                                            market_api
+                                                .confirm_agreement(&proposal.proposal_id()?)
+                                                .await?;
+                                            /* blocking? */
+                                            market_api.wait_for_approval(&proposal.proposal_id()?, Some(7.879))
+                                                .await?;
+                                            /* agreement approved; proceed to the next step (payment, then exe unit) */
+                                        }
+                                    },
+                                    _ => { /* TODO expected proposal event, got other event */ }
+                                }
+                            }
+                        }
                         Err(e) => eprintln!("error {:?}", e),
                     }
                     tokio::time::delay_for(Duration::from_millis(1000)).await;
