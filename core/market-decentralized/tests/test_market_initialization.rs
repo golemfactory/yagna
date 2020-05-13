@@ -19,8 +19,12 @@ mod tests {
     async fn instantiate() -> Result<(), anyhow::Error> {
         let network = MarketsNetwork::new("instantiate")
             .add_market_instance("Node-1")
+            .await?
+            .add_market_instance("Node-2")
             .await?;
 
+        let _market1 = network.get_market("Node-1");
+        let _market2 = network.get_market("Node-2");
         Ok(())
     }
 }

@@ -129,11 +129,18 @@ impl TryFrom<&CliArgs> for CliCtx {
 
 struct ServiceContext {
     db: DbExecutor,
+    data_dir: PathBuf,
 }
 
 impl<Service> Provider<Service, DbExecutor> for ServiceContext {
     fn component(&self) -> DbExecutor {
         self.db.clone()
+    }
+}
+
+impl<Service> Provider<Service, PathBuf> for ServiceContext {
+    fn component(&self) -> PathBuf {
+        self.data_dir.clone()
     }
 }
 
@@ -201,7 +208,10 @@ impl ServiceCommand {
 
                 let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
-                let context = ServiceContext { db: db.clone() };
+                let context = ServiceContext {
+                    db: db.clone(),
+                    data_dir: ctx.data_dir.clone(),
+                };
 
                 Services::gsb(&context).await?;
 

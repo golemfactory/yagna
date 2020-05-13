@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -7,6 +8,8 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
 use crate::protocol::{Discovery, DiscoveryBuilder, DiscoveryFactory, DiscoveryInitError};
+use crate::protocol::{OfferReceived, RetrieveOffers,};
+
 
 #[derive(Error, Debug)]
 pub enum MatcherError {}
@@ -34,12 +37,25 @@ pub struct Matcher {
 impl Matcher {
     pub fn new<Factory: DiscoveryFactory>(
         builder: DiscoveryBuilder,
+        data_dir: &Path,
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
-        // TODO: Bind Discovery callbacks.
-        let discovery = Factory::new(builder)?;
+        // TODO: Implement Discovery callbacks.
+        let builder = builder
+            .bind_offer_received(move |msg: OfferReceived| {
+                async move {
+                    log::info!("Offer from [{}] received.", msg.offer.offer_id.unwrap());
+                    Ok(())
+                }
+            })
+            .bind_retrieve_offers(move |msg: RetrieveOffers| {
+                async move {
+                    log::info!("Offers request received.");
+                    Ok(vec![])
+                }
+            });
 
-        // TODO: Create new database for offers.
-        let db = DbExecutor::new("[Separate database for offers]")?;
+        let discovery = Factory::new(builder)?;
+        let db = DbExecutor::from_data_dir(&data_dir, "offers")?;
 
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 

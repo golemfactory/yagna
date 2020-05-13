@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
             log::info!("Offer from [{}] received.", msg.offer.offer_id.unwrap());
             Ok(())
         })
-        .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
+        .bind_retrieve_offers(move |_msg: RetrieveOffers| async move {
             log::info!("Offers request received.");
             Ok(vec![])
         });
