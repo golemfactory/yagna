@@ -1,4 +1,6 @@
 use lazy_static::lazy_static;
+use std::env::current_dir;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
@@ -30,11 +32,11 @@ pub struct Market {
 }
 
 impl Market {
-    pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
+    pub fn new(db: &DbExecutor, data_dir: &Path) -> Result<Self, MarketInitError> {
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
 
-        let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder)?;
+        let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder, data_dir)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
         let requestor_engine =
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
@@ -55,13 +57,19 @@ impl Market {
         Ok(())
     }
 
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
-        let market = MARKET.get_or_init_market(&ctx.component())?;
+    pub async fn gsb<Context: Provider<Self, DbExecutor> + Provider<Self, PathBuf>>(
+        ctx: &Context,
+    ) -> anyhow::Result<()> {
+        let db = ctx.component();
+        let data_dir: PathBuf = ctx.component();
+        let market = MARKET.get_or_init_market(&db, &data_dir)?;
         Ok(market.bind_gsb(BUS_ID.to_string()).await?)
     }
 
     pub fn rest(db: &DbExecutor) -> actix_web::Scope {
-        let market = match MARKET.get_or_init_market(db) {
+        // TODO: We should run gsb function first, because it gets datadir.
+        //       This code is order dependent :/
+        let market = match MARKET.get_or_init_market(db, &current_dir().unwrap()) {
             Ok(market) => market,
             Err(error) => {
                 log::error!("{}", error);
@@ -93,12 +101,16 @@ impl StaticMarket {
         }
     }
 
-    pub fn get_or_init_market(&self, db: &DbExecutor) -> Result<Arc<Market>, MarketInitError> {
+    pub fn get_or_init_market(
+        &self,
+        db: &DbExecutor,
+        data_dir: &Path,
+    ) -> Result<Arc<Market>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let market = Arc::new(Market::new(db)?);
+            let market = Arc::new(Market::new(db, data_dir)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

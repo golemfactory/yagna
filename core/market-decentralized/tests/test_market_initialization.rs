@@ -10,17 +10,19 @@ mod utils;
 /// TODO: I don't want to set --manifest-path. How to do this?
 #[cfg(test)]
 mod tests {
-    use tokio;
-
     use crate::utils::MarketsNetwork;
 
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
-    #[tokio::test(threaded_scheduler)]
+    #[actix_rt::test]
     async fn instantiate() -> Result<(), anyhow::Error> {
         let network = MarketsNetwork::new("instantiate")
             .add_market_instance("Node-1")
+            .await?
+            .add_market_instance("Node-2")
             .await?;
 
+        let _market1 = network.get_market("Node-1");
+        let _market2 = network.get_market("Node-2");
         Ok(())
     }
 }

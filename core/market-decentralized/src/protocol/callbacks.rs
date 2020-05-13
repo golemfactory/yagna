@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use ya_service_bus::RpcMessage;
 
 /// Object for storing callback functions.
+#[derive(Clone)]
 pub struct HandlerSlot<MsgType: RpcMessage> {
     slot: Arc<Mutex<Box<dyn CallbackHandler<MsgType>>>>,
 }
