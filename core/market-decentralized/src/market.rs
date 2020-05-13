@@ -3,14 +3,13 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::matcher::{Matcher, MatcherInitError};
-use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::negotiation::NegotiationInitError;
+use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
 
 use ya_core_model::market::BUS_ID;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
-
 
 #[derive(Error, Debug)]
 pub enum MarketError {}
@@ -22,7 +21,6 @@ pub enum MarketInitError {
     #[error("Failed to initialize negotiation engine. Error: {}.", .0)]
     Negotiation(#[from] NegotiationInitError),
 }
-
 
 /// Structure connecting all market objects.
 pub struct Market {
@@ -38,10 +36,8 @@ impl Market {
 
         let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
-        let requestor_engine = RequestorNegotiationEngine::new(
-            db.clone(),
-            listeners.proposal_receiver,
-        )?;
+        let requestor_engine =
+            RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
 
         Ok(Market {
             matcher: Arc::new(matcher),
@@ -52,7 +48,9 @@ impl Market {
 
     pub async fn bind_gsb(&self, prefix: String) -> Result<(), MarketInitError> {
         self.matcher.bind_gsb(prefix.clone()).await?;
-        self.provider_negotiation_engine.bind_gsb(prefix.clone()).await?;
+        self.provider_negotiation_engine
+            .bind_gsb(prefix.clone())
+            .await?;
         self.requestor_negotiation_engine.bind_gsb(prefix).await?;
         Ok(())
     }
@@ -71,8 +69,7 @@ impl Market {
             }
         };
 
-        actix_web::web::scope(crate::MARKET_API_PATH)
-            .data(market)
+        actix_web::web::scope(crate::MARKET_API_PATH).data(market)
     }
 }
 
@@ -86,12 +83,14 @@ impl Service for Market {
 // =========================================== //
 
 struct StaticMarket {
-    locked_market: Mutex<Option<Arc<Market>>>
+    locked_market: Mutex<Option<Arc<Market>>>,
 }
 
 impl StaticMarket {
     pub fn new() -> StaticMarket {
-        StaticMarket{locked_market: Mutex::new(None)}
+        StaticMarket {
+            locked_market: Mutex::new(None),
+        }
     }
 
     pub fn get_or_init_market(&self, db: &DbExecutor) -> Result<Arc<Market>, MarketInitError> {
@@ -106,8 +105,6 @@ impl StaticMarket {
     }
 }
 
-
 lazy_static! {
     static ref MARKET: StaticMarket = StaticMarket::new();
 }
-
