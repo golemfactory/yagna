@@ -73,23 +73,33 @@ impl DiscoveryBuilder {
         self
     }
 
-    pub fn offer_received_handler(&mut self) -> Result<HandlerSlot<OfferReceived>, DiscoveryInitError> {
-        let handler = self
-            .offer_received
-            .take()
-            .ok_or(DiscoveryInitError::UninitializedCallback(format!("offer_received")))?;
+    pub fn offer_received_handler(
+        &mut self,
+    ) -> Result<HandlerSlot<OfferReceived>, DiscoveryInitError> {
+        let handler =
+            self.offer_received
+                .take()
+                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
+                    "offer_received"
+                )))?;
         Ok(handler)
     }
 
-    pub fn retrieve_offers_handler(&mut self) -> Result<HandlerSlot<RetrieveOffers>, DiscoveryInitError> {
-        let handler = self
-            .retrieve_offers
-            .take()
-            .ok_or(DiscoveryInitError::UninitializedCallback(format!("retrieve_offers")))?;
+    pub fn retrieve_offers_handler(
+        &mut self,
+    ) -> Result<HandlerSlot<RetrieveOffers>, DiscoveryInitError> {
+        let handler =
+            self.retrieve_offers
+                .take()
+                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
+                    "retrieve_offers"
+                )))?;
         Ok(handler)
     }
 
-    pub fn build<Factory: DiscoveryFactory>(self) -> Result<Arc<dyn Discovery>, DiscoveryInitError> {
+    pub fn build<Factory: DiscoveryFactory>(
+        self,
+    ) -> Result<Arc<dyn Discovery>, DiscoveryInitError> {
         Ok(Factory::new(self)?)
     }
 }

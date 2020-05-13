@@ -8,8 +8,8 @@ use tokio::runtime::Runtime;
 use ya_client_model::market::Offer;
 use ya_market_decentralized::protocol::callbacks::HandlerSlot;
 use ya_market_decentralized::protocol::{
-    Discovery, DiscoveryBuilder, DiscoveryInitError, OfferReceived, RetrieveOffers,
-    DiscoveryError, DiscoveryFactory,
+    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryFactory, DiscoveryInitError,
+    OfferReceived, RetrieveOffers,
 };
 
 // =========================================== //

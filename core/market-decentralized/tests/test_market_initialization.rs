@@ -17,8 +17,9 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[tokio::test(threaded_scheduler)]
     async fn instantiate() -> Result<(), anyhow::Error> {
-        let network = MarketsNetwork::new()
-            .add_market_instance("Node-1")?;
+        let network = MarketsNetwork::new("instantiate")
+            .add_market_instance("Node-1")
+            .await?;
 
         Ok(())
     }
