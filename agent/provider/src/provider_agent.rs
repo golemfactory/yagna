@@ -35,7 +35,7 @@ impl ProviderAgent {
         let market = ProviderMarket::new(api.market, "LimitAgreements").start();
         let runner =
             TaskRunner::new(api.activity.clone(), args.runner_config.clone(), registry)?.start();
-        let payments = Payments::new(api.activity, api.payment, &args.node.credit_address).start();
+        let payments = Payments::new(api.activity, api.payment).start();
         let task_manager =
             TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
 

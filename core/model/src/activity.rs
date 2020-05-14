@@ -173,6 +173,20 @@ pub mod local {
         type Item = ();
         type Error = RpcMessageError;
     }
+
+    /// Get agreement ID of the activity.
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct GetAgreementId {
+        pub activity_id: String,
+        pub timeout: Option<f32>,
+    }
+
+    impl RpcMessage for GetAgreementId {
+        const ID: &'static str = "GetAgreementId";
+        type Item = String;
+        type Error = RpcMessageError;
+    }
 }
 
 /// Error message for activity service bus API.
