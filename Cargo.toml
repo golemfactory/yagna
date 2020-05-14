@@ -5,7 +5,7 @@ members = [
     "core/activity",
     "core/gftp",
     "core/identity",
-    "core/market",
+    "core/market-forwarding",
     "core/model",
     "core/net",
     "core/payment",
@@ -36,7 +36,7 @@ members = [
 ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
 ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
+ya-market-forwarding = { path = "core/market-forwarding" }
 ya-net = { path = "core/net" }
 
 ## CORE UTILS
@@ -56,8 +56,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "020fc04d4281d4dd87ae6a48b827b8e86fb7c85e"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "020fc04d4281d4dd87ae6a48b827b8e86fb7c85e"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "08b0905"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "08b0905"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }
