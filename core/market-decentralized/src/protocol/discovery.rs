@@ -6,7 +6,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use ya_client_model::market::Offer;
-use ya_service_bus::RpcMessage;
+use ya_service_bus::{RpcMessage, typed as bus};
 
 use super::callbacks::{CallbackHandler, HandlerSlot};
 
@@ -137,6 +137,19 @@ impl Discovery for DiscoveryGSB {
     }
 
     async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError> {
+        let retrive_handler = self.retrieve_offers.clone();
+        let offer_received_handler = self.offer_received.clone();
+
+        let _ = bus::bind_with_caller(&prefix, move |caller, msg: RetrieveOffers| {
+            let handler = retrive_handler.clone();
+            async move { handler.call(caller, msg).await }
+        });
+
+        let _ = bus::bind_with_caller(&prefix, move |caller, msg: OfferReceived| {
+            let handler = offer_received_handler.clone();
+            async move { handler.call(caller, msg).await }
+        });
+
         Ok(())
     }
 }
@@ -152,7 +165,7 @@ pub struct OfferReceived {
 }
 
 impl RpcMessage for OfferReceived {
-    const ID: &'static str = "market::OfferReceived";
+    const ID: &'static str = "OfferReceived";
     type Item = ();
     type Error = DiscoveryRemoteError;
 }
@@ -164,7 +177,7 @@ pub struct RetrieveOffers {
 }
 
 impl RpcMessage for RetrieveOffers {
-    const ID: &'static str = "market::RetrieveOffers";
+    const ID: &'static str = "RetrieveOffers";
     type Item = Vec<Offer>;
     type Error = DiscoveryRemoteError;
 }

@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use ya_market_decentralized::Market;
 use ya_persistence::executor::DbExecutor;
+use ya_core_model::net;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -37,7 +38,8 @@ impl MarketsNetwork {
         let data_dir = self.instance_dir(name.as_ref());
         let market = Arc::new(Market::new(&db, &data_dir)?);
 
-        market.bind_gsb(name.as_ref().to_string()).await?;
+        let gsb_prefix = format!("{}/{}/market", net::BUS_ID, name.as_ref());
+        market.bind_gsb(gsb_prefix).await?;
 
         let market_node = MarketNode {
             name: name.as_ref().to_string(),
