@@ -212,10 +212,6 @@ mod tests {
 
     use super::*;
     use crate::RemoteEndpoint;
-    use ya_core_model::ethaddr::NodeId;
-
-    #[test]
-    fn empty() {}
 
     #[test]
     fn test_gen_parse() {
