@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::market::Agreement;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_core_model::{identity, market};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 

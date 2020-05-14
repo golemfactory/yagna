@@ -13,8 +13,9 @@ use std::sync::Arc;
 use std::{fs, io};
 use url::{quirks::hostname, Position, Url};
 
+use ya_client_model::NodeId;
 use ya_core_model::gftp as model;
-use ya_core_model::{ethaddr::NodeId, identity};
+use ya_core_model::identity;
 use ya_net::TryRemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 

@@ -9,7 +9,7 @@ use ya_client_model::activity::{
 };
 use ya_service_bus::RpcMessage;
 
-use crate::ethaddr::NodeId;
+use ya_client_model::NodeId;
 
 /// Public Activity bus address.
 ///

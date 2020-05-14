@@ -1,6 +1,6 @@
 use crate::schema::pay_agreement;
 use ya_client_model::market::Agreement;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]

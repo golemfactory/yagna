@@ -2,7 +2,7 @@ use crate::schema::pay_allocation;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
 use ya_client_model::payment::{Allocation, NewAllocation};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::types::BigDecimalField;
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]

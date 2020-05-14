@@ -4,7 +4,7 @@ use crate::schema::pay_allocation::dsl;
 use bigdecimal::BigDecimal;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::payment::{Allocation, NewAllocation};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };

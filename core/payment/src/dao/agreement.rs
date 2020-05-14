@@ -4,7 +4,7 @@ use crate::schema::pay_agreement::dsl;
 use bigdecimal::{BigDecimal, Zero};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatusNotes;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,

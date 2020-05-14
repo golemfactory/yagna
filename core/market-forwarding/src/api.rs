@@ -3,7 +3,7 @@ use jsonwebtoken::{encode, Header};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use ya_core_model::ethaddr::NodeId;
+use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 

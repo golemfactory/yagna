@@ -5,7 +5,7 @@ use chrono::{NaiveDateTime, TimeZone, Utc};
 use std::convert::{TryFrom, TryInto};
 use uuid::Uuid;
 use ya_client_model::payment::{DebitNote, DocumentStatus, NewDebitNote};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
 #[derive(Insertable, Debug)]
@@ -46,7 +46,7 @@ impl WriteObj {
     pub fn received(debit_note: DebitNote, previous_debit_note_id: Option<String>) -> Self {
         Self {
             id: debit_note.debit_note_id,
-            owner_id: debit_note.recipient_id.parse().unwrap(),
+            owner_id: debit_note.recipient_id,
             role: Role::Requestor,
             previous_debit_note_id,
             activity_id: debit_note.activity_id,
@@ -82,17 +82,17 @@ pub struct ReadObj {
 }
 
 impl ReadObj {
-    pub fn issuer_id(&self) -> String {
+    pub fn issuer_id(&self) -> NodeId {
         match self.role {
-            Role::Provider => self.owner_id.to_string(),
-            Role::Requestor => self.peer_id.to_string(),
+            Role::Provider => self.owner_id,
+            Role::Requestor => self.peer_id,
         }
     }
 
-    pub fn recipient_id(&self) -> String {
+    pub fn recipient_id(&self) -> NodeId {
         match self.role {
-            Role::Provider => self.peer_id.to_string(),
-            Role::Requestor => self.owner_id.to_string(),
+            Role::Provider => self.peer_id,
+            Role::Requestor => self.owner_id,
         }
     }
 }

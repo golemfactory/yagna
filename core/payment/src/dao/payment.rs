@@ -16,7 +16,7 @@ use diesel::{
 };
 use std::collections::HashMap;
 use ya_client_model::payment::{DocumentStatus, Payment};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 use ya_persistence::types::Role;
 

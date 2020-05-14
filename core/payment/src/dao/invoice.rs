@@ -10,7 +10,7 @@ use diesel::{
 };
 use std::collections::HashMap;
 use ya_client_model::payment::{DocumentStatus, EventType, Invoice, NewInvoice};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };

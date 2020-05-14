@@ -3,7 +3,7 @@ use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
 use ya_client_model::payment::Payment;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
 #[derive(Debug, Identifiable, Insertable)]
@@ -69,17 +69,17 @@ pub struct ReadObj {
 }
 
 impl ReadObj {
-    pub fn payee_id(&self) -> String {
+    pub fn payee_id(&self) -> NodeId {
         match self.role {
-            Role::Provider => self.owner_id.to_string(),
-            Role::Requestor => self.peer_id.to_string(),
+            Role::Provider => self.owner_id,
+            Role::Requestor => self.peer_id,
         }
     }
 
-    pub fn payer_id(&self) -> String {
+    pub fn payer_id(&self) -> NodeId {
         match self.role {
-            Role::Provider => self.peer_id.to_string(),
-            Role::Requestor => self.owner_id.to_string(),
+            Role::Provider => self.peer_id,
+            Role::Requestor => self.owner_id,
         }
     }
 

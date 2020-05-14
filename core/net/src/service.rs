@@ -2,7 +2,8 @@ use anyhow::{anyhow, Context};
 use futures::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 
-use ya_core_model::{ethaddr::NodeId, identity, net};
+use ya_client_model::NodeId;
+use ya_core_model::{identity, net};
 use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint,
 };

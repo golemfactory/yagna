@@ -5,7 +5,7 @@ use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::Serialize;
 use std::convert::{TryFrom, TryInto};
 use ya_client_model::payment::{DebitNoteEvent, EventType};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 
 #[derive(Debug, Identifiable, Insertable)]
 #[table_name = "pay_debit_note_event"]
