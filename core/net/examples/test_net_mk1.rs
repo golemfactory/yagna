@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use structopt::StructOpt;
 
-use ya_core_model::{ethaddr::NodeId, net};
+use ya_client_model::NodeId;
+use ya_core_model::net;
 use ya_net::TryRemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 

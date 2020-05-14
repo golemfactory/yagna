@@ -9,7 +9,8 @@ default=[]
 service=[]
 
 [dependencies]
-ya-core-model = { version = "0.1", features=["ethaddr", "net", "identity"] }
+ya-client-model = "0.1"
+ya-core-model = { version = "0.1", features=["net", "identity"] }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.2"
@@ -29,6 +30,7 @@ name="test_net_mk1"
 required-features = ["service"]
 
 [dev-dependencies]
+actix-rt = "1.0"
 env_logger = "0.7"
 structopt = "0.3"
 serde = "1.0"

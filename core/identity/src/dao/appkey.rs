@@ -5,7 +5,7 @@ use diesel::prelude::*;
 
 use diesel::{Connection, ExpressionMethods, RunQueryDsl};
 use std::cmp::max;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_connection, do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };

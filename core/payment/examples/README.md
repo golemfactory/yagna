@@ -4,12 +4,12 @@
 
 To start the provider:
 ```shell script
-RUST_BACKTRACE=1 cargo run --example payment_api -- provider
+cargo run --example payment_api -- provider
 ```
 
 To start the requestor:
 ```shell script
-RUST_BACKTRACE=1 GSB_URL="tcp://127.0.0.1:8464" YAGNA_API_URL="http://127.0.0.1:8465" cargo run --example payment_api -- requestor
+GSB_URL="tcp://127.0.0.1:8464" YAGNA_API_URL="http://127.0.0.1:8465" cargo run --example payment_api -- requestor
 ```
 
 #### Debit note flow
@@ -20,15 +20,12 @@ To issue a debit node:
 Payload:
 ```json
 {
-  "agreementId": "agreement_id",
   "activityId": "activity_id",
   "totalAmountDue": "1.123456789012345678",
   "usageCounterVector": {
     "comment": "This field can contain anything",
     "values": [1.222, 2.333, 4.555]
   },
-  "creditAccountId": "0xd39a168f0480b8502c2531b2ffd8588c592d713a",
-  "paymentPlatform": "GNT",
   "paymentDueDate": "2020-02-05T15:07:45.956Z"
 }
 ```
@@ -71,12 +68,6 @@ Payload:
   "agreementId": "agreement_id",
   "activityIds": ["activity_id1", "activity_id2"],
   "amount": "10.123456789012345678",
-  "usageCounterVector": {
-    "comment": "This field can contain anything",
-    "values": [1.222, 2.333, 4.555]
-  },
-  "creditAccountId": "0xd39a168f0480b8502c2531b2ffd8588c592d713a",
-  "paymentPlatform": "GNT",
   "paymentDueDate": "2020-02-05T15:07:45.956Z"
 }
 ```

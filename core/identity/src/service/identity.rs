@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::sync::Arc;
 
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 use ya_core_model::identity as model;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;

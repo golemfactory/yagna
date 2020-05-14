@@ -1,7 +1,5 @@
-use ya_core_model::{
-    ethaddr::{NodeId, ParseError},
-    net,
-};
+use ya_client_model::node_id::{NodeId, ParseError};
+use ya_core_model::net;
 use ya_service_bus::typed as bus;
 
 #[derive(thiserror::Error, Debug)]

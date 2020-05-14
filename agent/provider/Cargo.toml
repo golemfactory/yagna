@@ -6,8 +6,8 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
+ya-client = { version = "0.3", features = ['cli']}
+ya-client-model = "0.1"
 ya-core-model = { version = "0.1", features = ['activity'] }
 ya-agreement-utils = "0.1"
 ya-utils-actix = "0.1"

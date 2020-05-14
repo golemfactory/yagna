@@ -9,7 +9,7 @@ use ya_client_model::activity::{
 };
 use ya_service_bus::RpcMessage;
 
-use crate::ethaddr::NodeId;
+use ya_client_model::NodeId;
 
 /// Public Activity bus address.
 ///
@@ -171,6 +171,20 @@ pub mod local {
     impl RpcMessage for SetUsage {
         const ID: &'static str = "SetActivityUsage";
         type Item = ();
+        type Error = RpcMessageError;
+    }
+
+    /// Get agreement ID of the activity.
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct GetAgreementId {
+        pub activity_id: String,
+        pub timeout: Option<f32>,
+    }
+
+    impl RpcMessage for GetAgreementId {
+        const ID: &'static str = "GetAgreementId";
+        type Item = String;
         type Error = RpcMessageError;
     }
 }

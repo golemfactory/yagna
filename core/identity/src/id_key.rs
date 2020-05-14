@@ -7,7 +7,7 @@ use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use rand::Rng;
 use std::convert::TryFrom;
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 
 pub struct IdentityKey {
     id: NodeId,
