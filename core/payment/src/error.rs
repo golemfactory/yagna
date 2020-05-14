@@ -7,15 +7,23 @@ pub enum DbError {
     #[error("Database connection error: {0}")]
     Connection(#[from] r2d2::Error),
     #[error("Database query error: {0}")]
-    Query(#[from] diesel::result::Error),
+    Query(String),
     #[error("Runtime error: {0}")]
     Runtime(#[from] tokio::task::JoinError),
+}
+
+impl From<diesel::result::Error> for DbError {
+    fn from(e: diesel::result::Error) -> Self {
+        DbError::Query(e.to_string())
+    }
 }
 
 pub type DbResult<T> = Result<T, DbError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ExternalServiceError {
+    #[error("Activity service error: {0}")]
+    Activity(#[from] ya_core_model::activity::RpcMessageError),
     #[error("Market service error: {0}")]
     Market(#[from] ya_core_model::market::RpcMessageError),
 }
@@ -54,6 +62,12 @@ pub enum Error {
     Rpc(#[from] RpcMessageError),
     #[error("Timeout")]
     Timeout(#[from] tokio::time::Elapsed),
+}
+
+impl From<ya_core_model::activity::RpcMessageError> for Error {
+    fn from(e: ya_core_model::activity::RpcMessageError) -> Self {
+        Into::<ExternalServiceError>::into(e).into()
+    }
 }
 
 impl From<ya_core_model::market::RpcMessageError> for Error {
