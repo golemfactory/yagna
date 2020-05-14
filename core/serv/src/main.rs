@@ -9,7 +9,9 @@ use std::{
 use structopt::{clap, StructOpt};
 use url::Url;
 
-#[cfg(feature = "ya-market-forwarding")]
+#[cfg(feature = "market-dece")]
+use ya_market_decentralized::service::MarketService;
+#[cfg(feature = "market-fwd")]
 use ya_market_forwarding::service::MarketService;
 
 use ya_persistence::executor::DbExecutor;

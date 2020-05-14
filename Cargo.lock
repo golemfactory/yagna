@@ -5409,6 +5409,7 @@ dependencies = [
  "url 2.1.1",
  "ya-activity",
  "ya-identity",
+ "ya-market-decentralized",
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
