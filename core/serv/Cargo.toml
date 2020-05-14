@@ -10,13 +10,16 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default=['ya-market-forwarding']
+default=['market-fwd']
 static-openssl=["openssl/vendored"]
+market-fwd = ['ya-market-forwarding']
+market-dece = ['ya-market-decentralized']
 
 [dependencies]
 ya-activity = "0.2"
 ya-identity = "0.2"
 ya-market-forwarding = { version = "0.1", optional = true }
+ya-market-decentralized = { version = "0.1", optional = true }
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = { version = "0.1", features = ["gnt-driver"] }
 ya-persistence = "0.2"
