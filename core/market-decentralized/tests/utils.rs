@@ -3,9 +3,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use ya_core_model::net;
 use ya_market_decentralized::Market;
 use ya_persistence::executor::DbExecutor;
-use ya_core_model::net;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {

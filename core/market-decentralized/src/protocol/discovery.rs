@@ -6,7 +6,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use ya_client_model::market::Offer;
-use ya_service_bus::{RpcMessage, typed as bus};
+use ya_service_bus::{typed as bus, RpcMessage};
 
 use super::callbacks::{CallbackHandler, HandlerSlot};
 
