@@ -2059,6 +2059,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonwebtoken"
+version = "6.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a81d1812d731546d2614737bee92aa071d37e9afa1409bc374da9e5e70e70b22"
+dependencies = [
+ "base64 0.10.1",
+ "chrono",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "untrusted",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4790,7 +4805,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=a8ab6d9#a8ab6d9ac76b228a9e4473ec9169dc7713bf5266"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=df05135f4b34b8003b156f513eddd25b30d2d59e#df05135f4b34b8003b156f513eddd25b30d2d59e"
 dependencies = [
  "awc",
  "backtrace",
@@ -4810,7 +4825,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=a8ab6d9#a8ab6d9ac76b228a9e4473ec9169dc7713bf5266"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=df05135f4b34b8003b156f513eddd25b30d2d59e#df05135f4b34b8003b156f513eddd25b30d2d59e"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -4916,7 +4931,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-market"
+name = "ya-market-forwarding"
 version = "0.1.0"
 dependencies = [
  "actix-rt",
@@ -4928,6 +4943,7 @@ dependencies = [
  "diesel_migrations",
  "env_logger 0.7.1",
  "futures 0.3.4",
+ "jsonwebtoken",
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
@@ -4939,9 +4955,11 @@ dependencies = [
  "url 2.1.1",
  "ya-client",
  "ya-core-model",
+ "ya-net",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
+ "ya-service-api-web",
  "ya-service-bus",
 ]
 
@@ -5360,7 +5378,7 @@ dependencies = [
  "url 2.1.1",
  "ya-activity",
  "ya-identity",
- "ya-market",
+ "ya-market-forwarding",
  "ya-net",
  "ya-payment",
  "ya-persistence",

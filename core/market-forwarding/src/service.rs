@@ -11,7 +11,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
-use crate::{dao::AgreementDao, Error};
+use crate::{api, dao::AgreementDao, Error};
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
@@ -76,6 +76,10 @@ impl MarketService {
         }
 
         Ok(())
+    }
+
+    pub fn rest(db: &DbExecutor) -> actix_web::Scope {
+        api::web_scope(&db)
     }
 }
 

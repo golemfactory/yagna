@@ -14,8 +14,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 
 mod local {
     use super::*;
-    use crate::dao;
-    use crate::error::DbError;
+    use crate::dao::*;
     use ya_core_model::payment::local::*;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
@@ -23,8 +22,8 @@ mod local {
 
         ServiceBinder::new(BUS_ID, db, processor)
             .bind_with_processor(schedule_payment)
-            .bind_with_processor(on_init)
-            .bind_with_processor(on_status);
+            .bind_with_processor(init)
+            .bind_with_processor(get_status);
         log::debug!("Successfully bound payment private service to service bus");
     }
 
@@ -40,50 +39,45 @@ mod local {
         Ok(())
     }
 
-    async fn on_init(
+    async fn init(
         _db: DbExecutor,
-        pp: PaymentProcessor,
+        processor: PaymentProcessor,
         _caller: String,
-        init: Init,
+        msg: Init,
     ) -> Result<(), GenericError> {
-        let addr = init.identity.to_string();
-        pp.init(addr, init.requestor, init.provider)
+        let addr = msg.identity.to_string();
+        processor
+            .init(addr, msg.requestor, msg.provider)
             .await
             .map_err(GenericError::new)
     }
 
-    async fn on_status(
+    async fn get_status(
         db: DbExecutor,
-        pp: PaymentProcessor,
+        processor: PaymentProcessor,
         _caller: String,
-        req: GetStatus,
+        msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
-        log::info!("get status: {:?}", req);
+        log::info!("get status: {:?}", msg);
+
         let db_stats_fut = async {
-            let (incoming1, outgoing1) = db
-                .as_dao::<dao::DebitNoteDao>()
-                .status_report(req.identity())
-                .await?;
-            let (incoming2, outgoing2) = db
-                .as_dao::<dao::InvoiceDao>()
-                .status_report(req.identity())
-                .await?;
-            Ok((incoming1 + incoming2, outgoing1 + outgoing2))
-        }
-        .map_err(|e: DbError| GenericError::new(e));
-        let reserved_fut = async {
-            db.as_dao::<dao::AllocationDao>()
-                .total_allocation(req.identity())
+            db.as_dao::<AgreementDao>()
+                .status_report(msg.identity())
                 .await
-                .map_err(|e| {
-                    log::error!("allocation status error: {}", e);
-                    e
-                })
         }
         .map_err(GenericError::new);
 
-        let addr = hex::encode(req.identity().into_array());
-        let amount_fut = pp.get_status(addr.as_str()).map_err(GenericError::new);
+        let reserved_fut = async {
+            db.as_dao::<AllocationDao>()
+                .total_remaining_allocation(msg.identity())
+                .await
+        }
+        .map_err(GenericError::new);
+
+        let addr = hex::encode(msg.identity().into_array());
+        let amount_fut = processor
+            .get_status(addr.as_str())
+            .map_err(GenericError::new);
 
         let ((incoming, outgoing), amount, reserved) =
             future::try_join3(db_stats_fut, amount_fut, reserved_fut).await?;
@@ -104,9 +98,10 @@ mod public {
     use crate::error::{DbError, Error, PaymentError};
     use crate::utils::*;
 
-    use crate::dao::DebitNoteEventDao;
     use ya_client_model::payment::*;
+    use ya_core_model::ethaddr::NodeId;
     use ya_core_model::payment::public::*;
+    use ya_persistence::types::Role;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment public service to service bus");
@@ -132,9 +127,12 @@ mod public {
         sender_id: String,
         msg: SendDebitNote,
     ) -> Result<Ack, SendError> {
-        let mut debit_note = msg.0;
+        let debit_note = msg.0;
         let debit_note_id = debit_note.debit_note_id.clone();
-        let agreement = match get_agreement(debit_note.agreement_id.clone()).await {
+        let activity_id = debit_note.activity_id.clone();
+        let agreement_id = debit_note.agreement_id.clone();
+
+        let agreement = match get_agreement(agreement_id.clone()).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -146,48 +144,57 @@ mod public {
             }
             Ok(Some(agreement)) => agreement,
         };
-        let offeror_id = agreement.offer.provider_id.unwrap(); // FIXME: provider_id shouldn't be an Option
+
+        let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
         let issuer_id = debit_note.issuer_id.clone();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let dao: DebitNoteDao = db.as_dao();
-        debit_note.status = InvoiceStatus::Received;
-        match dao.insert(debit_note.into()).await {
+        // FIXME: requestor_id should be non-optional NodeId field
+        let node_id: NodeId = agreement
+            .demand
+            .requestor_id
+            .clone()
+            .unwrap()
+            .parse()
+            .unwrap();
+        match async move {
+            db.as_dao::<AgreementDao>()
+                .create_if_not_exists(agreement, node_id, Role::Requestor)
+                .await?;
+            db.as_dao::<ActivityDao>()
+                .create_if_not_exists(activity_id, node_id, Role::Requestor, agreement_id)
+                .await?;
+            db.as_dao::<DebitNoteDao>()
+                .insert_received(debit_note)
+                .await?;
+            Ok(())
+        }
+        .await
+        {
+            Ok(_) => Ok(Ack {}),
             Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
-            _ => (),
-        }
-
-        let dao: DebitNoteEventDao = db.as_dao();
-        let event = NewDebitNoteEvent {
-            debit_note_id,
-            details: None,
-            event_type: EventType::Received,
-        };
-        match dao.create(event.into()).await {
-            Err(DbError::Query(e)) => Err(SendError::BadRequest(e.to_string())),
-            Err(e) => Err(SendError::ServiceError(e.to_string())),
-            Ok(_) => Ok(Ack {}),
         }
     }
 
     async fn accept_debit_note(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: AcceptDebitNote,
     ) -> Result<Ack, AcceptRejectError> {
         let debit_note_id = msg.debit_note_id;
         let acceptance = msg.acceptance;
+        let node_id = msg.issuer_id;
+
         let dao: DebitNoteDao = db.as_dao();
-        let debit_note: DebitNote = match dao.get(debit_note_id.clone()).await {
+        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
             Ok(Some(debit_note)) => debit_note.into(),
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
 
-        let sender_id = sender.trim_start_matches("/net/");
         if sender_id != debit_note.recipient_id {
             return Err(AcceptRejectError::Forbidden);
         }
@@ -201,9 +208,9 @@ mod public {
         }
 
         match debit_note.status {
-            InvoiceStatus::Accepted => return Ok(Ack {}),
-            InvoiceStatus::Settled => return Ok(Ack {}),
-            InvoiceStatus::Cancelled => {
+            DocumentStatus::Accepted => return Ok(Ack {}),
+            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled debit note".to_owned(),
                 ))
@@ -211,23 +218,10 @@ mod public {
             _ => (),
         }
 
-        if let Err(e) = dao
-            .update_status(debit_note_id.clone(), InvoiceStatus::Accepted.into())
-            .await
-        {
-            return Err(AcceptRejectError::ServiceError(e.to_string()));
-        }
-
-        let dao: DebitNoteEventDao = db.as_dao();
-        let event = NewDebitNoteEvent {
-            debit_note_id,
-            details: None,
-            event_type: EventType::Accepted,
-        };
-        match dao.create(event.into()).await {
+        match dao.accept(debit_note_id, node_id).await {
+            Ok(_) => Ok(Ack {}),
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
-            Ok(_) => Ok(Ack {}),
         }
     }
 
@@ -254,9 +248,12 @@ mod public {
         sender_id: String,
         msg: SendInvoice,
     ) -> Result<Ack, SendError> {
-        let mut invoice = msg.0;
+        let invoice = msg.0;
         let invoice_id = invoice.invoice_id.clone();
-        let agreement = match get_agreement(invoice.agreement_id.clone()).await {
+        let agreement_id = invoice.agreement_id.clone();
+        let activity_ids = invoice.activity_ids.clone();
+
+        let agreement = match get_agreement(agreement_id.clone()).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -268,30 +265,64 @@ mod public {
             }
             Ok(Some(agreement)) => agreement,
         };
-        let offeror_id = agreement.offer.provider_id.unwrap(); // FIXME: provider_id shouldn't be an Option
+
+        for activity_id in activity_ids.iter() {
+            match provider::get_agreement_id(activity_id.clone()).await {
+                Ok(Some(id)) if id != agreement_id => {
+                    return Err(SendError::BadRequest(format!(
+                        "Activity {} belongs to agreement {} not {}",
+                        activity_id, id, agreement_id
+                    )));
+                }
+                Ok(None) => {
+                    return Err(SendError::BadRequest(format!(
+                        "Activity not found: {}",
+                        activity_id
+                    )))
+                }
+                Err(e) => return Err(SendError::ServiceError(e.to_string())),
+                _ => (),
+            }
+        }
+
+        let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
         let issuer_id = invoice.issuer_id.clone();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let dao: InvoiceDao = db.as_dao();
-        invoice.status = InvoiceStatus::Received;
-        match dao.insert(invoice.into()).await {
+        // FIXME: requestor_id should be non-optional NodeId field
+        let node_id: NodeId = agreement
+            .demand
+            .requestor_id
+            .clone()
+            .unwrap()
+            .parse()
+            .unwrap();
+        match async move {
+            db.as_dao::<AgreementDao>()
+                .create_if_not_exists(agreement, node_id, Role::Requestor)
+                .await?;
+
+            let dao: ActivityDao = db.as_dao();
+            for activity_id in activity_ids {
+                dao.create_if_not_exists(
+                    activity_id,
+                    node_id,
+                    Role::Requestor,
+                    agreement_id.clone(),
+                )
+                .await?;
+            }
+
+            db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
+            Ok(())
+        }
+        .await
+        {
+            Ok(_) => Ok(Ack {}),
             Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
-            _ => (),
-        }
-
-        let dao: InvoiceEventDao = db.as_dao();
-        let event = NewInvoiceEvent {
-            invoice_id,
-            details: None,
-            event_type: EventType::Received,
-        };
-        match dao.create(event.into()).await {
-            Err(DbError::Query(e)) => Err(SendError::BadRequest(e.to_string())),
-            Err(e) => Err(SendError::ServiceError(e.to_string())),
-            Ok(_) => Ok(Ack {}),
         }
     }
 
@@ -302,8 +333,10 @@ mod public {
     ) -> Result<Ack, AcceptRejectError> {
         let invoice_id = msg.invoice_id;
         let acceptance = msg.acceptance;
+        let node_id = msg.issuer_id;
+
         let dao: InvoiceDao = db.as_dao();
-        let invoice: Invoice = match dao.get(invoice_id.clone()).await {
+        let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
             Ok(Some(invoice)) => invoice.into(),
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
@@ -322,9 +355,9 @@ mod public {
         }
 
         match invoice.status {
-            InvoiceStatus::Accepted => return Ok(Ack {}),
-            InvoiceStatus::Settled => return Ok(Ack {}),
-            InvoiceStatus::Cancelled => {
+            DocumentStatus::Accepted => return Ok(Ack {}),
+            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled invoice".to_owned(),
                 ))
@@ -332,23 +365,10 @@ mod public {
             _ => (),
         }
 
-        if let Err(e) = dao
-            .update_status(invoice_id.clone(), InvoiceStatus::Accepted.into())
-            .await
-        {
-            return Err(AcceptRejectError::ServiceError(e.to_string()));
-        }
-
-        let dao: InvoiceEventDao = db.as_dao();
-        let event = NewInvoiceEvent {
-            invoice_id,
-            details: None,
-            event_type: EventType::Accepted,
-        };
-        match dao.create(event.into()).await {
+        match dao.accept(invoice_id, node_id).await {
+            Ok(_) => Ok(Ack {}),
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
-            Ok(_) => Ok(Ack {}),
         }
     }
 

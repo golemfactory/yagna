@@ -34,10 +34,6 @@ pub struct NodeConfig {
     /// Your human readable identity in the network.
     #[structopt(long, env = "NODE_NAME", hide_env_values = true)]
     pub node_name: String,
-    /// Credit address. Can be set same as default identity.
-    /// It will be removed in future release -- agreement will specify it.
-    #[structopt(long, env = "CREDIT_ADDRESS", hide_env_values = true)]
-    pub credit_address: String,
     /// Subnetwork identifier. You can set this value to filter nodes
     /// with other identifiers than selected. Useful for test purposes.
     #[structopt(long, env = "SUBNET")]

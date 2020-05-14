@@ -1,14 +1,24 @@
+use crate::dao::activity;
+use crate::dao::agreement;
+use crate::dao::allocation;
+use crate::dao::debit_note;
+use crate::dao::invoice;
 use crate::error::DbResult;
-use crate::models::*;
+use crate::models::payment::{PaymentXDebitNote, PaymentXInvoice, ReadObj, WriteObj};
+use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_payment::dsl;
 use crate::schema::pay_payment_x_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_payment_x_invoice::dsl as invoice_dsl;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{
+    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+};
 use std::collections::HashMap;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::types::{BigDecimalField, Summable};
+use ya_client_model::payment::{DocumentStatus, Payment};
+use ya_core_model::ethaddr::NodeId;
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -20,66 +30,146 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
     }
 }
 
-impl<'c> PaymentDao<'c> {
-    pub async fn create(&self, payment: NewPayment) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            let debit_note_ids = payment.debit_note_ids;
-            let invoice_ids = payment.invoice_ids;
-            let payment = payment.payment;
-            let payment_id = payment.id.clone();
+// FIXME: This could probably be a function
+macro_rules! query {
+    () => {
+        dsl::pay_payment
+            .inner_join(
+                agreement_dsl::pay_agreement.on(dsl::owner_id
+                    .eq(agreement_dsl::owner_id)
+                    .and(dsl::agreement_id.eq(agreement_dsl::id))),
+            )
+            .select((
+                dsl::id,
+                dsl::owner_id,
+                dsl::role,
+                dsl::agreement_id,
+                dsl::allocation_id,
+                dsl::amount,
+                dsl::timestamp,
+                dsl::details,
+                agreement_dsl::peer_id,
+                agreement_dsl::payee_addr,
+                agreement_dsl::payer_addr,
+            ))
+    };
+}
 
+impl<'c> PaymentDao<'c> {
+    async fn insert(
+        &self,
+        payment: WriteObj,
+        debit_note_ids: Vec<String>,
+        invoice_ids: Vec<String>,
+    ) -> DbResult<()> {
+        let payment_id = payment.id.clone();
+        let owner_id = payment.owner_id.clone();
+        let allocation_id = payment.allocation_id.clone();
+        let agreement_id = payment.agreement_id.clone();
+        let amount = payment.amount.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            // Insert payment
             diesel::insert_into(dsl::pay_payment)
                 .values(payment)
                 .execute(conn)?;
 
-            debit_note_ids.into_iter().try_for_each(|debit_note_id| {
+            // Insert debit note relations
+            debit_note_ids.iter().try_for_each(|debit_note_id| {
                 let payment_id = payment_id.clone();
+                let debit_note_id = debit_note_id.clone();
+                let owner_id = owner_id.clone();
                 diesel::insert_into(debit_note_dsl::pay_payment_x_debit_note)
                     .values(PaymentXDebitNote {
                         payment_id,
                         debit_note_id,
+                        owner_id,
                     })
                     .execute(conn)
                     .map(|_| ())
             })?;
 
-            invoice_ids.into_iter().try_for_each(|invoice_id| {
+            // Insert invoice relations
+            invoice_ids.iter().try_for_each(|invoice_id| {
                 let payment_id = payment_id.clone();
+                let invoice_id = invoice_id.clone();
+                let owner_id = owner_id.clone();
                 diesel::insert_into(invoice_dsl::pay_payment_x_invoice)
                     .values(PaymentXInvoice {
                         payment_id,
                         invoice_id,
+                        owner_id,
                     })
                     .execute(conn)
                     .map(|_| ())
             })?;
+
+            // Update spent & remaining amount for allocation (if applicable)
+            if let Some(allocation_id) = &allocation_id {
+                allocation::spend_from_allocation(allocation_id, &amount, conn)?;
+            }
+
+            // Update total paid amount for agreement
+            agreement::increase_amount_paid(&agreement_id, &owner_id, &amount, conn)?;
+
+            // Update total paid amount for activities
+            let amounts =
+                debit_note::get_paid_amount_per_activity(&debit_note_ids, &owner_id, conn)?;
+            activity::set_amounts_paid(&amounts, &owner_id, conn)?;
+
+            // Set 'SETTLED' status for all invoices and debit notes
+            debit_note::update_status(&debit_note_ids, &owner_id, &DocumentStatus::Settled, conn)?;
+            invoice::update_status(&invoice_ids, &owner_id, &DocumentStatus::Settled, conn)?;
 
             Ok(())
         })
         .await
     }
 
-    pub async fn get(&self, payment_id: String) -> DbResult<Option<Payment>> {
-        do_with_transaction(self.pool, move |conn| {
-            let payment: Option<BarePayment> = dsl::pay_payment
-                .find(payment_id.clone())
+    pub async fn create_new(
+        &self,
+        payer_id: NodeId,
+        agreement_id: String,
+        allocation_id: String,
+        amount: BigDecimal,
+        details: Vec<u8>,
+        debit_note_ids: Vec<String>,
+        invoice_ids: Vec<String>,
+    ) -> DbResult<String> {
+        let payment = WriteObj::new_sent(payer_id, agreement_id, allocation_id, amount, details);
+        let payment_id = payment.id.clone();
+        self.insert(payment, debit_note_ids, invoice_ids).await?;
+        Ok(payment_id)
+    }
+
+    pub async fn insert_received(&self, payment: Payment, payee_id: NodeId) -> DbResult<()> {
+        let debit_note_ids = payment.debit_note_ids.clone().unwrap_or(vec![]);
+        let invoice_ids = payment.invoice_ids.clone().unwrap_or(vec![]);
+        let payment = WriteObj::new_received(payment, payee_id);
+        self.insert(payment, debit_note_ids, invoice_ids).await
+    }
+
+    pub async fn get(&self, payment_id: String, owner_id: NodeId) -> DbResult<Option<Payment>> {
+        readonly_transaction(self.pool, move |conn| {
+            let payment: Option<ReadObj> = query!()
+                .filter(dsl::id.eq(&payment_id))
+                .filter(dsl::owner_id.eq(&owner_id))
                 .first(conn)
                 .optional()?;
+
             match payment {
                 Some(payment) => {
                     let debit_note_ids = debit_note_dsl::pay_payment_x_debit_note
                         .select(debit_note_dsl::debit_note_id)
-                        .filter(debit_note_dsl::payment_id.eq(payment_id.clone()))
+                        .filter(debit_note_dsl::payment_id.eq(&payment_id))
+                        .filter(debit_note_dsl::owner_id.eq(&owner_id))
                         .load(conn)?;
                     let invoice_ids = invoice_dsl::pay_payment_x_invoice
                         .select(invoice_dsl::invoice_id)
-                        .filter(invoice_dsl::payment_id.eq(payment_id))
+                        .filter(invoice_dsl::payment_id.eq(&payment_id))
+                        .filter(invoice_dsl::owner_id.eq(&owner_id))
                         .load(conn)?;
-                    Ok(Some(Payment {
-                        payment,
-                        debit_note_ids,
-                        invoice_ids,
-                    }))
+                    Ok(Some(payment.into_api_model(debit_note_ids, invoice_ids)))
                 }
                 None => Ok(None),
             }
@@ -87,30 +177,42 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get_sent(
+    async fn get_for_role(
         &self,
-        payer_id: String,
+        node_id: NodeId,
         later_than: Option<NaiveDateTime>,
+        role: Role,
     ) -> DbResult<Vec<Payment>> {
-        do_with_transaction(self.pool, move |conn| {
-            let query = dsl::pay_payment
-                .filter(dsl::payer_id.eq(payer_id.clone()))
+        readonly_transaction(self.pool, move |conn| {
+            let query = query!()
+                .filter(dsl::owner_id.eq(&node_id))
+                .filter(dsl::role.eq(&role))
                 .order_by(dsl::timestamp.asc());
-            let payments = match later_than {
+            let payments: Vec<ReadObj> = match later_than {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,
             };
             let debit_notes = debit_note_dsl::pay_payment_x_debit_note
-                .inner_join(dsl::pay_payment)
-                .filter(dsl::payer_id.eq(payer_id.clone()))
+                .inner_join(
+                    dsl::pay_payment.on(debit_note_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(debit_note_dsl::payment_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(&node_id))
+                .filter(dsl::role.eq(&role))
                 .select(crate::schema::pay_payment_x_debit_note::all_columns)
                 .load(conn)?;
             let invoices = invoice_dsl::pay_payment_x_invoice
-                .inner_join(dsl::pay_payment)
-                .filter(dsl::payer_id.eq(payer_id))
+                .inner_join(
+                    dsl::pay_payment.on(invoice_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(invoice_dsl::payment_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(&node_id))
+                .filter(dsl::role.eq(&role))
                 .select(crate::schema::pay_payment_x_invoice::all_columns)
                 .load(conn)?;
-            Ok(join_payments_with_debit_notes_and_payments(
+            Ok(join_payments_with_debit_notes_and_invoices(
                 payments,
                 debit_notes,
                 invoices,
@@ -119,52 +221,26 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    pub async fn get_received(
+    pub async fn get_for_requestor(
         &self,
-        payee_id: String,
+        node_id: NodeId,
         later_than: Option<NaiveDateTime>,
     ) -> DbResult<Vec<Payment>> {
-        do_with_transaction(self.pool, move |conn| {
-            let query = dsl::pay_payment
-                .filter(dsl::payee_id.eq(payee_id.clone()))
-                .order_by(dsl::timestamp.asc());
-            let payments = match later_than {
-                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
-                None => query.load(conn)?,
-            };
-            let debit_notes = debit_note_dsl::pay_payment_x_debit_note
-                .inner_join(dsl::pay_payment)
-                .filter(dsl::payee_id.eq(payee_id.clone()))
-                .select(crate::schema::pay_payment_x_debit_note::all_columns)
-                .load(conn)?;
-            let invoices = invoice_dsl::pay_payment_x_invoice
-                .inner_join(dsl::pay_payment)
-                .filter(dsl::payee_id.eq(payee_id))
-                .select(crate::schema::pay_payment_x_invoice::all_columns)
-                .load(conn)?;
-            Ok(join_payments_with_debit_notes_and_payments(
-                payments,
-                debit_notes,
-                invoices,
-            ))
-        })
-        .await
+        self.get_for_role(node_id, later_than, Role::Requestor)
+            .await
     }
 
-    pub async fn get_transaction_balance(&self, payer_id: String) -> DbResult<BigDecimal> {
-        do_with_transaction(self.pool, move |conn| {
-            let amounts: Vec<BigDecimalField> = dsl::pay_payment
-                .select(dsl::amount)
-                .filter(dsl::payer_id.eq(payer_id))
-                .load(conn)?;
-            Ok(amounts.sum())
-        })
-        .await
+    pub async fn get_for_provider(
+        &self,
+        node_id: NodeId,
+        later_than: Option<NaiveDateTime>,
+    ) -> DbResult<Vec<Payment>> {
+        self.get_for_role(node_id, later_than, Role::Provider).await
     }
 }
 
-fn join_payments_with_debit_notes_and_payments(
-    payments: Vec<BarePayment>,
+fn join_payments_with_debit_notes_and_invoices(
+    payments: Vec<ReadObj>,
     debit_notes: Vec<PaymentXDebitNote>,
     invoices: Vec<PaymentXInvoice>,
 ) -> Vec<Payment> {
@@ -187,10 +263,10 @@ fn join_payments_with_debit_notes_and_payments(
         });
     payments
         .into_iter()
-        .map(|payment| Payment {
-            debit_note_ids: debit_notes_map.remove(&payment.id).unwrap_or(vec![]),
-            invoice_ids: invoices_map.remove(&payment.id).unwrap_or(vec![]),
-            payment,
+        .map(|payment| {
+            let debit_note_ids = debit_notes_map.remove(&payment.id).unwrap_or(vec![]);
+            let invoice_ids = invoices_map.remove(&payment.id).unwrap_or(vec![]);
+            payment.into_api_model(debit_note_ids, invoice_ids)
         })
         .collect()
 }

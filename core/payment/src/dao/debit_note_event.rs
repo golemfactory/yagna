@@ -1,10 +1,31 @@
 use crate::error::DbResult;
-use crate::models::*;
-use crate::schema::pay_debit_note::dsl as debit_note_dsl;
+use crate::models::debit_note_event::{ReadObj, WriteObj};
 use crate::schema::pay_debit_note_event::dsl;
+use crate::schema::pay_event_type::dsl as event_type_dsl;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use serde::Serialize;
+use std::convert::TryInto;
+use ya_client_model::payment::{DebitNoteEvent, EventType};
+use ya_core_model::ethaddr::NodeId;
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
+use ya_persistence::types::Role;
+
+pub fn create<T: Serialize>(
+    debit_note_id: String,
+    owner_id: NodeId,
+    event_type: EventType,
+    details: Option<T>,
+    conn: &ConnType,
+) -> DbResult<()> {
+    let event = WriteObj::new(debit_note_id, owner_id, event_type, details)?;
+    diesel::insert_into(dsl::pay_debit_note_event)
+        .values(event)
+        .execute(conn)?;
+    Ok(())
+}
 
 pub struct DebitNoteEventDao<'c> {
     pool: &'c PoolType,
@@ -17,7 +38,14 @@ impl<'c> AsDao<'c> for DebitNoteEventDao<'c> {
 }
 
 impl<'c> DebitNoteEventDao<'c> {
-    pub async fn create(&self, event: NewDebitNoteEvent) -> DbResult<()> {
+    pub async fn create<T: Serialize>(
+        &self,
+        debit_note_id: String,
+        owner_id: NodeId,
+        event_type: EventType,
+        details: Option<T>,
+    ) -> DbResult<()> {
+        let event = WriteObj::new(debit_note_id, owner_id, event_type, details)?;
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::pay_debit_note_event)
                 .values(event)
@@ -27,43 +55,42 @@ impl<'c> DebitNoteEventDao<'c> {
         .await
     }
 
-    pub async fn get_for_recipient(
+    async fn get_for_role(
         &self,
-        recipient_id: String,
+        node_id: NodeId,
         later_than: Option<NaiveDateTime>,
+        role: Role,
     ) -> DbResult<Vec<DebitNoteEvent>> {
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             let query = dsl::pay_debit_note_event
-                .inner_join(debit_note_dsl::pay_debit_note)
-                .filter(debit_note_dsl::recipient_id.eq(recipient_id))
+                .inner_join(event_type_dsl::pay_event_type)
+                .filter(dsl::owner_id.eq(node_id))
+                .filter(event_type_dsl::role.eq(role))
                 .select(crate::schema::pay_debit_note_event::all_columns)
                 .order_by(dsl::timestamp.asc());
-            let events = match later_than {
+            let events: Vec<ReadObj> = match later_than {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,
             };
-            Ok(events)
+            events.into_iter().map(TryInto::try_into).collect()
         })
         .await
     }
 
-    pub async fn get_for_issuer(
+    pub async fn get_for_requestor(
         &self,
-        issuer_id: String,
+        node_id: NodeId,
         later_than: Option<NaiveDateTime>,
     ) -> DbResult<Vec<DebitNoteEvent>> {
-        do_with_transaction(self.pool, move |conn| {
-            let query = dsl::pay_debit_note_event
-                .inner_join(debit_note_dsl::pay_debit_note)
-                .filter(debit_note_dsl::issuer_id.eq(issuer_id))
-                .select(crate::schema::pay_debit_note_event::all_columns)
-                .order_by(dsl::timestamp.asc());
-            let events = match later_than {
-                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
-                None => query.load(conn)?,
-            };
-            Ok(events)
-        })
-        .await
+        self.get_for_role(node_id, later_than, Role::Requestor)
+            .await
+    }
+
+    pub async fn get_for_provider(
+        &self,
+        node_id: NodeId,
+        later_than: Option<NaiveDateTime>,
+    ) -> DbResult<Vec<DebitNoteEvent>> {
+        self.get_for_role(node_id, later_than, Role::Provider).await
     }
 }
