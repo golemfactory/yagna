@@ -1,6 +1,7 @@
 use crate::common::{
-    authorize_activity_initiator, authorize_agreement_initiator, generate_id, get_agreement,
-    get_persisted_state, get_persisted_usage, RpcMessageResult,
+    authorize_activity_initiator, authorize_agreement_initiator, generate_id,
+    get_activity_agreement, get_agreement, get_persisted_state, get_persisted_usage,
+    RpcMessageResult,
 };
 use crate::dao::*;
 use crate::error::Error;
@@ -218,7 +219,8 @@ mod local {
     pub fn bind_gsb(db: &DbExecutor) {
         ServiceBinder::new(activity::local::BUS_ID, db, ())
             .bind(set_activity_state_gsb)
-            .bind(set_activity_usage_gsb);
+            .bind(set_activity_usage_gsb)
+            .bind(get_agreement_id_gsb);
     }
 
     /// Pass activity state (which may include error details).
@@ -247,5 +249,16 @@ mod local {
     ) -> RpcMessageResult<activity::local::SetUsage> {
         set_persisted_usage(&db, &msg.activity_id, msg.usage).await?;
         Ok(())
+    }
+
+    /// Get agreement ID for a given activity ID
+    /// Called e.g. by payment module
+    async fn get_agreement_id_gsb(
+        db: DbExecutor,
+        _caller: String,
+        msg: activity::local::GetAgreementId,
+    ) -> RpcMessageResult<activity::local::GetAgreementId> {
+        let agreement = get_activity_agreement(&db, &msg.activity_id).await?;
+        Ok(agreement.agreement_id)
     }
 }
