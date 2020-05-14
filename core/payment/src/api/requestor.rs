@@ -105,13 +105,13 @@ async fn accept_debit_note(
     }
 
     match debit_note.status {
-        InvoiceStatus::Received => (),
-        InvoiceStatus::Rejected => (),
-        InvoiceStatus::Failed => (),
-        InvoiceStatus::Accepted => return response::ok(Null),
-        InvoiceStatus::Settled => return response::ok(Null),
-        InvoiceStatus::Issued => return response::server_error(&"Illegal status: issued"),
-        InvoiceStatus::Cancelled => return response::bad_request(&"Debit note cancelled"),
+        DocumentStatus::Received => (),
+        DocumentStatus::Rejected => (),
+        DocumentStatus::Failed => (),
+        DocumentStatus::Accepted => return response::ok(Null),
+        DocumentStatus::Settled => return response::ok(Null),
+        DocumentStatus::Issued => return response::server_error(&"Illegal status: issued"),
+        DocumentStatus::Cancelled => return response::bad_request(&"Debit note cancelled"),
     }
 
     with_timeout(query.timeout, async move {
@@ -119,8 +119,7 @@ async fn accept_debit_note(
         let msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
         match async move {
             issuer_id.try_service(PUBLIC_SERVICE)?.call(msg).await??;
-            dao.update_status(debit_note_id, node_id, InvoiceStatus::Accepted)
-                .await?;
+            dao.accept(debit_note_id, node_id).await?;
             Ok(())
         }
         .await
@@ -213,13 +212,13 @@ async fn accept_invoice(
     }
 
     match invoice.status {
-        InvoiceStatus::Received => (),
-        InvoiceStatus::Rejected => (),
-        InvoiceStatus::Failed => (),
-        InvoiceStatus::Accepted => return response::ok(Null),
-        InvoiceStatus::Settled => return response::ok(Null),
-        InvoiceStatus::Cancelled => return response::bad_request(&"Invoice cancelled"),
-        InvoiceStatus::Issued => return response::server_error(&"Illegal status: issued"),
+        DocumentStatus::Received => (),
+        DocumentStatus::Rejected => (),
+        DocumentStatus::Failed => (),
+        DocumentStatus::Accepted => return response::ok(Null),
+        DocumentStatus::Settled => return response::ok(Null),
+        DocumentStatus::Cancelled => return response::bad_request(&"Invoice cancelled"),
+        DocumentStatus::Issued => return response::server_error(&"Illegal status: issued"),
     }
 
     let allocation_dao: AllocationDao = db.as_dao();
@@ -249,8 +248,7 @@ async fn accept_invoice(
                 .call(accept_msg)
                 .await??;
             bus::service(LOCAL_SERVICE).send(schedule_msg).await??;
-            dao.update_status(invoice_id, node_id, InvoiceStatus::Accepted)
-                .await?;
+            dao.accept(invoice_id, node_id).await?;
             Ok(())
         }
         .await

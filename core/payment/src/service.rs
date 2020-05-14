@@ -98,7 +98,6 @@ mod public {
     use crate::error::{DbError, Error, PaymentError};
     use crate::utils::*;
 
-    use crate::dao::DebitNoteEventDao;
     use ya_client_model::payment::*;
     use ya_core_model::ethaddr::NodeId;
     use ya_core_model::payment::public::*;
@@ -170,9 +169,6 @@ mod public {
             db.as_dao::<DebitNoteDao>()
                 .insert_received(debit_note)
                 .await?;
-            db.as_dao::<DebitNoteEventDao>()
-                .create::<()>(debit_note_id, node_id, EventType::Received, None)
-                .await?;
             Ok(())
         }
         .await
@@ -212,9 +208,9 @@ mod public {
         }
 
         match debit_note.status {
-            InvoiceStatus::Accepted => return Ok(Ack {}),
-            InvoiceStatus::Settled => return Ok(Ack {}),
-            InvoiceStatus::Cancelled => {
+            DocumentStatus::Accepted => return Ok(Ack {}),
+            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled debit note".to_owned(),
                 ))
@@ -222,17 +218,7 @@ mod public {
             _ => (),
         }
 
-        let event_dao: DebitNoteEventDao = db.as_dao();
-        match async move {
-            dao.update_status(debit_note_id.clone(), node_id, InvoiceStatus::Accepted)
-                .await?;
-            event_dao
-                .create::<()>(debit_note_id, node_id, EventType::Accepted, None)
-                .await?;
-            Ok(())
-        }
-        .await
-        {
+        match dao.accept(debit_note_id, node_id).await {
             Ok(_) => Ok(Ack {}),
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
@@ -330,9 +316,6 @@ mod public {
             }
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
-            db.as_dao::<InvoiceEventDao>()
-                .create::<()>(invoice_id, node_id, EventType::Received, None)
-                .await?;
             Ok(())
         }
         .await
@@ -372,9 +355,9 @@ mod public {
         }
 
         match invoice.status {
-            InvoiceStatus::Accepted => return Ok(Ack {}),
-            InvoiceStatus::Settled => return Ok(Ack {}),
-            InvoiceStatus::Cancelled => {
+            DocumentStatus::Accepted => return Ok(Ack {}),
+            DocumentStatus::Settled => return Ok(Ack {}),
+            DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled invoice".to_owned(),
                 ))
@@ -382,17 +365,7 @@ mod public {
             _ => (),
         }
 
-        let event_dao: InvoiceEventDao = db.as_dao();
-        match async move {
-            dao.update_status(invoice_id.clone(), node_id, InvoiceStatus::Accepted)
-                .await?;
-            event_dao
-                .create::<()>(invoice_id, node_id, EventType::Accepted, None)
-                .await?;
-            Ok(())
-        }
-        .await
-        {
+        match dao.accept(invoice_id, node_id).await {
             Ok(_) => Ok(Ack {}),
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),

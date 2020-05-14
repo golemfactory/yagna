@@ -1,7 +1,9 @@
+use crate::error::DbResult;
 use crate::schema::{pay_invoice, pay_invoice_x_activity};
 use chrono::{NaiveDateTime, TimeZone, Utc};
+use std::convert::TryInto;
 use uuid::Uuid;
-use ya_client_model::payment::{Invoice, InvoiceStatus, NewInvoice};
+use ya_client_model::payment::{DocumentStatus, Invoice, NewInvoice};
 use ya_core_model::ethaddr::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
@@ -24,7 +26,7 @@ impl WriteObj {
             owner_id: issuer_id,
             role: Role::Provider,
             agreement_id: invoice.agreement_id,
-            status: InvoiceStatus::Issued.into(),
+            status: DocumentStatus::Issued.into(),
             amount: invoice.amount.into(),
             payment_due_date: invoice.payment_due_date.naive_utc(),
         }
@@ -36,7 +38,7 @@ impl WriteObj {
             owner_id: invoice.recipient_id.parse().unwrap(),
             role: Role::Requestor,
             agreement_id: invoice.agreement_id,
-            status: InvoiceStatus::Received.into(),
+            status: DocumentStatus::Received.into(),
             amount: invoice.amount.into(),
             payment_due_date: invoice.payment_due_date.naive_utc(),
         }
@@ -76,20 +78,20 @@ impl ReadObj {
         }
     }
 
-    pub fn into_api_model(self, activity_ids: Vec<String>) -> Invoice {
-        Invoice {
+    pub fn into_api_model(self, activity_ids: Vec<String>) -> DbResult<Invoice> {
+        Ok(Invoice {
             issuer_id: self.issuer_id(),
             recipient_id: self.recipient_id(),
             invoice_id: self.id,
-            payee_addr: self.payee_addr.to_string(),
-            payer_addr: self.payer_addr.to_string(),
+            payee_addr: self.payee_addr,
+            payer_addr: self.payer_addr,
             timestamp: Utc.from_utc_datetime(&self.timestamp),
             agreement_id: self.agreement_id,
             activity_ids,
             amount: self.amount.into(),
             payment_due_date: Utc.from_utc_datetime(&self.payment_due_date),
-            status: self.status.into(),
-        }
+            status: self.status.try_into()?,
+        })
     }
 }
 

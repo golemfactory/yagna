@@ -4,7 +4,7 @@ use crate::utils::get_sign_tx;
 use bigdecimal::BigDecimal;
 use std::sync::Arc;
 use std::time::Duration;
-use ya_client_model::payment::{Invoice, InvoiceStatus, Payment};
+use ya_client_model::payment::{Invoice, Payment};
 use ya_core_model::ethaddr::NodeId;
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::TryRemoteEndpoint;
@@ -93,10 +93,6 @@ impl PaymentProcessor {
                 .call(msg)
                 .await??;
 
-            let invoice_dao: InvoiceDao = self.db_executor.as_dao();
-            invoice_dao
-                .update_status(invoice_id, payer_id, InvoiceStatus::Settled)
-                .await?;
             Ok(())
         }
         .await;
@@ -105,7 +101,7 @@ impl PaymentProcessor {
             log::error!("Payment failed: {}", e);
             let invoice_dao: InvoiceDao = self.db_executor.as_dao();
             invoice_dao
-                .update_status(invoice_id, payer_id, InvoiceStatus::Failed)
+                .mark_failed(invoice_id, payer_id)
                 .await
                 .unwrap_or_else(|e| log::error!("{}", e));
         }

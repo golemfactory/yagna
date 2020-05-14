@@ -5,10 +5,27 @@ use crate::schema::pay_invoice_event::dsl;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
+use std::convert::TryInto;
 use ya_client_model::payment::{EventType, InvoiceEvent};
 use ya_core_model::ethaddr::NodeId;
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 use ya_persistence::types::Role;
+
+pub fn create<T: Serialize>(
+    invoice_id: String,
+    owner_id: NodeId,
+    event_type: EventType,
+    details: Option<T>,
+    conn: &ConnType,
+) -> DbResult<()> {
+    let event = WriteObj::new(invoice_id, owner_id, event_type, details)?;
+    diesel::insert_into(dsl::pay_invoice_event)
+        .values(event)
+        .execute(conn)?;
+    Ok(())
+}
 
 pub struct InvoiceEventDao<'c> {
     pool: &'c PoolType,
@@ -28,7 +45,7 @@ impl<'c> InvoiceEventDao<'c> {
         event_type: EventType,
         details: Option<T>,
     ) -> DbResult<()> {
-        let event = WriteObj::new(invoice_id, owner_id, event_type, details);
+        let event = WriteObj::new(invoice_id, owner_id, event_type, details)?;
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::pay_invoice_event)
                 .values(event)
@@ -55,7 +72,7 @@ impl<'c> InvoiceEventDao<'c> {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
                 None => query.load(conn)?,
             };
-            Ok(events.into_iter().map(Into::into).collect())
+            events.into_iter().map(TryInto::try_into).collect()
         })
         .await
     }

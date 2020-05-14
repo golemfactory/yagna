@@ -1,7 +1,9 @@
+use crate::error::{DbError, DbResult};
 use crate::schema::pay_debit_note_event;
+use crate::utils::{json_from_str, json_to_string};
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::Serialize;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use ya_client_model::payment::{DebitNoteEvent, EventType};
 use ya_core_model::ethaddr::NodeId;
 
@@ -21,13 +23,17 @@ impl WriteObj {
         owner_id: NodeId,
         event_type: EventType,
         details: Option<T>,
-    ) -> Self {
-        Self {
+    ) -> DbResult<Self> {
+        let details = match details {
+            Some(details) => Some(json_to_string(&details)?),
+            None => None,
+        };
+        Ok(Self {
             debit_note_id,
             owner_id,
             event_type: event_type.into(),
-            details: details.map(|s| serde_json::to_string(&s).unwrap()),
-        }
+            details,
+        })
     }
 }
 
@@ -42,13 +48,19 @@ pub struct ReadObj {
     pub details: Option<String>,
 }
 
-impl From<ReadObj> for DebitNoteEvent {
-    fn from(event: ReadObj) -> Self {
-        Self {
+impl TryFrom<ReadObj> for DebitNoteEvent {
+    type Error = DbError;
+
+    fn try_from(event: ReadObj) -> DbResult<Self> {
+        let details = match event.details {
+            Some(s) => Some(json_from_str(&s)?),
+            None => None,
+        };
+        Ok(Self {
             debit_note_id: event.debit_note_id,
             timestamp: Utc.from_utc_datetime(&event.timestamp),
-            details: event.details.map(|s| serde_json::from_str(&s).unwrap()),
-            event_type: event.event_type.try_into().unwrap(),
-        }
+            details,
+            event_type: event.event_type.try_into()?,
+        })
     }
 }
