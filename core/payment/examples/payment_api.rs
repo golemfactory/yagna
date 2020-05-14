@@ -9,7 +9,7 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
-use ya_core_model::ethaddr::NodeId;
+
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
@@ -143,7 +143,8 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor);
     fake_sign_tx(Box::new(sign_tx));
 
-    ya_net::bind_remote(&node_id.parse()?).await?;
+    let node_id = node_id.parse()?;
+    ya_net::bind_remote(node_id, vec![node_id]).await?;
 
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
@@ -169,7 +170,7 @@ async fn main() -> anyhow::Result<()> {
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
 
     let identity = Identity {
-        identity: NodeId::from_str(&node_id).unwrap(),
+        identity: node_id,
         name: "".to_string(),
         role: "".to_string(),
     };

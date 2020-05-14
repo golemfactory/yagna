@@ -4955,6 +4955,7 @@ dependencies = [
  "futures 0.3.4",
  "log 0.4.8",
  "serde",
+ "serde_json",
  "structopt",
  "thiserror",
  "ya-core-model",

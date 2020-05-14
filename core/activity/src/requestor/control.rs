@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use ya_client_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_core_model::activity;
-use ya_net::TryRemoteEndpoint;
+use ya_net::{self as net, RemoteEndpoint, TryRemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
@@ -38,15 +38,16 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id).await?;
     log::trace!("agreement: {:#?}", agreement);
 
+    let provider_id = agreement.provider_id()?.parse()?;
     let msg = activity::Create {
-        provider_id: agreement.provider_id()?.parse()?,
+        provider_id,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
-    let activity_id = agreement
-        .provider_id()?
-        .try_service(activity::BUS_ID)?
+    let activity_id = net::from(id.identity)
+        .to(provider_id)
+        .service(activity::BUS_ID)
         .send(msg)
         .timeout(query.timeout)
         .await???;

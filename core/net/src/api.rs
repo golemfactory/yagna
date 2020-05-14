@@ -33,8 +33,52 @@ impl TryRemoteEndpoint for &str {
     }
 }
 
-pub fn net_node_id(node_id: &NodeId) -> String {
-    format!("{}/{:?}", net::BUS_ID, node_id)
+pub struct NetSrc {
+    identity: NodeId,
+}
+
+impl NetSrc {
+    pub fn to(&self, dst: NodeId) -> NetDst {
+        NetDst {
+            identity: self.identity,
+            dst,
+        }
+    }
+}
+
+pub struct NetDst {
+    identity: NodeId,
+    dst: NodeId,
+}
+
+pub fn from(identity: NodeId) -> NetSrc {
+    NetSrc { identity }
+}
+
+fn extract_exported_part(local_service_addr: &str) -> &str {
+    assert!(local_service_addr.starts_with(net::PUBLIC_PREFIX));
+    &local_service_addr[net::PUBLIC_PREFIX.len()..]
+}
+
+pub trait RemoteEndpoint {
+    fn service(&self, bus_addr: &str) -> bus::Endpoint;
+}
+
+impl RemoteEndpoint for NodeId {
+    fn service(&self, bus_addr: &str) -> bus::Endpoint {
+        bus::service(format!("/net/{}/{}", self, extract_exported_part(bus_addr)))
+    }
+}
+
+impl RemoteEndpoint for NetDst {
+    fn service(&self, bus_addr: &str) -> bus::Endpoint {
+        bus::service(format!(
+            "/from/{}/to/{}{}",
+            self.identity,
+            self.dst,
+            extract_exported_part(bus_addr)
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -77,16 +121,5 @@ mod tests {
             .parse()
             .unwrap();
         assert!(node_id.try_service("/zima/x").is_err());
-    }
-
-    #[test]
-    fn ok_net_node_id() {
-        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
-            .parse()
-            .unwrap();
-        assert_eq!(
-            net_node_id(&node_id),
-            "/net/0xbabe000000000000000000000000000000000000".to_string()
-        );
     }
 }

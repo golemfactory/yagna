@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         .context(format!("Error binding local router"))?;
 
     std::env::set_var(ya_net::CENTRAL_ADDR_ENV_VAR, &options.hub_addr);
-    ya_net::bind_remote(&options.my_id())
+    ya_net::bind_remote(options.my_id(), vec![options.my_id()])
         .await
         .context(format!(
             "Error binding service at {} for {}",
