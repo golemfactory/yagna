@@ -1,13 +1,13 @@
 use actix_web::{web, Responder};
 
 use ya_core_model::activity;
-use ya_net::TryRemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
-    authorize_activity_initiator, get_activity_agreement, PathActivity, QueryTimeout,
+    agreement_provider_service, authorize_activity_initiator, get_activity_agreement, PathActivity,
+    QueryTimeout,
 };
 use crate::error::Error;
 
@@ -31,9 +31,7 @@ async fn get_running_command(
         timeout: query.timeout.clone(),
     };
 
-    let cmd = agreement
-        .provider_id()?
-        .try_service(activity::BUS_ID)?
+    let cmd = agreement_provider_service(&id, &agreement)?
         .send(msg)
         .timeout(query.timeout)
         .await???;
