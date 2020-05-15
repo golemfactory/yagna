@@ -9,7 +9,7 @@ use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
 use ya_core_model::payment::public::{SendDebitNote, SendError, SendInvoice, BUS_ID};
 use ya_core_model::payment::RpcMessageError;
-use ya_net::TryRemoteEndpoint;
+use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
@@ -143,9 +143,9 @@ async fn send_debit_note(
 
     with_timeout(query.timeout, async move {
         match async move {
-            debit_note
-                .recipient_id
-                .try_service(BUS_ID)?
+            ya_net::from(node_id)
+                .to(debit_note.recipient_id)
+                .service(BUS_ID)
                 .call(SendDebitNote(debit_note))
                 .await??;
             dao.mark_received(debit_note_id, node_id).await?;
@@ -302,9 +302,9 @@ async fn send_invoice(
 
     with_timeout(query.timeout, async move {
         match async move {
-            invoice
-                .recipient_id
-                .try_service(BUS_ID)?
+            ya_net::from(node_id)
+                .to(invoice.recipient_id)
+                .service(BUS_ID)
                 .call(SendInvoice(invoice))
                 .await??;
             dao.mark_received(invoice_id, node_id).await?;

@@ -6,12 +6,15 @@ use ya_client_model::{
     market::Agreement,
     NodeId,
 };
-use ya_core_model::market;
+use ya_core_model::{activity, market};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use crate::dao::{ActivityDao, ActivityStateDao, ActivityUsageDao};
 use crate::error::Error;
+use ya_net::RemoteEndpoint;
+use ya_service_api_web::middleware::Identity;
+use ya_service_bus::typed::Endpoint;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: f32 = 12.0;
@@ -72,6 +75,15 @@ pub(crate) async fn set_persisted_state(
         .as_dao::<ActivityStateDao>()
         .set(activity_id, activity_state)
         .await?)
+}
+
+pub(crate) fn agreement_provider_service(
+    id: &Identity,
+    agreement: &Agreement,
+) -> Result<Endpoint, Error> {
+    Ok(ya_net::from(id.identity)
+        .to(agreement.provider_id()?.parse()?)
+        .service(activity::BUS_ID))
 }
 
 pub(crate) async fn get_persisted_usage(

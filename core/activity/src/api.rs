@@ -16,15 +16,14 @@ mod common {
     use actix_web::{web, Responder};
 
     use ya_core_model::activity;
-    use ya_net::TryRemoteEndpoint;
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use crate::common::{
-        authorize_activity_executor, authorize_activity_initiator, get_activity_agreement,
-        get_persisted_state, get_persisted_usage, set_persisted_state, set_persisted_usage,
-        PathActivity, QueryTimeout,
+        agreement_provider_service, authorize_activity_executor, authorize_activity_initiator,
+        get_activity_agreement, get_persisted_state, get_persisted_usage, set_persisted_state,
+        set_persisted_usage, PathActivity, QueryTimeout,
     };
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -61,7 +60,7 @@ mod common {
 
         // Retrieve and persist activity state
         let agreement = get_activity_agreement(&db, &path.activity_id).await?;
-        let provider_service = agreement.provider_id()?.try_service(activity::BUS_ID)?;
+        let provider_service = agreement_provider_service(&id, &agreement)?;
         let state = provider_service
             .send(activity::GetState {
                 activity_id: path.activity_id.to_string(),
@@ -104,7 +103,7 @@ mod common {
 
         // Retrieve and persist activity usage
         let agreement = get_activity_agreement(&db, &path.activity_id).await?;
-        let provider_service = agreement.provider_id()?.try_service(activity::BUS_ID)?;
+        let provider_service = agreement_provider_service(&id, &agreement)?;
         let usage = provider_service
             .send(activity::GetUsage {
                 activity_id: path.activity_id.to_string(),

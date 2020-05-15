@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::payment::{Invoice, Payment};
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
-use ya_net::TryRemoteEndpoint;
+use ya_net::RemoteEndpoint;
 use ya_payment_driver::{
     AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
     PaymentDriverError, PaymentStatus,
@@ -86,9 +86,9 @@ impl PaymentProcessor {
             let payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
 
             let msg = SendPayment(payment);
-            payee_id
-                .try_service(BUS_ID)
-                .unwrap() //FIXME
+            ya_net::from(payer_id)
+                .to(payee_id)
+                .service(BUS_ID)
                 .call(msg)
                 .await??;
 
