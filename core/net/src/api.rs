@@ -69,7 +69,7 @@ impl RemoteEndpoint for NetDst {
     fn service(&self, bus_addr: &str) -> bus::Endpoint {
         bus::service(format!(
             "/from/{}/to/{}{}",
-            self.identity,
+            self.src,
             self.dst,
             extract_exported_part(bus_addr)
         ))
