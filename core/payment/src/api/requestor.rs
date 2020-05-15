@@ -11,7 +11,7 @@ use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
-use ya_net::TryRemoteEndpoint;
+use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -117,7 +117,11 @@ async fn accept_debit_note(
         let issuer_id = debit_note.issuer_id;
         let msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
         match async move {
-            issuer_id.try_service(PUBLIC_SERVICE)?.call(msg).await??;
+            ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(msg)
+                .await??;
             dao.accept(debit_note_id, node_id).await?;
             Ok(())
         }
@@ -242,8 +246,9 @@ async fn accept_invoice(
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::new(invoice, allocation_id);
         match async move {
-            issuer_id
-                .try_service(PUBLIC_SERVICE)?
+            ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
             bus::service(LOCAL_SERVICE).send(schedule_msg).await??;
