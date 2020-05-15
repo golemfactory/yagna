@@ -52,30 +52,35 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
 
     // connect to hub with forwarding handler
     let my_net_node_id = net_node_id(&default_node_id);
-    let own_net_node_id = my_net_node_id.clone();
+    let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_node_id(id)).collect();
+
     let call_handler = move |request_id: String, caller: String, addr: String, data: Vec<u8>| {
-        if !addr.starts_with(&own_net_node_id) {
+        let prefix = own_net_nodes
+            .iter()
+            .find(|&own_net_node_id| addr.starts_with(own_net_node_id));
+        if let Some(prefix) = prefix {
+            // replaces  /net/<src_node_id>/test/1 --> /public/test/1
+            let local_addr: String = addr.replacen(prefix, net::PUBLIC_PREFIX, 1);
+            log::debug!(
+                "Incoming msg from = {}, to = {}, fwd to local addr = {}, request_id: {}",
+                caller,
+                addr,
+                local_addr,
+                request_id
+            );
+            // actual forwarding to my local bus
+            stream::once(
+                local_bus::send(&local_addr, &caller, &data)
+                    .and_then(|r| future::ok(ResponseChunk::Full(r))),
+            )
+            .right_stream()
+        } else {
             return stream::once(future::err(Error::GsbBadRequest(format!(
-                "wrong routing: {}; I'll accept only addrs starting with: {}",
-                addr, own_net_node_id
+                "wrong routing: {}; I'll accept only addrs starting with: {:?}",
+                addr, own_net_nodes
             ))))
             .left_stream();
         }
-        // replaces  /net/<src_node_id>/test/1 --> /public/test/1
-        let local_addr: String = addr.replacen(&own_net_node_id, net::PUBLIC_PREFIX, 1);
-        log::debug!(
-            "Incoming msg from = {}, to = {}, fwd to local addr = {}, request_id: {}",
-            caller,
-            addr,
-            local_addr,
-            request_id
-        );
-        // actual forwarding to my local bus
-        stream::once(
-            local_bus::send(&local_addr, &caller, &data)
-                .and_then(|r| future::ok(ResponseChunk::Full(r))),
-        )
-        .right_stream()
     };
 
     let event_handler = {
