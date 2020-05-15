@@ -32,25 +32,22 @@ impl TryRemoteEndpoint for &str {
 }
 
 pub struct NetSrc {
-    identity: NodeId,
+    src: NodeId,
 }
 
 impl NetSrc {
     pub fn to(&self, dst: NodeId) -> NetDst {
-        NetDst {
-            identity: self.identity,
-            dst,
-        }
+        NetDst { src: self.src, dst }
     }
 }
 
 pub struct NetDst {
-    identity: NodeId,
+    src: NodeId,
     dst: NodeId,
 }
 
-pub fn from(identity: NodeId) -> NetSrc {
-    NetSrc { identity }
+pub fn from(src: NodeId) -> NetSrc {
+    NetSrc { src }
 }
 
 fn extract_exported_part(local_service_addr: &str) -> &str {
