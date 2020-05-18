@@ -4933,6 +4933,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-market-decentralized"
+version = "0.1.0"
+dependencies = [
+ "actix-rt",
+ "actix-web",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "derive_more 0.99.5",
+ "env_logger 0.7.1",
+ "futures 0.3.4",
+ "lazy_static",
+ "log 0.4.8",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio 0.2.20",
+ "ya-client",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-market-forwarding"
 version = "0.1.0"
 dependencies = [
@@ -5382,6 +5408,7 @@ dependencies = [
  "url 2.1.1",
  "ya-activity",
  "ya-identity",
+ "ya-market-decentralized",
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",

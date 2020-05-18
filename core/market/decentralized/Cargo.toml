@@ -1,0 +1,36 @@
+[package]
+name = "ya-market-decentralized"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[features]
+market-test-suite = []
+
+[dependencies]
+ya-client = "0.3"
+ya-core-model = { version = "0.1", features = ["market"] }
+ya-persistence = "0.2"
+ya-service-api = "0.1"
+ya-service-bus = "0.2"
+ya-service-api-interfaces = "0.1"
+
+actix-web = "2.0"
+anyhow = "1.0"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+derive_more = "0.99.5"
+futures = "0.3"
+lazy_static = "1.4"
+log = "0.4"
+serde = { version = "^1.0", features = ["derive"] }
+thiserror = "1.0"
+tokio = { version = "0.2", features = ["time"] }
+
+[dev-dependencies]
+actix-rt = "1.0.0"
+env_logger = "0.7"
+serde_json = "1.0"
+tokio = { version = "0.2", features = ["macros"] }
+
+ya-core-model = { version = "0.1", features = ["net"] }

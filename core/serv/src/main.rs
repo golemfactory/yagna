@@ -9,8 +9,14 @@ use std::{
 use structopt::{clap, StructOpt};
 use url::Url;
 
-#[cfg(feature = "ya-market-forwarding")]
-use ya_market_forwarding::service::MarketService;
+#[cfg(all(feature = "market-forwarding", feature = "market-decentralized"))]
+compile_error!("To use `market-decentralized` pls do `--no-default-features`.");
+#[cfg(all(feature = "market-decentralized", not(feature = "market-forwarding")))]
+use ya_market_decentralized::MarketService;
+#[cfg(feature = "market-forwarding")]
+use ya_market_forwarding::MarketService;
+#[cfg(not(any(feature = "market-forwarding", feature = "market-decentralized")))]
+compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
 
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -132,11 +138,18 @@ impl TryFrom<&CliArgs> for CliCtx {
 
 struct ServiceContext {
     db: DbExecutor,
+    data_dir: PathBuf,
 }
 
 impl<Service> Provider<Service, DbExecutor> for ServiceContext {
     fn component(&self) -> DbExecutor {
         self.db.clone()
+    }
+}
+
+impl<Service> Provider<Service, PathBuf> for ServiceContext {
+    fn component(&self) -> PathBuf {
+        self.data_dir.clone()
     }
 }
 
@@ -204,7 +217,10 @@ impl ServiceCommand {
 
                 let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
-                let context = ServiceContext { db: db.clone() };
+                let context = ServiceContext {
+                    db: db.clone(),
+                    data_dir: ctx.data_dir.clone(),
+                };
 
                 Services::gsb(&context).await?;
 
