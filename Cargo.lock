@@ -5042,6 +5042,7 @@ dependencies = [
  "tokio 0.2.20",
  "uint",
  "uuid 0.8.1",
+ "ya-client",
  "ya-client-model",
  "ya-core-model",
  "ya-net",
