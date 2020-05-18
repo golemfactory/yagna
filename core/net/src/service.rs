@@ -1,5 +1,5 @@
 use actix_rt::Arbiter;
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, Context};
 use futures::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
@@ -11,7 +11,7 @@ use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
 
-use crate::api::net_service;
+use crate::api::{self, net_service, parse_from_addr};
 
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 pub const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
@@ -22,21 +22,6 @@ pub fn central_net_addr() -> std::io::Result<SocketAddr> {
         .to_socket_addrs()?
         .next()
         .expect("central net hub addr needed"))
-}
-
-fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
-    let mut it = from_addr.split("/").fuse();
-    if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
-        (it.next(), it.next(), it.next(), it.next(), it.next())
-    {
-        to_node_id.parse::<NodeId>()?;
-        let prefix = 10 + from_node_id.len();
-        let service_id = &from_addr[prefix..];
-        if let Some(_) = it.next() {
-            return Ok((from_node_id.parse()?, net_service(service_id)));
-        }
-    }
-    bail!("invalid net-from destination: {}", from_addr)
 }
 
 /// Initialize net module on a hub.
@@ -125,24 +110,29 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     {
         let central_bus = central_bus.clone();
 
-        local_bus::subscribe("/from", move |_caller: &str, addr: &str, msg: &[u8]| {
-            let (from_node, to_addr) = match parse_from_addr(addr) {
-                Ok(v) => v,
-                Err(e) => return future::err(Error::GsbBadRequest(e.to_string())).left_future(),
-            };
-            log::debug!("{} is calling {}", from_node, to_addr);
-            if !nodes.contains(&from_node) {
-                return future::err(Error::GsbBadRequest(format!(
-                    "caller: {:?} is not on src list: {:?}",
-                    from_node, nodes,
-                )))
-                .left_future();
-            }
+        local_bus::subscribe(
+            api::FROM_BUS_ID,
+            move |_caller: &str, addr: &str, msg: &[u8]| {
+                let (from_node, to_addr) = match parse_from_addr(addr) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return future::err(Error::GsbBadRequest(e.to_string())).left_future()
+                    }
+                };
+                log::debug!("{} is calling {}", from_node, to_addr);
+                if !nodes.contains(&from_node) {
+                    return future::err(Error::GsbBadRequest(format!(
+                        "caller: {:?} is not on src list: {:?}",
+                        from_node, nodes,
+                    )))
+                    .left_future();
+                }
 
-            central_bus
-                .call(from_node.to_string(), to_addr, Vec::from(msg))
-                .right_future()
-        });
+                central_bus
+                    .call(from_node.to_string(), to_addr, Vec::from(msg))
+                    .right_future()
+            },
+        );
     }
 
     {
@@ -206,55 +196,5 @@ impl Net {
         bind_remote(default_id, ids)
             .await
             .context(format!("Error binding network service"))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use crate::RemoteEndpoint;
-
-    #[test]
-    fn parse_generated_from_to_service_should_pass() {
-        let from_id = "0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df"
-            .parse::<NodeId>()
-            .unwrap();
-        let dst = "0x99402605903da83901151b0871ebeae9296ef66b"
-            .parse::<NodeId>()
-            .unwrap();
-
-        let remote_service = crate::from(from_id).to(dst).service("/public/test/echo");
-        let addr = remote_service.addr();
-        eprintln!("from/to service address: {}", addr);
-        let (parsed_from, parsed_to) = parse_from_addr(addr).unwrap();
-        assert_eq!(parsed_from, from_id);
-        assert_eq!(
-            parsed_to,
-            "/net/0x99402605903da83901151b0871ebeae9296ef66b/test/echo"
-        );
-    }
-
-    #[test]
-    fn parse_no_service_should_fail() {
-        let out = parse_from_addr("/from/0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df/to/0x99402605903da83901151b0871ebeae9296ef66b");
-        assert!(out.is_err())
-    }
-
-    #[test]
-    fn parse_with_service_should_pass() {
-        let out = parse_from_addr("/from/0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df/to/0x99402605903da83901151b0871ebeae9296ef66b/x");
-        assert!(out.is_ok())
-    }
-
-    #[test]
-    fn ok_net_node_id() {
-        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
-            .parse()
-            .unwrap();
-        assert_eq!(
-            net_service(&node_id),
-            "/net/0xbabe000000000000000000000000000000000000".to_string()
-        );
     }
 }
