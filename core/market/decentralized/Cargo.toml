@@ -1,10 +1,8 @@
 [package]
 name = "ya-market-decentralized"
 version = "0.1.0"
-authors = ["nieznanysprawiciel <nieznany.sprawiciel@gmail.com>"]
+authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 market-test-suite = []
