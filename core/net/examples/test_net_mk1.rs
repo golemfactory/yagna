@@ -6,7 +6,7 @@ use structopt::StructOpt;
 
 use ya_client_model::NodeId;
 use ya_core_model::net;
-use ya_net::TryRemoteEndpoint;
+use ya_net::{RemoteEndpoint, TryRemoteEndpoint};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 #[derive(Serialize, Deserialize)]
@@ -96,10 +96,27 @@ async fn main() -> Result<()> {
                 .unwrap();
             let r = listener_id
                 .try_service(net::PUBLIC_PREFIX)?
-                .send_as(caller_id, Test("Test msg".into()))
+                .send_as(caller_id, Test("Test 1 msg".into()))
                 .map_err(Error::msg)
                 .await?;
-            log::info!("Sending Result: {:?}", r);
+            assert!(r.is_ok());
+            log::info!("Sending 1 Result: {:?}", r);
+            let r = ya_net::from("0xdad0000000000000000000000000000000000000".parse()?)
+                .to(listener_id)
+                .service(net::PUBLIC_PREFIX)
+                .send_as(caller_id, Test("Test 2 msg".into()))
+                .map_err(Error::msg)
+                .await;
+            assert!(r.is_err());
+            log::info!("Sending 2 Result should be err: {:?}", r);
+            let r = ya_net::from(options.my_id())
+                .to(listener_id)
+                .service(net::PUBLIC_PREFIX)
+                .send_as(caller_id, Test("Test 3 msg".into()))
+                .map_err(Error::msg)
+                .await;
+            assert!(r.is_ok());
+            log::info!("Sending 3 Result: {:?}", r);
         }
     }
 

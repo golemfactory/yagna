@@ -133,8 +133,8 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             log::debug!("{} is calling {}", from_node, to_addr);
             if !nodes.contains(&from_node) {
                 return future::err(Error::GsbBadRequest(format!(
-                    "invalid src node: {:?}",
-                    from_node
+                    "caller: {:?} is not on src list: {:?}",
+                    from_node, nodes,
                 )))
                 .left_future();
             }
