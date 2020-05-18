@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client_model::market::Proposal;
+use ya_client::model::market::Proposal;
 use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};

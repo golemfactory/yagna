@@ -5,7 +5,7 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use ya_client_model::market::Offer;
+use ya_client::model::market::Offer;
 use ya_market_decentralized::protocol::callbacks::HandlerSlot;
 use ya_market_decentralized::protocol::{
     Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryFactory, DiscoveryInitError,

@@ -11,4 +11,4 @@ mod negotiation;
 pub mod protocol;
 pub use market::MarketService;
 
-pub use ya_client_model::market::MARKET_API_PATH;
+pub use ya_client::model::market::MARKET_API_PATH;

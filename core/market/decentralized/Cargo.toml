@@ -9,7 +9,6 @@ market-test-suite = []
 
 [dependencies]
 ya-client = "0.3"
-ya-client-model = "0.1"
 ya-core-model = { version = "0.1", features = ["market"] }
 ya-persistence = "0.2"
 ya-service-api = "0.1"
@@ -30,7 +29,6 @@ tokio = { version = "0.2", features = ["time"] }
 
 [dev-dependencies]
 actix-rt = "1.0.0"
-anyhow = "1.0"
 env_logger = "0.7"
 serde_json = "1.0"
 tokio = { version = "0.2", features = ["macros"] }

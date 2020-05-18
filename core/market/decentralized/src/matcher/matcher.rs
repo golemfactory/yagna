@@ -3,7 +3,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use ya_client_model::market::{Demand, Offer, Proposal};
+use ya_client::model::market::{Demand, Offer, Proposal};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
