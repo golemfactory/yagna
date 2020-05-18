@@ -1,16 +1,17 @@
 use actix_rt::Arbiter;
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use futures::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
+
 use ya_client_model::NodeId;
-use ya_core_model::identity::IdentityInfo;
-use ya_core_model::net::local as local_net;
-use ya_core_model::net::local::SendBroadcastMessage;
-use ya_core_model::{identity, net};
+use ya_core_model::identity::{self, IdentityInfo};
+use ya_core_model::net::{self, local as local_net, local::SendBroadcastMessage};
 use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
+
+use crate::api::net_service;
 
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 pub const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
@@ -23,43 +24,38 @@ pub fn central_net_addr() -> std::io::Result<SocketAddr> {
         .expect("central net hub addr needed"))
 }
 
-#[inline]
-fn net_node_id(node_id: &NodeId) -> String {
-    format!("{}/{:?}", net::BUS_ID, node_id)
-}
-
-fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, NodeId, &str)> {
+fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
     let mut it = from_addr.split("/").fuse();
     if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
         (it.next(), it.next(), it.next(), it.next(), it.next())
     {
-        let prefix = 10 + from_node_id.len() + to_node_id.len();
+        to_node_id.parse::<NodeId>()?;
+        let prefix = 10 + from_node_id.len();
         let service_id = &from_addr[prefix..];
-        if service_id.starts_with('/') {
-            return Ok((from_node_id.parse()?, to_node_id.parse()?, service_id));
+        if let Some(_) = it.next() {
+            return Ok((from_node_id.parse()?, net_service(service_id)));
         }
     }
-    Err(anyhow!("invalid net-from destination: {}", from_addr))
+    bail!("invalid net-from destination: {}", from_addr)
 }
 
 /// Initialize net module on a hub.
 pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io::Result<()> {
     let hub_addr = central_net_addr()?;
-    log::info!("connecting Central Net (Mk1) hub at: {}", hub_addr);
     let conn = connection::tcp(hub_addr).await?;
     let bcast = super::bcast::BCastService::default();
     let bcast_service_id = <SendBroadcastMessage<serde_json::Value> as RpcMessage>::ID;
 
     // connect to hub with forwarding handler
-    let my_net_node_id = net_node_id(&default_node_id);
-    let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_node_id(id)).collect();
+    let my_net_node_id = net_service(&default_node_id);
+    let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_service(id)).collect();
 
-    let call_handler = move |request_id: String, caller: String, addr: String, data: Vec<u8>| {
+    let forward_call = move |request_id: String, caller: String, addr: String, data: Vec<u8>| {
         let prefix = own_net_nodes
             .iter()
             .find(|&own_net_node_id| addr.starts_with(own_net_node_id));
         if let Some(prefix) = prefix {
-            // replaces  /net/<src_node_id>/test/1 --> /public/test/1
+            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
             let local_addr: String = addr.replacen(prefix, net::PUBLIC_PREFIX, 1);
             log::debug!(
                 "Incoming msg from = {}, to = {}, fwd to local addr = {}, request_id: {}",
@@ -83,67 +79,68 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         }
     };
 
-    let event_handler = {
+    let broadcast_handler = {
         let bcast = bcast.clone();
 
-        move |topic: String, msg: Vec<u8>| {
+        move |caller: String, topic: String, msg: Vec<u8>| {
             let endpoints = bcast.resolve(&topic);
             let msg: Rc<[u8]> = msg.into();
             Arbiter::spawn(async move {
                 for endpoint in endpoints {
                     let addr = format!("{}/{}", endpoint, bcast_service_id);
-                    let _ = local_bus::send(addr.as_ref(), "bcast", msg.as_ref()).await;
+                    let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
                 }
             })
         }
     };
 
-    let central_bus = connection::connect_with_handler(conn, (call_handler, event_handler));
+    let central_bus = connection::connect_with_handler(conn, (forward_call, broadcast_handler));
 
-    // bind my local net service on remote centralised bus under /net/<my_addr>
+    // bind my local net service(s) on remote centralised bus under /net/<my_identity>
     for node in &nodes {
-        let addr = net_node_id(node);
+        let addr = net_service(node);
         central_bus
-            .bind(addr)
+            .bind(addr.clone())
             .await
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{}", e)))?;
-        log::info!("network service bound at: {} as {}", hub_addr, node);
+        log::info!("network service bound at: {} under: {}", hub_addr, addr);
     }
 
     // bind /net on my local bus and forward all calls to remote bus under /net
     {
         let central_bus = central_bus.clone();
-        let source_node_id = default_node_id.to_string();
+        let default_caller = default_node_id.to_string();
         local_bus::subscribe(net::BUS_ID, move |_caller: &str, addr: &str, msg: &[u8]| {
             log::debug!(
                 "Sending message to hub. Called by: {}, addr: {}.",
                 my_net_node_id,
                 addr
             );
-            // `_caller` here is usually "local", so we replace it with our src node id
-            central_bus.call(source_node_id.clone(), addr.to_string(), Vec::from(msg))
+            // `_caller` here is usually "local", so we replace it with our default node id
+            central_bus.call(default_caller.clone(), addr.to_string(), Vec::from(msg))
         });
     }
+
+    // bind /from/<caller>/to/<addr> on my local bus and forward all calls to remote bus under /net
     {
         let central_bus = central_bus.clone();
 
-        local_bus::subscribe("/from", move |_: &str, addr: &str, msg: &[u8]| {
-            log::debug!("Sending from message to hub. addr: {}.", addr);
-            let (from_addr, to_addr, dst) = match parse_from_addr(addr) {
+        local_bus::subscribe("/from", move |_caller: &str, addr: &str, msg: &[u8]| {
+            let (from_node, to_addr) = match parse_from_addr(addr) {
                 Ok(v) => v,
                 Err(e) => return future::err(Error::GsbBadRequest(e.to_string())).left_future(),
             };
-            if !nodes.contains(&from_addr) {
+            log::debug!("{} is calling {}", from_node, to_addr);
+            if !nodes.contains(&from_node) {
                 return future::err(Error::GsbBadRequest(format!(
                     "invalid src node: {:?}",
-                    from_addr
+                    from_node
                 )))
                 .left_future();
             }
 
-            let addr = format!("/net/{:?}{}", to_addr, dst);
             central_bus
-                .call(from_addr.to_string(), addr, Vec::from(msg))
+                .call(from_node.to_string(), to_addr, Vec::from(msg))
                 .right_future()
         });
     }
@@ -171,10 +168,10 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         let central_bus = central_bus.clone();
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
         let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
-        let _ = local_bus::subscribe(&addr, move |_: &str, _addr: &str, msg: &[u8]| {
+        let _ = local_bus::subscribe(&addr, move |caller: &str, _addr: &str, msg: &[u8]| {
             // TODO: remove unwrap here.
             let ent: SendBroadcastMessage<serde_json::Value> = serde_json::from_slice(msg).unwrap();
-            let fut = central_bus.broadcast(ent.topic().to_owned(), msg.into());
+            let fut = central_bus.broadcast(caller.to_owned(), ent.topic().to_owned(), msg.into());
             let resp = resp.clone();
             async move {
                 if let Err(e) = fut.await {
@@ -219,7 +216,7 @@ mod tests {
     use crate::RemoteEndpoint;
 
     #[test]
-    fn test_gen_parse() {
+    fn parse_generated_from_to_service_should_pass() {
         let from_id = "0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df"
             .parse::<NodeId>()
             .unwrap();
@@ -227,16 +224,37 @@ mod tests {
             .parse::<NodeId>()
             .unwrap();
 
-        let service = crate::from(from_id).to(dst).service("/public/test/echo");
-        let addr = service.addr();
-        eprintln!("addr={}", addr);
-        let (_parsed_from, _parsed_to, service) = parse_from_addr(addr).unwrap();
-        assert_eq!(service, "/test/echo");
+        let remote_service = crate::from(from_id).to(dst).service("/public/test/echo");
+        let addr = remote_service.addr();
+        eprintln!("from/to service address: {}", addr);
+        let (parsed_from, parsed_to) = parse_from_addr(addr).unwrap();
+        assert_eq!(parsed_from, from_id);
+        assert_eq!(
+            parsed_to,
+            "/net/0x99402605903da83901151b0871ebeae9296ef66b/test/echo"
+        );
     }
 
     #[test]
-    fn test_parse() {
+    fn parse_no_service_should_fail() {
         let out = parse_from_addr("/from/0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df/to/0x99402605903da83901151b0871ebeae9296ef66b");
         assert!(out.is_err())
+    }
+
+    #[test]
+    fn parse_with_service_should_pass() {
+        let out = parse_from_addr("/from/0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df/to/0x99402605903da83901151b0871ebeae9296ef66b/x");
+        assert!(out.is_ok())
+    }
+
+    #[test]
+    fn ok_net_node_id() {
+        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            net_service(&node_id),
+            "/net/0xbabe000000000000000000000000000000000000".to_string()
+        );
     }
 }

@@ -46,6 +46,11 @@ pub struct NetDst {
     dst: NodeId,
 }
 
+#[inline]
+pub(crate) fn net_service(service: impl ToString) -> String {
+    format!("{}/{}", net::BUS_ID, service.to_string())
+}
+
 pub fn from(src: NodeId) -> NetSrc {
     NetSrc { src }
 }
@@ -61,7 +66,11 @@ pub trait RemoteEndpoint {
 
 impl RemoteEndpoint for NodeId {
     fn service(&self, bus_addr: &str) -> bus::Endpoint {
-        bus::service(format!("/net/{}/{}", self, extract_exported_part(bus_addr)))
+        bus::service(format!(
+            "{}/{}",
+            net_service(self),
+            extract_exported_part(bus_addr)
+        ))
     }
 }
 
