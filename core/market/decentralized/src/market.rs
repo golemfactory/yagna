@@ -25,13 +25,13 @@ pub enum MarketInitError {
 }
 
 /// Structure connecting all market objects.
-pub struct Market {
+pub struct MarketService {
     matcher: Arc<Matcher>,
     provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
     requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
 }
 
-impl Market {
+impl MarketService {
     pub fn new(db: &DbExecutor, data_dir: &Path) -> Result<Self, MarketInitError> {
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
@@ -41,7 +41,7 @@ impl Market {
         let requestor_engine =
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
 
-        Ok(Market {
+        Ok(MarketService {
             matcher: Arc::new(matcher),
             provider_negotiation_engine: provider_engine,
             requestor_negotiation_engine: requestor_engine,
@@ -81,7 +81,7 @@ impl Market {
     }
 }
 
-impl Service for Market {
+impl Service for MarketService {
     type Cli = ();
 }
 
@@ -91,7 +91,7 @@ impl Service for Market {
 // =========================================== //
 
 struct StaticMarket {
-    locked_market: Mutex<Option<Arc<Market>>>,
+    locked_market: Mutex<Option<Arc<MarketService>>>,
 }
 
 impl StaticMarket {
@@ -105,12 +105,12 @@ impl StaticMarket {
         &self,
         db: &DbExecutor,
         data_dir: &Path,
-    ) -> Result<Arc<Market>, MarketInitError> {
+    ) -> Result<Arc<MarketService>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let market = Arc::new(Market::new(db, data_dir)?);
+            let market = Arc::new(MarketService::new(db, data_dir)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

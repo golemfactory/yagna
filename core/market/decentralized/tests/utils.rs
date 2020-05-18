@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ya_core_model::net;
-use ya_market_decentralized::Market;
+use ya_market_decentralized::MarketService;
 use ya_persistence::executor::DbExecutor;
 
 /// Instantiates market test nodes inside one process.
@@ -16,7 +16,7 @@ pub struct MarketsNetwork {
 /// Store all object associated with single market
 /// for example: Database
 pub struct MarketNode {
-    market: Arc<Market>,
+    market: Arc<MarketService>,
     name: String,
 }
 
@@ -36,7 +36,7 @@ impl MarketsNetwork {
     ) -> Result<Self, anyhow::Error> {
         let db = self.init_database(name.as_ref())?;
         let data_dir = self.instance_dir(name.as_ref());
-        let market = Arc::new(Market::new(&db, &data_dir)?);
+        let market = Arc::new(MarketService::new(&db, &data_dir)?);
 
         let gsb_prefix = format!("{}/{}/market", net::BUS_ID, name.as_ref());
         market.bind_gsb(gsb_prefix).await?;
@@ -50,7 +50,7 @@ impl MarketsNetwork {
         Ok(self)
     }
 
-    pub fn get_market(&self, name: &str) -> Arc<Market> {
+    pub fn get_market(&self, name: &str) -> Arc<MarketService> {
         self.markets
             .iter()
             .find(|node| node.name == name)

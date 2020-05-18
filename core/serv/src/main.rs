@@ -9,10 +9,14 @@ use std::{
 use structopt::{clap, StructOpt};
 use url::Url;
 
-#[cfg(feature = "market-dece")]
-use ya_market_decentralized::service::MarketService;
-#[cfg(feature = "market-fwd")]
-use ya_market_forwarding::service::MarketService;
+#[cfg(all(feature = "market-forwarding", feature = "market-decentralized"))]
+compile_error!("To use `market-decentralized` pls do `--no-default-features`.");
+#[cfg(all(feature = "market-decentralized", not(feature = "market-forwarding")))]
+use ya_market_decentralized::MarketService;
+#[cfg(feature = "market-forwarding")]
+use ya_market_forwarding::MarketService;
+#[cfg(not(any(feature = "market-forwarding", feature = "market-decentralized")))]
+compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
 
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};

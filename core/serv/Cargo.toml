@@ -10,10 +10,10 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default=['market-fwd']
+default=['market-forwarding']
 static-openssl=["openssl/vendored"]
-market-fwd = ['ya-market-forwarding']
-market-dece = ['ya-market-decentralized']
+market-forwarding = ['ya-market-forwarding']
+market-decentralized = ['ya-market-decentralized']
 
 [dependencies]
 ya-activity = "0.2"

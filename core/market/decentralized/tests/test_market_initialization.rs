@@ -5,7 +5,7 @@ mod utils;
 ///
 /// To test market-test-suite run:
 /// ```
-/// cargo test --manifest-path core/market-decentralized/Cargo.toml --features market-test-suite
+/// cargo test --manifest-path core/market/decentralized/Cargo.toml --features market-test-suite
 /// ```
 /// TODO: I don't want to set --manifest-path. How to do this?
 #[cfg(test)]
