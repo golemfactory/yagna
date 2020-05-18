@@ -5,6 +5,7 @@ use ya_batch_requestor::{
 
 #[actix_rt::main]
 async fn main() -> Result<(), ()> {
+    env_logger::init();
     let tasks = vec!["1", "2", "3", "4", "5"];
     let image_spec =
         ImageSpec::from_github("prekucki/test-wasi@0.1.0").runtime(WasmRuntime::Wasi(1));

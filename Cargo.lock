@@ -4811,9 +4811,12 @@ version = "0.1.0"
 dependencies = [
  "actix",
  "actix-rt",
+ "anyhow",
  "chrono",
+ "env_logger 0.6.2",
  "futures 0.3.4",
  "indicatif",
+ "log 0.4.8",
  "serde_json",
  "tokio 0.2.20",
  "url 2.1.1",

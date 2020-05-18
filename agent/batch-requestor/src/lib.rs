@@ -1,6 +1,5 @@
 use actix::prelude::*;
-use chrono::Utc;
-use futures::prelude::*;
+//use chrono::Utc;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::{str::FromStr, time::Duration};
 use url::Url;
@@ -8,12 +7,15 @@ use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_client::{
     activity::ActivityRequestorControlApi,
     market::MarketRequestorApi,
-    model::market::{
-        proposal::State,
-        {AgreementProposal, Demand, Proposal, RequestorEvent},
-    },
+    // model::market::{
+    //     proposal::State,
+    //     {AgreementProposal, Demand, Proposal, RequestorEvent},
+    // },
+    model::market::Demand,
     web::WebClient,
 };
+
+mod negotiator;
 
 #[derive(Clone)]
 pub enum WasmRuntime {
@@ -205,74 +207,38 @@ impl Actor for TaskSession {
         let demand: Demand = self.demand.clone().unwrap().into();
         /* TODO 1. download image spec (demand.spec) 2. market api -> subscribe 3. activity_api */
 
-        eprintln!(
-            "Actor started. Demand: {}",
+        log::info!(
+            "TaskSession started. Demand: {}",
             serde_json::to_string(&demand).unwrap()
         );
+
         ctx.spawn(
             async move {
-                /* TODO */
-                eprintln!("subscribing");
-                let sub_id = market_api.subscribe(&demand).await?;
-                eprintln!("subscription result: {:?}", sub_id);
-                loop {
-                    eprintln!("waiting");
-                    match market_api.collect(&sub_id, Some(120.0), Some(5)).await {
-                        Ok(events) => {
-                            eprintln!("received {:?}", events);
-                            for e in events {
-                                match e {
-                                    RequestorEvent::ProposalEvent {
-                                        event_date: _date,
-                                        proposal,
-                                    } => match proposal.state {
-                                        None | Some(State::Initial) => {
-                                            let counter_proposal =
-                                                proposal.counter_demand(demand.clone())?;
-                                            /* TODO spawn? */
-                                            let proposal_id = market_api
-                                                .counter_proposal(&counter_proposal, &sub_id)
-                                                .await?;
-                                        }
-                                        _ => {
-                                            let agreement_proposal = AgreementProposal::new(
-                                                proposal.proposal_id()?.clone(),
-                                                Utc::now() + chrono::Duration::hours(2),
-                                            );
-                                            let agreement_id = market_api
-                                                .create_agreement(&agreement_proposal)
-                                                .await?;
-                                            /* TODO allocate funds here using create_allocation and cancel_agreement if it's not possible */
-                                            market_api
-                                                .confirm_agreement(&proposal.proposal_id()?)
-                                                .await?;
-                                            /* blocking? */
-                                            market_api.wait_for_approval(&proposal.proposal_id()?, Some(7.879))
-                                                .await?;
-                                            /* agreement approved; proceed to the next step (payment, then exe unit) */
-                                        }
-                                    },
-                                    _ => { /* TODO expected proposal event, got other event */ }
-                                }
-                            }
-                        }
-                        Err(e) => eprintln!("error {:?}", e),
-                    }
-                    tokio::time::delay_for(Duration::from_millis(1000)).await;
-                }
-                Ok::<(), ya_client::error::Error>(())
+                let subscription_id = market_api.subscribe(&demand).await?;
+                log::info!("Subscribed to Market API ( id : {} )", subscription_id);
+                Ok::<_, ya_client::error::Error>(
+                    negotiator::AgreementProducer::new(
+                        market_api.clone(),
+                        subscription_id,
+                        demand.clone(),
+                    )
+                    .start(),
+                )
             }
             .into_actor(self)
             .then(|result, ctx, _| {
-                eprintln!("Received result {:?}", result);
+                // TODO
+                log::info!(
+                    "Agreement Producer subscribed and started: {}",
+                    result.is_ok()
+                );
                 fut::ready(())
             }),
         );
-        eprintln!("done");
     }
 }
 
-struct GetStatus {}
+struct GetStatus;
 
 impl Message for GetStatus {
     type Result = f32;
@@ -282,7 +248,7 @@ impl Handler<GetStatus> for TaskSession {
     type Result = f32;
 
     fn handle(&mut self, msg: GetStatus, ctx: &mut Self::Context) -> Self::Result {
-        unimplemented!()
+        1.0 // TODO
     }
 }
 
@@ -297,6 +263,8 @@ pub async fn tui_progress_monitor(task_session: Addr<TaskSession>) -> Result<(),
     //progress_bar.set_message("Running tasks");
     for _ in 0..100 {
         //progress_bar.inc(1);
+        let status = task_session.send(GetStatus).await;
+        log::error!("Here {:?}", status);
         tokio::time::delay_for(Duration::from_millis(50)).await;
     }
     //progress_bar.finish();
