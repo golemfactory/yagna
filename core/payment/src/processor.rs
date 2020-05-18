@@ -1,15 +1,12 @@
-use crate::dao::{DebitNoteDao, InvoiceDao, PaymentDao};
+use crate::dao::{AgreementDao, InvoiceDao, PaymentDao};
 use crate::error::{Error, PaymentError, PaymentResult};
-use crate::models as db_models;
 use crate::utils::get_sign_tx;
 use bigdecimal::BigDecimal;
 use std::sync::Arc;
 use std::time::Duration;
-use uuid::Uuid;
-use ya_client_model::payment::{Invoice, InvoiceStatus, Payment};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::payment::{Invoice, Payment};
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
-use ya_net::TryRemoteEndpoint;
+use ya_net::RemoteEndpoint;
 use ya_payment_driver::{
     AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
     PaymentDriverError, PaymentStatus,
@@ -45,6 +42,9 @@ impl PaymentProcessor {
 
     async fn process_payment(&self, invoice: Invoice, allocation_id: String) {
         let invoice_id = invoice.invoice_id.clone();
+        let payer_id = invoice.recipient_id;
+        let payee_id = invoice.issuer_id;
+
         let result: Result<(), Error> = async move {
             // ************************************** BEGIN **************************************
             // This code is placed here as a temporary workaround because schedule_payment
@@ -56,15 +56,13 @@ impl PaymentProcessor {
                 gas_amount: None,
             };
             // TODO: Allow signing transactions with different key than node ID
-            let sender = invoice.recipient_id.as_str();
-            let recipient = invoice.credit_account_id.as_str();
-            let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
+            let sign_tx = get_sign_tx(payer_id);
             self.driver
                 .schedule_payment(
                     &invoice_id,
                     amount,
-                    sender,
-                    recipient,
+                    &invoice.payer_addr,
+                    &invoice.payee_addr,
                     invoice.payment_due_date,
                     &sign_tx,
                 )
@@ -73,36 +71,27 @@ impl PaymentProcessor {
 
             let confirmation = self.wait_for_payment(&invoice.invoice_id).await?;
 
-            let payment_id = Uuid::new_v4().to_string();
-            let payment = db_models::BareNewPayment {
-                id: payment_id.clone(),
-                payer_id: invoice.recipient_id,
-                payee_id: invoice.issuer_id,
-                amount: invoice.amount.into(),
-                allocation_id: Some(allocation_id),
-                details: confirmation.confirmation,
-            };
-            let payment = db_models::NewPayment {
-                payment,
-                debit_note_ids: vec![],
-                invoice_ids: vec![invoice.invoice_id.clone()],
-            };
             let payment_dao: PaymentDao = self.db_executor.as_dao();
-            payment_dao.create(payment).await?;
-            let payment = payment_dao.get(payment_id).await?.unwrap();
+            let payment_id = payment_dao
+                .create_new(
+                    payer_id,
+                    invoice.agreement_id,
+                    allocation_id,
+                    invoice.amount,
+                    confirmation.confirmation,
+                    vec![],
+                    vec![invoice_id.clone()],
+                )
+                .await?;
+            let payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
 
-            let payee_id: NodeId = payment.payment.payee_id.parse().unwrap();
-            let msg = SendPayment(payment.into());
-            payee_id
-                .try_service(BUS_ID)
-                .unwrap() //FIXME
+            let msg = SendPayment(payment);
+            ya_net::from(payer_id)
+                .to(payee_id)
+                .service(BUS_ID)
                 .call(msg)
                 .await??;
 
-            let invoice_dao: InvoiceDao = self.db_executor.as_dao();
-            invoice_dao
-                .update_status(invoice.invoice_id, InvoiceStatus::Settled.into())
-                .await?;
             Ok(())
         }
         .await;
@@ -111,7 +100,7 @@ impl PaymentProcessor {
             log::error!("Payment failed: {}", e);
             let invoice_dao: InvoiceDao = self.db_executor.as_dao();
             invoice_dao
-                .update_status(invoice_id, InvoiceStatus::Failed.into())
+                .mark_failed(invoice_id, payer_id)
                 .await
                 .unwrap_or_else(|e| log::error!("{}", e));
         }
@@ -131,14 +120,17 @@ impl PaymentProcessor {
     }
 
     pub async fn verify_payment(&self, payment: Payment) -> Result<(), Error> {
-        let payment: db_models::Payment = payment.into();
-        let confirmation = PaymentConfirmation {
-            confirmation: payment.payment.details.clone(),
+        let confirmation = match base64::decode(&payment.details) {
+            Ok(confirmation) => PaymentConfirmation { confirmation },
+            Err(e) => {
+                let msg = "Confirmation is not base64-encoded".to_string();
+                return Err(PaymentError::Verification(msg).into());
+            }
         };
         let details = self.driver.verify_payment(&confirmation).await?;
 
         let actual_amount = details.amount;
-        let declared_amount: BigDecimal = payment.payment.amount.clone().into();
+        let declared_amount: BigDecimal = payment.amount.clone();
         if actual_amount != declared_amount {
             let msg = format!(
                 "Invalid payment amount. Declared: {} Actual: {}",
@@ -147,11 +139,15 @@ impl PaymentProcessor {
             return Err(PaymentError::Verification(msg).into());
         }
 
-        let invoice_ids = payment.invoice_ids.clone();
-        let debit_note_ids = payment.debit_note_ids.clone();
+        let agreement_id = payment.agreement_id.clone();
+        let invoice_ids = payment.invoice_ids.clone().unwrap_or_default();
+        let debit_note_ids = payment.debit_note_ids.clone().unwrap_or_default();
+        let payee_id = payment.payee_id;
 
         let invoice_dao: InvoiceDao = self.db_executor.as_dao();
-        let total_amount = invoice_dao.get_total_amount(invoice_ids.clone()).await?;
+        let invoices = invoice_dao.get_many(invoice_ids, payee_id).await?;
+        let total_amount: BigDecimal =
+            Iterator::sum(invoices.iter().map(|invoice| invoice.amount.clone()));
         if total_amount != actual_amount {
             let msg = format!(
                 "Invalid payment amount. Expected: {} Actual: {}",
@@ -160,29 +156,55 @@ impl PaymentProcessor {
             return Err(PaymentError::Verification(msg).into());
         }
 
-        // Translate account ids to lower case, because recipient will be address without checksum.
-        let recipient = details.recipient.clone();
-        let account_ids = invoice_dao
-            .get_accounts_ids(invoice_ids.clone())
-            .await?
-            .iter()
-            .map(|account| account.to_lowercase())
-            .collect::<Vec<String>>();
-        log::debug!("Recipient: {}, account_ids: {:?}", recipient, account_ids);
-        if account_ids != [recipient.clone()] {
-            return Err(
-                PaymentError::Verification(format!("Invalid account ID: {}", recipient)).into(),
-            );
+        for invoice in invoices.iter() {
+            if &invoice.agreement_id != &agreement_id {
+                let msg = format!(
+                    "Invoice {} has invalid agreement ID. Expected: {} Actual: {}",
+                    &invoice.invoice_id, &agreement_id, &invoice.agreement_id
+                );
+                return Err(PaymentError::Verification(msg).into());
+            }
         }
 
         // TODO: Check debit notes as well
-        // It's not as simple as with invoices because debit notes contain total amount due.
-        // Probably payments should be related to agreements not particular invoices/debit notes.
 
-        // FIXME: This code assumes that payer always uses the same Ethereum address
-        let payment_dao: PaymentDao = self.db_executor.as_dao();
-        let db_balance = payment_dao
-            .get_transaction_balance(payment.payment.payer_id.clone())
+        let payee_addr = payment.payee_addr.clone();
+        let payer_addr = payment.payer_addr.clone();
+        if &details.recipient != &payee_addr {
+            let msg = format!(
+                "Invalid transaction recipient. Declared: {} Actual: {}",
+                &payee_addr, &details.recipient
+            );
+            return Err(PaymentError::Verification(msg).into());
+        }
+        // TODO: Sender should be included in transaction details and checked as well
+
+        let agreement_dao: AgreementDao = self.db_executor.as_dao();
+        let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
+        match agreement {
+            None => {
+                let msg = format!("Agreement not found: {}", agreement_id);
+                return Err(PaymentError::Verification(msg).into());
+            }
+            Some(agreement) if &agreement.payee_addr != &payee_addr => {
+                let msg = format!(
+                    "Invalid payee address. {} != {}",
+                    &agreement.payee_addr, &payee_addr
+                );
+                return Err(PaymentError::Verification(msg).into());
+            }
+            Some(agreement) if &agreement.payer_addr != &payer_addr => {
+                let msg = format!(
+                    "Invalid payer address. {} != {}",
+                    &agreement.payer_addr, &payer_addr
+                );
+                return Err(PaymentError::Verification(msg).into());
+            }
+            _ => (),
+        }
+
+        let db_balance = agreement_dao
+            .get_transaction_balance(payee_id, payee_addr, payer_addr)
             .await?;
         let bc_balance = self
             .driver
@@ -195,19 +217,8 @@ impl PaymentProcessor {
             return Err(PaymentError::Verification(msg).into());
         }
 
-        payment_dao.create(payment.into()).await?;
-
-        let debit_note_dao: DebitNoteDao = self.db_executor.as_dao();
-        for debit_note_id in debit_note_ids {
-            debit_note_dao
-                .update_status(debit_note_id, InvoiceStatus::Settled.into())
-                .await?;
-        }
-        for invoice_id in invoice_ids {
-            invoice_dao
-                .update_status(invoice_id, InvoiceStatus::Settled.into())
-                .await?;
-        }
+        let payment_dao: PaymentDao = self.db_executor.as_dao();
+        payment_dao.insert_received(payment, payee_id).await?;
 
         Ok(())
     }

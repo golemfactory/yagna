@@ -5,10 +5,12 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [features]
+default=[]
 service=[]
 
 [dependencies]
-ya-core-model = { version = "0.1", features=["ethaddr", "net"] }
+ya-client-model = "0.1"
+ya-core-model = { version = "0.1", features=["net", "identity"] }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.2"
@@ -16,6 +18,8 @@ ya-service-bus = "0.2"
 anyhow = "1.0"
 log = "0.4"
 thiserror = "1.0"
+serde_json="1.0"
+actix-rt = "1.0"
 
 [dependencies.futures]
 package = "futures"

@@ -18,9 +18,9 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
-    use crate::ethaddr::NodeId;
     use bigdecimal::BigDecimal;
     use std::fmt::Display;
+    use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
 
@@ -38,6 +38,15 @@ pub mod local {
     pub struct SchedulePayment {
         pub invoice: Invoice,
         pub allocation_id: String,
+    }
+
+    impl SchedulePayment {
+        pub fn new(invoice: Invoice, allocation_id: String) -> Self {
+            Self {
+                invoice,
+                allocation_id,
+            }
+        }
     }
 
     impl RpcMessage for SchedulePayment {
@@ -130,6 +139,7 @@ pub mod local {
 
 pub mod public {
     use super::*;
+    use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/public/payment";
 
@@ -183,6 +193,17 @@ pub mod public {
     pub struct AcceptDebitNote {
         pub debit_note_id: String,
         pub acceptance: Acceptance,
+        pub issuer_id: NodeId,
+    }
+
+    impl AcceptDebitNote {
+        pub fn new(debit_note_id: String, acceptance: Acceptance, issuer_id: NodeId) -> Self {
+            Self {
+                debit_note_id,
+                acceptance,
+                issuer_id,
+            }
+        }
     }
 
     impl RpcMessage for AcceptDebitNote {
@@ -231,6 +252,17 @@ pub mod public {
     pub struct AcceptInvoice {
         pub invoice_id: String,
         pub acceptance: Acceptance,
+        pub issuer_id: NodeId,
+    }
+
+    impl AcceptInvoice {
+        pub fn new(invoice_id: String, acceptance: Acceptance, issuer_id: NodeId) -> Self {
+            Self {
+                invoice_id,
+                acceptance,
+                issuer_id,
+            }
+        }
     }
 
     impl RpcMessage for AcceptInvoice {

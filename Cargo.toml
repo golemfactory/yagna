@@ -1,3 +1,66 @@
+[package]
+name = "yagna"
+version = "0.3.0"
+description = "Open platform and marketplace for distributed computations"
+readme = "README.md"
+authors = ["Golem Factory <contact@golem.network>"]
+homepage = "https://github.com/golemfactory/yagna/core/serv"
+repository = "https://github.com/golemfactory/yagna"
+license = "GPL-3.0"
+edition = "2018"
+
+[features]
+default=['market-forwarding']
+static-openssl=["openssl/vendored"]
+market-forwarding = ['ya-market-forwarding']
+market-decentralized = ['ya-market-decentralized']
+
+[[bin]]
+name = "yagna"
+path = "core/serv/src/main.rs"
+
+[dependencies]
+ya-activity = "0.2"
+ya-identity = "0.2"
+ya-market-decentralized = { version = "0.1", optional = true }
+ya-market-forwarding = { version = "0.1", optional = true }
+ya-net = { version = "0.1", features = ["service"] }
+ya-payment = { version = "0.1", features = ["gnt-driver"] }
+ya-persistence = "0.2"
+ya-sb-proto = "0.1"
+ya-sb-router = "0.1"
+ya-service-api = "0.1"
+ya-service-api-derive = "0.1"
+ya-service-api-interfaces = "0.1"
+ya-service-api-web = "0.1"
+ya-service-bus = "0.2"
+
+actix-rt = "1.0"
+actix-service = "1.0"
+actix-web = "2.0"
+anyhow = "1.0"
+directories = "2.0.2"
+dotenv = "0.15.0"
+env_logger = "0.7"
+futures = "0.3"
+lazy_static = "1.4"
+log = "0.4"
+openssl="0.10"
+structopt = "0.3"
+url = "2.1.1"
+
+[package.metadata.deb]
+assets = [
+    ["target/release/yagna", "usr/bin/", "755"],
+    ["target/release/ya-requestor", "usr/bin/", "755"],
+    ["target/release/ya-provider", "usr/bin/", "755"],
+    ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
+    ["README.md", "usr/share/doc/yagna/", "644"],
+    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
+    ["agent/provider/readme.md", "usr/share/doc/yagna/run-provider.md", "644"],
+]
+features=["static-openssl"]
+
 [workspace]
 members = [
     "agent/provider",
@@ -6,39 +69,40 @@ members = [
     "core/activity",
     "core/gftp",
     "core/identity",
-    "core/market",
+    "core/market/decentralized",
+    "core/market/forwarding",
     "core/model",
     "core/net",
     "core/payment",
     "core/payment-driver",
     "core/persistence",
-    "core/serv",
     "core/serv-api",
     "core/serv-api/cache",
+    "core/serv-api/derive",
     "core/serv-api/interfaces",
     "core/serv-api/web",
-    "core/serv-api/derive",
     "exe-unit",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
     "service-bus/router",
     "service-bus/util",
-    "utils/agreement-utils",
-    "utils/scheduler",
     "utils/actix_utils",
-    "utils/process",
-    "utils/transfer",
+    "utils/agreement-utils",
     "utils/path",
+    "utils/process",
+    "utils/scheduler",
+    "utils/transfer",
 ]
 
 [patch.crates-io]
 ## SERVICES
+ya-identity = { path = "core/identity" }
+ya-net = { path = "core/net" }
+ya-market-forwarding = { path = "core/market/forwarding" }
+ya-market-decentralized = { path = "core/market/decentralized" }
 ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
-ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
-ya-net = { path = "core/net" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -57,8 +121,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a8ab6d9"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "baf7d33ad728b485dba555f65f517c433ffa435a"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "baf7d33ad728b485dba555f65f517c433ffa435a"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }

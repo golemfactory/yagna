@@ -130,10 +130,13 @@ async fn process_invoice(
                 .lock()
                 .unwrap()
                 .remove(&invoice.agreement_id);
-            match payment_api.release_allocation(&allocation_id).await {
-                Ok(_) => log::info!("released allocation {}", allocation_id),
-                Err(e) => log::error!("Unable to release allocation {}: {}", allocation_id, e),
-            }
+
+            // FIXME: Allocation should be released after the payment is made.
+            // Doing it immediately after accepting invoice causes payment to fail.
+            // match payment_api.release_allocation(&allocation_id).await {
+            //     Ok(_) => log::info!("released allocation {}", allocation_id),
+            //     Err(e) => log::error!("Unable to release allocation {}: {}", allocation_id, e),
+            // }
         }
         None => {
             let rejection = payment::Rejection {

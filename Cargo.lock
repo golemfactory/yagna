@@ -1713,6 +1713,7 @@ dependencies = [
  "sha3",
  "structopt",
  "url 2.1.1",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-service-api",
@@ -2068,6 +2069,21 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+]
+
+[[package]]
+name = "jsonwebtoken"
+version = "6.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a81d1812d731546d2614737bee92aa071d37e9afa1409bc374da9e5e70e70b22"
+dependencies = [
+ "base64 0.10.1",
+ "chrono",
+ "ring",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "untrusted",
 ]
 
 [[package]]
@@ -4827,7 +4843,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=a8ab6d9#a8ab6d9ac76b228a9e4473ec9169dc7713bf5266"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=baf7d33ad728b485dba555f65f517c433ffa435a#baf7d33ad728b485dba555f65f517c433ffa435a"
 dependencies = [
  "awc",
  "backtrace",
@@ -4847,10 +4863,11 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=a8ab6d9#a8ab6d9ac76b228a9e4473ec9169dc7713bf5266"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=baf7d33ad728b485dba555f65f517c433ffa435a#baf7d33ad728b485dba555f65f517c433ffa435a"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
+ "diesel",
  "serde",
  "serde_json",
  "thiserror",
@@ -4862,7 +4879,6 @@ version = "0.1.0"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
- "diesel",
  "serde",
  "serde_bytes",
  "thiserror",
@@ -4943,6 +4959,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.20",
  "uuid 0.7.4",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-sb-router",
@@ -4953,7 +4970,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-market"
+name = "ya-market-decentralized"
+version = "0.1.0"
+dependencies = [
+ "actix-rt",
+ "actix-web",
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "derive_more 0.99.5",
+ "env_logger 0.7.1",
+ "futures 0.3.4",
+ "lazy_static",
+ "log 0.4.8",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio 0.2.20",
+ "ya-client",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
+name = "ya-market-forwarding"
 version = "0.1.0"
 dependencies = [
  "actix-rt",
@@ -4965,6 +5008,7 @@ dependencies = [
  "diesel_migrations",
  "env_logger 0.7.1",
  "futures 0.3.4",
+ "jsonwebtoken",
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
@@ -4976,9 +5020,11 @@ dependencies = [
  "url 2.1.1",
  "ya-client",
  "ya-core-model",
+ "ya-net",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
+ "ya-service-api-web",
  "ya-service-bus",
 ]
 
@@ -4992,8 +5038,10 @@ dependencies = [
  "futures 0.3.4",
  "log 0.4.8",
  "serde",
+ "serde_json",
  "structopt",
  "thiserror",
+ "ya-client-model",
  "ya-core-model",
  "ya-sb-router",
  "ya-service-api",
@@ -5277,6 +5325,7 @@ dependencies = [
  "serde",
  "structopt",
  "url 2.1.1",
+ "ya-client-model",
  "ya-core-model",
  "ya-identity",
  "ya-persistence",
@@ -5396,7 +5445,8 @@ dependencies = [
  "url 2.1.1",
  "ya-activity",
  "ya-identity",
- "ya-market",
+ "ya-market-decentralized",
+ "ya-market-forwarding",
  "ya-net",
  "ya-payment",
  "ya-persistence",

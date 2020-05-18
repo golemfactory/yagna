@@ -1,7 +1,5 @@
-use ya_core_model::{
-    ethaddr::{NodeId, ParseError},
-    net,
-};
+use ya_client_model::node_id::{NodeId, ParseError};
+use ya_core_model::net;
 use ya_service_bus::typed as bus;
 
 #[derive(thiserror::Error, Debug)]
@@ -33,8 +31,49 @@ impl TryRemoteEndpoint for &str {
     }
 }
 
-pub fn net_node_id(node_id: &NodeId) -> String {
-    format!("{}/{:?}", net::BUS_ID, node_id)
+pub struct NetSrc {
+    src: NodeId,
+}
+
+impl NetSrc {
+    pub fn to(&self, dst: NodeId) -> NetDst {
+        NetDst { src: self.src, dst }
+    }
+}
+
+pub struct NetDst {
+    src: NodeId,
+    dst: NodeId,
+}
+
+pub fn from(src: NodeId) -> NetSrc {
+    NetSrc { src }
+}
+
+fn extract_exported_part(local_service_addr: &str) -> &str {
+    assert!(local_service_addr.starts_with(net::PUBLIC_PREFIX));
+    &local_service_addr[net::PUBLIC_PREFIX.len()..]
+}
+
+pub trait RemoteEndpoint {
+    fn service(&self, bus_addr: &str) -> bus::Endpoint;
+}
+
+impl RemoteEndpoint for NodeId {
+    fn service(&self, bus_addr: &str) -> bus::Endpoint {
+        bus::service(format!("/net/{}/{}", self, extract_exported_part(bus_addr)))
+    }
+}
+
+impl RemoteEndpoint for NetDst {
+    fn service(&self, bus_addr: &str) -> bus::Endpoint {
+        bus::service(format!(
+            "/from/{}/to/{}{}",
+            self.src,
+            self.dst,
+            extract_exported_part(bus_addr)
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -77,16 +116,5 @@ mod tests {
             .parse()
             .unwrap();
         assert!(node_id.try_service("/zima/x").is_err());
-    }
-
-    #[test]
-    fn ok_net_node_id() {
-        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
-            .parse()
-            .unwrap();
-        assert_eq!(
-            net_node_id(&node_id),
-            "/net/0xbabe000000000000000000000000000000000000".to_string()
-        );
     }
 }

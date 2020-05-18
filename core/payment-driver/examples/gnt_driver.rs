@@ -68,7 +68,7 @@ async fn show_payment_status(gnt_driver: &GntDriver, invoice_id: &str) {
     }
 }
 
-#[tokio::main]
+#[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
     dotenv::dotenv().expect("Failed to read .env file");
@@ -109,13 +109,13 @@ async fn main() -> anyhow::Result<()> {
             &sign_tx,
         )
         .await
-        .unwrap();
+        .map_or_else(|e| println!("{:?}", e), |_| println!("Done!"));
 
     show_balance(&gnt_driver, address.as_str()).await;
     show_payment_status(&gnt_driver, invoice_id).await;
 
-    let hardcoded: &str = "7e6fe400-92ba-4f93-960d-cc0720cf19e3";
-    show_payment_status(&gnt_driver, hardcoded).await;
+    // let hardcoded: &str = "7e6fe400-92ba-4f93-960d-cc0720cf19e3";
+    // show_payment_status(&gnt_driver, hardcoded).await;
 
     println!("Waiting for Ctr+C...");
     tokio::signal::ctrl_c()

@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use structopt::StructOpt;
 
-use ya_core_model::{ethaddr::NodeId, net};
+use ya_client_model::NodeId;
+use ya_core_model::net;
 use ya_net::TryRemoteEndpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
@@ -68,7 +69,7 @@ async fn main() -> Result<()> {
         .context(format!("Error binding local router"))?;
 
     std::env::set_var(ya_net::CENTRAL_ADDR_ENV_VAR, &options.hub_addr);
-    ya_net::bind_remote(&options.my_id())
+    ya_net::bind_remote(options.my_id(), vec![options.my_id()])
         .await
         .context(format!(
             "Error binding service at {} for {}",

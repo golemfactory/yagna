@@ -7,8 +7,8 @@ use serde::Serialize;
 use std::cell::Ref;
 use std::convert::TryFrom;
 use std::pin::Pin;
+use ya_client_model::NodeId;
 use ya_core_model::appkey::AppKey;
-use ya_core_model::ethaddr::NodeId;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Identity {

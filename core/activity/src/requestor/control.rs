@@ -3,15 +3,15 @@ use serde::Deserialize;
 
 use ya_client_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
 use ya_core_model::activity;
-use ya_net::TryRemoteEndpoint;
+use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
-    authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, set_persisted_state, PathActivity, QueryTimeout,
-    QueryTimeoutCommandIndex,
+    agreement_provider_service, authorize_activity_initiator, authorize_agreement_initiator,
+    generate_id, get_activity_agreement, get_agreement, set_persisted_state, PathActivity,
+    QueryTimeout, QueryTimeoutCommandIndex,
 };
 use crate::dao::ActivityDao;
 use crate::error::Error;
@@ -38,15 +38,16 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id).await?;
     log::trace!("agreement: {:#?}", agreement);
 
+    let provider_id = agreement.provider_id()?.parse()?;
     let msg = activity::Create {
-        provider_id: agreement.provider_id()?.parse()?,
+        provider_id,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
 
-    let activity_id = agreement
-        .provider_id()?
-        .try_service(activity::BUS_ID)?
+    let activity_id = net::from(id.identity)
+        .to(provider_id)
+        .service(activity::BUS_ID)
         .send(msg)
         .timeout(query.timeout)
         .await???;
@@ -75,10 +76,7 @@ async fn destroy_activity(
         agreement_id: agreement.agreement_id.clone(),
         timeout: query.timeout.clone(),
     };
-
-    agreement
-        .provider_id()?
-        .try_service(activity::BUS_ID)?
+    agreement_provider_service(&id, &agreement)?
         .send(msg)
         .timeout(query.timeout)
         .await???;
@@ -118,9 +116,9 @@ async fn exec(
         timeout: query.timeout.clone(),
     };
 
-    agreement
-        .provider_id()?
-        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
+    ya_net::from(id.identity)
+        .to(agreement.provider_id()?.parse()?)
+        .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(query.timeout)
         .await???;
@@ -146,9 +144,9 @@ async fn get_batch_results(
         command_index: query.command_index,
     };
 
-    let results = agreement
-        .provider_id()?
-        .try_service(&activity::exeunit::bus_id(&path.activity_id))?
+    let results = ya_net::from(id.identity)
+        .to(agreement.provider_id()?.parse()?)
+        .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(query.timeout)
         .await???;

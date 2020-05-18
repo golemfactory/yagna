@@ -6,9 +6,6 @@ pub mod activity;
 #[cfg(feature = "appkey")]
 pub mod appkey;
 
-#[cfg(any(feature = "ethaddr", feature = "identity"))]
-pub mod ethaddr;
-
 #[cfg(feature = "identity")]
 pub mod identity;
 

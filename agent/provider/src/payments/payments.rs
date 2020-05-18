@@ -16,7 +16,7 @@ use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{
-    DebitNote, Invoice, InvoiceStatus, NewDebitNote, NewInvoice, Payment,
+    DebitNote, DocumentStatus, Invoice, NewDebitNote, NewInvoice, Payment,
 };
 use ya_client::payment::PaymentProviderApi;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
@@ -95,8 +95,6 @@ struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
     payment_api: Arc<PaymentProviderApi>,
 
-    credit_account: String,
-
     invoice_paid_check_interval: Duration,
     invoice_accept_check_interval: Duration,
     invoice_resend_interval: Duration,
@@ -113,20 +111,10 @@ pub struct Payments {
 }
 
 impl Payments {
-    pub fn new(
-        activity_api: ActivityProviderApi,
-        payment_api: PaymentProviderApi,
-        credit_address: &str,
-    ) -> Payments {
-        log::info!(
-            "Payments will be sent to account address {}.",
-            credit_address
-        );
-
+    pub fn new(activity_api: ActivityProviderApi, payment_api: PaymentProviderApi) -> Payments {
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
-            credit_account: credit_address.to_string(),
             invoice_paid_check_interval: Duration::from_secs(10),
             invoice_accept_check_interval: Duration::from_secs(10),
             invoice_resend_interval: Duration::from_secs(50),
@@ -175,12 +163,9 @@ async fn send_debit_note(
     cost_info: CostInfo,
 ) -> Result<DebitNote> {
     let debit_note = NewDebitNote {
-        agreement_id: debit_note_info.agreement_id.clone(),
-        activity_id: Some(debit_note_info.activity_id.clone()),
+        activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        credit_account_id: provider_context.credit_account.clone(),
-        payment_platform: None,
         payment_due_date: None,
     };
 
@@ -244,10 +229,6 @@ async fn send_invoice(
         agreement_id: agreement_id.to_string(),
         activity_ids: Some(activities.clone()),
         amount: cost_summary.clone().cost,
-        // TODO: This is temporary. In the future we won't need to set these fields.
-        usage_counter_vector: Some(json!(cost_summary.usage)),
-        credit_account_id: provider_context.credit_account.clone(),
-        payment_platform: None,
         // TODO: Change this date to meaningful value.
         //  Now all our invoices are immediately outdated.
         payment_due_date: Utc::now(),
@@ -610,20 +591,20 @@ impl Handler<CheckInvoiceAcceptance> for Payments {
                 match result {
                     Ok(invoice) => {
                         match invoice.status {
-                            InvoiceStatus::Accepted => {
+                            DocumentStatus::Accepted => {
                                 log::info!("Invoice [{}] accepted by requestor.", &msg.invoice_id);
 
                                 // Wait for payment to be settled.
                                 myself.invoices_to_pay.push(invoice);
                                 return Ok(());
                             }
-                            InvoiceStatus::Rejected => {
+                            DocumentStatus::Rejected => {
                                 log::warn!("Invoice [{}] rejected by requestor.", &msg.invoice_id);
                                 //TODO: Send signal to other provider's modules to react to this situation.
                                 //      Probably we don't want to cooperate with this Requestor anymore.
                                 return Ok(());
                             }
-                            //TODO: What means InvoiceStatus::Failed? How should we handle it?
+                            //TODO: What means DocumentStatus::Failed? How should we handle it?
                             _ => (),
                         }
                     }
