@@ -1,16 +1,5 @@
 # Provider Agent
 
-## Central setup
-We have centrally deployed (ip: `34.244.4.185`) three independent standalone modules/apps:
- - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 34.244.4.185:7464 \
-   (can be invoked locally with `cargo run --release -p ya-sb-router --example ya_sb_router`)
- - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://34.244.4.185:8080/market-api/v1/ \
-   (can be invoked locally with `dotnet run --urls "http://0.0.0.0:5001" -p GolemClientMockAPI`)
- - simple "wasm store" @ 34.244.4.185:8000 \
-   this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
-   (can be invoked locally with `cargo run --release -p ya-exe-unit --example http-get-put --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
-   TODO: describe how to build and pack yagna wasm binary image
-
 ## Configuration
 
 Provider agent can be used with `.env` file. [Here](https://github.com/golemfactory/yagna/wiki/DotEnv-Configuration) is list of additional environment variables that can be set.
@@ -229,6 +218,8 @@ cargo run -p ya-provider run high-cpu amazing-offer
 ## Mock requestor
 
 Run `ya-requestor` app to mock negotiations, activity and payments.
+There is also `gwasm-runner` being prepared as a fully fledged Requestor Agent.
+See [PR#47](https://github.com/golemfactory/gwasm-runner/pull/47)
 
 #### 0. Configure Requestor
 
@@ -273,3 +264,18 @@ You need `commands.json` file which contains commands to be executed on the prov
 ```
 cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json
 ```
+
+## Central setup
+We have centrally deployed (ip: `34.244.4.185`) three independent standalone modules/apps:
+ - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 34.244.4.185:7464 \
+   (can be invoked locally with `cargo run --release -p ya-sb-router --example ya_sb_router`)
+ - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://34.244.4.185:8080/market-api/v1/ \
+   (can be invoked locally with `dotnet run --urls "http://0.0.0.0:5001" -p GolemClientMockAPI`)
+ - simple "wasm store" @ 34.244.4.185:8000 \
+   this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
+   (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
+
+### Yagna binary image
+   TODO: describe how to build and pack yagna wasm binary image
+
+   Example can be found in gwasm-runner: [here](https://github.com/golemfactory/gwasm-runner/pull/47/files#diff-bb439e3905abce87b1ff2f3d832f6f0cR83) and [here](https://github.com/golemfactory/gwasm-runner/pull/47/files#diff-bb439e3905abce87b1ff2f3d832f6f0cR130).
