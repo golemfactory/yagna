@@ -5,4 +5,4 @@ COPY . .
 
 RUN cargo build --workspace --examples --bins
 EXPOSE 9000
-CMD [ "cargo", "run", "-p", "ya-sb-router", "--example", "ya_sb_router", "--", "-l", "0.0.0.0:9000" ]
+CMD [ "cargo", "run", "-p", "ya-sb-router", "--example", "ya_sb_router", "--", "-l", "tcp://0.0.0.0:9000" ]
