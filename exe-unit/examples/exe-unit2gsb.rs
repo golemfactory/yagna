@@ -24,7 +24,7 @@ const BATCH_ID: &str = "fake_batch_id";
 /// as specified in your `agreement.json` and `commands.json`
 /// For default files it is enough to invoke this:
 ///
-///   cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
+///   cargo run -p ya-exe-unit --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
 #[derive(StructOpt, Debug)]
 pub struct Cli {
     /// Supervisor binary
