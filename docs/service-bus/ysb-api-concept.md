@@ -1,10 +1,10 @@
-# Yagna Service Bus API
+# Service Bus API
 
-This document describes the Yagna Service Bus (YSB) API and its purpose in Yagna.
+This document describes the Service Bus (GSB) API and its purpose in Yagna.
 
 ## Table of contents
 
-- [Yagna Service Bus API](#yagna-service-bus-api)
+- [Service Bus API](#yagna-service-bus-api)
   - [Table of contents](#table-of-contents)
   - [Concepts](#concepts)
     - [Net API](#net-api)
@@ -13,7 +13,7 @@ This document describes the Yagna Service Bus (YSB) API and its purpose in Yagna
     - [Service address](#service-address)
     - [Service registration](#service-registration)
     - [Service relaying](#service-relaying)
-    - [YSB API module](#ysb-api-module)
+    - [GSB API module](#ysb-api-module)
   - [Authorization](#authorization)
   - [Authentication and accounting](#authentication-and-accounting)
   - [API definition](#api-definition)
@@ -41,7 +41,7 @@ different callers per registered method.
 
 **The multiple-caller aspect is out of scope of the PoC** and will only support a single caller.
 
-Channels are mapped to service names and created via registering a service within the Yagna Service Bus API module.
+Channels are mapped to service names and created via registering a service within the Service Bus API module.
 
 Each node is responsible for authorizing calls coming from the network. Typically, a requestor manages this kind of
 service authorization, i.e. by remotely populating whitelists on providers' Yagna daemons.
@@ -64,24 +64,24 @@ A string that consists of node's id and the registered service name.
 
 ### Service registration
 
-An API call to the YSB API module which binds a given service name string to the registered service process and
+An API call to the GSB API module which binds a given service name string to the registered service process and
 route any incoming messages to that service. The latter is performed by calling an appropriate interface method,
 which is required to be implemented by the service.
 
-Registration shares the lifetime of a "connection" between the YSB API module and the registered service.
+Registration shares the lifetime of a "connection" between the GSB API module and the registered service.
 
 ### Service relaying
 
 A state of exposing a Service interface directly on the Yagna network. The interface may be called by any third
 party who poses the knowledge of that service's address.
 
-The prerequisite for relaying is to register a service within the YSB API module. In consequence, messages addressed
-to that service will be routed to that service by the YSB API module. Responses are routed back to the caller either
+The prerequisite for relaying is to register a service within the GSB API module. In consequence, messages addressed
+to that service will be routed to that service by the GSB API module. Responses are routed back to the caller either
 as a single reply or a stream.
 
-### YSB API module
+### GSB API module
 
-A module within the Yagna daemon exposing the Yagna Service Bus API.
+A module within the Yagna daemon exposing the Service Bus API.
 
 ## Authorization
 
@@ -99,7 +99,7 @@ the Yagna daemon.
 
 ## API definition
 
-Due to the PubSub nature of the API, two different services need to be implemented by the YSB API provider
+Due to the PubSub nature of the API, two different services need to be implemented by the GSB API provider
 and the registering service.
 
 Note: authorization is not included in the scope of this proposal.
@@ -109,9 +109,9 @@ Note: authorization is not included in the scope of this proposal.
 ```protobuf
 syntax = "proto3";
 
-package YSB_API;
+package GSB_API;
 
-/* Exposed by Yagna Service Bus API implementation */
+/* Exposed by Service Bus API implementation */
 service Bus {
   /* Register a service within the bus */
   rpc Register (RegisterRequest) returns (RegisterReply);
@@ -171,7 +171,7 @@ message CallReply {
 
 ## API implementation details
 
-This section describes implementation hints and requirements for modules exposing the Yagna Service Bus API.
+This section describes implementation hints and requirements for modules exposing the Service Bus API.
 
 ### Message definition
 
@@ -185,7 +185,7 @@ The binary `data` field within the messages must be serialized with [msgpack](ht
 
 ### Transport
 
-YSB API modules utilize a `nanomsg-next-gen` library with 2 transports enabled:
+GSB API modules utilize a `nanomsg-next-gen` library with 2 transports enabled:
 
 - IPC: unix sockets (Linux, macOS) and Named Pipes (Windows)
 - TCP: all supported operating systems
