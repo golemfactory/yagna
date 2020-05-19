@@ -329,12 +329,13 @@ impl Handler<TxSave> for TransactionSender {
                 )
             })
             .collect();
+        let sender = msg.address.clone();
         let encoded_transactions = msg
             .transactions
             .into_iter()
             .map(|(tx, sign)| {
                 (
-                    hex::encode(tx.hash(chain_id)),
+                    crate::utils::prepare_tx_id(&tx, chain_id, sender),
                     tx.encode_signed_tx(sign, chain_id),
                 )
             })
@@ -403,7 +404,7 @@ impl Handler<Retry> for TransactionSender {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
         let chain_id = client.chain_id();
-        // TODO: catch diffrent states.
+        // TODO: catch different states.
         let fut = async move {
             if let Some(tx) = db.as_dao::<TransactionDao>().get(msg.tx_id).await? {
                 let tx_id: &str = tx.tx_id.as_ref();
@@ -411,7 +412,7 @@ impl Handler<Retry> for TransactionSender {
                 let signature = hex::decode(&tx.signature).unwrap();
                 let signed_tx = raw_tx.encode_signed_tx(signature, chain_id);
                 let hash = client.send_tx(signed_tx).await?;
-                log::info!("resend transaciotn: {} tx={:?}", tx_id, hash);
+                log::info!("resend transaction: {} tx={:?}", tx_id, hash);
                 Ok(true)
             } else {
                 Err(PaymentDriverError::UnknownTransaction)
@@ -489,8 +490,7 @@ impl Builder {
             for mut tx in me.tx {
                 tx.nonce = nx.start;
                 nx.start += 1.into();
-                let tx_hash = tx.hash(me.chain_id);
-                let signature = sign_tx(tx_hash.clone()).await;
+                let signature = sign_tx(tx.hash(me.chain_id)).await;
                 tx_save.transactions.push((tx, signature))
             }
             assert_eq!(nx.start, nx.end);

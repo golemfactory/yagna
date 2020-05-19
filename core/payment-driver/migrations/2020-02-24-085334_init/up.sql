@@ -56,8 +56,7 @@ VALUES(1, "TRANSFER");
 
 CREATE TABLE gnt_driver_transaction
 (
-	-- H256 in hex
-	tx_id VARCHAR(64) NOT NULL PRIMARY KEY,
+	tx_id VARCHAR(128) NOT NULL PRIMARY KEY,
 	sender VARCHAR(40) NOT NULL,
 	-- U256 in big endian hex
 	nonce VARCHAR(64) NOT NULL,
@@ -82,8 +81,7 @@ CREATE TABLE gnt_driver_payment
 	recipient VARCHAR(40) NOT NULL,
 	payment_due_date DATETIME NOT NULL,
 	status INTEGER NOT NULL,
-	-- H256 in hex
-	tx_id VARCHAR(64),
+	tx_id VARCHAR(128),
 	FOREIGN KEY(tx_id) REFERENCES gnt_driver_transaction (tx_id),
 	FOREIGN KEY(status) REFERENCES gnt_driver_payment_status (status_id)
 );

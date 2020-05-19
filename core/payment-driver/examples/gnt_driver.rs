@@ -113,7 +113,10 @@ async fn main() -> anyhow::Result<()> {
             &sign_tx,
         )
         .await
-        .map_or_else(|e| println!("{:?}", e), |_| println!("Done!"));
+        .map_or_else(
+            |e| println!("Error while scheduling payment {:?}", e),
+            |_| println!("Done!"),
+        );
 
     show_balance(&gnt_driver, address.as_str()).await;
     show_payment_status(&gnt_driver, invoice_id).await;

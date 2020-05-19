@@ -32,16 +32,6 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn insert(&self, tx: TransactionEntity) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(dsl::gnt_driver_transaction)
-                .values(tx)
-                .execute(conn)?;
-            Ok(())
-        })
-        .await
-    }
-
     pub async fn insert_transactions(&self, txs: Vec<TransactionEntity>) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             for tx in txs {
