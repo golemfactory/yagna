@@ -123,11 +123,11 @@ The dependencies should not be spontaneously updated by developers.
 ### Usage Examples
 
 If a crate needs usage examples, they should be placed in the `examples` subdirectory of the crate. To run such example, 
-please run `cargo run --example <example name>` command.
+please run `cargo run -p <package name> --example <example name>` command.
 
 ### Tests
 
-Tests can be run using `cargo test` command:
+Tests can be run using `cargo test --workspace` command:
 
 https://doc.rust-lang.org/book/ch11-01-writing-tests.html
 
@@ -139,6 +139,6 @@ Documentation will be automatically generated using rustdoc:
 
 https://doc.rust-lang.org/rustdoc/index.html
 
-To generate documentation, please enter `cargo doc` command in your shell.
+To generate documentation, please enter `cargo doc --workspace --no-deps` command in your shell.
 
 The comments that are copied to the documentation are prefixed with `///`, Markdown is supported.

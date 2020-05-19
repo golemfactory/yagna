@@ -4,12 +4,13 @@
 
 To start the provider:
 ```shell script
-cargo run --example payment_api -- provider
+cargo run -p ya-payment --example payment_api -- provider
 ```
 
 To start the requestor:
 ```shell script
-GSB_URL="tcp://127.0.0.1:8464" YAGNA_API_URL="http://127.0.0.1:8465" cargo run --example payment_api -- requestor
+GSB_URL="tcp://127.0.0.1:8464" YAGNA_API_URL="http://127.0.0.1:8465" \
+    cargo run -p ya-payment --example payment_api -- requestor
 ```
 
 #### Debit note flow

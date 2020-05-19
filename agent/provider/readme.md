@@ -3,12 +3,12 @@
 ## Central setup
 We have centrally deployed (ip: `34.244.4.185`) three independent standalone modules/apps:
  - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 34.244.4.185:7464 \
-   (can be invoked locally with `cargo run --release --example ya_sb_router`)
+   (can be invoked locally with `cargo run --release -p ya-sb-router --example ya_sb_router`)
  - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://34.244.4.185:8080/market-api/v1/ \
    (can be invoked locally with `dotnet run --urls "http://0.0.0.0:5001" -p GolemClientMockAPI`)
  - simple "wasm store" @ 34.244.4.185:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
-   (can be invoked locally with `cargo run --release --example http-get-put --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
+   (can be invoked locally with `cargo run --release -p ya-exe-unit --example http-get-put --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
    TODO: describe how to build and pack yagna wasm binary image
 
 ## Configuration
@@ -20,7 +20,7 @@ Create separate working dir for the Provider Agent (please create `ya-prov` in t
 
 ### Command line parameters
 
-This can be displayed using `cargo run --bin ya-provider run --help`
+This can be displayed using `cargo run -p ya-provider run --help`
 
 | Parameter      | Description   
 | -------------- |------------------------------------------------|
@@ -38,36 +38,77 @@ This can be displayed using `cargo run --bin ya-provider run --help`
 To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov`:
 
 1. Run [yagna service](https://github.com/golemfactory/yagna/blob/master/core/serv/README.md):
-    ```
-    cargo run --bin yagna -- service run
+    ```bash
+    cargo run service run
     ```
     If you want to set `debug` log level or higher its good to filter out core crates to `info`:
-    ```
-    RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info cargo run --bin yagna -- service run
+    ```bash
+    RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info cargo run service run
     ```
 
 2. Create app-key token
 
-    In another console, go to the same directory and run:
-    ```
-    cargo run --bin yagna -- app-key create "provider-agent"
-    ```
-    it will display newly created app-key eg.
-    ```
-    $ cargo run --bin yagna -- app-key create "provider-agent"
+    In another console, go to the same directory and run:\
+    (it will display newly created app-key)
+    ```bash
+    $ cargo run app-key create "provider-agent"
     58cffa9aa1e74811b223b627c7f87aac
     ```
 
 3. Put this app-key into your `.env` file as a value for variable `YAGNA_APPKEY`.
 
+## ExeUnits
+
+## WASI (wasmtime)
+
+This is the first ExeUnit we've prepared for you.
+You need to clone its repository and build.
+In following sections we assume you've cloned it to the same directory where `yagna` is cloned.
+```
+cd ../..  # assuming you are in ./yagna/ya-prov
+git clone git@github.com:golemfactory/ya-runtime-wasi.git
+cd ya-runtime-wasi
+cargo build --release
+cd ../yagna/ya-prov
+```
+
+You can list available ExeUnits with command:
+
+```bash
+$ cargo run -p ya-provider exe-unit list \
+--exe-unit-path ../exe-unit/resources/local-debug-exeunits-descriptor.json
+
+Available ExeUnits:
+
+Available ExeUnits:
+
+Name:          wasmtime
+Version:       0.1.0
+Supervisor:    /Users/tworec/git/yagna/target/debug/exe-unit
+Runtime:       /Users/tworec/git/ya-runtime-wasi/target/debug/ya-runtime-wasi
+Description:   This is just a sample descriptor for wasmtime exeunit used by ya-provider
+Properties:
+    wasm.wasi.version@v           "0.9.0"
+```
+
+**NOTE!** You can set path to ExeUnit descriptors within your `.env` file:
+```bash
+EXE_UNIT_PATH=../exe-unit/resources/local-debug-exeunits-descriptor.json
+```
+In the following we assume you have this set. 
+
+
 ## Presets
 
 Provider uses presets to create market offers. In current version presets are
 defined in `presets.json` file, that should be placed in working directory.
-You can copy example presets from `agent/provider/examples/presets.json`.
+You can copy example presets
+ ```bash
+ cp ../agent/provider/examples/presets.json .
+```
 
 You can list presets by running command:
-`cargo run --bin ya-provider preset list`
+`cargo run -p ya-provider preset list`
 
 The result will be something like this:
 ```
@@ -116,42 +157,59 @@ When running provider, you must list all presets, that you want to use.
 
 ### Creating presets
 
-You can create preset in interactive mode:
+You can create preset in the interactive mode:
 
-`cargo run --bin ya-provider preset create`
+```bash
+cargo run -p ya-provider preset create
+```
 
-or set all parameters non interactively:
+Preset can be created non-interactively also:
 
-`cargo run --bin ya-provider preset create --no-interactive --preset-name wasm-offer --exe-unit wasmtime --pricing linear --price Duration=1.2 --price CPU=3.4 "Init price"=0.2`
+```bash
+cargo run -p ya-provider preset create \
+    --no-interactive \
+    --preset-name new-preset \
+    --exe-unit wasmtime \
+    --pricing linear \
+    --price Duration=1.2 CPU=3.4 "Init price"=0.2
+```
 
-If you don't specify any of price values, it will be defaulted to 0.0.  
+If you don't specify any of price values, it will be defaulted to `0.0`.  
 
 
 ### Updating presets
 
 Updating in interactive mode:
 
-`cargo run --bin ya-provider preset update new-preset`
+```bash
+cargo run -p ya-provider preset update new-preset
+```
 
 or using command line parameters:
 
-`cargo run --bin ya-provider preset update wasm-preset --no-interactive --exe-unit wasmtime --pricing linear --price Duration=1.3 --price CPU=3.5 "Init price"=0.3`
+```bash
+cargo run -p ya-provider preset update new-preset \
+    --no-interactive \
+    --exe-unit wasmtime \
+    --pricing linear \
+    --price Duration=1.3 CPU=3.5 "Init price"=0.3
+```
 
 You can omit some parameters and the will be filled with previous values.
 
 ### Removing presets
 
-`cargo run --bin ya-provider preset remove new-preset`
+```bash
+cargo run -p ya-provider preset remove new-preset
+```
 
 ### Listing metrics
 
 You can list available metrics with command:
 
-`cargo run --bin ya-provider preset list-metrics`
+```bash
+$ cargo run -p ya-provider preset list-metrics
 
-You will get something like this:
-
-```
 Duration       golem.usage.duration_sec
 CPU            golem.usage.cpu_sec
 ```
@@ -160,14 +218,13 @@ you can see agreement property, that will be set in usage vector.
 
 ## Running the Provider Agent
 
-Make sure you have compiled latest changes to exe-unit binaries:
-
-`cargo build --release --bin exe-unit --bin wasmtime-exeunit`
-
-While the yagna service is still running (and you are in the `ya-prov` directory) you can now start Provider Agent.
+While the yagna service is still running (and you are in the `ya-prov` directory)
+you can now start Provider Agent.
 You must enumerate all presets, you want Provider Agent to publish as Offers on the Market:
 
-`cargo run --release --bin ya-provider -- --exe-unit-path ../exe-unit/resources/local-exeunits-descriptor.json run high-cpu amazing-offer`
+```bash
+cargo run -p ya-provider run high-cpu amazing-offer
+```
 
 ## Mock requestor
 
@@ -186,51 +243,33 @@ In this `.env` file you must change port numbers not to interfere with provider:
 #### 1. Run yagna service
 Start requestor-side yagna service
 ```
-cargo run --bin yagna -- service run
+cargo run service run
 ```
 
 #### 2. Create app-key
 1. In a new console run:
-    ```
-    cargo run --bin yagna -- app-key create "requestor-agent"
-    ```
+```
+cargo run app-key create "requestor-agent"
+```
 
 2. Set the result as `YAGNA_APPKEY` value in your `.env` file.
 
 #### 3. Get some ETH and GNT
 1. We need to acquire funds from faucet on testnet (rinkeby).
 This can last a little bit long. Retry if not succeed at first.
-    ```
-    cargo run --bin yagna payment init -r
-    ```
+```bash
+cargo run payment init -r
+```
 2. Check if you got credit on your account:
-    ```
-    cargo run --bin yagna payment status
-    ```
-    Or go to the Rinkeby's etherscan: https://rinkeby.etherscan.io/address/0xdeadbeef00000000000000000000000000000000
-    (Replace the address with the generated node id for the requestor agent -- a result of `cargo run --bin yagna id show`)
+```bash
+cargo run payment status
+```
+Or go to the Rinkeby's etherscan: https://rinkeby.etherscan.io/address/0xdeadbeef00000000000000000000000000000000
+(Replace the address with the generated node id for the requestor agent -- a result of `cargo run id show`)
 
 #### 4. Run Requestor Agent
 You need `commands.json` file which contains commands to be executed on the provider:
 
 ```
-cargo run --bin ya-requestor -- --exe-script ../exe-unit/examples/commands.json
-```
-
-## ExeUnits
-
-You can list available ExeUnits with command:
-
-`cargo run --bin ya-provider exe-unit list`
-Result:
-```
-Available ExeUnits:
-
-Name:          wasmtime
-Version:       0.1.0
-Supervisor:    /home/nieznanysprawiciel/Repos/Golem/yagna/target/debug/exe-unit
-Runtime:       /home/nieznanysprawiciel/Repos/Golem/yagna/target/debug/wasmtime-exeunit
-Description:   This is just a sample descriptor for wasmtime exeunit used by ya-provider
-Properties:
-    wasm.wasi.version@v           "0.9.0"
+cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json
 ```
