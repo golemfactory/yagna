@@ -70,6 +70,10 @@ async fn show_payment_status(gnt_driver: &GntDriver, invoice_id: &str) {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    std::env::set_var(
+        "RUST_LOG",
+        "debug,tokio_core=info,tokio_reactor=info,hyper=info,web3::transports::http",
+    );
     env_logger::init();
     dotenv::dotenv().expect("Failed to read .env file");
     let account = get_account(KEYSTORE, PASSWORD);
