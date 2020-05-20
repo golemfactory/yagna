@@ -1,21 +1,15 @@
 use actix::prelude::*;
-//use chrono::Utc;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::{str::FromStr, time::Duration};
 use url::Url;
 use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_client::{
-    activity::ActivityRequestorControlApi,
-    market::MarketRequestorApi,
-    // model::market::{
-    //     proposal::State,
-    //     {AgreementProposal, Demand, Proposal, RequestorEvent},
-    // },
-    model::market::Demand,
-    web::WebClient,
+    activity::ActivityRequestorControlApi, market::MarketRequestorApi, model,
+    model::market::Demand, payment::PaymentRequestorApi, web::WebClient,
 };
 
 mod negotiator;
+mod payment_manager;
 
 #[derive(Clone)]
 pub enum WasmRuntime {
@@ -191,21 +185,17 @@ impl Actor for TaskSession {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        /* TODO 1. app key 2. URLs from env */
         let app_key = "TODO app key";
+        let client = ya_client::web::WebClient::with_token(&app_key).unwrap();
+        /* TODO URLs from env */
         let market_url = Url::from_str("http://34.244.4.185:8080/market-api/v1/").unwrap();
         let activity_url = Url::from_str("http://127.0.0.1:7465/activity-api/v1/").unwrap();
-        let market_api: MarketRequestorApi = WebClient::with_token(app_key)
-            .unwrap()
-            .interface_at(market_url)
-            .unwrap();
-        let activity_api: ActivityRequestorControlApi = WebClient::with_token(app_key)
-            .unwrap()
-            .interface_at(activity_url)
-            .unwrap();
+        let payment_url = Url::from_str("http://127.0.0.1:7465/payment-api/v1/").unwrap();
+        let market_api: MarketRequestorApi = client.interface_at(market_url).unwrap();
+        let activity_api: ActivityRequestorControlApi = client.interface_at(activity_url).unwrap();
+        let payment_api: PaymentRequestorApi = client.interface_at(payment_url).unwrap();
 
         let demand: Demand = self.demand.clone().unwrap().into();
-        /* TODO 1. download image spec (demand.spec) 2. market api -> subscribe 3. activity_api */
 
         log::info!(
             "TaskSession started. Demand: {}",
@@ -214,24 +204,34 @@ impl Actor for TaskSession {
 
         ctx.spawn(
             async move {
+                /* TODO move market_api and payment_api calls to actors */
                 let subscription_id = market_api.subscribe(&demand).await?;
                 log::info!("Subscribed to Market API ( id : {} )", subscription_id);
-                Ok::<_, ya_client::error::Error>(
+
+                let allocation = payment_api
+                    .create_allocation(&model::payment::NewAllocation {
+                        total_amount: (8 as u64).into(), /* TODO */
+                        timeout: None,
+                        make_deposit: false,
+                    })
+                    .await?;
+                log::info!("Allocated {} GNT.", &allocation.total_amount);
+
+                /* start actors */
+                Ok::<_, ya_client::error::Error>((
                     negotiator::AgreementProducer::new(
                         market_api.clone(),
                         subscription_id,
                         demand.clone(),
                     )
                     .start(),
-                )
+                    payment_manager::PaymentManager::new(payment_api.clone(), allocation).start(),
+                ))
             }
             .into_actor(self)
             .then(|result, ctx, _| {
                 // TODO
-                log::info!(
-                    "Agreement Producer subscribed and started: {}",
-                    result.is_ok()
-                );
+                log::info!("Actors started: {}", result.is_ok());
                 fut::ready(())
             }),
         );
