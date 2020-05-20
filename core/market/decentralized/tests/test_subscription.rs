@@ -10,6 +10,8 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
+    /// Test subscribes offers checks if offer is available
+    /// and than unsubscribes. Checking broadcasting behavior is out of scope.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
@@ -21,7 +23,10 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let offer = Offer::new(json!({}), "()".to_string());
-        let _subscription_id = market1.subscribe_offer(offer, identity1).await?;
+        let subscription_id = market1.subscribe_offer(offer, identity1).await?;
+
+        let offer = market1.matcher.get_offer(&subscription_id).await?.unwrap();
+        assert_eq!(offer.offer_id, Some(subscription_id));
 
         Ok(())
     }

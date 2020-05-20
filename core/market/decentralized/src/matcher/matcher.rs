@@ -89,6 +89,10 @@ impl Matcher {
         unimplemented!();
     }
 
+// =========================================== //
+// Offer/Demand subscription
+// =========================================== //
+
     pub async fn subscribe_offer(&self, model_offer: &ModelOffer) -> Result<(), MatcherError> {
         self.db
             .as_dao::<OfferDao>()
@@ -115,6 +119,22 @@ impl Matcher {
 
     pub async fn unsubscribe_demand(&self, subscription_id: String) -> Result<(), MatcherError> {
         unimplemented!();
+    }
+
+// =========================================== //
+// Offer/Demand query
+// =========================================== //
+
+    pub async fn get_offer<Str: AsRef<str>>(&self, subscription_id: Str) -> Result<Option<Offer>, MatcherError> {
+        let model_offer: Option<ModelOffer> = self.db
+            .as_dao::<OfferDao>()
+            .get_offer(subscription_id.as_ref())
+            .await?;
+
+        match model_offer {
+            Some(model_offer) => Ok(Some(model_offer.into_client_offer()?)),
+            None => Ok(None)
+        }
     }
 }
 

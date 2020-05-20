@@ -41,9 +41,9 @@ pub enum MarketInitError {
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    matcher: Arc<Matcher>,
-    provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
-    requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
+    pub matcher: Arc<Matcher>,
+    pub provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
+    pub requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
 }
 
 impl MarketService {
