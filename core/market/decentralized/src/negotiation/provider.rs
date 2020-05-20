@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use crate::db::models::Offer as ModelOffer;
 use ya_persistence::executor::DbExecutor;
-use ya_client::model::market::Offer;
 
 use super::errors::{NegotiationError, NegotiationInitError};
 
@@ -20,11 +20,13 @@ impl ProviderNegotiationEngine {
         Ok(())
     }
 
-    pub async fn subscribe_offer(&self, offer: &Offer) -> Result<(), NegotiationError> {
-        unimplemented!();
+    pub async fn subscribe_offer(&self, offer: &ModelOffer) -> Result<(), NegotiationError> {
+        // TODO: Implement
+        Ok(())
     }
 
     pub async fn unsubscribe_offer(&self, subscription_id: String) -> Result<(), NegotiationError> {
-        unimplemented!();
+        // TODO: Implement
+        Ok(())
     }
 }

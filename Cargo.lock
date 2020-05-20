@@ -4983,15 +4983,18 @@ dependencies = [
  "libsqlite3-sys",
  "log 0.4.8",
  "r2d2",
+ "rand 0.7.3",
  "serde",
  "serde_json",
  "thiserror",
  "tokio 0.2.21",
+ "uuid 0.8.1",
  "ya-client",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
+ "ya-service-api-web",
  "ya-service-bus",
 ]
 

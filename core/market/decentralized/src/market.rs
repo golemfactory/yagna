@@ -4,18 +4,20 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::matcher::{Matcher, MatcherInitError, MatcherError};
-use crate::negotiation::{NegotiationInitError, NegotiationError};
+use crate::db::models::Offer as ModelOffer;
+use crate::matcher::{Matcher, MatcherError, MatcherInitError};
+use crate::migrations;
+use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
-use crate::migrations;
 
+use ya_client::error::Error::ModelError;
+use ya_client::model::market::{Demand, Offer};
+use ya_client::model::ErrorMessage;
 use ya_core_model::market::BUS_ID;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
-use ya_client::model::market::{Offer, Demand};
-
-
+use ya_service_api_web::middleware::Identity;
 
 #[derive(Error, Debug)]
 pub enum MarketError {
@@ -23,6 +25,8 @@ pub enum MarketError {
     Matcher(#[from] MatcherError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
+    #[error("Internal error: {}.", .0)]
+    InternalError(#[from] ErrorMessage),
 }
 
 #[derive(Error, Debug)]
@@ -44,6 +48,8 @@ pub struct MarketService {
 
 impl MarketService {
     pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
+        db.apply_migration(migrations::run_with_output)?;
+
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
 
@@ -84,13 +90,18 @@ impl MarketService {
         actix_web::web::scope(crate::MARKET_API_PATH).data(market)
     }
 
-    pub async fn subscribe_offer(&self, offer: Offer) -> Result<(), MarketError> {
-        self.provider_negotiation_engine.subscribe_offer(&offer).await?;
+    pub async fn subscribe_offer(&self, offer: Offer, id: Identity) -> Result<String, MarketError> {
+        let offer = ModelOffer::from_with_identity(&offer, &id);
+        let subscription_id = offer.id.clone();
+
+        self.provider_negotiation_engine
+            .subscribe_offer(&offer)
+            .await?;
         self.matcher.subscribe_offer(&offer).await?;
-        Ok(())
+        Ok(subscription_id)
     }
 
-    pub async fn subscribe_demand(&self, demand: Demand) -> Result<(), MarketError> {
+    pub async fn subscribe_demand(&self, demand: Demand) -> Result<String, MarketError> {
         unimplemented!();
     }
 }

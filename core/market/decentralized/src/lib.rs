@@ -4,10 +4,10 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
+mod db;
 mod market;
 mod matcher;
 mod negotiation;
-mod db;
 
 pub mod protocol;
 pub use market::MarketService;
