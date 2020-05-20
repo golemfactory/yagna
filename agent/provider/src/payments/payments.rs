@@ -633,7 +633,12 @@ impl Handler<CheckInvoicePayments> for Payments {
         let self_addr = ctx.address();
 
         let future = async move {
-            let payments = match pay_ctx.payment_api.get_payments(Some(&msg.since)).await {
+            let timeout = Some(Duration::from_secs(60));
+            let payments = match pay_ctx
+                .payment_api
+                .get_payments(Some(&msg.since), timeout)
+                .await
+            {
                 Ok(payments) => payments,
                 Err(error) => {
                     log::error!("Can't query payments. Error: {}", error);
