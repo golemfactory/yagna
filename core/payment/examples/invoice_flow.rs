@@ -1,5 +1,6 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use std::time::Duration;
 use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
 use ya_client::web::{WebClient, WebInterface};
 use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInvoice};
@@ -33,18 +34,25 @@ async fn main() -> anyhow::Result<()> {
             make_deposit: false,
         })
         .await?;
+
+    // FIXME: -1 sec is needed because timestamps have 1 sec accuracy
+    let now = Utc::now() - chrono::Duration::seconds(1);
     requestor
         .accept_invoice(
             &invoice.invoice_id,
             &Acceptance {
-                total_amount_accepted: invoice.amount,
+                total_amount_accepted: invoice.amount.clone(),
                 allocation_id: allocation.allocation_id,
             },
         )
         .await?;
 
-    // TODO: Listen for payment instead of sleeping
-    tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+    let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
+    let mut payments = provider.get_payments(Some(&now), timeout).await?;
+    assert_eq!(payments.len(), 1);
+    let payment = payments.pop().unwrap();
+    assert_eq!(&payment.amount, &invoice.amount);
+
     let invoice = provider.get_invoice(&invoice.invoice_id).await?;
     assert_eq!(invoice.status, DocumentStatus::Settled);
 
