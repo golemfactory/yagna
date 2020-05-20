@@ -1,5 +1,102 @@
 # Provider Agent
 
+This is a reference Yagna Provider Agent implementation.
+Provider Agent is a module which effectively controls the behaviour of
+the Provider Node in the Yagna Network. It includes rules and logic for:
+* Offer formulation
+* Demand validation and evaluation
+* Agreement negotiation
+* Payment regimes
+* Node Resources management
+* Activity workflow control
+* ExeUnit instantiation and control
+* Invoice/Debit Note generation
+
+### Offer formulation
+
+It is rather straightforward and minimal: 
+* at most two constrains:
+  * requires `golem.srv.comp.expiration` to be set
+  * if provided (via env or CLI) sets also `golem.node.debug.subnet`
+*  properties:
+  * linear pricing (see sample below: 0.01 GNT/sec + 1.2 GNT/CPUsec + 1.5 GNT const)
+  * hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
+  * node name set via env or CLI
+  * runtime (sample below: wasmtime)
+  
+Provider subscribes to the network as many Offers as presets enumerated from CLI. 
+
+#### Sample Offer 
+```json
+      "properties": {
+        "golem": {
+          "com": {
+            "pricing": {
+              "model": "linear",
+              "model.linear": {
+                "coeffs": [
+                  0.01,
+                  1.2,
+                  1.5
+                ]
+              }
+            },
+            "scheme": "payu",
+            "scheme.payu": {
+              "interval_sec": 6.0
+            },
+            "usage": {
+              "vector": [
+                "golem.usage.duration_sec",
+                "golem.usage.cpu_sec"
+              ]
+            }
+          },
+          "inf": {
+            "mem": {
+              "gib": 1.0
+            },
+            "storage": {
+              "gib": 10.0
+            }
+          },
+          "node": {
+            "id": {
+              "name": "__YOUR_NODE_NAME_GOES_HERE__"
+            }
+          },
+          "runtime": {
+            "name": "wasmtime",
+            "version": "0.1.0",
+            "wasm.wasi.version@v": "0.9.0"
+          }
+        }
+      },
+      "constraints": "(golem.srv.comp.expiration>0)"
+    }
+```
+
+### Market Strategy
+Current implementation has two naive market strategies:
+ * accepting all proposals and agreements
+ * accepting limited number of agreements; will reject proposals and agreements above the limit
+ 
+Provider Agent uses (hardcode) the second with limit of 1 agreement.
+It will accept all Proposals until first agreement approval.
+ 
+Upon agreement termination (in case of failure, expiration or successful finish)
+Provider Agent will start accepting Proposals again until agreement confirmation; and so on.
+
+
+### Activity
+Provider agent allow just one activity per agreement.
+On activity finish Provider Agent will initiate Agreement termination.
+This is workaround because `terminate_agreement` operation is not supported yet in Market API.
+
+### Payments
+Provider agent issues Debit Notes periodically (every `scheme.payu.interval_sec`; `6` in sample above).
+It issues Invoice once, after activity (ie. subordinate ExeUnit) finish. 
+
 ## Configuration
 
 Provider agent can be used with `.env` file. [Here](https://github.com/golemfactory/yagna/wiki/DotEnv-Configuration) is list of additional environment variables that can be set.
@@ -15,15 +112,15 @@ and change `NODE_NAME` there.
 
 This can be displayed using `cargo run -p ya-provider run --help`
 
-| Parameter      | Description   
-| -------------- |------------------------------------------------|
-| app-key        | Authorization token. Overrides `YAGNA_APPKEY`
-| market-url     | Market api address. Overrides `YAGNA_MARKET_URL`
-| activity-url   | Activity api address. Overrides `YAGNA_ACTIVITY_URL`
-| payment-url    | Payment api address. Overrides `YAGNA_PAYMENT_URL`
-| node-name      | Node name to use in agreements.
-| subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes.
-| exe-unit-path  | Path to JSON descriptor file for ExeUnits. Overrides `EXE_UNIT_PATH`
+| Parameter      | Description | Env var | 
+| -------------- | ----------- | ------- |
+| app-key        | Authorization token. |`YAGNA_APPKEY`|
+| market-url     | Market api address. |`YAGNA_MARKET_URL`|
+| activity-url   | Activity api address. |`YAGNA_ACTIVITY_URL`|
+| payment-url    | Payment api address. |`YAGNA_PAYMENT_URL`|
+| node-name      | Node name to use in agreements. |`NODE_NAME`| 
+| subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes. |`SUBNET`| 
+| exe-unit-path  | Path to JSON descriptor file for ExeUnits. |`EXE_UNIT_PATH`|
 
 ### Creating app-key authentication token
 
