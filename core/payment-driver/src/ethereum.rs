@@ -27,14 +27,6 @@ const RINKEBY_NAME: &str = "rinkeby";
 const CHAIN_ENV_VAR: &str = "CHAIN";
 const GETH_ADDRESS_ENV_VAR: &str = "GETH_ADDRESS";
 
-lazy_static! {
-    pub static ref CHAIN: String = env::var(CHAIN_ENV_VAR)
-        .expect(format!("Missing {} env variable...", CHAIN_ENV_VAR).as_str())
-        .to_ascii_lowercase();
-    pub static ref GETH_ADDRESS: String = env::var(GETH_ADDRESS_ENV_VAR)
-        .expect(format!("Missing {} env variable...", GETH_ADDRESS_ENV_VAR).as_str());
-}
-
 fn default_geth_address(chain: Chain) -> &'static str {
     match chain {
         Chain::Rinkeby => "http://1.geth.testnet.golem.network:55555",
