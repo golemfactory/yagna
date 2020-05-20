@@ -5083,6 +5083,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
+ "sha3",
  "thiserror",
  "tokio 0.2.20",
  "uint",
