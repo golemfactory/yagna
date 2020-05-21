@@ -25,7 +25,10 @@ impl ProviderNegotiationEngine {
         Ok(())
     }
 
-    pub async fn unsubscribe_offer(&self, subscription_id: String) -> Result<(), NegotiationError> {
+    pub async fn unsubscribe_offer(
+        &self,
+        subscription_id: &String,
+    ) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }

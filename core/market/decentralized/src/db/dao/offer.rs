@@ -46,4 +46,15 @@ impl<'c> OfferDao<'c> {
         })
         .await
     }
+
+    pub async fn remove_offer<Str: AsRef<str>>(&self, subscription_id: Str) -> DbResult<bool> {
+        let subscription_id = subscription_id.as_ref().to_string();
+
+        do_with_transaction(self.pool, move |conn| {
+            let num_deleted = diesel::delete(dsl::market_offer.filter(dsl::id.eq(subscription_id)))
+                .execute(conn)?;
+            Ok(num_deleted > 0)
+        })
+        .await
+    }
 }

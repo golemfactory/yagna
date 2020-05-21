@@ -101,7 +101,32 @@ impl MarketService {
         Ok(subscription_id)
     }
 
-    pub async fn subscribe_demand(&self, demand: Demand) -> Result<String, MarketError> {
+    pub async fn unsubscribe_offer(
+        &self,
+        subscription_id: String,
+        id: Identity,
+    ) -> Result<(), MarketError> {
+        // TODO: Authorize unsubscribe caller.
+
+        self.provider_negotiation_engine
+            .unsubscribe_offer(&subscription_id)
+            .await?;
+        Ok(self.matcher.unsubscribe_offer(&subscription_id).await?)
+    }
+
+    pub async fn subscribe_demand(
+        &self,
+        demand: Demand,
+        id: Identity,
+    ) -> Result<String, MarketError> {
+        unimplemented!();
+    }
+
+    pub async fn unsubscribe_demand(
+        &self,
+        subscription_id: String,
+        id: Identity,
+    ) -> Result<(), MarketError> {
         unimplemented!();
     }
 }

@@ -21,6 +21,10 @@ use crate::protocol::{OfferReceived, RetrieveOffers};
 pub enum MatcherError {
     #[error("Failed to insert Offer. Error: {}.", .0)]
     InsertOfferFailure(#[from] DbError),
+    #[error("Failed to remove Offer [{}]. Error: {}.", .1, .0)]
+    RemoveOfferFailure(DbError, String),
+    #[error("Offer [{}] doesn't exist.", .0)]
+    OfferNotExists(String),
     #[error("Failed to broadcast offer [{}]. Error: {}.", .0, .1)]
     BroadcastOfferFailure(DiscoveryError, String),
     #[error("Internal error: {}.", .0)]
@@ -89,9 +93,9 @@ impl Matcher {
         unimplemented!();
     }
 
-// =========================================== //
-// Offer/Demand subscription
-// =========================================== //
+    // =========================================== //
+    // Offer/Demand subscription
+    // =========================================== //
 
     pub async fn subscribe_offer(&self, model_offer: &ModelOffer) -> Result<(), MatcherError> {
         self.db
@@ -113,27 +117,43 @@ impl Matcher {
         unimplemented!();
     }
 
-    pub async fn unsubscribe_offer(&self, subscription_id: String) -> Result<(), MatcherError> {
+    pub async fn unsubscribe_offer(&self, subscription_id: &str) -> Result<(), MatcherError> {
+        let removed = self
+            .db
+            .as_dao::<OfferDao>()
+            .remove_offer(subscription_id)
+            .await
+            .map_err(|error| {
+                MatcherError::RemoveOfferFailure(error, subscription_id.to_string())
+            })?;
+
+        if !removed {
+            return Err(MatcherError::OfferNotExists(subscription_id.to_string()));
+        }
+        Ok(())
+    }
+
+    pub async fn unsubscribe_demand(&self, subscription_id: &str) -> Result<(), MatcherError> {
         unimplemented!();
     }
 
-    pub async fn unsubscribe_demand(&self, subscription_id: String) -> Result<(), MatcherError> {
-        unimplemented!();
-    }
+    // =========================================== //
+    // Offer/Demand query
+    // =========================================== //
 
-// =========================================== //
-// Offer/Demand query
-// =========================================== //
-
-    pub async fn get_offer<Str: AsRef<str>>(&self, subscription_id: Str) -> Result<Option<Offer>, MatcherError> {
-        let model_offer: Option<ModelOffer> = self.db
+    pub async fn get_offer<Str: AsRef<str>>(
+        &self,
+        subscription_id: Str,
+    ) -> Result<Option<Offer>, MatcherError> {
+        let model_offer: Option<ModelOffer> = self
+            .db
             .as_dao::<OfferDao>()
             .get_offer(subscription_id.as_ref())
             .await?;
 
         match model_offer {
             Some(model_offer) => Ok(Some(model_offer.into_client_offer()?)),
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 }
