@@ -48,17 +48,18 @@ struct AppSettings {
     /// - Provider was not as performant as he declared
     #[structopt(long, default_value = "15min")]
     pub task_expiration: Duration,
+    /// Exit after processing one agreement.
+    #[structopt(long)]
+    one_agreement: bool,
 }
 
 /// if needed unsubscribes from the market and releases allocation
-async fn shutdown_handler(
+async fn shutdown(
     activities: Arc<Mutex<HashSet<String>>>,
     agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
     subscription_id: String,
     api: RequestorApi,
 ) {
-    signal::ctrl_c().await.unwrap();
-
     log::info!("terminating...");
 
     let activities = std::mem::replace(&mut (*activities.lock().unwrap()), HashSet::new());
@@ -125,6 +126,28 @@ async fn shutdown_handler(
     Arbiter::current().stop();
 }
 
+fn shutdown_handler(
+    activities: Arc<Mutex<HashSet<String>>>,
+    agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
+    subscription_id: String,
+    api: RequestorApi,
+) -> (impl Future, futures::future::AbortHandle) {
+    let (future_ctrl_c, ctrl_c_abort) = futures::future::abortable(signal::ctrl_c());
+
+    let shutdown_fut = async {
+        match future_ctrl_c.await {
+            Ok(Ok(())) => log::info!("Caught ctrl-c"),
+            Ok(Err(error)) => log::error!("Failed listening to ctrl-c: {}", error),
+            Err(futures::future::Aborted) => {
+                log::info!("Finished processing one Agreement. Payment is confirmed. Finishing")
+            }
+        }
+        shutdown(activities, agreement_allocation, subscription_id, api).await;
+    };
+
+    return (shutdown_fut, ctrl_c_abort);
+}
+
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
@@ -156,7 +179,7 @@ async fn main() -> anyhow::Result<()> {
     let subscription_id = api.market.subscribe(&my_demand).await?;
     log::info!("\n\n DEMAND SUBSCRIBED: {}", subscription_id);
 
-    let shutdown = shutdown_handler(
+    let (shutdown_fut, app_abort_handle) = shutdown_handler(
         activities.clone(),
         agreement_allocation.clone(),
         subscription_id.clone(),
@@ -195,6 +218,10 @@ async fn main() -> anyhow::Result<()> {
         payment_api.clone(),
         started_at,
         agreement_allocation.clone(),
+        match settings.one_agreement {
+            true => Some(app_abort_handle.clone()),
+            false => None,
+        },
     ));
 
     Arbiter::spawn(async move {
@@ -205,10 +232,13 @@ async fn main() -> anyhow::Result<()> {
                 exe_script.clone(),
                 commands_cnt,
                 activities.clone(),
-            ))
+            ));
+            if settings.one_agreement {
+                break;
+            }
         }
     });
 
-    shutdown.await;
+    shutdown_fut.await;
     Ok(())
 }
