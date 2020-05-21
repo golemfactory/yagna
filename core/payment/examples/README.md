@@ -2,16 +2,13 @@
 
 #### Startup
 
-To start the provider:
+To start the API server (both provider & requestor) run the following commands:
 ```shell script
-cargo run -p ya-payment --example payment_api -- provider
+cd core/payment
+cp ../../.env-template .env
+cargo run --features=dummy-driver --example payment_api
 ```
-
-To start the requestor:
-```shell script
-GSB_URL="tcp://127.0.0.1:8464" YAGNA_API_URL="http://127.0.0.1:8465" \
-    cargo run -p ya-payment --example payment_api -- requestor
-```
+To use GNT instead of dummy driver add `-- --driver=gnt` at the end.
 
 #### Debit note flow
 
@@ -39,10 +36,10 @@ To see debit notes issued by the provider:
 `GET` `http://127.0.0.1:7465/payment-api/v1/provider/debitNotes`
 
 To see debit notes received by the requestor:  
-`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNotes`
+`GET` `http://127.0.0.1:7465/payment-api/v1/requestor/debitNotes`
 
 To accept a debit note:
-`POST` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNotes/<debitNoteId>/accept`
+`POST` `http://127.0.0.1:7465/payment-api/v1/requestor/debitNotes/<debitNoteId>/accept`
 
 Payload:
 ```json
@@ -53,10 +50,10 @@ Payload:
 ```
 
 To listen for requestor's debit note events:
-`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/debitNoteEvents?timeout=<seconds>`
+`GET` `http://127.0.0.1:7465/payment-api/v1/requestor/debitNoteEvents?timeout=<seconds>`
 
 To listen for provider's debit note events:
-`GET` `http://127.0.0.1:8465/payment-api/v1/provider/debitNoteEvents?timeout=<seconds>`
+`GET` `http://127.0.0.1:7465/payment-api/v1/provider/debitNoteEvents?timeout=<seconds>`
 
 #### Invoice flow
 
@@ -81,10 +78,10 @@ To see invoices issued by the provider:
 `GET` `http://127.0.0.1:7465/payment-api/v1/provider/invoices`
 
 To see invoices received by the requestor:  
-`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/invoices`
+`GET` `http://127.0.0.1:7465/payment-api/v1/requestor/invoices`
 
 To accept an invoice:
-`POST` `http://127.0.0.1:8465/payment-api/v1/requestor/invoices/<invoiceId>/accept`
+`POST` `http://127.0.0.1:7465/payment-api/v1/requestor/invoices/<invoiceId>/accept`
 
 Payload:
 ```json
@@ -95,15 +92,15 @@ Payload:
 ```
 
 To listen for requestor's invoice events:
-`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/invoiceEvents?timeout=<seconds>`
+`GET` `http://127.0.0.1:7465/payment-api/v1/requestor/invoiceEvents?timeout=<seconds>`
 
 To listen for provider's invoice events:
-`GET` `http://127.0.0.1:8465/payment-api/v1/provider/invoiceEvents?timeout=<seconds>`
+`GET` `http://127.0.0.1:7465/payment-api/v1/provider/invoiceEvents?timeout=<seconds>`
 
 #### Allocations
 
 To create an allocation:  
-`POST` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations`
+`POST` `http://127.0.0.1:7465/payment-api/v1/requestor/allocations`
 
 Payload:
 ```json
@@ -116,15 +113,15 @@ Payload:
 Don't forget to copy `allocationId` from the response!
 
 To see all created allocations:
-`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations`
+`GET` `http://127.0.0.1:7465/payment-api/v1/requestor/allocations`
 
 To release an allocation:
-`DELETE` `http://127.0.0.1:8465/payment-api/v1/requestor/allocations/<allocationId>`
+`DELETE` `http://127.0.0.1:7465/payment-api/v1/requestor/allocations/<allocationId>`
 
 #### Payments
 
 To see requestor's (sent) payments:
-`GET` `http://127.0.0.1:8465/payment-api/v1/requestor/payments`
+`GET` `http://127.0.0.1:7465/payment-api/v1/requestor/payments`
 
 To see provider's (received) payments:
 `GET` `http://127.0.0.1:7465/payment-api/v1/provider/payments`

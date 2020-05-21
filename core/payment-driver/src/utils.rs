@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H160, H256, U256};
 use num_bigint::ToBigInt;
+use sha3::{Digest, Sha3_512};
 use std::str::FromStr;
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
@@ -72,7 +73,7 @@ pub fn raw_tx_to_entity(
     tx_type: TxType,
 ) -> TransactionEntity {
     TransactionEntity {
-        tx_id: hex::encode(raw_tx.hash(chain_id)),
+        tx_id: prepare_tx_id(&raw_tx, chain_id, sender),
         sender: addr_to_str(sender),
         nonce: u256_to_big_endian_hex(raw_tx.nonce),
         timestamp: timestamp.naive_utc(),
@@ -82,6 +83,16 @@ pub fn raw_tx_to_entity(
         signature: hex::encode(signature),
         tx_hash: None,
     }
+}
+
+// We need a function to prepare an unique identifier for tx
+// that could be calculated easily from RawTransaction data
+// Explanation: RawTransaction::hash() can produce the same output (sender does not have any impact)
+pub fn prepare_tx_id(raw_tx: &RawTransaction, chain_id: u64, sender: Address) -> String {
+    let mut bytes = raw_tx.hash(chain_id);
+    let mut address = sender.as_bytes().to_vec();
+    bytes.append(&mut address);
+    format!("{:x}", Sha3_512::digest(&bytes))
 }
 
 #[cfg(test)]

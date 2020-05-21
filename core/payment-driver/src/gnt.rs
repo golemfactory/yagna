@@ -540,19 +540,17 @@ mod tests {
     }
 
     #[actix_rt::test]
-    // TODO set gnt2 tx
-    #[ignore]
     async fn test_verify_payment() -> anyhow::Result<()> {
         let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
         let tx_hash: Vec<u8> =
-            hex::decode("df06916d8a8fe218e6261d3e811b1d9aee9cf8e07fb539431f0433abcdd9a8c2")
+            hex::decode("bb7f9fbf3fd08e75f1f3bda035b8d3109edce96dc6bab5624503146217a79c24")
                 .unwrap();
         let confirmation = PaymentConfirmation::from(&tx_hash);
 
         let expected = PaymentDetails {
-            recipient: String::from("0x43a5b798e0e78be13b7bc0c553e433fb5b639be5"),
-            sender: String::from("0x43a5b798e0e78be13b7bc0c553e433fb5b639be5"),
-            amount: utils::str_to_big_dec("0.00000000000001")?,
+            recipient: String::from("0xf466400dd3c7ef0694205c2e93754ffce7c32313"),
+            sender: String::from("0xf466400dd3c7ef0694205c2e93754ffce7c32313"),
+            amount: utils::str_to_big_dec("69")?,
             date: None,
         };
         let details = driver.verify_payment(&confirmation).await?;

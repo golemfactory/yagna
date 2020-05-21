@@ -70,6 +70,10 @@ async fn show_payment_status(gnt_driver: &GntDriver, invoice_id: &str) {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    std::env::set_var(
+        "RUST_LOG",
+        "debug,tokio_core=info,tokio_reactor=info,hyper=info,web3::transports::http",
+    );
     env_logger::init();
     dotenv::dotenv().expect("Failed to read .env file");
     let account = get_account(KEYSTORE, PASSWORD);
@@ -109,7 +113,10 @@ async fn main() -> anyhow::Result<()> {
             &sign_tx,
         )
         .await
-        .map_or_else(|e| println!("{:?}", e), |_| println!("Done!"));
+        .map_or_else(
+            |e| println!("Error while scheduling payment {:?}", e),
+            |_| println!("Done!"),
+        );
 
     show_balance(&gnt_driver, address.as_str()).await;
     show_payment_status(&gnt_driver, invoice_id).await;
