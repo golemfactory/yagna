@@ -1,10 +1,13 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use std::{
+    any::TypeId,
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
     path::PathBuf,
+    sync::{Arc, Mutex},
 };
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -137,20 +140,44 @@ impl TryFrom<&CliArgs> for CliCtx {
 }
 
 struct ServiceContext {
-    db: DbExecutor,
+    app_name: String,
     data_dir: PathBuf,
-}
-
-impl<Service> Provider<Service, DbExecutor> for ServiceContext {
-    fn component(&self) -> DbExecutor {
-        self.db.clone()
-    }
+    dbs: Arc<Mutex<HashMap<String, DbExecutor>>>,
 }
 
 impl<Service> Provider<Service, PathBuf> for ServiceContext {
     fn component(&self) -> PathBuf {
         self.data_dir.clone()
     }
+}
+
+impl<Service: 'static> Provider<Service, DbExecutor> for ServiceContext {
+    fn component(&self) -> DbExecutor {
+        let service_type = TypeId::of::<Service>();
+        let db_file_name = if TypeId::of::<ya_identity::service::Identity>() == service_type {
+            "id"
+        } else if TypeId::of::<ya_payment::PaymentService>() == service_type {
+            "payments"
+        } else if TypeId::of::<MarketService>() == service_type {
+            "market"
+        } else {
+            &self.app_name
+        }
+        .to_string();
+
+        log::debug!("getting db for {}", db_file_name);
+        let mut dbs = self.dbs.lock().unwrap();
+        let db = dbs.entry(db_file_name.clone()).or_insert_with(|| {
+            log::debug!("creating db for {}", db_file_name);
+            DbExecutor::from_data_dir(&self.data_dir, &db_file_name).unwrap()
+        });
+
+        db.clone()
+    }
+}
+
+fn default_db<Context: Provider<ya_net::Net, DbExecutor>>(ctx: &Context) -> DbExecutor {
+    ctx.component()
 }
 
 #[services(ServiceContext)]
@@ -215,12 +242,13 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
 
-                let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
-                db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 let context = ServiceContext {
-                    db: db.clone(),
+                    app_name: name.into(),
                     data_dir: ctx.data_dir.clone(),
+                    dbs: Arc::new(Mutex::new(HashMap::with_capacity(4))),
                 };
+                let db = default_db(&context);
+                db.apply_migration(ya_persistence::migrations::run_with_output)?;
 
                 Services::gsb(&context).await?;
 
