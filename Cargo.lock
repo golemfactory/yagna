@@ -5006,6 +5006,7 @@ dependencies = [
  "thiserror",
  "ya-client-model",
  "ya-core-model",
+ "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
