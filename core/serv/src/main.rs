@@ -6,6 +6,8 @@ use std::{
     fmt::Debug,
     path::PathBuf,
 };
+use std::any::TypeId;
+use std::collections::HashMap;
 use structopt::{clap, StructOpt};
 use url::Url;
 
@@ -33,6 +35,9 @@ use autocomplete::CompleteCommand;
 
 mod data_dir;
 use data_dir::DataDir;
+use ya_activity::service::Activity;
+use ya_payment::PaymentService;
+
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -137,19 +142,18 @@ impl TryFrom<&CliArgs> for CliCtx {
 }
 
 struct ServiceContext {
-    db: DbExecutor,
-    data_dir: PathBuf,
+    dbs : HashMap<TypeId, DbExecutor>,
+    default_db : DbExecutor
 }
 
-impl<Service> Provider<Service, DbExecutor> for ServiceContext {
+impl<Service: 'static> Provider<Service, DbExecutor> for ServiceContext {
     fn component(&self) -> DbExecutor {
-        self.db.clone()
-    }
-}
-
-impl<Service> Provider<Service, PathBuf> for ServiceContext {
-    fn component(&self) -> PathBuf {
-        self.data_dir.clone()
+        let service_type = TypeId::of::<Service>();
+        if let Some(db) = self.dbs.get(&service_type) {
+            db.clone()
+        } else {
+            self.default_db.clone()
+        }
     }
 }
 
@@ -218,8 +222,16 @@ impl ServiceCommand {
                 let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
                 db.apply_migration(ya_persistence::migrations::run_with_output)?;
                 let context = ServiceContext {
-                    db: db.clone(),
-                    data_dir: ctx.data_dir.clone(),
+                    default_db: db.clone(),
+                    dbs: [
+                        (TypeId::of::<MarketService>(), DbExecutor::from_data_dir(&ctx.data_dir, "market")?),
+                        (TypeId::of::<Activity>(), DbExecutor::from_data_dir(&ctx.data_dir, "activity")?),
+                        (TypeId::of::<Identity>(), DbExecutor::from_data_dir(&ctx.data_dir, "identity")?),
+                        (TypeId::of::<PaymentService>(), DbExecutor::from_data_dir(&ctx.data_dir, "payments")?),
+                    ]
+                    .iter()
+                    .cloned()
+                    .collect()
                 };
 
                 Services::gsb(&context).await?;
