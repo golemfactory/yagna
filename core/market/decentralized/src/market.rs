@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::db::models::Offer as ModelOffer;
+use crate::db::models::Demand as ModelDemand;
 use crate::matcher::{Matcher, MatcherError, MatcherInitError};
 use crate::migrations;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
@@ -119,7 +120,15 @@ impl MarketService {
         demand: Demand,
         id: Identity,
     ) -> Result<String, MarketError> {
-        unimplemented!();
+        let demand = ModelDemand::from_with_identity(&demand, &id);
+        let subscription_id = demand.id.clone();
+
+        self.requestor_negotiation_engine
+            .subscribe_demand(&demand)
+            .await?;
+
+        self.matcher.subscribe_demand(&demand).await?;
+        Ok(subscription_id)
     }
 
     pub async fn unsubscribe_demand(
@@ -127,7 +136,12 @@ impl MarketService {
         subscription_id: String,
         id: Identity,
     ) -> Result<(), MarketError> {
-        unimplemented!();
+        // TODO: Authorize unsubscribe caller.
+
+        self.requestor_negotiation_engine
+            .unsubscribe_demand(&subscription_id)
+            .await?;
+        Ok(self.matcher.unsubscribe_demand(&subscription_id).await?)
     }
 }
 
