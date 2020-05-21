@@ -2,11 +2,10 @@
 
 #### Startup
 
-To start the API server (both provider & requestor):
-1. Go to `core/payment`.
-2. Copy `.env-template` from root directory and rename to `.env`.
-3. Run the following command:
+To start the API server (both provider & requestor) run the following commands:
 ```shell script
+cd core/payment
+cp ../../.env-template .env
 cargo run --features=dummy-driver --example payment_api
 ```
 To use GNT instead of dummy driver add `-- --driver=gnt` at the end.

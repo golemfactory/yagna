@@ -5,9 +5,12 @@ mod utils;
 ///
 /// To test market-test-suite run:
 /// ```
-/// cargo test --manifest-path core/market/decentralized/Cargo.toml --features market-test-suite
+/// cargo test --workspace --features ya-market-decentralized/market-test-suite
 /// ```
-/// TODO: I don't want to set --manifest-path. How to do this?
+/// or for market crate only
+/// ```
+/// cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite
+/// ```
 #[cfg(test)]
 mod tests {
     use crate::utils::MarketsNetwork;
