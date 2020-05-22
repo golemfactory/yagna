@@ -13,17 +13,11 @@ use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
-use ya_payment_driver::{AccountMode, DummyDriver, GntDriver, PaymentDriver, SignTx};
+use ya_payment_driver::{AccountMode, DummyDriver, GntDriver, PaymentDriver};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
-
-#[derive(Clone, Debug, StructOpt)]
-enum Command {
-    Provider,
-    Requestor,
-}
 
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
@@ -54,8 +48,6 @@ impl std::fmt::Display for Driver {
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
-    #[structopt(subcommand)]
-    command: Command,
     #[structopt(long, default_value = "dummy")]
     driver: Driver,
     #[structopt(long, default_value = "provider.key")]
@@ -72,17 +64,24 @@ struct Args {
 
 async fn get_gnt_driver(
     db: &DbExecutor,
-    address: &str,
-    sign_tx: SignTx<'_>,
-    command: Command,
+    provider_account: Box<EthAccount>,
+    requestor_account: Box<EthAccount>,
 ) -> anyhow::Result<GntDriver> {
-    let driver = GntDriver::new(db.clone()).await?;
+    let provider_addr = hex::encode(provider_account.address());
+    let requestor_addr = hex::encode(requestor_account.address());
+    let provider_sign_tx = get_sign_tx(provider_account);
+    let requestor_sign_tx = get_sign_tx(requestor_account);
 
-    let mode = match command {
-        Command::Provider => AccountMode::RECV,
-        Command::Requestor => AccountMode::SEND,
-    };
-    driver.init(mode, address, sign_tx).await?;
+    let driver = GntDriver::new(db.clone()).await?;
+    driver
+        .init(AccountMode::RECV, &provider_addr, &provider_sign_tx)
+        .await?;
+    driver
+        .init(AccountMode::SEND, &requestor_addr, &requestor_sign_tx)
+        .await?;
+
+    fake_sign_tx(Box::new(provider_sign_tx));
+    fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(driver)
 }
 
@@ -108,7 +107,10 @@ fn get_sign_tx(
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var("RUST_LOG", "debug");
+    std::env::set_var(
+        "RUST_LOG",
+        "debug,tokio_core=info,tokio_reactor=info,hyper=info",
+    );
     env_logger::init();
     dotenv::dotenv().expect("Failed to read .env file");
 
@@ -120,15 +122,13 @@ async fn main() -> anyhow::Result<()> {
     let requestor_account = EthAccount::load_or_generate(&args.requestor_key_path, requestor_pass)?;
     let provider_id = provider_account.address().to_string();
     let requestor_id = requestor_account.address().to_string();
-    let (account, node_id) = match &args.command {
-        Command::Provider => (provider_account, provider_id.clone()),
-        Command::Requestor => (requestor_account, requestor_id.clone()),
-    };
-    let address = hex::encode(account.address());
-    log::info!("Node ID: {}", node_id);
-    let sign_tx = get_sign_tx(account);
+    log::info!(
+        "Provider ID: {}\nRequestor ID: {}",
+        provider_id,
+        requestor_id
+    );
 
-    let database_url = format!("file:{}.db", &node_id);
+    let database_url = "file:yagna.db";
     let db = DbExecutor::new(database_url)?;
     db.apply_migration(migrations::run_with_output)?;
 
@@ -136,15 +136,11 @@ async fn main() -> anyhow::Result<()> {
     let processor = match &args.driver {
         Driver::Dummy => PaymentProcessor::new(DummyDriver::new(), db.clone()),
         Driver::Gnt => PaymentProcessor::new(
-            get_gnt_driver(&db, address.as_str(), &sign_tx, args.command.clone()).await?,
+            get_gnt_driver(&db, provider_account, requestor_account).await?,
             db.clone(),
         ),
     };
     ya_payment::service::bind_service(&db, processor);
-    fake_sign_tx(Box::new(sign_tx));
-
-    let node_id = node_id.parse()?;
-    ya_net::bind_remote(node_id, vec![node_id]).await?;
 
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
@@ -170,21 +166,32 @@ async fn main() -> anyhow::Result<()> {
     utils::fake_get_agreement(args.agreement_id.clone(), agreement);
     utils::provider::fake_get_agreement_id(args.agreement_id.clone());
 
-    let identity = Identity {
-        identity: node_id,
-        name: "".to_string(),
-        role: "".to_string(),
-    };
+    let provider_id = provider_id.parse()?;
+    let requestor_id = requestor_id.parse()?;
+    ya_net::bind_remote(provider_id, vec![provider_id, requestor_id]).await?;
 
     HttpServer::new(move || {
-        let scope = match &args.command {
-            Command::Provider => ya_payment::api::provider_scope(),
-            Command::Requestor => ya_payment::api::requestor_scope(),
+        let provider_identity = Identity {
+            identity: provider_id,
+            name: "".to_string(),
+            role: "".to_string(),
         };
-        let payment_service = Scope::new(PAYMENT_API_PATH).data(db.clone()).service(scope);
+        let requestor_identity = Identity {
+            identity: requestor_id,
+            name: "".to_string(),
+            role: "".to_string(),
+        };
+
+        let provider_scope =
+            ya_payment::api::provider_scope().wrap(DummyAuth::new(provider_identity));
+        let requestor_scope =
+            ya_payment::api::requestor_scope().wrap(DummyAuth::new(requestor_identity));
+        let payment_service = Scope::new(PAYMENT_API_PATH)
+            .data(db.clone())
+            .service(provider_scope)
+            .service(requestor_scope);
         App::new()
             .wrap(middleware::Logger::default())
-            .wrap(DummyAuth::new(identity.clone()))
             .service(payment_service)
     })
     .bind(rest_api_addr())?

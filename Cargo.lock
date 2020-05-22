@@ -1330,6 +1330,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "envy"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f938a4abd5b75fe3737902dbc2e79ca142cc1526827a9e40b829a086758531a9"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "errno"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4844,12 +4853,13 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=baf7d33ad728b485dba555f65f517c433ffa435a#baf7d33ad728b485dba555f65f517c433ffa435a"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=159a3cb#159a3cbf6af4cbe62ea9bd895f0d1f1985b763e0"
 dependencies = [
  "awc",
  "backtrace",
  "bytes 0.5.4",
  "chrono",
+ "envy",
  "failure",
  "futures 0.3.4",
  "log 0.4.8",
@@ -4864,7 +4874,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=baf7d33ad728b485dba555f65f517c433ffa435a#baf7d33ad728b485dba555f65f517c433ffa435a"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=159a3cb#159a3cbf6af4cbe62ea9bd895f0d1f1985b763e0"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -5044,6 +5054,7 @@ dependencies = [
  "thiserror",
  "ya-client-model",
  "ya-core-model",
+ "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -5080,6 +5091,7 @@ dependencies = [
  "tokio 0.2.20",
  "uint",
  "uuid 0.8.1",
+ "ya-client",
  "ya-client-model",
  "ya-core-model",
  "ya-net",
@@ -5120,6 +5132,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
+ "sha3",
  "thiserror",
  "tokio 0.2.20",
  "uint",

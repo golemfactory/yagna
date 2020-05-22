@@ -23,16 +23,16 @@ pub fn web_scope(db: &DbExecutor) -> Scope {
         .service(requestor_scope())
 }
 
-pub const DEFAULT_ACK_TIMEOUT: u32 = 60; // seconds
-pub const DEFAULT_EVENT_TIMEOUT: u32 = 0; // seconds
+pub const DEFAULT_ACK_TIMEOUT: f64 = 60.0; // seconds
+pub const DEFAULT_EVENT_TIMEOUT: f64 = 0.0; // seconds
 
 #[inline(always)]
-pub(crate) fn default_ack_timeout() -> u32 {
+pub(crate) fn default_ack_timeout() -> f64 {
     DEFAULT_ACK_TIMEOUT
 }
 
 #[inline(always)]
-pub(crate) fn default_event_timeout() -> u32 {
+pub(crate) fn default_event_timeout() -> f64 {
     DEFAULT_EVENT_TIMEOUT
 }
 
@@ -59,13 +59,13 @@ pub struct PaymentId {
 #[derive(Deserialize)]
 pub struct Timeout {
     #[serde(default = "default_ack_timeout")]
-    pub timeout: u32,
+    pub timeout: f64,
 }
 
 #[derive(Deserialize)]
 pub struct EventParams {
     #[serde(default = "default_event_timeout")]
-    pub timeout: u32,
+    pub timeout: f64,
     #[serde(rename = "laterThan")]
     pub later_than: Option<DateTime<Utc>>,
 }

@@ -494,6 +494,11 @@ impl Handler<CreateOffer> for ProviderMarket {
         let myself = ctx.address();
         let client = self.market_api.clone();
 
+        log::debug!(
+            "Offer created: {}",
+            serde_json::to_string_pretty(&offer).unwrap()
+        );
+
         log::info!("Subscribing to events... [{}]", msg.preset.name);
 
         let future = async move {

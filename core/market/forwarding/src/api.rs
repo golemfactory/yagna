@@ -7,9 +7,11 @@ use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+const DEFAULT_MARKET_URL: &str = "http://34.244.4.185:8080/market-api/v1/";
+
 /// implementation note: every request will timeout after 5s.
 pub fn web_scope(_db: &DbExecutor) -> Scope {
-    let central_market_url = ya_client::market::service_url().unwrap();
+    let central_market_url: Url = DEFAULT_MARKET_URL.parse().unwrap();
     Scope::new(crate::MARKET_API_PATH)
         .data(central_market_url)
         .data(awc::Client::new()) // has default timeout of 5s
