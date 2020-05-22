@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::db::models::Offer as ModelOffer;
+use crate::api::{provider, requestor};
 use crate::db::models::Demand as ModelDemand;
+use crate::db::models::Offer as ModelOffer;
 use crate::matcher::{Matcher, MatcherError, MatcherInitError};
 use crate::migrations;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
@@ -19,6 +20,7 @@ use ya_core_model::market::BUS_ID;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::scope::ExtendableScope;
 
 #[derive(Error, Debug)]
 pub enum MarketError {
@@ -88,7 +90,11 @@ impl MarketService {
                 panic!("Market initialization impossible. Check error logs.")
             }
         };
-        actix_web::web::scope(crate::MARKET_API_PATH).data(market)
+
+        actix_web::web::scope(crate::MARKET_API_PATH)
+            .data(market)
+            .extend(provider::register_endpoints)
+            .extend(requestor::register_endpoints)
     }
 
     pub async fn subscribe_offer(&self, offer: Offer, id: Identity) -> Result<String, MarketError> {

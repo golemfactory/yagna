@@ -6,8 +6,8 @@ use ya_client::model::market::Demand as ClientDemand;
 use ya_client::model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::schema::market_demand;
 use crate::db::models::offer::generate_subscription_id;
+use crate::db::schema::market_demand;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_demand"]
@@ -18,11 +18,13 @@ pub struct Demand {
     pub node_id: String,
 }
 
-
 impl Demand {
     pub fn from(demand: &ClientDemand) -> Result<Demand, ErrorMessage> {
         Ok(Demand {
-            id: demand.demand_id.clone().unwrap_or(generate_subscription_id()),
+            id: demand
+                .demand_id
+                .clone()
+                .unwrap_or(generate_subscription_id()),
             properties: demand.properties.to_string(),
             constraints: demand.constraints.clone(),
             node_id: demand
@@ -34,7 +36,10 @@ impl Demand {
 
     pub fn from_with_identity(demand: &ClientDemand, id: &Identity) -> Demand {
         Demand {
-            id: demand.demand_id.clone().unwrap_or(generate_subscription_id()),
+            id: demand
+                .demand_id
+                .clone()
+                .unwrap_or(generate_subscription_id()),
             properties: demand.properties.to_string(),
             constraints: demand.constraints.clone(),
             node_id: id.identity.to_string(),

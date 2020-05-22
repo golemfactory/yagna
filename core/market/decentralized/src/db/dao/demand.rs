@@ -6,7 +6,6 @@ use crate::db::schema::market_demand::dsl;
 use crate::db::DbResult;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-
 #[allow(unused)]
 pub struct DemandDao<'c> {
     pool: &'c PoolType,
@@ -17,7 +16,6 @@ impl<'c> AsDao<'c> for DemandDao<'c> {
         Self { pool }
     }
 }
-
 
 impl<'c> DemandDao<'c> {
     pub async fn get_demand<Str: AsRef<str>>(
@@ -35,7 +33,7 @@ impl<'c> DemandDao<'c> {
                 None => Ok(None),
             }
         })
-            .await
+        .await
     }
 
     pub async fn create_demand(&self, demand: &ModelDemand) -> DbResult<()> {
@@ -46,18 +44,18 @@ impl<'c> DemandDao<'c> {
                 .execute(conn)?;
             Ok(())
         })
-            .await
+        .await
     }
 
     pub async fn remove_demand<Str: AsRef<str>>(&self, subscription_id: Str) -> DbResult<bool> {
         let subscription_id = subscription_id.as_ref().to_string();
 
         do_with_transaction(self.pool, move |conn| {
-            let num_deleted = diesel::delete(dsl::market_demand.filter(dsl::id.eq(subscription_id)))
-                .execute(conn)?;
+            let num_deleted =
+                diesel::delete(dsl::market_demand.filter(dsl::id.eq(subscription_id)))
+                    .execute(conn)?;
             Ok(num_deleted > 0)
         })
-            .await
+        .await
     }
 }
-

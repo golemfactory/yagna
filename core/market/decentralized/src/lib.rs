@@ -4,6 +4,7 @@
 #![allow(unused_variables)]
 #![allow(unused_imports)]
 
+mod api;
 mod db;
 mod market;
 mod matcher;

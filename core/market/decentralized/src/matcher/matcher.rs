@@ -9,8 +9,8 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
 use crate::db::dao::*;
-use crate::db::models::Offer as ModelOffer;
 use crate::db::models::Demand as ModelDemand;
+use crate::db::models::Offer as ModelOffer;
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
@@ -150,9 +150,7 @@ impl Matcher {
             .as_dao::<OfferDao>()
             .remove_offer(subscription_id)
             .await
-            .map_err(|error| {
-                OfferError::RemoveOfferFailure(error, subscription_id.to_string())
-            })?;
+            .map_err(|error| OfferError::RemoveOfferFailure(error, subscription_id.to_string()))?;
 
         if !removed {
             Err(OfferError::OfferNotExists(subscription_id.to_string()))?;
