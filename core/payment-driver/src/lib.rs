@@ -1,4 +1,6 @@
 use chrono::{DateTime, Utc};
+use ya_persistence::executor::DbExecutor;
+use ya_service_api_interfaces::Provider;
 
 #[macro_use]
 extern crate diesel;
@@ -92,6 +94,26 @@ pub trait PaymentDriver {
         payer: &str,
         payee: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>>;
+}
+
+#[cfg(feature = "dummy-driver")]
+async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
+    Ok(DummyDriver::new())
+}
+
+#[cfg(feature = "gnt-driver")]
+async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
+    Ok(GntDriver::new(db.clone()).await?)
+}
+
+pub struct PaymentDriverService;
+
+impl PaymentDriverService {
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
+        let db: DbExecutor = context.component();
+        let _driver = payment_driver_factory(&db).await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

@@ -5103,6 +5103,7 @@ dependencies = [
  "uuid 0.8.1",
  "web3",
  "ya-persistence",
+ "ya-service-api-interfaces",
 ]
 
 [[package]]
@@ -5426,6 +5427,7 @@ dependencies = [
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
+ "ya-payment-driver",
  "ya-persistence",
  "ya-sb-proto",
  "ya-sb-router",
