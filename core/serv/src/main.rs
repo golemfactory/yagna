@@ -249,8 +249,7 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
-                        app
-                    //TODO: Services::rest(app, &context)
+                    Services::rest(app, &context)
                 })
                 .bind(ctx.http_address())
                 .context(format!(
