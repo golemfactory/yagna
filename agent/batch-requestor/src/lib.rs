@@ -8,7 +8,7 @@ use ya_client::{
     model::market::Demand, payment::PaymentRequestorApi, web::WebClient,
 };
 
-mod negotiator;
+mod market_negotiator;
 mod payment_manager;
 
 #[derive(Clone)]
@@ -219,7 +219,7 @@ impl Actor for TaskSession {
 
                 /* start actors */
                 Ok::<_, ya_client::error::Error>((
-                    negotiator::AgreementProducer::new(
+                    market_negotiator::AgreementProducer::new(
                         market_api.clone(),
                         subscription_id,
                         demand.clone(),
@@ -232,6 +232,10 @@ impl Actor for TaskSession {
             .then(|result, ctx, _| {
                 // TODO
                 log::info!("Actors started: {}", result.is_ok());
+                // let (market_api, payment_api) = result.unwrap();
+                // loop {
+                //     let agreement_id = market_api.send(market_negotiator::NewAgreement);
+                // }
                 fut::ready(())
             }),
         );
