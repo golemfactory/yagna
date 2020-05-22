@@ -25,7 +25,9 @@ impl MarketService {
             .build()?;
 
         let _ = bus::bind(market::BUS_ID, move |get: market::GetAgreement| {
-            let market_api: MarketProviderApi = client.interface().unwrap();
+            let market_api: MarketProviderApi = client
+                .interface_at(Some(crate::api::CENTRAL_MARKET_URL.clone()))
+                .unwrap();
             let db = db.clone();
 
             async move {

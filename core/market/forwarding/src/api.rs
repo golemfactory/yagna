@@ -1,20 +1,25 @@
 use actix_web::{web, HttpResponse, Scope};
 use jsonwebtoken::{encode, Header};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use url::Url;
 
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-const DEFAULT_MARKET_URL: &str = "http://34.244.4.185:8080/market-api/v1/";
+lazy_static::lazy_static! {
+    pub(crate) static ref CENTRAL_MARKET_URL: Url = "http://34.244.4.185:8080/market-api/v1/".parse().unwrap();
+    static ref FORWARD_CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
+}
 
-/// implementation note: every request will timeout after 5s.
+/// implementation note: every request will timeout after 60s.
 pub fn web_scope(_db: &DbExecutor) -> Scope {
-    let central_market_url: Url = DEFAULT_MARKET_URL.parse().unwrap();
+    let web_client = awc::Client::build()
+        .timeout(*FORWARD_CLIENT_TIMEOUT)
+        .finish();
     Scope::new(crate::MARKET_API_PATH)
-        .data(central_market_url)
-        .data(awc::Client::new()) // has default timeout of 5s
+        .data(web_client)
         .service(web::resource("*").to(forward))
 }
 
@@ -23,10 +28,9 @@ async fn forward(
     req: web::HttpRequest,
     body: web::Bytes,
     id: Identity,
-    central_market_url: web::Data<Url>,
     client: web::Data<awc::Client>,
 ) -> std::result::Result<HttpResponse, actix_web::Error> {
-    let mut forward_url = central_market_url.get_ref().clone();
+    let mut forward_url = CENTRAL_MARKET_URL.clone();
     forward_url.set_path(req.uri().path());
     forward_url.set_query(req.uri().query());
 
