@@ -44,6 +44,7 @@ pub enum Command {
     Start,
     Run(Vec<String>),
     Stop,
+    Transfer { from: String, to: String },
 }
 
 pub struct CommandList(Vec<Command>);
@@ -148,6 +149,9 @@ macro_rules! expand_cmd {
     (stop) => { ya_batch_requestor::Command::Stop };
     (run ( $($e:expr)* )) => {{
         ya_batch_requestor::Command::Run(vec![ $($e.to_string()),* ])
+    }};
+    (transfer ($e1:expr, $e2:expr)) => {{
+        ya_batch_requestor::Command::Transfer(e1, e2)
     }};
 }
 
