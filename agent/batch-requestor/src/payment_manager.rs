@@ -43,7 +43,9 @@ impl PaymentManager {
         let api = self.payment_api.clone();
 
         let f = async move {
-            let events = api.get_debit_note_events(Some(&ts)).await?;
+            let events = api
+                .get_debit_note_events(Some(&ts), Some(Duration::from_secs(60)))
+                .await?;
             for event in events {
                 log::debug!("got debit note: {:?}", event);
                 ts = event.timestamp;
@@ -72,7 +74,9 @@ impl PaymentManager {
         let api = self.payment_api.clone();
 
         let f = async move {
-            let events = api.get_invoice_events(Some(&ts)).await?;
+            let events = api
+                .get_invoice_events(Some(&ts), Some(Duration::from_secs(60)))
+                .await?;
             let mut new_invoices = Vec::new();
             for event in events {
                 log::debug!("Got invoice: {:?}", event);

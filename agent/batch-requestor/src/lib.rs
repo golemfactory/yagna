@@ -218,26 +218,24 @@ impl Actor for TaskSession {
                 log::info!("Allocated {} GNT.", &allocation.total_amount);
 
                 /* start actors */
-                Ok::<_, ya_client::error::Error>((
-                    market_negotiator::AgreementProducer::new(
-                        market_api.clone(),
-                        subscription_id,
-                        demand.clone(),
-                    )
-                    .start(),
-                    payment_manager::PaymentManager::new(payment_api.clone(), allocation).start(),
-                ))
+                let agreement_producer = market_negotiator::AgreementProducer::new(
+                    market_api.clone(),
+                    subscription_id,
+                    demand.clone(),
+                )
+                .start();
+                let payment_manager =
+                    payment_manager::PaymentManager::new(payment_api.clone(), allocation).start();
+                loop {
+                    let agreement_id = agreement_producer
+                        .send(market_negotiator::NewAgreement)
+                        .await??;
+                    let activity_id = activity_api.create_activity(&agreement_id).await?;
+                }
+                Ok::<_, anyhow::Error>(())
             }
             .into_actor(self)
-            .then(|result, ctx, _| {
-                // TODO
-                log::info!("Actors started: {}", result.is_ok());
-                // let (market_api, payment_api) = result.unwrap();
-                // loop {
-                //     let agreement_id = market_api.send(market_negotiator::NewAgreement);
-                // }
-                fut::ready(())
-            }),
+            .then(|result, ctx, _| fut::ready(())), //.then(|result, ctx, _| {}),
         );
     }
 }
