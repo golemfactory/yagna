@@ -98,8 +98,8 @@ impl MarketService {
     }
 
     pub async fn subscribe_offer(&self, offer: Offer, id: Identity) -> Result<String, MarketError> {
-        let offer = ModelOffer::from_with_identity(&offer, &id);
-        let subscription_id = offer.id.clone();
+        let offer = ModelOffer::from_new(&offer, &id);
+        let subscription_id = offer.id.to_string();
 
         self.provider_negotiation_engine
             .subscribe_offer(&offer)
@@ -126,8 +126,8 @@ impl MarketService {
         demand: Demand,
         id: Identity,
     ) -> Result<String, MarketError> {
-        let demand = ModelDemand::from_with_identity(&demand, &id);
-        let subscription_id = demand.id.clone();
+        let demand = ModelDemand::from_new(&demand, &id);
+        let subscription_id = demand.id.to_string();
 
         self.requestor_negotiation_engine
             .subscribe_demand(&demand)
