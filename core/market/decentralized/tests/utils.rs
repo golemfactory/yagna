@@ -19,6 +19,7 @@ pub struct MarketsNetwork {
 
 /// Store all object associated with single market
 /// for example: Database
+#[allow(unused)]
 pub struct MarketNode {
     market: Arc<MarketService>,
     name: String,
@@ -64,6 +65,7 @@ impl MarketsNetwork {
             .unwrap()
     }
 
+    #[allow(unused)]
     pub fn get_default_id(&self, name: &str) -> Identity {
         self.markets
             .iter()

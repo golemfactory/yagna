@@ -5,14 +5,13 @@ use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
 use sha3::Sha3_256;
-use std::str::FromStr;
 use std::io::Write;
+use std::str::FromStr;
 use thiserror::Error;
 use uuid::Uuid;
 
-use ya_client::model::ErrorMessage;
 use digest::generic_array::GenericArray;
-
+use ya_client::model::ErrorMessage;
 
 #[derive(Error, Debug)]
 pub enum SubscriptionParseError {
@@ -23,7 +22,6 @@ pub enum SubscriptionParseError {
     #[error("Subscription id [{}] has invalid length.", .0)]
     InvalidLength(String),
 }
-
 
 #[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", random_id, hash)]
@@ -57,14 +55,11 @@ fn hash(properties: &str, constraints: &str, node_id: &str) -> String {
     format!("{:x}", hasher.result())
 }
 
-
 impl FromStr for SubscriptionId {
     type Err = SubscriptionParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let elements: Vec<&str> = s
-            .split('-')
-            .collect();
+        let elements: Vec<&str> = s.split('-').collect();
 
         if elements.len() != 2 {
             Err(SubscriptionParseError::InvalidFormat(s.to_string()))?;
@@ -72,10 +67,9 @@ impl FromStr for SubscriptionId {
 
         if !elements
             .iter()
-            .map(|slice| slice
-                .chars()
-                .all(|character| character.is_ascii_hexdigit()))
-            .all(|result| result == true) {
+            .map(|slice| slice.chars().all(|character| character.is_ascii_hexdigit()))
+            .all(|result| result == true)
+        {
             Err(SubscriptionParseError::NotHexadecimal(s.to_string()))?;
         }
 
@@ -95,9 +89,9 @@ impl FromStr for SubscriptionId {
 }
 
 impl<DB> ToSql<Text, DB> for SubscriptionId
-    where
-        DB: Backend,
-        String: ToSql<Text, DB>,
+where
+    DB: Backend,
+    String: ToSql<Text, DB>,
 {
     fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
         self.to_string().to_sql(out)
@@ -105,9 +99,9 @@ impl<DB> ToSql<Text, DB> for SubscriptionId
 }
 
 impl<DB> FromSql<Text, DB> for SubscriptionId
-    where
-        DB: Backend,
-        String: FromSql<Text, DB>,
+where
+    DB: Backend,
+    String: FromSql<Text, DB>,
 {
     fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
         let string = String::from_sql(bytes)?;
@@ -124,7 +118,6 @@ impl From<SubscriptionParseError> for ErrorMessage {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,12 +127,17 @@ mod tests {
         let subscription_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53";
 
         let sub_id = SubscriptionId::from_str(subscription_id).unwrap();
-        assert_eq!(sub_id.hash.as_str(), "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53");
-        assert_eq!(sub_id.random_id.as_str(), "c76161077d0343ab85ac986eb5f6ea38");
+        assert_eq!(
+            sub_id.hash.as_str(),
+            "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53"
+        );
+        assert_eq!(
+            sub_id.random_id.as_str(),
+            "c76161077d0343ab85ac986eb5f6ea38"
+        );
 
         assert_eq!(SubscriptionId::from_str("34324-241").is_ok(), false);
         assert_eq!(SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").is_ok(), false);
         assert_eq!(SubscriptionId::from_str("gfht-ertry").is_ok(), false);
     }
-
 }
