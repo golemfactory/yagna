@@ -115,7 +115,7 @@ fn define_cli_services(
             });
         }
         variants.extend(quote! {
-            #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+            #[structopt(setting = structopt::clap::AppSettings::DeriveDisplayOrder)]
             #name(#path::Cli),
         });
         variants_match.extend(quote! {
@@ -138,6 +138,7 @@ fn define_cli_services(
     quote! {
         #[doc(hidden)]
         #[derive(structopt::StructOpt, Debug)]
+        #[structopt(setting = structopt::clap::AppSettings::DeriveDisplayOrder)]
         #vis enum #ident {
             #variants
         }
