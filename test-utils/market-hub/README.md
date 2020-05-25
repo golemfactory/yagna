@@ -5,7 +5,7 @@ Yagna Market as specified [here](../../docs/market-api/market-api-mk0-central-ex
 
 Below is the source repository, where you will find how to run it:
 
-https://github.com/stranger80/golem-client-mock/
+https://github.com/golemfactory/golem-client-mock/
 
 It is written in C# on top of .NET Core, which beside Windows supports
 also Ubuntu and macOS.
@@ -13,13 +13,13 @@ also Ubuntu and macOS.
 This implementation have no data persistence, which means all objects created
 during the server process lifetime perishes after it is shut down.
 
-It implements the [Market API](../../interfaces/specs/market-api.yaml) and
+It implements the [Market API](https://github.com/golemfactory/ya-client/blob/master/specs/market-api.yaml) and
 conforms with Cabability Level 1 of the [Market API specification](
 https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg/edit#heading=h.8anq3nlk2en7
 ).
 
 This mockup implements also the [Activity API](
-../../interfaces/specs/market-api.yaml)
+https://github.com/golemfactory/ya-client/blob/master/specs/activity-api.yaml)
 and conforms with Cabability Level 1 of the [Activity API specification](
 https://docs.google.com/document/d/1BXaN32ediXdBHljEApmznSfbuudTU8TmvOmHKl0gmQM
 ).

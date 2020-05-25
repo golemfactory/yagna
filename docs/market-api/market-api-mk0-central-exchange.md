@@ -15,7 +15,8 @@ https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg/
 ) which means support for the three basic phases of the market interaction:
 [Discovery](#discovery-phase), [Negotiation](#negotiation-phase) and [Agreement](#agreement-phase).
 
-In Mk0 we will provide [client library crate](../../interfaces/client) with typesafe bindings to Market API.
+In Mk0 we will provide [client library crate](https://github.com/golemfactory/ya-client)
+with typesafe bindings to Market API.
 It will be valid for all MkX, because API itself will be the same.
 
 Yagna Market service Mk0 will **not** be integrated with Yagna Daemon, nor service bus.
