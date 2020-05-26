@@ -528,7 +528,7 @@ impl TransactionSender {
             let blocks = client.blocks().await.unwrap();
             blocks
                 .try_for_each(|b| {
-                    log::info!("new block: {:?}", b);
+                    log::debug!("new block: {:?}", b);
                     future::ok(())
                 })
                 .await

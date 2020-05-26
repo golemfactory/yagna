@@ -53,6 +53,8 @@ pub enum PaymentError {
     Verification(String),
     #[error("Payment driver error: {0}")]
     Driver(#[from] ya_payment_driver::PaymentDriverError),
+    #[error("Payment Driver Service error: {0}")]
+    DriverService(#[from] ya_service_bus::error::Error),
 }
 
 pub type PaymentResult<T> = Result<T, PaymentError>;
@@ -62,6 +64,7 @@ impl From<PaymentError> for ScheduleError {
         match e {
             PaymentError::Driver(e) => ScheduleError::Driver(e.to_string()),
             PaymentError::Verification(e) => panic!(e),
+            PaymentError::DriverService(e) => panic!(e),
         }
     }
 }

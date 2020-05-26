@@ -5,13 +5,15 @@ use bigdecimal::BigDecimal;
 use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::payment::{Invoice, Payment};
+use ya_core_model::driver;
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
 use ya_payment_driver::{
-    AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
+    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
     PaymentDriverError, PaymentStatus,
 };
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(Clone)]
 pub struct PaymentProcessor {
@@ -237,7 +239,13 @@ impl PaymentProcessor {
     }
 
     pub async fn get_status(&self, addr: &str) -> PaymentResult<BigDecimal> {
-        let balance: AccountBalance = self.driver.get_account_balance(addr).await?;
-        Ok(balance.base_currency.amount)
+        let address: String = addr.to_string();
+        bus::service(driver::BUS_ID)
+            .send(driver::GetAccountBalance::from(address))
+            .await
+            .map_or_else(
+                |e| Err(PaymentError::DriverService(e)),
+                |balance| Ok(balance.unwrap().amount),
+            )
     }
 }
