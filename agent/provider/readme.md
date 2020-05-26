@@ -140,7 +140,7 @@ To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov
     In another console, go to the same directory and run:\
     (it will change your `.env` file with newly created app-key)
     ```bash
-    sed -e "s/__GENERATED_APP_KEY__/`cargo run app-key create 'provider-agent'`/" -i .bckp .env
+    sed -e "s/__GENERATED_APP_KEY__/`cargo run app-key create 'provider-agent'`/" -i.bckp .env
     ```
 
 
@@ -305,12 +305,20 @@ See [PR#47](https://github.com/golemfactory/gwasm-runner/pull/47)
 
 You need to run a separate yagna service with a different identity,
 if you want to run requestor on the same machine. The best way is to create
-a separate directory (e.g. `ya-req` in the main yagna
+a separate directory (say `ya-req` in the main yagna
 source directory) with a new `.env` copied from `.env-template`. 
-In this `.env` file you must change port numbers not to interfere with the provider:
- * `NODE_NAME` of your choice 
- * `GSB_URL` to e.g. 7474
- * `YAGNA_API_URL` to e.g. 7475
+In this `.env` file you must change port numbers not to interfere with the provider
+and `NODE_NAME` of your choice. Use below script
+
+```bash
+mkdir ya-req && cd ya-req && cp ../.env-template .env
+sed \
+  -e "s/__GENERATED_APP_KEY__/`cargo run app-key create 'req-agent'`/" \
+  -e "s/#GSB_URL=tcp://127.0.0.1:7464/GSB_URL=tcp://127.0.0.1:7474/" \
+  -e "s/#YAGNA_API_URL=http://127.0.0.1:7465/YAGNA_API_URL=http://127.0.0.1:7475/" \
+  -i.bckp .env
+```
+
 
 #### 1. Run yagna service
 Start requestor-side yagna service
