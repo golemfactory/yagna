@@ -43,9 +43,25 @@ impl SubscriptionId {
             hash: hash(properties, constraints, node_id),
         }
     }
+
+    pub fn validate(
+        &self,
+        properties: &str,
+        constraints: &str,
+        node_id: &str,
+    ) -> Result<(), ErrorMessage> {
+        let hash = hash(properties, constraints, node_id);
+        if self.hash != hash {
+            Err(ErrorMessage::new(format!(
+                "Invalid subscription id [{}]. Hash doesn't match content.",
+                &self
+            )))?;
+        }
+        Ok(())
+    }
 }
 
-fn hash(properties: &str, constraints: &str, node_id: &str) -> String {
+pub fn hash(properties: &str, constraints: &str, node_id: &str) -> String {
     let mut hasher = Sha3_256::new();
 
     hasher.input(properties);

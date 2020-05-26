@@ -34,6 +34,8 @@ impl Demand {
         let node_id = demand.requestor_id()?.to_string();
         let id = SubscriptionId::from_str(demand.demand_id()?)?;
 
+        id.validate(&properties, &constraints, &node_id)?;
+
         // TODO: Set default expiration time. In future provider should set expiration.
         // TODO: Creation time should come from ClientOffer
         // TODO: Creation time should be included in subscription id hash.
@@ -50,6 +52,8 @@ impl Demand {
         })
     }
 
+    /// Creates new model demand. If ClientDemand has id already assigned,
+    /// it will be ignored and regenerated.
     pub fn from_new(demand: &ClientDemand, id: &Identity) -> Demand {
         let properties = demand.properties.to_string();
         let constraints = demand.constraints.clone();
