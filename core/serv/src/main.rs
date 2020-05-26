@@ -1,13 +1,13 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use std::{
+    any::TypeId,
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
     path::PathBuf,
 };
-use std::any::TypeId;
-use std::collections::HashMap;
 use structopt::{clap, StructOpt};
 use url::Url;
 
@@ -20,10 +20,13 @@ use ya_market_forwarding::MarketService;
 #[cfg(not(any(feature = "market-forwarding", feature = "market-decentralized")))]
 compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
 
+use ya_activity::service::Activity as ActivityService;
+use ya_identity::service::Identity as IdentityService;
+use ya_net::Net as NetService;
+use ya_payment::PaymentService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
-use ya_service_api_derive::services;
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
@@ -35,9 +38,6 @@ use autocomplete::CompleteCommand;
 
 mod data_dir;
 use data_dir::DataDir;
-use ya_activity::service::Activity;
-use ya_payment::PaymentService;
-
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -141,9 +141,10 @@ impl TryFrom<&CliArgs> for CliCtx {
     }
 }
 
+#[derive(Clone)]
 struct ServiceContext {
-    dbs : HashMap<TypeId, DbExecutor>,
-    default_db : DbExecutor
+    dbs: HashMap<TypeId, DbExecutor>,
+    default_db: DbExecutor,
 }
 
 impl<Service: 'static> Provider<Service, DbExecutor> for ServiceContext {
@@ -157,18 +158,39 @@ impl<Service: 'static> Provider<Service, DbExecutor> for ServiceContext {
     }
 }
 
-#[services(ServiceContext)]
+impl ServiceContext {
+    fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
+        Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
+    }
+
+    fn from_data_dir(path: &PathBuf, name: &str) -> Result<Self> {
+        let default_db = DbExecutor::from_data_dir(path, name)?;
+        default_db.apply_migration(ya_persistence::migrations::run_with_output)?;
+        let dbs = [
+            Self::make_entry::<MarketService>(path, "market")?,
+            Self::make_entry::<ActivityService>(path, "activity")?,
+            Self::make_entry::<PaymentService>(path, "payments")?,
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        Ok(ServiceContext { default_db, dbs })
+    }
+}
+
+#[ya_service_api_derive::services(ServiceContext)]
 enum Services {
     #[enable(gsb, cli(flatten))]
-    Identity(ya_identity::service::Identity),
+    Identity(IdentityService),
     #[enable(gsb)]
-    Net(ya_net::Net),
-    #[enable(gsb, rest)]
-    Activity(ya_activity::service::Activity),
+    Net(NetService),
     #[enable(gsb, rest)]
     Market(MarketService),
+    #[enable(gsb, rest)]
+    Activity(ActivityService),
     #[enable(gsb, rest, cli)]
-    Payment(ya_payment::PaymentService),
+    Payment(PaymentService),
 }
 
 #[derive(StructOpt, Debug)]
@@ -219,21 +241,7 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
 
-                let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
-                db.apply_migration(ya_persistence::migrations::run_with_output)?;
-                let context = ServiceContext {
-                    default_db: db.clone(),
-                    dbs: [
-                        (TypeId::of::<MarketService>(), DbExecutor::from_data_dir(&ctx.data_dir, "market")?),
-                        (TypeId::of::<Activity>(), DbExecutor::from_data_dir(&ctx.data_dir, "activity")?),
-                        (TypeId::of::<Identity>(), DbExecutor::from_data_dir(&ctx.data_dir, "identity")?),
-                        (TypeId::of::<PaymentService>(), DbExecutor::from_data_dir(&ctx.data_dir, "payments")?),
-                    ]
-                    .iter()
-                    .cloned()
-                    .collect()
-                };
-
+                let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
                 Services::gsb(&context).await?;
 
                 HttpServer::new(move || {
@@ -241,7 +249,8 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
-                    Services::rest(app, &db)
+                        app
+                    //TODO: Services::rest(app, &context)
                 })
                 .bind(ctx.http_address())
                 .context(format!(
