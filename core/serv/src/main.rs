@@ -147,13 +147,11 @@ struct ServiceContext {
     default_db: DbExecutor,
 }
 
-impl<Service: 'static> Provider<Service, DbExecutor> for ServiceContext {
+impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     fn component(&self) -> DbExecutor {
-        let service_type = TypeId::of::<Service>();
-        if let Some(db) = self.dbs.get(&service_type) {
-            db.clone()
-        } else {
-            self.default_db.clone()
+        match self.dbs.get(&TypeId::of::<S>()) {
+            Some(db) => db.clone(),
+            None => self.default_db.clone(),
         }
     }
 }

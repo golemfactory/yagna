@@ -35,8 +35,7 @@ impl MarketsNetwork {
         name: Str,
     ) -> Result<Self, anyhow::Error> {
         let db = self.init_database(name.as_ref())?;
-        let data_dir = self.instance_dir(name.as_ref());
-        let market = Arc::new(MarketService::new(&db, &data_dir)?);
+        let market = Arc::new(MarketService::new(&db)?);
 
         let gsb_prefix = format!("{}/{}/market", net::BUS_ID, name.as_ref());
         market.bind_gsb(gsb_prefix).await?;
