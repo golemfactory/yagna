@@ -313,12 +313,10 @@ and `NODE_NAME` of your choice. Use below script
 ```bash
 mkdir ya-req && cd ya-req && cp ../.env-template .env
 sed \
-  -e "s/__GENERATED_APP_KEY__/`cargo run app-key create 'req-agent'`/" \
-  -e "s/#GSB_URL=tcp://127.0.0.1:7464/GSB_URL=tcp://127.0.0.1:7474/" \
-  -e "s/#YAGNA_API_URL=http://127.0.0.1:7465/YAGNA_API_URL=http://127.0.0.1:7475/" \
+  -e "s/#GSB_URL=tcp:\/\/127.0.0.1:7464/GSB_URL=tcp:\/\/127.0.0.1:7474/" \
+  -e "s/#YAGNA_API_URL=http:\/\/127.0.0.1:7465/YAGNA_API_URL=http:\/\/127.0.0.1:7475/" \
   -i.bckp .env
 ```
-
 
 #### 1. Run yagna service
 Start requestor-side yagna service
@@ -327,12 +325,10 @@ cargo run service run
 ```
 
 #### 2. Create app-key
-1. In a new console run:
+1. In a new console but in the same directory (`<repo>/ya-req`) run:
+```bash
+sed -e "s/__GENERATED_APP_KEY__/`cargo run app-key create 'requestor-agent'`/" -i.bckp .env
 ```
-cargo run app-key create "requestor-agent"
-```
-
-2. Set the result as `YAGNA_APPKEY` value in your `.env` file.
 
 #### 3. Get some ETH and GNT
 1. We need to acquire funds from faucet on testnet (rinkeby).
