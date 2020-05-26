@@ -1,8 +1,9 @@
 use actix::prelude::*;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::{str::FromStr, time::Duration};
+use std::{convert::TryFrom, str::FromStr, time::Duration};
 use url::Url;
 use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
+use ya_client::model::activity::ExeScriptRequest;
 use ya_client::{
     activity::ActivityRequestorControlApi, market::MarketRequestorApi, model,
     model::market::Demand, payment::PaymentRequestorApi, web::WebClient,
@@ -52,6 +53,29 @@ pub struct CommandList(Vec<Command>);
 impl CommandList {
     pub fn new(v: Vec<Command>) -> Self {
         Self(v)
+    }
+}
+
+impl TryFrom<CommandList> for ExeScriptRequest {
+    type Error = anyhow::Error;
+    fn try_from(cmd_list: CommandList) -> Result<Self, anyhow::Error> {
+        let mut res = vec![];
+        for cmd in cmd_list.0 {
+            res.push(match cmd {
+                Command::Deploy => serde_json::json!({ "deploy": {} }),
+                Command::Start => serde_json::json!({ "start": { "args": [] }}),
+                Command::Run(vec) => serde_json::json!({ "run": { // TODO depends on ExeUnit type
+                    "entry_point": "main",
+                    "args": vec
+                }}),
+                Command::Stop => serde_json::json!({ "stop": {} }),
+                Command::Transfer { from, to } => serde_json::json!({ "transfer": {
+                    "from": from,
+                    "to": to,
+                }}),
+            })
+        }
+        Ok(ExeScriptRequest::new(serde_json::to_string_pretty(&res)?))
     }
 }
 
@@ -147,26 +171,26 @@ macro_rules! expand_cmd {
     (deploy) => { ya_batch_requestor::Command::Deploy };
     (start) => { ya_batch_requestor::Command::Start };
     (stop) => { ya_batch_requestor::Command::Stop };
-    (run ( $($e:expr)* )) => {{
+    (run ( $($e:expr),* )) => {{
         ya_batch_requestor::Command::Run(vec![ $($e.to_string()),* ])
     }};
-    (transfer ($e1:expr, $e2:expr)) => {{
-        ya_batch_requestor::Command::Transfer(e1, e2)
-    }};
+    (transfer ( $e:expr, $f:expr)) => {
+        ya_batch_requestor::Command::Transfer { from: $e.to_string(), to: $f.to_string() }
+    };
 }
 
 #[macro_export]
 macro_rules! commands_helper {
     () => {};
     ( $i:ident ( $($param:expr),* ) $(;)* ) => {{
-        vec![$crate::expand_cmd!($i ( $($param)* ))]
+        vec![$crate::expand_cmd!($i ( $($param),* ))]
     }};
     ( $i:tt $(;)* ) => {{
         vec![$crate::expand_cmd!($i)]
     }};
     ( $i:ident ( $($param:expr),* ) ; $( $t:tt )* ) => {{
         let mut tail = $crate::commands_helper!( $($t)* );
-        tail.push($crate::expand_cmd!($i ( $($param)* )));
+        tail.push($crate::expand_cmd!($i ( $($param),* )));
         tail
     }};
     ( $i:tt ; $( $t:tt )* ) => {{
