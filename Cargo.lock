@@ -5102,8 +5102,10 @@ dependencies = [
  "ureq",
  "uuid 0.8.1",
  "web3",
+ "ya-core-model",
  "ya-persistence",
  "ya-service-api-interfaces",
+ "ya-service-bus",
 ]
 
 [[package]]

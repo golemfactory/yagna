@@ -1,3 +1,4 @@
+use crate::processor::PaymentDriverProcessor;
 use chrono::{DateTime, Utc};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
@@ -8,6 +9,7 @@ extern crate diesel;
 mod dummy;
 mod ethereum;
 mod models;
+mod processor;
 mod schema;
 mod utils;
 
@@ -16,6 +18,7 @@ pub mod dao;
 pub mod error;
 pub mod gnt;
 pub mod payment;
+pub mod service;
 
 pub use account::{AccountBalance, Balance, Currency};
 use bitflags::bitflags;
@@ -111,7 +114,9 @@ pub struct PaymentDriverService;
 impl PaymentDriverService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db: DbExecutor = context.component();
-        let _driver = payment_driver_factory(&db).await?;
+        let driver = payment_driver_factory(&db).await?;
+        let processor = PaymentDriverProcessor::new(driver, db.clone());
+        self::service::bind_service(&db, processor);
         Ok(())
     }
 }

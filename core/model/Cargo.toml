@@ -6,19 +6,28 @@ edition = "2018"
 
 [features]
 default = []
-full = ['activity', 'appkey', 'identity', 'market', 'net', 'payment', 'gftp']
+full = [
+    'activity',
+    'appkey',
+    'driver',
+    'identity',
+    'market',
+    'net',
+    'payment',
+    'gftp'
+]
 activity = []
 appkey = []
+driver = ['bigdecimal']
 gftp = []
 identity = []
-market=[]
-net=[]
-payment=['bigdecimal']
+market = []
+net = []
+payment = ['bigdecimal']
 
 [dependencies]
 ya-client-model = "0.1"
 ya-service-bus = "0.2"
-
 bigdecimal = { version = "0.1.0", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }

@@ -6,6 +6,9 @@ pub mod activity;
 #[cfg(feature = "appkey")]
 pub mod appkey;
 
+#[cfg(feature = "driver")]
+pub mod driver;
+
 #[cfg(feature = "identity")]
 pub mod identity;
 
