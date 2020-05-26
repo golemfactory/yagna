@@ -62,7 +62,6 @@ impl MarketsNetwork {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|error| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, error))?;
-        db.apply_migration(ya_persistence::migrations::run_with_output)?;
         Ok(db)
     }
 

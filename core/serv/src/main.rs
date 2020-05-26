@@ -165,7 +165,6 @@ impl ServiceContext {
 
     fn from_data_dir(path: &PathBuf, name: &str) -> Result<Self> {
         let default_db = DbExecutor::from_data_dir(path, name)?;
-        default_db.apply_migration(ya_persistence::migrations::run_with_output)?;
         let dbs = [
             Self::make_entry::<MarketService>(path, "market")?,
             Self::make_entry::<ActivityService>(path, "activity")?,

@@ -6,10 +6,9 @@ use std::convert::TryInto;
 
 use ya_client_model::activity::activity_usage::ActivityUsage;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::models::ActivityUsage as DbActivityUsage;
-use ya_persistence::schema;
 
 use crate::dao::{DaoError, Result};
+use crate::db::{models::ActivityUsage as DbActivityUsage, schema};
 
 pub struct ActivityUsageDao<'c> {
     pool: &'c PoolType,
