@@ -1,4 +1,3 @@
-
 table! {
     market_demand (id) {
         id -> Text,
@@ -23,7 +22,4 @@ table! {
     }
 }
 
-allow_tables_to_appear_in_same_query!(
-    market_demand,
-    market_offer,
-);
+allow_tables_to_appear_in_same_query!(market_demand, market_offer,);
