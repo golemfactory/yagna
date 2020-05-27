@@ -1,3 +1,4 @@
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use serde_json;
 use std::str::FromStr;
@@ -17,6 +18,13 @@ pub struct Offer {
     pub properties: String,
     pub constraints: String,
     pub node_id: String,
+
+    /// Creation time of Offer on Provider side.
+    pub creation_time: NaiveDateTime,
+    /// Time when this Offer was added to our local database.
+    pub addition_time: NaiveDateTime,
+    /// Time when Offer expires set by Provider.
+    pub expiration_time: NaiveDateTime,
 }
 
 impl Offer {
@@ -29,11 +37,19 @@ impl Offer {
             .to_string();
         let id = SubscriptionId::from_str(offer.offer_id()?)?;
 
+        // TODO: Set default expiration time. In future provider should set expiration.
+        // TODO: Creation time should come from ClientOffer
+        // TODO: Creation time should be included in subscription id hash.
+        let creation_time = Utc::now().naive_utc();
+
         Ok(Offer {
             id,
             properties,
             constraints,
             node_id,
+            creation_time: creation_time.clone(),
+            addition_time: creation_time.clone(),
+            expiration_time: creation_time.clone(),
         })
     }
 
@@ -43,11 +59,19 @@ impl Offer {
         let node_id = id.identity.to_string();
         let id = SubscriptionId::generate_id(&properties, &constraints, &node_id);
 
+        // TODO: Set default expiration time. In future provider should set expiration.
+        // TODO: Creation time should be included in subscription id hash.
+        // This function creates new Offer, so creation time should be equal to addition time.
+        let creation_time = Utc::now().naive_utc();
+
         Offer {
             id,
             properties,
             constraints,
             node_id,
+            creation_time: creation_time.clone(),
+            addition_time: creation_time.clone(),
+            expiration_time: creation_time.clone(),
         }
     }
 

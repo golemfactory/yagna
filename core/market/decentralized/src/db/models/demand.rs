@@ -1,3 +1,4 @@
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use serde_json;
 use std::str::FromStr;
@@ -17,6 +18,13 @@ pub struct Demand {
     pub properties: String,
     pub constraints: String,
     pub node_id: String,
+
+    /// Creation time of Demand on Requestor side.
+    pub creation_time: NaiveDateTime,
+    /// Time when this Demand was added to our local database.
+    pub addition_time: NaiveDateTime,
+    /// Time when Demand expires set by Requestor.
+    pub expiration_time: NaiveDateTime,
 }
 
 impl Demand {
@@ -26,11 +34,19 @@ impl Demand {
         let node_id = demand.requestor_id()?.to_string();
         let id = SubscriptionId::from_str(demand.demand_id()?)?;
 
+        // TODO: Set default expiration time. In future provider should set expiration.
+        // TODO: Creation time should come from ClientOffer
+        // TODO: Creation time should be included in subscription id hash.
+        let creation_time = Utc::now().naive_utc();
+
         Ok(Demand {
             id,
             properties,
             constraints,
             node_id,
+            creation_time: creation_time.clone(),
+            addition_time: creation_time.clone(),
+            expiration_time: creation_time.clone(),
         })
     }
 
@@ -40,11 +56,19 @@ impl Demand {
         let node_id = id.identity.to_string();
         let id = SubscriptionId::generate_id(&properties, &constraints, &node_id);
 
+        // TODO: Set default expiration time. In future provider should set expiration.
+        // TODO: Creation time should be included in subscription id hash.
+        // This function creates new Demand, so creation time should be equal to addition time.
+        let creation_time = Utc::now().naive_utc();
+
         Demand {
             id,
             properties,
             constraints,
             node_id,
+            creation_time: creation_time.clone(),
+            addition_time: creation_time.clone(),
+            expiration_time: creation_time.clone(),
         }
     }
 
