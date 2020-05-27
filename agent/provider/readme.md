@@ -140,7 +140,8 @@ To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov
     In another console, go to the same directory and run:\
     (it will change your `.env` file with newly created app-key)
     ```bash
-    sed -e "s/__GENERATED_APP_KEY__/`cargo run app-key create 'provider-agent'`/" -i.bckp .env
+    APP_KEY=`cargo run app-key create 'provider-agent'`
+    sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
     ```
 
 
@@ -313,8 +314,8 @@ and `NODE_NAME` of your choice. Use below script
 ```bash
 mkdir ya-req && cd ya-req && cp ../.env-template .env
 sed \
-  -e "s/#GSB_URL=tcp:\/\/127.0.0.1:7464/GSB_URL=tcp:\/\/127.0.0.1:7474/" \
-  -e "s/#YAGNA_API_URL=http:\/\/127.0.0.1:7465/YAGNA_API_URL=http:\/\/127.0.0.1:7475/" \
+  -e "s|#GSB_URL=tcp://127.0.0.1:7464|GSB_URL=tcp://127.0.0.1:7474|" \
+  -e "s|#YAGNA_API_URL=http://127.0.0.1:7465|YAGNA_API_URL=http://127.0.0.1:7475|" \
   -i.bckp .env
 ```
 
@@ -327,7 +328,8 @@ cargo run service run
 #### 2. Create app-key
 1. In a new console but in the same directory (`<repo>/ya-req`) run:
 ```bash
-sed -e "s/__GENERATED_APP_KEY__/`cargo run app-key create 'requestor-agent'`/" -i.bckp .env
+APP_KEY=`cargo run app-key create 'requestor-agent'`
+sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
 ```
 
 #### 3. Get some ETH and GNT
