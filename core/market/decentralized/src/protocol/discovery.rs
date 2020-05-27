@@ -3,10 +3,13 @@ use chrono::prelude::*;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::marker::Send;
 use thiserror::Error;
 
+use ya_core_model::net;
+use ya_core_model::net::local::{BroadcastMessage, Subscribe, ToEndpoint};
 use ya_client::model::market::Offer;
-use ya_service_bus::{typed as bus, RpcMessage};
+use ya_service_bus::{typed as bus, RpcMessage, RpcEndpoint};
 
 use super::callbacks::{CallbackHandler, HandlerSlot};
 
@@ -26,6 +29,10 @@ pub enum DiscoveryRemoteError {}
 pub enum DiscoveryInitError {
     #[error("Uninitialized callback '{}'.", .0)]
     UninitializedCallback(String),
+    #[error("Failed to bind to gsb. Error: {}.", .0)]
+    BindingGsbFailed(String),
+    #[error("Failed to subscribe to broadcast. Error: {0}.")]
+    BroadcastSubscribeFailed(String),
 }
 
 // =========================================== //
@@ -34,7 +41,7 @@ pub enum DiscoveryInitError {
 
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait Discovery: Send + Sync {
     async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError>;
 
@@ -126,7 +133,7 @@ impl DiscoveryFactory for DiscoveryGSB {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Discovery for DiscoveryGSB {
     async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
         unimplemented!()
@@ -137,16 +144,20 @@ impl Discovery for DiscoveryGSB {
     }
 
     async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError> {
-        let retrive_handler = self.retrieve_offers.clone();
+        let retrieve_handler = self.retrieve_offers.clone();
         let offer_received_handler = self.offer_received.clone();
 
-        let _ = bus::bind_with_caller(&prefix, move |caller, msg: RetrieveOffers| {
-            let handler = retrive_handler.clone();
+        let offer_broadcast_address = format!("{}/{}", prefix, OfferReceived::TOPIC);
+        let subscribe_msg = OfferReceived::into_subscribe_msg(&offer_broadcast_address);
+        bus::service(net::BUS_ID).send(subscribe_msg).await??;
+
+        let _ = bus::bind_with_caller(&offer_broadcast_address, move |caller, msg: OfferReceived| {
+            let handler = offer_received_handler.clone();
             async move { handler.call(caller, msg).await }
         });
 
-        let _ = bus::bind_with_caller(&prefix, move |caller, msg: OfferReceived| {
-            let handler = offer_received_handler.clone();
+        let _ = bus::bind_with_caller(&prefix, move |caller, msg: RetrieveOffers| {
+            let handler = retrieve_handler.clone();
             async move { handler.call(caller, msg).await }
         });
 
@@ -181,3 +192,30 @@ impl RpcMessage for RetrieveOffers {
     type Item = Vec<Offer>;
     type Error = DiscoveryRemoteError;
 }
+
+// =========================================== //
+// Internal Discovery messages used
+// for communication between market instances
+// of Discovery protocol
+// =========================================== //
+
+impl BroadcastMessage for OfferReceived {
+    const TOPIC: &'static str = "market/protocol/mk1/offer";
+}
+
+// =========================================== //
+// Errors From impls
+// =========================================== //
+
+impl From<net::local::SubscribeError> for DiscoveryInitError {
+    fn from(err: net::local::SubscribeError) -> Self {
+        DiscoveryInitError::BroadcastSubscribeFailed(format!("{}", err))
+    }
+}
+
+impl From<ya_service_bus::error::Error> for DiscoveryInitError {
+    fn from(err: ya_service_bus::error::Error) -> Self {
+        DiscoveryInitError::BindingGsbFailed(format!("{}", err))
+    }
+}
+

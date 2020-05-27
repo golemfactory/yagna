@@ -35,7 +35,7 @@ impl DiscoveryFactory for DiscoveryExample {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Discovery for DiscoveryExample {
     async fn bind_gsb(&self, _prefix: String) -> Result<(), DiscoveryInitError> {
         Ok(())
