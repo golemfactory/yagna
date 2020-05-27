@@ -1,0 +1,57 @@
+[package]
+name = "yagna"
+version = "0.3.0"
+description = "Yagna Service and CLI"
+readme = "README.md"
+authors = ["Golem Factory <contact@golem.network>"]
+homepage = "https://github.com/golemfactory/yagna/core/serv"
+repository = "https://github.com/golemfactory/yagna"
+license = "GPL-3.0"
+edition = "2018"
+
+[features]
+#default=['ya-market-forwarding']
+static-openssl=["openssl/vendored"]
+
+[dependencies]
+ya-activity = "0.2"
+ya-identity = "0.2"
+ya-market-decentralized = { version = "0.1" }
+#ya-market-forwarding = { version = "0.1", optional = true }
+ya-net = { version = "0.1", features = ["service"] }
+ya-payment = { version = "0.1", features = ["gnt-driver"] }
+ya-persistence = "0.2"
+ya-sb-proto = "0.1"
+ya-sb-router = "0.1"
+ya-service-api = "0.1"
+ya-service-api-derive = "0.1"
+ya-service-api-interfaces = "0.1"
+ya-service-api-web = "0.1"
+ya-service-bus = "0.2"
+openssl="0.10"
+
+actix-rt = "1.0"
+actix-service = "1.0"
+actix-web = "2.0"
+anyhow = "1.0"
+directories = "2.0.2"
+dotenv = "0.15.0"
+env_logger = "0.7"
+futures = "0.3"
+lazy_static = "1.4"
+log = "0.4"
+structopt = "0.3"
+url = "2.1.1"
+
+[package.metadata.deb]
+assets = [
+    ["target/release/yagna", "usr/bin/", "755"],
+    ["target/release/ya-requestor", "usr/bin/", "755"],
+    ["target/release/ya-provider", "usr/bin/", "755"],
+    ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
+    ["../../README.md", "usr/share/doc/yagna/", "644"],
+    ["README.md", "usr/share/doc/yagna/service.md", "644"],
+    ["../../agent/provider/readme.md", "usr/share/doc/yagna/ya-provider.md", "644"],
+]
+features=["static-openssl"]
+

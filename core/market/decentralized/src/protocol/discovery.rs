@@ -136,7 +136,8 @@ impl DiscoveryFactory for DiscoveryGSB {
 #[async_trait(?Send)]
 impl Discovery for DiscoveryGSB {
     async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
-        unimplemented!()
+        // TODO: Implement
+        Ok(())
     }
 
     async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {

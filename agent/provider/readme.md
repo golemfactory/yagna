@@ -343,7 +343,7 @@ Or go to the Rinkeby's etherscan: https://rinkeby.etherscan.io/address/0xdeadbee
 You need `commands.json` file which contains commands to be executed on the provider:
 
 ```
-cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json
+cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json --one-agreement
 ```
 
 ## Central setup

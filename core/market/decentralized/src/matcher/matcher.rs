@@ -4,14 +4,51 @@ use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use ya_client::model::market::{Demand, Offer, Proposal};
+use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
-use crate::protocol::{Discovery, DiscoveryBuilder, DiscoveryFactory, DiscoveryInitError};
+use crate::db::dao::*;
+use crate::db::models::Demand as ModelDemand;
+use crate::db::models::Offer as ModelOffer;
+use crate::db::*;
+use crate::migrations;
+use crate::protocol::{
+    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryFactory, DiscoveryInitError,
+};
 use crate::protocol::{OfferReceived, RetrieveOffers};
 
 #[derive(Error, Debug)]
-pub enum MatcherError {}
+pub enum DemandError {
+    #[error("Failed to insert Demand. Error: {}.", .0)]
+    InsertDemandFailure(#[from] DbError),
+    #[error("Failed to remove Demand [{}]. Error: {}.", .1, .0)]
+    RemoveDemandFailure(DbError, String),
+    #[error("Demand [{}] doesn't exist.", .0)]
+    DemandNotExists(String),
+}
+
+#[derive(Error, Debug)]
+pub enum OfferError {
+    #[error("Failed to insert Offer. Error: {}.", .0)]
+    InsertOfferFailure(#[from] DbError),
+    #[error("Failed to remove Offer [{}]. Error: {}.", .1, .0)]
+    RemoveOfferFailure(DbError, String),
+    #[error("Offer [{}] doesn't exist.", .0)]
+    OfferNotExists(String),
+    #[error("Failed to broadcast offer [{}]. Error: {}.", .0, .1)]
+    BroadcastOfferFailure(DiscoveryError, String),
+}
+
+#[derive(Error, Debug)]
+pub enum MatcherError {
+    #[error(transparent)]
+    DemandError(#[from] DemandError),
+    #[error(transparent)]
+    OfferError(#[from] OfferError),
+    #[error("Internal error: {}.", .0)]
+    InternalError(String),
+}
 
 #[derive(Error, Debug)]
 pub enum MatcherInitError {
@@ -19,6 +56,8 @@ pub enum MatcherInitError {
     DiscoveryError(#[from] DiscoveryInitError),
     #[error("Failed to initialize database. Error: {}.", .0)]
     DatabaseError(#[from] DbError),
+    #[error("Failed to migrate market database. Error: {}.", .0)]
+    MigrationError(#[from] anyhow::Error),
 }
 
 /// Receivers for events, that can be emitted from Matcher.
@@ -36,7 +75,7 @@ pub struct Matcher {
 impl Matcher {
     pub fn new<Factory: DiscoveryFactory>(
         builder: DiscoveryBuilder,
-        data_dir: &Path,
+        db: &DbExecutor,
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
         let builder = builder
@@ -50,12 +89,11 @@ impl Matcher {
             });
 
         let discovery = Factory::new(builder)?;
-        let db = DbExecutor::from_data_dir(&data_dir, "offers")?;
 
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {
-            db,
+            db: db.clone(),
             discovery,
             proposal_emitter: emitter,
         };
@@ -70,23 +108,119 @@ impl Matcher {
         Ok(self.discovery.bind_gsb(prefix).await?)
     }
 
-    async fn add_offer(&self, offer: Offer) {
+    pub async fn add_offer(&self, offer: Offer) {
         unimplemented!();
     }
 
-    async fn subscribe_offer(&self, offer: Offer) {
-        unimplemented!();
+    // =========================================== //
+    // Offer/Demand subscription
+    // =========================================== //
+
+    pub async fn subscribe_offer(&self, model_offer: &ModelOffer) -> Result<(), MatcherError> {
+        self.db
+            .as_dao::<OfferDao>()
+            .create_offer(model_offer)
+            .await
+            .map_err(|error| OfferError::InsertOfferFailure(error))?;
+
+        // TODO: Run matching to find local matching demands. We shouldn't wait here.
+        // TODO: Handle broadcast errors. Maybe we should retry if it failed.
+        self.discovery
+            .broadcast_offer(model_offer.into_client_offer()?)
+            .await
+            .map_err(|error| {
+                OfferError::BroadcastOfferFailure(error, model_offer.id.to_string())
+            })?;
+        Ok(())
     }
 
-    async fn subscribe_demand(&self, subscription_id: String) {
-        unimplemented!();
+    pub async fn subscribe_demand(&self, model_demand: &ModelDemand) -> Result<(), MatcherError> {
+        self.db
+            .as_dao::<DemandDao>()
+            .create_demand(model_demand)
+            .await
+            .map_err(|error| DemandError::InsertDemandFailure(error))?;
+
+        // TODO: Try to match demand with offers currently existing in database.
+        //  We shouldn't await here on this.
+        Ok(())
     }
 
-    async fn unsubscribe_offer(&self, offer: Demand) {
-        unimplemented!();
+    pub async fn unsubscribe_offer(&self, subscription_id: &str) -> Result<(), MatcherError> {
+        let removed = self
+            .db
+            .as_dao::<OfferDao>()
+            .remove_offer(subscription_id)
+            .await
+            .map_err(|error| OfferError::RemoveOfferFailure(error, subscription_id.to_string()))?;
+
+        if !removed {
+            Err(OfferError::OfferNotExists(subscription_id.to_string()))?;
+        }
+        Ok(())
     }
 
-    async fn unsubscribe_demand(&self, subscription_id: String) {
-        unimplemented!();
+    pub async fn unsubscribe_demand(&self, subscription_id: &str) -> Result<(), MatcherError> {
+        let removed = self
+            .db
+            .as_dao::<DemandDao>()
+            .remove_demand(subscription_id)
+            .await
+            .map_err(|error| {
+                DemandError::RemoveDemandFailure(error, subscription_id.to_string())
+            })?;
+
+        if !removed {
+            Err(DemandError::DemandNotExists(subscription_id.to_string()))?;
+        }
+        Ok(())
+    }
+
+    // =========================================== //
+    // Offer/Demand query
+    // =========================================== //
+
+    pub async fn get_offer<Str: AsRef<str>>(
+        &self,
+        subscription_id: Str,
+    ) -> Result<Option<Offer>, MatcherError> {
+        let model_offer: Option<ModelOffer> = self
+            .db
+            .as_dao::<OfferDao>()
+            .get_offer(subscription_id.as_ref())
+            .await?;
+
+        match model_offer {
+            Some(model_offer) => Ok(Some(model_offer.into_client_offer()?)),
+            None => Ok(None),
+        }
+    }
+
+    pub async fn get_demand<Str: AsRef<str>>(
+        &self,
+        subscription_id: Str,
+    ) -> Result<Option<Demand>, MatcherError> {
+        let model_demand: Option<ModelDemand> = self
+            .db
+            .as_dao::<DemandDao>()
+            .get_demand(subscription_id.as_ref())
+            .await?;
+
+        match model_demand {
+            Some(model_demand) => Ok(Some(model_demand.into_client_offer()?)),
+            None => Ok(None),
+        }
+    }
+}
+
+impl From<ErrorMessage> for MatcherError {
+    fn from(e: ErrorMessage) -> Self {
+        MatcherError::InternalError(e.to_string())
+    }
+}
+
+impl From<DbError> for MatcherError {
+    fn from(e: DbError) -> Self {
+        MatcherError::InternalError(e.to_string())
     }
 }

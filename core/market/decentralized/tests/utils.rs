@@ -1,11 +1,15 @@
 use anyhow::{anyhow, Context, Result};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use ya_client::model::NodeId;
 use ya_core_model::net;
 use ya_market_decentralized::MarketService;
 use ya_persistence::executor::DbExecutor;
+use ya_service_api_web::middleware::Identity;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -15,9 +19,12 @@ pub struct MarketsNetwork {
 
 /// Store all object associated with single market
 /// for example: Database
+#[allow(unused)]
 pub struct MarketNode {
     market: Arc<MarketService>,
     name: String,
+    /// For now only mock default Identity.
+    identity: Identity,
 }
 
 impl MarketsNetwork {
@@ -35,14 +42,14 @@ impl MarketsNetwork {
         name: Str,
     ) -> Result<Self, anyhow::Error> {
         let db = self.init_database(name.as_ref())?;
-        let data_dir = self.instance_dir(name.as_ref());
-        let market = Arc::new(MarketService::new(&db, &data_dir)?);
+        let market = Arc::new(MarketService::new(&db)?);
 
         let gsb_prefix = format!("{}/{}/market", net::BUS_ID, name.as_ref());
         market.bind_gsb(gsb_prefix).await?;
 
         let market_node = MarketNode {
             name: name.as_ref().to_string(),
+            identity: generate_identity(name.as_ref()),
             market,
         };
 
@@ -58,11 +65,19 @@ impl MarketsNetwork {
             .unwrap()
     }
 
+    #[allow(unused)]
+    pub fn get_default_id(&self, name: &str) -> Identity {
+        self.markets
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.identity.clone())
+            .unwrap()
+    }
+
     fn init_database(&self, name: &str) -> Result<DbExecutor> {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|error| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, error))?;
-        db.apply_migration(ya_persistence::migrations::run_with_output)?;
         Ok(db)
     }
 
@@ -87,4 +102,14 @@ fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf, anyhow::E
     fs::create_dir_all(&test_dir)
         .with_context(|| format!("Creating test directory: {}", test_dir.display()))?;
     Ok(test_dir)
+}
+
+fn generate_identity(name: &str) -> Identity {
+    let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
+
+    Identity {
+        name: name.to_string(),
+        role: "manager".to_string(),
+        identity: NodeId::from(random_node_id[..].as_bytes()),
+    }
 }

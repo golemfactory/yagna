@@ -65,7 +65,7 @@ fn define_enum(
 
     let cli = define_cli_services(&item.vis, &ident, &services);
     let gsb = define_gsb_services(&services, context);
-    let rest = define_rest_services(&services);
+    let rest = define_rest_services(&services, context);
 
     quote! {
         #cli
@@ -115,7 +115,7 @@ fn define_cli_services(
             });
         }
         variants.extend(quote! {
-            #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+            #[structopt(setting = structopt::clap::AppSettings::DeriveDisplayOrder)]
             #name(#path::Cli),
         });
         variants_match.extend(quote! {
@@ -138,6 +138,7 @@ fn define_cli_services(
     quote! {
         #[doc(hidden)]
         #[derive(structopt::StructOpt, Debug)]
+        #[structopt(setting = structopt::clap::AppSettings::DeriveDisplayOrder)]
         #vis enum #ident {
             #variants
         }
@@ -176,7 +177,10 @@ fn define_gsb_services(
     }
 }
 
-fn define_rest_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
+fn define_rest_services(
+    services: &Vec<Service>,
+    context_path: &syn::Meta,
+) -> proc_macro2::TokenStream {
     let mut inner = proc_macro2::TokenStream::new();
     for service in services
         .iter()
@@ -184,12 +188,12 @@ fn define_rest_services(services: &Vec<Service>) -> proc_macro2::TokenStream {
     {
         let path = &service.path;
         inner.extend(quote! {
-            let app = app.service(#path::rest(&db));
+            let app = app.service(#path::rest(context));
         });
     }
 
     quote! {
-        pub fn rest<T, B>(mut app: actix_web::App<T, B>, db: &DbExecutor) -> actix_web::App<T, B>
+        pub fn rest<T, B>(mut app: actix_web::App<T, B>, context: &#context_path) -> actix_web::App<T, B>
         where
             B : actix_web::body::MessageBody,
             T : actix_service::ServiceFactory<
