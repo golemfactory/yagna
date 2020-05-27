@@ -56,7 +56,7 @@ impl MarketService {
         Ok(())
     }
 
-    pub fn rest(db: &DbExecutor) -> actix_web::Scope {
-        api::web_scope(&db)
+    pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
+        api::web_scope(&ctx.component())
     }
 }

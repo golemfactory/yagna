@@ -32,11 +32,11 @@ pub struct MarketService {
 }
 
 impl MarketService {
-    pub fn new(db: &DbExecutor, data_dir: &Path) -> Result<Self, MarketInitError> {
+    pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
 
-        let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder, data_dir)?;
+        let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder, db)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
         let requestor_engine =
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
@@ -57,26 +57,19 @@ impl MarketService {
         Ok(())
     }
 
-    pub async fn gsb<Context: Provider<Self, DbExecutor> + Provider<Self, PathBuf>>(
-        ctx: &Context,
-    ) -> anyhow::Result<()> {
-        let db = ctx.component();
-        let data_dir: PathBuf = ctx.component();
-        let market = MARKET.get_or_init_market(&db, &data_dir)?;
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
+        let market = MARKET.get_or_init_market(&ctx.component())?;
         Ok(market.bind_gsb(BUS_ID.to_string()).await?)
     }
 
-    pub fn rest(db: &DbExecutor) -> actix_web::Scope {
-        // TODO: We should run gsb function first, because it gets datadir.
-        //       This code is order dependent :/
-        let market = match MARKET.get_or_init_market(db, &current_dir().unwrap()) {
+    pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
+        let market = match MARKET.get_or_init_market(&ctx.component()) {
             Ok(market) => market,
             Err(error) => {
                 log::error!("{}", error);
                 panic!("Market initialization impossible. Check error logs.")
             }
         };
-
         actix_web::web::scope(crate::MARKET_API_PATH).data(market)
     }
 }
@@ -104,13 +97,12 @@ impl StaticMarket {
     pub fn get_or_init_market(
         &self,
         db: &DbExecutor,
-        data_dir: &Path,
     ) -> Result<Arc<MarketService>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let market = Arc::new(MarketService::new(db, data_dir)?);
+            let market = Arc::new(MarketService::new(db)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

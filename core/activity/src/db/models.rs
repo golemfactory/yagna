@@ -1,7 +1,7 @@
 #![allow(unused)]
 #![allow(clippy::all)]
 
-use crate::schema::*;
+use super::schema::*;
 use chrono::NaiveDateTime;
 use diesel::backend::Backend;
 use diesel::deserialize;
@@ -72,7 +72,7 @@ pub struct ActivityState {
 }
 
 impl std::convert::TryFrom<ActivityState> for ya_client_model::activity::ActivityState {
-    type Error = crate::Error;
+    type Error = ya_persistence::Error;
 
     fn try_from(value: ActivityState) -> Result<Self, Self::Error> {
         Ok(ya_client_model::activity::ActivityState {
@@ -92,7 +92,7 @@ pub struct ActivityUsage {
 }
 
 impl std::convert::TryFrom<ActivityUsage> for ya_client_model::activity::ActivityUsage {
-    type Error = crate::Error;
+    type Error = ya_persistence::Error;
 
     fn try_from(value: ActivityUsage) -> Result<Self, Self::Error> {
         Ok(ya_client_model::activity::ActivityUsage {
