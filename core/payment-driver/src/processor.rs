@@ -1,7 +1,7 @@
-use crate::account::AccountBalance;
 use crate::PaymentDriver;
 use crate::PaymentDriverResult;
 use std::sync::Arc;
+use ya_core_model::driver::AccountBalance;
 use ya_persistence::executor::DbExecutor;
 
 #[derive(Clone)]

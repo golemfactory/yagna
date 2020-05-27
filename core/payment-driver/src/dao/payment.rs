@@ -6,8 +6,8 @@ use crate::schema::gnt_driver_payment::dsl;
 
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
 
-use crate::payment::PAYMENT_STATUS_OK;
-use crate::{PaymentConfirmation, PaymentStatus};
+use crate::utils::{payment_entity_to_status, PAYMENT_STATUS_OK};
+use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 #[allow(unused)]
@@ -48,7 +48,7 @@ impl<'c> PaymentDao<'c> {
                 None => return Ok(None),
             };
             let tx_id = payment.tx_id.clone();
-            let mut status = payment.into();
+            let mut status = payment_entity_to_status(&payment);
             if let PaymentStatus::Ok(ref mut confirmation) = &mut status {
                 let tx_id = match tx_id {
                     Some(v) => v,

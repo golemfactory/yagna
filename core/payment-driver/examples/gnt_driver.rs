@@ -13,10 +13,8 @@ use std::future::Future;
 use std::pin::Pin;
 
 use uuid::Uuid;
-use ya_payment_driver::account::AccountBalance;
+use ya_core_model::driver::{AccountBalance, AccountMode, PaymentAmount, PaymentStatus};
 use ya_payment_driver::gnt::GntDriver;
-use ya_payment_driver::payment::{PaymentAmount, PaymentStatus};
-use ya_payment_driver::AccountMode;
 use ya_payment_driver::PaymentDriver;
 
 use ya_persistence::executor::DbExecutor;

@@ -1,7 +1,4 @@
-use crate::{
-    utils, AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
-    PaymentDetails, PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
-};
+use crate::{utils, PaymentDriver, PaymentDriverError, SignTx};
 use chrono::{DateTime, Utc};
 use futures3::lock::Mutex;
 use futures3::prelude::*;
@@ -12,6 +9,10 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use ya_core_model::driver::{
+    AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
+    PaymentDetails, PaymentStatus,
+};
 
 #[derive(Clone)]
 pub struct DummyDriver {

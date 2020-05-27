@@ -4852,6 +4852,7 @@ name = "ya-core-model"
 version = "0.1.0"
 dependencies = [
  "bigdecimal 0.1.2",
+ "bitflags 1.2.1",
  "chrono",
  "serde",
  "serde_bytes",

@@ -8,17 +8,12 @@ use web3::types::{Bytes, Log, TransactionReceipt};
 
 use ya_persistence::executor::DbExecutor;
 
-use crate::account::{AccountBalance, Balance, Currency};
 use crate::dao::payment::PaymentDao;
 
 use crate::error::PaymentDriverError;
 use crate::ethereum::{Chain, EthereumClient, EthereumClientBuilder};
 use crate::models::{PaymentEntity, TxType};
-use crate::payment::{
-    PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus, PAYMENT_STATUS_FAILED,
-    PAYMENT_STATUS_NOT_ENOUGH_FUNDS, PAYMENT_STATUS_NOT_ENOUGH_GAS,
-};
-use crate::{AccountMode, PaymentDriver, PaymentDriverResult, SignTx};
+use crate::{PaymentDriver, PaymentDriverResult, SignTx};
 
 use futures3::compat::*;
 use futures3::prelude::*;
@@ -28,8 +23,16 @@ use crate::utils;
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::utils::{
+    payment_status_to_i32, PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
+    PAYMENT_STATUS_NOT_ENOUGH_GAS,
+};
 use std::sync::Arc;
 use web3::Transport;
+use ya_core_model::driver::{
+    AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
+    PaymentDetails, PaymentStatus,
+};
 
 mod config;
 mod faucet;
@@ -330,7 +333,7 @@ impl PaymentDriver for GntDriver {
             payment_due_date: due_date.naive_utc(),
             sender: sender.clone(),
             recipient: recipient.clone(),
-            status: PaymentStatus::NotYet.to_i32(),
+            status: payment_status_to_i32(&PaymentStatus::NotYet {}),
             tx_id: None,
         };
         async move {
@@ -481,11 +484,10 @@ async fn transfer_gnt(
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
-    use crate::account::Currency;
     use crate::utils;
+    use ya_core_model::driver::Currency;
 
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 

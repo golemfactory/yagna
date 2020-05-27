@@ -15,7 +15,7 @@ async fn get_account_balance(
     processor: PaymentDriverProcessor,
     _caller: String,
     msg: GetAccountBalance,
-) -> Result<AccountBalanceResult, GenericError> {
+) -> Result<AccountBalance, GenericError> {
     log::info!("get account balance: {:?}", msg);
 
     let addr = msg.address();
@@ -25,10 +25,6 @@ async fn get_account_balance(
         .await
         .map_or_else(
             |e| Err(GenericError::new(e)),
-            |account_balance| {
-                Ok(AccountBalanceResult {
-                    amount: account_balance.base_currency.amount,
-                })
-            },
+            |account_balance| Ok(account_balance),
         )
 }

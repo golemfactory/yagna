@@ -6,12 +6,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::payment::{Invoice, Payment};
 use ya_core_model::driver;
+use ya_core_model::driver::{AccountMode, PaymentAmount, PaymentConfirmation, PaymentStatus};
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
-use ya_payment_driver::{
-    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
-    PaymentDriverError, PaymentStatus,
-};
+use ya_payment_driver::{PaymentDriver, PaymentDriverError};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -245,7 +243,7 @@ impl PaymentProcessor {
             .await
             .map_or_else(
                 |e| Err(PaymentError::DriverService(e)),
-                |balance| Ok(balance.unwrap().amount),
+                |balance| Ok(balance.unwrap().base_currency.amount),
             )
     }
 }

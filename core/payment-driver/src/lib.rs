@@ -13,34 +13,24 @@ mod processor;
 mod schema;
 mod utils;
 
-pub mod account;
 pub mod dao;
 pub mod error;
 pub mod gnt;
-pub mod payment;
 pub mod service;
 
-pub use account::{AccountBalance, Balance, Currency};
-use bitflags::bitflags;
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
 pub use gnt::GntDriver;
-pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use std::future::Future;
 use std::pin::Pin;
+use ya_core_model::driver::{
+    AccountBalance, AccountMode, Balance, PaymentAmount, PaymentConfirmation, PaymentDetails,
+    PaymentStatus,
+};
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
 
 pub type SignTx<'a> = &'a (dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>);
-
-bitflags! {
-    pub struct AccountMode : usize {
-        const NONE = 0b000;
-        const RECV = 0b001;
-        const SEND = 0b010;
-        const ALL = Self::RECV.bits | Self::SEND.bits;
-    }
-}
 
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]

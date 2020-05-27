@@ -9,11 +9,12 @@ use std::sync::Arc;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
+use ya_core_model::driver::AccountMode;
 
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
-use ya_payment_driver::{AccountMode, DummyDriver, GntDriver, PaymentDriver};
+use ya_payment_driver::{DummyDriver, GntDriver, PaymentDriver};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
