@@ -1,21 +1,23 @@
-use crate::common::{
-    authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, get_persisted_state, get_persisted_usage,
-    RpcMessageResult,
-};
-use crate::dao::*;
-use crate::error::Error;
 use actix_rt::Arbiter;
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
 use std::convert::From;
 use std::time::Duration;
+
 use ya_client_model::activity::{ActivityState, ActivityUsage, State};
 use ya_core_model::activity;
 use ya_persistence::executor::DbExecutor;
-use ya_persistence::models::ActivityEventType;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
+
+use crate::common::{
+    authorize_activity_initiator, authorize_agreement_initiator, generate_id,
+    get_activity_agreement, get_agreement, get_persisted_state, get_persisted_usage,
+    RpcMessageResult,
+};
+use crate::dao::*;
+use crate::db::models::ActivityEventType;
+use crate::error::Error;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const DEFAULT_INACTIVITY_LIMIT_SECONDS: i64 = 10;

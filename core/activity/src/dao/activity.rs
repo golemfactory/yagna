@@ -4,9 +4,9 @@ use serde_json;
 
 use ya_client_model::activity::{State, StatePair};
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::schema;
 
 use crate::dao::{last_insert_rowid, DaoError, Result};
+use crate::db::schema;
 use diesel::dsl::exists;
 
 pub struct ActivityDao<'c> {

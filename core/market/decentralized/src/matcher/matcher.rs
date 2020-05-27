@@ -36,7 +36,7 @@ pub struct Matcher {
 impl Matcher {
     pub fn new<Factory: DiscoveryFactory>(
         builder: DiscoveryBuilder,
-        data_dir: &Path,
+        db: &DbExecutor,
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
         let builder = builder
@@ -50,12 +50,11 @@ impl Matcher {
             });
 
         let discovery = Factory::new(builder)?;
-        let db = DbExecutor::from_data_dir(&data_dir, "offers")?;
 
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {
-            db,
+            db: db.clone(),
             discovery,
             proposal_emitter: emitter,
         };
