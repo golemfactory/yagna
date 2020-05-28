@@ -1,8 +1,9 @@
 use crate::PaymentDriver;
 use crate::PaymentDriverResult;
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use ya_core_model::driver::{
-    AccountBalance, AccountMode, PaymentConfirmation, PaymentDetails, PaymentStatus,
+    AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus,
 };
 use ya_persistence::executor::DbExecutor;
 
@@ -33,6 +34,19 @@ impl PaymentDriverProcessor {
 
     pub async fn get_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus> {
         self.driver.get_payment_status(invoice_id).await
+    }
+
+    pub async fn schedule_payment(
+        &self,
+        invoice_id: &str,
+        amount: PaymentAmount,
+        sender: &str,
+        recipient: &str,
+        due_date: DateTime<Utc>,
+    ) -> PaymentDriverResult<()> {
+        self.driver
+            .schedule_payment(invoice_id, amount, sender, recipient, due_date)
+            .await
     }
 
     pub async fn verify_payment(

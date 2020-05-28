@@ -206,3 +206,57 @@ impl RpcMessage for Init {
     type Item = Ack;
     type Error = GenericError;
 }
+
+// ************************** SCHEDULE PAYMENT **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SchedulePayment {
+    invoice_id: String,
+    amount: PaymentAmount,
+    sender: String,
+    recipient: String,
+    due_date: DateTime<Utc>,
+}
+
+impl SchedulePayment {
+    pub fn new(
+        invoice_id: String,
+        amount: PaymentAmount,
+        sender: String,
+        recipient: String,
+        due_date: DateTime<Utc>,
+    ) -> SchedulePayment {
+        SchedulePayment {
+            invoice_id,
+            amount,
+            sender,
+            recipient,
+            due_date,
+        }
+    }
+    pub fn invoice_id(&self) -> String {
+        self.invoice_id.clone()
+    }
+
+    pub fn amount(&self) -> PaymentAmount {
+        self.amount.clone()
+    }
+
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+
+    pub fn recipient(&self) -> String {
+        self.recipient.clone()
+    }
+
+    pub fn due_date(&self) -> DateTime<Utc> {
+        self.due_date.clone()
+    }
+}
+
+impl RpcMessage for SchedulePayment {
+    const ID: &'static str = "SchedulePayment";
+    type Item = Ack;
+    type Error = GenericError;
+}

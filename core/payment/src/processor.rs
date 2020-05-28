@@ -62,15 +62,18 @@ impl PaymentProcessor {
                 gas_amount: None,
             };
             // TODO: Allow signing transactions with different key than node ID
-            self.driver
-                .schedule_payment(
-                    &invoice_id,
+            bus::service(driver::BUS_ID)
+                .send(driver::SchedulePayment::new(
+                    invoice_id.clone(),
                     amount,
-                    &invoice.payer_addr,
-                    &invoice.payee_addr,
+                    invoice.payer_addr.clone(),
+                    invoice.payee_addr.clone(),
                     invoice.payment_due_date,
-                )
-                .await?;
+                ))
+                .await
+                .unwrap()
+                .unwrap();
+
             // *************************************** END ***************************************
 
             let confirmation = self.wait_for_payment(&invoice.invoice_id).await?;

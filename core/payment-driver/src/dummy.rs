@@ -81,7 +81,6 @@ impl PaymentDriver for DummyDriver {
         })
     }
 
-
     fn get_payment_status(
         &self,
         invoice_id: &str,
