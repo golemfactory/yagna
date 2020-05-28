@@ -81,20 +81,6 @@ impl PaymentDriver for DummyDriver {
         })
     }
 
-    fn reschedule_payment<'a>(
-        &self,
-        invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
-        let invoice_id = invoice_id.to_owned();
-        let payments = self.payments.clone();
-
-        Box::pin(async move {
-            match payments.lock().await.get(&invoice_id) {
-                Some(_) => Ok(()),
-                None => Err(PaymentDriverError::PaymentNotFound(invoice_id)),
-            }
-        })
-    }
 
     fn get_payment_status(
         &self,

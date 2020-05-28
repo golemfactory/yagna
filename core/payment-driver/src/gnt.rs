@@ -380,27 +380,6 @@ impl PaymentDriver for GntDriver {
         .boxed_local()
     }
 
-    /// Reschedules payment
-    fn reschedule_payment<'a>(
-        &self,
-        invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
-        let db = self.db.clone();
-        let tx_sender = self.tx_sender.clone();
-        let invoice_id = invoice_id.to_owned();
-        async move {
-            let payment = match db.as_dao::<PaymentDao>().get(invoice_id.clone()).await? {
-                Some(v) => v,
-                None => return Err(PaymentDriverError::PaymentNotFound(invoice_id)),
-            };
-            if let Some(tx_id) = payment.tx_id {
-                tx_sender.send(sender::Retry { tx_id }).await??;
-            }
-            Ok(())
-        }
-        .boxed_local()
-    }
-
     /// Returns payment status
     fn get_payment_status(
         &self,

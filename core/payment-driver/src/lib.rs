@@ -60,12 +60,6 @@ pub trait PaymentDriver {
         due_date: DateTime<Utc>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
-    /// Schedules payment
-    fn reschedule_payment<'a>(
-        &self,
-        invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
-
     /// Returns payment status
     fn get_payment_status(
         &self,
