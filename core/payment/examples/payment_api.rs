@@ -1,18 +1,13 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
-use futures::Future;
-use std::convert::TryInto;
-use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_core_model::driver::AccountMode;
 
 use ya_payment::processor::PaymentProcessor;
-use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
 use ya_payment_driver::{DummyDriver, GntDriver, PaymentDriver};
 use ya_persistence::executor::DbExecutor;
@@ -70,40 +65,12 @@ async fn get_gnt_driver(
 ) -> anyhow::Result<GntDriver> {
     let provider_addr = hex::encode(provider_account.address());
     let requestor_addr = hex::encode(requestor_account.address());
-    let provider_sign_tx = get_sign_tx(provider_account);
-    let requestor_sign_tx = get_sign_tx(requestor_account);
 
     let driver = GntDriver::new(db.clone()).await?;
-    driver
-        .init(AccountMode::RECV, &provider_addr, &provider_sign_tx)
-        .await?;
-    driver
-        .init(AccountMode::SEND, &requestor_addr, &requestor_sign_tx)
-        .await?;
+    driver.init(AccountMode::RECV, &provider_addr).await?;
+    driver.init(AccountMode::SEND, &requestor_addr).await?;
 
-    fake_sign_tx(Box::new(provider_sign_tx));
-    fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(driver)
-}
-
-fn get_sign_tx(
-    account: Box<EthAccount>,
-) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    // let account: Arc<EthAccount> = EthAccount::load_or_generate(key_path, password).unwrap().into();
-    let account: Arc<EthAccount> = account.into();
-    move |msg| {
-        let account = account.clone();
-        let fut = async move {
-            let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
-            let signature = account.sign(&msg).unwrap();
-            let mut v = Vec::with_capacity(65);
-            v.push(signature.v);
-            v.extend_from_slice(&signature.r);
-            v.extend_from_slice(&signature.s);
-            v
-        };
-        Box::pin(fut)
-    }
 }
 
 #[actix_rt::main]

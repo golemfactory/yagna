@@ -42,7 +42,6 @@ pub trait PaymentDriver {
         &self,
         mode: AccountMode,
         address: &str,
-        sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Returns account balance
@@ -59,14 +58,12 @@ pub trait PaymentDriver {
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-        sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Schedules payment
     fn reschedule_payment<'a>(
         &self,
         invoice_id: &str,
-        sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Returns payment status

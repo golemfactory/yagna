@@ -262,7 +262,6 @@ impl PaymentDriver for GntDriver {
         &self,
         mode: AccountMode,
         address: &str,
-        sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
         use futures3::prelude::*;
 
@@ -271,12 +270,12 @@ impl PaymentDriver for GntDriver {
                 && self.ethereum_client.chain_id() == Chain::Rinkeby.id()
             {
                 let address = utils::str_to_addr(address).unwrap();
-                let req = self.request_gnt_from_faucet(address, sign_tx);
+                // let req = self.request_gnt_from_faucet(address, sign_tx);
                 let fut = async move {
                     faucet::EthFaucetConfig::from_env()?
                         .request_eth(address)
                         .await?;
-                    req.await?;
+                    // req.await?;
                     Ok(())
                 };
 
@@ -314,7 +313,6 @@ impl PaymentDriver for GntDriver {
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-        sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
@@ -340,42 +338,42 @@ impl PaymentDriver for GntDriver {
             db.as_dao::<PaymentDao>().insert(payment).await?;
             let gas_price = client.get_gas_price().await?;
             let chain_id = client.chain_id();
-            match transfer_gnt(
-                gnt_contract,
-                tx_sender,
-                gnt_amount,
-                utils::str_to_addr(&sender)?,
-                utils::str_to_addr(&recipient)?,
-                sign_tx,
-                gas_price,
-                chain_id,
-            )
-            .await
-            {
-                Ok(tx_id) => {
-                    db.as_dao::<PaymentDao>()
-                        .update_tx_id(invoice_id, tx_id)
-                        .await?;
-                }
-                Err(e) => {
-                    db.as_dao::<PaymentDao>()
-                        .update_status(
-                            invoice_id,
-                            match e {
-                                PaymentDriverError::InsufficientFunds => {
-                                    PAYMENT_STATUS_NOT_ENOUGH_FUNDS
-                                }
-                                PaymentDriverError::InsufficientGas => {
-                                    PAYMENT_STATUS_NOT_ENOUGH_GAS
-                                }
-                                _ => PAYMENT_STATUS_FAILED,
-                            },
-                        )
-                        .await?;
-                    log::error!("gnt transfer failed: {}", e);
-                    return Err(e);
-                }
-            }
+            // match transfer_gnt(
+            //     gnt_contract,
+            //     tx_sender,
+            //     gnt_amount,
+            //     utils::str_to_addr(&sender)?,
+            //     utils::str_to_addr(&recipient)?,
+            //     sign_tx,
+            //     gas_price,
+            //     chain_id,
+            // )
+            // .await
+            // {
+            //     Ok(tx_id) => {
+            //         db.as_dao::<PaymentDao>()
+            //             .update_tx_id(invoice_id, tx_id)
+            //             .await?;
+            //     }
+            //     Err(e) => {
+            //         db.as_dao::<PaymentDao>()
+            //             .update_status(
+            //                 invoice_id,
+            //                 match e {
+            //                     PaymentDriverError::InsufficientFunds => {
+            //                         PAYMENT_STATUS_NOT_ENOUGH_FUNDS
+            //                     }
+            //                     PaymentDriverError::InsufficientGas => {
+            //                         PAYMENT_STATUS_NOT_ENOUGH_GAS
+            //                     }
+            //                     _ => PAYMENT_STATUS_FAILED,
+            //                 },
+            //             )
+            //             .await?;
+            //         log::error!("gnt transfer failed: {}", e);
+            //         return Err(e);
+            //     }
+            // }
 
             Ok(())
         }
@@ -386,7 +384,6 @@ impl PaymentDriver for GntDriver {
     fn reschedule_payment<'a>(
         &self,
         invoice_id: &str,
-        _sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
         let db = self.db.clone();
         let tx_sender = self.tx_sender.clone();

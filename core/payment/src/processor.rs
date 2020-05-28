@@ -1,6 +1,5 @@
 use crate::dao::{AgreementDao, InvoiceDao, PaymentDao};
 use crate::error::{Error, PaymentError, PaymentResult};
-use crate::utils::get_sign_tx;
 use bigdecimal::BigDecimal;
 use std::sync::Arc;
 use std::time::Duration;
@@ -63,7 +62,6 @@ impl PaymentProcessor {
                 gas_amount: None,
             };
             // TODO: Allow signing transactions with different key than node ID
-            let sign_tx = get_sign_tx(payer_id);
             self.driver
                 .schedule_payment(
                     &invoice_id,
@@ -71,7 +69,6 @@ impl PaymentProcessor {
                     &invoice.payer_addr,
                     &invoice.payee_addr,
                     invoice.payment_due_date,
-                    &sign_tx,
                 )
                 .await?;
             // *************************************** END ***************************************
@@ -242,9 +239,7 @@ impl PaymentProcessor {
         if provider {
             mode |= AccountMode::RECV;
         }
-        let node_id = addr.parse().unwrap();
-        let sign_tx = get_sign_tx(node_id);
-        Ok(self.driver.init(mode, addr.as_str(), &sign_tx).await?)
+        Ok(self.driver.init(mode, addr.as_str()).await?)
     }
 
     pub async fn get_status(&self, addr: &str) -> PaymentResult<BigDecimal> {

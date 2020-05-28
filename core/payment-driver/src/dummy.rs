@@ -1,4 +1,4 @@
-use crate::{utils, PaymentDriver, PaymentDriverError, SignTx};
+use crate::{utils, PaymentDriver, PaymentDriverError};
 use chrono::{DateTime, Utc};
 use futures3::lock::Mutex;
 use futures3::prelude::*;
@@ -28,12 +28,11 @@ impl DummyDriver {
 }
 
 impl PaymentDriver for DummyDriver {
-    fn init(
+    fn init<'a>(
         &self,
         _mode: AccountMode,
         _address: &str,
-        _sign_tx: SignTx<'_>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         Box::pin(future::ready(Ok(())))
     }
 
@@ -61,8 +60,7 @@ impl PaymentDriver for DummyDriver {
         sender: &str,
         recipient: &str,
         _due_date: DateTime<Utc>,
-        _sign_tx: SignTx<'a>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         let payments = self.payments.clone();
         let details = PaymentDetails {
             recipient: recipient.to_string(),
@@ -86,8 +84,7 @@ impl PaymentDriver for DummyDriver {
     fn reschedule_payment<'a>(
         &self,
         invoice_id: &str,
-        _sign_tx: SignTx<'a>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         let invoice_id = invoice_id.to_owned();
         let payments = self.payments.clone();
 
