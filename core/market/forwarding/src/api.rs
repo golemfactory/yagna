@@ -8,8 +8,16 @@ use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+pub const CENTRAL_MARKET_URL_ENV_VAR: &str = "YAGNA_API_URL";
+pub const DEFAULT_CENTRAL_MARKET_URL: &str = "http://34.244.4.185:8080/market-api/v1/";
+
 lazy_static::lazy_static! {
-    pub(crate) static ref CENTRAL_MARKET_URL: Url = "http://34.244.4.185:8080/market-api/v1/".parse().unwrap();
+    pub(crate) static ref CENTRAL_MARKET_URL: Url =
+        std::env::var(CENTRAL_MARKET_URL_ENV_VAR)
+            .unwrap_or(DEFAULT_CENTRAL_MARKET_URL.into())
+            .parse()
+            .unwrap();
+
     static ref FORWARD_CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 }
 
