@@ -6,7 +6,6 @@ use std::path::PathBuf;
 #[derive(Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
-    pub api_host_port: String,
     pub gsb_url: Option<url::Url>,
     pub json_output: bool,
     pub interactive: bool,

@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ClientCommand::Request { key } => {
                     let mut resp = Client::default()
-                        .get(format!("{}", rest_api_url()))
+                        .get(rest_api_url().into_string())
                         .header(header::AUTHORIZATION, key)
                         .send()
                         .map_err(map_err)

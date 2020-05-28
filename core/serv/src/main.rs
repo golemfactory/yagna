@@ -44,7 +44,7 @@ use data_dir::DataDir;
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
-    /// Daemon data dir
+    /// Service data dir
     #[structopt(
         short,
         long = "datadir",
@@ -54,16 +54,6 @@ struct CliArgs {
         hide_env_values = true,
     )]
     data_dir: DataDir,
-
-    /// Daemon address
-    #[structopt(
-        short,
-        long,
-        env = YAGNA_API_URL_ENV_VAR,
-        default_value = DEFAULT_YAGNA_API_URL,
-        hide_env_values = true,
-    )]
-    api_url: Url,
 
     /// Service Bus (aka GSB) URL
     #[structopt(
@@ -98,7 +88,7 @@ impl CliArgs {
 
     pub fn log_level(&self) -> String {
         match self.command {
-            CliCommand::Service(ServiceCommand::Run) => self.log_level.clone(),
+            CliCommand::Service(ServiceCommand::Run(..)) => self.log_level.clone(),
             _ => "error".to_string(),
         }
     }
@@ -120,7 +110,6 @@ impl TryFrom<&CliArgs> for CliCtx {
 
         Ok(CliCtx {
             data_dir,
-            api_host_port: rest_api_host_port(args.api_url.clone()),
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
             interactive: args.interactive,
@@ -205,19 +194,32 @@ impl CliCommand {
 #[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
-    Run,
+    Run(ServiceCommandOpts),
     /// Spawns daemon
-    Start,
+    Start(ServiceCommandOpts),
     /// Stops daemon
     Stop,
     /// Checks if daemon is running
     Status,
 }
 
+#[derive(StructOpt, Debug)]
+struct ServiceCommandOpts {
+    /// Service address
+    #[structopt(
+        short,
+        long,
+        env = YAGNA_API_URL_ENV_VAR,
+        default_value = DEFAULT_YAGNA_API_URL,
+        hide_env_values = true,
+    )]
+    api_url: Url,
+}
+
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            Self::Run => {
+            Self::Run(ServiceCommandOpts { api_url }) => {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
@@ -228,6 +230,7 @@ impl ServiceCommand {
                 let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
                 Services::gsb(&context).await?;
 
+                let api_host_port = rest_api_host_port(api_url.clone());
                 HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
@@ -235,11 +238,8 @@ impl ServiceCommand {
                         .route("/me", web::get().to(me));
                     Services::rest(app, &context)
                 })
-                .bind(ctx.api_host_port.clone())
-                .context(format!(
-                    "Failed to bind http server on {:?}",
-                    ctx.api_host_port
-                ))?
+                .bind(api_host_port.clone())
+                .context(format!("Failed to bind http server on {:?}", api_host_port))?
                 .run()
                 .await?;
 
