@@ -166,7 +166,7 @@ impl ServiceContext {
         let dbs = [
             Self::make_entry::<MarketService>(path, "market")?,
             Self::make_entry::<ActivityService>(path, "activity")?,
-            Self::make_entry::<PaymentService>(path, "payments")?,
+            Self::make_entry::<PaymentService>(path, "payment")?,
         ]
         .iter()
         .cloned()
