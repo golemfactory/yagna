@@ -15,7 +15,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
-        let network = MarketsNetwork::new("test_subscribe_offer")
+        let network = MarketsNetwork::new("test_subscribe_offer").await
             .add_market_instance("Node-1")
             .await?;
 
@@ -56,7 +56,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_subscribe_demand() -> Result<(), anyhow::Error> {
-        let network = MarketsNetwork::new("test_subscribe_demand")
+        let network = MarketsNetwork::new("test_subscribe_demand").await
             .add_market_instance("Node-1")
             .await?;
 

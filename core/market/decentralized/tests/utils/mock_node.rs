@@ -6,10 +6,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ya_client::model::NodeId;
-use ya_core_model::net;
+use ya_net::bcast;
 use ya_market_decentralized::MarketService;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+
+use super::mock_net::MockNet;
+
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -28,8 +31,11 @@ pub struct MarketNode {
 }
 
 impl MarketsNetwork {
-    pub fn new<Str: AsRef<str>>(dir_name: Str) -> Self {
+    pub async fn new<Str: AsRef<str>>(dir_name: Str) -> Self {
         let test_dir = prepare_test_dir(dir_name).unwrap();
+
+        let bcast = bcast::BCastService::default();
+        MockNet::gsb(bcast).await.unwrap();
 
         MarketsNetwork {
             markets: vec![],
@@ -44,7 +50,7 @@ impl MarketsNetwork {
         let db = self.init_database(name.as_ref())?;
         let market = Arc::new(MarketService::new(&db)?);
 
-        let gsb_prefix = format!("{}/{}/market", net::BUS_ID, name.as_ref());
+        let gsb_prefix = format!("/{}", name.as_ref());
         market.bind_gsb(gsb_prefix).await?;
 
         let market_node = MarketNode {

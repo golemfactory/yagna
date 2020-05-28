@@ -4994,6 +4994,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-client",
  "ya-core-model",
+ "ya-net",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",

@@ -148,9 +148,13 @@ impl Discovery for DiscoveryGSB {
         let retrieve_handler = self.retrieve_offers.clone();
         let offer_received_handler = self.offer_received.clone();
 
+        log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
+
         let offer_broadcast_address = format!("{}/{}", prefix, OfferReceived::TOPIC);
         let subscribe_msg = OfferReceived::into_subscribe_msg(&offer_broadcast_address);
-        bus::service(net::BUS_ID).send(subscribe_msg).await??;
+        bus::service(net::local::BUS_ID).send(subscribe_msg).await??;
+
+        log::debug!("Binding handler for broadcast topic {}.", OfferReceived::TOPIC);
 
         let _ = bus::bind_with_caller(&offer_broadcast_address, move |caller, msg: OfferReceived| {
             let handler = offer_received_handler.clone();
