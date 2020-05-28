@@ -260,3 +260,30 @@ impl RpcMessage for SchedulePayment {
     type Item = Ack;
     type Error = GenericError;
 }
+
+// ************************** GET TRANSACTION BALANCE **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetTransactionBalance {
+    sender: String,
+    recipient: String,
+}
+
+impl GetTransactionBalance {
+    pub fn new(sender: String, recipient: String) -> GetTransactionBalance {
+        GetTransactionBalance { sender, recipient }
+    }
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+
+    pub fn recipient(&self) -> String {
+        self.recipient.clone()
+    }
+}
+
+impl RpcMessage for GetTransactionBalance {
+    const ID: &'static str = "GetTransactionBalance";
+    type Item = Balance;
+    type Error = GenericError;
+}

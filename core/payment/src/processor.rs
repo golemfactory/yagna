@@ -217,10 +217,15 @@ impl PaymentProcessor {
         let db_balance = agreement_dao
             .get_transaction_balance(payee_id, payee_addr, payer_addr)
             .await?;
-        let bc_balance = self
-            .driver
-            .get_transaction_balance(details.sender.as_str(), details.recipient.as_str())
-            .await?;
+        let bc_balance = bus::service(driver::BUS_ID)
+            .send(driver::GetTransactionBalance::new(
+                details.sender.clone(),
+                details.recipient.clone(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+
         let bc_balance = bc_balance.amount;
 
         if bc_balance < db_balance + actual_amount {

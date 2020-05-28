@@ -10,6 +10,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
         .bind_with_processor(init)
         .bind_with_processor(get_account_balance)
         .bind_with_processor(get_payment_status)
+        .bind_with_processor(get_transaction_balance)
         .bind_with_processor(schedule_payment)
         .bind_with_processor(verify_payment);
 
@@ -69,6 +70,23 @@ async fn get_payment_status(
             |e| Err(GenericError::new(e)),
             |payment_status| Ok(payment_status),
         )
+}
+
+async fn get_transaction_balance(
+    _db: DbExecutor,
+    processor: PaymentDriverProcessor,
+    _caller: String,
+    msg: GetTransactionBalance,
+) -> Result<Balance, GenericError> {
+    log::info!("get transaction balance: {:?}", msg);
+
+    let sender = msg.sender();
+    let recipient = msg.recipient();
+
+    processor
+        .get_transaction_balance(sender.as_str(), recipient.as_str())
+        .await
+        .map_or_else(|e| Err(GenericError::new(e)), |balance| Ok(balance))
 }
 
 async fn schedule_payment(
