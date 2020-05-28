@@ -32,7 +32,12 @@ impl PaymentProcessor {
 
     async fn wait_for_payment(&self, invoice_id: &str) -> PaymentResult<PaymentConfirmation> {
         loop {
-            match self.driver.get_payment_status(&invoice_id).await? {
+            let payment_status: PaymentStatus = bus::service(driver::BUS_ID)
+                .send(driver::GetPaymentStatus::from(invoice_id.to_string()))
+                .await
+                .unwrap()
+                .unwrap();
+            match payment_status {
                 PaymentStatus::Ok(confirmation) => return Ok(confirmation),
                 PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
                 _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),

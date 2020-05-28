@@ -6,7 +6,9 @@ use ya_service_bus::typed::ServiceBinder;
 pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
     log::debug!("Binding payment driver service to service bus");
 
-    ServiceBinder::new(BUS_ID, db, processor).bind_with_processor(get_account_balance);
+    ServiceBinder::new(BUS_ID, db, processor)
+        .bind_with_processor(get_account_balance)
+        .bind_with_processor(get_payment_status);
     log::debug!("Successfully bound payment driver service to service bus");
 }
 
@@ -26,5 +28,24 @@ async fn get_account_balance(
         .map_or_else(
             |e| Err(GenericError::new(e)),
             |account_balance| Ok(account_balance),
+        )
+}
+
+async fn get_payment_status(
+    _db: DbExecutor,
+    processor: PaymentDriverProcessor,
+    _caller: String,
+    msg: GetPaymentStatus,
+) -> Result<PaymentStatus, GenericError> {
+    log::info!("get payment status: {:?}", msg);
+
+    let invoice_id = msg.invoice_id();
+
+    processor
+        .get_payment_status(invoice_id.as_str())
+        .await
+        .map_or_else(
+            |e| Err(GenericError::new(e)),
+            |payment_status| Ok(payment_status),
         )
 }

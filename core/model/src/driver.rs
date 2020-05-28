@@ -122,12 +122,6 @@ impl From<String> for GetAccountBalance {
     }
 }
 
-impl AsRef<String> for GetAccountBalance {
-    fn as_ref(&self) -> &String {
-        &self.0
-    }
-}
-
 impl GetAccountBalance {
     pub fn address(&self) -> String {
         self.0.clone()
@@ -137,5 +131,28 @@ impl GetAccountBalance {
 impl RpcMessage for GetAccountBalance {
     const ID: &'static str = "GetAccountBalance";
     type Item = AccountBalance;
+    type Error = GenericError;
+}
+
+// ************************** GET PAYMENT STATUS **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetPaymentStatus(String);
+
+impl From<String> for GetPaymentStatus {
+    fn from(invoice_id: String) -> Self {
+        GetPaymentStatus(invoice_id)
+    }
+}
+
+impl GetPaymentStatus {
+    pub fn invoice_id(&self) -> String {
+        self.0.clone()
+    }
+}
+
+impl RpcMessage for GetPaymentStatus {
+    const ID: &'static str = "GetPaymentStatus";
+    type Item = PaymentStatus;
     type Error = GenericError;
 }
