@@ -6,7 +6,7 @@ use std::time::Duration;
 use ya_client_model::payment::{Invoice, Payment};
 use ya_core_model::driver;
 use ya_core_model::driver::{
-    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus,
+    AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -239,17 +239,21 @@ impl PaymentProcessor {
         if provider {
             mode |= AccountMode::RECV;
         }
-        Ok(self.driver.init(mode, addr.as_str()).await?)
+        bus::service(driver::BUS_ID)
+            .send(driver::Init::new(addr, mode))
+            .await
+            .unwrap()
+            .unwrap();
+        Ok(())
     }
 
     pub async fn get_status(&self, addr: &str) -> PaymentResult<BigDecimal> {
         let address: String = addr.to_string();
-        bus::service(driver::BUS_ID)
+        let account_balance: AccountBalance = bus::service(driver::BUS_ID)
             .send(driver::GetAccountBalance::from(address))
             .await
-            .map_or_else(
-                |e| Err(PaymentError::DriverService(e)),
-                |balance| Ok(balance.unwrap().base_currency.amount),
-            )
+            .unwrap()
+            .unwrap();
+        Ok(account_balance.base_currency.amount)
     }
 }

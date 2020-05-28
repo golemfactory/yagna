@@ -1,7 +1,9 @@
 use crate::PaymentDriver;
 use crate::PaymentDriverResult;
 use std::sync::Arc;
-use ya_core_model::driver::{AccountBalance, PaymentConfirmation, PaymentDetails, PaymentStatus};
+use ya_core_model::driver::{
+    AccountBalance, AccountMode, PaymentConfirmation, PaymentDetails, PaymentStatus,
+};
 use ya_persistence::executor::DbExecutor;
 
 #[derive(Clone)]
@@ -21,8 +23,12 @@ impl PaymentDriverProcessor {
         }
     }
 
-    pub async fn get_account_balance(&self, addr: &str) -> PaymentDriverResult<AccountBalance> {
-        self.driver.get_account_balance(addr).await
+    pub async fn init(&self, mode: AccountMode, address: &str) -> PaymentDriverResult<()> {
+        self.driver.init(mode, address).await
+    }
+
+    pub async fn get_account_balance(&self, address: &str) -> PaymentDriverResult<AccountBalance> {
+        self.driver.get_account_balance(address).await
     }
 
     pub async fn get_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus> {

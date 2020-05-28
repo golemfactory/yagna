@@ -30,6 +30,7 @@ pub struct Ack {}
 // ************************** ACCOUNT **************************
 
 bitflags! {
+    #[derive(Serialize, Deserialize)]
     pub struct AccountMode : usize {
         const NONE = 0b000;
         const RECV = 0b001;
@@ -177,5 +178,31 @@ impl VerifyPayment {
 impl RpcMessage for VerifyPayment {
     const ID: &'static str = "VerifyPayment";
     type Item = PaymentDetails;
+    type Error = GenericError;
+}
+
+// ************************** INIT **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Init {
+    address: String,
+    mode: AccountMode,
+}
+
+impl Init {
+    pub fn new(address: String, mode: AccountMode) -> Init {
+        Init { address, mode }
+    }
+    pub fn address(&self) -> String {
+        self.address.clone()
+    }
+    pub fn mode(&self) -> AccountMode {
+        self.mode.clone()
+    }
+}
+
+impl RpcMessage for Init {
+    const ID: &'static str = "Init";
+    type Item = Ack;
     type Error = GenericError;
 }
