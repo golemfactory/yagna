@@ -156,3 +156,26 @@ impl RpcMessage for GetPaymentStatus {
     type Item = PaymentStatus;
     type Error = GenericError;
 }
+
+// ************************** VERIFY PAYMENT **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VerifyPayment(PaymentConfirmation);
+
+impl From<PaymentConfirmation> for VerifyPayment {
+    fn from(confirmation: PaymentConfirmation) -> Self {
+        VerifyPayment(confirmation)
+    }
+}
+
+impl VerifyPayment {
+    pub fn confirmation(&self) -> PaymentConfirmation {
+        self.0.clone()
+    }
+}
+
+impl RpcMessage for VerifyPayment {
+    const ID: &'static str = "VerifyPayment";
+    type Item = PaymentDetails;
+    type Error = GenericError;
+}

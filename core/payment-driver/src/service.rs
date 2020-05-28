@@ -8,7 +8,9 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
 
     ServiceBinder::new(BUS_ID, db, processor)
         .bind_with_processor(get_account_balance)
-        .bind_with_processor(get_payment_status);
+        .bind_with_processor(get_payment_status)
+        .bind_with_processor(verify_payment);
+
     log::debug!("Successfully bound payment driver service to service bus");
 }
 
@@ -48,4 +50,20 @@ async fn get_payment_status(
             |e| Err(GenericError::new(e)),
             |payment_status| Ok(payment_status),
         )
+}
+
+async fn verify_payment(
+    _db: DbExecutor,
+    processor: PaymentDriverProcessor,
+    _caller: String,
+    msg: VerifyPayment,
+) -> Result<PaymentDetails, GenericError> {
+    log::info!("verify payment: {:?}", msg);
+
+    let confirmation = msg.confirmation();
+
+    processor.verify_payment(confirmation).await.map_or_else(
+        |e| Err(GenericError::new(e)),
+        |payment_details| Ok(payment_details),
+    )
 }

@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::payment::{Invoice, Payment};
 use ya_core_model::driver;
-use ya_core_model::driver::{AccountMode, PaymentAmount, PaymentConfirmation, PaymentStatus};
+use ya_core_model::driver::{
+    AccountMode, PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus,
+};
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
 use ya_payment_driver::{PaymentDriver, PaymentDriverError};
@@ -132,7 +134,11 @@ impl PaymentProcessor {
                 return Err(PaymentError::Verification(msg).into());
             }
         };
-        let details = self.driver.verify_payment(&confirmation).await?;
+        let details: PaymentDetails = bus::service(driver::BUS_ID)
+            .send(driver::VerifyPayment::from(confirmation))
+            .await
+            .unwrap()
+            .unwrap();
 
         let actual_amount = details.amount;
         let declared_amount: BigDecimal = payment.amount.clone();
