@@ -30,7 +30,7 @@ use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
-    DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
+    rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 
 mod autocomplete;
@@ -96,19 +96,6 @@ impl CliArgs {
         self.data_dir.get_or_create()
     }
 
-    pub fn get_http_address(&self) -> Result<(String, u16)> {
-        let host = self
-            .api_url
-            .host()
-            .ok_or_else(|| anyhow::anyhow!("invalid api url"))?
-            .to_owned();
-        let port = self
-            .api_url
-            .port_or_known_default()
-            .ok_or_else(|| anyhow::anyhow!("invalid api url, no port"))?;
-        Ok((host.to_string(), port))
-    }
-
     pub fn log_level(&self) -> String {
         match self.command {
             CliCommand::Service(ServiceCommand::Run) => self.log_level.clone(),
@@ -133,7 +120,7 @@ impl TryFrom<&CliArgs> for CliCtx {
 
         Ok(CliCtx {
             data_dir,
-            http_address: args.get_http_address()?,
+            api_host_port: rest_api_host_port(args.api_url.clone()),
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
             interactive: args.interactive,
@@ -248,10 +235,10 @@ impl ServiceCommand {
                         .route("/me", web::get().to(me));
                     Services::rest(app, &context)
                 })
-                .bind(ctx.http_address())
+                .bind(ctx.api_host_port.clone())
                 .context(format!(
                     "Failed to bind http server on {:?}",
-                    ctx.http_address
+                    ctx.api_host_port
                 ))?
                 .run()
                 .await?;
