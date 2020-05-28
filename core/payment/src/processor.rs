@@ -1,7 +1,6 @@
 use crate::dao::{AgreementDao, InvoiceDao, PaymentDao};
 use crate::error::{Error, PaymentError, PaymentResult};
 use bigdecimal::BigDecimal;
-use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::payment::{Invoice, Payment};
 use ya_core_model::driver;
@@ -10,25 +9,17 @@ use ya_core_model::driver::{
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
-use ya_payment_driver::{PaymentDriver, PaymentDriverError};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(Clone)]
 pub struct PaymentProcessor {
-    driver: Arc<dyn PaymentDriver + Send + Sync + 'static>,
     db_executor: DbExecutor,
 }
 
 impl PaymentProcessor {
-    pub fn new<D>(driver: D, db_executor: DbExecutor) -> Self
-    where
-        D: PaymentDriver + Send + Sync + 'static,
-    {
-        Self {
-            driver: Arc::new(driver),
-            db_executor,
-        }
+    pub fn new(db_executor: DbExecutor) -> Self {
+        Self { db_executor }
     }
 
     async fn wait_for_payment(&self, invoice_id: &str) -> PaymentResult<PaymentConfirmation> {
@@ -41,7 +32,7 @@ impl PaymentProcessor {
             match payment_status {
                 PaymentStatus::Ok(confirmation) => return Ok(confirmation),
                 PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
-                _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),
+                _ => return Err(PaymentError::Driver(String::from("Insufficient funds"))),
             }
         }
     }

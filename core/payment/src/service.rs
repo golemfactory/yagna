@@ -402,9 +402,7 @@ mod public {
         }
 
         match processor.verify_payment(payment).await {
-            Err(Error::Payment(PaymentError::Driver(e))) => {
-                return Err(SendError::ServiceError(e.to_string()))
-            }
+            Err(Error::Payment(PaymentError::Driver(e))) => return Err(SendError::ServiceError(e)),
             Err(e) => return Err(SendError::BadRequest(e.to_string())),
             Ok(_) => {}
         }

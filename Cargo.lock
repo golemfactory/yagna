@@ -5059,7 +5059,6 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-net",
- "ya-payment-driver",
  "ya-persistence",
  "ya-sb-router",
  "ya-service-api",

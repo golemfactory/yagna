@@ -1,51 +1,19 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
-use std::str::FromStr;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
-use ya_core_model::driver::AccountMode;
 
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
-use ya_payment_driver::{DummyDriver, GntDriver, PaymentDriver};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 
 #[derive(Clone, Debug, StructOpt)]
-enum Driver {
-    Dummy,
-    Gnt,
-}
-
-impl FromStr for Driver {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        match s.to_lowercase().as_str() {
-            "dummy" => Ok(Driver::Dummy),
-            "gnt" => Ok(Driver::Gnt),
-            s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
-        }
-    }
-}
-
-impl std::fmt::Display for Driver {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Driver::Dummy => write!(f, "dummy"),
-            Driver::Gnt => write!(f, "gnt"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, StructOpt)]
 struct Args {
-    #[structopt(long, default_value = "dummy")]
-    driver: Driver,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
     #[structopt(long, default_value = "")]
@@ -56,21 +24,6 @@ struct Args {
     requestor_pass: String,
     #[structopt(long, default_value = "agreement_id")]
     agreement_id: String,
-}
-
-async fn get_gnt_driver(
-    db: &DbExecutor,
-    provider_account: Box<EthAccount>,
-    requestor_account: Box<EthAccount>,
-) -> anyhow::Result<GntDriver> {
-    let provider_addr = hex::encode(provider_account.address());
-    let requestor_addr = hex::encode(requestor_account.address());
-
-    let driver = GntDriver::new(db.clone()).await?;
-    driver.init(AccountMode::RECV, &provider_addr).await?;
-    driver.init(AccountMode::SEND, &requestor_addr).await?;
-
-    Ok(driver)
 }
 
 #[actix_rt::main]
@@ -101,13 +54,7 @@ async fn main() -> anyhow::Result<()> {
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
-    let processor = match &args.driver {
-        Driver::Dummy => PaymentProcessor::new(DummyDriver::new(), db.clone()),
-        Driver::Gnt => PaymentProcessor::new(
-            get_gnt_driver(&db, provider_account, requestor_account).await?,
-            db.clone(),
-        ),
-    };
+    let processor = PaymentProcessor::new(db.clone());
     ya_payment::service::bind_service(&db, processor);
 
     let agreement = market::Agreement {

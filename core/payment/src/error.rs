@@ -52,7 +52,7 @@ pub enum PaymentError {
     #[error("Verification error: {0}")]
     Verification(String),
     #[error("Payment driver error: {0}")]
-    Driver(#[from] ya_payment_driver::PaymentDriverError),
+    Driver(String),
     #[error("Payment Driver Service error: {0}")]
     DriverService(#[from] ya_service_bus::error::Error),
 }
@@ -62,7 +62,7 @@ pub type PaymentResult<T> = Result<T, PaymentError>;
 impl From<PaymentError> for ScheduleError {
     fn from(e: PaymentError) -> Self {
         match e {
-            PaymentError::Driver(e) => ScheduleError::Driver(e.to_string()),
+            PaymentError::Driver(e) => ScheduleError::Driver(e),
             PaymentError::Verification(e) => panic!(e),
             PaymentError::DriverService(e) => panic!(e),
         }
@@ -120,11 +120,5 @@ impl From<AcceptRejectError> for Error {
 impl From<CancelError> for Error {
     fn from(e: CancelError) -> Self {
         Into::<RpcMessageError>::into(e).into()
-    }
-}
-
-impl From<ya_payment_driver::PaymentDriverError> for Error {
-    fn from(e: ya_payment_driver::PaymentDriverError) -> Self {
-        Into::<PaymentError>::into(e).into()
     }
 }
