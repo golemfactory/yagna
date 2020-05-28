@@ -20,7 +20,8 @@ mod tests {
     async fn instantiate() -> Result<(), anyhow::Error> {
         env_logger::init();
 
-        let network = MarketsNetwork::new("instantiate").await
+        let network = MarketsNetwork::new("instantiate")
+            .await
             .add_market_instance("Node-1")
             .await?
             .add_market_instance("Node-2")

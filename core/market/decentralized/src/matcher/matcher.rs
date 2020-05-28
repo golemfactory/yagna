@@ -15,6 +15,7 @@ use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
     Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryFactory, DiscoveryInitError,
+    PropagateOffer,
 };
 use crate::protocol::{OfferReceived, RetrieveOffers};
 
@@ -78,10 +79,24 @@ impl Matcher {
         db: &DbExecutor,
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
+
+        let database = db.clone();
         let builder = builder
-            .bind_offer_received(move |msg: OfferReceived| async move {
-                log::info!("Offer from [{}] received.", msg.offer.offer_id.unwrap());
-                Ok(())
+            .bind_offer_received(move |msg: OfferReceived| {
+                let database = database.clone();
+                async move {
+                    log::info!("Offer [{}] received.", msg.offer.offer_id.clone().unwrap());
+
+                    let model_offer = ModelOffer::from(&msg.offer).unwrap();
+                    database
+                        .as_dao::<OfferDao>()
+                        .create_offer(&model_offer)
+                        .await
+                        .map_err(|error| OfferError::InsertOfferFailure(error))
+                        .unwrap();
+
+                    Ok(PropagateOffer::False)
+                }
             })
             .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
                 log::info!("Offers request received.");

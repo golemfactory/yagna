@@ -2,24 +2,28 @@ use async_trait::async_trait;
 use chrono::prelude::*;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::marker::Send;
+use std::sync::Arc;
 use thiserror::Error;
 
-use ya_core_model::net;
-use ya_core_model::net::local::{BroadcastMessage, Subscribe, ToEndpoint};
 use ya_client::model::market::Offer;
-use ya_service_bus::{typed as bus, RpcMessage, RpcEndpoint};
+use ya_core_model::net;
+use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint};
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use super::callbacks::{CallbackHandler, HandlerSlot};
+use std::alloc::handle_alloc_error;
 
 // =========================================== //
 // Errors
 // =========================================== //
 
-#[derive(Error, Display, Debug, Serialize, Deserialize)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum DiscoveryError {
+    #[error(transparent)]
     RemoteError(#[from] DiscoveryRemoteError),
+    #[error("Failed to broadcast caused by gsb error: {}.", .0)]
+    GsbError(String),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -38,6 +42,12 @@ pub enum DiscoveryInitError {
 // =========================================== //
 // Discovery interface
 // =========================================== //
+
+#[derive(Serialize, Deserialize)]
+pub enum PropagateOffer {
+    True,
+    False,
+}
 
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
@@ -117,6 +127,11 @@ impl DiscoveryBuilder {
 
 /// Implementation of Discovery protocol using GSB.
 pub struct DiscoveryGSB {
+    inner: Arc<DiscoveryGSBInner>,
+}
+
+/// Implementation of Discovery protocol using GSB.
+pub struct DiscoveryGSBInner {
     offer_received: HandlerSlot<OfferReceived>,
     retrieve_offers: HandlerSlot<RetrieveOffers>,
 }
@@ -126,9 +141,12 @@ impl DiscoveryFactory for DiscoveryGSB {
         let offer_received = builder.offer_received_handler()?;
         let retrieve_offers = builder.retrieve_offers_handler()?;
 
-        Ok(Arc::new(DiscoveryGSB {
+        let inner = DiscoveryGSBInner {
             offer_received,
             retrieve_offers,
+        };
+        Ok(Arc::new(DiscoveryGSB {
+            inner: Arc::new(inner),
         }))
     }
 }
@@ -136,38 +154,91 @@ impl DiscoveryFactory for DiscoveryGSB {
 #[async_trait(?Send)]
 impl Discovery for DiscoveryGSB {
     async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
-        // TODO: Implement
-        Ok(())
+        broadcast_offer(self.inner.clone(), offer).await
     }
 
     async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {
-        unimplemented!()
+        retrieve_offers(self.inner.clone()).await
     }
 
     async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError> {
-        let retrieve_handler = self.retrieve_offers.clone();
-        let offer_received_handler = self.offer_received.clone();
+        let myself = self.inner.clone();
 
         log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
 
         let offer_broadcast_address = format!("{}/{}", prefix, OfferReceived::TOPIC);
         let subscribe_msg = OfferReceived::into_subscribe_msg(&offer_broadcast_address);
-        bus::service(net::local::BUS_ID).send(subscribe_msg).await??;
+        bus::service(net::local::BUS_ID)
+            .send(subscribe_msg)
+            .await??;
 
-        log::debug!("Binding handler for broadcast topic {}.", OfferReceived::TOPIC);
+        log::debug!(
+            "Binding handler for broadcast topic {}.",
+            OfferReceived::TOPIC
+        );
 
-        let _ = bus::bind_with_caller(&offer_broadcast_address, move |caller, msg: OfferReceived| {
-            let handler = offer_received_handler.clone();
-            async move { handler.call(caller, msg).await }
-        });
-
-        let _ = bus::bind_with_caller(&prefix, move |caller, msg: RetrieveOffers| {
-            let handler = retrieve_handler.clone();
-            async move { handler.call(caller, msg).await }
-        });
+        let _ = bus::bind_with_caller(
+            &offer_broadcast_address,
+            move |caller, msg: SendBroadcastMessage<OfferReceived>| {
+                let myself = myself.clone();
+                on_offer_received(myself, caller, msg.body().to_owned())
+            },
+        );
 
         Ok(())
     }
+}
+
+async fn broadcast_offer(
+    myself: Arc<DiscoveryGSBInner>,
+    offer: Offer,
+) -> Result<(), DiscoveryError> {
+    let msg = OfferReceived { offer };
+    let bcast_msg = SendBroadcastMessage::new(msg);
+
+    let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+    Ok(())
+}
+
+async fn retrieve_offers(myself: Arc<DiscoveryGSBInner>) -> Result<Vec<Offer>, DiscoveryError> {
+    unimplemented!()
+}
+
+async fn on_offer_received(
+    myself: Arc<DiscoveryGSBInner>,
+    caller: String,
+    msg: OfferReceived,
+) -> Result<(), ()> {
+    let callback = myself.offer_received.clone();
+
+    let offer = msg.offer.clone();
+    let offer_id = offer.offer_id().unwrap_or("{Empty id}").to_string();
+    let provider_id = offer.provider_id().unwrap_or("{Empty id}").to_string();
+
+    log::info!(
+        "Received broadcasted Offer [{}] from provider [{}].",
+        offer_id,
+        provider_id
+    );
+
+    match callback.call(caller, msg).await? {
+        PropagateOffer::True => {
+            log::info!("Propagating further Offer [{}].", offer_id,);
+
+            // TODO: Should we retry in case of fail?
+            if let Err(error) = broadcast_offer(myself, offer).await {
+                log::error!(
+                    "Error propagating further Offer [{}] from provider [{}].",
+                    offer_id,
+                    provider_id
+                );
+            }
+        }
+        PropagateOffer::False => {
+            log::info!("Not propagating Offer [{}].", offer_id,);
+        }
+    }
+    Ok(())
 }
 
 // =========================================== //
@@ -182,8 +253,8 @@ pub struct OfferReceived {
 
 impl RpcMessage for OfferReceived {
     const ID: &'static str = "OfferReceived";
-    type Item = ();
-    type Error = DiscoveryRemoteError;
+    type Item = PropagateOffer;
+    type Error = ();
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -224,3 +295,8 @@ impl From<ya_service_bus::error::Error> for DiscoveryInitError {
     }
 }
 
+impl From<ya_service_bus::error::Error> for DiscoveryError {
+    fn from(err: ya_service_bus::error::Error) -> Self {
+        DiscoveryError::GsbError(format!("{}", err))
+    }
+}

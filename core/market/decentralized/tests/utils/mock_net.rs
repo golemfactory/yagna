@@ -2,8 +2,8 @@ use actix_rt::Arbiter;
 use std::rc::Rc;
 
 use ya_core_model::net::{local as local_net, local::SendBroadcastMessage};
-use ya_service_bus::{typed as bus, untyped as local_bus, RpcMessage,};
 use ya_net::bcast;
+use ya_service_bus::{typed as bus, untyped as local_bus, RpcMessage};
 
 pub struct MockNet;
 
@@ -30,7 +30,8 @@ impl MockNet {
                 let resp = resp.clone();
                 let bcast = bcast.clone();
 
-                let msg_json: SendBroadcastMessage<serde_json::Value> = serde_json::from_slice(msg).unwrap();
+                let msg_json: SendBroadcastMessage<serde_json::Value> =
+                    serde_json::from_slice(msg).unwrap();
                 let caller = caller.to_string();
 
                 Arbiter::spawn(async move {
@@ -43,15 +44,10 @@ impl MockNet {
                         let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
                     }
                 });
-                async move {
-                    Ok(Vec::from(resp.as_ref()))
-                }
+                async move { Ok(Vec::from(resp.as_ref())) }
             });
         }
 
         Ok(())
     }
 }
-
-
-
