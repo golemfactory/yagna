@@ -19,3 +19,12 @@ or for market crate only
 cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite
 ```
 
+### Running with logs enabled
+
+It is very useful to see logs, if we want to debug test. We can do this as
+always by adding RUST_LOG environment variable, but in test case we need to
+add `env_logger::init();` on the beginning. 
+
+```
+RUST_LOG=debug cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite 
+```

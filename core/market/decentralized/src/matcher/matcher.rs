@@ -90,12 +90,11 @@ impl Matcher {
                 on_offer_received(database, msg)
             })
             .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
-                log::info!("Offers request received.");
+                log::info!("Offers request received. Unimplemented.");
                 Ok(vec![])
             });
 
         let discovery = builder.build()?;
-
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {

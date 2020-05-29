@@ -163,7 +163,7 @@ async fn on_offer_received(
 
 #[derive(Serialize, Deserialize, Display)]
 pub enum StopPropagateReason {
-    #[display(fmt = "Offer already exists in database.")]
+    #[display(fmt = "Offer already exists in database")]
     AlreadyExists,
     #[display(fmt = "Error adding offer: {}", "_0")]
     Error(String),

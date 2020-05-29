@@ -9,6 +9,7 @@ mod tests {
 
     use serde_json::json;
     use std::sync::Arc;
+    use std::time::Duration;
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -33,6 +34,10 @@ mod tests {
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
         let market3: Arc<MarketService> = network.get_market("Node-3");
+
+        // Wait for Offer propagation.
+        // TODO: How to wait without assuming any number of seconds?
+        tokio::time::delay_for(Duration::from_secs(1)).await;
 
         assert!(market2.matcher.get_offer(&subscription_id).await?.is_some());
         assert!(market3.matcher.get_offer(&subscription_id).await?.is_some());

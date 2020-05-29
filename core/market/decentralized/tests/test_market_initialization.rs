@@ -18,8 +18,6 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn instantiate() -> Result<(), anyhow::Error> {
-        env_logger::init();
-
         let network = MarketsNetwork::new("instantiate")
             .await
             .add_market_instance("Node-1")
