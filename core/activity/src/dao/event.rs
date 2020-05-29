@@ -5,12 +5,11 @@ use std::cmp::min;
 use std::time::Duration;
 use tokio::time::delay_for;
 
+use ya_client_model::activity::ProviderEvent;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::models::ActivityEventType;
-use ya_persistence::schema;
 
 use crate::dao::Result;
-use ya_client_model::activity::ProviderEvent;
+use crate::db::{models::ActivityEventType, schema};
 
 pub const MAX_EVENTS: u32 = 100;
 

@@ -2,21 +2,14 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
 use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::{WebClient, WebInterface};
+use ya_client::web::WebClient;
 use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInvoice};
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let provider = PaymentProviderApi::from_client(
-        WebClient::builder()
-            .host_port("127.0.0.1:7465/payment-api/v1/")
-            .build()?,
-    );
-    let requestor = PaymentRequestorApi::from_client(
-        WebClient::builder()
-            .host_port("127.0.0.1:7465/payment-api/v1/")
-            .build()?,
-    );
+    let client = WebClient::builder().build();
+    let provider: PaymentProviderApi = client.interface()?;
+    let requestor: PaymentRequestorApi = client.interface()?;
     let invoice = provider
         .issue_invoice(&NewInvoice {
             agreement_id: "agreement_id".to_string(),

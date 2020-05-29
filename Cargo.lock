@@ -4795,6 +4795,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "diesel",
+ "diesel_migrations",
  "env_logger 0.7.1",
  "futures 0.3.4",
  "lazy_static",
@@ -4853,7 +4854,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=159a3cb#159a3cbf6af4cbe62ea9bd895f0d1f1985b763e0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=493461d#493461d5e64d0eea28e333c2888f4af68c1c38b0"
 dependencies = [
  "awc",
  "backtrace",
@@ -4874,7 +4875,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=159a3cb#159a3cbf6af4cbe62ea9bd895f0d1f1985b763e0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=493461d#493461d5e64d0eea28e333c2888f4af68c1c38b0"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -5150,7 +5151,6 @@ dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
  "diesel",
- "diesel_migrations",
  "dotenv 0.14.1",
  "libsqlite3-sys",
  "log 0.4.8",
@@ -5298,6 +5298,7 @@ dependencies = [
 name = "ya-service-api-derive"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "actix-service",
  "actix-web",
  "anyhow",
@@ -5339,7 +5340,7 @@ dependencies = [
  "serde",
  "structopt",
  "url 2.1.1",
- "ya-client-model",
+ "ya-client",
  "ya-core-model",
  "ya-identity",
  "ya-persistence",

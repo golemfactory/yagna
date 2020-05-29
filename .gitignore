@@ -17,6 +17,6 @@ core/market/decentralized/tests/test-workdir/*
 **/.env
 
 # Databases
-**/yagna.db
-**/yagna.db-shm
-**/yagna.db-wal
+**/*.db
+**/*.db-shm
+**/*.db-wal

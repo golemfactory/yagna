@@ -35,8 +35,7 @@ impl MarketsNetwork {
         name: Str,
     ) -> Result<Self, anyhow::Error> {
         let db = self.init_database(name.as_ref())?;
-        let data_dir = self.instance_dir(name.as_ref());
-        let market = Arc::new(MarketService::new(&db, &data_dir)?);
+        let market = Arc::new(MarketService::new(&db)?);
 
         let gsb_prefix = format!("{}/{}/market", net::BUS_ID, name.as_ref());
         market.bind_gsb(gsb_prefix).await?;
@@ -62,7 +61,6 @@ impl MarketsNetwork {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|error| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, error))?;
-        db.apply_migration(ya_persistence::migrations::run_with_output)?;
         Ok(db)
     }
 

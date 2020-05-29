@@ -6,17 +6,12 @@ use std::path::PathBuf;
 #[derive(Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
-    pub http_address: (String, u16),
     pub gsb_url: Option<url::Url>,
     pub json_output: bool,
     pub interactive: bool,
 }
 
 impl CliCtx {
-    pub fn http_address(&self) -> (&str, u16) {
-        (&self.http_address.0, self.http_address.1)
-    }
-
     pub fn output(&self, output: CommandOutput) {
         output.print(self.json_output)
     }

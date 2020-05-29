@@ -108,10 +108,10 @@ pub(crate) async fn spawn_negotiations(
                         .await
                         {
                             Ok(ProcessOfferResult::ProposalId(id)) => {
-                                log::info!("\n\n ACCEPTED via counter proposal [{}]", id)
+                                log::info!("\n\n ACCEPTED via counter proposal [{}]", id);
                             }
                             Ok(ProcessOfferResult::AgreementId(id)) => {
-                                agreement_tx.send(id).await.unwrap()
+                                agreement_tx.send(id).await.unwrap();
                             }
                             Err(e) => {
                                 log::error!("unable to process offer: {}", e);

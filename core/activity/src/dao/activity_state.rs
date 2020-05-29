@@ -7,10 +7,9 @@ use tokio::time::delay_for;
 
 use ya_client_model::activity::activity_state::{ActivityState, StatePair};
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::models::ActivityState as DbActivityState;
-use ya_persistence::schema;
 
 use crate::dao::{DaoError, Result};
+use crate::db::{models::ActivityState as DbActivityState, schema};
 
 pub struct ActivityStateDao<'c> {
     pool: &'c PoolType,

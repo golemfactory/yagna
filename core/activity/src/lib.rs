@@ -1,8 +1,13 @@
+/// Yagna Activity Service
+
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 mod common;
 mod dao;
+pub mod db;
 
 mod api;
 mod error;
