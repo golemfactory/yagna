@@ -14,8 +14,8 @@ use crate::db::models::Offer as ModelOffer;
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
-    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryInitError,
-    PropagateOffer,
+    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryInitError, PropagateOffer,
+    StopPropagateReason,
 };
 use crate::protocol::{OfferReceived, RetrieveOffers};
 
@@ -67,6 +67,9 @@ pub struct EventsListeners {
 }
 
 /// Responsible for storing Offers and matching them with demands.
+///
+/// Note: Should be lightweight cloneable object. If you
+#[derive(Clone)]
 pub struct Matcher {
     db: DbExecutor,
     discovery: Discovery,
@@ -84,19 +87,7 @@ impl Matcher {
         let builder = builder
             .bind_offer_received(move |msg: OfferReceived| {
                 let database = database.clone();
-                async move {
-                    log::info!("Offer [{}] received.", msg.offer.offer_id.clone().unwrap());
-
-                    let model_offer = ModelOffer::from(&msg.offer).unwrap();
-                    database
-                        .as_dao::<OfferDao>()
-                        .create_offer(&model_offer)
-                        .await
-                        .map_err(|error| OfferError::InsertOfferFailure(error))
-                        .unwrap();
-
-                    Ok(PropagateOffer::False)
-                }
+                on_offer_received(database, msg)
             })
             .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
                 log::info!("Offers request received.");
@@ -227,6 +218,44 @@ impl Matcher {
         }
     }
 }
+
+async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<PropagateOffer, ()> {
+    match async move {
+        // We shouldn't propagate Offer, if we already have it in our database.
+        // Note that when, we broadcast our Offer, it will reach us too, so it concerns
+        // not only Offers from other nodes.
+        if let Some(_) = db
+            .as_dao::<OfferDao>()
+            .get_offer(msg.offer.offer_id()?)
+            .await?
+        {
+            return Ok(PropagateOffer::False(StopPropagateReason::AlreadyExists));
+        }
+
+        let model_offer = ModelOffer::from(&msg.offer)?;
+        db.as_dao::<OfferDao>()
+            .create_offer(&model_offer)
+            .await
+            .map_err(|error| OfferError::InsertOfferFailure(error))
+            .unwrap();
+
+        // TODO: Spawn matching with Demands.
+
+        Result::<_, MatcherError>::Ok(PropagateOffer::True)
+    }
+    .await
+    {
+        Err(error) => {
+            let reason = StopPropagateReason::Error(format!("{}", error));
+            Ok(PropagateOffer::False(reason))
+        }
+        Ok(should_propagate) => Ok(should_propagate),
+    }
+}
+
+// =========================================== //
+// Errors From impls
+// =========================================== //
 
 impl From<ErrorMessage> for MatcherError {
     fn from(e: ErrorMessage) -> Self {

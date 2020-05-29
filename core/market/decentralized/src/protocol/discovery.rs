@@ -41,15 +41,9 @@ pub enum DiscoveryInitError {
 // Discovery interface
 // =========================================== //
 
-#[derive(Serialize, Deserialize)]
-pub enum PropagateOffer {
-    True,
-    False,
-}
-
-
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
+#[derive(Clone)]
 pub struct Discovery {
     inner: Arc<DiscoveryImpl>,
 }
@@ -109,10 +103,7 @@ impl Discovery {
     }
 }
 
-async fn broadcast_offer(
-    myself: Arc<DiscoveryImpl>,
-    offer: Offer,
-) -> Result<(), DiscoveryError> {
+async fn broadcast_offer(myself: Arc<DiscoveryImpl>, offer: Offer) -> Result<(), DiscoveryError> {
     let msg = OfferReceived { offer };
     let bcast_msg = SendBroadcastMessage::new(msg);
 
@@ -136,9 +127,10 @@ async fn on_offer_received(
     let provider_id = offer.provider_id().unwrap_or("{Empty id}").to_string();
 
     log::info!(
-        "Received broadcasted Offer [{}] from provider [{}].",
+        "Received broadcasted Offer [{}] from provider [{}]. Sender: [{}].",
         offer_id,
-        provider_id
+        provider_id,
+        &caller,
     );
 
     match callback.call(caller, msg).await? {
@@ -154,8 +146,12 @@ async fn on_offer_received(
                 );
             }
         }
-        PropagateOffer::False => {
-            log::info!("Not propagating Offer [{}].", offer_id,);
+        PropagateOffer::False(reason) => {
+            log::info!(
+                "Not propagating Offer [{}] for reason: {}.",
+                offer_id,
+                reason
+            );
         }
     }
     Ok(())
@@ -164,6 +160,20 @@ async fn on_offer_received(
 // =========================================== //
 // Discovery messages
 // =========================================== //
+
+#[derive(Serialize, Deserialize, Display)]
+pub enum StopPropagateReason {
+    #[display(fmt = "Offer already exists in database.")]
+    AlreadyExists,
+    #[display(fmt = "Error adding offer: {}", "_0")]
+    Error(String),
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum PropagateOffer {
+    True,
+    False(StopPropagateReason),
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -273,9 +283,7 @@ impl DiscoveryBuilder {
         Ok(handler)
     }
 
-    pub fn build(
-        self,
-    ) -> Result<Discovery, DiscoveryInitError> {
+    pub fn build(self) -> Result<Discovery, DiscoveryInitError> {
         Ok(Discovery::new(self)?)
     }
 }
