@@ -16,14 +16,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Compute deb package version
+        ids: vars
+        run: |
+          VERSION="$(cargo pkgid | cut -d'#' -f2)"
+          ROUTER_VERSION=$(cargo pkgid --manifest-path service-bus/router/Cargo.toml | cut -d'#' -f2)"
+          SHA="$(echo ${{ github.sha }} | cut -c1-8)"
+          echo "::set-output name=deb_version::$VERSION-$SHA"
+          echo "::set-output name=router_deb_version::$ROUTER_VERSION-$SHA"
+
       - name: Build the Docker image
-        run: docker build . -f build-deb.Dockerfile -t build-deb
+        run: docker build . -f build-deb.Dockerfile -t build-deb --build-arg DEB_VERSION=${{ vars.outputs.deb_version }}
 
       - name: Copy yagna.deb file
         run: docker run build-deb bash -c "cat /src/target/debian/yagna*.deb" > yagna.deb
 
       - name: Build the router
-        run: docker build . -f build-deb-router.Dockerfile -t build-deb-router
+        run: docker build . -f build-deb-router.Dockerfile -t build-deb-router --build-arg DEB_VERSION=${{ vars.outputs.router_deb_version }}
 
       - name: Copy ya-sb-router.deb file
         run: docker run build-deb-router bash -c "cat /src/target/debian/ya-sb-router*.deb" > ya-sb-router.deb
