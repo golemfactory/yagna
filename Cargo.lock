@@ -4973,7 +4973,6 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
- "async-trait",
  "chrono",
  "derive_more 0.99.7",
  "diesel",

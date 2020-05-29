@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use chrono::prelude::*;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
@@ -12,7 +11,6 @@ use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage, Subscrib
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use super::callbacks::{CallbackHandler, HandlerSlot};
-use std::alloc::handle_alloc_error;
 
 // =========================================== //
 // Errors
@@ -49,119 +47,41 @@ pub enum PropagateOffer {
     False,
 }
 
+
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
-#[async_trait(?Send)]
-pub trait Discovery: Send + Sync {
-    async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError>;
-
-    /// Broadcasts offer to other nodes in network. Connected nodes will
-    /// get call to function bound in DiscoveryBuilder::bind_offer_received.
-    async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError>;
-    async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError>;
+pub struct Discovery {
+    inner: Arc<DiscoveryImpl>,
 }
 
-/// Creates Discovery of specific type.
-pub trait DiscoveryFactory {
-    fn new(builder: DiscoveryBuilder) -> Result<Arc<dyn Discovery>, DiscoveryInitError>;
-}
-
-/// Discovery API initialization.
-pub struct DiscoveryBuilder {
-    offer_received: Option<HandlerSlot<OfferReceived>>,
-    retrieve_offers: Option<HandlerSlot<RetrieveOffers>>,
-}
-
-impl DiscoveryBuilder {
-    pub fn new() -> DiscoveryBuilder {
-        DiscoveryBuilder {
-            offer_received: None,
-            retrieve_offers: None,
-        }
-    }
-
-    pub fn bind_offer_received(mut self, callback: impl CallbackHandler<OfferReceived>) -> Self {
-        self.offer_received = Some(HandlerSlot::new(callback));
-        self
-    }
-
-    pub fn bind_retrieve_offers(mut self, callback: impl CallbackHandler<RetrieveOffers>) -> Self {
-        self.retrieve_offers = Some(HandlerSlot::new(callback));
-        self
-    }
-
-    pub fn offer_received_handler(
-        &mut self,
-    ) -> Result<HandlerSlot<OfferReceived>, DiscoveryInitError> {
-        let handler =
-            self.offer_received
-                .take()
-                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
-                    "offer_received"
-                )))?;
-        Ok(handler)
-    }
-
-    pub fn retrieve_offers_handler(
-        &mut self,
-    ) -> Result<HandlerSlot<RetrieveOffers>, DiscoveryInitError> {
-        let handler =
-            self.retrieve_offers
-                .take()
-                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
-                    "retrieve_offers"
-                )))?;
-        Ok(handler)
-    }
-
-    pub fn build<Factory: DiscoveryFactory>(
-        self,
-    ) -> Result<Arc<dyn Discovery>, DiscoveryInitError> {
-        Ok(Factory::new(self)?)
-    }
-}
-
-// =========================================== //
-// Discovery implementation
-// =========================================== //
-
-/// Implementation of Discovery protocol using GSB.
-pub struct DiscoveryGSB {
-    inner: Arc<DiscoveryGSBInner>,
-}
-
-/// Implementation of Discovery protocol using GSB.
-pub struct DiscoveryGSBInner {
+pub struct DiscoveryImpl {
     offer_received: HandlerSlot<OfferReceived>,
     retrieve_offers: HandlerSlot<RetrieveOffers>,
 }
 
-impl DiscoveryFactory for DiscoveryGSB {
-    fn new(mut builder: DiscoveryBuilder) -> Result<Arc<dyn Discovery>, DiscoveryInitError> {
+impl Discovery {
+    fn new(mut builder: DiscoveryBuilder) -> Result<Discovery, DiscoveryInitError> {
         let offer_received = builder.offer_received_handler()?;
         let retrieve_offers = builder.retrieve_offers_handler()?;
 
-        let inner = DiscoveryGSBInner {
+        let inner = Arc::new(DiscoveryImpl {
             offer_received,
             retrieve_offers,
-        };
-        Ok(Arc::new(DiscoveryGSB {
-            inner: Arc::new(inner),
-        }))
+        });
+        Ok(Discovery { inner })
     }
-}
 
-#[async_trait(?Send)]
-impl Discovery for DiscoveryGSB {
-    async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
+    /// Broadcasts offer to other nodes in network. Connected nodes will
+    /// get call to function bound in DiscoveryBuilder::bind_offer_received.
+    pub async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
         broadcast_offer(self.inner.clone(), offer).await
     }
 
-    async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {
+    pub async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {
         retrieve_offers(self.inner.clone()).await
     }
 
-    async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError> {
+    pub async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError> {
         let myself = self.inner.clone();
 
         log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
@@ -190,7 +110,7 @@ impl Discovery for DiscoveryGSB {
 }
 
 async fn broadcast_offer(
-    myself: Arc<DiscoveryGSBInner>,
+    myself: Arc<DiscoveryImpl>,
     offer: Offer,
 ) -> Result<(), DiscoveryError> {
     let msg = OfferReceived { offer };
@@ -200,12 +120,12 @@ async fn broadcast_offer(
     Ok(())
 }
 
-async fn retrieve_offers(myself: Arc<DiscoveryGSBInner>) -> Result<Vec<Offer>, DiscoveryError> {
+async fn retrieve_offers(myself: Arc<DiscoveryImpl>) -> Result<Vec<Offer>, DiscoveryError> {
     unimplemented!()
 }
 
 async fn on_offer_received(
-    myself: Arc<DiscoveryGSBInner>,
+    myself: Arc<DiscoveryImpl>,
     caller: String,
     msg: OfferReceived,
 ) -> Result<(), ()> {
@@ -298,5 +218,64 @@ impl From<ya_service_bus::error::Error> for DiscoveryInitError {
 impl From<ya_service_bus::error::Error> for DiscoveryError {
     fn from(err: ya_service_bus::error::Error) -> Self {
         DiscoveryError::GsbError(format!("{}", err))
+    }
+}
+
+// =========================================== //
+// Discovery interface builder
+// =========================================== //
+
+/// Discovery API initialization.
+pub struct DiscoveryBuilder {
+    offer_received: Option<HandlerSlot<OfferReceived>>,
+    retrieve_offers: Option<HandlerSlot<RetrieveOffers>>,
+}
+
+impl DiscoveryBuilder {
+    pub fn new() -> DiscoveryBuilder {
+        DiscoveryBuilder {
+            offer_received: None,
+            retrieve_offers: None,
+        }
+    }
+
+    pub fn bind_offer_received(mut self, callback: impl CallbackHandler<OfferReceived>) -> Self {
+        self.offer_received = Some(HandlerSlot::new(callback));
+        self
+    }
+
+    pub fn bind_retrieve_offers(mut self, callback: impl CallbackHandler<RetrieveOffers>) -> Self {
+        self.retrieve_offers = Some(HandlerSlot::new(callback));
+        self
+    }
+
+    pub fn offer_received_handler(
+        &mut self,
+    ) -> Result<HandlerSlot<OfferReceived>, DiscoveryInitError> {
+        let handler =
+            self.offer_received
+                .take()
+                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
+                    "offer_received"
+                )))?;
+        Ok(handler)
+    }
+
+    pub fn retrieve_offers_handler(
+        &mut self,
+    ) -> Result<HandlerSlot<RetrieveOffers>, DiscoveryInitError> {
+        let handler =
+            self.retrieve_offers
+                .take()
+                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
+                    "retrieve_offers"
+                )))?;
+        Ok(handler)
+    }
+
+    pub fn build(
+        self,
+    ) -> Result<Discovery, DiscoveryInitError> {
+        Ok(Discovery::new(self)?)
     }
 }

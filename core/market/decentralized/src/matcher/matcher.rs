@@ -14,7 +14,7 @@ use crate::db::models::Offer as ModelOffer;
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
-    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryFactory, DiscoveryInitError,
+    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryInitError,
     PropagateOffer,
 };
 use crate::protocol::{OfferReceived, RetrieveOffers};
@@ -69,12 +69,12 @@ pub struct EventsListeners {
 /// Responsible for storing Offers and matching them with demands.
 pub struct Matcher {
     db: DbExecutor,
-    discovery: Arc<dyn Discovery>,
+    discovery: Discovery,
     proposal_emitter: UnboundedSender<Proposal>,
 }
 
 impl Matcher {
-    pub fn new<Factory: DiscoveryFactory>(
+    pub fn new(
         builder: DiscoveryBuilder,
         db: &DbExecutor,
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
@@ -103,7 +103,7 @@ impl Matcher {
                 Ok(vec![])
             });
 
-        let discovery = Factory::new(builder)?;
+        let discovery = builder.build()?;
 
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 

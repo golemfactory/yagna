@@ -11,7 +11,7 @@ use crate::matcher::{Matcher, MatcherError, MatcherInitError};
 use crate::migrations;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
-use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
+use crate::protocol::DiscoveryBuilder;
 
 use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
@@ -56,7 +56,7 @@ impl MarketService {
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
 
-        let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder, db)?;
+        let (matcher, listeners) = Matcher::new(builder, db)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
         let requestor_engine =
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
