@@ -165,7 +165,11 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             // TODO: remove unwrap here.
             let ent: SendBroadcastMessage<serde_json::Value> = serde_json::from_slice(msg).unwrap();
 
-            log::debug!("Broadcast msg related to topic {} from [{}].", ent.topic(), &caller);
+            log::debug!(
+                "Broadcast msg related to topic {} from [{}].",
+                ent.topic(),
+                &caller
+            );
 
             let fut = central_bus.broadcast(caller.to_owned(), ent.topic().to_owned(), msg.into());
             let resp = resp.clone();

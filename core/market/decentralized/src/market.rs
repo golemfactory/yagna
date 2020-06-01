@@ -16,7 +16,7 @@ use crate::protocol::DiscoveryBuilder;
 use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
-use ya_core_model::market::{BUS_ID, private};
+use ya_core_model::market::{private, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
@@ -87,7 +87,9 @@ impl MarketService {
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb(BUS_ID.to_string(), private::BUS_ID.to_string()).await?)
+        Ok(market
+            .bind_gsb(BUS_ID.to_string(), private::BUS_ID.to_string())
+            .await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {

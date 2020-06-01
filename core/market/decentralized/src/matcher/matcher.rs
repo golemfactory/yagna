@@ -138,9 +138,7 @@ impl Matcher {
         self.discovery
             .broadcast_offer(model_offer.into_client_offer()?)
             .await
-            .map_err(|error| {
-                OfferError::BroadcastOfferFailure(error, model_offer.id.clone())
-            })?;
+            .map_err(|error| OfferError::BroadcastOfferFailure(error, model_offer.id.clone()))?;
         Ok(())
     }
 
