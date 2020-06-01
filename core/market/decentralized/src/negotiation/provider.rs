@@ -16,7 +16,11 @@ impl ProviderNegotiationEngine {
         Ok(Arc::new(ProviderNegotiationEngine { db }))
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), NegotiationInitError> {
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: String,
+        private: String,
+    ) -> Result<(), NegotiationInitError> {
         Ok(())
     }
 

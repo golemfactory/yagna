@@ -11,6 +11,7 @@ use ya_persistence::executor::Error as DbError;
 use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
+use crate::db::models::SubscriptionId;
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
@@ -37,8 +38,8 @@ pub enum OfferError {
     RemoveOfferFailure(DbError, String),
     #[error("Offer [{}] doesn't exist.", .0)]
     OfferNotExists(String),
-    #[error("Failed to broadcast offer [{}]. Error: {}.", .0, .1)]
-    BroadcastOfferFailure(DiscoveryError, String),
+    #[error("Failed to broadcast offer [{}]. Error: {}.", .1, .0)]
+    BroadcastOfferFailure(DiscoveryError, SubscriptionId),
 }
 
 #[derive(Error, Debug)]
@@ -109,8 +110,12 @@ impl Matcher {
         Ok((matcher, listeners))
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), MatcherInitError> {
-        Ok(self.discovery.bind_gsb(prefix).await?)
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: String,
+        private: String,
+    ) -> Result<(), MatcherInitError> {
+        Ok(self.discovery.bind_gsb(public_prefix, private).await?)
     }
 
     pub async fn add_offer(&self, offer: Offer) {
@@ -134,7 +139,7 @@ impl Matcher {
             .broadcast_offer(model_offer.into_client_offer()?)
             .await
             .map_err(|error| {
-                OfferError::BroadcastOfferFailure(error, model_offer.id.to_string())
+                OfferError::BroadcastOfferFailure(error, model_offer.id.clone())
             })?;
         Ok(())
     }

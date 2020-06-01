@@ -49,8 +49,9 @@ impl MarketsNetwork {
         let db = self.init_database(name.as_ref())?;
         let market = Arc::new(MarketService::new(&db)?);
 
-        let gsb_prefix = format!("/{}", name.as_ref());
-        market.bind_gsb(gsb_prefix).await?;
+        let public_gsb_prefix = format!("/{}", name.as_ref());
+        let local_gsb_prefix = format!("/{}", name.as_ref());
+        market.bind_gsb(public_gsb_prefix, local_gsb_prefix).await?;
 
         let market_node = MarketNode {
             name: name.as_ref().to_string(),

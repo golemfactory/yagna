@@ -16,7 +16,7 @@ use crate::protocol::DiscoveryBuilder;
 use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
-use ya_core_model::market::BUS_ID;
+use ya_core_model::market::{BUS_ID, private};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
@@ -68,18 +68,26 @@ impl MarketService {
         })
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), MarketInitError> {
-        self.matcher.bind_gsb(prefix.clone()).await?;
-        self.provider_negotiation_engine
-            .bind_gsb(prefix.clone())
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: String,
+        private: String,
+    ) -> Result<(), MarketInitError> {
+        self.matcher
+            .bind_gsb(public_prefix.clone(), private.clone())
             .await?;
-        self.requestor_negotiation_engine.bind_gsb(prefix).await?;
+        self.provider_negotiation_engine
+            .bind_gsb(public_prefix.clone(), private.clone())
+            .await?;
+        self.requestor_negotiation_engine
+            .bind_gsb(public_prefix.clone(), private.clone())
+            .await?;
         Ok(())
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb(BUS_ID.to_string()).await?)
+        Ok(market.bind_gsb(BUS_ID.to_string(), private::BUS_ID.to_string()).await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {

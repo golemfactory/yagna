@@ -6,6 +6,7 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use ya_client::model::market::Offer;
+use ya_client::model::ErrorMessage;
 use ya_core_model::net;
 use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
@@ -22,6 +23,8 @@ pub enum DiscoveryError {
     RemoteError(#[from] DiscoveryRemoteError),
     #[error("Failed to broadcast caused by gsb error: {}.", .0)]
     GsbError(String),
+    #[error("Internal error: {}.", .0)]
+    InternalError(String),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -75,12 +78,16 @@ impl Discovery {
         retrieve_offers(self.inner.clone()).await
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), DiscoveryInitError> {
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: String,
+        private: String,
+    ) -> Result<(), DiscoveryInitError> {
         let myself = self.inner.clone();
 
         log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
 
-        let offer_broadcast_address = format!("{}/{}", prefix, OfferReceived::TOPIC);
+        let offer_broadcast_address = format!("{}/{}", private, OfferReceived::TOPIC);
         let subscribe_msg = OfferReceived::into_subscribe_msg(&offer_broadcast_address);
         bus::service(net::local::BUS_ID)
             .send(subscribe_msg)
@@ -104,6 +111,8 @@ impl Discovery {
 }
 
 async fn broadcast_offer(myself: Arc<DiscoveryImpl>, offer: Offer) -> Result<(), DiscoveryError> {
+    log::info!("Broadcasting offer [{}] to the network.", offer.offer_id()?);
+
     let msg = OfferReceived { offer };
     let bcast_msg = SendBroadcastMessage::new(msg);
 
@@ -206,29 +215,7 @@ impl RpcMessage for RetrieveOffers {
 // =========================================== //
 
 impl BroadcastMessage for OfferReceived {
-    const TOPIC: &'static str = "market/protocol/mk1/offer";
-}
-
-// =========================================== //
-// Errors From impls
-// =========================================== //
-
-impl From<net::local::SubscribeError> for DiscoveryInitError {
-    fn from(err: net::local::SubscribeError) -> Self {
-        DiscoveryInitError::BroadcastSubscribeFailed(format!("{}", err))
-    }
-}
-
-impl From<ya_service_bus::error::Error> for DiscoveryInitError {
-    fn from(err: ya_service_bus::error::Error) -> Self {
-        DiscoveryInitError::BindingGsbFailed(format!("{}", err))
-    }
-}
-
-impl From<ya_service_bus::error::Error> for DiscoveryError {
-    fn from(err: ya_service_bus::error::Error) -> Self {
-        DiscoveryError::GsbError(format!("{}", err))
-    }
+    const TOPIC: &'static str = "market-protocol-mk1-offer";
 }
 
 // =========================================== //
@@ -285,5 +272,33 @@ impl DiscoveryBuilder {
 
     pub fn build(self) -> Result<Discovery, DiscoveryInitError> {
         Ok(Discovery::new(self)?)
+    }
+}
+
+// =========================================== //
+// Errors From impls
+// =========================================== //
+
+impl From<net::local::SubscribeError> for DiscoveryInitError {
+    fn from(err: net::local::SubscribeError) -> Self {
+        DiscoveryInitError::BroadcastSubscribeFailed(format!("{}", err))
+    }
+}
+
+impl From<ya_service_bus::error::Error> for DiscoveryInitError {
+    fn from(err: ya_service_bus::error::Error) -> Self {
+        DiscoveryInitError::BindingGsbFailed(format!("{}", err))
+    }
+}
+
+impl From<ya_service_bus::error::Error> for DiscoveryError {
+    fn from(err: ya_service_bus::error::Error) -> Self {
+        DiscoveryError::GsbError(format!("{}", err))
+    }
+}
+
+impl From<ErrorMessage> for DiscoveryError {
+    fn from(e: ErrorMessage) -> Self {
+        DiscoveryError::InternalError(e.to_string())
     }
 }
