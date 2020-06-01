@@ -25,7 +25,7 @@ impl BCastService {
             .entry(subscribe.topic().to_owned())
             .or_insert_with(Default::default);
 
-        let is_new = !receivers.is_empty();
+        let is_new = receivers.is_empty();
         receivers.push((id, subscribe.endpoint().into()));
         me.last_id += 1;
         (is_new, id)
