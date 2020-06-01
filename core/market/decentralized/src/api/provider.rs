@@ -53,9 +53,8 @@ async fn unsubscribe(
     id: Identity,
 ) -> HttpResponse {
     let subscription_id = path.into_inner().subscription_id;
-    match market.matcher.get_offer(subscription_id.clone()).await {
-        Ok(Some(_offer)) => response::ok(subscription_id),
-        Ok(None) => response::not_found(),
+    match market.unsubscribe_offer(subscription_id.clone(), id).await {
+        Ok(()) => response::ok(subscription_id),
         // TODO: Translate MatcherError to better HTTP response.
         Err(error) => response::server_error(&format!("{}", error)),
     }

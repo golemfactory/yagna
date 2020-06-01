@@ -124,7 +124,6 @@ impl MarketService {
         id: Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-
         self.provider_negotiation_engine
             .unsubscribe_offer(&subscription_id)
             .await?;

@@ -12,6 +12,7 @@ mod tests {
     use std::time::Duration;
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
+    /// Than sending unsubscribe should remove Offer from other nodes.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
@@ -41,6 +42,16 @@ mod tests {
 
         assert!(market2.matcher.get_offer(&subscription_id).await?.is_some());
         assert!(market3.matcher.get_offer(&subscription_id).await?.is_some());
+
+        // Unsubscribe Offer. Wait some delay for propagation.
+        market1
+            .unsubscribe_offer(subscription_id.clone(), identity1.clone())
+            .await?;
+        tokio::time::delay_for(Duration::from_secs(1)).await;
+
+        // We expect, that Offers won't be available on other nodes now
+        assert!(market2.matcher.get_offer(&subscription_id).await?.is_none());
+        assert!(market3.matcher.get_offer(&subscription_id).await?.is_none());
 
         Ok(())
     }

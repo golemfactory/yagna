@@ -53,16 +53,19 @@ pub struct Discovery {
 
 pub struct DiscoveryImpl {
     offer_received: HandlerSlot<OfferReceived>,
+    offer_unsubscribed: HandlerSlot<OfferUnsubscribed>,
     retrieve_offers: HandlerSlot<RetrieveOffers>,
 }
 
 impl Discovery {
     fn new(mut builder: DiscoveryBuilder) -> Result<Discovery, DiscoveryInitError> {
         let offer_received = builder.offer_received_handler()?;
+        let offer_unsubscribed = builder.offer_unsubscribed_handler()?;
         let retrieve_offers = builder.retrieve_offers_handler()?;
 
         let inner = Arc::new(DiscoveryImpl {
             offer_received,
+            offer_unsubscribed,
             retrieve_offers,
         });
         Ok(Discovery { inner })
@@ -72,6 +75,13 @@ impl Discovery {
     /// get call to function bound in DiscoveryBuilder::bind_offer_received.
     pub async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
         broadcast_offer(self.inner.clone(), offer).await
+    }
+
+    pub async fn broadcast_unsubscribe(
+        &self,
+        subscription_id: String,
+    ) -> Result<(), DiscoveryError> {
+        broadcast_unsubscribe(self.inner.clone(), subscription_id).await
     }
 
     pub async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {
@@ -106,6 +116,28 @@ impl Discovery {
             },
         );
 
+        log::debug!("Creating broadcast topic {}.", OfferUnsubscribed::TOPIC);
+
+        let unsubscribe_broadcast_address = format!("{}/{}", private, OfferUnsubscribed::TOPIC);
+        let subscribe_msg = OfferUnsubscribed::into_subscribe_msg(&unsubscribe_broadcast_address);
+        bus::service(net::local::BUS_ID)
+            .send(subscribe_msg)
+            .await??;
+
+        log::debug!(
+            "Binding handler for broadcast topic {}.",
+            OfferUnsubscribed::TOPIC
+        );
+
+        let myself = self.inner.clone();
+        let _ = bus::bind_with_caller(
+            &unsubscribe_broadcast_address,
+            move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
+                let myself = myself.clone();
+                on_offer_unsubscribed(myself, caller, msg.body().to_owned())
+            },
+        );
+
         Ok(())
     }
 }
@@ -114,6 +146,22 @@ async fn broadcast_offer(myself: Arc<DiscoveryImpl>, offer: Offer) -> Result<(),
     log::info!("Broadcasting offer [{}] to the network.", offer.offer_id()?);
 
     let msg = OfferReceived { offer };
+    let bcast_msg = SendBroadcastMessage::new(msg);
+
+    let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+    Ok(())
+}
+
+async fn broadcast_unsubscribe(
+    myself: Arc<DiscoveryImpl>,
+    subscription_id: String,
+) -> Result<(), DiscoveryError> {
+    log::info!(
+        "Broadcasting unsubscribe offer [{}] to the network.",
+        &subscription_id
+    );
+
+    let msg = OfferUnsubscribed { subscription_id };
     let bcast_msg = SendBroadcastMessage::new(msg);
 
     let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
@@ -143,7 +191,7 @@ async fn on_offer_received(
     );
 
     match callback.call(caller, msg).await? {
-        PropagateOffer::True => {
+        Propagate::True => {
             log::info!("Propagating further Offer [{}].", offer_id,);
 
             // TODO: Should we retry in case of fail?
@@ -155,10 +203,50 @@ async fn on_offer_received(
                 );
             }
         }
-        PropagateOffer::False(reason) => {
+        Propagate::False(reason) => {
             log::info!(
                 "Not propagating Offer [{}] for reason: {}.",
                 offer_id,
+                reason
+            );
+        }
+    }
+    Ok(())
+}
+
+async fn on_offer_unsubscribed(
+    myself: Arc<DiscoveryImpl>,
+    caller: String,
+    msg: OfferUnsubscribed,
+) -> Result<(), ()> {
+    let callback = myself.offer_unsubscribed.clone();
+    let subscription_id = msg.subscription_id.clone();
+
+    log::info!(
+        "Received broadcasted unsubscribe Offer [{}]. Sender: [{}].",
+        subscription_id,
+        &caller,
+    );
+
+    match callback.call(caller, msg).await? {
+        Propagate::True => {
+            log::info!(
+                "Propagating further unsubscribe Offer [{}].",
+                &subscription_id,
+            );
+
+            // TODO: Should we retry in case of fail?
+            if let Err(error) = broadcast_unsubscribe(myself, subscription_id.clone()).await {
+                log::error!(
+                    "Error propagating further unsubscribe Offer [{}].",
+                    subscription_id,
+                );
+            }
+        }
+        Propagate::False(reason) => {
+            log::info!(
+                "Not propagating unsubscribe Offer [{}] for reason: {}.",
+                subscription_id,
                 reason
             );
         }
@@ -176,10 +264,12 @@ pub enum StopPropagateReason {
     AlreadyExists,
     #[display(fmt = "Error adding offer: {}", "_0")]
     Error(String),
+    #[display(fmt = "Offer already unsubscribed")]
+    AlreadyUnsubscribed,
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum PropagateOffer {
+pub enum Propagate {
     True,
     False(StopPropagateReason),
 }
@@ -192,8 +282,28 @@ pub struct OfferReceived {
 
 impl RpcMessage for OfferReceived {
     const ID: &'static str = "OfferReceived";
-    type Item = PropagateOffer;
+    type Item = Propagate;
     type Error = ();
+}
+
+impl BroadcastMessage for OfferReceived {
+    const TOPIC: &'static str = "market-protocol-mk1-offer";
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OfferUnsubscribed {
+    pub subscription_id: String,
+}
+
+impl RpcMessage for OfferUnsubscribed {
+    const ID: &'static str = "OfferUnsubscribed";
+    type Item = Propagate;
+    type Error = ();
+}
+
+impl BroadcastMessage for OfferUnsubscribed {
+    const TOPIC: &'static str = "market-protocol-mk1-offer-unsubscribe";
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -209,22 +319,13 @@ impl RpcMessage for RetrieveOffers {
 }
 
 // =========================================== //
-// Internal Discovery messages used
-// for communication between market instances
-// of Discovery protocol
-// =========================================== //
-
-impl BroadcastMessage for OfferReceived {
-    const TOPIC: &'static str = "market-protocol-mk1-offer";
-}
-
-// =========================================== //
 // Discovery interface builder
 // =========================================== //
 
 /// Discovery API initialization.
 pub struct DiscoveryBuilder {
     offer_received: Option<HandlerSlot<OfferReceived>>,
+    offer_unsubscribed: Option<HandlerSlot<OfferUnsubscribed>>,
     retrieve_offers: Option<HandlerSlot<RetrieveOffers>>,
 }
 
@@ -232,12 +333,21 @@ impl DiscoveryBuilder {
     pub fn new() -> DiscoveryBuilder {
         DiscoveryBuilder {
             offer_received: None,
+            offer_unsubscribed: None,
             retrieve_offers: None,
         }
     }
 
     pub fn bind_offer_received(mut self, callback: impl CallbackHandler<OfferReceived>) -> Self {
         self.offer_received = Some(HandlerSlot::new(callback));
+        self
+    }
+
+    pub fn bind_offer_unsubscribed(
+        mut self,
+        callback: impl CallbackHandler<OfferUnsubscribed>,
+    ) -> Self {
+        self.offer_unsubscribed = Some(HandlerSlot::new(callback));
         self
     }
 
@@ -254,6 +364,18 @@ impl DiscoveryBuilder {
                 .take()
                 .ok_or(DiscoveryInitError::UninitializedCallback(format!(
                     "offer_received"
+                )))?;
+        Ok(handler)
+    }
+
+    pub fn offer_unsubscribed_handler(
+        &mut self,
+    ) -> Result<HandlerSlot<OfferUnsubscribed>, DiscoveryInitError> {
+        let handler =
+            self.offer_unsubscribed
+                .take()
+                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
+                    "offer_unsubscribed"
                 )))?;
         Ok(handler)
     }
