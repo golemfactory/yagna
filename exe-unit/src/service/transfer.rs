@@ -1,3 +1,4 @@
+use crate::commands::ContainerVolume;
 use crate::error::Error;
 use crate::message::Shutdown;
 use crate::util::path::{CachePath, ProjectedPath};
@@ -8,13 +9,15 @@ use actix::prelude::*;
 use futures::future::{AbortHandle, Abortable};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::io;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use url::Url;
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::{
     transfer, FileTransferProvider, GftpTransferProvider, HashStream, HttpTransferProvider,
-    TransferData, TransferProvider, TransferSink,
+    TransferData, TransferProvider, TransferSink, TransferStream,
 };
 
 #[derive(Clone, Debug, Message)]
@@ -22,6 +25,16 @@ use ya_transfer::{
 pub struct TransferResource {
     pub from: String,
     pub to: String,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct AddVolumes(Vec<ContainerVolume>);
+
+impl AddVolumes {
+    pub fn new(vols: Vec<ContainerVolume>) -> Self {
+        AddVolumes(vols)
+    }
 }
 
 #[derive(Clone, Debug, Message)]
@@ -40,9 +53,76 @@ struct AddAbortHandle(Abort);
 #[rtype("()")]
 struct RemoveAbortHandle(Abort);
 
+struct ContainerTransferProvider {
+    file_tp: FileTransferProvider,
+    work_dir: PathBuf,
+    vols: Vec<ContainerVolume>,
+}
+
+impl ContainerTransferProvider {
+    fn new(work_dir: PathBuf, vols: Vec<ContainerVolume>) -> Self {
+        let file_tp = Default::default();
+        ContainerTransferProvider {
+            file_tp,
+            work_dir,
+            vols,
+        }
+    }
+
+    fn resolve_path(&self, path: &str) -> std::result::Result<PathBuf, TransferError> {
+        fn is_prefix_of(base: &str, path: &str) -> usize {
+            if path.starts_with(base) && !path[base.len()..].starts_with("/") {
+                base.len()
+            } else {
+                0
+            }
+        }
+
+        if let Some(c) = self
+            .vols
+            .iter()
+            .max_by_key(|&c| is_prefix_of(&c.path, path))
+        {
+            let path = &path[c.path.len()..];
+            Ok(self.work_dir.join(&c.name).join(path))
+        } else {
+            Err(TransferError::IoError(io::Error::new(
+                io::ErrorKind::NotFound,
+                anyhow::anyhow!("path {} not found in container", path),
+            )))
+        }
+    }
+
+    fn resolve_url(&self, path: &str) -> std::result::Result<Url, TransferError> {
+        Ok(Url::from_file_path(self.resolve_path(path)?).unwrap())
+    }
+}
+
+impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider {
+    fn schemes(&self) -> Vec<&'static str> {
+        vec!["container"]
+    }
+
+    fn source(&self, url: &Url) -> TransferStream<TransferData, TransferError> {
+        let file_url = match self.resolve_url(url.path()) {
+            Ok(v) => v,
+            Err(e) => return TransferStream::err(e),
+        };
+        self.file_tp.source(&file_url)
+    }
+
+    fn destination(&self, url: &Url) -> TransferSink<TransferData, TransferError> {
+        let file_url = match self.resolve_url(url.path()) {
+            Ok(v) => v,
+            Err(e) => return TransferSink::err(e),
+        };
+        self.file_tp.destination(&file_url)
+    }
+}
+
 /// Handles resources transfers.
 pub struct TransferService {
-    providers: HashMap<&'static str, Rc<Box<dyn TransferProvider<TransferData, TransferError>>>>,
+    providers: HashMap<&'static str, Rc<dyn TransferProvider<TransferData, TransferError>>>,
     cache: Cache,
     work_dir: PathBuf,
     task_package: String,
@@ -53,14 +133,13 @@ impl TransferService {
     pub fn new(ctx: &ExeUnitContext) -> TransferService {
         let mut providers = HashMap::new();
 
-        let provider_vec: Vec<Rc<Box<dyn TransferProvider<TransferData, TransferError>>>> = vec![
-            Rc::new(Box::new(GftpTransferProvider::default())),
-            Rc::new(Box::new(HttpTransferProvider::default())),
-            Rc::new(Box::new(FileTransferProvider::default())),
+        let provider_vec: Vec<Rc<dyn TransferProvider<TransferData, TransferError>>> = vec![
+            Rc::new(GftpTransferProvider::default()),
+            Rc::new(HttpTransferProvider::default()),
         ];
-        for provider in provider_vec.into_iter() {
-            for scheme in provider.schemes().iter() {
-                providers.insert(*scheme, provider.clone());
+        for provider in provider_vec {
+            for scheme in provider.schemes() {
+                providers.insert(scheme, provider.clone());
             }
         }
 
@@ -350,5 +429,17 @@ impl TryFrom<ProjectedPath> for TransferUrl {
             "file",
         )
         .map_err(Error::local)
+    }
+}
+
+impl Handler<AddVolumes> for TransferService {
+    type Result = Result<()>;
+
+    fn handle(&mut self, msg: AddVolumes, _ctx: &mut Self::Context) -> Self::Result {
+        let container_transfer_provider =
+            ContainerTransferProvider::new(self.work_dir.clone(), msg.0);
+        self.providers
+            .insert("container", Rc::new(container_transfer_provider));
+        Ok(())
     }
 }

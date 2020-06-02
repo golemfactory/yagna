@@ -3,6 +3,7 @@ use crate::message::{ExecCmd, ExecCmdResult, SetTaskPackagePath, Shutdown};
 use crate::runtime::Runtime;
 use crate::ExeUnitContext;
 use actix::prelude::*;
+use futures::prelude::*;
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -173,17 +174,13 @@ impl Handler<RemoveChild> for RuntimeProcess {
 }
 
 impl Handler<Shutdown> for RuntimeProcess {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
-        let children = std::mem::replace(&mut self.children, HashSet::new());
         let timeout = process_kill_timeout_seconds();
-        let fut = async move {
-            futures::future::join_all(children.into_iter().map(|p| kill_pid(p, timeout))).await;
-            Ok(())
-        };
-
-        ActorResponse::r#async(fut.into_actor(self))
+        future::join_all(self.children.drain().map(|p| kill_pid(p, timeout)))
+            .map(|_| Ok(()))
+            .boxed_local()
     }
 }
 
