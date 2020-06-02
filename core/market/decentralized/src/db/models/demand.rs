@@ -20,9 +20,7 @@ pub struct Demand {
     pub node_id: String,
 
     /// Creation time of Demand on Requestor side.
-    pub creation_time: NaiveDateTime,
-    /// Time when this Demand was added to our local database.
-    pub addition_time: NaiveDateTime,
+    pub creation_ts: NaiveDateTime,
     /// Time when Demand expires set by Requestor.
     pub expiration_time: NaiveDateTime,
 }
@@ -46,8 +44,7 @@ impl Demand {
             properties,
             constraints,
             node_id,
-            creation_time: creation_time.clone(),
-            addition_time: creation_time.clone(),
+            creation_ts: creation_time.clone(),
             expiration_time: creation_time.clone(),
         })
     }
@@ -70,8 +67,7 @@ impl Demand {
             properties,
             constraints,
             node_id,
-            creation_time: creation_time.clone(),
-            addition_time: creation_time.clone(),
+            creation_ts: creation_time.clone(),
             expiration_time: creation_time.clone(),
         }
     }

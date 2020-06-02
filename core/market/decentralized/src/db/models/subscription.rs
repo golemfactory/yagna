@@ -15,11 +15,11 @@ use ya_client::model::ErrorMessage;
 
 #[derive(Error, Debug)]
 pub enum SubscriptionParseError {
-    #[error("Subscription id [{}] has invalid format.", .0)]
+    #[error("Subscription id [{0}] has invalid format.")]
     InvalidFormat(String),
-    #[error("Subscription id [{}] contains non hexadecimal characters.", .0)]
+    #[error("Subscription id [{0}] contains non hexadecimal characters.")]
     NotHexadecimal(String),
-    #[error("Subscription id [{}] has invalid length.", .0)]
+    #[error("Subscription id [{0}] has invalid length.")]
     InvalidLength(String),
 }
 

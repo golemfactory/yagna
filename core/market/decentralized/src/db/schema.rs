@@ -4,8 +4,7 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
-        creation_time -> Timestamp,
-        addition_time -> Timestamp,
+        creation_ts -> Timestamp,
         expiration_time -> Timestamp,
     }
 }
@@ -16,8 +15,7 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
-        creation_time -> Timestamp,
-        addition_time -> Timestamp,
+        creation_ts -> Timestamp,
         expiration_time -> Timestamp,
     }
 }
