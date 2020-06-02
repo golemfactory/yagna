@@ -16,7 +16,7 @@ use crate::db::models::{SubscriptionId, SubscriptionParseError};
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
-    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryInitError, Propagate, StopPropagateReason,
+    Discovery, DiscoveryError, DiscoveryInitError, Propagate, StopPropagateReason,
 };
 use crate::protocol::{OfferReceived, OfferUnsubscribed, RetrieveOffers};
 
@@ -80,29 +80,25 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(
-        builder: DiscoveryBuilder,
-        db: &DbExecutor,
-    ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
+    pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
 
         let database1 = db.clone();
         let database2 = db.clone();
-        let builder = builder
-            .bind_offer_received(move |msg: OfferReceived| {
+        let discovery = Discovery::new(
+            move |msg: OfferReceived| {
                 let database = database1.clone();
                 on_offer_received(database, msg)
-            })
-            .bind_offer_unsubscribed(move |msg: OfferUnsubscribed| {
+            },
+            move |msg: OfferUnsubscribed| {
                 let database = database2.clone();
                 on_offer_unsubscribed(database, msg)
-            })
-            .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
+            },
+            move |msg: RetrieveOffers| async move {
                 log::info!("Offers request received. Unimplemented.");
                 Ok(vec![])
-            });
-
-        let discovery = builder.build()?;
+            },
+        )?;
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {

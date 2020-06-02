@@ -58,15 +58,15 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
-    fn new(mut builder: DiscoveryBuilder) -> Result<Discovery, DiscoveryInitError> {
-        let offer_received = builder.offer_received_handler()?;
-        let offer_unsubscribed = builder.offer_unsubscribed_handler()?;
-        let retrieve_offers = builder.retrieve_offers_handler()?;
-
+    pub fn new(
+        offer_received: impl CallbackHandler<OfferReceived>,
+        offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
+        retrieve_offers: impl CallbackHandler<RetrieveOffers>,
+    ) -> Result<Discovery, DiscoveryInitError> {
         let inner = Arc::new(DiscoveryImpl {
-            offer_received,
-            offer_unsubscribed,
-            retrieve_offers,
+            offer_received: HandlerSlot::new(offer_received),
+            offer_unsubscribed: HandlerSlot::new(offer_unsubscribed),
+            retrieve_offers: HandlerSlot::new(retrieve_offers),
         });
         Ok(Discovery { inner })
     }
@@ -316,85 +316,6 @@ impl RpcMessage for RetrieveOffers {
     const ID: &'static str = "RetrieveOffers";
     type Item = Vec<Offer>;
     type Error = DiscoveryRemoteError;
-}
-
-// =========================================== //
-// Discovery interface builder
-// =========================================== //
-
-/// Discovery API initialization.
-pub struct DiscoveryBuilder {
-    offer_received: Option<HandlerSlot<OfferReceived>>,
-    offer_unsubscribed: Option<HandlerSlot<OfferUnsubscribed>>,
-    retrieve_offers: Option<HandlerSlot<RetrieveOffers>>,
-}
-
-impl DiscoveryBuilder {
-    pub fn new() -> DiscoveryBuilder {
-        DiscoveryBuilder {
-            offer_received: None,
-            offer_unsubscribed: None,
-            retrieve_offers: None,
-        }
-    }
-
-    pub fn bind_offer_received(mut self, callback: impl CallbackHandler<OfferReceived>) -> Self {
-        self.offer_received = Some(HandlerSlot::new(callback));
-        self
-    }
-
-    pub fn bind_offer_unsubscribed(
-        mut self,
-        callback: impl CallbackHandler<OfferUnsubscribed>,
-    ) -> Self {
-        self.offer_unsubscribed = Some(HandlerSlot::new(callback));
-        self
-    }
-
-    pub fn bind_retrieve_offers(mut self, callback: impl CallbackHandler<RetrieveOffers>) -> Self {
-        self.retrieve_offers = Some(HandlerSlot::new(callback));
-        self
-    }
-
-    pub fn offer_received_handler(
-        &mut self,
-    ) -> Result<HandlerSlot<OfferReceived>, DiscoveryInitError> {
-        let handler =
-            self.offer_received
-                .take()
-                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
-                    "offer_received"
-                )))?;
-        Ok(handler)
-    }
-
-    pub fn offer_unsubscribed_handler(
-        &mut self,
-    ) -> Result<HandlerSlot<OfferUnsubscribed>, DiscoveryInitError> {
-        let handler =
-            self.offer_unsubscribed
-                .take()
-                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
-                    "offer_unsubscribed"
-                )))?;
-        Ok(handler)
-    }
-
-    pub fn retrieve_offers_handler(
-        &mut self,
-    ) -> Result<HandlerSlot<RetrieveOffers>, DiscoveryInitError> {
-        let handler =
-            self.retrieve_offers
-                .take()
-                .ok_or(DiscoveryInitError::UninitializedCallback(format!(
-                    "retrieve_offers"
-                )))?;
-        Ok(handler)
-    }
-
-    pub fn build(self) -> Result<Discovery, DiscoveryInitError> {
-        Ok(Discovery::new(self)?)
-    }
 }
 
 // =========================================== //
