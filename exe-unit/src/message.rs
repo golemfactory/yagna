@@ -8,10 +8,6 @@ use ya_client_model::activity::{
     CommandResult, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
 
-#[derive(Debug, Message)]
-#[rtype("()")]
-pub struct SetTaskPackagePath(pub PathBuf);
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
 pub struct GetMetrics;
@@ -29,6 +25,10 @@ pub struct GetBatchResults(pub String);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
 pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
+
+#[derive(Debug, Message)]
+#[rtype(result = "()")]
+pub struct SetTaskPackagePath(pub PathBuf);
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
@@ -125,6 +125,20 @@ impl ExecCmdResult {
 pub struct Register<Svc>(pub Addr<Svc>)
 where
     Svc: Actor<Context = Context<Svc>> + Handler<Shutdown>;
+
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Stop {
+    pub exclude_batches: Vec<String>,
+}
+
+impl Default for Stop {
+    fn default() -> Self {
+        Stop {
+            exclude_batches: Vec::new(),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<()>")]
