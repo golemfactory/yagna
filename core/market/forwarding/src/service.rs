@@ -20,9 +20,7 @@ impl MarketService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let db = ctx.component();
         crate::dao::init(&db)?;
-        let client = WebClient::builder()
-            .timeout(Duration::from_secs(5))
-            .build()?;
+        let client = WebClient::builder().timeout(Duration::from_secs(5)).build();
 
         let _ = bus::bind(market::BUS_ID, move |get: market::GetAgreement| {
             let market_api: MarketProviderApi = client
