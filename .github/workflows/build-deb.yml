@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - az/commit-sha-in-deb-version
       # - <your-branch>    # put your branch name here to test it @ GH Actions
 
 jobs:
