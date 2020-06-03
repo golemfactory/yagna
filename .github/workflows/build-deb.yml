@@ -20,8 +20,8 @@ jobs:
       - name: Compute deb package version
         id: vars
         run: |
-          VERSION=$(cargo pkgid | cut -d'#' -f2)
-          ROUTER_VERSION=$(cargo pkgid --manifest-path service-bus/router/Cargo.toml | cut -d'#' -f2)
+          VERSION=$(cargo pkgid yagna | cut -d'#' -f2)
+          ROUTER_VERSION=$(cargo pkgid ya-sb-router | cut -d':' -f3)
           SHA=$(echo ${{ github.sha }} | cut -c1-8)
           echo "::set-output name=deb_version::$VERSION-$SHA"
           echo "::set-output name=router_deb_version::$ROUTER_VERSION-$SHA"
