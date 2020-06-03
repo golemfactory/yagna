@@ -22,7 +22,7 @@ pub struct Offer {
     /// Creation time of Offer on Provider side.
     pub creation_ts: NaiveDateTime,
     /// Timestamp of adding this Offer to database.
-    pub modification_ts: Option<NaiveDateTime>,
+    pub insertion_ts: Option<NaiveDateTime>,
     /// Time when Offer expires set by Provider.
     pub expiration_ts: NaiveDateTime,
 }
@@ -51,7 +51,7 @@ impl Offer {
             constraints,
             node_id,
             creation_ts,
-            modification_ts: None, // Database will insert this timestamp.
+            insertion_ts: None, // Database will insert this timestamp.
             expiration_ts,
         })
     }
@@ -76,7 +76,7 @@ impl Offer {
             constraints,
             node_id,
             creation_ts,
-            modification_ts: None, // Database will insert this timestamp.
+            insertion_ts: None, // Database will insert this timestamp.
             expiration_ts,
         }
     }

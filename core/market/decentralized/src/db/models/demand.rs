@@ -22,7 +22,7 @@ pub struct Demand {
     /// Creation time of Demand on Requestor side.
     pub creation_ts: NaiveDateTime,
     /// Timestamp of adding this Demand to database.
-    pub modification_ts: Option<NaiveDateTime>,
+    pub insertion_ts: Option<NaiveDateTime>,
     /// Time when Demand expires set by Requestor.
     pub expiration_ts: NaiveDateTime,
 }
@@ -48,7 +48,7 @@ impl Demand {
             constraints,
             node_id,
             creation_ts,
-            modification_ts: None, // Database will insert this timestamp.
+            insertion_ts: None, // Database will insert this timestamp.
             expiration_ts,
         })
     }
@@ -73,7 +73,7 @@ impl Demand {
             constraints,
             node_id,
             creation_ts,
-            modification_ts: None, // Database will insert this timestamp.
+            insertion_ts: None, // Database will insert this timestamp.
             expiration_ts,
         }
     }
