@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, TimeZone, Utc, Duration};
+use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use serde_json;
 use std::str::FromStr;
@@ -21,8 +21,10 @@ pub struct Offer {
 
     /// Creation time of Offer on Provider side.
     pub creation_ts: NaiveDateTime,
+    /// Timestamp of adding this Offer to database.
+    pub modification_ts: Option<NaiveDateTime>,
     /// Time when Offer expires set by Provider.
-    pub expiration_time: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
 }
 
 impl Offer {
@@ -41,7 +43,7 @@ impl Offer {
         // TODO: Creation time should come from ClientOffer
         // TODO: Creation time should be included in subscription id hash.
         let creation_ts = Utc::now().naive_utc();
-        let expiration_time = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + Duration::hours(24);
 
         Ok(Offer {
             id,
@@ -49,7 +51,8 @@ impl Offer {
             constraints,
             node_id,
             creation_ts,
-            expiration_time,
+            modification_ts: None,  // Database will insert this timestamp.
+            expiration_ts,
         })
     }
 
@@ -65,7 +68,7 @@ impl Offer {
         // TODO: Creation time should be included in subscription id hash.
         // This function creates new Offer, so creation time should be equal to addition time.
         let creation_ts = Utc::now().naive_utc();
-        let expiration_time = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + Duration::hours(24);
 
         Offer {
             id,
@@ -73,7 +76,8 @@ impl Offer {
             constraints,
             node_id,
             creation_ts,
-            expiration_time,
+            modification_ts: None,  // Database will insert this timestamp.
+            expiration_ts,
         }
     }
 

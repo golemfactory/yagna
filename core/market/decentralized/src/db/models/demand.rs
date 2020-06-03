@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, TimeZone, Utc, Duration};
+use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use serde_json;
 use std::str::FromStr;
@@ -21,8 +21,10 @@ pub struct Demand {
 
     /// Creation time of Demand on Requestor side.
     pub creation_ts: NaiveDateTime,
+    /// Timestamp of adding this Demand to database.
+    pub modification_ts: Option<NaiveDateTime>,
     /// Time when Demand expires set by Requestor.
-    pub expiration_time: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
 }
 
 impl Demand {
@@ -38,7 +40,7 @@ impl Demand {
         // TODO: Creation time should come from ClientOffer
         // TODO: Creation time should be included in subscription id hash.
         let creation_ts = Utc::now().naive_utc();
-        let expiration_time = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + Duration::hours(24);
 
         Ok(Demand {
             id,
@@ -46,7 +48,8 @@ impl Demand {
             constraints,
             node_id,
             creation_ts,
-            expiration_time,
+            modification_ts: None,  // Database will insert this timestamp.
+            expiration_ts,
         })
     }
 
@@ -62,7 +65,7 @@ impl Demand {
         // TODO: Creation time should be included in subscription id hash.
         // This function creates new Demand, so creation time should be equal to addition time.
         let creation_ts = Utc::now().naive_utc();
-        let expiration_time = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + Duration::hours(24);
 
         Demand {
             id,
@@ -70,7 +73,8 @@ impl Demand {
             constraints,
             node_id,
             creation_ts,
-            expiration_time,
+            modification_ts: None,  // Database will insert this timestamp.
+            expiration_ts,
         }
     }
 

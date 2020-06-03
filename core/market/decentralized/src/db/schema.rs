@@ -5,7 +5,8 @@ table! {
         constraints -> Text,
         node_id -> Text,
         creation_ts -> Timestamp,
-        expiration_time -> Timestamp,
+        modification_ts -> Nullable<Timestamp>,
+        expiration_ts -> Timestamp,
     }
 }
 
@@ -16,7 +17,8 @@ table! {
         constraints -> Text,
         node_id -> Text,
         creation_ts -> Timestamp,
-        expiration_time -> Timestamp,
+        modification_ts -> Nullable<Timestamp>,
+        expiration_ts -> Timestamp,
     }
 }
 

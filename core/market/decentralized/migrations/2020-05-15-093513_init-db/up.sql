@@ -7,7 +7,8 @@ CREATE TABLE market_offer (
 	node_id VARCHAR(20) NOT NULL,
 
 	creation_ts DATETIME NOT NULL,
-	expiration_time DATETIME NOT NULL
+	modification_ts DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	expiration_ts DATETIME NOT NULL
 );
 
 CREATE TABLE market_demand (
@@ -17,5 +18,6 @@ CREATE TABLE market_demand (
 	node_id VARCHAR(20) NOT NULL,
 
 	creation_ts DATETIME NOT NULL,
-	expiration_time DATETIME NOT NULL
+	modification_ts DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	expiration_ts DATETIME NOT NULL
 );
