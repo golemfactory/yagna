@@ -54,8 +54,7 @@ impl DeployResult {
 
 #[cfg(test)]
 mod test {
-    use super::{ContainerVolume, DeployResult};
-    use std::io;
+    use super::DeployResult;
 
     fn parse_bytes<T: AsRef<[u8]>>(b: T) -> DeployResult {
         let result = DeployResult::from_bytes(b).unwrap();
