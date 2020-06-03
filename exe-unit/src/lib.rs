@@ -233,6 +233,7 @@ impl<R: Runtime> ExeUnit<R> {
                         return Err(Error::CommandError(exec_result));
                     }
                 };
+                log::info!("adding vols: {:?}", deploy_desc.vols);
                 transfer_service
                     .send(AddVolumes::new(deploy_desc.vols))
                     .await??;

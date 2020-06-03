@@ -33,18 +33,22 @@ impl Default for StartMode {
 
 impl DeployResult {
     pub fn from_bytes(bytes: impl AsRef<[u8]>) -> anyhow::Result<DeployResult> {
-        let b = bytes.as_ref();
+        let b: &[u8] = bytes.as_ref();
         if b.is_empty() {
+            log::warn!("empty descriptor");
             return Ok(DeployResult {
                 valid: Ok(Default::default()),
                 vols: Default::default(),
                 start_mode: Default::default(),
             });
         }
-        if b[0] != b'{' {
-            anyhow::bail!("invliad deploy response")
+        if let Some(idx) = b.iter().position(|&ch| ch == b'{') {
+            let b = &b[idx..];
+            Ok(serde_json::from_reader(Cursor::new(b))?)
+        } else {
+            let text = String::from_utf8_lossy(b);
+            anyhow::bail!("invliad deploy response: {}", text);
         }
-        Ok(serde_json::from_reader(Cursor::new(b))?)
     }
 }
 

@@ -79,7 +79,9 @@ impl<T: 'static, E: 'static> TransferStream<T, E> {
     pub fn err(e: E) -> Self {
         let (this, mut sender, _) = Self::create(1);
         Arbiter::spawn(async move {
-            sender.send(Err(e)).await;
+            if let Err(e) = sender.send(Err(e)).await {
+                log::warn!("send error: {}", e);
+            }
         });
         this
     }
@@ -121,7 +123,7 @@ impl<T, E> TransferSink<T, E> {
     }
 
     pub fn err(e: E) -> Self {
-        let (this, _, mut s) = Self::create(1);
+        let (this, _, s) = Self::create(1);
         let _ = s.send(Err(e));
         this
     }
