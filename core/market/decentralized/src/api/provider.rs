@@ -119,7 +119,7 @@ async fn reject_agreement(
     response::not_implemented()
 }
 
-#[actix_web::delete("/agreements/{agreement_id}/terminate")]
+#[actix_web::post("/agreements/{agreement_id}/terminate")]
 async fn terminate_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,

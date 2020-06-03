@@ -24,7 +24,7 @@ pub enum DiscoveryRemoteError {}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum DiscoveryInitError {
-    #[error("Uninitialized callback '{}'.", .0)]
+    #[error("Uninitialized callback '{0}'.")]
     UninitializedCallback(String),
 }
 

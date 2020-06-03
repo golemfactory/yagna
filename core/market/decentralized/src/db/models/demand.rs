@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, TimeZone, Utc};
+use chrono::{NaiveDateTime, TimeZone, Utc, Duration};
 use diesel::prelude::*;
 use serde_json;
 use std::str::FromStr;
@@ -37,15 +37,16 @@ impl Demand {
         // TODO: Set default expiration time. In future provider should set expiration.
         // TODO: Creation time should come from ClientOffer
         // TODO: Creation time should be included in subscription id hash.
-        let creation_time = Utc::now().naive_utc();
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_time = creation_ts + Duration::hours(24);
 
         Ok(Demand {
             id,
             properties,
             constraints,
             node_id,
-            creation_ts: creation_time.clone(),
-            expiration_time: creation_time.clone(),
+            creation_ts,
+            expiration_time,
         })
     }
 
@@ -60,15 +61,16 @@ impl Demand {
         // TODO: Set default expiration time. In future provider should set expiration.
         // TODO: Creation time should be included in subscription id hash.
         // This function creates new Demand, so creation time should be equal to addition time.
-        let creation_time = Utc::now().naive_utc();
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_time = creation_ts + Duration::hours(24);
 
         Demand {
             id,
             properties,
             constraints,
             node_id,
-            creation_ts: creation_time.clone(),
-            expiration_time: creation_time.clone(),
+            creation_ts,
+            expiration_time,
         }
     }
 

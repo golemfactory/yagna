@@ -28,17 +28,17 @@ pub enum MarketError {
     Matcher(#[from] MatcherError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
-    #[error("Internal error: {}.", .0)]
+    #[error("Internal error: {0}.")]
     InternalError(#[from] ErrorMessage),
 }
 
 #[derive(Error, Debug)]
 pub enum MarketInitError {
-    #[error("Failed to initialize Offers matcher. Error: {}.", .0)]
+    #[error("Failed to initialize Offers matcher. Error: {0}.")]
     Matcher(#[from] MatcherInitError),
-    #[error("Failed to initialize negotiation engine. Error: {}.", .0)]
+    #[error("Failed to initialize negotiation engine. Error: {0}.")]
     Negotiation(#[from] NegotiationInitError),
-    #[error("Failed to migrate market database. Error: {}.", .0)]
+    #[error("Failed to migrate market database. Error: {0}.")]
     Migration(#[from] anyhow::Error),
 }
 
