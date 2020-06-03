@@ -14,11 +14,61 @@ use diesel::{
 use std::collections::HashMap;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
 use ya_client_model::NodeId;
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
+}
+
+fn insert_activity_payments(
+    activity_payments: Vec<ActivityPayment>,
+    payment_id: &String,
+    owner_id: &NodeId,
+    conn: &ConnType,
+) -> DbResult<()> {
+    log::trace!("Inserting activity payments...");
+    for activity_payment in activity_payments {
+        let amount = activity_payment.amount.into();
+        activity::increase_amount_paid(&activity_payment.activity_id, &owner_id, &amount, conn)?;
+        diesel::insert_into(activity_pay_dsl::pay_activity_payment)
+            .values(DbActivityPayment {
+                payment_id: payment_id.clone(),
+                activity_id: activity_payment.activity_id,
+                owner_id: owner_id.clone(),
+                amount,
+            })
+            .execute(conn)
+            .map(|_| ())?;
+    }
+    log::trace!("Activity payments inserted.");
+    Ok(())
+}
+
+fn insert_agreement_payments(
+    agreement_payments: Vec<AgreementPayment>,
+    payment_id: &String,
+    owner_id: &NodeId,
+    conn: &ConnType,
+) -> DbResult<()> {
+    log::trace!("Inserting agreement payments...");
+    for agreement_payment in agreement_payments {
+        let amount = agreement_payment.amount.into();
+        agreement::increase_amount_paid(&agreement_payment.agreement_id, &owner_id, &amount, conn)?;
+        diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
+            .values(DbAgreementPayment {
+                payment_id: payment_id.clone(),
+                agreement_id: agreement_payment.agreement_id,
+                owner_id: owner_id.clone(),
+                amount,
+            })
+            .execute(conn)
+            .map(|_| ())?;
+    }
+    log::trace!("Agreement payments inserted.");
+    Ok(())
 }
 
 impl<'c> AsDao<'c> for PaymentDao<'c> {
@@ -40,62 +90,14 @@ impl<'c> PaymentDao<'c> {
         let amount = payment.amount.clone();
 
         do_with_transaction(self.pool, move |conn| {
-            // Insert payment
             log::trace!("Inserting payment...");
             diesel::insert_into(dsl::pay_payment)
                 .values(payment)
                 .execute(conn)?;
             log::trace!("Payment inserted.");
 
-            // Insert debit note relations
-            log::trace!("Inserting activity payments...");
-            activity_payments
-                .into_iter()
-                .try_for_each(|activity_payment| -> DbResult<()> {
-                    let amount = activity_payment.amount.into();
-                    activity::increase_amount_paid(
-                        &activity_payment.activity_id,
-                        &owner_id,
-                        &amount,
-                        conn,
-                    )?;
-                    diesel::insert_into(activity_pay_dsl::pay_activity_payment)
-                        .values(DbActivityPayment {
-                            payment_id: payment_id.clone(),
-                            activity_id: activity_payment.activity_id,
-                            owner_id,
-                            amount,
-                        })
-                        .execute(conn)
-                        .map(|_| ())?;
-                    Ok(())
-                })?;
-            log::trace!("Activity payments inserted.");
-
-            // Insert invoice relations
-            log::trace!("Inserting agreement payments...");
-            agreement_payments
-                .into_iter()
-                .try_for_each(|agreement_payment| -> DbResult<()> {
-                    let amount = agreement_payment.amount.into();
-                    agreement::increase_amount_paid(
-                        &agreement_payment.agreement_id,
-                        &owner_id,
-                        &amount,
-                        conn,
-                    )?;
-                    diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
-                        .values(DbAgreementPayment {
-                            payment_id: payment_id.clone(),
-                            agreement_id: agreement_payment.agreement_id,
-                            owner_id,
-                            amount,
-                        })
-                        .execute(conn)
-                        .map(|_| ())?;
-                    Ok(())
-                })?;
-            log::trace!("Agreement payments inserted.");
+            insert_activity_payments(activity_payments, &payment_id, &owner_id, &conn)?;
+            insert_agreement_payments(agreement_payments, &payment_id, &owner_id, &conn)?;
 
             // Update spent & remaining amount for allocation (if applicable)
             if let Some(allocation_id) = &allocation_id {

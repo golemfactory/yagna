@@ -1,55 +1,19 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
-use futures::Future;
-use std::convert::TryInto;
-use std::pin::Pin;
-use std::str::FromStr;
-use std::sync::Arc;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
 
 use ya_payment::processor::PaymentProcessor;
-use ya_payment::utils::fake_sign_tx;
 use ya_payment::{migrations, utils};
-use ya_payment_driver::{AccountMode, DummyDriver, GntDriver, PaymentDriver};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 
 #[derive(Clone, Debug, StructOpt)]
-enum Driver {
-    Dummy,
-    Gnt,
-}
-
-impl FromStr for Driver {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        match s.to_lowercase().as_str() {
-            "dummy" => Ok(Driver::Dummy),
-            "gnt" => Ok(Driver::Gnt),
-            s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
-        }
-    }
-}
-
-impl std::fmt::Display for Driver {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Driver::Dummy => write!(f, "dummy"),
-            Driver::Gnt => write!(f, "gnt"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, StructOpt)]
 struct Args {
-    #[structopt(long, default_value = "dummy")]
-    driver: Driver,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
     #[structopt(long, default_value = "")]
@@ -62,46 +26,70 @@ struct Args {
     agreement_id: String,
 }
 
-async fn get_gnt_driver(
-    db: &DbExecutor,
-    provider_account: Box<EthAccount>,
-    requestor_account: Box<EthAccount>,
-) -> anyhow::Result<GntDriver> {
-    let provider_addr = hex::encode(provider_account.address());
-    let requestor_addr = hex::encode(requestor_account.address());
-    let provider_sign_tx = get_sign_tx(provider_account);
-    let requestor_sign_tx = get_sign_tx(requestor_account);
+#[cfg(feature = "dummy-driver")]
+mod driver {
+    use super::{DbExecutor, EthAccount};
+    use ya_payment_driver::{DummyDriver, PaymentDriver};
 
-    let driver = GntDriver::new(db.clone()).await?;
-    driver
-        .init(AccountMode::RECV, &provider_addr, &provider_sign_tx)
-        .await?;
-    driver
-        .init(AccountMode::SEND, &requestor_addr, &requestor_sign_tx)
-        .await?;
-
-    fake_sign_tx(Box::new(provider_sign_tx));
-    fake_sign_tx(Box::new(requestor_sign_tx));
-    Ok(driver)
+    pub async fn get(
+        _db: &DbExecutor,
+        _provider_account: Box<EthAccount>,
+        _requestor_account: Box<EthAccount>,
+    ) -> anyhow::Result<impl PaymentDriver> {
+        Ok(DummyDriver::new())
+    }
 }
 
-fn get_sign_tx(
-    account: Box<EthAccount>,
-) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    // let account: Arc<EthAccount> = EthAccount::load_or_generate(key_path, password).unwrap().into();
-    let account: Arc<EthAccount> = account.into();
-    move |msg| {
-        let account = account.clone();
-        let fut = async move {
-            let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
-            let signature = account.sign(&msg).unwrap();
-            let mut v = Vec::with_capacity(65);
-            v.push(signature.v);
-            v.extend_from_slice(&signature.r);
-            v.extend_from_slice(&signature.s);
-            v
-        };
-        Box::pin(fut)
+#[cfg(feature = "gnt-driver")]
+mod driver {
+    use super::{DbExecutor, EthAccount};
+    use futures::Future;
+    use std::convert::TryInto;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use ya_payment::utils::fake_sign_tx;
+    use ya_payment_driver::{AccountMode, GntDriver, PaymentDriver};
+
+    pub async fn get(
+        db: &DbExecutor,
+        provider_account: Box<EthAccount>,
+        requestor_account: Box<EthAccount>,
+    ) -> anyhow::Result<impl PaymentDriver> {
+        let provider_addr = hex::encode(provider_account.address());
+        let requestor_addr = hex::encode(requestor_account.address());
+        let provider_sign_tx = get_sign_tx(provider_account);
+        let requestor_sign_tx = get_sign_tx(requestor_account);
+
+        let driver = GntDriver::new(db.clone()).await?;
+        driver
+            .init(AccountMode::RECV, &provider_addr, &provider_sign_tx)
+            .await?;
+        driver
+            .init(AccountMode::SEND, &requestor_addr, &requestor_sign_tx)
+            .await?;
+
+        fake_sign_tx(Box::new(provider_sign_tx));
+        fake_sign_tx(Box::new(requestor_sign_tx));
+        Ok(driver)
+    }
+
+    fn get_sign_tx(
+        account: Box<EthAccount>,
+    ) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+        let account: Arc<EthAccount> = account.into();
+        move |msg| {
+            let account = account.clone();
+            let fut = async move {
+                let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
+                let signature = account.sign(&msg).unwrap();
+                let mut v = Vec::with_capacity(65);
+                v.push(signature.v);
+                v.extend_from_slice(&signature.r);
+                v.extend_from_slice(&signature.s);
+                v
+            };
+            Box::pin(fut)
+        }
     }
 }
 
@@ -128,18 +116,13 @@ async fn main() -> anyhow::Result<()> {
         requestor_id
     );
 
-    let database_url = "file:yagna.db";
+    let database_url = "file:payment.db";
     let db = DbExecutor::new(database_url)?;
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
-    let processor = match &args.driver {
-        Driver::Dummy => PaymentProcessor::new(DummyDriver::new(), db.clone()),
-        Driver::Gnt => PaymentProcessor::new(
-            get_gnt_driver(&db, provider_account, requestor_account).await?,
-            db.clone(),
-        ),
-    };
+    let driver = driver::get(&db, provider_account, requestor_account).await?;
+    let processor = PaymentProcessor::new(driver, db.clone());
     ya_payment::service::bind_service(&db, processor);
 
     let agreement = market::Agreement {

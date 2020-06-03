@@ -33,9 +33,7 @@ mod local {
         sender: String,
         msg: SchedulePayment,
     ) -> Result<(), ScheduleError> {
-        let invoice = msg.invoice;
-        let allocation_id = msg.allocation_id;
-        processor.schedule_payment(invoice, allocation_id).await?;
+        processor.schedule_payment(msg).await?;
         Ok(())
     }
 
