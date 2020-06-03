@@ -46,7 +46,7 @@ CREATE TABLE "pay_debit_note"(
     "previous_debit_note_id" VARCHAR(50) NULL,
     "activity_id" VARCHAR(50) NOT NULL,
     "status" VARCHAR(50) NOT NULL DEFAULT 'ISSUED',
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "timestamp" DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     "total_amount_due" VARCHAR(32) NOT NULL,
     "usage_counter_vector" BLOB NULL,
     "payment_due_date" DATETIME NULL,
@@ -63,7 +63,7 @@ CREATE TABLE "pay_invoice"(
     "role" CHAR(1) NOT NULL CHECK ("role" in ('R', 'P')),
     "agreement_id" VARCHAR(50) NOT NULL,
     "status" VARCHAR(50) NOT NULL DEFAULT 'ISSUED',
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "timestamp" DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     "amount" VARCHAR(32) NOT NULL,
     "payment_due_date" DATETIME NOT NULL,
     PRIMARY KEY("owner_id", "id"),
@@ -91,37 +91,40 @@ CREATE TABLE "pay_allocation"(
     "make_deposit" BOOLEAN NOT NULL
 );
 
-CREATE TABLE "pay_payment"(
-    "id" VARCHAR(50) NOT NULL,
-    "owner_id" VARCHAR(50) NOT NULL,
-    "role" CHAR(1) NOT NULL CHECK ("role" in ('R', 'P')),
-    "agreement_id" VARCHAR(50) NOT NULL,
-    "allocation_id" VARCHAR(50) NULL,
-    "amount" VARCHAR(32) NOT NULL,
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "details" BLOB NOT NULL,
-    PRIMARY KEY("owner_id", "id"),
-    UNIQUE ("id", "role"),
-    FOREIGN KEY("owner_id", "agreement_id") REFERENCES "pay_agreement" ("owner_id", "id"),
-    FOREIGN KEY("allocation_id") REFERENCES "pay_allocation" ("id") ON DELETE SET NULL
+CREATE TABLE pay_payment(
+    id VARCHAR(50) NOT NULL,
+    owner_id VARCHAR(50) NOT NULL,
+    peer_id VARCHAR(50) NOT NULL,
+    payee_addr VARCHAR(50) NOT NULL,
+    payer_addr VARCHAR(50) NOT NULL,
+    role CHAR(1) NOT NULL CHECK ("role" in ('R', 'P')),
+    allocation_id VARCHAR(50) NULL,
+    amount VARCHAR(32) NOT NULL,
+    timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+    details BLOB NOT NULL,
+    PRIMARY KEY(owner_id, id),
+    UNIQUE (id, role),
+    FOREIGN KEY(allocation_id) REFERENCES pay_allocation(id) ON DELETE SET NULL
 );
 
-CREATE TABLE "pay_payment_x_debit_note"(
-    "payment_id" VARCHAR(50) NOT NULL,
-    "debit_note_id" VARCHAR(50) NOT NULL,
-    "owner_id" VARCHAR(50) NOT NULL,
-    PRIMARY KEY("owner_id", "payment_id", "debit_note_id"),
-    FOREIGN KEY("owner_id", "payment_id") REFERENCES "pay_payment" ("owner_id", "id"),
-    FOREIGN KEY("owner_id", "debit_note_id") REFERENCES "pay_debit_note" ("owner_id", "id")
+CREATE TABLE pay_activity_payment(
+    payment_id VARCHAR(50) NOT NULL,
+    activity_id VARCHAR(50) NOT NULL,
+    owner_id VARCHAR(50) NOT NULL,
+    amount VARCHAR(32) NOT NULL,
+    PRIMARY KEY(owner_id, payment_id, activity_id),
+    FOREIGN KEY(owner_id, payment_id) REFERENCES pay_payment(owner_id, id),
+    FOREIGN KEY(owner_id, activity_id) REFERENCES pay_activity(owner_id, id)
 );
 
-CREATE TABLE "pay_payment_x_invoice"(
-    "payment_id" VARCHAR(50) NOT NULL,
-    "invoice_id" VARCHAR(50) NOT NULL,
-    "owner_id" VARCHAR(50) NOT NULL,
-    PRIMARY KEY("owner_id", "payment_id", "invoice_id"),
-    FOREIGN KEY("owner_id", "payment_id") REFERENCES "pay_payment" ("owner_id", "id"),
-    FOREIGN KEY("owner_id", "invoice_id") REFERENCES "pay_invoice" ("owner_id", "id")
+CREATE TABLE pay_agreement_payment(
+    payment_id VARCHAR(50) NOT NULL,
+    agreement_id VARCHAR(50) NOT NULL,
+    owner_id VARCHAR(50) NOT NULL,
+    amount VARCHAR(32) NOT NULL,
+    PRIMARY KEY(owner_id, payment_id, agreement_id),
+    FOREIGN KEY(owner_id, payment_id) REFERENCES pay_payment(owner_id, id),
+    FOREIGN KEY(owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id)
 );
 
 CREATE TABLE "pay_event_type"(
@@ -139,7 +142,7 @@ CREATE TABLE "pay_debit_note_event"(
     "debit_note_id" VARCHAR(50) NOT NULL,
     "owner_id" VARCHAR(50) NOT NULL,
     "event_type" VARCHAR(50) NOT NULL,
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "timestamp" DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     "details" TEXT NULL,
     PRIMARY KEY("debit_note_id", "event_type"),
     FOREIGN KEY("owner_id", "debit_note_id") REFERENCES "pay_debit_note" ("owner_id", "id"),
@@ -150,7 +153,7 @@ CREATE TABLE "pay_invoice_event"(
     "invoice_id" VARCHAR(50) NOT NULL,
     "owner_id" VARCHAR(50) NOT NULL,
     "event_type" VARCHAR(50) NOT NULL,
-    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "timestamp" DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     "details" TEXT NULL,
     PRIMARY KEY("invoice_id", "event_type"),
     FOREIGN KEY("owner_id", "invoice_id") REFERENCES "pay_invoice" ("owner_id", "id"),

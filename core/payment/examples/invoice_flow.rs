@@ -28,8 +28,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .await?;
 
-    // FIXME: -1 sec is needed because timestamps have 1 sec accuracy
-    let now = Utc::now() - chrono::Duration::seconds(1);
+    let now = Utc::now();
     requestor
         .accept_invoice(
             &invoice.invoice_id,
