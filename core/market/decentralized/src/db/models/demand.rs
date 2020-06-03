@@ -48,7 +48,7 @@ impl Demand {
             constraints,
             node_id,
             creation_ts,
-            modification_ts: None,  // Database will insert this timestamp.
+            modification_ts: None, // Database will insert this timestamp.
             expiration_ts,
         })
     }
@@ -73,7 +73,7 @@ impl Demand {
             constraints,
             node_id,
             creation_ts,
-            modification_ts: None,  // Database will insert this timestamp.
+            modification_ts: None, // Database will insert this timestamp.
             expiration_ts,
         }
     }
