@@ -103,8 +103,12 @@ impl MarketService {
             .extend(requestor::register_endpoints)
     }
 
-    pub async fn subscribe_offer(&self, offer: &Offer, id: Identity) -> Result<String, MarketError> {
-        let offer = ModelOffer::from_new(offer, &id);
+    pub async fn subscribe_offer(
+        &self,
+        offer: &Offer,
+        id: Identity,
+    ) -> Result<String, MarketError> {
+        let offer = ModelOffer::from_new(offer, &id)?;
         let subscription_id = offer.id.to_string();
 
         self.provider_negotiation_engine

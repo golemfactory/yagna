@@ -53,7 +53,7 @@ impl Offer {
         })
     }
 
-    pub fn from_new(offer: &ClientOffer, id: &Identity) -> Offer {
+    pub fn from_new(offer: &ClientOffer, id: &Identity) -> Result<Offer, ErrorMessage> {
         let properties = offer.properties.to_string();
         let constraints = offer.constraints.clone();
         let node_id = id.identity.to_string();
@@ -64,7 +64,7 @@ impl Offer {
         // This function creates new Offer, so creation time should be equal to addition time.
         let creation_time = Utc::now().naive_utc();
 
-        Offer {
+        Ok(Offer {
             id,
             properties,
             constraints,
@@ -72,7 +72,7 @@ impl Offer {
             creation_time: creation_time.clone(),
             addition_time: creation_time.clone(),
             expiration_time: creation_time.clone(),
-        }
+        })
     }
 
     pub fn into_client_offer(&self) -> Result<ClientOffer, ErrorMessage> {
@@ -80,7 +80,7 @@ impl Offer {
             offer_id: Some(self.id.to_string()),
             provider_id: Some(self.node_id.clone()),
             constraints: self.constraints.clone(),
-            properties: serde_json::to_value(&self.properties).map_err(|error| {
+            properties: serde_json::from_str(&self.properties).map_err(|error| {
                 format!(
                     "Can't serialize Offer properties from database!!! Error: {}",
                     error
