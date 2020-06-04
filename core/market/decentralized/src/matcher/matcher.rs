@@ -20,8 +20,8 @@ use crate::protocol::{OfferReceived, RetrieveOffers};
 
 #[derive(Error, Debug)]
 pub enum DemandError {
-    #[error("Failed to insert Demand. Error: {0}.")]
-    InsertDemandFailure(#[from] DbError),
+    #[error("Failed to save Demand. Error: {0}.")]
+    SaveDemandFailure(#[from] DbError),
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
     RemoveDemandFailure(DbError, String),
     #[error("Demand [{0}] doesn't exist.")]
@@ -30,8 +30,8 @@ pub enum DemandError {
 
 #[derive(Error, Debug)]
 pub enum OfferError {
-    #[error("Failed to insert Offer. Error: {0}.")]
-    InsertOfferFailure(#[from] DbError),
+    #[error("Failed to save Offer. Error: {0}.")]
+    SaveOfferFailure(#[from] DbError),
     #[error("Failed to remove Offer [{1}]. Error: {0}.")]
     RemoveOfferFailure(DbError, String),
     #[error("Offer [{0}] doesn't exist.")]
@@ -121,7 +121,7 @@ impl Matcher {
             .as_dao::<OfferDao>()
             .create_offer(model_offer)
             .await
-            .map_err(|error| OfferError::InsertOfferFailure(error))?;
+            .map_err(OfferError::SaveOfferFailure)?;
 
         // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
@@ -139,7 +139,7 @@ impl Matcher {
             .as_dao::<DemandDao>()
             .create_demand(model_demand)
             .await
-            .map_err(|error| DemandError::InsertDemandFailure(error))?;
+            .map_err(DemandError::SaveDemandFailure)?;
 
         // TODO: Try to match demand with offers currently existing in database.
         //  We shouldn't await here on this.
