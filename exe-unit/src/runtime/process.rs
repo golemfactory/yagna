@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::message::{ExecCmd, ExecCmdResult, SetTaskPackagePath, Shutdown};
-use crate::runtime::Runtime;
+use crate::runtime::{Runtime, RuntimeArgs};
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use std::collections::HashSet;
@@ -23,7 +23,7 @@ fn process_kill_timeout_seconds() -> i64 {
 
 pub struct RuntimeProcess {
     binary: PathBuf,
-    work_dir: PathBuf,
+    runtime_args: RuntimeArgs,
     task_package_path: Option<PathBuf>,
     children: HashSet<u32>,
 }
@@ -32,7 +32,7 @@ impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
             binary,
-            work_dir: ctx.work_dir.clone(),
+            runtime_args: ctx.runtime_args.clone(),
             task_package_path: None,
             children: HashSet::new(),
         }
@@ -42,13 +42,9 @@ impl RuntimeProcess {
         let pkg_path = self
             .task_package_path
             .clone()
-            .ok_or(Error::RuntimeError("Task package path missing".to_owned()))?;
-        let mut args = vec![
-            OsString::from("--workdir"),
-            self.work_dir.clone().into_os_string(),
-            OsString::from("--task-package"),
-            OsString::from(pkg_path),
-        ];
+            .ok_or(Error::RuntimeError("Missing task package path".to_owned()))?;
+
+        let mut args = self.runtime_args.to_command_line(&pkg_path);
         args.extend(cmd_args);
         Ok(args)
     }

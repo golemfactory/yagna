@@ -1,12 +1,15 @@
 use crate::error::Error;
 use crate::message::{GetMetrics, Shutdown};
 use crate::metrics::error::MetricError;
-use crate::metrics::{CpuMetric, MemMetric, Metric, MetricData, MetricReport, TimeMetric};
+use crate::metrics::{
+    CpuMetric, MemMetric, Metric, MetricData, MetricReport, StorageMetric, TimeMetric,
+};
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub struct MetricsService {
     usage_vector: Vec<String>,
@@ -17,14 +20,19 @@ impl MetricsService {
     pub fn try_new(
         ctx: &ExeUnitContext,
         backlog_limit: Option<usize>,
+        supervise_caps: bool,
     ) -> Result<Self, MetricError> {
+        let caps = move |ctx: &ExeUnitContext, id| match supervise_caps {
+            true => ctx.agreement.usage_limits.get(id).cloned(),
+            _ => None,
+        };
         let metrics: HashMap<String, MetricProvider> = vec![
             (
                 CpuMetric::ID.to_string(),
                 MetricProvider::new(
                     CpuMetric::default(),
                     backlog_limit.clone(),
-                    ctx.agreement.usage_limits.get(CpuMetric::ID).cloned(),
+                    caps(ctx, CpuMetric::ID),
                 ),
             ),
             (
@@ -32,16 +40,20 @@ impl MetricsService {
                 MetricProvider::new(
                     MemMetric::default(),
                     backlog_limit.clone(),
-                    ctx.agreement.usage_limits.get(MemMetric::ID).cloned(),
+                    caps(ctx, MemMetric::ID),
+                ),
+            ),
+            (
+                StorageMetric::ID.to_string(),
+                MetricProvider::new(
+                    StorageMetric::new(ctx.work_dir.clone(), Duration::from_secs(2)),
+                    backlog_limit.clone(),
+                    caps(ctx, StorageMetric::ID),
                 ),
             ),
             (
                 TimeMetric::ID.to_string(),
-                MetricProvider::new(
-                    TimeMetric::default(),
-                    Some(1),
-                    ctx.agreement.usage_limits.get(TimeMetric::ID).cloned(),
-                ),
+                MetricProvider::new(TimeMetric::default(), Some(1), caps(ctx, TimeMetric::ID)),
             ),
         ]
         .into_iter()
@@ -60,10 +72,6 @@ impl MetricsService {
             usage_vector: ctx.agreement.usage_vector.clone(),
             metrics,
         })
-    }
-
-    pub fn metrics() -> Vec<&'static str> {
-        vec![CpuMetric::ID, MemMetric::ID, TimeMetric::ID]
     }
 }
 

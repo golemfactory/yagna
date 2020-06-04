@@ -305,6 +305,7 @@ pub struct ExeUnitContext {
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub runtime_args: RuntimeArgs,
 }
 
 impl ExeUnitContext {

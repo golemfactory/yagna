@@ -58,6 +58,9 @@ pub struct Cli {
     /// timeout in seconds
     #[structopt(long, default_value = "20")]
     pub timeout: f32,
+    /// Hand off resource limiting from Supervisor to Runtime
+    #[structopt(long)]
+    pub cap_handoff: bool,
 }
 
 mod mock_activity {
@@ -108,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     let activity = mock_activity::MockActivityService {};
     activity.start();
 
-    let child_args = vec![
+    let mut child_args = vec![
         OsString::from("--binary"),
         OsString::from(&args.runtime),
         OsString::from("-c"),
@@ -121,6 +124,9 @@ async fn main() -> anyhow::Result<()> {
         OsString::from(ACTIVITY_ID),
         OsString::from(ACTIVITY_BUS_ID),
     ];
+    if args.cap_handoff {
+        child_args.insert(0, OsString::from("--cap-handoff"));
+    }
 
     let mut child = Command::new(&args.supervisor).args(child_args).spawn()?;
     log::warn!("exeunit supervisor spawned. PID: {}", child.id());
