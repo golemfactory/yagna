@@ -47,7 +47,7 @@ impl DeployResult {
             Ok(serde_json::from_reader(Cursor::new(b))?)
         } else {
             let text = String::from_utf8_lossy(b);
-            anyhow::bail!("invliad deploy response: {}", text);
+            anyhow::bail!("invalid deploy response: {}", text);
         }
     }
 }
