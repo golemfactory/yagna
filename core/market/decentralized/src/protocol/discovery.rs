@@ -86,14 +86,14 @@ impl Discovery {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: String,
-        private: String,
+        public_prefix: &str,
+        private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
 
         log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
 
-        let offer_broadcast_address = format!("{}/{}", private, OfferReceived::TOPIC);
+        let offer_broadcast_address = format!("{}/{}", private_prefix, OfferReceived::TOPIC);
         let subscribe_msg = OfferReceived::into_subscribe_msg(&offer_broadcast_address);
         bus::service(net::local::BUS_ID)
             .send(subscribe_msg)
@@ -115,11 +115,7 @@ impl Discovery {
         Ok(())
     }
 
-    async fn on_offer_received(
-        self,
-        caller: String,
-        msg: OfferReceived,
-    ) -> Result<(), ()> {
+    async fn on_offer_received(self, caller: String, msg: OfferReceived) -> Result<(), ()> {
         let callback = self.inner.offer_received.clone();
 
         let offer = msg.offer.clone();

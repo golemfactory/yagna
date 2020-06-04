@@ -68,8 +68,6 @@ pub struct EventsListeners {
 }
 
 /// Responsible for storing Offers and matching them with demands.
-///
-/// Note: Should be lightweight cloneable object. If you
 #[derive(Clone)]
 pub struct Matcher {
     db: DbExecutor,
@@ -112,10 +110,13 @@ impl Matcher {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: String,
-        private: String,
+        public_prefix: &str,
+        private_prefix: &str,
     ) -> Result<(), MatcherInitError> {
-        Ok(self.discovery.bind_gsb(public_prefix, private).await?)
+        Ok(self
+            .discovery
+            .bind_gsb(public_prefix, private_prefix)
+            .await?)
     }
 
     pub async fn add_offer(&self, offer: Offer) {
@@ -238,8 +239,7 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         db.as_dao::<OfferDao>()
             .create_offer(&model_offer)
             .await
-            .map_err(|error| OfferError::InsertOfferFailure(error))
-            .unwrap();
+            .map_err(|error| OfferError::InsertOfferFailure(error))?;
 
         // TODO: Spawn matching with Demands.
 

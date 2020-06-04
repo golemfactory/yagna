@@ -70,26 +70,22 @@ impl MarketService {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: String,
-        private: String,
+        public_prefix: &str,
+        private_prefix: &str,
     ) -> Result<(), MarketInitError> {
-        self.matcher
-            .bind_gsb(public_prefix.clone(), private.clone())
-            .await?;
+        self.matcher.bind_gsb(public_prefix, private_prefix).await?;
         self.provider_negotiation_engine
-            .bind_gsb(public_prefix.clone(), private.clone())
+            .bind_gsb(public_prefix, private_prefix)
             .await?;
         self.requestor_negotiation_engine
-            .bind_gsb(public_prefix.clone(), private.clone())
+            .bind_gsb(public_prefix, private_prefix)
             .await?;
         Ok(())
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market
-            .bind_gsb(BUS_ID.to_string(), private::BUS_ID.to_string())
-            .await?)
+        Ok(market.bind_gsb(BUS_ID, private::BUS_ID).await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {

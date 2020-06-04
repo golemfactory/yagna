@@ -28,8 +28,8 @@ impl RequestorNegotiationEngine {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: String,
-        private: String,
+        public_prefix: &str,
+        private_prefix: &str,
     ) -> Result<(), NegotiationInitError> {
         Ok(())
     }
