@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, TimeZone, Utc};
+use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use serde_json;
 use std::str::FromStr;
@@ -20,11 +20,11 @@ pub struct Demand {
     pub node_id: String,
 
     /// Creation time of Demand on Requestor side.
-    pub creation_time: NaiveDateTime,
-    /// Time when this Demand was added to our local database.
-    pub addition_time: NaiveDateTime,
+    pub creation_ts: NaiveDateTime,
+    /// Timestamp of adding this Demand to database.
+    pub insertion_ts: Option<NaiveDateTime>,
     /// Time when Demand expires set by Requestor.
-    pub expiration_time: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
 }
 
 impl Demand {
@@ -34,22 +34,27 @@ impl Demand {
         let node_id = demand.requestor_id()?.to_string();
         let id = SubscriptionId::from_str(demand.demand_id()?)?;
 
+        id.validate(&properties, &constraints, &node_id)?;
+
         // TODO: Set default expiration time. In future provider should set expiration.
         // TODO: Creation time should come from ClientOffer
         // TODO: Creation time should be included in subscription id hash.
-        let creation_time = Utc::now().naive_utc();
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_ts = creation_ts + Duration::hours(24);
 
         Ok(Demand {
             id,
             properties,
             constraints,
             node_id,
-            creation_time: creation_time.clone(),
-            addition_time: creation_time.clone(),
-            expiration_time: creation_time.clone(),
+            creation_ts,
+            insertion_ts: None, // Database will insert this timestamp.
+            expiration_ts,
         })
     }
 
+    /// Creates new model demand. If ClientDemand has id already assigned,
+    /// it will be ignored and regenerated.
     pub fn from_new(demand: &ClientDemand, id: &Identity) -> Demand {
         let properties = demand.properties.to_string();
         let constraints = demand.constraints.clone();
@@ -59,16 +64,17 @@ impl Demand {
         // TODO: Set default expiration time. In future provider should set expiration.
         // TODO: Creation time should be included in subscription id hash.
         // This function creates new Demand, so creation time should be equal to addition time.
-        let creation_time = Utc::now().naive_utc();
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_ts = creation_ts + Duration::hours(24);
 
         Demand {
             id,
             properties,
             constraints,
             node_id,
-            creation_time: creation_time.clone(),
-            addition_time: creation_time.clone(),
-            expiration_time: creation_time.clone(),
+            creation_ts,
+            insertion_ts: None, // Database will insert this timestamp.
+            expiration_ts,
         }
     }
 

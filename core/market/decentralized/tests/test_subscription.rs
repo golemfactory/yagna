@@ -34,13 +34,10 @@ mod tests {
         assert_eq!(got_offer, offer);
 
         // Unsubscribe should fail on not existing subscription id.
-        assert_eq!(
-            market1
-                .unsubscribe_offer("".to_string(), identity1.clone())
-                .await
-                .is_err(),
-            true
-        );
+        assert!(market1
+            .unsubscribe_offer("".to_string(), identity1.clone())
+            .await
+            .is_err());
 
         market1
             .unsubscribe_offer(subscription_id.to_string(), identity1.clone())

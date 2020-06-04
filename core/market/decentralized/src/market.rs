@@ -28,17 +28,17 @@ pub enum MarketError {
     Matcher(#[from] MatcherError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
-    #[error("Internal error: {}.", .0)]
+    #[error("Internal error: {0}.")]
     InternalError(#[from] ErrorMessage),
 }
 
 #[derive(Error, Debug)]
 pub enum MarketInitError {
-    #[error("Failed to initialize Offers matcher. Error: {}.", .0)]
+    #[error("Failed to initialize Offers matcher. Error: {0}.")]
     Matcher(#[from] MatcherInitError),
-    #[error("Failed to initialize negotiation engine. Error: {}.", .0)]
+    #[error("Failed to initialize negotiation engine. Error: {0}.")]
     Negotiation(#[from] NegotiationInitError),
-    #[error("Failed to migrate market database. Error: {}.", .0)]
+    #[error("Failed to migrate market database. Error: {0}.")]
     Migration(#[from] anyhow::Error),
 }
 
@@ -108,13 +108,13 @@ impl MarketService {
         offer: &Offer,
         id: Identity,
     ) -> Result<String, MarketError> {
-        let offer = ModelOffer::from_new(offer, &id)?;
+        let offer = ModelOffer::from_new(offer, &id);
         let subscription_id = offer.id.to_string();
 
+        self.matcher.subscribe_offer(&offer).await?;
         self.provider_negotiation_engine
             .subscribe_offer(&offer)
             .await?;
-        self.matcher.subscribe_offer(&offer).await?;
         Ok(subscription_id)
     }
 
@@ -139,11 +139,10 @@ impl MarketService {
         let demand = ModelDemand::from_new(demand, &id);
         let subscription_id = demand.id.to_string();
 
+        self.matcher.subscribe_demand(&demand).await?;
         self.requestor_negotiation_engine
             .subscribe_demand(&demand)
             .await?;
-
-        self.matcher.subscribe_demand(&demand).await?;
         Ok(subscription_id)
     }
 

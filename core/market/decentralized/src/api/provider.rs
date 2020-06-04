@@ -26,6 +26,8 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(reject_proposal)
         .service(approve_agreement)
         .service(reject_agreement)
+        .service(terminate_agreement)
+        .service(get_agreement)
 }
 
 #[actix_web::post("/offers")]
@@ -35,7 +37,7 @@ async fn subscribe(
     id: Identity,
 ) -> HttpResponse {
     match market.subscribe_offer(&body.into_inner(), id).await {
-        Ok(subscription_id) => response::created("Ok"),
+        Ok(subscription_id) => response::created(subscription_id),
         // TODO: Translate MarketError to better HTTP response.
         Err(error) => response::server_error(&format!("{}", error)),
     }
@@ -53,9 +55,8 @@ async fn unsubscribe(
     id: Identity,
 ) -> HttpResponse {
     let subscription_id = path.into_inner().subscription_id;
-    match market.matcher.get_offer(subscription_id.clone()).await {
-        Ok(Some(_offer)) => response::ok(subscription_id),
-        Ok(None) => response::not_found(),
+    match market.unsubscribe_offer(subscription_id.clone(), id).await {
+        Ok(()) => response::ok("Ok"),
         // TODO: Translate MatcherError to better HTTP response.
         Err(error) => response::server_error(&format!("{}", error)),
     }
@@ -111,6 +112,24 @@ async fn approve_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]
 async fn reject_agreement(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+) -> HttpResponse {
+    response::not_implemented()
+}
+
+#[actix_web::post("/agreements/{agreement_id}/terminate")]
+async fn terminate_agreement(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+) -> HttpResponse {
+    response::not_implemented()
+}
+
+#[actix_web::get("/agreements/{agreement_id}")]
+async fn get_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
     id: Identity,

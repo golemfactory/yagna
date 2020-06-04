@@ -22,24 +22,24 @@ use crate::protocol::{OfferReceived, RetrieveOffers};
 
 #[derive(Error, Debug)]
 pub enum DemandError {
-    #[error("Failed to insert Demand. Error: {}.", .0)]
-    InsertDemandFailure(#[from] DbError),
-    #[error("Failed to remove Demand [{}]. Error: {}.", .1, .0)]
+    #[error("Failed to save Demand. Error: {0}.")]
+    SaveDemandFailure(#[from] DbError),
+    #[error("Failed to remove Demand [{1}]. Error: {0}.")]
     RemoveDemandFailure(DbError, String),
-    #[error("Demand [{}] doesn't exist.", .0)]
+    #[error("Demand [{0}] doesn't exist.")]
     DemandNotExists(String),
 }
 
 #[derive(Error, Debug)]
 pub enum OfferError {
-    #[error("Failed to insert Offer. Error: {}.", .0)]
-    InsertOfferFailure(#[from] DbError),
-    #[error("Failed to remove Offer [{}]. Error: {}.", .1, .0)]
+    #[error("Failed to save Offer. Error: {0}.")]
+    SaveOfferFailure(#[from] DbError),
+    #[error("Failed to remove Offer [{1}]. Error: {0}.")]
     RemoveOfferFailure(DbError, String),
-    #[error("Offer [{}] doesn't exist.", .0)]
+    #[error("Offer [{0}] doesn't exist.")]
     OfferNotExists(String),
-    #[error("Failed to broadcast offer [{}]. Error: {}.", .1, .0)]
-    BroadcastOfferFailure(DiscoveryError, SubscriptionId),
+    #[error("Failed to broadcast offer [{1}]. Error: {0}.")]
+    BroadcastOfferFailure(DiscoveryError, String),
 }
 
 #[derive(Error, Debug)]
@@ -48,17 +48,17 @@ pub enum MatcherError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     OfferError(#[from] OfferError),
-    #[error("Internal error: {}.", .0)]
+    #[error("Internal error: {0}.")]
     InternalError(String),
 }
 
 #[derive(Error, Debug)]
 pub enum MatcherInitError {
-    #[error("Failed to initialize Discovery interface. Error: {}.", .0)]
+    #[error("Failed to initialize Discovery interface. Error: {0}.")]
     DiscoveryError(#[from] DiscoveryInitError),
-    #[error("Failed to initialize database. Error: {}.", .0)]
+    #[error("Failed to initialize database. Error: {0}.")]
     DatabaseError(#[from] DbError),
-    #[error("Failed to migrate market database. Error: {}.", .0)]
+    #[error("Failed to migrate market database. Error: {0}.")]
     MigrationError(#[from] anyhow::Error),
 }
 
@@ -132,14 +132,16 @@ impl Matcher {
             .as_dao::<OfferDao>()
             .create_offer(model_offer)
             .await
-            .map_err(|error| OfferError::InsertOfferFailure(error))?;
+            .map_err(OfferError::SaveOfferFailure)?;
 
         // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         self.discovery
             .broadcast_offer(model_offer.into_client_offer()?)
             .await
-            .map_err(|error| OfferError::BroadcastOfferFailure(error, model_offer.id.clone()))?;
+            .map_err(|error| {
+                OfferError::BroadcastOfferFailure(error, model_offer.id.to_string())
+            })?;
         Ok(())
     }
 
@@ -148,7 +150,7 @@ impl Matcher {
             .as_dao::<DemandDao>()
             .create_demand(model_demand)
             .await
-            .map_err(|error| DemandError::InsertDemandFailure(error))?;
+            .map_err(DemandError::SaveDemandFailure)?;
 
         // TODO: Try to match demand with offers currently existing in database.
         //  We shouldn't await here on this.
@@ -239,7 +241,7 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         db.as_dao::<OfferDao>()
             .create_offer(&model_offer)
             .await
-            .map_err(|error| OfferError::InsertOfferFailure(error))?;
+            .map_err(OfferError::SaveOfferFailure)?;
 
         // TODO: Spawn matching with Demands.
 

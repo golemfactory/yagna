@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, TimeZone, Utc};
+use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use serde_json;
 use std::str::FromStr;
@@ -20,11 +20,11 @@ pub struct Offer {
     pub node_id: String,
 
     /// Creation time of Offer on Provider side.
-    pub creation_time: NaiveDateTime,
-    /// Time when this Offer was added to our local database.
-    pub addition_time: NaiveDateTime,
+    pub creation_ts: NaiveDateTime,
+    /// Timestamp of adding this Offer to database.
+    pub insertion_ts: Option<NaiveDateTime>,
     /// Time when Offer expires set by Provider.
-    pub expiration_time: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
 }
 
 impl Offer {
@@ -37,23 +37,28 @@ impl Offer {
             .to_string();
         let id = SubscriptionId::from_str(offer.offer_id()?)?;
 
+        id.validate(&properties, &constraints, &node_id)?;
+
         // TODO: Set default expiration time. In future provider should set expiration.
         // TODO: Creation time should come from ClientOffer
         // TODO: Creation time should be included in subscription id hash.
-        let creation_time = Utc::now().naive_utc();
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_ts = creation_ts + Duration::hours(24);
 
         Ok(Offer {
             id,
             properties,
             constraints,
             node_id,
-            creation_time: creation_time.clone(),
-            addition_time: creation_time.clone(),
-            expiration_time: creation_time.clone(),
+            creation_ts,
+            insertion_ts: None, // Database will insert this timestamp.
+            expiration_ts,
         })
     }
 
-    pub fn from_new(offer: &ClientOffer, id: &Identity) -> Result<Offer, ErrorMessage> {
+    /// Creates new model offer. If ClientOffer has id already assigned,
+    /// it will be ignored and regenerated.
+    pub fn from_new(offer: &ClientOffer, id: &Identity) -> Offer {
         let properties = offer.properties.to_string();
         let constraints = offer.constraints.clone();
         let node_id = id.identity.to_string();
@@ -62,17 +67,18 @@ impl Offer {
         // TODO: Set default expiration time. In future provider should set expiration.
         // TODO: Creation time should be included in subscription id hash.
         // This function creates new Offer, so creation time should be equal to addition time.
-        let creation_time = Utc::now().naive_utc();
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_ts = creation_ts + Duration::hours(24);
 
-        Ok(Offer {
+        Offer {
             id,
             properties,
             constraints,
             node_id,
-            creation_time: creation_time.clone(),
-            addition_time: creation_time.clone(),
-            expiration_time: creation_time.clone(),
-        })
+            creation_ts,
+            insertion_ts: None, // Database will insert this timestamp.
+            expiration_ts,
+        }
     }
 
     pub fn into_client_offer(&self) -> Result<ClientOffer, ErrorMessage> {
@@ -87,5 +93,43 @@ impl Offer {
                 )
             })?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use ya_client::model::NodeId;
+
+    #[test]
+    // Offer with subscription id, that has wrong hash, should fail to create model.
+    fn test_offer_validation_wrong_hash() {
+        let false_subscription_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53";
+        let node_id = "12412abcf3112412abcf".to_string();
+
+        let offer = ClientOffer {
+            offer_id: Some(false_subscription_id.to_string()),
+            properties: json!({}),
+            constraints: "()".to_string(),
+            provider_id: Some(NodeId::from(node_id[..].as_bytes()).to_string()),
+        };
+
+        assert!(Offer::from(&offer).is_err());
+    }
+
+    #[test]
+    fn test_offer_validation_good_hash() {
+        let subscription_id = "c76161077d0343ab85ac986eb5f6ea38-df6f6ad8c04d6bbc9dbfe87a5964b8be3c01e8456b1bc2d5d78fd4ef6851b071";
+        let node_id = "12412abcf3112412abcf".to_string();
+
+        let offer = ClientOffer {
+            offer_id: Some(subscription_id.to_string()),
+            properties: json!({}),
+            constraints: "()".to_string(),
+            provider_id: Some(NodeId::from(node_id[..].as_bytes()).to_string()),
+        };
+
+        assert!(Offer::from(&offer).is_ok());
     }
 }
