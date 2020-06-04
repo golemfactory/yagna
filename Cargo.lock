@@ -492,9 +492,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.31"
+version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26c4f3195085c36ea8d24d32b2f828d23296a9370a28aa39d111f6f16bef9f3b"
+checksum = "8f1c13101a3224fb178860ae372a031ce350bbd92d39968518f016744dde0bf7"
 dependencies = [
  "proc-macro2 1.0.18",
  "quote 1.0.6",
@@ -4976,19 +4976,28 @@ dependencies = [
  "async-trait",
  "chrono",
  "derive_more 0.99.7",
+ "diesel",
+ "diesel_migrations",
+ "digest 0.8.1",
  "env_logger 0.7.1",
  "futures 0.3.5",
  "lazy_static",
+ "libsqlite3-sys",
  "log 0.4.8",
+ "r2d2",
+ "rand 0.7.3",
  "serde",
  "serde_json",
+ "sha3",
  "thiserror",
  "tokio 0.2.21",
+ "uuid 0.8.1",
  "ya-client",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
+ "ya-service-api-web",
  "ya-service-bus",
 ]
 
