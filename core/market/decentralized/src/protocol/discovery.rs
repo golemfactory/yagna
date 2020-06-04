@@ -71,11 +71,17 @@ impl Discovery {
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in DiscoveryBuilder::bind_offer_received.
     pub async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
-        broadcast_offer(self.inner.clone(), offer).await
+        log::info!("Broadcasting offer [{}] to the network.", offer.offer_id()?);
+
+        let msg = OfferReceived { offer };
+        let bcast_msg = SendBroadcastMessage::new(msg);
+
+        let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+        Ok(())
     }
 
     pub async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {
-        retrieve_offers(self.inner.clone()).await
+        unimplemented!()
     }
 
     pub async fn bind_gsb(
@@ -83,7 +89,7 @@ impl Discovery {
         public_prefix: String,
         private: String,
     ) -> Result<(), DiscoveryInitError> {
-        let myself = self.inner.clone();
+        let myself = self.clone();
 
         log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
 
@@ -102,68 +108,54 @@ impl Discovery {
             &offer_broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferReceived>| {
                 let myself = myself.clone();
-                on_offer_received(myself, caller, msg.body().to_owned())
+                myself.on_offer_received(caller, msg.body().to_owned())
             },
         );
 
         Ok(())
     }
-}
 
-async fn broadcast_offer(myself: Arc<DiscoveryImpl>, offer: Offer) -> Result<(), DiscoveryError> {
-    log::info!("Broadcasting offer [{}] to the network.", offer.offer_id()?);
+    async fn on_offer_received(
+        self,
+        caller: String,
+        msg: OfferReceived,
+    ) -> Result<(), ()> {
+        let callback = self.inner.offer_received.clone();
 
-    let msg = OfferReceived { offer };
-    let bcast_msg = SendBroadcastMessage::new(msg);
+        let offer = msg.offer.clone();
+        let offer_id = offer.offer_id().unwrap_or("{Empty id}").to_string();
+        let provider_id = offer.provider_id().unwrap_or("{Empty id}").to_string();
 
-    let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
-    Ok(())
-}
+        log::info!(
+            "Received broadcasted Offer [{}] from provider [{}]. Sender: [{}].",
+            offer_id,
+            provider_id,
+            &caller,
+        );
 
-async fn retrieve_offers(myself: Arc<DiscoveryImpl>) -> Result<Vec<Offer>, DiscoveryError> {
-    unimplemented!()
-}
+        match callback.call(caller, msg).await? {
+            PropagateOffer::True => {
+                log::info!("Propagating further Offer [{}].", offer_id,);
 
-async fn on_offer_received(
-    myself: Arc<DiscoveryImpl>,
-    caller: String,
-    msg: OfferReceived,
-) -> Result<(), ()> {
-    let callback = myself.offer_received.clone();
-
-    let offer = msg.offer.clone();
-    let offer_id = offer.offer_id().unwrap_or("{Empty id}").to_string();
-    let provider_id = offer.provider_id().unwrap_or("{Empty id}").to_string();
-
-    log::info!(
-        "Received broadcasted Offer [{}] from provider [{}]. Sender: [{}].",
-        offer_id,
-        provider_id,
-        &caller,
-    );
-
-    match callback.call(caller, msg).await? {
-        PropagateOffer::True => {
-            log::info!("Propagating further Offer [{}].", offer_id,);
-
-            // TODO: Should we retry in case of fail?
-            if let Err(error) = broadcast_offer(myself, offer).await {
-                log::error!(
-                    "Error propagating further Offer [{}] from provider [{}].",
+                // TODO: Should we retry in case of fail?
+                if let Err(error) = self.broadcast_offer(offer).await {
+                    log::error!(
+                        "Error propagating further Offer [{}] from provider [{}].",
+                        offer_id,
+                        provider_id
+                    );
+                }
+            }
+            PropagateOffer::False(reason) => {
+                log::info!(
+                    "Not propagating Offer [{}] for reason: {}.",
                     offer_id,
-                    provider_id
+                    reason
                 );
             }
         }
-        PropagateOffer::False(reason) => {
-            log::info!(
-                "Not propagating Offer [{}] for reason: {}.",
-                offer_id,
-                reason
-            );
-        }
+        Ok(())
     }
-    Ok(())
 }
 
 // =========================================== //
