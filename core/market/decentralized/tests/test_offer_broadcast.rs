@@ -29,7 +29,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let offer = Offer::new(json!({}), "()".to_string());
-        let subscription_id = market1.subscribe_offer(offer, identity1.clone()).await?;
+        let subscription_id = market1.subscribe_offer(&offer, identity1.clone()).await?;
 
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");

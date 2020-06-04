@@ -24,7 +24,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let offer = Offer::new(json!({}), "()".to_string());
-        let subscription_id = market1.subscribe_offer(offer, identity1.clone()).await?;
+        let subscription_id = market1.subscribe_offer(&offer, identity1.clone()).await?;
 
         // Offer should be available in database after subscribe.
         let offer = market1.matcher.get_offer(&subscription_id).await?.unwrap();
@@ -66,7 +66,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let demand = Demand::new(json!({}), "()".to_string());
-        let subscription_id = market1.subscribe_demand(demand, identity1.clone()).await?;
+        let subscription_id = market1.subscribe_demand(&demand, identity1.clone()).await?;
 
         // Offer should be available in database after subscribe.
         let demand = market1.matcher.get_demand(&subscription_id).await?.unwrap();

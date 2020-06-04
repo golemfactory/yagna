@@ -38,7 +38,7 @@ async fn subscribe(
     body: Json<Demand>,
     id: Identity,
 ) -> HttpResponse {
-    match market.subscribe_demand(body.into_inner(), id).await {
+    match market.subscribe_demand(&body.into_inner(), id).await {
         Ok(subscription_id) => response::created("Ok"),
         // TODO: Translate MarketError to better HTTP response.
         Err(error) => response::server_error(&format!("{}", error)),
