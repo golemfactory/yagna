@@ -72,7 +72,7 @@ impl ContainerTransferProvider {
     fn resolve_path(&self, container_path: &str) -> std::result::Result<PathBuf, TransferError> {
         fn is_prefix_of(base: &str, path: &str) -> usize {
             if path.starts_with(base) && (path == base || path[base.len()..].starts_with("/")) {
-                base.len()
+                base.len() + 1
             } else {
                 0
             }
@@ -501,5 +501,17 @@ mod test {
         check_resolve("/out/b/x.png", "/tmp/vol-3/b/x.png");
         check_resolve("/out/bin/bash", "/tmp/vol-4/bash");
         check_resolve("/out/lib/libc.so", "/tmp/vol-5/libc.so");
+    }
+
+    #[test]
+    fn test_resolve_compat() {
+        let c = ContainerTransferProvider::new(
+            "/tmp".into(),
+            vec![ContainerVolume {
+                name: ".".into(),
+                path: "".into(),
+            }],
+        );
+        eprintln!("{}", c.resolve_path("/in/tasks.json").unwrap().display());
     }
 }

@@ -36,9 +36,18 @@ impl DeployResult {
         let b: &[u8] = bytes.as_ref();
         if b.is_empty() {
             log::warn!("empty descriptor");
+            let vols = if cfg!(feature = "compat-deployment") {
+                vec![ContainerVolume {
+                    name: ".".to_string(),
+                    path: "".to_string(),
+                }]
+            } else {
+                Default::default()
+            };
+
             return Ok(DeployResult {
                 valid: Ok(Default::default()),
-                vols: Default::default(),
+                vols,
                 start_mode: Default::default(),
             });
         }
