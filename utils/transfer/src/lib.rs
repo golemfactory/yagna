@@ -18,6 +18,7 @@ use url::Url;
 pub use crate::file::FileTransferProvider;
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
+use actix_rt::Arbiter;
 
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
@@ -68,11 +69,21 @@ pub struct TransferStream<T, E> {
     pub abort_handle: AbortHandle,
 }
 
-impl<T, E> TransferStream<T, E> {
+impl<T: 'static, E: 'static> TransferStream<T, E> {
     pub fn create(channel_size: usize) -> (Self, Sender<Result<T, E>>, AbortRegistration) {
         let (tx, rx) = channel(channel_size);
         let (abort_handle, abort_reg) = AbortHandle::new_pair();
         (TransferStream { rx, abort_handle }, tx, abort_reg)
+    }
+
+    pub fn err(e: E) -> Self {
+        let (this, mut sender, _) = Self::create(1);
+        Arbiter::spawn(async move {
+            if let Err(e) = sender.send(Err(e)).await {
+                log::warn!("send error: {}", e);
+            }
+        });
+        this
     }
 }
 
@@ -109,6 +120,12 @@ impl<T, E> TransferSink<T, E> {
             rx,
             res_tx,
         )
+    }
+
+    pub fn err(e: E) -> Self {
+        let (this, _, s) = Self::create(1);
+        let _ = s.send(Err(e));
+        this
     }
 }
 
