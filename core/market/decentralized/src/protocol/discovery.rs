@@ -133,7 +133,8 @@ impl Discovery {
 
         log::debug!("Creating broadcast topic {}.", OfferUnsubscribed::TOPIC);
 
-        let unsubscribe_broadcast_address = format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC);
+        let unsubscribe_broadcast_address =
+            format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC);
         let subscribe_msg = OfferUnsubscribed::into_subscribe_msg(&unsubscribe_broadcast_address);
         bus::service(net::local::BUS_ID)
             .send(subscribe_msg)
@@ -182,7 +183,7 @@ impl Discovery {
                         provider_id
                     );
                 }
-            },
+            }
             Propagate::False(reason) => {
                 log::info!(
                     "Not propagating Offer [{}] for reason: {}.",
@@ -194,12 +195,7 @@ impl Discovery {
         Ok(())
     }
 
-
-    async fn on_offer_unsubscribed(
-        self,
-        caller: String,
-        msg: OfferUnsubscribed,
-    ) -> Result<(), ()> {
+    async fn on_offer_unsubscribed(self, caller: String, msg: OfferUnsubscribed) -> Result<(), ()> {
         let callback = self.inner.offer_unsubscribed.clone();
         let subscription_id = msg.subscription_id.clone();
 
@@ -212,9 +208,9 @@ impl Discovery {
         match callback.call(caller, msg).await? {
             Propagate::True => {
                 log::info!(
-                "Propagating further unsubscribe Offer [{}].",
-                &subscription_id,
-            );
+                    "Propagating further unsubscribe Offer [{}].",
+                    &subscription_id,
+                );
 
                 // TODO: Should we retry in case of fail?
                 if let Err(error) = self.broadcast_unsubscribe(subscription_id.clone()).await {
@@ -223,7 +219,7 @@ impl Discovery {
                         subscription_id,
                     );
                 }
-            },
+            }
             Propagate::False(reason) => {
                 log::info!(
                     "Not propagating unsubscribe Offer [{}] for reason: {}.",
@@ -235,7 +231,6 @@ impl Discovery {
         Ok(())
     }
 }
-
 
 // =========================================== //
 // Discovery messages

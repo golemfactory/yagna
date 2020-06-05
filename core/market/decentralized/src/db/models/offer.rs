@@ -9,7 +9,7 @@ use ya_client::model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
-use crate::db::schema::market_offer;
+use crate::db::schema::{market_offer, market_offer_unsubscribed};
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_offer"]
@@ -25,6 +25,14 @@ pub struct Offer {
     pub insertion_ts: Option<NaiveDateTime>,
     /// Time when Offer expires set by Provider.
     pub expiration_ts: NaiveDateTime,
+}
+
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[table_name = "market_offer_unsubscribed"]
+pub struct OfferUnsubscribed {
+    pub id: SubscriptionId,
+    pub timestamp: NaiveDateTime,
+    pub node_id: String,
 }
 
 impl Offer {
