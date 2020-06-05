@@ -31,13 +31,10 @@ mod tests {
         assert_eq!(offer.offer_id, Some(subscription_id.clone()));
 
         // Unsubscribe should fail on not existing subscription id.
-        assert_eq!(
-            market1
-                .unsubscribe_offer("".to_string(), identity1.clone())
-                .await
-                .is_err(),
-            true
-        );
+        assert!(market1
+            .unsubscribe_offer("".to_string(), identity1.clone())
+            .await
+            .is_err());
 
         market1
             .unsubscribe_offer(subscription_id.to_string(), identity1.clone())
@@ -73,27 +70,21 @@ mod tests {
         assert_eq!(demand.demand_id, Some(subscription_id.clone()));
 
         // Unsubscribe should fail on not existing subscription id.
-        assert_eq!(
-            market1
-                .unsubscribe_demand("".to_string(), identity1.clone())
-                .await
-                .is_err(),
-            true
-        );
+        assert!(market1
+            .unsubscribe_demand("".to_string(), identity1.clone())
+            .await
+            .is_err());
 
         market1
             .unsubscribe_demand(subscription_id.to_string(), identity1.clone())
             .await?;
 
         // Offer should be removed from database after unsubscribed.
-        assert_eq!(
-            market1
-                .matcher
-                .get_demand(&subscription_id)
-                .await?
-                .is_none(),
-            true
-        );
+        assert!(market1
+            .matcher
+            .get_demand(&subscription_id)
+            .await?
+            .is_none());
 
         Ok(())
     }
