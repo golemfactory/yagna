@@ -4,9 +4,8 @@ pub mod response;
 
 use serde::{Deserialize, Serialize};
 
-pub const DEFAULT_ACK_TIMEOUT: u32 = 60; // seconds
 pub const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
-pub const DEFAULT_REQUEST_TIMEOUT: f32 = 12.0;
+pub const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
 
 #[derive(Deserialize)]
 pub struct PathAgreement {
@@ -50,21 +49,10 @@ pub struct QueryTimeoutMaxEvents {
 
 #[inline(always)]
 pub(crate) fn default_query_timeout() -> Option<f32> {
-    Some(DEFAULT_REQUEST_TIMEOUT)
-}
-
-#[inline(always)]
-pub(crate) fn default_ack_timeout() -> u32 {
-    DEFAULT_ACK_TIMEOUT
+    Some(DEFAULT_QUERY_TIMEOUT)
 }
 
 #[inline(always)]
 pub(crate) fn default_event_timeout() -> Option<f32> {
     Some(DEFAULT_EVENT_TIMEOUT)
-}
-
-#[derive(Deserialize)]
-pub struct Timeout {
-    #[serde(default = "default_ack_timeout")]
-    pub timeout: u32,
 }

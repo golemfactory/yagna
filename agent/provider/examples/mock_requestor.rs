@@ -83,5 +83,5 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
-    simulate_requestor(WebClient::builder().build()?.interface()?).await
+    simulate_requestor(WebClient::builder().build().interface()?).await
 }

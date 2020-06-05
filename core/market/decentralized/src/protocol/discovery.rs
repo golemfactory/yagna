@@ -32,7 +32,7 @@ pub enum DiscoveryRemoteError {}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum DiscoveryInitError {
-    #[error("Uninitialized callback '{}'.", .0)]
+    #[error("Uninitialized callback '{0}'.")]
     UninitializedCallback(String),
     #[error("Failed to bind to gsb. Error: {}.", .0)]
     BindingGsbFailed(String),
@@ -74,30 +74,45 @@ impl Discovery {
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in DiscoveryBuilder::bind_offer_received.
     pub async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
-        broadcast_offer(self.inner.clone(), offer).await
+        log::info!("Broadcasting offer [{}] to the network.", offer.offer_id()?);
+
+        let msg = OfferReceived { offer };
+        let bcast_msg = SendBroadcastMessage::new(msg);
+
+        let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+        Ok(())
     }
 
     pub async fn broadcast_unsubscribe(
         &self,
         subscription_id: String,
     ) -> Result<(), DiscoveryError> {
-        broadcast_unsubscribe(self.inner.clone(), subscription_id).await
+        log::info!(
+            "Broadcasting unsubscribe offer [{}] to the network.",
+            &subscription_id
+        );
+
+        let msg = OfferUnsubscribed { subscription_id };
+        let bcast_msg = SendBroadcastMessage::new(msg);
+
+        let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+        Ok(())
     }
 
     pub async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {
-        retrieve_offers(self.inner.clone()).await
+        unimplemented!()
     }
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: String,
-        private: String,
+        public_prefix: &str,
+        private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
-        let myself = self.inner.clone();
+        let myself = self.clone();
 
         log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
 
-        let offer_broadcast_address = format!("{}/{}", private, OfferReceived::TOPIC);
+        let offer_broadcast_address = format!("{}/{}", private_prefix, OfferReceived::TOPIC);
         let subscribe_msg = OfferReceived::into_subscribe_msg(&offer_broadcast_address);
         bus::service(net::local::BUS_ID)
             .send(subscribe_msg)
@@ -112,13 +127,13 @@ impl Discovery {
             &offer_broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferReceived>| {
                 let myself = myself.clone();
-                on_offer_received(myself, caller, msg.body().to_owned())
+                myself.on_offer_received(caller, msg.body().to_owned())
             },
         );
 
         log::debug!("Creating broadcast topic {}.", OfferUnsubscribed::TOPIC);
 
-        let unsubscribe_broadcast_address = format!("{}/{}", private, OfferUnsubscribed::TOPIC);
+        let unsubscribe_broadcast_address = format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC);
         let subscribe_msg = OfferUnsubscribed::into_subscribe_msg(&unsubscribe_broadcast_address);
         bus::service(net::local::BUS_ID)
             .send(subscribe_msg)
@@ -129,130 +144,98 @@ impl Discovery {
             OfferUnsubscribed::TOPIC
         );
 
-        let myself = self.inner.clone();
+        let myself = self.clone();
         let _ = bus::bind_with_caller(
             &unsubscribe_broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
                 let myself = myself.clone();
-                on_offer_unsubscribed(myself, caller, msg.body().to_owned())
+                myself.on_offer_unsubscribed(caller, msg.body().to_owned())
             },
         );
 
         Ok(())
     }
-}
 
-async fn broadcast_offer(myself: Arc<DiscoveryImpl>, offer: Offer) -> Result<(), DiscoveryError> {
-    log::info!("Broadcasting offer [{}] to the network.", offer.offer_id()?);
+    async fn on_offer_received(self, caller: String, msg: OfferReceived) -> Result<(), ()> {
+        let callback = self.inner.offer_received.clone();
 
-    let msg = OfferReceived { offer };
-    let bcast_msg = SendBroadcastMessage::new(msg);
+        let offer = msg.offer.clone();
+        let offer_id = offer.offer_id().unwrap_or("{Empty id}").to_string();
+        let provider_id = offer.provider_id().unwrap_or("{Empty id}").to_string();
 
-    let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
-    Ok(())
-}
+        log::info!(
+            "Received broadcasted Offer [{}] from provider [{}]. Sender: [{}].",
+            offer_id,
+            provider_id,
+            &caller,
+        );
 
-async fn broadcast_unsubscribe(
-    myself: Arc<DiscoveryImpl>,
-    subscription_id: String,
-) -> Result<(), DiscoveryError> {
-    log::info!(
-        "Broadcasting unsubscribe offer [{}] to the network.",
-        &subscription_id
-    );
+        match callback.call(caller, msg).await? {
+            Propagate::True => {
+                log::info!("Propagating further Offer [{}].", offer_id,);
 
-    let msg = OfferUnsubscribed { subscription_id };
-    let bcast_msg = SendBroadcastMessage::new(msg);
-
-    let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
-    Ok(())
-}
-
-async fn retrieve_offers(myself: Arc<DiscoveryImpl>) -> Result<Vec<Offer>, DiscoveryError> {
-    unimplemented!()
-}
-
-async fn on_offer_received(
-    myself: Arc<DiscoveryImpl>,
-    caller: String,
-    msg: OfferReceived,
-) -> Result<(), ()> {
-    let callback = myself.offer_received.clone();
-
-    let offer = msg.offer.clone();
-    let offer_id = offer.offer_id().unwrap_or("{Empty id}").to_string();
-    let provider_id = offer.provider_id().unwrap_or("{Empty id}").to_string();
-
-    log::info!(
-        "Received broadcasted Offer [{}] from provider [{}]. Sender: [{}].",
-        offer_id,
-        provider_id,
-        &caller,
-    );
-
-    match callback.call(caller, msg).await? {
-        Propagate::True => {
-            log::info!("Propagating further Offer [{}].", offer_id,);
-
-            // TODO: Should we retry in case of fail?
-            if let Err(error) = broadcast_offer(myself, offer).await {
-                log::error!(
-                    "Error propagating further Offer [{}] from provider [{}].",
+                // TODO: Should we retry in case of fail?
+                if let Err(error) = self.broadcast_offer(offer).await {
+                    log::error!(
+                        "Error propagating further Offer [{}] from provider [{}].",
+                        offer_id,
+                        provider_id
+                    );
+                }
+            },
+            Propagate::False(reason) => {
+                log::info!(
+                    "Not propagating Offer [{}] for reason: {}.",
                     offer_id,
-                    provider_id
+                    reason
                 );
             }
         }
-        Propagate::False(reason) => {
-            log::info!(
-                "Not propagating Offer [{}] for reason: {}.",
-                offer_id,
-                reason
-            );
-        }
+        Ok(())
     }
-    Ok(())
-}
 
-async fn on_offer_unsubscribed(
-    myself: Arc<DiscoveryImpl>,
-    caller: String,
-    msg: OfferUnsubscribed,
-) -> Result<(), ()> {
-    let callback = myself.offer_unsubscribed.clone();
-    let subscription_id = msg.subscription_id.clone();
 
-    log::info!(
-        "Received broadcasted unsubscribe Offer [{}]. Sender: [{}].",
-        subscription_id,
-        &caller,
-    );
+    async fn on_offer_unsubscribed(
+        self,
+        caller: String,
+        msg: OfferUnsubscribed,
+    ) -> Result<(), ()> {
+        let callback = self.inner.offer_unsubscribed.clone();
+        let subscription_id = msg.subscription_id.clone();
 
-    match callback.call(caller, msg).await? {
-        Propagate::True => {
-            log::info!(
+        log::info!(
+            "Received broadcasted unsubscribe Offer [{}]. Sender: [{}].",
+            subscription_id,
+            &caller,
+        );
+
+        match callback.call(caller, msg).await? {
+            Propagate::True => {
+                log::info!(
                 "Propagating further unsubscribe Offer [{}].",
                 &subscription_id,
             );
 
-            // TODO: Should we retry in case of fail?
-            if let Err(error) = broadcast_unsubscribe(myself, subscription_id.clone()).await {
-                log::error!(
-                    "Error propagating further unsubscribe Offer [{}].",
+                // TODO: Should we retry in case of fail?
+                if let Err(error) = self.broadcast_unsubscribe(subscription_id.clone()).await {
+                    log::error!(
+                        "Error propagating further unsubscribe Offer [{}].",
+                        subscription_id,
+                    );
+                }
+            },
+            Propagate::False(reason) => {
+                log::info!(
+                    "Not propagating unsubscribe Offer [{}] for reason: {}.",
                     subscription_id,
+                    reason
                 );
             }
         }
-        Propagate::False(reason) => {
-            log::info!(
-                "Not propagating unsubscribe Offer [{}] for reason: {}.",
-                subscription_id,
-                reason
-            );
-        }
+        Ok(())
     }
-    Ok(())
 }
+
 
 // =========================================== //
 // Discovery messages

@@ -22,25 +22,25 @@ use crate::protocol::{OfferReceived, OfferUnsubscribed, RetrieveOffers};
 
 #[derive(Error, Debug)]
 pub enum DemandError {
-    #[error("Failed to insert Demand. Error: {}.", .0)]
-    InsertDemandFailure(#[from] DbError),
-    #[error("Failed to remove Demand [{}]. Error: {}.", .1, .0)]
+    #[error("Failed to save Demand. Error: {0}.")]
+    SaveDemandFailure(#[from] DbError),
+    #[error("Failed to remove Demand [{1}]. Error: {0}.")]
     RemoveDemandFailure(DbError, String),
-    #[error("Demand [{}] doesn't exist.", .0)]
+    #[error("Demand [{0}] doesn't exist.")]
     DemandNotExists(String),
 }
 
 #[derive(Error, Debug)]
 pub enum OfferError {
-    #[error("Failed to insert Offer. Error: {}.", .0)]
-    InsertOfferFailure(#[from] DbError),
-    #[error("Failed to remove Offer [{}]. Error: {}.", .1, .0)]
+    #[error("Failed to save Offer. Error: {0}.")]
+    SaveOfferFailure(#[from] DbError),
+    #[error("Failed to remove Offer [{1}]. Error: {0}.")]
     RemoveOfferFailure(DbError, String),
-    #[error("Offer [{}] doesn't exist.", .0)]
+    #[error("Offer [{0}] doesn't exist.")]
     OfferNotExists(String),
-    #[error("Failed to broadcast offer [{}]. Error: {}.", .1, .0)]
+    #[error("Failed to broadcast offer [{1}]. Error: {0}.")]
     BroadcastOfferFailure(DiscoveryError, SubscriptionId),
-    #[error("Failed to broadcast unsubscribe offer [{}]. Error: {}.", .1, .0)]
+    #[error("Failed to broadcast unsubscribe offer [{1}]. Error: {0}.")]
     BroadcastUnsubscribeOfferFailure(DiscoveryError, SubscriptionId),
 }
 
@@ -50,17 +50,17 @@ pub enum MatcherError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     OfferError(#[from] OfferError),
-    #[error("Internal error: {}.", .0)]
+    #[error("Internal error: {0}.")]
     InternalError(String),
 }
 
 #[derive(Error, Debug)]
 pub enum MatcherInitError {
-    #[error("Failed to initialize Discovery interface. Error: {}.", .0)]
+    #[error("Failed to initialize Discovery interface. Error: {0}.")]
     DiscoveryError(#[from] DiscoveryInitError),
-    #[error("Failed to initialize database. Error: {}.", .0)]
+    #[error("Failed to initialize database. Error: {0}.")]
     DatabaseError(#[from] DbError),
-    #[error("Failed to migrate market database. Error: {}.", .0)]
+    #[error("Failed to migrate market database. Error: {0}.")]
     MigrationError(#[from] anyhow::Error),
 }
 
@@ -70,8 +70,6 @@ pub struct EventsListeners {
 }
 
 /// Responsible for storing Offers and matching them with demands.
-///
-/// Note: Should be lightweight cloneable object. If you
 #[derive(Clone)]
 pub struct Matcher {
     db: DbExecutor,
@@ -115,10 +113,13 @@ impl Matcher {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: String,
-        private: String,
+        public_prefix: &str,
+        private_prefix: &str,
     ) -> Result<(), MatcherInitError> {
-        Ok(self.discovery.bind_gsb(public_prefix, private).await?)
+        Ok(self
+            .discovery
+            .bind_gsb(public_prefix, private_prefix)
+            .await?)
     }
 
     pub async fn add_offer(&self, offer: Offer) {
@@ -134,14 +135,16 @@ impl Matcher {
             .as_dao::<OfferDao>()
             .create_offer(model_offer)
             .await
-            .map_err(|error| OfferError::InsertOfferFailure(error))?;
+            .map_err(OfferError::SaveOfferFailure)?;
 
         // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         self.discovery
             .broadcast_offer(model_offer.into_client_offer()?)
             .await
-            .map_err(|error| OfferError::BroadcastOfferFailure(error, model_offer.id.clone()))?;
+            .map_err(|error| {
+                OfferError::BroadcastOfferFailure(error, model_offer.id.clone())
+            })?;
         Ok(())
     }
 
@@ -150,7 +153,7 @@ impl Matcher {
             .as_dao::<DemandDao>()
             .create_demand(model_demand)
             .await
-            .map_err(|error| DemandError::InsertDemandFailure(error))?;
+            .map_err(DemandError::SaveDemandFailure)?;
 
         // TODO: Try to match demand with offers currently existing in database.
         //  We shouldn't await here on this.
@@ -233,7 +236,7 @@ impl Matcher {
 }
 
 async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propagate, ()> {
-    match async move {
+    async move {
         // We shouldn't propagate Offer, if we already have it in our database.
         // Note that when, we broadcast our Offer, it will reach us too, so it concerns
         // not only Offers from other nodes.
@@ -249,25 +252,21 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         db.as_dao::<OfferDao>()
             .create_offer(&model_offer)
             .await
-            .map_err(|error| OfferError::InsertOfferFailure(error))
-            .unwrap();
+            .map_err(OfferError::SaveOfferFailure)?;
 
         // TODO: Spawn matching with Demands.
 
         Result::<_, MatcherError>::Ok(Propagate::True)
     }
     .await
-    {
-        Err(error) => {
-            let reason = StopPropagateReason::Error(format!("{}", error));
-            Ok(Propagate::False(reason))
-        }
-        Ok(should_propagate) => Ok(should_propagate),
-    }
+    .or_else(|error| {
+        let reason = StopPropagateReason::Error(format!("{}", error));
+        Ok(Propagate::False(reason))
+    })
 }
 
 async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result<Propagate, ()> {
-    match async move {
+    async move {
         // We should remove Offer if it wasn't ours. Ours Offers remain
         // in the database, but they are marked as unsubscribed.
         // TODO: Temporary version that always removes Offer.
@@ -286,13 +285,10 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
         Result::<_, MatcherError>::Ok(Propagate::True)
     }
     .await
-    {
-        Ok(should_propagate) => Ok(should_propagate),
-        Err(error) => {
-            let reason = StopPropagateReason::Error(format!("{}", error));
-            Ok(Propagate::False(reason))
-        }
-    }
+    .or_else(|error| {
+        let reason = StopPropagateReason::Error(format!("{}", error));
+        Ok(Propagate::False(reason))
+    })
 }
 
 // =========================================== //

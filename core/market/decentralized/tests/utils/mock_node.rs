@@ -51,7 +51,9 @@ impl MarketsNetwork {
 
         let public_gsb_prefix = format!("/{}", name.as_ref());
         let local_gsb_prefix = format!("/{}", name.as_ref());
-        market.bind_gsb(public_gsb_prefix, local_gsb_prefix).await?;
+        market
+            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
+            .await?;
 
         let market_node = MarketNode {
             name: name.as_ref().to_string(),

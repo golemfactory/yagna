@@ -4,9 +4,9 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
-        creation_time -> Timestamp,
-        addition_time -> Timestamp,
-        expiration_time -> Timestamp,
+        creation_ts -> Timestamp,
+        insertion_ts -> Nullable<Timestamp>,
+        expiration_ts -> Timestamp,
     }
 }
 
@@ -16,9 +16,9 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
-        creation_time -> Timestamp,
-        addition_time -> Timestamp,
-        expiration_time -> Timestamp,
+        creation_ts -> Timestamp,
+        insertion_ts -> Nullable<Timestamp>,
+        expiration_ts -> Timestamp,
     }
 }
 

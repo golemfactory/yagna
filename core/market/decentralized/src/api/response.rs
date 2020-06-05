@@ -10,10 +10,6 @@ pub fn created<T: Serialize>(t: T) -> HttpResponse {
     HttpResponse::Created().json(t)
 }
 
-pub fn accepted<T: Serialize>(t: T) -> HttpResponse {
-    HttpResponse::Accepted().json(t)
-}
-
 pub fn no_content() -> HttpResponse {
     HttpResponse::NoContent().finish()
 }

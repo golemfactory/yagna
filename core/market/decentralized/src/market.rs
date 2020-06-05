@@ -27,17 +27,17 @@ pub enum MarketError {
     Matcher(#[from] MatcherError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
-    #[error("Internal error: {}.", .0)]
+    #[error("Internal error: {0}.")]
     InternalError(#[from] ErrorMessage),
 }
 
 #[derive(Error, Debug)]
 pub enum MarketInitError {
-    #[error("Failed to initialize Offers matcher. Error: {}.", .0)]
+    #[error("Failed to initialize Offers matcher. Error: {0}.")]
     Matcher(#[from] MatcherInitError),
-    #[error("Failed to initialize negotiation engine. Error: {}.", .0)]
+    #[error("Failed to initialize negotiation engine. Error: {0}.")]
     Negotiation(#[from] NegotiationInitError),
-    #[error("Failed to migrate market database. Error: {}.", .0)]
+    #[error("Failed to migrate market database. Error: {0}.")]
     Migration(#[from] anyhow::Error),
 }
 
@@ -66,26 +66,22 @@ impl MarketService {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: String,
-        private: String,
+        public_prefix: &str,
+        private_prefix: &str,
     ) -> Result<(), MarketInitError> {
-        self.matcher
-            .bind_gsb(public_prefix.clone(), private.clone())
-            .await?;
+        self.matcher.bind_gsb(public_prefix, private_prefix).await?;
         self.provider_negotiation_engine
-            .bind_gsb(public_prefix.clone(), private.clone())
+            .bind_gsb(public_prefix, private_prefix)
             .await?;
         self.requestor_negotiation_engine
-            .bind_gsb(public_prefix.clone(), private.clone())
+            .bind_gsb(public_prefix, private_prefix)
             .await?;
         Ok(())
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market
-            .bind_gsb(BUS_ID.to_string(), private::BUS_ID.to_string())
-            .await?)
+        Ok(market.bind_gsb(BUS_ID, private::BUS_ID).await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
@@ -103,14 +99,18 @@ impl MarketService {
             .extend(requestor::register_endpoints)
     }
 
-    pub async fn subscribe_offer(&self, offer: Offer, id: Identity) -> Result<String, MarketError> {
-        let offer = ModelOffer::from_new(&offer, &id);
+    pub async fn subscribe_offer(
+        &self,
+        offer: &Offer,
+        id: Identity,
+    ) -> Result<String, MarketError> {
+        let offer = ModelOffer::from_new(offer, &id);
         let subscription_id = offer.id.to_string();
 
+        self.matcher.subscribe_offer(&offer).await?;
         self.provider_negotiation_engine
             .subscribe_offer(&offer)
             .await?;
-        self.matcher.subscribe_offer(&offer).await?;
         Ok(subscription_id)
     }
 
@@ -128,17 +128,16 @@ impl MarketService {
 
     pub async fn subscribe_demand(
         &self,
-        demand: Demand,
+        demand: &Demand,
         id: Identity,
     ) -> Result<String, MarketError> {
-        let demand = ModelDemand::from_new(&demand, &id);
+        let demand = ModelDemand::from_new(demand, &id);
         let subscription_id = demand.id.to_string();
 
+        self.matcher.subscribe_demand(&demand).await?;
         self.requestor_negotiation_engine
             .subscribe_demand(&demand)
             .await?;
-
-        self.matcher.subscribe_demand(&demand).await?;
         Ok(subscription_id)
     }
 
