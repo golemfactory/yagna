@@ -31,6 +31,9 @@ pub struct MarketNode {
 }
 
 impl MarketsNetwork {
+    /// Remember that dir_name should be unique between all tests.
+    /// It will be used to create directories and GSB binding points,
+    /// to avoid potential name clashes.
     pub async fn new<Str: AsRef<str>>(dir_name: Str) -> Self {
         let test_dir = prepare_test_dir(&dir_name).unwrap();
 

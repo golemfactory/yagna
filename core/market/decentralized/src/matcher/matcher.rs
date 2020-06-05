@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -11,14 +12,13 @@ use ya_persistence::executor::Error as DbError;
 use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
-use crate::db::models::SubscriptionId;
+use crate::db::models::{SubscriptionId, SubscriptionParseError};
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
-    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryInitError, PropagateOffer,
-    StopPropagateReason,
+    Discovery, DiscoveryError, DiscoveryInitError, Propagate, StopPropagateReason,
 };
-use crate::protocol::{OfferReceived, RetrieveOffers};
+use crate::protocol::{OfferReceived, OfferUnsubscribed, RetrieveOffers};
 
 #[derive(Error, Debug)]
 pub enum DemandError {
@@ -39,7 +39,9 @@ pub enum OfferError {
     #[error("Offer [{0}] doesn't exist.")]
     OfferNotExists(String),
     #[error("Failed to broadcast offer [{1}]. Error: {0}.")]
-    BroadcastOfferFailure(DiscoveryError, String),
+    BroadcastOfferFailure(DiscoveryError, SubscriptionId),
+    #[error("Failed to broadcast unsubscribe offer [{1}]. Error: {0}.")]
+    BroadcastUnsubscribeOfferFailure(DiscoveryError, SubscriptionId),
 }
 
 #[derive(Error, Debug)]
@@ -76,24 +78,25 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(
-        builder: DiscoveryBuilder,
-        db: &DbExecutor,
-    ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
+    pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
 
-        let database = db.clone();
-        let builder = builder
-            .bind_offer_received(move |msg: OfferReceived| {
-                let database = database.clone();
+        let database1 = db.clone();
+        let database2 = db.clone();
+        let discovery = Discovery::new(
+            move |msg: OfferReceived| {
+                let database = database1.clone();
                 on_offer_received(database, msg)
-            })
-            .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
+            },
+            move |msg: OfferUnsubscribed| {
+                let database = database2.clone();
+                on_offer_unsubscribed(database, msg)
+            },
+            move |msg: RetrieveOffers| async move {
                 log::info!("Offers request received. Unimplemented.");
                 Ok(vec![])
-            });
-
-        let discovery = builder.build()?;
+            },
+        )?;
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {
@@ -139,9 +142,7 @@ impl Matcher {
         self.discovery
             .broadcast_offer(model_offer.into_client_offer()?)
             .await
-            .map_err(|error| {
-                OfferError::BroadcastOfferFailure(error, model_offer.id.to_string())
-            })?;
+            .map_err(|error| OfferError::BroadcastOfferFailure(error, model_offer.id.clone()))?;
         Ok(())
     }
 
@@ -158,15 +159,23 @@ impl Matcher {
     }
 
     pub async fn unsubscribe_offer(&self, subscription_id: &str) -> Result<(), MatcherError> {
+        let subscription_id = SubscriptionId::from_str(subscription_id)?;
         let removed = self
             .db
             .as_dao::<OfferDao>()
-            .remove_offer(subscription_id)
+            .remove_offer(subscription_id.to_string())
             .await
             .map_err(|error| OfferError::RemoveOfferFailure(error, subscription_id.to_string()))?;
 
         if !removed {
             Err(OfferError::OfferNotExists(subscription_id.to_string()))?;
+        } else {
+            self.discovery
+                .broadcast_unsubscribe(subscription_id.to_string())
+                .await
+                .map_err(|error| {
+                    OfferError::BroadcastUnsubscribeOfferFailure(error, subscription_id)
+                })?;
         }
         Ok(())
     }
@@ -224,7 +233,7 @@ impl Matcher {
     }
 }
 
-async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<PropagateOffer, ()> {
+async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propagate, ()> {
     async move {
         // We shouldn't propagate Offer, if we already have it in our database.
         // Note that when, we broadcast our Offer, it will reach us too, so it concerns
@@ -234,7 +243,7 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
             .get_offer(msg.offer.offer_id()?)
             .await?
         {
-            return Ok(PropagateOffer::False(StopPropagateReason::AlreadyExists));
+            return Ok(Propagate::False(StopPropagateReason::AlreadyExists));
         }
 
         let model_offer = ModelOffer::from(&msg.offer)?;
@@ -245,12 +254,38 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
 
         // TODO: Spawn matching with Demands.
 
-        Result::<_, MatcherError>::Ok(PropagateOffer::True)
+        Result::<_, MatcherError>::Ok(Propagate::True)
     }
     .await
     .or_else(|error| {
         let reason = StopPropagateReason::Error(format!("{}", error));
-        Ok(PropagateOffer::False(reason))
+        Ok(Propagate::False(reason))
+    })
+}
+
+async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result<Propagate, ()> {
+    async move {
+        // We should remove Offer if it wasn't ours. Ours Offers remain
+        // in the database, but they are marked as unsubscribed.
+        // TODO: Temporary version that always removes Offer.
+        if let None = db
+            .as_dao::<OfferDao>()
+            .get_offer(&msg.subscription_id)
+            .await?
+        {
+            return Ok(Propagate::False(StopPropagateReason::AlreadyUnsubscribed));
+        }
+
+        db.as_dao::<OfferDao>()
+            .remove_offer(&msg.subscription_id)
+            .await?;
+
+        Result::<_, MatcherError>::Ok(Propagate::True)
+    }
+    .await
+    .or_else(|error| {
+        let reason = StopPropagateReason::Error(format!("{}", error));
+        Ok(Propagate::False(reason))
     })
 }
 
@@ -260,6 +295,12 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
 
 impl From<ErrorMessage> for MatcherError {
     fn from(e: ErrorMessage) -> Self {
+        MatcherError::InternalError(e.to_string())
+    }
+}
+
+impl From<SubscriptionParseError> for MatcherError {
+    fn from(e: SubscriptionParseError) -> Self {
         MatcherError::InternalError(e.to_string())
     }
 }
