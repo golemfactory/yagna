@@ -11,6 +11,15 @@ table! {
 }
 
 table! {
+    pay_activity_payment (payment_id, activity_id, owner_id) {
+        payment_id -> Text,
+        activity_id -> Text,
+        owner_id -> Text,
+        amount -> Text,
+    }
+}
+
+table! {
     pay_agreement (id, owner_id) {
         id -> Text,
         owner_id -> Text,
@@ -22,6 +31,15 @@ table! {
         total_amount_due -> Text,
         total_amount_accepted -> Text,
         total_amount_paid -> Text,
+    }
+}
+
+table! {
+    pay_agreement_payment (payment_id, agreement_id, owner_id) {
+        payment_id -> Text,
+        agreement_id -> Text,
+        owner_id -> Text,
+        amount -> Text,
     }
 }
 
@@ -110,28 +128,14 @@ table! {
     pay_payment (id, owner_id) {
         id -> Text,
         owner_id -> Text,
+        peer_id -> Text,
+        payee_addr -> Text,
+        payer_addr -> Text,
         role -> Text,
-        agreement_id -> Text,
         allocation_id -> Nullable<Text>,
         amount -> Text,
         timestamp -> Timestamp,
         details -> Binary,
-    }
-}
-
-table! {
-    pay_payment_x_debit_note (payment_id, debit_note_id, owner_id) {
-        payment_id -> Text,
-        debit_note_id -> Text,
-        owner_id -> Text,
-    }
-}
-
-table! {
-    pay_payment_x_invoice (payment_id, invoice_id, owner_id) {
-        payment_id -> Text,
-        invoice_id -> Text,
-        owner_id -> Text,
     }
 }
 
@@ -143,7 +147,9 @@ joinable!(pay_payment -> pay_allocation (allocation_id));
 
 allow_tables_to_appear_in_same_query!(
     pay_activity,
+    pay_activity_payment,
     pay_agreement,
+    pay_agreement_payment,
     pay_allocation,
     pay_debit_note,
     pay_debit_note_event,
@@ -153,6 +159,4 @@ allow_tables_to_appear_in_same_query!(
     pay_invoice_event,
     pay_invoice_x_activity,
     pay_payment,
-    pay_payment_x_debit_note,
-    pay_payment_x_invoice,
 );

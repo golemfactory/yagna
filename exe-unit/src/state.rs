@@ -1,4 +1,5 @@
 use crate::notify::Notify;
+use futures::channel::oneshot;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -23,6 +24,7 @@ pub struct ExeUnitState {
     pub inner: StatePair,
     pub running_command: Option<ExeScriptCommandState>,
     pub batches: HashMap<String, Exec>,
+    pub batch_control: HashMap<String, Option<oneshot::Sender<()>>>,
     batch_results: HashMap<String, Vec<ExeScriptCommandResult>>,
     batch_notifiers: HashMap<String, Notify<usize>>,
 }
@@ -87,6 +89,7 @@ impl Default for ExeUnitState {
             inner: StatePair::default(),
             running_command: None,
             batches: HashMap::new(),
+            batch_control: HashMap::new(),
             batch_results: HashMap::new(),
             batch_notifiers: HashMap::new(),
         }

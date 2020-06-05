@@ -4,6 +4,7 @@ use crate::runtime::Runtime;
 use crate::ExeUnit;
 use actix::prelude::*;
 use chrono::Utc;
+use futures::channel::oneshot;
 use std::time::Duration;
 use tokio::time::timeout;
 use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
@@ -15,14 +16,23 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
 
     fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
         self.ctx.verify_activity_id(&msg.activity_id)?;
-        self.state.batches.insert(msg.batch_id.clone(), msg.clone());
 
         let batch_id = msg.batch_id.clone();
+        if self.state.batches.contains_key(&batch_id) {
+            let msg = format!("Batch {} already exists", batch_id);
+            return Err(RpcMessageError::BadRequest(msg));
+        }
+
+        let (tx, rx) = oneshot::channel();
+        self.state.batches.insert(batch_id.clone(), msg.clone());
+        self.state.batch_control.insert(batch_id.clone(), Some(tx));
+
         let fut = Self::exec(
             ctx.address(),
             self.runtime.clone(),
             self.transfers.clone(),
             msg.into_inner(),
+            rx,
         );
         ctx.spawn(fut.into_actor(self));
 
@@ -49,7 +59,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
 
     fn handle(&mut self, msg: RpcEnvelope<GetUsage>, _: &mut Self::Context) -> Self::Result {
         if let Err(e) = self.ctx.verify_activity_id(&msg.activity_id) {
-            return ActorResponse::r#async(futures::future::err(e.into()).into_actor(self));
+            return ActorResponse::reply(Err(e.into()));
         }
 
         let metrics = self.metrics.clone();

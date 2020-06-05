@@ -1,9 +1,12 @@
+use crate::dao::{invoice, invoice_event};
 use crate::error::DbResult;
 use crate::models::agreement::{ReadObj, WriteObj};
 use crate::schema::pay_agreement::dsl;
+use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::{BigDecimal, Zero};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
+use ya_client_model::payment::{DocumentStatus, EventType};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatusNotes;
 use ya_persistence::executor::{
@@ -17,7 +20,7 @@ pub fn increase_amount_due(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into());
+    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -37,7 +40,7 @@ pub fn set_amount_due(
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
-    assert!(total_amount_due >= &agreement.total_amount_due);
+    assert!(total_amount_due >= &agreement.total_amount_due); // TODO: Remove when payment service is production-ready.
     diesel::update(&agreement)
         .set(dsl::total_amount_due.eq(total_amount_due))
         .execute(conn)?;
@@ -50,7 +53,7 @@ pub fn increase_amount_accepted(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into());
+    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -70,7 +73,7 @@ pub fn set_amount_accepted(
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
-    assert!(total_amount_accepted >= &agreement.total_amount_accepted);
+    assert!(total_amount_accepted >= &agreement.total_amount_accepted); // TODO: Remove when payment service is production-ready.
     diesel::update(&agreement)
         .set(dsl::total_amount_accepted.eq(total_amount_accepted))
         .execute(conn)?;
@@ -83,14 +86,41 @@ pub fn increase_amount_paid(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into());
-    let agreement: ReadObj = dsl::pay_agreement
+    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
+    let total_amount_paid: BigDecimalField = dsl::pay_agreement
         .find((agreement_id, owner_id))
+        .select(dsl::total_amount_paid)
         .first(conn)?;
-    let total_amount_paid = &agreement.total_amount_paid + amount;
-    diesel::update(&agreement)
-        .set(dsl::total_amount_paid.eq(total_amount_paid))
+    let total_amount_paid = &total_amount_paid + amount;
+    diesel::update(dsl::pay_agreement.find((agreement_id, owner_id)))
+        .set(dsl::total_amount_paid.eq(&total_amount_paid))
         .execute(conn)?;
+
+    let invoice_query: Option<(String, Role)> = invoice_dsl::pay_invoice
+        .filter(invoice_dsl::agreement_id.eq(agreement_id))
+        .filter(invoice_dsl::owner_id.eq(owner_id))
+        .filter(invoice_dsl::status.ne_all(vec![
+            DocumentStatus::Cancelled.to_string(),
+            DocumentStatus::Settled.to_string(),
+        ]))
+        .filter(invoice_dsl::amount.le(&total_amount_paid))
+        .select((invoice_dsl::id, invoice_dsl::role))
+        .first(conn)
+        .optional()?;
+
+    if let Some((invoice_id, role)) = invoice_query {
+        invoice::update_status(&invoice_id, owner_id, &DocumentStatus::Settled, conn)?;
+        if let Role::Provider = role {
+            invoice_event::create::<()>(
+                invoice_id,
+                owner_id.clone(),
+                EventType::Settled,
+                None,
+                conn,
+            )?;
+        }
+    }
+
     Ok(())
 }
 
