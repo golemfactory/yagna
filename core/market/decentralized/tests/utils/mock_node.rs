@@ -17,6 +17,7 @@ use super::mock_net::MockNet;
 pub struct MarketsNetwork {
     markets: Vec<MarketNode>,
     test_dir: PathBuf,
+    test_name: String,
 }
 
 /// Store all object associated with single market
@@ -31,7 +32,7 @@ pub struct MarketNode {
 
 impl MarketsNetwork {
     pub async fn new<Str: AsRef<str>>(dir_name: Str) -> Self {
-        let test_dir = prepare_test_dir(dir_name).unwrap();
+        let test_dir = prepare_test_dir(&dir_name).unwrap();
 
         let bcast = bcast::BCastService::default();
         MockNet::gsb(bcast).await.unwrap();
@@ -39,6 +40,7 @@ impl MarketsNetwork {
         MarketsNetwork {
             markets: vec![],
             test_dir,
+            test_name: dir_name.as_ref().to_string(),
         }
     }
 
@@ -49,8 +51,8 @@ impl MarketsNetwork {
         let db = self.init_database(name.as_ref())?;
         let market = Arc::new(MarketService::new(&db)?);
 
-        let public_gsb_prefix = format!("/{}", name.as_ref());
-        let local_gsb_prefix = format!("/{}", name.as_ref());
+        let public_gsb_prefix = format!("/{}-{}", &self.test_name, name.as_ref());
+        let local_gsb_prefix = format!("/{}-{}", &self.test_name, name.as_ref());
         market
             .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
             .await?;
