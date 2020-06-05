@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::db::models::Offer as ModelOffer;
 use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};
@@ -16,6 +17,19 @@ impl ProviderNegotiationEngine {
     }
 
     pub async fn bind_gsb(&self, prefix: String) -> Result<(), NegotiationInitError> {
+        Ok(())
+    }
+
+    pub async fn subscribe_offer(&self, offer: &ModelOffer) -> Result<(), NegotiationError> {
+        // TODO: Implement
+        Ok(())
+    }
+
+    pub async fn unsubscribe_offer(
+        &self,
+        subscription_id: &String,
+    ) -> Result<(), NegotiationError> {
+        // TODO: Implement
         Ok(())
     }
 }
