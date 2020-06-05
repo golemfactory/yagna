@@ -5,13 +5,13 @@ use std::marker::Send;
 use std::sync::Arc;
 use thiserror::Error;
 
-use ya_client::model::market::Offer;
 use ya_client::model::ErrorMessage;
 use ya_core_model::net;
 use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use super::callbacks::{CallbackHandler, HandlerSlot};
+use crate::db::models::Offer as ModelOffer;
 
 // =========================================== //
 // Errors
@@ -73,8 +73,8 @@ impl Discovery {
 
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in DiscoveryBuilder::bind_offer_received.
-    pub async fn broadcast_offer(&self, offer: Offer) -> Result<(), DiscoveryError> {
-        log::info!("Broadcasting offer [{}] to the network.", offer.offer_id()?);
+    pub async fn broadcast_offer(&self, offer: ModelOffer) -> Result<(), DiscoveryError> {
+        log::info!("Broadcasting offer [{}] to the network.", &offer.id);
 
         let msg = OfferReceived { offer };
         let bcast_msg = SendBroadcastMessage::new(msg);
@@ -99,7 +99,7 @@ impl Discovery {
         Ok(())
     }
 
-    pub async fn retrieve_offers(&self) -> Result<Vec<Offer>, DiscoveryError> {
+    pub async fn retrieve_offers(&self) -> Result<Vec<ModelOffer>, DiscoveryError> {
         unimplemented!()
     }
 
@@ -161,8 +161,8 @@ impl Discovery {
         let callback = self.inner.offer_received.clone();
 
         let offer = msg.offer.clone();
-        let offer_id = offer.offer_id().unwrap_or("{Empty id}").to_string();
-        let provider_id = offer.provider_id().unwrap_or("{Empty id}").to_string();
+        let offer_id = offer.id.clone();
+        let provider_id = offer.node_id.clone();
 
         log::info!(
             "Received broadcasted Offer [{}] from provider [{}]. Sender: [{}].",
@@ -255,7 +255,7 @@ pub enum Propagate {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OfferReceived {
-    pub offer: Offer,
+    pub offer: ModelOffer,
 }
 
 impl RpcMessage for OfferReceived {
@@ -292,7 +292,7 @@ pub struct RetrieveOffers {
 
 impl RpcMessage for RetrieveOffers {
     const ID: &'static str = "RetrieveOffers";
-    type Item = Vec<Offer>;
+    type Item = Vec<ModelOffer>;
     type Error = DiscoveryRemoteError;
 }
 
