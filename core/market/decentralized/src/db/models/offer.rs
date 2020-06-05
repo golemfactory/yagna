@@ -1,6 +1,7 @@
 use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use serde_json;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -11,7 +12,7 @@ use ya_service_api_web::middleware::Identity;
 use super::SubscriptionId;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
 #[table_name = "market_offer"]
 pub struct Offer {
     pub id: SubscriptionId,
@@ -101,6 +102,10 @@ impl Offer {
                 )
             })?,
         })
+    }
+
+    pub fn validate(&self) -> Result<(), ErrorMessage> {
+        Ok(self.id.validate(&self.properties, &self.constraints, &self.node_id)?)
     }
 }
 

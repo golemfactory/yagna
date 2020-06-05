@@ -5,6 +5,7 @@ use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
 use sha3::Sha3_256;
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::str::FromStr;
 use thiserror::Error;
@@ -23,7 +24,7 @@ pub enum SubscriptionParseError {
     InvalidLength(String),
 }
 
-#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
+#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq, Serialize, Deserialize)]
 #[display(fmt = "{}-{}", random_id, hash)]
 #[sql_type = "Text"]
 pub struct SubscriptionId {

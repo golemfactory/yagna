@@ -140,7 +140,7 @@ impl Matcher {
         // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         self.discovery
-            .broadcast_offer(model_offer.into_client_offer()?)
+            .broadcast_offer(model_offer.clone())
             .await
             .map_err(|error| OfferError::BroadcastOfferFailure(error, model_offer.id.clone()))?;
         Ok(())
@@ -240,13 +240,15 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         // not only Offers from other nodes.
         if let Some(_) = db
             .as_dao::<OfferDao>()
-            .get_offer(msg.offer.offer_id()?)
+            .get_offer(&msg.offer.id.to_string())
             .await?
         {
             return Ok(Propagate::False(StopPropagateReason::AlreadyExists));
         }
 
-        let model_offer = ModelOffer::from(&msg.offer)?;
+        let model_offer = msg.offer;
+        model_offer.validate()?;
+
         db.as_dao::<OfferDao>()
             .create_offer(&model_offer)
             .await

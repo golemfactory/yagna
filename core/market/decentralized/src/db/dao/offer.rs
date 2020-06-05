@@ -37,7 +37,11 @@ impl<'c> OfferDao<'c> {
     }
 
     pub async fn create_offer(&self, offer: &ModelOffer) -> DbResult<()> {
-        let offer = offer.clone();
+        let mut offer = offer.clone();
+        // Insertions timestamp should always reference our local time
+        // of adding it to database, so we must reset it here.
+        offer.insertion_ts = None;
+
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::market_offer)
                 .values(offer)
