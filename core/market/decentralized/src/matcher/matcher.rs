@@ -225,7 +225,7 @@ impl Matcher {
 }
 
 async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<PropagateOffer, ()> {
-    match async move {
+    async move {
         // We shouldn't propagate Offer, if we already have it in our database.
         // Note that when, we broadcast our Offer, it will reach us too, so it concerns
         // not only Offers from other nodes.
@@ -248,13 +248,10 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         Result::<_, MatcherError>::Ok(PropagateOffer::True)
     }
     .await
-    {
-        Err(error) => {
-            let reason = StopPropagateReason::Error(format!("{}", error));
-            Ok(PropagateOffer::False(reason))
-        }
-        Ok(should_propagate) => Ok(should_propagate),
-    }
+    .or_else(|error| {
+        let reason = StopPropagateReason::Error(format!("{}", error));
+        Ok(PropagateOffer::False(reason))
+    })
 }
 
 // =========================================== //
