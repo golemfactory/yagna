@@ -11,6 +11,7 @@ mod matcher;
 mod negotiation;
 
 pub mod protocol;
+pub use db::models::{Demand, Offer, SubscriptionId};
 pub use market::MarketService;
 
 pub use ya_client::model::market::MARKET_API_PATH;
