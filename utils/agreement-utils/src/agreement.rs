@@ -498,21 +498,13 @@ constraints: |
                     PROPERTY_TAG: 2
                 }
             },
-            "r": [
-                "a": { "b": { "c": 1 } },
-                123,
-                "string"
-            ]
+            "r": [123, "string"]
         });
 
-        let tagged = format!("a.b.{}", PROPERTY_TAG);
-        let expected = serde_json::json!({
-            "a.b.c": 1,
-            "r": [
-                "a": { "b": { "c": 1 } },
-                123,
-                "string"
-            ]
-        });
+        let mut map = Map::new();
+        properties(String::new(), &mut map, source);
+        assert_eq!(map.get("a.b.c").unwrap(), 1);
+        assert_eq!(map.get("a.b").unwrap(), 2);
+        assert_eq!(map.get("r").unwrap(), &serde_json::json!([123, "string"]));
     }
 }
