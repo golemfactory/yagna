@@ -6,6 +6,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ya_client::model::NodeId;
+use ya_market_decentralized::protocol::{
+    CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
+};
 use ya_market_decentralized::MarketService;
 use ya_net::bcast;
 use ya_persistence::executor::DbExecutor;
@@ -16,15 +19,25 @@ use super::mock_net::MockNet;
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
     markets: Vec<MarketNode>,
+    discoveries: Vec<DiscoveryNode>,
     test_dir: PathBuf,
     test_name: String,
 }
 
 /// Store all object associated with single market
 /// for example: Database
-#[allow(unused)]
 pub struct MarketNode {
     market: Arc<MarketService>,
+    name: String,
+    /// For now only mock default Identity.
+    identity: Identity,
+}
+
+/// Stores mock discovery node, that doesn't include full
+/// Market implementation, but only Discovery interface.
+/// Necessary to emulate wrong nodes behavior.
+pub struct DiscoveryNode {
+    discovery: Discovery,
     name: String,
     /// For now only mock default Identity.
     identity: Identity,
@@ -42,6 +55,7 @@ impl MarketsNetwork {
 
         MarketsNetwork {
             markets: vec![],
+            discoveries: vec![],
             test_dir,
             test_name: dir_name.as_ref().to_string(),
         }
@@ -70,6 +84,31 @@ impl MarketsNetwork {
         Ok(self)
     }
 
+    pub async fn add_discovery_instance<Str: AsRef<str>>(
+        mut self,
+        name: Str,
+        offer_received: impl CallbackHandler<OfferReceived>,
+        offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
+        retrieve_offers: impl CallbackHandler<RetrieveOffers>,
+    ) -> Result<Self, anyhow::Error> {
+        let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
+        let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
+
+        let discovery = Discovery::new(offer_received, offer_unsubscribed, retrieve_offers)?;
+        discovery
+            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
+            .await?;
+
+        let discovery_node = DiscoveryNode {
+            name: name.as_ref().to_string(),
+            identity: generate_identity(name.as_ref()),
+            discovery,
+        };
+
+        self.discoveries.push(discovery_node);
+        Ok(self)
+    }
+
     pub fn get_market(&self, name: &str) -> Arc<MarketService> {
         self.markets
             .iter()
@@ -78,13 +117,27 @@ impl MarketsNetwork {
             .unwrap()
     }
 
-    #[allow(unused)]
+    pub fn get_discovery(&self, name: &str) -> Discovery {
+        self.discoveries
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.discovery.clone())
+            .unwrap()
+    }
+
     pub fn get_default_id(&self, name: &str) -> Identity {
+        // TODO: Could we do this without nesting??
         self.markets
             .iter()
             .find(|node| node.name == name)
             .map(|node| node.identity.clone())
-            .unwrap()
+            .unwrap_or_else(|| {
+                self.discoveries
+                    .iter()
+                    .find(|node| node.name == name)
+                    .map(|node| node.identity.clone())
+                    .unwrap()
+            })
     }
 
     fn init_database(&self, name: &str) -> Result<DbExecutor> {
@@ -124,5 +177,27 @@ fn generate_identity(name: &str) -> Identity {
         name: name.to_string(),
         role: "manager".to_string(),
         identity: NodeId::from(random_node_id[..].as_bytes()),
+    }
+}
+
+pub mod default {
+    use ya_market_decentralized::protocol::{
+        DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, RetrieveOffers,
+        StopPropagateReason,
+    };
+    use ya_market_decentralized::Offer;
+
+    pub async fn empty_on_offer_received(_msg: OfferReceived) -> Result<Propagate, ()> {
+        Ok(Propagate::False(StopPropagateReason::AlreadyExists))
+    }
+
+    pub async fn empty_on_offer_unsubscribed(_msg: OfferUnsubscribed) -> Result<Propagate, ()> {
+        Ok(Propagate::False(StopPropagateReason::AlreadyUnsubscribed))
+    }
+
+    pub async fn empty_on_retrieve_offers(
+        _msg: RetrieveOffers,
+    ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
+        Ok(vec![])
     }
 }

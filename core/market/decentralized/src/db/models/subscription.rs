@@ -66,8 +66,7 @@ impl SubscriptionId {
         if self.hash != hash {
             Err(ErrorMessage::new(format!(
                 "Invalid subscription id [{}]. Hash doesn't match content hash [{}].",
-                &self,
-                hash,
+                &self, hash,
             )))?;
         }
         Ok(())
