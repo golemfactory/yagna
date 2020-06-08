@@ -16,12 +16,13 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
-use crate::service::transfer::{DeployImage, TransferResource, TransferService};
+use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 use chrono::Utc;
 
 pub mod agreement;
+mod commands;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -243,6 +244,22 @@ impl<R: Runtime> ExeUnit<R> {
         }
 
         let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
+        if let ExeScriptCommand::Deploy { .. } = &ctx.cmd {
+            if let Some(output) = &exec_result.stdout {
+                let deploy_desc = match commands::DeployResult::from_bytes(output) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log::error!("deploy failed: {}", e);
+                        return Err(Error::CommandError(exec_result));
+                    }
+                };
+                log::info!("adding vols: {:?}", deploy_desc.vols);
+                transfer_service
+                    .send(AddVolumes::new(deploy_desc.vols))
+                    .await??;
+            }
+        }
+
         if let CommandResult::Error = exec_result.result {
             return Err(Error::CommandError(exec_result));
         }
