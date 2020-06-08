@@ -246,9 +246,11 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
             return Ok(Propagate::False(StopPropagateReason::AlreadyExists));
         }
 
-        let model_offer = msg.offer;
-        model_offer.validate()?;
+        // Will reject Offer, if hash was computed incorrectly. In most cases
+        // it could mean, that it could be some kind of attack.
+        msg.offer.validate()?;
 
+        let model_offer = msg.offer;
         db.as_dao::<OfferDao>()
             .create_offer(&model_offer)
             .await

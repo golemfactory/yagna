@@ -1,11 +1,12 @@
+use chrono::NaiveDateTime;
 use derive_more::Display;
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
-use sha3::Sha3_256;
 use serde::{Deserialize, Serialize};
+use sha3::Sha3_256;
 use std::io::Write;
 use std::str::FromStr;
 use thiserror::Error;
@@ -24,7 +25,9 @@ pub enum SubscriptionParseError {
     InvalidLength(String),
 }
 
-#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[display(fmt = "{}-{}", random_id, hash)]
 #[sql_type = "Text"]
 pub struct SubscriptionId {
@@ -38,10 +41,16 @@ pub fn generate_random_id() -> String {
 }
 
 impl SubscriptionId {
-    pub fn generate_id(properties: &str, constraints: &str, node_id: &str) -> SubscriptionId {
+    pub fn generate_id(
+        properties: &str,
+        constraints: &str,
+        node_id: &str,
+        creation_ts: &NaiveDateTime,
+        expiration_ts: &NaiveDateTime,
+    ) -> SubscriptionId {
         SubscriptionId {
             random_id: generate_random_id(),
-            hash: hash(properties, constraints, node_id),
+            hash: hash(properties, constraints, node_id, creation_ts, expiration_ts),
         }
     }
 
@@ -50,24 +59,37 @@ impl SubscriptionId {
         properties: &str,
         constraints: &str,
         node_id: &str,
+        creation_ts: &NaiveDateTime,
+        expiration_ts: &NaiveDateTime,
     ) -> Result<(), ErrorMessage> {
-        let hash = hash(properties, constraints, node_id);
+        let hash = hash(properties, constraints, node_id, creation_ts, expiration_ts);
         if self.hash != hash {
             Err(ErrorMessage::new(format!(
-                "Invalid subscription id [{}]. Hash doesn't match content.",
-                &self
+                "Invalid subscription id [{}]. Hash doesn't match content hash [{}].",
+                &self,
+                hash,
             )))?;
         }
         Ok(())
     }
 }
 
-pub fn hash(properties: &str, constraints: &str, node_id: &str) -> String {
+pub fn hash(
+    properties: &str,
+    constraints: &str,
+    node_id: &str,
+    creation_ts: &NaiveDateTime,
+    expiration_ts: &NaiveDateTime,
+) -> String {
     let mut hasher = Sha3_256::new();
 
     hasher.input(properties);
     hasher.input(constraints);
     hasher.input(node_id);
+    // We can't change format freely, because it is important to compute hash.
+    // Is there any other solution, to compute hash, that is format independent?
+    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%S").to_string());
+    hasher.input(expiration_ts.format("%Y-%m-%d %H:%M:%S").to_string());
 
     format!("{:x}", hasher.result())
 }
