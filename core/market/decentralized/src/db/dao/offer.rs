@@ -1,3 +1,5 @@
+use chrono::Utc;
+
 use ya_persistence::executor::Error;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
@@ -6,7 +8,6 @@ use crate::db::schema::market_offer::dsl;
 use crate::db::DbResult;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-#[allow(unused)]
 pub struct OfferDao<'c> {
     pool: &'c PoolType,
 }
@@ -23,9 +24,12 @@ impl<'c> OfferDao<'c> {
         subscription_id: Str,
     ) -> DbResult<Option<ModelOffer>> {
         let subscription_id = subscription_id.as_ref().to_string();
+        let now = Utc::now().naive_utc();
+
         readonly_transaction(self.pool, move |conn| {
             let offer: Option<ModelOffer> = dsl::market_offer
                 .filter(dsl::id.eq(&subscription_id))
+                .filter(dsl::expiration_ts.ge(now))
                 .first(conn)
                 .optional()?;
             match offer {
