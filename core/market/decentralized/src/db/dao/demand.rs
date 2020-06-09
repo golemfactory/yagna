@@ -1,3 +1,5 @@
+use chrono::Utc;
+
 use ya_persistence::executor::Error;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
@@ -23,9 +25,12 @@ impl<'c> DemandDao<'c> {
         subscription_id: Str,
     ) -> DbResult<Option<ModelDemand>> {
         let subscription_id = subscription_id.as_ref().to_string();
+        let now = Utc::now().naive_utc();
+
         readonly_transaction(self.pool, move |conn| {
             let demand: Option<ModelDemand> = dsl::market_demand
                 .filter(dsl::id.eq(&subscription_id))
+                .filter(dsl::expiration_ts.ge(now))
                 .first(conn)
                 .optional()?;
             match demand {
