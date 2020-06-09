@@ -10,7 +10,7 @@ use ya_core_model::net;
 use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
-use super::callbacks::{CallbackHandler, HandlerSlot};
+use super::callbacks::{CallbackHandler, CallbackMessage, HandlerSlot};
 use crate::db::models::Offer as ModelOffer;
 
 // =========================================== //
@@ -258,8 +258,7 @@ pub struct OfferReceived {
     pub offer: ModelOffer,
 }
 
-impl RpcMessage for OfferReceived {
-    const ID: &'static str = "OfferReceived";
+impl CallbackMessage for OfferReceived {
     type Item = Propagate;
     type Error = ();
 }
@@ -274,8 +273,7 @@ pub struct OfferUnsubscribed {
     pub subscription_id: String,
 }
 
-impl RpcMessage for OfferUnsubscribed {
-    const ID: &'static str = "OfferUnsubscribed";
+impl CallbackMessage for OfferUnsubscribed {
     type Item = Propagate;
     type Error = ();
 }
@@ -290,8 +288,7 @@ pub struct RetrieveOffers {
     pub newer_than: chrono::DateTime<Utc>,
 }
 
-impl RpcMessage for RetrieveOffers {
-    const ID: &'static str = "RetrieveOffers";
+impl CallbackMessage for RetrieveOffers {
     type Item = Vec<ModelOffer>;
     type Error = DiscoveryRemoteError;
 }
