@@ -113,6 +113,7 @@ impl Discovery {
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
         net::local::bind_broadcast_with_caller(
+            // /private/market/market-protocol-mk1-offer
             &format!("{}/{}", private_prefix, OfferReceived::TOPIC),
             move |caller, msg: SendBroadcastMessage<OfferReceived>| {
                 let myself = myself.clone();
@@ -123,6 +124,7 @@ impl Discovery {
 
         let myself = self.clone();
         net::local::bind_broadcast_with_caller(
+            // /private/market/market-protocol-mk1-offer-unsubscribe
             &format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC),
             move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
                 let myself = myself.clone();
