@@ -1,5 +1,5 @@
 #[cfg(any(feature = "service", test))]
-mod bcast;
+pub mod bcast;
 #[cfg(any(feature = "service", test))]
 mod service;
 

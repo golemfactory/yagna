@@ -9,7 +9,7 @@ market-test-suite = []
 
 [dependencies]
 ya-client = "0.3"
-ya-core-model = { version = "0.1", features = ["market"] }
+ya-core-model = { version = "0.1", features = ["market", "net"] }
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-bus = "0.2"
@@ -18,7 +18,6 @@ ya-service-api-web = "0.1"
 
 actix-web = "2.0"
 anyhow = "1.0"
-async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.5"
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
@@ -41,6 +40,6 @@ actix-rt = "1.0.0"
 env_logger = "0.7"
 rand = "0.7.2"
 serde_json = "1.0"
-tokio = { version = "0.2", features = ["macros"] }
+tokio = { version = "0.2", features = ["macros", "rt-core"] }
 
-ya-core-model = { version = "0.1", features = ["net"] }
+ya-net = { version = "0.1", features = ["service"] }

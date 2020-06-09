@@ -11,12 +11,12 @@ use crate::matcher::{Matcher, MatcherError, MatcherInitError};
 use crate::migrations;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
-use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
+use crate::protocol::DiscoveryBuilder;
 
 use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
-use ya_core_model::market::BUS_ID;
+use ya_core_model::market::{private, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
@@ -56,7 +56,7 @@ impl MarketService {
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
 
-        let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder, db)?;
+        let (matcher, listeners) = Matcher::new(builder, db)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
         let requestor_engine =
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
@@ -68,18 +68,24 @@ impl MarketService {
         })
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), MarketInitError> {
-        self.matcher.bind_gsb(prefix.clone()).await?;
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: &str,
+        private_prefix: &str,
+    ) -> Result<(), MarketInitError> {
+        self.matcher.bind_gsb(public_prefix, private_prefix).await?;
         self.provider_negotiation_engine
-            .bind_gsb(prefix.clone())
+            .bind_gsb(public_prefix, private_prefix)
             .await?;
-        self.requestor_negotiation_engine.bind_gsb(prefix).await?;
+        self.requestor_negotiation_engine
+            .bind_gsb(public_prefix, private_prefix)
+            .await?;
         Ok(())
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb(BUS_ID.to_string()).await?)
+        Ok(market.bind_gsb(BUS_ID, private::BUS_ID).await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
@@ -97,15 +103,18 @@ impl MarketService {
             .extend(requestor::register_endpoints)
     }
 
-    pub async fn subscribe_offer(&self, offer: Offer, id: Identity) -> Result<String, MarketError> {
-        let offer = ModelOffer::from_new(&offer, &id);
+    pub async fn subscribe_offer(
+        &self,
+        offer: &Offer,
+        id: Identity,
+    ) -> Result<String, MarketError> {
+        let offer = ModelOffer::from_new(offer, &id);
         let subscription_id = offer.id.to_string();
 
         self.matcher.subscribe_offer(&offer).await?;
         self.provider_negotiation_engine
             .subscribe_offer(&offer)
             .await?;
-
         Ok(subscription_id)
     }
 
@@ -124,10 +133,10 @@ impl MarketService {
 
     pub async fn subscribe_demand(
         &self,
-        demand: Demand,
+        demand: &Demand,
         id: Identity,
     ) -> Result<String, MarketError> {
-        let demand = ModelDemand::from_new(&demand, &id);
+        let demand = ModelDemand::from_new(demand, &id);
         let subscription_id = demand.id.to_string();
 
         self.matcher.subscribe_demand(&demand).await?;

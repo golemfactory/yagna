@@ -86,7 +86,7 @@ impl Offer {
             offer_id: Some(self.id.to_string()),
             provider_id: Some(self.node_id.clone()),
             constraints: self.constraints.clone(),
-            properties: serde_json::to_value(&self.properties).map_err(|error| {
+            properties: serde_json::from_str(&self.properties).map_err(|error| {
                 format!(
                     "Can't serialize Offer properties from database!!! Error: {}",
                     error

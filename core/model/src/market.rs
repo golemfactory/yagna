@@ -6,6 +6,11 @@ use ya_service_bus::RpcMessage;
 /// Public Market bus address.
 pub const BUS_ID: &str = "/public/market";
 
+/// Internal Market bus address.
+pub mod private {
+    pub const BUS_ID: &str = "/private/market";
+}
+
 /// Returns the Agreement.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
