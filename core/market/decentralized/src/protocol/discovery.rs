@@ -7,11 +7,14 @@ use thiserror::Error;
 
 use ya_client::model::ErrorMessage;
 use ya_core_model::net;
-use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint};
-use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+use ya_core_model::net::local::{
+    BindBroadcastError, BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint,
+};
+use ya_service_bus::{typed as bus, Handle, RpcEndpoint, RpcMessage};
 
 use super::callbacks::{CallbackHandler, CallbackMessage, HandlerSlot};
 use crate::db::models::Offer as ModelOffer;
+use std::future::Future;
 
 // =========================================== //
 // Errors
@@ -109,50 +112,24 @@ impl Discovery {
         private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
-
-        log::debug!("Creating broadcast topic {}.", OfferReceived::TOPIC);
-
-        let offer_broadcast_address = format!("{}/{}", private_prefix, OfferReceived::TOPIC);
-        let subscribe_msg = OfferReceived::into_subscribe_msg(&offer_broadcast_address);
-        bus::service(net::local::BUS_ID)
-            .send(subscribe_msg)
-            .await??;
-
-        log::debug!(
-            "Binding handler for broadcast topic {}.",
-            OfferReceived::TOPIC
-        );
-
-        let _ = bus::bind_with_caller(
-            &offer_broadcast_address,
+        net::local::bind_broadcast_with_caller(
+            &format!("{}/{}", private_prefix, OfferReceived::TOPIC),
             move |caller, msg: SendBroadcastMessage<OfferReceived>| {
                 let myself = myself.clone();
                 myself.on_offer_received(caller, msg.body().to_owned())
             },
-        );
-
-        log::debug!("Creating broadcast topic {}.", OfferUnsubscribed::TOPIC);
-
-        let unsubscribe_broadcast_address =
-            format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC);
-        let subscribe_msg = OfferUnsubscribed::into_subscribe_msg(&unsubscribe_broadcast_address);
-        bus::service(net::local::BUS_ID)
-            .send(subscribe_msg)
-            .await??;
-
-        log::debug!(
-            "Binding handler for broadcast topic {}.",
-            OfferUnsubscribed::TOPIC
-        );
+        )
+        .await?;
 
         let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &unsubscribe_broadcast_address,
+        net::local::bind_broadcast_with_caller(
+            &format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC),
             move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
                 let myself = myself.clone();
                 myself.on_offer_unsubscribed(caller, msg.body().to_owned())
             },
-        );
+        )
+        .await?;
 
         Ok(())
     }
@@ -297,15 +274,16 @@ impl CallbackMessage for RetrieveOffers {
 // Errors From impls
 // =========================================== //
 
-impl From<net::local::SubscribeError> for DiscoveryInitError {
-    fn from(err: net::local::SubscribeError) -> Self {
-        DiscoveryInitError::BroadcastSubscribeFailed(format!("{}", err))
-    }
-}
-
-impl From<ya_service_bus::error::Error> for DiscoveryInitError {
-    fn from(err: ya_service_bus::error::Error) -> Self {
-        DiscoveryInitError::BindingGsbFailed(format!("{}", err))
+impl From<net::local::BindBroadcastError> for DiscoveryInitError {
+    fn from(err: net::local::BindBroadcastError) -> Self {
+        match err {
+            BindBroadcastError::GsbError(error) => {
+                DiscoveryInitError::BindingGsbFailed(format!("{}", error))
+            }
+            BindBroadcastError::SubscribeError(error) => {
+                DiscoveryInitError::BroadcastSubscribeFailed(format!("{}", error))
+            }
+        }
     }
 }
 

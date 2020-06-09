@@ -4876,6 +4876,7 @@ version = "0.1.0"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
+ "log 0.4.8",
  "serde",
  "serde_bytes",
  "thiserror",
