@@ -13,7 +13,7 @@ use ya_core_model::net::local::{
 use ya_service_bus::{typed as bus, Handle, RpcEndpoint, RpcMessage};
 
 use super::callbacks::{CallbackHandler, CallbackMessage, HandlerSlot};
-use crate::db::models::Offer as ModelOffer;
+use crate::db::models::{Offer as ModelOffer, SubscriptionId};
 use std::future::Future;
 
 // =========================================== //
@@ -88,7 +88,7 @@ impl Discovery {
 
     pub async fn broadcast_unsubscribe(
         &self,
-        subscription_id: String,
+        subscription_id: SubscriptionId,
     ) -> Result<(), DiscoveryError> {
         log::info!(
             "Broadcasting unsubscribe offer [{}] to the network.",
@@ -247,7 +247,7 @@ impl BroadcastMessage for OfferReceived {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OfferUnsubscribed {
-    pub subscription_id: String,
+    pub subscription_id: SubscriptionId,
 }
 
 impl CallbackMessage for OfferUnsubscribed {
