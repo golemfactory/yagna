@@ -46,7 +46,7 @@ impl MetricsService {
             (
                 StorageMetric::ID.to_string(),
                 MetricProvider::new(
-                    StorageMetric::new(ctx.work_dir.clone(), Duration::from_secs(2)),
+                    StorageMetric::new(ctx.work_dir.clone(), Duration::from_secs(60 * 5)),
                     backlog_limit.clone(),
                     caps(ctx, StorageMetric::ID),
                 ),
