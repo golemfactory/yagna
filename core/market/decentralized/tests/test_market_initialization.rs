@@ -19,6 +19,7 @@ mod tests {
     #[actix_rt::test]
     async fn instantiate() -> Result<(), anyhow::Error> {
         let network = MarketsNetwork::new("instantiate")
+            .await
             .add_market_instance("Node-1")
             .await?
             .add_market_instance("Node-2")

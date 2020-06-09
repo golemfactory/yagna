@@ -11,10 +11,12 @@ use ya_persistence::executor::Error as DbError;
 use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
+use crate::db::models::SubscriptionId;
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
-    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryFactory, DiscoveryInitError,
+    Discovery, DiscoveryBuilder, DiscoveryError, DiscoveryInitError, PropagateOffer,
+    StopPropagateReason,
 };
 use crate::protocol::{OfferReceived, RetrieveOffers};
 
@@ -66,30 +68,32 @@ pub struct EventsListeners {
 }
 
 /// Responsible for storing Offers and matching them with demands.
+#[derive(Clone)]
 pub struct Matcher {
     db: DbExecutor,
-    discovery: Arc<dyn Discovery>,
+    discovery: Discovery,
     proposal_emitter: UnboundedSender<Proposal>,
 }
 
 impl Matcher {
-    pub fn new<Factory: DiscoveryFactory>(
+    pub fn new(
         builder: DiscoveryBuilder,
         db: &DbExecutor,
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
+
+        let database = db.clone();
         let builder = builder
-            .bind_offer_received(move |msg: OfferReceived| async move {
-                log::info!("Offer from [{}] received.", msg.offer.offer_id.unwrap());
-                Ok(())
+            .bind_offer_received(move |msg: OfferReceived| {
+                let database = database.clone();
+                on_offer_received(database, msg)
             })
             .bind_retrieve_offers(move |msg: RetrieveOffers| async move {
-                log::info!("Offers request received.");
+                log::info!("Offers request received. Unimplemented.");
                 Ok(vec![])
             });
 
-        let discovery = Factory::new(builder)?;
-
+        let discovery = builder.build()?;
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {
@@ -104,8 +108,15 @@ impl Matcher {
         Ok((matcher, listeners))
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), MatcherInitError> {
-        Ok(self.discovery.bind_gsb(prefix).await?)
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: &str,
+        private_prefix: &str,
+    ) -> Result<(), MatcherInitError> {
+        Ok(self
+            .discovery
+            .bind_gsb(public_prefix, private_prefix)
+            .await?)
     }
 
     pub async fn add_offer(&self, offer: Offer) {
@@ -212,6 +223,40 @@ impl Matcher {
         }
     }
 }
+
+async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<PropagateOffer, ()> {
+    async move {
+        // We shouldn't propagate Offer, if we already have it in our database.
+        // Note that when, we broadcast our Offer, it will reach us too, so it concerns
+        // not only Offers from other nodes.
+        if let Some(_) = db
+            .as_dao::<OfferDao>()
+            .get_offer(msg.offer.offer_id()?)
+            .await?
+        {
+            return Ok(PropagateOffer::False(StopPropagateReason::AlreadyExists));
+        }
+
+        let model_offer = ModelOffer::from(&msg.offer)?;
+        db.as_dao::<OfferDao>()
+            .create_offer(&model_offer)
+            .await
+            .map_err(OfferError::SaveOfferFailure)?;
+
+        // TODO: Spawn matching with Demands.
+
+        Result::<_, MatcherError>::Ok(PropagateOffer::True)
+    }
+    .await
+    .or_else(|error| {
+        let reason = StopPropagateReason::Error(format!("{}", error));
+        Ok(PropagateOffer::False(reason))
+    })
+}
+
+// =========================================== //
+// Errors From impls
+// =========================================== //
 
 impl From<ErrorMessage> for MatcherError {
     fn from(e: ErrorMessage) -> Self {
