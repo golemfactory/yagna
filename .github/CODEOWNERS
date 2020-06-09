@@ -1,0 +1,4 @@
+core/activity/			@golemfactory/exe-unit
+core/model/src/activity.rs	@golemfactory/exe-unit
+exe-unit/			@golemfactory/exe-unit
+
