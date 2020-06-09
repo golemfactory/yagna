@@ -207,7 +207,7 @@ impl Metric for StorageMetric {
             self.spawn();
         }
 
-        let val = self.last.load(Ordering::Relaxed) as MetricData / 1_000_000_000.;
+        let val = self.last.load(Ordering::Relaxed) as MetricData / (1024. * 1024. * 1024.);
         self.update_peak(val);
         Ok(val)
     }
