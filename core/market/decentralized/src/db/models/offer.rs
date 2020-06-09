@@ -36,6 +36,13 @@ pub struct OfferUnsubscribed {
     pub node_id: String,
 }
 
+#[derive(Clone, Debug, Identifiable, Insertable)]
+#[table_name = "market_offer_unsubscribed"]
+pub struct NewOfferUnsubscribed {
+    pub id: SubscriptionId,
+    pub node_id: String,
+}
+
 impl Offer {
     /// Creates new model offer. If ClientOffer has id already assigned,
     /// it will be ignored and regenerated.
@@ -80,6 +87,13 @@ impl Offer {
                 )
             })?,
         })
+    }
+
+    pub fn into_unsubscribe(&self) -> NewOfferUnsubscribed {
+        NewOfferUnsubscribed {
+            id: self.id.clone(),
+            node_id: self.node_id.clone(),
+        }
     }
 
     pub fn validate(&self) -> Result<(), ErrorMessage> {

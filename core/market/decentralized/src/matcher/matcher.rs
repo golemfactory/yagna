@@ -163,7 +163,7 @@ impl Matcher {
         let removed = self
             .db
             .as_dao::<OfferDao>()
-            .remove_offer(subscription_id.to_string())
+            .remove_offer(&subscription_id)
             .await
             .map_err(|error| OfferError::RemoveOfferFailure(error, subscription_id.to_string()))?;
 
@@ -171,7 +171,7 @@ impl Matcher {
             Err(OfferError::OfferNotExists(subscription_id.to_string()))?;
         } else {
             self.discovery
-                .broadcast_unsubscribe(subscription_id.to_string())
+                .broadcast_unsubscribe(subscription_id.clone())
                 .await
                 .map_err(|error| {
                     OfferError::BroadcastUnsubscribeOfferFailure(error, subscription_id)
@@ -181,10 +181,11 @@ impl Matcher {
     }
 
     pub async fn unsubscribe_demand(&self, subscription_id: &str) -> Result<(), MatcherError> {
+        let subscription_id = SubscriptionId::from_str(subscription_id)?;
         let removed = self
             .db
             .as_dao::<DemandDao>()
-            .remove_demand(subscription_id)
+            .remove_demand(&subscription_id)
             .await
             .map_err(|error| {
                 DemandError::RemoveDemandFailure(error, subscription_id.to_string())
@@ -207,7 +208,7 @@ impl Matcher {
         let model_offer: Option<ModelOffer> = self
             .db
             .as_dao::<OfferDao>()
-            .get_offer(subscription_id.as_ref())
+            .get_offer(&SubscriptionId::from_str(subscription_id.as_ref())?)
             .await?;
 
         match model_offer {
@@ -223,7 +224,7 @@ impl Matcher {
         let model_demand: Option<ModelDemand> = self
             .db
             .as_dao::<DemandDao>()
-            .get_demand(subscription_id.as_ref())
+            .get_demand(&SubscriptionId::from_str(subscription_id.as_ref())?)
             .await?;
 
         match model_demand {
@@ -238,11 +239,7 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         // We shouldn't propagate Offer, if we already have it in our database.
         // Note that when, we broadcast our Offer, it will reach us too, so it concerns
         // not only Offers from other nodes.
-        if let Some(_) = db
-            .as_dao::<OfferDao>()
-            .get_offer(&msg.offer.id.to_string())
-            .await?
-        {
+        if let Some(_) = db.as_dao::<OfferDao>().get_offer(&msg.offer.id).await? {
             return Ok(Propagate::False(StopPropagateReason::AlreadyExists));
         }
 
