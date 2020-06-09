@@ -1,4 +1,4 @@
-use crate::metrics::os::SystemError;
+use crate::process::SystemError;
 use std::time::SystemTimeError;
 use thiserror::Error;
 
