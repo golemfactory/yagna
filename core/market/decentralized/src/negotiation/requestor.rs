@@ -26,7 +26,11 @@ impl RequestorNegotiationEngine {
         Ok(Arc::new(engine))
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), NegotiationInitError> {
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: &str,
+        private_prefix: &str,
+    ) -> Result<(), NegotiationInitError> {
         Ok(())
     }
 

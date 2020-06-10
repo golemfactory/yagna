@@ -71,6 +71,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             let endpoints = bcast.resolve(&topic);
             let msg: Rc<[u8]> = msg.into();
             Arbiter::spawn(async move {
+                log::debug!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
                     let addr = format!("{}/{}", endpoint, bcast_service_id);
                     let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
@@ -144,10 +145,12 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             let (is_new, id) = bcast.add(subscribe);
             let central_bus = central_bus.clone();
             async move {
+                log::info!("Subscribe topic {} on central bus.", topic);
                 if is_new {
                     if let Err(e) = central_bus.subscribe(topic.clone()).await {
                         log::error!("fail to subscribe to: {}, {}", topic, e);
                     }
+                    log::info!("Created new topic: {}", topic);
                 }
                 Ok(id)
             }
@@ -161,6 +164,13 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         let _ = local_bus::subscribe(&addr, move |caller: &str, _addr: &str, msg: &[u8]| {
             // TODO: remove unwrap here.
             let ent: SendBroadcastMessage<serde_json::Value> = serde_json::from_slice(msg).unwrap();
+
+            log::debug!(
+                "Broadcast msg related to topic {} from [{}].",
+                ent.topic(),
+                &caller
+            );
+
             let fut = central_bus.broadcast(caller.to_owned(), ent.topic().to_owned(), msg.into());
             let resp = resp.clone();
             async move {

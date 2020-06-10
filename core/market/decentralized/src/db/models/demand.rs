@@ -83,7 +83,7 @@ impl Demand {
             demand_id: Some(self.id.to_string()),
             requestor_id: Some(self.node_id.clone()),
             constraints: self.constraints.clone(),
-            properties: serde_json::to_value(&self.properties).map_err(|error| {
+            properties: serde_json::from_str(&self.properties).map_err(|error| {
                 format!(
                     "Can't serialize Demand properties from database!!! Error: {}",
                     error
