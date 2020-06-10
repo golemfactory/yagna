@@ -223,6 +223,8 @@ pub enum StopPropagateReason {
     Error(String),
     #[display(fmt = "Offer already unsubscribed")]
     AlreadyUnsubscribed,
+    #[display(fmt = "Offer expired")]
+    Expired,
 }
 
 #[derive(Serialize, Deserialize)]

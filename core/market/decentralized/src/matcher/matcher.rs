@@ -35,9 +35,9 @@ pub enum OfferError {
     #[error("Failed to save Offer. Error: {0}.")]
     SaveOfferFailure(#[from] DbError),
     #[error("Failed to remove Offer [{1}]. Error: {0}.")]
-    RemoveOfferFailure(DbError, String),
+    UnsubscribeOfferFailure(UnsubscribeError, SubscriptionId),
     #[error("Offer [{0}] doesn't exist.")]
-    OfferNotExists(String),
+    OfferNotExists(SubscriptionId),
     #[error("Failed to broadcast offer [{1}]. Error: {0}.")]
     BroadcastOfferFailure(DiscoveryError, SubscriptionId),
     #[error("Failed to broadcast unsubscribe offer [{1}]. Error: {0}.")]
@@ -122,10 +122,6 @@ impl Matcher {
             .await?)
     }
 
-    pub async fn add_offer(&self, offer: Offer) {
-        unimplemented!();
-    }
-
     // =========================================== //
     // Offer/Demand subscription
     // =========================================== //
@@ -160,23 +156,27 @@ impl Matcher {
 
     pub async fn unsubscribe_offer(&self, subscription_id: &str) -> Result<(), MatcherError> {
         let subscription_id = SubscriptionId::from_str(subscription_id)?;
-        let removed = self
-            .db
+        self.db
             .as_dao::<OfferDao>()
-            .remove_offer(&subscription_id)
+            .mark_offer_as_unsubscribed(&subscription_id)
             .await
-            .map_err(|error| OfferError::RemoveOfferFailure(error, subscription_id.to_string()))?;
+            .map_err(|error| OfferError::UnsubscribeOfferFailure(error, subscription_id.clone()))?;
 
-        if !removed {
-            Err(OfferError::OfferNotExists(subscription_id.to_string()))?;
-        } else {
-            self.discovery
-                .broadcast_unsubscribe(subscription_id.clone())
-                .await
-                .map_err(|error| {
-                    OfferError::BroadcastUnsubscribeOfferFailure(error, subscription_id)
-                })?;
-        }
+        // Broadcast only, if no Error occurred in previous step.
+        // We ignore broadcast errors. Unsubscribing was finished successfully, so:
+        // - We shouldn't bother agent with broadcasts
+        // - Unsubscribe message probably will reach other markets, but later.
+        let _ = self
+            .discovery
+            .broadcast_unsubscribe(subscription_id.clone())
+            .await
+            .map_err(|error| {
+                log::warn!(
+                    "Failed to broadcast unsubscribe offer [{1}]. Error: {0}.",
+                    error,
+                    subscription_id
+                );
+            });
         Ok(())
     }
 
@@ -268,24 +268,19 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
     async move {
         // We should remove Offer if it wasn't ours. Ours Offers remain
         // in the database, but they are marked as unsubscribed.
-        // TODO: Temporary version that always removes Offer.
-        if let None = db
-            .as_dao::<OfferDao>()
-            .get_offer(&msg.subscription_id)
-            .await?
-        {
-            return Ok(Propagate::False(StopPropagateReason::AlreadyUnsubscribed));
-        }
-
+        // TODO: Temporary version that never removes Offer.
         db.as_dao::<OfferDao>()
-            .remove_offer(&msg.subscription_id)
+            .mark_offer_as_unsubscribed(&msg.subscription_id)
             .await?;
-
-        Result::<_, MatcherError>::Ok(Propagate::True)
+        Result::<_, UnsubscribeError>::Ok(Propagate::True)
     }
     .await
     .or_else(|error| {
-        let reason = StopPropagateReason::Error(format!("{}", error));
+        let reason = match error {
+            UnsubscribeError::OfferExpired(_) => StopPropagateReason::Expired,
+            UnsubscribeError::AlreadyUnsubscribed(_) => StopPropagateReason::AlreadyUnsubscribed,
+            _ => StopPropagateReason::Error(format!("{}", error)),
+        };
         Ok(Propagate::False(reason))
     })
 }
