@@ -239,6 +239,9 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         // We shouldn't propagate Offer, if we already have it in our database.
         // Note that when, we broadcast our Offer, it will reach us too, so it concerns
         // not only Offers from other nodes.
+        // TODO: Infinite loop is possible here. We won't get expired and unsubscribed Offers
+        //       here because get_offer function isn't supposed to return them. The we will try
+        //       to add this Offer and it will succeed, so we will propagate them further.
         if let Some(_) = db.as_dao::<OfferDao>().get_offer(&msg.offer.id).await? {
             return Ok(Propagate::False(StopPropagateReason::AlreadyExists));
         }
