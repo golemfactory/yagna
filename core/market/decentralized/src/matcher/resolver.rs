@@ -4,10 +4,9 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use ya_client::model::market::{Demand, Offer, Proposal};
 
 use super::Matcher;
-use crate::db::models::SubscriptionId;
 
 #[derive(Debug)]
-enum Subscription {
+pub enum Subscription {
     Offer(String),
     Demand(String),
 }
@@ -16,7 +15,7 @@ enum Subscription {
 #[derive(Clone)]
 pub struct Resolver {
     matcher: Matcher,
-    subscription_sender: UnboundedSender<Subscription>,
+    subscription_tx: UnboundedSender<Subscription>,
 }
 
 #[derive(Error, Debug)]
@@ -29,39 +28,37 @@ pub enum ResolverInitError {
 pub enum ResolverError {
     #[error("Failed resolve matching relation for {0:?} and {1:?}.")]
     MatchingError(Offer, Demand),
+    #[error("Failed to process incoming {0:?}")]
+    SendError(#[from] tokio::sync::mpsc::error::SendError<Subscription>),
 }
 
 impl Resolver {
-    pub fn new(matcher: &Matcher) -> Result<Self, ResolverInitError> {
-        let (subscription_sender, subscription_receiver) = unbounded_channel::<Subscription>();
+    pub fn new(matcher: Matcher) -> Result<Self, ResolverError> {
+        let (subscription_tx, subscription_rx) = unbounded_channel::<Subscription>();
 
-        let matcher2move = matcher.clone();
-        tokio::spawn(async move {
-            process_incoming_subscriptions(subscription_receiver, matcher2move).await
+        let resolver = Resolver {
+            matcher,
+            subscription_tx,
+        };
+
+        tokio::spawn({
+            let resolver = resolver.clone();
+            async move {
+                resolver
+                    .process_incoming_subscriptions(subscription_rx)
+                    .await
+            }
         });
 
-        Ok(Resolver {
-            matcher: matcher.clone(),
-            subscription_sender,
-        })
+        Ok(resolver)
     }
 
-    pub fn incoming_offer(&self, subscription_id: &str) {
-        if let Err(e) = self
-            .subscription_sender
-            .send(Subscription::Offer(subscription_id.into()))
-        {
-            log::error!("Failed to process incoming offer: {}", e)
-        }
+    pub fn incoming_offer(&self, id: &str) -> Result<(), ResolverError> {
+        Ok(self.subscription_tx.send(Subscription::Offer(id.into()))?)
     }
 
-    pub fn incoming_demand(&self, subscription_id: &str) {
-        if let Err(e) = self
-            .subscription_sender
-            .send(Subscription::Demand(subscription_id.into()))
-        {
-            log::error!("Failed to process incoming demand: {}", e)
-        }
+    pub fn incoming_demand(&self, id: &str) -> Result<(), ResolverError> {
+        Ok(self.subscription_tx.send(Subscription::Demand(id.into()))?)
     }
 
     pub fn find_matches<'a>(
@@ -78,28 +75,28 @@ impl Resolver {
         }
         Ok(res)
     }
-}
 
-async fn process_incoming_subscriptions(
-    mut subscription_receiver: UnboundedReceiver<Subscription>,
-    matcher: Matcher,
-) {
-    while let Some(new_subs) = subscription_receiver.recv().await {
-        log::debug!("processing incoming subscription {:?}", new_subs);
-        // TODO: here we will use Matcher to get list of all active Offers or Demands
-        // TODO: to be resolved against newcomer subscription
-        match new_subs {
-            Subscription::Offer(id) => log::info!("TODO: resolve new Offer: {:?}", id),
-            Subscription::Demand(id) => log::info!("TODO: resolve new Demand: {:?}", id),
-        };
-        // TODO: upon finding matching pair we will send a proposal
-        let proposal = Proposal::new(
-            serde_json::json!({"name": "dummy"}),
-            "(&(name=dummy))".into(),
-        );
-        if let Err(e) = matcher.emit_proposal(proposal) {
-            log::error!("Failed to emit proposal: {}", e)
-        };
+    async fn process_incoming_subscriptions(
+        &self,
+        mut subscription_rx: UnboundedReceiver<Subscription>,
+    ) {
+        while let Some(new_subs) = subscription_rx.recv().await {
+            log::debug!("processing incoming subscription {:?}", new_subs);
+            // TODO: here we will use Matcher to get list of all active Offers or Demands
+            // TODO: to be resolved against newcomer subscription
+            match new_subs {
+                Subscription::Offer(id) => log::info!("TODO: resolve new Offer: {:?}", id),
+                Subscription::Demand(id) => log::info!("TODO: resolve new Demand: {:?}", id),
+            };
+            // TODO: upon finding matching pair we will send a proposal
+            let proposal = Proposal::new(
+                serde_json::json!({"name": "dummy"}),
+                "(&(name=dummy))".into(),
+            );
+            if let Err(e) = self.matcher.emit_proposal(proposal) {
+                log::error!("Failed to emit proposal: {}", e)
+            };
+        }
     }
 }
 
