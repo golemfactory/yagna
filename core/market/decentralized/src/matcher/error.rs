@@ -2,7 +2,9 @@ use ya_client::model::ErrorMessage;
 use ya_persistence::executor::Error as DbError;
 
 use crate::db::models::{SubscriptionId, SubscriptionValidationError};
+use crate::matcher::resolver::Subscription;
 use crate::protocol::DiscoveryInitError;
+use crate::{Demand, Offer};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DemandError {
@@ -44,6 +46,8 @@ pub enum MatcherError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     OfferError(#[from] OfferError),
+    #[error(transparent)]
+    ResolverError(#[from] ResolverError),
     #[error("Unexpected Matcher error: {0}.")]
     UnexpectedError(String),
 }
@@ -54,6 +58,14 @@ pub enum MatcherInitError {
     DiscoveryError(#[from] DiscoveryInitError),
     #[error("Failed to initialize database. Error: {0}.")]
     DatabaseError(#[from] DbError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ResolverError {
+    #[error("Failed resolve matching relation for {0:?} and {1:?}.")]
+    MatchingError(Offer, Demand),
+    #[error("Failed to process incoming subscription {0:?}")]
+    SendError(#[from] tokio::sync::mpsc::error::SendError<Subscription>),
 }
 
 impl From<ErrorMessage> for MatcherError {

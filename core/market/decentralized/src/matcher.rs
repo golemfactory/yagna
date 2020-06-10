@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer, Proposal};
 use ya_persistence::executor::DbExecutor;
@@ -10,12 +10,13 @@ use crate::protocol::{
 };
 use crate::SubscriptionId;
 
-pub use error::{DemandError, MatcherError, MatcherInitError, OfferError};
-pub use store::SubscriptionStore;
+pub mod error;
+pub mod resolver;
+pub mod store;
 
-mod error;
-mod resolver;
-mod store;
+pub use error::{DemandError, MatcherError, MatcherInitError, OfferError};
+use resolver::{Resolver, Subscription};
+pub use store::SubscriptionStore;
 
 /// Receivers for events, that can be emitted from Matcher.
 pub struct EventsListeners {
@@ -25,8 +26,8 @@ pub struct EventsListeners {
 /// Responsible for storing Offers and matching them with demands.
 pub struct Matcher {
     pub store: SubscriptionStore,
+    resolver: Resolver,
     discovery: Discovery,
-    proposal_tx: UnboundedSender<Proposal>,
 }
 
 impl Matcher {
@@ -34,12 +35,17 @@ impl Matcher {
         // TODO: Implement Discovery callbacks.
 
         let store = SubscriptionStore::new(db.clone());
+        let (proposal_tx, proposal_rx) = unbounded_channel::<Proposal>();
+        let resolver = Resolver::new(store.clone(), proposal_tx);
+
         let store1 = store.clone();
         let store2 = store.clone();
+        let resolver1 = resolver.clone();
         let discovery = Discovery::new(
             move |caller: String, msg: OfferReceived| {
                 let store = store1.clone();
-                on_offer_received(store, caller, msg)
+                let resolver = resolver1.clone();
+                on_offer_received(store, resolver, caller, msg)
             },
             move |caller: String, msg: OfferUnsubscribed| {
                 let store = store2.clone();
@@ -50,12 +56,11 @@ impl Matcher {
                 Ok(vec![])
             },
         )?;
-        let (proposal_tx, proposal_rx) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {
             store,
+            resolver,
             discovery,
-            proposal_tx,
         };
 
         let listeners = EventsListeners { proposal_rx };
@@ -83,9 +88,9 @@ impl Matcher {
         id: &Identity,
         offer: &ClientOffer,
     ) -> Result<Offer, MatcherError> {
-        // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         let offer = self.store.create_offer(id, offer).await?;
+        self.resolver.receive(&offer)?;
 
         let _ = self
             .discovery
@@ -129,8 +134,7 @@ impl Matcher {
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
 
-        // TODO: Try to match demand with offers currently existing in database.
-        //  We shouldn't await here on this.
+        self.resolver.receive(&demand)?;
         Ok(demand)
     }
 
@@ -141,14 +145,11 @@ impl Matcher {
     ) -> Result<(), MatcherError> {
         Ok(self.store.remove_demand(subscription_id).await?)
     }
-
-    pub fn emit_proposal(&self, proposal: Proposal) -> Result<(), SendError<Proposal>> {
-        self.proposal_tx.send(proposal)
-    }
 }
 
 pub(crate) async fn on_offer_received(
     store: SubscriptionStore,
+    resolver: Resolver,
     _caller: String,
     msg: OfferReceived,
 ) -> Result<Propagate, ()> {
@@ -156,11 +157,15 @@ pub(crate) async fn on_offer_received(
     // Note that when we broadcast our Offer, it will reach us too, so it concerns
     // not only Offers from other nodes.
 
+    let subscription = Subscription::from(&msg.offer);
     store
         .store_offer(msg.offer)
         .await
         .map(|propagate| match propagate {
-            true => Propagate::Yes,
+            true => {
+                resolver.receive(subscription).unwrap();
+                Propagate::Yes
+            }
             false => Propagate::No(Reason::AlreadyExists),
         })
         .or_else(|e| match e {

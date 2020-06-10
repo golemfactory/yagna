@@ -2,7 +2,8 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::matcher::{DemandError, Matcher, MatcherError, MatcherInitError, OfferError};
+use crate::matcher::error::{DemandError, MatcherError, MatcherInitError, OfferError};
+use crate::matcher::Matcher;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::rest_api;
@@ -32,7 +33,7 @@ pub enum MarketError {
 
 #[derive(Error, Debug)]
 pub enum MarketInitError {
-    #[error("Failed to initialize Offers matcher. Error: {0}.")]
+    #[error("Failed to initialize Matcher. Error: {0}.")]
     Matcher(#[from] MatcherInitError),
     #[error("Failed to initialize negotiation engine. Error: {0}.")]
     Negotiation(#[from] NegotiationInitError),
