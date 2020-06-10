@@ -5,14 +5,14 @@ use actix_web::{error::PathError, http::StatusCode, test, App};
 use actix_web::body::MessageBody;
 use actix_web::dev::ServiceResponse;
 use serde::de::DeserializeOwned;
-use ya_client::model::{ErrorMessage, NodeId};
+use ya_client::model::ErrorMessage;
 use ya_core_model::market;
 use ya_market_decentralized::testing::{
     DemandError, OfferError, SubscriptionParseError, SubscriptionStore,
 };
 use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
+use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 
 mod utils;
 
@@ -68,7 +68,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
 
     // given
     client_offer.offer_id = Some(subscription_id.to_string());
-    client_offer.provider_id = Some(mock_id().identity.to_string());
+    client_offer.provider_id = Some(utils::mock_id().identity.to_string());
     // when get from subscription store
     let offer = SubscriptionStore::new(db)
         .get_offer(&subscription_id)
@@ -129,7 +129,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
 
     // given
     client_demand.demand_id = Some(subscription_id.to_string());
-    client_demand.requestor_id = Some(mock_id().identity.to_string());
+    client_demand.requestor_id = Some(utils::mock_id().identity.to_string());
     // when
     let demand = SubscriptionStore::new(db)
         .get_demand(&subscription_id)
@@ -198,17 +198,7 @@ async fn init_db_app(
 }
 
 fn mock_auth() -> DummyAuth {
-    DummyAuth::new(mock_id())
-}
-
-fn mock_id() -> Identity {
-    Identity {
-        identity: "0xbabe000000000000000000000000000000000000"
-            .parse::<NodeId>()
-            .unwrap(),
-        name: "".to_string(),
-        role: "".to_string(),
-    }
+    DummyAuth::new(utils::mock_id())
 }
 
 pub async fn read_response_json<B: MessageBody, T: DeserializeOwned>(

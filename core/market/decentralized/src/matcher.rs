@@ -19,14 +19,14 @@ mod store;
 
 /// Receivers for events, that can be emitted from Matcher.
 pub struct EventsListeners {
-    pub proposal_receiver: UnboundedReceiver<Proposal>,
+    pub proposal_rx: UnboundedReceiver<Proposal>,
 }
 
 /// Responsible for storing Offers and matching them with demands.
 pub struct Matcher {
     pub store: SubscriptionStore,
     discovery: Discovery,
-    proposal_emitter: UnboundedSender<Proposal>,
+    proposal_tx: UnboundedSender<Proposal>,
 }
 
 impl Matcher {
@@ -50,17 +50,15 @@ impl Matcher {
                 Ok(vec![])
             },
         )?;
-        let (emitter, receiver) = unbounded_channel::<Proposal>();
+        let (proposal_tx, proposal_rx) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {
-            store: store,
+            store,
             discovery,
-            proposal_emitter: emitter,
+            proposal_tx,
         };
 
-        let listeners = EventsListeners {
-            proposal_receiver: receiver,
-        };
+        let listeners = EventsListeners { proposal_rx };
 
         Ok((matcher, listeners))
     }
@@ -145,7 +143,7 @@ impl Matcher {
     }
 
     pub fn emit_proposal(&self, proposal: Proposal) -> Result<(), SendError<Proposal>> {
-        self.proposal_emitter.send(proposal)
+        self.proposal_tx.send(proposal)
     }
 }
 

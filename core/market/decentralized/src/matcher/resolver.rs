@@ -1,9 +1,10 @@
 use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use ya_client::model::market::{Demand, Offer, Proposal};
+use ya_client::model::market::Proposal;
 
-use super::Matcher;
+use super::SubscriptionStore;
+use crate::db::models::{Demand, Offer};
 
 #[derive(Debug)]
 pub enum Subscription {
@@ -14,8 +15,9 @@ pub enum Subscription {
 /// Resolves the match relation for the specific Offer-Demand pair.
 #[derive(Clone)]
 pub struct Resolver {
-    matcher: Matcher,
+    store: SubscriptionStore,
     subscription_tx: UnboundedSender<Subscription>,
+    proposal_tx: UnboundedSender<Proposal>,
 }
 
 #[derive(Error, Debug)]
@@ -33,12 +35,16 @@ pub enum ResolverError {
 }
 
 impl Resolver {
-    pub fn new(matcher: Matcher) -> Result<Self, ResolverError> {
+    pub fn new(
+        store: SubscriptionStore,
+        proposal_tx: UnboundedSender<Proposal>,
+    ) -> Result<Self, ResolverError> {
         let (subscription_tx, subscription_rx) = unbounded_channel::<Subscription>();
 
         let resolver = Resolver {
-            matcher,
+            store,
             subscription_tx,
+            proposal_tx,
         };
 
         tokio::spawn({
@@ -82,7 +88,7 @@ impl Resolver {
     ) {
         while let Some(new_subs) = subscription_rx.recv().await {
             log::debug!("processing incoming subscription {:?}", new_subs);
-            // TODO: here we will use Matcher to get list of all active Offers or Demands
+            // TODO: here we will use Store to get list of all active Offers or Demands
             // TODO: to be resolved against newcomer subscription
             match new_subs {
                 Subscription::Offer(id) => log::info!("TODO: resolve new Offer: {:?}", id),
@@ -93,7 +99,7 @@ impl Resolver {
                 serde_json::json!({"name": "dummy"}),
                 "(&(name=dummy))".into(),
             );
-            if let Err(e) = self.matcher.emit_proposal(proposal) {
+            if let Err(e) = self.proposal_tx.send(proposal) {
                 log::error!("Failed to emit proposal: {}", e)
             };
         }
@@ -101,19 +107,35 @@ impl Resolver {
 }
 
 fn matches(offers: &Offer, demands: &Demand) -> Result<bool, ResolverError> {
-    todo!()
+    // TODO
+    Ok(true)
 }
+
+// TODO: a bit hacky - straighten this
+#[cfg(test)]
+#[path = "../../tests/utils/mock_offer.rs"]
+mod mock_offer;
 
 #[cfg(test)]
 mod tests {
+    use super::mock_offer::{example_demand, example_offer, mock_id};
     use super::*;
-    use serde_json::Value;
+    use chrono::{Duration, Utc};
+
+    fn sample_offer() -> Offer {
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_ts = creation_ts + Duration::hours(1);
+        Offer::from_new(&example_offer(), &mock_id(), creation_ts, expiration_ts)
+    }
+
+    fn sample_demand() -> Demand {
+        let creation_ts = Utc::now().naive_utc();
+        let expiration_ts = creation_ts + Duration::hours(1);
+        Demand::from_new(&example_demand(), &mock_id(), creation_ts, expiration_ts)
+    }
 
     #[test]
-    #[ignore]
     fn matches_empty() {
-        let offer = Offer::new(Value::Null, "".into());
-        let demand = Demand::new(Value::Null, "".into());
-        assert!(matches(&offer, &demand).unwrap())
+        assert!(matches(&sample_offer(), &sample_demand()).unwrap())
     }
 }
