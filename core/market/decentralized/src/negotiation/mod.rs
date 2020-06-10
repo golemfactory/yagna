@@ -1,4 +1,5 @@
-mod errors;
+// TODO: move to ../<mod_name>.rs
+mod errors; // TODO: remove plural form
 mod provider;
 mod requestor;
 

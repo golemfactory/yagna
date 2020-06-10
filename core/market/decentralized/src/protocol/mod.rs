@@ -1,5 +1,6 @@
+// TODO: move to ../<mod_name>.rs
 // Could be private
-pub mod callbacks;
+pub mod callbacks; // TODO: remove plural form
 mod discovery;
 
 pub use self::discovery::{Discovery, Propagate, Reason};

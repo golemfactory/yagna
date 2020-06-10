@@ -165,4 +165,6 @@ mod tests {
 
         offer.validate().unwrap();
     }
+
+    // TODO: test from_new
 }
