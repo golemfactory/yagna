@@ -2,9 +2,11 @@ use chrono::Utc;
 use thiserror::Error;
 
 use ya_persistence::executor::Error as DbError;
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 
-use crate::db::models::{Offer as ModelOffer, OfferUnsubscribed};
+use crate::db::models::{NewOfferUnsubscribed, Offer as ModelOffer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl;
 use crate::db::schema::market_offer_unsubscribed::dsl as dsl_unsubscribed;
 use crate::db::DbResult;
@@ -23,10 +25,14 @@ impl<'c> AsDao<'c> for OfferDao<'c> {
 
 #[derive(Error, Debug)]
 pub enum UnsubscribeError {
-    #[error("Can't Unsubscribe not existing offer: {0}.")]
+    #[error("Can't unsubscribe not existing offer: {0}.")]
     OfferDoesntExist(SubscriptionId),
+    #[error("Can't unsubscribe expired offer: {0}.")]
+    OfferExpired(SubscriptionId),
+    #[error("Offer [{0}] already unsubscribed.")]
+    AlreadyUnsubscribed(SubscriptionId),
     #[error(transparent)]
-    DatabaseError(#[from] DbError),
+    DatabaseError(DbError),
 }
 
 impl<'c> OfferDao<'c> {
@@ -38,9 +44,13 @@ impl<'c> OfferDao<'c> {
         let now = Utc::now().naive_utc();
 
         readonly_transaction(self.pool, move |conn| {
+            if is_unsubscribed(conn, &subscription_id)? {
+                return Ok(None);
+            }
+
             let offer: Option<ModelOffer> = dsl::market_offer
                 .filter(dsl::id.eq(&subscription_id))
-                .filter(dsl::expiration_ts.ge(now))
+                .filter(dsl::expiration_ts.gt(now))
                 .first(conn)
                 .optional()?;
             match offer {
@@ -71,17 +81,35 @@ impl<'c> OfferDao<'c> {
         subscription_id: &SubscriptionId,
     ) -> Result<(), UnsubscribeError> {
         let subscription_id = subscription_id.clone();
-        let unsubscribe = self
-            .get_offer(&subscription_id)
-            .await?
-            .ok_or(UnsubscribeError::OfferDoesntExist(subscription_id.clone()))?
-            .into_unsubscribe();
-
         Ok(do_with_transaction(self.pool, move |conn| {
+            // If offer was already unsubscribed, we need to check it before we
+            // will make other queries, because we will get at best integrity constraint error.
+            if is_unsubscribed(conn, &subscription_id)? {
+                Err(UnsubscribeError::AlreadyUnsubscribed(
+                    subscription_id.clone(),
+                ))?;
+            }
+
+            let offer: Option<ModelOffer> = dsl::market_offer
+                .filter(dsl::id.eq(&subscription_id))
+                .first(conn)
+                .optional()?;
+
+            let unsubscribe: NewOfferUnsubscribed = offer
+                .ok_or(UnsubscribeError::OfferDoesntExist(subscription_id.clone()))
+                .map(|offer| {
+                    // Note: we don't unsubscribe expired Offers.
+                    match offer.expiration_ts > Utc::now().naive_utc() {
+                        true => Ok(offer),
+                        false => Err(UnsubscribeError::OfferExpired(subscription_id.clone())),
+                    }
+                })??
+                .into_unsubscribe();
+
             diesel::insert_into(dsl_unsubscribed::market_offer_unsubscribed)
                 .values(unsubscribe)
                 .execute(conn)?;
-            DbResult::<()>::Ok(())
+            Result::<(), UnsubscribeError>::Ok(())
         })
         .await?)
     }
@@ -95,5 +123,19 @@ impl<'c> OfferDao<'c> {
             Ok(num_deleted > 0)
         })
         .await
+    }
+}
+
+pub fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
+    let unsubscribed: Option<OfferUnsubscribed> = dsl_unsubscribed::market_offer_unsubscribed
+        .filter(dsl_unsubscribed::id.eq(&subscription_id))
+        .first(conn)
+        .optional()?;
+    Ok(unsubscribed.is_some())
+}
+
+impl<ErrorType: Into<DbError>> From<ErrorType> for UnsubscribeError {
+    fn from(err: ErrorType) -> Self {
+        UnsubscribeError::DatabaseError(err.into())
     }
 }

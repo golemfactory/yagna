@@ -43,7 +43,7 @@ mod tests {
             .unsubscribe_offer(subscription_id.to_string(), identity1.clone())
             .await?;
 
-        // Offer should be removed from database after unsubscribed.
+        // Offer shouldn't be available after unsubscribed.
         assert!(market1.matcher.get_offer(&subscription_id).await?.is_none());
 
         Ok(())

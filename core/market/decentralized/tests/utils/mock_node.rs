@@ -31,6 +31,8 @@ pub struct MarketNode {
     name: String,
     /// For now only mock default Identity.
     identity: Identity,
+    /// Direct access to underlying database.
+    db: DbExecutor,
 }
 
 /// Stores mock discovery node, that doesn't include full
@@ -78,6 +80,7 @@ impl MarketsNetwork {
             name: name.as_ref().to_string(),
             identity: generate_identity(name.as_ref()),
             market,
+            db,
         };
 
         self.markets.push(market_node);
@@ -138,6 +141,15 @@ impl MarketsNetwork {
                     .map(|node| node.identity.clone())
                     .unwrap()
             })
+    }
+
+    pub fn get_database(&self, name: &str) -> DbExecutor {
+        // TODO: Could we do this without nesting??
+        self.markets
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.db.clone())
+            .unwrap()
     }
 
     fn init_database(&self, name: &str) -> Result<DbExecutor> {
