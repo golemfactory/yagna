@@ -266,12 +266,26 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
 
 async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result<Propagate, ()> {
     async move {
-        // We should remove Offer if it wasn't ours. Ours Offers remain
-        // in the database, but they are marked as unsubscribed.
-        // TODO: Temporary version that never removes Offer.
         db.as_dao::<OfferDao>()
             .mark_offer_as_unsubscribed(&msg.subscription_id)
             .await?;
+
+        // We store only our Offers to keep history. Offers from other nodes
+        // should be removed.
+        // We are sure that we don't remove our Offer here, because we would got
+        // error in mark_offer_as_unsubscribed.
+        // TODO: Maybe we should add check here, to be sure, that we don't remove own Offers.
+        log::debug!("Removing unsubscribed Offer [{}].", &msg.subscription_id);
+        let _ = db
+            .as_dao::<OfferDao>()
+            .remove_offer(&msg.subscription_id)
+            .await
+            .map_err(|error| {
+                log::warn!(
+                    "Failed to remove offer [{}] during unsubscribe.",
+                    &msg.subscription_id
+                )
+            });
         Result::<_, UnsubscribeError>::Ok(Propagate::True)
     }
     .await
