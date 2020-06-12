@@ -2,8 +2,9 @@ use actix_rt::Arbiter;
 use std::rc::Rc;
 
 use ya_core_model::net::{local as local_net, local::SendBroadcastMessage};
-use ya_net::bcast;
 use ya_service_bus::{typed as bus, untyped as local_bus, RpcMessage};
+
+use super::bcast;
 
 pub struct MockNet;
 

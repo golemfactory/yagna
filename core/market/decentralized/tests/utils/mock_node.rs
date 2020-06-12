@@ -10,10 +10,10 @@ use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
 use ya_market_decentralized::MarketService;
-use ya_net::bcast;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+use super::bcast;
 use super::mock_net::MockNet;
 
 /// Instantiates market test nodes inside one process.
