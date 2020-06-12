@@ -23,3 +23,7 @@ pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
     struct _Dummy;
 }
+
+// Exports only for service tests.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+pub use db::dao::{DemandDao, OfferDao};

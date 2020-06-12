@@ -144,7 +144,6 @@ impl MarketsNetwork {
     }
 
     pub fn get_database(&self, name: &str) -> DbExecutor {
-        // TODO: Could we do this without nesting??
         self.markets
             .iter()
             .find(|node| node.name == name)
