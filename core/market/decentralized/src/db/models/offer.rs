@@ -31,13 +31,14 @@ pub struct Offer {
 /// Keeps track of Offers, that were already unsubscribed.
 /// We don't need to keep whole unsubscribed Offer, it is enough to keep it's
 /// subscription id.
-/// TODO: This entry must exist in database at least until Offer expiration time.
-///  Otherwise we will add this Offer for the second time, when someone will broadcast it.
+/// This entry must exist in database at least until Offer expiration time.
+/// Otherwise we will add this Offer for the second time, when someone will broadcast it.
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_offer_unsubscribed"]
 pub struct OfferUnsubscribed {
     pub id: SubscriptionId,
-    pub timestamp: NaiveDateTime,
+    pub insertion_ts: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
     pub node_id: String,
 }
 
@@ -45,6 +46,7 @@ pub struct OfferUnsubscribed {
 #[table_name = "market_offer_unsubscribed"]
 pub struct NewOfferUnsubscribed {
     pub id: SubscriptionId,
+    pub expiration_ts: NaiveDateTime,
     pub node_id: String,
 }
 
@@ -98,6 +100,7 @@ impl Offer {
         NewOfferUnsubscribed {
             id: self.id.clone(),
             node_id: self.node_id.clone(),
+            expiration_ts: self.expiration_ts.clone(),
         }
     }
 

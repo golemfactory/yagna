@@ -260,7 +260,7 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
             OfferState::Expired(_) => Propagate::False(StopPropagateReason::Expired),
             OfferState::NotFound => Propagate::True,
         };
-        
+
         if let Propagate::True = propagate {
             // Will reject Offer, if hash was computed incorrectly. In most cases
             // it could mean, that it could be some kind of attack.
