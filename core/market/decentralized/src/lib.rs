@@ -25,5 +25,5 @@ pub mod migrations {
 }
 
 // Exports only for service tests.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg(feature = "market-test-suite")]
 pub use db::dao::{DemandDao, OfferDao};
