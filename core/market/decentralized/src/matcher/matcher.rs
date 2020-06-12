@@ -287,7 +287,7 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
                 log::warn!(
                     "Failed to remove offer [{}] during unsubscribe.",
                     &msg.subscription_id
-                )
+                );
             });
         Result::<_, UnsubscribeError>::Ok(Propagate::True)
     }
