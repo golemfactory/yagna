@@ -24,6 +24,7 @@ pub mod migrations {
     struct _Dummy;
 }
 
-// Exports only for service tests.
-#[cfg(any(feature = "market-test-suite", test))]
-pub use db::dao::{DemandDao, OfferDao};
+/// These exports are expected to be used only in tests.
+pub mod testing {
+    pub use super::db::dao::{DemandDao, OfferDao};
+}
