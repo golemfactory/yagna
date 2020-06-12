@@ -25,7 +25,8 @@ table! {
 table! {
     market_offer_unsubscribed (id) {
         id -> Text,
-        timestamp -> Timestamp,
+        insertion_ts -> Timestamp,
+        expiration_ts -> Timestamp,
         node_id -> Text,
     }
 }

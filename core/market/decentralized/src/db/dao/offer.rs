@@ -72,8 +72,6 @@ impl<'c> OfferDao<'c> {
         // of adding it to database, so we must reset it here.
         offer.insertion_ts = None;
 
-        // TODO: We should check, if Offer with the same subscription id
-        //  wasn't unsubscribed already.
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::market_offer)
                 .values(offer)
