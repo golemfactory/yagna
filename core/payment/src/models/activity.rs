@@ -40,5 +40,7 @@ pub struct ReadObj {
     pub total_amount_accepted: BigDecimalField,
     pub total_amount_paid: BigDecimalField,
 
-    pub peer_id: NodeId, // Joined from Agreement
+    pub peer_id: NodeId,    // From Agreement
+    pub payee_addr: String, // From Agreement
+    pub payer_addr: String, // From Agreement
 }
