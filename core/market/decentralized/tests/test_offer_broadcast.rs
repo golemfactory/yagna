@@ -105,7 +105,9 @@ mod tests {
     }
 
     /// Nodes shouldn't broadcast unsubscribed Offers.
-    ///
+    /// This test broadcasts unsubscribed Offer and checks how other market Nodes
+    /// behave. We expect that market nodes will stop broadcast and Discovery interface will
+    /// get Offer only from himself.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
@@ -160,7 +162,7 @@ mod tests {
             )
             .await?;
 
-        // Broadcast already unsubscribed Offer. We will number of Offers that will come back.
+        // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
         log::info!("Fake Offer broadcast");
         let market3: Discovery = network.get_discovery("Node-3");
         market3.broadcast_offer(model_offer).await?;
