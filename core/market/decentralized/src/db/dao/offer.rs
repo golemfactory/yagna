@@ -35,6 +35,15 @@ pub enum UnsubscribeError {
     DatabaseError(DbError),
 }
 
+/// Returns state of Offer in database. Since we keep our Offers
+/// and remove other node's Offers, Unsubscribed and Expired Offers are Options.
+pub enum OfferState {
+    Active(ModelOffer),
+    Unsubscribed(Option<ModelOffer>),
+    Expired(Option<ModelOffer>),
+    NotFound,
+}
+
 impl<'c> OfferDao<'c> {
     pub async fn get_offer(
         &self,
@@ -44,21 +53,17 @@ impl<'c> OfferDao<'c> {
         let now = Utc::now().naive_utc();
 
         readonly_transaction(self.pool, move |conn| {
-            if is_unsubscribed(conn, &subscription_id)? {
-                return Ok(None);
-            }
-
-            let offer: Option<ModelOffer> = dsl::market_offer
-                .filter(dsl::id.eq(&subscription_id))
-                .filter(dsl::expiration_ts.gt(now))
-                .first(conn)
-                .optional()?;
-            match offer {
-                Some(model_offer) => Ok(Some(model_offer)),
-                None => Ok(None),
+            match query_offer(conn, &subscription_id)? {
+                OfferState::Active(model_offer) => Ok(Some(model_offer)),
+                _ => Ok(None),
             }
         })
         .await
+    }
+
+    pub async fn get_offer_state(&self, subscription_id: &SubscriptionId) -> DbResult<OfferState> {
+        let subscription_id = subscription_id.clone();
+        readonly_transaction(self.pool, move |conn| query_offer(conn, &subscription_id)).await
     }
 
     pub async fn create_offer(&self, offer: &ModelOffer) -> DbResult<()> {
@@ -84,29 +89,18 @@ impl<'c> OfferDao<'c> {
     ) -> Result<(), UnsubscribeError> {
         let subscription_id = subscription_id.clone();
         Ok(do_with_transaction(self.pool, move |conn| {
-            // If offer was already unsubscribed, we need to check it before we
-            // will make other queries, because we will get at best integrity constraint error.
-            if is_unsubscribed(conn, &subscription_id)? {
-                Err(UnsubscribeError::AlreadyUnsubscribed(
+            let unsubscribe: NewOfferUnsubscribed = match query_offer(conn, &subscription_id)? {
+                OfferState::Active(offer) => offer.into_unsubscribe(),
+                OfferState::Expired(_) => {
+                    Err(UnsubscribeError::OfferExpired(subscription_id.clone()))?
+                }
+                OfferState::Unsubscribed(_) => Err(UnsubscribeError::AlreadyUnsubscribed(
                     subscription_id.clone(),
-                ))?;
-            }
-
-            let offer: Option<ModelOffer> = dsl::market_offer
-                .filter(dsl::id.eq(&subscription_id))
-                .first(conn)
-                .optional()?;
-
-            let unsubscribe: NewOfferUnsubscribed = offer
-                .ok_or(UnsubscribeError::OfferDoesntExist(subscription_id.clone()))
-                .map(|offer| {
-                    // Note: we don't unsubscribe expired Offers.
-                    match offer.expiration_ts > Utc::now().naive_utc() {
-                        true => Ok(offer),
-                        false => Err(UnsubscribeError::OfferExpired(subscription_id.clone())),
-                    }
-                })??
-                .into_unsubscribe();
+                ))?,
+                OfferState::NotFound => {
+                    Err(UnsubscribeError::OfferDoesntExist(subscription_id.clone()))?
+                }
+            };
 
             diesel::insert_into(dsl_unsubscribed::market_offer_unsubscribed)
                 .values(unsubscribe)
@@ -128,7 +122,28 @@ impl<'c> OfferDao<'c> {
     }
 }
 
-pub fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
+fn query_offer(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<OfferState> {
+    let is_unsubscribed = is_unsubscribed(conn, subscription_id)?;
+
+    let offer: Option<ModelOffer> = dsl::market_offer
+        .filter(dsl::id.eq(&subscription_id))
+        .first(conn)
+        .optional()?;
+
+    if is_unsubscribed {
+        return Ok(OfferState::Unsubscribed(offer));
+    }
+
+    Ok(match offer {
+        None => OfferState::NotFound,
+        Some(offer) => match offer.expiration_ts > Utc::now().naive_utc() {
+            true => OfferState::Active(offer),
+            false => OfferState::Expired(Some(offer)),
+        },
+    })
+}
+
+fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
     let unsubscribed: Option<OfferUnsubscribed> = dsl_unsubscribed::market_offer_unsubscribed
         .filter(dsl_unsubscribed::id.eq(&subscription_id))
         .first(conn)

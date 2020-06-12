@@ -7,15 +7,17 @@ mod tests {
     use crate::utils::MarketsNetwork;
 
     use ya_client::model::market::Offer;
-    use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, StopPropagateReason};
+    use ya_market_decentralized::protocol::{
+        Discovery, OfferReceived, Propagate, StopPropagateReason,
+    };
     use ya_market_decentralized::Offer as ModelOffer;
-    use ya_market_decentralized::{MarketService, SubscriptionId};
     use ya_market_decentralized::OfferDao;
+    use ya_market_decentralized::{MarketService, SubscriptionId};
 
     use serde_json::json;
     use std::str::FromStr;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
     use std::time::Duration;
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
@@ -118,7 +120,6 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
-        env_logger::init();
         let network = MarketsNetwork::new("test_broadcast_stop_conditions")
             .await
             .add_market_instance("Node-1")

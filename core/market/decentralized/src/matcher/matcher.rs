@@ -38,10 +38,6 @@ pub enum OfferError {
     UnsubscribeOfferFailure(UnsubscribeError, SubscriptionId),
     #[error("Offer [{0}] doesn't exist.")]
     OfferNotExists(SubscriptionId),
-    #[error("Failed to broadcast offer [{1}]. Error: {0}.")]
-    BroadcastOfferFailure(DiscoveryError, SubscriptionId),
-    #[error("Failed to broadcast unsubscribe offer [{1}]. Error: {0}.")]
-    BroadcastUnsubscribeOfferFailure(DiscoveryError, SubscriptionId),
 }
 
 #[derive(Error, Debug)]
@@ -135,10 +131,17 @@ impl Matcher {
 
         // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
-        self.discovery
+        let _ = self
+            .discovery
             .broadcast_offer(model_offer.clone())
             .await
-            .map_err(|error| OfferError::BroadcastOfferFailure(error, model_offer.id.clone()))?;
+            .map_err(|error| {
+                log::warn!(
+                    "Failed to broadcast offer [{1}]. Error: {0}.",
+                    error,
+                    model_offer.id,
+                );
+            });
         Ok(())
     }
 
@@ -239,26 +242,39 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         // We shouldn't propagate Offer, if we already have it in our database.
         // Note that when, we broadcast our Offer, it will reach us too, so it concerns
         // not only Offers from other nodes.
-        // TODO: Infinite loop is possible here. We won't get expired and unsubscribed Offers
-        //       here because get_offer function isn't supposed to return them. The we will try
-        //       to add this Offer and it will succeed, so we will propagate them further.
-        if let Some(_) = db.as_dao::<OfferDao>().get_offer(&msg.offer.id).await? {
-            return Ok(Propagate::False(StopPropagateReason::AlreadyExists));
+        //
+        // Note: Infinite broadcasting is possible here, if we would just use get_offer function,
+        // because it filters expired and unsubscribed Offers. Note what happens in such case:
+        // We think that Offer doesn't exist, so we insert it to database every time it reaches us,
+        // because get_offer will never return it. So we will never meet stop condition of broadcast!!
+        // So be careful.
+        let propagate = match db
+            .as_dao::<OfferDao>()
+            .get_offer_state(&msg.offer.id)
+            .await?
+        {
+            OfferState::Active(_) => Propagate::False(StopPropagateReason::AlreadyExists),
+            OfferState::Unsubscribed(_) => {
+                Propagate::False(StopPropagateReason::AlreadyUnsubscribed)
+            }
+            OfferState::Expired(_) => Propagate::False(StopPropagateReason::Expired),
+            OfferState::NotFound => Propagate::True,
+        };
+        
+        if let Propagate::True = propagate {
+            // Will reject Offer, if hash was computed incorrectly. In most cases
+            // it could mean, that it could be some kind of attack.
+            msg.offer.validate()?;
+
+            let model_offer = msg.offer;
+            db.as_dao::<OfferDao>()
+                .create_offer(&model_offer)
+                .await
+                .map_err(OfferError::SaveOfferFailure)?;
+
+            // TODO: Spawn matching with Demands.
         }
-
-        // Will reject Offer, if hash was computed incorrectly. In most cases
-        // it could mean, that it could be some kind of attack.
-        msg.offer.validate()?;
-
-        let model_offer = msg.offer;
-        db.as_dao::<OfferDao>()
-            .create_offer(&model_offer)
-            .await
-            .map_err(OfferError::SaveOfferFailure)?;
-
-        // TODO: Spawn matching with Demands.
-
-        Result::<_, MatcherError>::Ok(Propagate::True)
+        Result::<_, MatcherError>::Ok(propagate)
     }
     .await
     .or_else(|error| {
