@@ -15,6 +15,7 @@ core/market/decentralized/tests/test-workdir/*
 .vscode
 
 **/.env
+.*.swp
 
 # Databases
 **/yagna.db

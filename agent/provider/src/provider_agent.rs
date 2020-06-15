@@ -5,6 +5,11 @@ use std::convert::TryFrom;
 use std::time::Duration;
 
 use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
+use ya_agreement_utils::{
+    constraints,
+    ClauseOperator::{And, Or},
+    ConstraintKey, ConstraintValue, Constraints,
+};
 use ya_client::cli::ProviderApi;
 use ya_utils_actix::actix_handler::send_message;
 
@@ -118,13 +123,16 @@ impl ProviderAgent {
 
         // If user set subnet name, we should add constraint for filtering
         // nodes that didn't set the same name in properties.
-        // TODO: Write better constraints building.
+        let expiration_constraint = ConstraintKey::new("golem.srv.comp.expiration").greater_than(ConstraintValue::new(0));
         match self.node_info.subnet.clone() {
-            Some(subnet) => Ok(format!(
-                "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration>0))",
-                subnet,
-            )),
-            None => Ok(format!("(golem.srv.comp.expiration>0)")),
+            Some(subnet) => Ok(new Constraints::new_caluse(
+                And,
+                vec![
+                    ConstraintKey::new("golem.node.debug.subnet").equal_to(subnet),
+                    expiration_constraint,
+                ],
+            ),
+            None => Ok(Constraints::new_single(expiration_constraint).to_string()),
         }
     }
 
