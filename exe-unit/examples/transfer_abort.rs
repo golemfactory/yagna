@@ -13,6 +13,7 @@ use tokio::time::delay_for;
 use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
+use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::transfer::{AbortTransfers, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
 
@@ -141,22 +142,24 @@ async fn main() -> anyhow::Result<()> {
     let src_size = std::fs::metadata(&src_file)?.len();
 
     let agreement = Agreement {
-        agreement: AgreementView {
+        inner: AgreementView {
             agreement_id: String::new(),
             json: serde_json::Value::Null,
         },
-        agreement_id: String::new(),
         task_package: "".to_string(),
         usage_vector: Vec::new(),
         usage_limits: HashMap::new(),
+        infrastructure: HashMap::new(),
     };
 
+    let runtime_args = RuntimeArgs::new(&work_dir, &agreement, true);
     let exe_ctx = ExeUnitContext {
         activity_id: None,
         report_url: None,
         agreement,
         work_dir,
         cache_dir,
+        runtime_args,
     };
 
     let _result = interrupted_transfer(
