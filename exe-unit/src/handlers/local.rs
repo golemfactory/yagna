@@ -5,6 +5,7 @@ use crate::service::ServiceAddr;
 use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
+use futures::FutureExt;
 use ya_client_model::activity::ActivityState;
 use ya_core_model::activity::local::SetState as SetActivityState;
 
@@ -75,6 +76,26 @@ where
     }
 }
 
+impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: Stop, _: &mut Context<Self>) -> Self::Result {
+        self.state.batch_control.retain(|id, tx| {
+            if msg.exclude_batches.contains(id) {
+                return true;
+            }
+            if let Some(tx) = tx.take() {
+                let _ = tx.send(());
+            }
+            false
+        });
+
+        let fut = Self::stop_runtime(self.runtime.clone(), ShutdownReason::Interrupted(0))
+            .map(|_| Ok(()));
+        ActorResponse::r#async(fut.into_actor(self))
+    }
+}
+
 impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
     type Result = ActorResponse<Self, (), Error>;
 
@@ -84,7 +105,6 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         }
 
         let address = ctx.address();
-        let runtime = self.runtime.clone();
         let services = std::mem::replace(&mut self.services, Vec::new());
         let state = self.state.inner.to_pending(State::Terminated);
         let reason = format!("{}: {}", msg.0, self.state.report());
@@ -92,15 +112,14 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         let fut = async move {
             log::info!("Shutting down ...");
             let _ = address.send(SetState::from(state)).await;
+            let _ = address.send(Stop::default()).await;
 
-            Self::stop_runtime(runtime, msg.0).await;
-            for mut service in services.into_iter() {
+            for mut service in services {
                 service.stop().await;
             }
 
-            let _ = address
-                .send(SetState::default().state_reason(State::Terminated.into(), reason))
-                .await;
+            let set_state = SetState::default().state_reason(State::Terminated.into(), reason);
+            let _ = address.send(set_state).await;
 
             System::current().stop();
 

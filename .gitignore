@@ -18,6 +18,6 @@ core/market/decentralized/tests/test-workdir/*
 .*.swp
 
 # Databases
-**/yagna.db
-**/yagna.db-shm
-**/yagna.db-wal
+**/*.db
+**/*.db-shm
+**/*.db-wal

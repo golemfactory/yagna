@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use futures::channel::oneshot;
 use futures::TryFutureExt;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,17 +16,19 @@ use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
-use crate::service::transfer::{DeployImage, TransferResource, TransferService};
+use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 use chrono::Utc;
 
 pub mod agreement;
+mod commands;
 pub mod error;
 mod handlers;
 pub mod message;
 pub mod metrics;
 mod notify;
+pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
@@ -88,18 +91,6 @@ impl<R: Runtime> ExeUnit<R> {
             log::warn!("Unable to stop the runtime: {:?}", e);
         }
     }
-
-    async fn shutdown(addr: &Addr<Self>, reason: ShutdownReason) {
-        log::warn!("Initiating shutdown: {}", reason);
-
-        if let Err(error) = addr.send(Shutdown(reason)).await {
-            log::error!(
-                "Unable to perform a graceful shutdown: {:?}. Terminating",
-                error
-            );
-            System::current().stop();
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -126,10 +117,12 @@ impl ExecCtx {
             (None, Some(stderr)) => Some(stderr),
             (Some(stdout), Some(stderr)) => Some(format!("{}\n{}", stdout, stderr)),
         };
+        let finished =
+            self.idx == self.batch_size - 1 || exec_result.result == CommandResult::Error;
         ExeScriptCommandResult {
             index: self.idx as u32,
             result: exec_result.result,
-            is_batch_finished: self.idx == self.batch_size - 1,
+            is_batch_finished: finished,
             message,
         }
     }
@@ -141,8 +134,16 @@ impl<R: Runtime> ExeUnit<R> {
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
         exec: activity::Exec,
+        mut control: oneshot::Receiver<()>,
     ) {
         let batch_size = exec.exe_script.len();
+        let on_error = |batch_id, result| async {
+            let set_state = SetState::default().cmd(None).result(batch_id, result);
+            if let Err(error) = addr.send(set_state).await {
+                log::error!("Cannot update state during exec: {:?}", error);
+            }
+        };
+
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
             let ctx = ExecCtx {
                 batch_id: exec.batch_id.clone(),
@@ -150,6 +151,12 @@ impl<R: Runtime> ExeUnit<R> {
                 idx,
                 cmd,
             };
+
+            if let Ok(Some(_)) = control.try_recv() {
+                let cmd_result = ctx.cmd_result(ExecCmdResult::error("interrupted"));
+                on_error(ctx.batch_id, cmd_result).await;
+                break;
+            }
 
             if let Err(error) = Self::exec_cmd(
                 addr.clone(),
@@ -159,22 +166,9 @@ impl<R: Runtime> ExeUnit<R> {
             )
             .await
             {
+                log::warn!("Command interrupted: {}", error.to_string());
                 let cmd_result = ctx.cmd_result(ExecCmdResult::error(&error));
-                let set_state = SetState::default()
-                    .cmd(None)
-                    .result(ctx.batch_id, cmd_result);
-
-                if let Err(error) = addr.send(set_state).await {
-                    log::error!(
-                        "Unable to update the state during exec failure: {:?}",
-                        error
-                    );
-                }
-
-                log::error!("Command interrupted: {}", error.to_string());
-
-                let message = format!("Command interrupted: {:?}", ctx.cmd);
-                Self::shutdown(&addr, ShutdownReason::Error(message)).await;
+                on_error(ctx.batch_id, cmd_result).await;
                 break;
             }
         }
@@ -186,8 +180,21 @@ impl<R: Runtime> ExeUnit<R> {
         transfer_service: Addr<TransferService>,
         ctx: ExecCtx,
     ) -> Result<()> {
+        if let ExeScriptCommand::Terminate {} = &ctx.cmd {
+            log::warn!("Terminating running ExeScripts");
+
+            let exclude_batches = vec![ctx.batch_id];
+            let set_state = SetState::default()
+                .state(StatePair(State::Initialized, None))
+                .cmd(None);
+
+            addr.send(Stop { exclude_batches }).await??;
+            addr.send(set_state).await?;
+            return Ok(());
+        }
+
         let state = addr.send(GetState {}).await?.0;
-        let exec_state = match (&state.0, &state.1) {
+        let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
             }
@@ -208,7 +215,7 @@ impl<R: Runtime> ExeUnit<R> {
                 ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
                     return Err(StateError::InvalidState(state).into());
                 }
-                _ => StatePair(s.clone(), Some(*s)),
+                _ => StatePair(*s, Some(*s)),
             },
         };
 
@@ -216,44 +223,11 @@ impl<R: Runtime> ExeUnit<R> {
 
         addr.send(
             SetState::default()
-                .state(exec_state.clone())
+                .state(state_pre.clone())
                 .cmd(Some(ctx.cmd.clone())),
         )
         .await?;
 
-        Self::pre_exec(transfer_service, runtime.clone(), ctx.clone()).await?;
-
-        let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
-        if let CommandResult::Error = exec_result.result {
-            return Err(Error::CommandError(exec_result));
-        }
-
-        let sanity_state = addr.send(GetState {}).await?.0;
-        if sanity_state != exec_state {
-            return Err(StateError::UnexpectedState {
-                current: sanity_state,
-                expected: exec_state,
-            }
-            .into());
-        }
-
-        let cmd_result = ctx.cmd_result(exec_result);
-        addr.send(
-            SetState::default()
-                .state(exec_state.1.unwrap().into())
-                .cmd(None)
-                .result(ctx.batch_id, cmd_result),
-        )
-        .await?;
-
-        Ok(())
-    }
-
-    async fn pre_exec(
-        transfer_service: Addr<TransferService>,
-        runtime: Addr<R>,
-        ctx: ExecCtx,
-    ) -> Result<()> {
         match &ctx.cmd {
             ExeScriptCommand::Transfer { from, to } => {
                 let msg = TransferResource {
@@ -269,6 +243,44 @@ impl<R: Runtime> ExeUnit<R> {
             }
             _ => (),
         }
+
+        let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
+        if let ExeScriptCommand::Deploy { .. } = &ctx.cmd {
+            if let Some(output) = &exec_result.stdout {
+                let deploy_desc = match commands::DeployResult::from_bytes(output) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log::error!("deploy failed: {}", e);
+                        return Err(Error::CommandError(exec_result));
+                    }
+                };
+                log::info!("adding vols: {:?}", deploy_desc.vols);
+                transfer_service
+                    .send(AddVolumes::new(deploy_desc.vols))
+                    .await??;
+            }
+        }
+
+        if let CommandResult::Error = exec_result.result {
+            return Err(Error::CommandError(exec_result));
+        }
+
+        let state_cur = addr.send(GetState {}).await?.0;
+        if state_cur != state_pre {
+            return Err(StateError::UnexpectedState {
+                current: state_cur,
+                expected: state_pre,
+            }
+            .into());
+        }
+
+        let cmd_result = ctx.cmd_result(exec_result);
+        let state_post = SetState::default()
+            .state(state_pre.1.unwrap().into())
+            .cmd(None)
+            .result(ctx.batch_id, cmd_result);
+        addr.send(state_post).await?;
+
         Ok(())
     }
 }
@@ -311,6 +323,7 @@ pub struct ExeUnitContext {
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub runtime_args: RuntimeArgs,
 }
 
 impl ExeUnitContext {

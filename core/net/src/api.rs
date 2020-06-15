@@ -1,6 +1,10 @@
+use anyhow::bail;
+
 use ya_client_model::node_id::{NodeId, ParseError};
 use ya_core_model::net;
 use ya_service_bus::typed as bus;
+
+pub(crate) const FROM_BUS_ID: &str = "/from";
 
 #[derive(thiserror::Error, Debug)]
 pub enum NetApiError {
@@ -35,12 +39,6 @@ pub struct NetSrc {
     src: NodeId,
 }
 
-impl NetSrc {
-    pub fn to(&self, dst: NodeId) -> NetDst {
-        NetDst { src: self.src, dst }
-    }
-}
-
 pub struct NetDst {
     src: NodeId,
     dst: NodeId,
@@ -48,6 +46,17 @@ pub struct NetDst {
 
 pub fn from(src: NodeId) -> NetSrc {
     NetSrc { src }
+}
+
+impl NetSrc {
+    pub fn to(&self, dst: NodeId) -> NetDst {
+        NetDst { src: self.src, dst }
+    }
+}
+
+#[inline]
+pub(crate) fn net_service(service: impl ToString) -> String {
+    format!("{}/{}", net::BUS_ID, service.to_string())
 }
 
 fn extract_exported_part(local_service_addr: &str) -> &str {
@@ -61,7 +70,11 @@ pub trait RemoteEndpoint {
 
 impl RemoteEndpoint for NodeId {
     fn service(&self, bus_addr: &str) -> bus::Endpoint {
-        bus::service(format!("/net/{}/{}", self, extract_exported_part(bus_addr)))
+        bus::service(format!(
+            "{}/{}",
+            net_service(self),
+            extract_exported_part(bus_addr)
+        ))
     }
 }
 
@@ -74,6 +87,21 @@ impl RemoteEndpoint for NetDst {
             extract_exported_part(bus_addr)
         ))
     }
+}
+
+pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
+    let mut it = from_addr.split("/").fuse();
+    if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
+        (it.next(), it.next(), it.next(), it.next(), it.next())
+    {
+        to_node_id.parse::<NodeId>()?;
+        let prefix = 10 + from_node_id.len();
+        let service_id = &from_addr[prefix..];
+        if let Some(_) = it.next() {
+            return Ok((from_node_id.parse()?, net_service(service_id)));
+        }
+    }
+    bail!("invalid net-from destination: {}", from_addr)
 }
 
 #[cfg(test)]
@@ -116,5 +144,48 @@ mod tests {
             .parse()
             .unwrap();
         assert!(node_id.try_service("/zima/x").is_err());
+    }
+
+    #[test]
+    fn parse_generated_from_to_service_should_pass() {
+        let from_id = "0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df"
+            .parse::<NodeId>()
+            .unwrap();
+        let dst = "0x99402605903da83901151b0871ebeae9296ef66b"
+            .parse::<NodeId>()
+            .unwrap();
+
+        let remote_service = crate::from(from_id).to(dst).service("/public/test/echo");
+        let addr = remote_service.addr();
+        eprintln!("from/to service address: {}", addr);
+        let (parsed_from, parsed_to) = parse_from_addr(addr).unwrap();
+        assert_eq!(parsed_from, from_id);
+        assert_eq!(
+            parsed_to,
+            "/net/0x99402605903da83901151b0871ebeae9296ef66b/test/echo"
+        );
+    }
+
+    #[test]
+    fn parse_no_service_should_fail() {
+        let out = parse_from_addr("/from/0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df/to/0x99402605903da83901151b0871ebeae9296ef66b");
+        assert!(out.is_err())
+    }
+
+    #[test]
+    fn parse_with_service_should_pass() {
+        let out = parse_from_addr("/from/0xe93ab94a2095729ad0b7cfa5bfd7d33e1b44d6df/to/0x99402605903da83901151b0871ebeae9296ef66b/x");
+        assert!(out.is_ok())
+    }
+
+    #[test]
+    fn ok_net_node_id() {
+        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            net_service(&node_id),
+            "/net/0xbabe000000000000000000000000000000000000".to_string()
+        );
     }
 }

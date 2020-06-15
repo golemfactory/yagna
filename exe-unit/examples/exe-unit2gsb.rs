@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::process::Command;
-use ya_client_model::activity::ExeScriptCommand;
-use ya_core_model::activity::{self, Exec, GetExecBatchResults};
+use ya_client_model::activity::{ExeScriptCommand, State};
+use ya_core_model::activity::{self, Exec, GetExecBatchResults, GetState};
 use ya_service_bus::actix_rpc;
 
 const ACTIVITY_BUS_ID: &str = "activity";
@@ -20,11 +20,14 @@ const BATCH_ID: &str = "fake_batch_id";
 /// It tests also Exec and GetExecBatchResults messages support by ExeUnit.
 /// Example ends when all ExeScript commands are executed or timeout occurs.
 ///
+///
 /// Before running this example you need to provide http server
 /// as specified in your `agreement.json` and `commands.json`
 /// For default files it is enough to invoke this:
 ///
-///   cargo run --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
+///   cargo run -p ya-exe-unit --example http-get-put -- -r <path with two files: rust-wasi-tutorial.zip and LICENSE>
+///
+/// The timeout parameter can be set to 0 to test out immediate execution result responses.
 #[derive(StructOpt, Debug)]
 pub struct Cli {
     /// Supervisor binary
@@ -49,9 +52,15 @@ pub struct Cli {
     /// Other strategy is to wait once for the whole script to complete.
     #[structopt(long)]
     pub wait_once: bool,
-    /// timeout in seconds
+    /// Execute a scenario where the exe script is interrupted and replaced with another
     #[structopt(long)]
-    pub timeout: Option<f32>,
+    pub terminate: bool,
+    /// timeout in seconds
+    #[structopt(long, default_value = "20")]
+    pub timeout: f32,
+    /// Hand off resource limiting from Supervisor to Runtime
+    #[structopt(long)]
+    pub cap_handoff: bool,
 }
 
 mod mock_activity {
@@ -102,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     let activity = mock_activity::MockActivityService {};
     activity.start();
 
-    let child_args = vec![
+    let mut child_args = vec![
         OsString::from("--binary"),
         OsString::from(&args.runtime),
         OsString::from("-c"),
@@ -115,6 +124,9 @@ async fn main() -> anyhow::Result<()> {
         OsString::from(ACTIVITY_ID),
         OsString::from(ACTIVITY_BUS_ID),
     ];
+    if args.cap_handoff {
+        child_args.insert(0, OsString::from("--cap-handoff"));
+    }
 
     let mut child = Command::new(&args.supervisor).args(child_args).spawn()?;
     log::warn!("exeunit supervisor spawned. PID: {}", child.id());
@@ -131,45 +143,82 @@ async fn main() -> anyhow::Result<()> {
 
 async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
     let contents = std::fs::read_to_string(&args.script)?;
-    let exe_script: Vec<ExeScriptCommand> = serde_json::from_str(&contents)?;
-    let exe_len = exe_script.len();
-    log::warn!("executing script with {} command(s)", exe_len);
+    let mut exe_script: Vec<ExeScriptCommand> = serde_json::from_str(&contents)?;
+    log::warn!("executing script with {} command(s)", exe_script.len());
 
     let exe_unit_url = activity::exeunit::bus_id(ACTIVITY_ID);
     let exe_unit_service = actix_rpc::service(&exe_unit_url);
-    let _ = exe_unit_service
-        .send(Exec {
-            activity_id: ACTIVITY_ID.to_owned(),
-            batch_id: BATCH_ID.to_string(),
-            exe_script,
-            timeout: None,
-        })
-        .await?;
-
-    let mut msg = GetExecBatchResults {
+    let exec = Exec {
         activity_id: ACTIVITY_ID.to_owned(),
         batch_id: BATCH_ID.to_string(),
-        timeout: args.timeout,
+        exe_script: exe_script.clone(),
+        timeout: None,
+    };
+
+    let _ = exe_unit_service.send(exec.clone()).await?;
+
+    let mut msg = GetExecBatchResults {
+        activity_id: ACTIVITY_ID.to_string(),
+        batch_id: BATCH_ID.to_string(),
+        timeout: Some(args.timeout),
         command_index: None,
     };
 
     if args.wait_once {
-        match args.timeout {
-            Some(t) => log::warn!("waiting at most {:?}s for exe script to complete", t),
-            None => log::warn!("Immediately requesting full exe script result"),
-        };
+        if args.timeout == 0. {
+            log::warn!("Immediately requesting full exe script result")
+        } else {
+            log::warn!(
+                "waiting at most {:?}s for exe script to complete",
+                args.timeout
+            )
+        }
         let results = exe_unit_service.send(msg).await?;
         log::warn!("Exe script results: {:#?}", results);
         return Ok(());
     }
 
-    for i in 0..exe_len {
+    for i in 0..exe_script.len() {
         msg.command_index = Some(i);
         log::warn!("waiting at most {:?}s for {}. command", msg.timeout, i);
-
         let results = exe_unit_service.send(msg.clone()).await?;
-
         log::warn!("Command {} result: {:#?}", i, results);
+
+        if args.terminate {
+            let response = exe_unit_service
+                .send(GetState {
+                    activity_id: ACTIVITY_ID.to_string(),
+                    timeout: None,
+                })
+                .await??;
+            if response.state.0 == State::Ready {
+                break;
+            }
+        }
     }
+
+    if args.terminate {
+        log::warn!("Executing a script starting with TERMINATE");
+        let batch_id = "new_batch_id".to_string();
+
+        msg.batch_id = batch_id.clone();
+        exe_script.insert(0, ExeScriptCommand::Terminate {});
+
+        let exec = Exec {
+            activity_id: ACTIVITY_ID.to_owned(),
+            batch_id,
+            exe_script: exe_script.clone(),
+            timeout: None,
+        };
+
+        let _ = exe_unit_service.send(exec.clone()).await?;
+        for i in 0..exe_script.len() {
+            msg.command_index = Some(i);
+            log::warn!("waiting at most {:?}s for {}. command", msg.timeout, i);
+            let results = exe_unit_service.send(msg.clone()).await?;
+            log::warn!("Command {} result: {:#?}", i, results);
+        }
+    }
+
     Ok(())
 }

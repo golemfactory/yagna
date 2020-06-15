@@ -2,6 +2,7 @@ use ya_client_model::market::Agreement;
 
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
@@ -23,14 +24,32 @@ impl AgreementView {
         self.json.pointer(pointer)
     }
 
-    pub fn pointer_typed<'a, Type: Deserialize<'a>>(&self, pointer: &str) -> Result<Type, Error> {
+    pub fn pointer_typed<'a, T: Deserialize<'a>>(&self, pointer: &str) -> Result<T, Error> {
         let value = self
             .json
             .pointer(pointer)
             .ok_or(Error::NoKey(pointer.to_string()))?
             .clone();
-        Ok(<Type as Deserialize>::deserialize(value)
+        Ok(<T as Deserialize>::deserialize(value)
             .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))?)
+    }
+
+    pub fn properties<'a, T: Deserialize<'a>>(
+        &self,
+        pointer: &str,
+    ) -> Result<HashMap<String, T>, Error> {
+        let value = self
+            .pointer(pointer)
+            .ok_or(Error::NoKey(pointer.to_string()))?;
+
+        let mut map = Map::new();
+        properties(String::new(), &mut map, value.clone());
+        map.into_iter()
+            .map(|(k, v)| match <T as Deserialize>::deserialize(v) {
+                Ok(v) => Ok((k, v)),
+                Err(e) => Err(Error::UnexpectedType(pointer.to_string(), e)),
+            })
+            .collect()
     }
 }
 
@@ -194,14 +213,43 @@ fn merge_obj(a: &mut Value, b: Value) {
             }
         }
         (a, Value::Object(mut b)) => {
-            b.insert(PROPERTY_TAG.to_string(), a.clone());
+            match a {
+                Value::Null => (),
+                _ => {
+                    b.insert(PROPERTY_TAG.to_string(), a.clone());
+                }
+            }
             *a = Value::Object(b);
         }
-        (a @ &mut Value::Object(_), b) => {
-            let a = a.as_object_mut().unwrap();
-            a.insert(PROPERTY_TAG.to_string(), b.clone());
-        }
+        (a @ &mut Value::Object(_), b) => match b {
+            Value::Null => (),
+            _ => {
+                let a = a.as_object_mut().unwrap();
+                a.insert(PROPERTY_TAG.to_string(), b.clone());
+            }
+        },
         (a, b) => *a = b,
+    }
+}
+
+fn properties(prefix: String, result: &mut Map<String, Value>, value: Value) {
+    match value {
+        Value::Object(m) => {
+            for (k, v) in m.into_iter() {
+                if k.as_str() == PROPERTY_TAG {
+                    result.insert(prefix.clone(), v);
+                    continue;
+                }
+                let pi = match prefix.is_empty() {
+                    true => k,
+                    _ => format!("{}.{}", prefix, k),
+                };
+                properties(pi, result, v);
+            }
+        }
+        v => {
+            result.insert(prefix, v);
+        }
     }
 }
 
@@ -439,5 +487,24 @@ constraints: |
             "a": { "b": { "c": 1, PROPERTY_TAG: 2 } },
         });
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn properties_json() {
+        let source = serde_json::json!({
+            "a": {
+                "b": {
+                    "c": 1,
+                    PROPERTY_TAG: 2
+                }
+            },
+            "r": [123, "string"]
+        });
+
+        let mut map = Map::new();
+        properties(String::new(), &mut map, source);
+        assert_eq!(map.get("a.b.c").unwrap(), 1);
+        assert_eq!(map.get("a.b").unwrap(), 2);
+        assert_eq!(map.get("r").unwrap(), &serde_json::json!([123, "string"]));
     }
 }

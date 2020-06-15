@@ -113,15 +113,51 @@ async fn accept_debit_note(
         DocumentStatus::Cancelled => return response::bad_request(&"Debit note cancelled"),
     }
 
+    let activity_id = debit_note.activity_id.clone();
+    let activity = match db
+        .as_dao::<ActivityDao>()
+        .get(activity_id.clone(), node_id)
+        .await
+    {
+        Ok(Some(activity)) => activity,
+        Ok(None) => return response::server_error(&format!("Activity {} not found", activity_id)),
+        Err(e) => return response::server_error(&e),
+    };
+    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_accepted.0;
+
+    let allocation = match db
+        .as_dao::<AllocationDao>()
+        .get(allocation_id.clone(), node_id)
+        .await
+    {
+        Ok(Some(allocation)) => allocation,
+        Ok(None) => {
+            return response::bad_request(&format!("Allocation {} not found", allocation_id))
+        }
+        Err(e) => return response::server_error(&e),
+    };
+    if amount_to_pay > allocation.remaining_amount {
+        let msg = format!(
+            "Not enough funds. Allocated: {} Needed: {}",
+            allocation.remaining_amount, amount_to_pay
+        );
+        return response::bad_request(&msg);
+    }
+
     with_timeout(query.timeout, async move {
         let issuer_id = debit_note.issuer_id;
-        let msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
+        let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
+        let schedule_msg =
+            SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
         match async move {
             ya_net::from(node_id)
                 .to(issuer_id)
                 .service(PUBLIC_SERVICE)
-                .call(msg)
+                .call(accept_msg)
                 .await??;
+            if let Some(msg) = schedule_msg {
+                bus::service(LOCAL_SERVICE).send(msg).await??;
+            }
             dao.accept(debit_note_id, node_id).await?;
             Ok(())
         }
@@ -224,8 +260,25 @@ async fn accept_invoice(
         DocumentStatus::Issued => return response::server_error(&"Illegal status: issued"),
     }
 
-    let allocation_dao: AllocationDao = db.as_dao();
-    let allocation = match allocation_dao.get(allocation_id.clone(), node_id).await {
+    let agreement_id = invoice.agreement_id.clone();
+    let agreement = match db
+        .as_dao::<AgreementDao>()
+        .get(agreement_id.clone(), node_id)
+        .await
+    {
+        Ok(Some(agreement)) => agreement,
+        Ok(None) => {
+            return response::server_error(&format!("Agreement {} not found", agreement_id))
+        }
+        Err(e) => return response::server_error(&e),
+    };
+    let amount_to_pay = &invoice.amount - &agreement.total_amount_accepted.0;
+
+    let allocation = match db
+        .as_dao::<AllocationDao>()
+        .get(allocation_id.clone(), node_id)
+        .await
+    {
         Ok(Some(allocation)) => allocation,
         Ok(None) => {
             return response::bad_request(&format!("Allocation {} not found", allocation_id))
@@ -233,10 +286,10 @@ async fn accept_invoice(
         Err(e) => return response::server_error(&e),
     };
     // FIXME: remaining amount should be 'locked' until payment is done to avoid double spending
-    if invoice.amount > allocation.remaining_amount {
+    if amount_to_pay > allocation.remaining_amount {
         let msg = format!(
             "Not enough funds. Allocated: {} Needed: {}",
-            allocation.remaining_amount, invoice.amount
+            allocation.remaining_amount, amount_to_pay
         );
         return response::bad_request(&msg);
     }
@@ -244,7 +297,7 @@ async fn accept_invoice(
     with_timeout(query.timeout, async move {
         let issuer_id = invoice.issuer_id;
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
-        let schedule_msg = SchedulePayment::new(invoice, allocation_id);
+        let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
             ya_net::from(node_id)
                 .to(issuer_id)

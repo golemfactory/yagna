@@ -52,14 +52,14 @@ macro_rules! query {
 }
 
 pub fn update_status(
-    invoice_ids: &Vec<String>,
+    invoice_id: &String,
     owner_id: &NodeId,
     status: &DocumentStatus,
     conn: &ConnType,
 ) -> DbResult<()> {
     diesel::update(
         dsl::pay_invoice
-            .filter(dsl::id.eq_any(invoice_ids))
+            .filter(dsl::id.eq(invoice_id))
             .filter(dsl::owner_id.eq(owner_id)),
     )
     .set(dsl::status.eq(status.to_string()))
@@ -185,21 +185,7 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            update_status(
-                &vec![invoice_id],
-                &owner_id,
-                &DocumentStatus::Received,
-                conn,
-            )?;
-            Ok(())
-        })
-        .await
-    }
-
-    pub async fn mark_failed(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            update_status(&vec![invoice_id], &owner_id, &DocumentStatus::Failed, conn)?;
-            Ok(())
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Received, conn)
         })
         .await
     }
@@ -210,12 +196,7 @@ impl<'c> InvoiceDao<'c> {
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
                 .first(conn)?;
-            update_status(
-                &vec![invoice_id.clone()],
-                &owner_id,
-                &DocumentStatus::Accepted,
-                conn,
-            )?;
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
             if let Role::Provider = role {
                 invoice_event::create::<()>(invoice_id, owner_id, EventType::Accepted, None, conn)?;
@@ -231,12 +212,7 @@ impl<'c> InvoiceDao<'c> {
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
                 .first(conn)?;
-            update_status(
-                &vec![invoice_id.clone()],
-                &owner_id,
-                &DocumentStatus::Accepted,
-                conn,
-            )?;
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
             if let Role::Provider = role {
                 invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected, None, conn)?;
             }

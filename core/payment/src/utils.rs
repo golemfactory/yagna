@@ -128,12 +128,12 @@ pub fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Ou
 }
 
 pub async fn with_timeout<Work: Future<Output = HttpResponse>>(
-    timeout_secs: impl Into<u64>,
+    timeout_secs: impl Into<f64>,
     work: Work,
 ) -> HttpResponse {
     let timeout_secs = timeout_secs.into();
-    if timeout_secs > 0 {
-        match tokio::time::timeout(Duration::from_secs(timeout_secs), work).await {
+    if timeout_secs > 0.0 {
+        match tokio::time::timeout(Duration::from_secs_f64(timeout_secs), work).await {
             Ok(v) => v,
             Err(_) => return HttpResponse::GatewayTimeout().finish(),
         }
@@ -163,16 +163,16 @@ where
 
 pub async fn listen_for_events<T: EventGetter>(
     getter: T,
-    timeout_secs: impl Into<u64>,
+    timeout_secs: impl Into<f64>,
 ) -> DbResult<Vec<T::Event>> {
-    let timeout_secs: u64 = timeout_secs.into();
+    let timeout_secs = timeout_secs.into();
     match getter.get_events().await {
         Err(e) => return Err(e),
-        Ok(events) if events.len() > 0 || timeout_secs == 0 => return Ok(events),
+        Ok(events) if events.len() > 0 || timeout_secs == 0.0 => return Ok(events),
         _ => (),
     }
 
-    let timeout = Duration::from_secs(timeout_secs);
+    let timeout = Duration::from_secs_f64(timeout_secs);
     tokio::time::timeout(timeout, async move {
         loop {
             tokio::time::delay_for(Duration::from_secs(1)).await;

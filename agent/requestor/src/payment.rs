@@ -38,9 +38,13 @@ pub(crate) async fn log_and_ignore_debit_notes(
 ) {
     // FIXME: should be persisted and restored upon next ya-requestor start
     let mut events_after = started_at.clone();
+    let timeout = Some(Duration::from_secs(60));
 
     loop {
-        match payment_api.get_debit_note_events(Some(&events_after)).await {
+        match payment_api
+            .get_debit_note_events(Some(&events_after), timeout)
+            .await
+        {
             Err(e) => {
                 log::error!("getting debit notes events error: {}", e);
                 tokio::time::delay_for(Duration::from_secs(5)).await;
@@ -59,13 +63,18 @@ pub(crate) async fn process_payments(
     payment_api: PaymentRequestorApi,
     started_at: DateTime<Utc>,
     agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
+    app_abort_handle: Option<futures::future::AbortHandle>,
 ) {
     log::info!("\n\n INVOICES processing start");
     // FIXME: should be persisted and restored upon next ya-requestor start
     let mut events_after = started_at;
+    let timeout = Some(Duration::from_secs(60));
 
     loop {
-        let events = match payment_api.get_invoice_events(Some(&events_after)).await {
+        let events = match payment_api
+            .get_invoice_events(Some(&events_after), timeout)
+            .await
+        {
             Err(e) => {
                 log::error!("getting invoice events error: {}", e);
                 tokio::time::delay_for(Duration::from_secs(5)).await;
@@ -81,6 +90,7 @@ pub(crate) async fn process_payments(
                     payment_api.clone(),
                     event.invoice_id,
                     agreement_allocation.clone(),
+                    app_abort_handle.clone(),
                 )),
                 _ => log::warn!(
                     "ignoring event type {:?} for: {}",
@@ -97,6 +107,7 @@ async fn process_invoice(
     payment_api: PaymentRequestorApi,
     invoice_id: String,
     agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
+    app_abort_handle: Option<futures::future::AbortHandle>,
 ) {
     let mut invoice = payment_api.get_invoice(&invoice_id).await;
     while let Err(e) = invoice {
@@ -150,4 +161,6 @@ async fn process_invoice(
             }
         }
     }
+
+    app_abort_handle.map(|h| h.abort());
 }

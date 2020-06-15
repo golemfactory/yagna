@@ -17,7 +17,8 @@
     "properties.golem.com.usage.vector": [
       "golem.usage.duration_sec",
       "golem.usage.cpu_sec",
-      "golem.usage.gib"
+      "golem.usage.gib",
+      "golem.usage.storage_gib"
     ]
   }
 }

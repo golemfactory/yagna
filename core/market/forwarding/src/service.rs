@@ -1,15 +1,10 @@
-use anyhow::anyhow;
-use std::{convert::TryInto, rc::Rc, time::Duration};
-use url::Url;
+use std::{convert::TryInto, time::Duration};
 
-use ya_client::{
-    market::MarketProviderApi,
-    web::{WebClient, WebInterface},
-};
-use ya_core_model::{appkey, market};
+use ya_client::{market::MarketProviderApi, web::WebClient};
+use ya_core_model::market;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
-use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+use ya_service_bus::{typed as bus, RpcMessage};
 
 use crate::{api, dao::AgreementDao, Error};
 
@@ -25,12 +20,12 @@ impl MarketService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let db = ctx.component();
         crate::dao::init(&db)?;
-        let client = WebClient::builder()
-            .timeout(Duration::from_secs(5))
-            .build()?;
+        let client = WebClient::builder().timeout(Duration::from_secs(5)).build();
 
         let _ = bus::bind(market::BUS_ID, move |get: market::GetAgreement| {
-            let market_api: MarketProviderApi = client.interface().unwrap();
+            let market_api: MarketProviderApi = client
+                .interface_at(Some(crate::api::CENTRAL_MARKET_URL.clone()))
+                .unwrap();
             let db = db.clone();
 
             async move {
@@ -56,64 +51,10 @@ impl MarketService {
             }
         });
 
-        tmp_send_keys()
-            .await
-            .unwrap_or_else(|e| log::error!("app-key export error: {}", e));
-
-        let event_addr = "/events/market/appkey";
-        let _ = bus::bind(event_addr, |_: appkey::event::Event| async move {
-            let _ = tmp_send_keys().await;
-            Ok(())
-        });
-
-        if let Err(e) = bus::service(appkey::BUS_ID)
-            .send(appkey::Subscribe {
-                endpoint: event_addr.into(),
-            })
-            .await
-        {
-            log::error!("init app-key listener error: {}", e)
-        }
-
         Ok(())
     }
 
-    pub fn rest(db: &DbExecutor) -> actix_web::Scope {
-        api::web_scope(&db)
+    pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
+        api::web_scope(&ctx.component())
     }
-}
-
-async fn tmp_send_keys() -> anyhow::Result<()> {
-    let (ids, _n) = bus::service(appkey::BUS_ID)
-        .send(appkey::List {
-            identity: None,
-            page: 1,
-            per_page: 10,
-        })
-        .await??;
-
-    let ids: Vec<serde_json::Value> = ids
-        .into_iter()
-        .map(|k: appkey::AppKey| serde_json::json! {{"key": k.key, "nodeId": k.identity}})
-        .collect();
-    log::debug!("exporting all app-keys: {:#?}", &ids);
-
-    let mut url =
-        MarketProviderApi::rebase_service_url(Rc::new(Url::parse("http://127.0.0.1:5001")?))?
-            .as_ref()
-            .clone();
-    url.set_path("admin/import-key");
-    log::debug!("posting to: {:?}", url);
-
-    let resp: serde_json::Value = awc::Client::new()
-        .post(url.to_string())
-        .send_json(&ids)
-        .await
-        .map_err(|e| anyhow!("posting to: {:?} error: {}", url, e.to_string()))?
-        .json()
-        .await
-        .map_err(|e| anyhow!("key export response decoding error: {}", e.to_string()))?;
-    log::info!("done. number of keys exported: {}", resp);
-
-    Ok(())
 }

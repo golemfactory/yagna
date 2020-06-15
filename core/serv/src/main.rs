@@ -1,6 +1,8 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use std::{
+    any::TypeId,
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
@@ -18,14 +20,17 @@ use ya_market_forwarding::MarketService;
 #[cfg(not(any(feature = "market-forwarding", feature = "market-decentralized")))]
 compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
 
+use ya_activity::service::Activity as ActivityService;
+use ya_identity::service::Identity as IdentityService;
+use ya_net::Net as NetService;
+use ya_payment::PaymentService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
-use ya_service_api_derive::services;
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
-    DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
+    rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 
 mod autocomplete;
@@ -39,7 +44,7 @@ use data_dir::DataDir;
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 struct CliArgs {
-    /// Daemon data dir
+    /// Service data dir
     #[structopt(
         short,
         long = "datadir",
@@ -49,16 +54,6 @@ struct CliArgs {
         hide_env_values = true,
     )]
     data_dir: DataDir,
-
-    /// Daemon address
-    #[structopt(
-        short,
-        long,
-        env = YAGNA_API_URL_ENV_VAR,
-        default_value = DEFAULT_YAGNA_API_URL,
-        hide_env_values = true,
-    )]
-    api_url: Url,
 
     /// Service Bus (aka GSB) URL
     #[structopt(
@@ -91,22 +86,9 @@ impl CliArgs {
         self.data_dir.get_or_create()
     }
 
-    pub fn get_http_address(&self) -> Result<(String, u16)> {
-        let host = self
-            .api_url
-            .host()
-            .ok_or_else(|| anyhow::anyhow!("invalid api url"))?
-            .to_owned();
-        let port = self
-            .api_url
-            .port_or_known_default()
-            .ok_or_else(|| anyhow::anyhow!("invalid api url, no port"))?;
-        Ok((host.to_string(), port))
-    }
-
     pub fn log_level(&self) -> String {
         match self.command {
-            CliCommand::Service(ServiceCommand::Run) => self.log_level.clone(),
+            CliCommand::Service(ServiceCommand::Run(..)) => self.log_level.clone(),
             _ => "error".to_string(),
         }
     }
@@ -128,7 +110,6 @@ impl TryFrom<&CliArgs> for CliCtx {
 
         Ok(CliCtx {
             data_dir,
-            http_address: args.get_http_address()?,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
             interactive: args.interactive,
@@ -136,35 +117,53 @@ impl TryFrom<&CliArgs> for CliCtx {
     }
 }
 
+#[derive(Clone)]
 struct ServiceContext {
-    db: DbExecutor,
-    data_dir: PathBuf,
+    dbs: HashMap<TypeId, DbExecutor>,
+    default_db: DbExecutor,
 }
 
-impl<Service> Provider<Service, DbExecutor> for ServiceContext {
+impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     fn component(&self) -> DbExecutor {
-        self.db.clone()
+        match self.dbs.get(&TypeId::of::<S>()) {
+            Some(db) => db.clone(),
+            None => self.default_db.clone(),
+        }
     }
 }
 
-impl<Service> Provider<Service, PathBuf> for ServiceContext {
-    fn component(&self) -> PathBuf {
-        self.data_dir.clone()
+impl ServiceContext {
+    fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
+        Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
+    }
+
+    fn from_data_dir(path: &PathBuf, name: &str) -> Result<Self> {
+        let default_db = DbExecutor::from_data_dir(path, name)?;
+        let dbs = [
+            Self::make_entry::<MarketService>(path, "market")?,
+            Self::make_entry::<ActivityService>(path, "activity")?,
+            Self::make_entry::<PaymentService>(path, "payment")?,
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        Ok(ServiceContext { default_db, dbs })
     }
 }
 
-#[services(ServiceContext)]
+#[ya_service_api_derive::services(ServiceContext)]
 enum Services {
     #[enable(gsb, cli(flatten))]
-    Identity(ya_identity::service::Identity),
+    Identity(IdentityService),
     #[enable(gsb)]
-    Net(ya_net::Net),
-    #[enable(gsb, rest)]
-    Activity(ya_activity::service::Activity),
+    Net(NetService),
     #[enable(gsb, rest)]
     Market(MarketService),
+    #[enable(gsb, rest)]
+    Activity(ActivityService),
     #[enable(gsb, rest, cli)]
-    Payment(ya_payment::PaymentService),
+    Payment(PaymentService),
 }
 
 #[derive(StructOpt, Debug)]
@@ -195,19 +194,32 @@ impl CliCommand {
 #[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
-    Run,
+    Run(ServiceCommandOpts),
     /// Spawns daemon
-    Start,
+    Start(ServiceCommandOpts),
     /// Stops daemon
     Stop,
     /// Checks if daemon is running
     Status,
 }
 
+#[derive(StructOpt, Debug)]
+struct ServiceCommandOpts {
+    /// Service address
+    #[structopt(
+        short,
+        long,
+        env = YAGNA_API_URL_ENV_VAR,
+        default_value = DEFAULT_YAGNA_API_URL,
+        hide_env_values = true,
+    )]
+    api_url: Url,
+}
+
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            Self::Run => {
+            Self::Run(ServiceCommandOpts { api_url }) => {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
@@ -215,27 +227,19 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
 
-                let db = DbExecutor::from_data_dir(&ctx.data_dir, name)?;
-                db.apply_migration(ya_persistence::migrations::run_with_output)?;
-                let context = ServiceContext {
-                    db: db.clone(),
-                    data_dir: ctx.data_dir.clone(),
-                };
-
+                let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
                 Services::gsb(&context).await?;
 
+                let api_host_port = rest_api_host_port(api_url.clone());
                 HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
-                    Services::rest(app, &db)
+                    Services::rest(app, &context)
                 })
-                .bind(ctx.http_address())
-                .context(format!(
-                    "Failed to bind http server on {:?}",
-                    ctx.http_address
-                ))?
+                .bind(api_host_port.clone())
+                .context(format!("Failed to bind http server on {:?}", api_host_port))?
                 .run()
                 .await?;
 
