@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - az/commit-sha-in-deb-version
       # - <your-branch>    # put your branch name here to test it @ GH Actions
 
 jobs:
@@ -18,15 +19,16 @@ jobs:
 
       - name: Compute deb package version
         id: vars
+        env:
+          YAGNA_VERSION: $(cargo pkgid yagna | cut -d'#' -f2)
+          ROUTER_VERSION: $(cargo pkgid ya-sb-router | cut -d':' -f3)
+          COMMIT_SHA: $(echo ${{ github.sha }} | cut -c1-8)
         run: |
-          VERSION=$(cargo pkgid yagna | cut -d'#' -f2)
-          ROUTER_VERSION=$(cargo pkgid ya-sb-router | cut -d':' -f3)
-          SHA=$(echo ${{ github.sha }} | cut -c1-8)
-          echo "::set-output name=deb_version::$VERSION-$SHA"
-          echo "::set-output name=router_deb_version::$ROUTER_VERSION-$SHA"
+          echo "::set-output name=yagna_deb_version::$YAGNA_VERSION-$COMMIT_SHA"
+          echo "::set-output name=router_deb_version::$ROUTER_VERSION-$COMMIT_SHA"
 
       - name: Build the Docker image
-        run: docker build . -f build-deb.Dockerfile -t build-deb --build-arg DEB_VERSION=${{ steps.vars.outputs.deb_version }}
+        run: docker build . -f build-deb.Dockerfile -t build-deb --build-arg DEB_VERSION=${{ steps.vars.outputs.yagna_deb_version }}
 
       - name: Copy yagna.deb file
         run: docker run build-deb bash -c "cat /src/target/debian/yagna*.deb" > yagna.deb
