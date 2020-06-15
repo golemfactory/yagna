@@ -6,8 +6,7 @@ use std::time::Duration;
 
 use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
 use ya_agreement_utils::{
-    constraints,
-    ClauseOperator::{And, Or},
+    ClauseOperator::{And},
     ConstraintKey, ConstraintValue, Constraints,
 };
 use ya_client::cli::ProviderApi;
@@ -125,13 +124,13 @@ impl ProviderAgent {
         // nodes that didn't set the same name in properties.
         let expiration_constraint = ConstraintKey::new("golem.srv.comp.expiration").greater_than(ConstraintValue::new(0));
         match self.node_info.subnet.clone() {
-            Some(subnet) => Ok(new Constraints::new_caluse(
+            Some(subnet) => Ok(Constraints::new_clause(
                 And,
                 vec![
-                    ConstraintKey::new("golem.node.debug.subnet").equal_to(subnet),
+                    ConstraintKey::new("golem.node.debug.subnet").equal_to(ConstraintValue::new(subnet)),
                     expiration_constraint,
                 ],
-            ),
+            ).to_string()),
             None => Ok(Constraints::new_single(expiration_constraint).to_string()),
         }
     }
