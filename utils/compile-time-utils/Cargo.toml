@@ -1,0 +1,9 @@
+[package]
+name = "ya-compile-time-utils"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+description = "Compile-time utilities"
+
+[dependencies]
+lazy_static = "1.4"

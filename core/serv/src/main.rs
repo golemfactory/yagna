@@ -21,6 +21,7 @@ use ya_market_forwarding::MarketService;
 compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
 
 use ya_activity::service::Activity as ActivityService;
+use ya_compile_time_utils::define_version_string;
 use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::PaymentService;
@@ -40,10 +41,13 @@ use autocomplete::CompleteCommand;
 mod data_dir;
 use data_dir::DataDir;
 
+define_version_string!();
+
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(version = &VERSION[..])]
 struct CliArgs {
     /// Service data dir
     #[structopt(
