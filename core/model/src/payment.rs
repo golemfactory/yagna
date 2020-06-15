@@ -18,6 +18,7 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
+    use crate::driver::{AccountMode, PaymentConfirmation};
     use bigdecimal::BigDecimal;
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
@@ -132,37 +133,67 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct Init {
-        pub identity: NodeId,
-        pub provider: bool,
-        pub requestor: bool,
+    pub struct RegisterAccount {
+        pub platform: String,
+        pub address: String,
+        pub driver: String,
+        pub mode: AccountMode,
     }
 
-    impl RpcMessage for Init {
-        const ID: &'static str = "init";
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum RegisterAccountError {
+        #[error("Account already registered")]
+        AlreadyRegistered,
+        #[error("Error while registering account: {0}")]
+        Other(String),
+    }
+
+    impl RpcMessage for RegisterAccount {
+        const ID: &'static str = "RegisterAccount";
+        type Item = ();
+        type Error = RegisterAccountError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct UnregisterAccount {
+        pub platform: String,
+        pub address: String,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterAccountError {
+        #[error("Account not registered")]
+        NotRegistered,
+        #[error("Error while unregistering account: {0}")]
+        Other(String),
+    }
+
+    impl RpcMessage for UnregisterAccount {
+        const ID: &'static str = "UnregisterAccount";
+        type Item = ();
+        type Error = UnregisterAccountError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct NotifyPayment {
+        pub driver: String,
+        pub amount: BigDecimal,
+        pub sender: String,
+        pub recipient: String,
+        pub order_ids: Vec<String>,
+        pub confirmation: PaymentConfirmation,
+    }
+
+    impl RpcMessage for NotifyPayment {
+        const ID: &'static str = "NotifyPayment";
         type Item = ();
         type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct GetStatus(NodeId);
-
-    impl From<NodeId> for GetStatus {
-        fn from(id: NodeId) -> Self {
-            GetStatus(id)
-        }
-    }
-
-    impl AsRef<NodeId> for GetStatus {
-        fn as_ref(&self) -> &NodeId {
-            &self.0
-        }
-    }
-
-    impl GetStatus {
-        pub fn identity(&self) -> NodeId {
-            self.0
-        }
+    pub struct GetStatus {
+        pub platform: String,
+        pub address: String,
     }
 
     impl RpcMessage for GetStatus {

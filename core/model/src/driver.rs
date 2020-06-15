@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &'static str = "/public/driver";
+pub const BUS_ID_PREFIX: &'static str = "/local/driver/";
 
 // ************************** ERROR **************************
 
@@ -39,57 +39,7 @@ bitflags! {
     }
 }
 
-// ************************** CURRENCY **************************
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Currency {
-    Eth,
-    Gnt,
-}
-
-// ************************** BALANCE **************************
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Balance {
-    pub amount: BigDecimal,
-    pub currency: Currency,
-}
-
-impl Balance {
-    pub fn new(amount: BigDecimal, currency: Currency) -> Balance {
-        Balance { amount, currency }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AccountBalance {
-    pub base_currency: Balance,
-    pub gas: Option<Balance>,
-}
-
-impl AccountBalance {
-    pub fn new(base_currency: Balance, gas: Option<Balance>) -> AccountBalance {
-        AccountBalance { base_currency, gas }
-    }
-}
-
 // ************************** PAYMENT **************************
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PaymentStatus {
-    Ok(PaymentConfirmation),
-    NotYet,
-    NotEnoughFunds,
-    NotEnoughGas,
-    Unknown,
-    Failed,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PaymentAmount {
-    pub base_currency_amount: BigDecimal,
-    pub gas_amount: Option<BigDecimal>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PaymentDetails {
@@ -131,30 +81,7 @@ impl GetAccountBalance {
 
 impl RpcMessage for GetAccountBalance {
     const ID: &'static str = "GetAccountBalance";
-    type Item = AccountBalance;
-    type Error = GenericError;
-}
-
-// ************************** GET PAYMENT STATUS **************************
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetPaymentStatus(String);
-
-impl From<String> for GetPaymentStatus {
-    fn from(invoice_id: String) -> Self {
-        GetPaymentStatus(invoice_id)
-    }
-}
-
-impl GetPaymentStatus {
-    pub fn invoice_id(&self) -> String {
-        self.0.clone()
-    }
-}
-
-impl RpcMessage for GetPaymentStatus {
-    const ID: &'static str = "GetPaymentStatus";
-    type Item = PaymentStatus;
+    type Item = BigDecimal;
     type Error = GenericError;
 }
 
@@ -211,8 +138,7 @@ impl RpcMessage for Init {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SchedulePayment {
-    invoice_id: String,
-    amount: PaymentAmount,
+    amount: BigDecimal,
     sender: String,
     recipient: String,
     due_date: DateTime<Utc>,
@@ -220,25 +146,20 @@ pub struct SchedulePayment {
 
 impl SchedulePayment {
     pub fn new(
-        invoice_id: String,
-        amount: PaymentAmount,
+        amount: BigDecimal,
         sender: String,
         recipient: String,
         due_date: DateTime<Utc>,
     ) -> SchedulePayment {
         SchedulePayment {
-            invoice_id,
             amount,
             sender,
             recipient,
             due_date,
         }
     }
-    pub fn invoice_id(&self) -> String {
-        self.invoice_id.clone()
-    }
 
-    pub fn amount(&self) -> PaymentAmount {
+    pub fn amount(&self) -> BigDecimal {
         self.amount.clone()
     }
 
@@ -257,7 +178,7 @@ impl SchedulePayment {
 
 impl RpcMessage for SchedulePayment {
     const ID: &'static str = "SchedulePayment";
-    type Item = Ack;
+    type Item = String; // payment order ID
     type Error = GenericError;
 }
 
@@ -265,8 +186,8 @@ impl RpcMessage for SchedulePayment {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetTransactionBalance {
-    sender: String,
-    recipient: String,
+    pub sender: String,
+    pub recipient: String,
 }
 
 impl GetTransactionBalance {
@@ -284,6 +205,6 @@ impl GetTransactionBalance {
 
 impl RpcMessage for GetTransactionBalance {
     const ID: &'static str = "GetTransactionBalance";
-    type Item = Balance;
+    type Item = BigDecimal;
     type Error = GenericError;
 }
