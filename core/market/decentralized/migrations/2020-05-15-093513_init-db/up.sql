@@ -28,3 +28,82 @@ CREATE TABLE market_demand (
 	insertion_ts DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	expiration_ts DATETIME NOT NULL
 );
+
+CREATE TABLE market_event_type(
+    id INTEGER NOT NULL PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    role VARCHAR(10) NOT NULL CHECK (role in ('Requestor', 'Provider'))
+);
+
+INSERT INTO market_event_type(id, event_type, role) VALUES
+    (1001, "Proposal", "Provider"),
+    (1002, "Agreement", "Provider"),
+    (1003, "PropertyQuery", "Provider"),
+    (2001, "Proposal", "Requestor"),
+    (2002, "PropertyQuery", "Requestor");
+
+CREATE TABLE market_requestor_event(
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    event_type INTEGER NOT NULL,
+    artifact_id VARCHAR(100) NOT NULL,
+
+    FOREIGN KEY(event_type) REFERENCES market_event_type (id),
+    CHECK (event_type>=2000)
+);
+
+CREATE TABLE market_provider_event(
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    subscription_id INTEGER NOT NULL,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    event_type INTEGER NOT NULL,
+    artifact_id VARCHAR(100) NOT NULL,
+
+    FOREIGN KEY(event_type) REFERENCES market_event_type (id),
+    CHECK (event_type<2000)
+);
+
+CREATE TABLE market_proposal_state(
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    state VARCHAR(10) NOT NULL UNIQUE
+);
+
+INSERT INTO market_proposal_state(id, state) VALUES
+    (0, "Initial"),
+    (1, "Draft"),
+    (2, "Rejected"),
+    (3, "Accepted"),
+    (4, "Expired");
+
+CREATE TABLE market_negotiation(
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    subscription_id VARCHAR(97) NOT NULL,
+
+    offer_id VARCHAR(97) NOT NULL,
+    demand_id VARCHAR(97) NOT NULL,
+
+    identity_id VARCHAR(20) NOT NULL,
+    requestor_id VARCHAR(20) NOT NULL,
+    provider_id VARCHAR(20) NOT NULL,
+
+    agreement_id VARCHAR(100)
+);
+
+CREATE TABLE market_proposal(
+    proposal_id VARCHAR(100) NOT NULL PRIMARY KEY,
+    prev_proposal_id VARCHAR(100) NOT NULL,
+    negotiation_id INTEGER NOT NULL,
+
+    properties TEXT NOT NULL,
+    constraints TEXT NOT NULL,
+
+    state INTEGER NOT NULL,
+	creation_ts DATETIME NOT NULL,
+	expiration_ts DATETIME NOT NULL,
+
+	FOREIGN KEY(state) REFERENCES market_proposal_state (id),
+	FOREIGN KEY(negotiation_id) REFERENCES market_negotiation (id)
+);
+
+
