@@ -5,3 +5,6 @@ pub enum NegotiationError {}
 
 #[derive(Error, Debug)]
 pub enum NegotiationInitError {}
+
+#[derive(Error, Debug)]
+pub enum QueryEventsError {}

@@ -98,7 +98,6 @@ table! {
     }
 }
 
-
 allow_tables_to_appear_in_same_query!(market_demand, market_offer, market_offer_unsubscribed);
 
 joinable!(market_offer -> market_offer_unsubscribed (id));

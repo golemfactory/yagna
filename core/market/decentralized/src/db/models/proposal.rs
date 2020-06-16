@@ -67,4 +67,3 @@ pub struct Proposal {
     pub creation_ts: NaiveDateTime,
     pub expiration_ts: NaiveDateTime,
 }
-

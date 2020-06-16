@@ -71,7 +71,18 @@ async fn collect(
     query: Query<QueryTimeoutMaxEvents>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    let subscription_id = path.into_inner().subscription_id;
+    let timeout = query.timeout;
+    let max_events = query.max_events;
+    match market
+        .requestor_engine
+        .query_events(&subscription_id, timeout, max_events)
+        .await
+    {
+        Ok(events) => response::ok(events),
+        // TODO: Translate QueryEventsError to better HTTP response.
+        Err(error) => response::server_error(&format!("{}", error)),
+    }
 }
 
 #[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}")]

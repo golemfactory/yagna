@@ -44,8 +44,8 @@ pub enum MarketInitError {
 /// Structure connecting all market objects.
 pub struct MarketService {
     pub matcher: Arc<Matcher>,
-    pub provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
-    pub requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
+    pub provider_engine: Arc<ProviderNegotiationEngine>,
+    pub requestor_engine: Arc<RequestorNegotiationEngine>,
 }
 
 impl MarketService {
@@ -59,8 +59,8 @@ impl MarketService {
 
         Ok(MarketService {
             matcher: Arc::new(matcher),
-            provider_negotiation_engine: provider_engine,
-            requestor_negotiation_engine: requestor_engine,
+            provider_engine,
+            requestor_engine,
         })
     }
 
@@ -70,10 +70,10 @@ impl MarketService {
         private_prefix: &str,
     ) -> Result<(), MarketInitError> {
         self.matcher.bind_gsb(public_prefix, private_prefix).await?;
-        self.provider_negotiation_engine
+        self.provider_engine
             .bind_gsb(public_prefix, private_prefix)
             .await?;
-        self.requestor_negotiation_engine
+        self.requestor_engine
             .bind_gsb(public_prefix, private_prefix)
             .await?;
         Ok(())
@@ -108,9 +108,7 @@ impl MarketService {
         let subscription_id = offer.id.to_string();
 
         self.matcher.subscribe_offer(&offer).await?;
-        self.provider_negotiation_engine
-            .subscribe_offer(&offer)
-            .await?;
+        self.provider_engine.subscribe_offer(&offer).await?;
         Ok(subscription_id)
     }
 
@@ -120,7 +118,7 @@ impl MarketService {
         id: Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-        self.provider_negotiation_engine
+        self.provider_engine
             .unsubscribe_offer(&subscription_id)
             .await?;
         Ok(self.matcher.unsubscribe_offer(&subscription_id).await?)
@@ -135,9 +133,7 @@ impl MarketService {
         let subscription_id = demand.id.to_string();
 
         self.matcher.subscribe_demand(&demand).await?;
-        self.requestor_negotiation_engine
-            .subscribe_demand(&demand)
-            .await?;
+        self.requestor_engine.subscribe_demand(&demand).await?;
         Ok(subscription_id)
     }
 
@@ -148,7 +144,7 @@ impl MarketService {
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
 
-        self.requestor_negotiation_engine
+        self.requestor_engine
             .unsubscribe_demand(&subscription_id)
             .await?;
         Ok(self.matcher.unsubscribe_demand(&subscription_id).await?)

@@ -2,7 +2,6 @@ use chrono::NaiveDateTime;
 
 use super::SubscriptionId;
 
-
 pub enum EventType {
     Provider(ProviderEventType),
     Requestor(RequestorEventType),
@@ -29,5 +28,3 @@ pub struct MarketEvent {
     /// that will represent PropertyQuery.
     pub artifact_id: String,
 }
-
-

@@ -2,10 +2,11 @@ use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::db::models::Demand as ModelDemand;
+use ya_client::model::market::event::ProviderEvent;
 use ya_client::model::market::Proposal;
 use ya_persistence::executor::DbExecutor;
 
-use super::errors::{NegotiationError, NegotiationInitError};
+use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 
 /// Requestor part of negotiation logic.
 /// TODO: Too long name.
@@ -45,5 +46,14 @@ impl RequestorNegotiationEngine {
     ) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
+    }
+
+    pub async fn query_events(
+        &self,
+        subscription_id: &String,
+        timeout: f32,
+        max_events: i32,
+    ) -> Result<Vec<ProviderEvent>, QueryEventsError> {
+        Ok(vec![])
     }
 }

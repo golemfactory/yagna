@@ -26,7 +26,7 @@ pub struct PathSubscriptionProposal {
 #[derive(Deserialize)]
 pub struct QueryTimeout {
     #[serde(rename = "timeout", default = "default_query_timeout")]
-    pub timeout: Option<f32>,
+    pub timeout: f32,
 }
 
 #[derive(Deserialize)]
@@ -41,18 +41,18 @@ pub struct QueryTimeoutCommandIndex {
 pub struct QueryTimeoutMaxEvents {
     /// number of milliseconds to wait
     #[serde(rename = "timeout", default = "default_event_timeout")]
-    pub timeout: Option<f32>,
+    pub timeout: f32,
     /// maximum count of events to return
     #[serde(rename = "maxEvents", default)]
-    pub max_events: Option<i32>,
+    pub max_events: i32,
 }
 
 #[inline(always)]
-pub(crate) fn default_query_timeout() -> Option<f32> {
-    Some(DEFAULT_QUERY_TIMEOUT)
+pub(crate) fn default_query_timeout() -> f32 {
+    DEFAULT_QUERY_TIMEOUT
 }
 
 #[inline(always)]
-pub(crate) fn default_event_timeout() -> Option<f32> {
-    Some(DEFAULT_EVENT_TIMEOUT)
+pub(crate) fn default_event_timeout() -> f32 {
+    DEFAULT_EVENT_TIMEOUT
 }
