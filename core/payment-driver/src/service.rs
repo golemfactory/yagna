@@ -1,12 +1,13 @@
 use crate::processor::PaymentDriverProcessor;
 use ya_core_model::driver::*;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::typed::ServiceBinder;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
     log::debug!("Binding payment driver service to service bus");
 
-    ServiceBinder::new(BUS_ID, db, processor)
+    bus::ServiceBinder::new(BUS_ID, db, processor)
+        .bind_with_processor(account_event)
         .bind_with_processor(init)
         .bind_with_processor(get_account_balance)
         .bind_with_processor(get_payment_status)
@@ -15,6 +16,17 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
         .bind_with_processor(verify_payment);
 
     log::debug!("Successfully bound payment driver service to service bus");
+}
+
+pub async fn subscribe_to_identity_events() {
+    if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
+        .send(ya_core_model::identity::Subscribe {
+            endpoint: BUS_ID.into(),
+        })
+        .await
+    {
+        log::error!("init app-key listener error: {}", e)
+    }
 }
 
 async fn init(
@@ -129,4 +141,14 @@ async fn verify_payment(
         |e| Err(GenericError::new(e)),
         |payment_details| Ok(payment_details),
     )
+}
+
+async fn account_event(
+    _db: DbExecutor,
+    processor: PaymentDriverProcessor,
+    _caller: String,
+    msg: ya_core_model::identity::event::Event,
+) -> Result<(), ya_core_model::identity::Error> {
+    log::info!("account event: {:?}", msg);
+    Ok(())
 }

@@ -98,6 +98,7 @@ impl PaymentDriverService {
         let driver = payment_driver_factory(&db).await?;
         let processor = PaymentDriverProcessor::new(driver, db.clone());
         self::service::bind_service(&db, processor);
+        self::service::subscribe_to_identity_events().await;
         Ok(())
     }
 }
