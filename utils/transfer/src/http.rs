@@ -10,6 +10,36 @@ use futures::{SinkExt, StreamExt, TryStreamExt};
 use std::thread;
 use url::Url;
 
+enum HttpAuth<'s> {
+    None,
+    Basic {
+        username: &'s str,
+        password: Option<&'s str>,
+    },
+}
+
+impl<'s> From<&'s Url> for HttpAuth<'s> {
+    fn from(url: &'s Url) -> Self {
+        if url.username().is_empty() {
+            HttpAuth::None
+        } else {
+            HttpAuth::Basic {
+                username: url.username(),
+                password: url.password(),
+            }
+        }
+    }
+}
+
+fn request(method: Method, url: Url) -> awc::ClientRequest {
+    let builder = awc::ClientBuilder::new();
+    let client = match HttpAuth::from(&url) {
+        HttpAuth::None => builder.finish(),
+        HttpAuth::Basic { username, password } => builder.basic_auth(username, password).finish(),
+    };
+    client.request(method, url.to_string())
+}
+
 pub struct HttpTransferProvider {
     upload_method: Method,
 }
@@ -28,15 +58,13 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
     }
 
     fn source(&self, url: &Url) -> TransferStream<TransferData, Error> {
-        let url = url.to_string();
-
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
+        let url = url.clone();
 
         thread::spawn(move || {
             let fut = async move {
-                awc::Client::new()
-                    .get(url)
+                request(Method::GET, url)
                     .send()
                     .await?
                     .into_stream()
@@ -57,15 +85,13 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
 
     fn destination(&self, url: &Url) -> TransferSink<TransferData, Error> {
         let method = self.upload_method.clone();
-        let url = url.to_string();
+        let url = url.clone();
 
         let (sink, rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
         thread::spawn(move || {
             let fut = async move {
-                match awc::Client::new()
-                    .request(method, url)
-                    .send_stream(rx.map(|d| d.map(TransferData::into_bytes)))
+                match request(method, url).send_stream(rx.map(|d| d.map(TransferData::into_bytes)))
                 {
                     SendClientRequest::Fut(fut, _, _) => {
                         fut.await.map_err(Error::from)?;
