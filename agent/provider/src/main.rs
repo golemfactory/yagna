@@ -11,8 +11,9 @@ mod startup_config;
 mod task_manager;
 mod task_state;
 
+use crate::hardware::Profiles;
 use provider_agent::ProviderAgent;
-use startup_config::{Commands, ExeUnitsConfig, PresetsConfig, StartupConfig};
+use startup_config::{Commands, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig};
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
     let cli_args = StartupConfig::from_args();
     let mut config = cli_args.config;
     config.presets_file = config.data_dir.get_or_create()?.join(config.presets_file);
+    config.hardware_file = config.data_dir.get_or_create()?.join(config.hardware_file);
 
     match cli_args.commands {
         Commands::Run(args) => {
@@ -61,6 +63,39 @@ async fn main() -> anyhow::Result<()> {
             }
             PresetsConfig::ListMetrics => ProviderAgent::list_metrics(config),
         },
+        Commands::Profile(profile_cmd) => {
+            let path = config.hardware_file;
+            match profile_cmd {
+                ProfileConfig::List => {
+                    for profile in Profiles::load(&path)?.list() {
+                        println!("{}", profile);
+                    }
+                }
+                ProfileConfig::Show { name } => match Profiles::load(&path)?.get(&name) {
+                    Some(res) => println!("{}", serde_json::to_string_pretty(res)?),
+                    None => return Err(hardware::ProfileError::Unknown(name).into()),
+                },
+                ProfileConfig::Create { name, resources } => {
+                    let mut profiles = Profiles::load_or_create(&path)?;
+                    if let Some(_) = profiles.get(&name) {
+                        return Err(hardware::ProfileError::AlreadyExists(name).into());
+                    }
+                    profiles.add(name, resources)?;
+                    profiles.save(path)?;
+                }
+                ProfileConfig::Remove { name } => {
+                    let mut profiles = Profiles::load(&path)?;
+                    profiles.remove(name)?;
+                    profiles.save(path)?;
+                }
+                ProfileConfig::Activate { name } => {
+                    let mut profiles = Profiles::load(&path)?;
+                    profiles.set_active(name)?;
+                    profiles.save(path)?;
+                }
+            }
+            Ok(())
+        }
         Commands::ExeUnit(exeunit_cmd) => match exeunit_cmd {
             ExeUnitsConfig::List => ProviderAgent::list_exeunits(config),
         },

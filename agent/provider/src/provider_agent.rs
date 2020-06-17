@@ -30,7 +30,6 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let data_dir = config.data_dir.get_or_create()?;
         let api = ProviderApi::try_from(&args.api)?;
 
         // FIXME: proper workspace configuration
@@ -49,7 +48,7 @@ impl ProviderAgent {
             TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
 
         let node_info = ProviderAgent::create_node_info(&args.node).await;
-        let hardware = hardware::Manager::try_new(data_dir)?;
+        let hardware = hardware::Manager::try_new(&config.hardware_file)?;
 
         let mut provider = ProviderAgent {
             market,

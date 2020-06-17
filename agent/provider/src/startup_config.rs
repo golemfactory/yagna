@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use structopt::{clap, StructOpt};
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
+use crate::hardware::Resources;
 use futures::channel::oneshot;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -33,6 +34,8 @@ pub struct ProviderConfig {
     // FIXME: workspace configuration
     #[structopt(skip = "presets.json")]
     pub presets_file: PathBuf,
+    #[structopt(skip = "hardware.json")]
+    pub hardware_file: PathBuf,
 }
 
 impl ProviderConfig {
@@ -103,6 +106,25 @@ pub enum PresetsConfig {
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
+pub enum ProfileConfig {
+    /// List available profiles
+    List,
+    /// Show profile details
+    Show { name: String },
+    /// Create a new profile
+    Create {
+        name: String,
+        #[structopt(flatten)]
+        resources: Resources,
+    },
+    /// Remove an existing profile
+    Remove { name: String },
+    /// Activate a profile
+    Activate { name: String },
+}
+
+#[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 pub enum ExeUnitsConfig {
     List,
     // TODO: Install command - could download ExeUnit and add to descriptor file.
@@ -123,8 +145,13 @@ pub struct StartupConfig {
 
 #[derive(StructOpt)]
 pub enum Commands {
+    /// Run provider agent
     Run(RunConfig),
+    /// Manage offer presets
     Preset(PresetsConfig),
+    /// Manage hardware profiles
+    Profile(ProfileConfig),
+    /// Manage ExeUnits
     ExeUnit(ExeUnitsConfig),
 }
 

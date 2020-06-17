@@ -10,6 +10,7 @@ use std::ops::{Add, Not, Sub};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use structopt::StructOpt;
 use tokio::sync::broadcast;
 use ya_agreement_utils::{CpuInfo, InfNodeInfo};
 use ya_utils_path::SwapSave;
@@ -24,6 +25,16 @@ pub static MIN_CAPS: Resources = Resources {
 };
 
 #[derive(Debug, thiserror::Error)]
+pub enum ProfileError {
+    #[error("unknown name: '{0}'")]
+    Unknown(String),
+    #[error("profile already exists: '{0}'")]
+    AlreadyExists(String),
+    #[error("profile is active: '{0}'")]
+    Active(String),
+}
+
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("insufficient hardware resources available")]
     InsufficientResources,
@@ -31,8 +42,8 @@ pub enum Error {
     AlreadyAllocated(String),
     #[error("resources not allocated for id {0}")]
     NotAllocated(String),
-    #[error("unknown profile {0}")]
-    UnknownProfile(String),
+    #[error("profile error: {0}")]
+    Profile(#[from] ProfileError),
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
     #[error("file watch error: {0}")]
@@ -56,13 +67,17 @@ impl fmt::Display for Event {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, StructOpt)]
+#[structopt(rename_all = "kebab-case")]
 pub struct Resources {
     /// Number of CPU logical cores
+    #[structopt(long)]
     pub cpu_threads: i32,
     /// Total amount of RAM
+    #[structopt(long)]
     pub mem_gib: f64,
     /// Free partition space
+    #[structopt(long)]
     pub storage_gib: f64,
 }
 
@@ -180,11 +195,24 @@ impl Profiles {
         Ok(Profiles { active, profiles })
     }
 
+    pub fn load_or_create<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let path = path.as_ref();
+        match path.exists() {
+            true => Self::load(path),
+            false => {
+                let current_dir = std::env::current_dir()?;
+                let profiles = Self::try_default(&current_dir)?;
+                profiles.save(path)?;
+                Ok(profiles)
+            }
+        }
+    }
+
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let contents = std::fs::read_to_string(&path)?;
         let new: Profiles = serde_json::from_str(contents.as_str())?;
         if new.profiles.contains_key(&new.active).not() {
-            return Err(Error::UnknownProfile(new.active));
+            return Err(ProfileError::Unknown(new.active).into());
         }
 
         Ok(serde_json::from_str(contents.as_str())?)
@@ -201,6 +229,32 @@ impl Profiles {
     }
 
     #[inline]
+    pub fn get(&self, name: impl ToString) -> Option<&Resources> {
+        self.profiles.get(&name.to_string())
+    }
+
+    #[inline]
+    pub fn add(&mut self, name: impl ToString, resources: Resources) -> Result<(), Error> {
+        if resources < Resources::empty() {
+            return Err(Error::InsufficientResources);
+        }
+        self.profiles.insert(name.to_string(), resources);
+        Ok(())
+    }
+
+    #[inline]
+    pub fn remove(&mut self, name: impl ToString) -> Result<(), Error> {
+        let name = name.to_string();
+        if name == self.active {
+            return Err(ProfileError::Active(name).into());
+        }
+        if let None = self.profiles.remove(&name) {
+            return Err(ProfileError::Unknown(name).into());
+        }
+        Ok(())
+    }
+
+    #[inline]
     pub fn get_active(&self) -> &Resources {
         self.profiles.get(&self.active).unwrap()
     }
@@ -208,7 +262,7 @@ impl Profiles {
     pub fn set_active(&mut self, name: impl ToString) -> Result<&Resources, Error> {
         let name = name.to_string();
         if self.profiles.contains_key(&name).not() {
-            return Err(Error::UnknownProfile(name));
+            return Err(ProfileError::Unknown(name).into());
         }
         self.active = name;
         Ok(self.get_active())
@@ -227,24 +281,15 @@ pub struct Manager {
 }
 
 impl Manager {
-    pub fn try_new<P: AsRef<Path>>(data_dir: P) -> Result<Self, Error> {
+    pub fn try_new<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let current_dir = std::env::current_dir()?;
-        let path = data_dir.as_ref().join("hardware.json");
-
-        let profiles = match path.exists() {
-            true => Profiles::load(&path)?,
-            false => {
-                let profiles = Profiles::try_default(&current_dir)?;
-                profiles.save(&path)?;
-                profiles
-            }
-        };
+        let profiles = Profiles::load_or_create(&path)?;
         let active_profile = profiles.active.clone();
 
         let (tx, mut rx) = broadcast::channel(16);
         Arbiter::spawn(async move {
+            let delay = Duration::from_secs_f32(0.5);
             loop {
-                let delay = Duration::from_secs_f32(0.5);
                 if let Ok(evt) = rx.try_recv() {
                     log::info!("{}", evt);
                 } else {
@@ -284,7 +329,8 @@ impl Manager {
             // e.g. file re-created
             | DebouncedEvent::Create(p)
             // e.g. file permissions fixed
-            | DebouncedEvent::Chmod(p) => {
+            | DebouncedEvent::Chmod(p)
+            | DebouncedEvent::Rename(_, p)=> {
                 let mut profs = profiles.lock().unwrap();
                 *profs = match Profiles::load(&p) {
                     Ok(p) => p,
