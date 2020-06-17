@@ -163,7 +163,6 @@ mod tests {
             .await?;
 
         // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
-        log::info!("Fake Offer broadcast");
         let market3: Discovery = network.get_discovery("Node-3");
         market3.broadcast_offer(model_offer).await?;
 
@@ -171,8 +170,11 @@ mod tests {
         // TODO: How to wait without assuming any number of seconds?
         tokio::time::delay_for(Duration::from_millis(30)).await;
 
-        // We expect to receive Offer only from ourselves.
-        assert_eq!(offers_counter.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            offers_counter.load(Ordering::SeqCst),
+            1,
+            "We expect to receive Offer only from ourselves"
+        );
         Ok(())
     }
 }

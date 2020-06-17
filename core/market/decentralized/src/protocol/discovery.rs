@@ -24,9 +24,9 @@ use std::future::Future;
 pub enum DiscoveryError {
     #[error(transparent)]
     RemoteError(#[from] DiscoveryRemoteError),
-    #[error("Failed to broadcast caused by gsb error: {}.", .0)]
+    #[error("Failed to broadcast caused by gsb error: {0}.")]
     GsbError(String),
-    #[error("Internal error: {}.", .0)]
+    #[error("Internal error: {0}.")]
     InternalError(String),
 }
 
@@ -37,10 +37,10 @@ pub enum DiscoveryRemoteError {}
 pub enum DiscoveryInitError {
     #[error("Uninitialized callback '{0}'.")]
     UninitializedCallback(String),
-    #[error("Failed to bind to gsb. Error: {}.", .0)]
-    BindingGsbFailed(String),
-    #[error("Failed to subscribe to broadcast. Error: {0}.")]
-    BroadcastSubscribeFailed(String),
+    #[error("Failed to bind broadcast `{0}` to gsb. Error: {1}.")]
+    BindingGsbFailed(String, String),
+    #[error("Failed to subscribe to broadcast `{0}`. Error: {1}.")]
+    BroadcastSubscribeFailed(String, String),
 }
 
 // =========================================== //
@@ -112,26 +112,30 @@ impl Discovery {
         private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
+        // /private/market/market-protocol-mk1-offer
+        let broadcast_address = format!("{}/{}", private_prefix, OfferReceived::TOPIC);
         net::local::bind_broadcast_with_caller(
-            // /private/market/market-protocol-mk1-offer
-            &format!("{}/{}", private_prefix, OfferReceived::TOPIC),
+            &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferReceived>| {
                 let myself = myself.clone();
                 myself.on_offer_received(caller, msg.body().to_owned())
             },
         )
-        .await?;
+        .await
+        .map_err(|e| DiscoveryInitError::from_pair(broadcast_address, e))?;
 
         let myself = self.clone();
+        // /private/market/market-protocol-mk1-offer-unsubscribe
+        let broadcast_address = format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC);
         net::local::bind_broadcast_with_caller(
-            // /private/market/market-protocol-mk1-offer-unsubscribe
-            &format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC),
+            &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
                 let myself = myself.clone();
                 myself.on_offer_unsubscribed(caller, msg.body().to_owned())
             },
         )
-        .await?;
+        .await
+        .map_err(|e| DiscoveryInitError::from_pair(broadcast_address, e))?;
 
         Ok(())
     }
@@ -278,22 +282,22 @@ impl CallbackMessage for RetrieveOffers {
 // Errors From impls
 // =========================================== //
 
-impl From<net::local::BindBroadcastError> for DiscoveryInitError {
-    fn from(err: net::local::BindBroadcastError) -> Self {
-        match err {
-            BindBroadcastError::GsbError(error) => {
-                DiscoveryInitError::BindingGsbFailed(format!("{}", error))
+impl DiscoveryInitError {
+    fn from_pair(addr: String, e: net::local::BindBroadcastError) -> Self {
+        match e {
+            BindBroadcastError::GsbError(e) => {
+                DiscoveryInitError::BindingGsbFailed(addr, e.to_string())
             }
-            BindBroadcastError::SubscribeError(error) => {
-                DiscoveryInitError::BroadcastSubscribeFailed(format!("{}", error))
+            BindBroadcastError::SubscribeError(e) => {
+                DiscoveryInitError::BroadcastSubscribeFailed(addr, e.to_string())
             }
         }
     }
 }
 
 impl From<ya_service_bus::error::Error> for DiscoveryError {
-    fn from(err: ya_service_bus::error::Error) -> Self {
-        DiscoveryError::GsbError(format!("{}", err))
+    fn from(e: ya_service_bus::error::Error) -> Self {
+        DiscoveryError::GsbError(e.to_string())
     }
 }
 

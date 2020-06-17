@@ -129,18 +129,13 @@ impl MarketsNetwork {
     }
 
     pub fn get_default_id(&self, name: &str) -> Identity {
-        // TODO: Could we do this without nesting??
         self.markets
             .iter()
-            .find(|node| node.name == name)
-            .map(|node| node.identity.clone())
-            .unwrap_or_else(|| {
-                self.discoveries
-                    .iter()
-                    .find(|node| node.name == name)
-                    .map(|node| node.identity.clone())
-                    .unwrap()
-            })
+            .map(|n| (&n.name, &n.identity))
+            .chain(self.discoveries.iter().map(|n| (&n.name, &n.identity)))
+            .find(|node| node.0 == name)
+            .map(|node| node.1.clone())
+            .unwrap()
     }
 
     pub fn get_database(&self, name: &str) -> DbExecutor {
