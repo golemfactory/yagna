@@ -5,6 +5,7 @@ use ya_client::model::market::{Demand, Offer};
 pub fn example_offer() -> Offer {
     let properties = serde_json::json!({
         "golem": {
+            "golem.node.debug.subnet": "blaa".to_string(),
             "node.id.name": "itstest".to_string(),
             "srv.comp.wasm.task_package": "test-package".to_string(),
         },
@@ -16,6 +17,7 @@ pub fn example_offer() -> Offer {
 pub fn example_demand() -> Demand {
     let properties = serde_json::json!({
         "golem": {
+            "golem.node.debug.subnet": "blaa".to_string(),
             "node.id.name": "itstest".to_string(),
             "srv.comp.wasm.task_package": "test-package".to_string(),
         },

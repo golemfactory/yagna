@@ -11,7 +11,6 @@ mod matcher;
 mod negotiation;
 
 pub mod protocol;
-pub use db::models::{Demand, Offer, SubscriptionId};
 pub use market::MarketService;
 
 pub use ya_client::model::market::MARKET_API_PATH;
@@ -27,4 +26,7 @@ pub mod migrations {
 /// These exports are expected to be used only in tests.
 pub mod testing {
     pub use super::db::dao::{DemandDao, OfferDao};
+    pub use super::db::models::{Demand, Offer, SubscriptionId};
+    pub use super::matcher::DraftProposal;
+    pub use super::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 }

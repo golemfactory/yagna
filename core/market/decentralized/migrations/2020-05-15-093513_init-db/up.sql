@@ -77,7 +77,7 @@ INSERT INTO market_proposal_state(id, state) VALUES
     (4, "Expired");
 
 CREATE TABLE market_negotiation(
-    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    id VARCHAR(100) NOT NULL PRIMARY KEY,
     subscription_id VARCHAR(97) NOT NULL,
 
     offer_id VARCHAR(97) NOT NULL,
@@ -91,9 +91,9 @@ CREATE TABLE market_negotiation(
 );
 
 CREATE TABLE market_proposal(
-    proposal_id VARCHAR(100) NOT NULL PRIMARY KEY,
+    id VARCHAR(100) NOT NULL PRIMARY KEY,
     prev_proposal_id VARCHAR(100) NOT NULL,
-    negotiation_id INTEGER NOT NULL,
+    negotiation_id VARCHAR(100) NOT NULL,
 
     properties TEXT NOT NULL,
     constraints TEXT NOT NULL,

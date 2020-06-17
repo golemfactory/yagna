@@ -93,6 +93,20 @@ pub fn hash(
     format!("{:x}", hasher.result())
 }
 
+pub fn hash_proposal(
+    offer_id: &SubscriptionId,
+    demand_id: &SubscriptionId,
+    creation_ts: &NaiveDateTime,
+) -> String {
+    let mut hasher = Sha3_256::new();
+
+    hasher.input(offer_id.to_string());
+    hasher.input(demand_id.to_string());
+    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%S").to_string());
+
+    format!("{:x}", hasher.result())
+}
+
 impl FromStr for SubscriptionId {
     type Err = SubscriptionParseError;
 

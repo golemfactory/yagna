@@ -1,7 +1,19 @@
 use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
+use diesel::backend::Backend;
+use diesel::deserialize;
+use diesel::serialize::Output;
+use diesel::sql_types::Integer;
+use diesel::types::{FromSql, ToSql};
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
-use super::SubscriptionId;
+use super::{generate_random_id, hash_proposal, SubscriptionId};
+use crate::db::models::Demand as ModelDemand;
+use crate::db::models::Offer as ModelOffer;
+use crate::db::schema::{market_negotiation, market_proposal};
 
+#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[sql_type = "Integer"]
 pub enum State {
     /// Proposal arrived from the market as response to subscription
     Initial = 0,
@@ -25,6 +37,8 @@ pub enum State {
 /// we could deduce requestor and provider NodeId from Offer. But Offers
 /// can be removed from our database (after expiration for example)
 /// and we still will be able to know, who negotiated with whom.
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[table_name = "market_negotiation"]
 pub struct Negotiation {
     pub id: String,
     pub subscription_id: SubscriptionId,
@@ -52,10 +66,12 @@ pub struct Negotiation {
 /// from matched Offer. The same applies to initial Proposal for Provider, which contains
 /// Demand properties and constraints.
 ///
-/// Proposal id to, be unique, must be generated from properties, constraints
-/// Provider and Requestor subscription ids and creation timestamp.
+/// Proposal id to, be unique, must be generated from Provider and Requestor
+/// subscription ids and creation timestamp.
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[table_name = "market_proposal"]
 pub struct Proposal {
-    pub proposal_id: String,
+    pub id: String,
     pub prev_proposal_id: Option<String>,
 
     pub negotiation_id: String,
@@ -66,4 +82,80 @@ pub struct Proposal {
     pub state: State,
     pub creation_ts: NaiveDateTime,
     pub expiration_ts: NaiveDateTime,
+}
+
+enum OwnerType {
+    Provider,
+    Requestor,
+}
+
+impl Proposal {
+    pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> (Proposal, Negotiation) {
+        let negotiation = Negotiation::new(&demand, &offer, OwnerType::Requestor);
+        let creation_ts = Utc::now().naive_utc();
+        // TODO: How to set expiration? Config?
+        let expiration_ts = creation_ts + Duration::minutes(10);
+        let proposal_id = hash_proposal(&offer.id, &demand.id, &creation_ts);
+
+        let proposal = Proposal {
+            id: proposal_id,
+            prev_proposal_id: None,
+            negotiation_id: negotiation.id.clone(),
+            properties: offer.properties,
+            constraints: offer.constraints,
+            state: State::Initial,
+            creation_ts,
+            expiration_ts,
+        };
+
+        (proposal, negotiation)
+    }
+}
+
+impl Negotiation {
+    fn new(demand: &ModelDemand, offer: &ModelOffer, role: OwnerType) -> Negotiation {
+        let subscription_id = match role {
+            OwnerType::Provider => offer.id.clone(),
+            OwnerType::Requestor => demand.id.clone(),
+        };
+
+        let identity_id = match role {
+            OwnerType::Provider => offer.node_id.clone(),
+            OwnerType::Requestor => demand.node_id.clone(),
+        };
+
+        Negotiation {
+            id: generate_random_id(),
+            subscription_id,
+            offer_id: offer.id.clone(),
+            demand_id: demand.id.clone(),
+            identity_id,
+            requestor_id: demand.node_id.clone(),
+            provider_id: offer.node_id.clone(),
+            agreement_id: None,
+        }
+    }
+}
+
+impl<DB: Backend> ToSql<Integer, DB> for State
+where
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
+        (*self as i32).to_sql(out)
+    }
+}
+
+impl<DB> FromSql<Integer, DB> for State
+where
+    i32: FromSql<Integer, DB>,
+    DB: Backend,
+{
+    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
+        Ok(
+            FromPrimitive::from_i32(i32::from_sql(bytes)?).ok_or(anyhow::anyhow!(
+                "Invalid conversion from i32 to Proposal State."
+            ))?,
+        )
+    }
 }

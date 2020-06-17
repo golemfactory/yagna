@@ -10,9 +10,10 @@ mod tests {
     use ya_market_decentralized::protocol::{
         Discovery, OfferReceived, Propagate, StopPropagateReason,
     };
+    use ya_market_decentralized::testing::Offer as ModelOffer;
     use ya_market_decentralized::testing::OfferDao;
-    use ya_market_decentralized::Offer as ModelOffer;
-    use ya_market_decentralized::{MarketService, SubscriptionId};
+    use ya_market_decentralized::testing::SubscriptionId;
+    use ya_market_decentralized::MarketService;
 
     use serde_json::json;
     use std::str::FromStr;

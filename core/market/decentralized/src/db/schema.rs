@@ -67,11 +67,11 @@ table! {
 }
 
 table! {
-    market_proposal (proposal_id) {
-        proposal_id -> Text,
+    market_proposal (id) {
+        id -> Text,
         prev_proposal_id -> Text,
 
-        negotiation_id -> Integer,
+        negotiation_id -> Text,
 
         properties -> Text,
         constraints -> Text,
@@ -84,7 +84,7 @@ table! {
 
 table! {
     market_negotiation (id) {
-        id -> Integer,
+        id -> Text,
         subscription_id -> Text,
 
         offer_id -> Text,

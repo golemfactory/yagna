@@ -196,7 +196,7 @@ pub mod default {
         DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, RetrieveOffers,
         StopPropagateReason,
     };
-    use ya_market_decentralized::Offer;
+    use ya_market_decentralized::testing::Offer;
 
     pub async fn empty_on_offer_received(_msg: OfferReceived) -> Result<Propagate, ()> {
         Ok(Propagate::False(StopPropagateReason::AlreadyExists))

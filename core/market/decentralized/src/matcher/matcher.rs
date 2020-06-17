@@ -2,7 +2,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use ya_client::model::market::{Demand, Offer, Proposal};
 use ya_client::model::ErrorMessage;
@@ -60,9 +60,16 @@ pub enum MatcherInitError {
     MigrationError(#[from] anyhow::Error),
 }
 
+/// Stores proposal generated from resolver.
+#[derive(Debug)]
+pub struct DraftProposal {
+    pub offer: ModelOffer,
+    pub demand: ModelDemand,
+}
+
 /// Receivers for events, that can be emitted from Matcher.
 pub struct EventsListeners {
-    pub proposal_receiver: UnboundedReceiver<Proposal>,
+    pub proposal_receiver: UnboundedReceiver<DraftProposal>,
 }
 
 /// Responsible for storing Offers and matching them with demands.
@@ -70,7 +77,7 @@ pub struct EventsListeners {
 pub struct Matcher {
     db: DbExecutor,
     discovery: Discovery,
-    proposal_emitter: UnboundedSender<Proposal>,
+    proposal_emitter: UnboundedSender<DraftProposal>,
 }
 
 impl Matcher {
@@ -93,7 +100,7 @@ impl Matcher {
                 Ok(vec![])
             },
         )?;
-        let (emitter, receiver) = unbounded_channel::<Proposal>();
+        let (emitter, receiver) = unbounded_channel::<DraftProposal>();
 
         let matcher = Matcher {
             db: db.clone(),
@@ -234,6 +241,10 @@ impl Matcher {
             Some(model_demand) => Ok(Some(model_demand.into_client_offer()?)),
             None => Ok(None),
         }
+    }
+
+    pub fn emit_proposal(&self, proposal: DraftProposal) -> Result<(), SendError<DraftProposal>> {
+        self.proposal_emitter.send(proposal)
     }
 }
 

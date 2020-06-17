@@ -8,3 +8,6 @@ pub enum NegotiationInitError {}
 
 #[derive(Error, Debug)]
 pub enum QueryEventsError {}
+
+#[derive(Error, Debug)]
+pub enum ProposalError {}

@@ -4,9 +4,9 @@ use ya_persistence::executor::Error;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::db::models::Demand as ModelDemand;
+use crate::db::models::SubscriptionId;
 use crate::db::schema::market_demand::dsl;
 use crate::db::DbResult;
-use crate::SubscriptionId;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 #[allow(unused)]

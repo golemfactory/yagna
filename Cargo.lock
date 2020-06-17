@@ -2468,6 +2468,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
+dependencies = [
+ "proc-macro2 0.4.30",
+ "quote 0.6.13",
+ "syn 0.15.44",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4984,6 +4995,8 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
+ "num-derive",
+ "num-traits",
  "r2d2",
  "rand 0.7.3",
  "serde",
