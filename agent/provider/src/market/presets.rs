@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
 use std::path::Path;
+use ya_utils_path::SwapSave;
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -60,16 +61,11 @@ impl Presets {
     }
 
     pub fn save_to_file(&self, presets_file: &Path) -> Result<()> {
-        let file = File::create(presets_file).map_err(|error| {
+        let ser = serde_json::to_string_pretty(&self.list())
+            .map_err(|error| anyhow!("Failed to serialize Presets: {}", error))?;
+        presets_file.swap_save(ser).map_err(|error| {
             anyhow!(
-                "Can't create Presets from file {}, error: {}.",
-                presets_file.display(),
-                error
-            )
-        })?;
-        serde_json::to_writer_pretty(BufWriter::new(file), &self.list()).map_err(|error| {
-            anyhow!(
-                "Failed to serialize presets to file [{}], error: {}",
+                "Failed to save Presets to file {}, error: {}.",
                 presets_file.display(),
                 error
             )
@@ -118,6 +114,14 @@ impl Presets {
     }
 }
 
+impl Default for Presets {
+    fn default() -> Self {
+        let mut presets = Presets::new();
+        presets.add_preset(Preset::default()).unwrap();
+        presets
+    }
+}
+
 impl Preset {
     /// List usage metrics names, that should be added to agreement
     /// as 'properties.golem.com.usage.vector'. We could store them in preset
@@ -152,12 +156,13 @@ impl Preset {
 }
 
 impl Default for Preset {
+    // FIXME: sane defaults
     fn default() -> Self {
         Preset {
-            name: "".to_string(),
-            exeunit_name: "".to_string(),
-            pricing_model: "".to_string(),
-            usage_coeffs: vec![0.0, 0.0, 0.0],
+            name: "default".to_string(),
+            exeunit_name: "wasmtime".to_string(),
+            pricing_model: "linear".to_string(),
+            usage_coeffs: vec![0.1, 0.2, 1.0],
         }
     }
 }

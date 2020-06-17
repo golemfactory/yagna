@@ -1,9 +1,14 @@
+use notify::*;
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use structopt::{clap, StructOpt};
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
+use futures::channel::oneshot;
+use std::sync::mpsc;
+use std::time::Duration;
 use ya_client::cli::ApiOpts;
+use ya_utils_path::data_dir::DataDir;
 
 /// Common configuration for all Provider commands.
 #[derive(StructOpt)]
@@ -17,6 +22,15 @@ pub struct ProviderConfig {
         hide_env_values = true,
     )]
     pub exe_unit_path: PathBuf,
+    /// Agent data directory
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "DATA_DIR",
+        default_value,
+    )]
+    pub data_dir: DataDir,
+    // FIXME: workspace configuration
     #[structopt(skip = "presets.json")]
     pub presets_file: PathBuf,
 }
@@ -112,6 +126,58 @@ pub enum Commands {
     Run(RunConfig),
     Preset(PresetsConfig),
     ExeUnit(ExeUnitsConfig),
+}
+
+#[derive(Debug)]
+pub struct FileMonitor {
+    pub(crate) path: PathBuf,
+    pub(crate) thread_ctl: Option<oneshot::Sender<()>>,
+}
+
+impl FileMonitor {
+    pub fn spawn<P, F>(path: P, handler: F) -> std::result::Result<Self, notify::Error>
+    where
+        P: AsRef<Path>,
+        F: Fn(DebouncedEvent) -> () + Send + 'static,
+    {
+        let path = path.as_ref().to_path_buf();
+        let path_th = path.clone();
+        let (tx, rx) = mpsc::channel();
+        let (tx_ctl, mut rx_ctl) = oneshot::channel();
+
+        let watch_delay = Duration::from_secs(2);
+        let sleep_delay = Duration::from_secs_f32(0.5);
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)?;
+
+        std::thread::spawn(move || {
+            watcher
+                .watch(&path_th, RecursiveMode::NonRecursive)
+                .unwrap();
+            loop {
+                if let Ok(event) = rx.try_recv() {
+                    handler(event);
+                }
+                if let Ok(Some(_)) = rx_ctl.try_recv() {
+                    break;
+                }
+                std::thread::sleep(sleep_delay);
+            }
+            log::debug!("Stopping file monitor: {:?}", path_th);
+        });
+
+        Ok(Self {
+            path,
+            thread_ctl: Some(tx_ctl),
+        })
+    }
+}
+
+impl Drop for FileMonitor {
+    fn drop(&mut self) {
+        self.thread_ctl.take().map(|sender| {
+            let _ = sender.send(());
+        });
+    }
 }
 
 /// Structopt key-value example:

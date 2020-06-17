@@ -2,6 +2,7 @@ use std::env;
 use structopt::{clap, StructOpt};
 
 mod execution;
+mod hardware;
 mod market;
 mod payments;
 mod preset_cli;
@@ -18,7 +19,9 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
 
     let cli_args = StartupConfig::from_args();
-    let config = cli_args.config;
+    let mut config = cli_args.config;
+    config.presets_file = config.data_dir.get_or_create()?.join(config.presets_file);
+
     match cli_args.commands {
         Commands::Run(args) => {
             env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));

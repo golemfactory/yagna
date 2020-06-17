@@ -10,6 +10,7 @@ use ya_client::cli::ProviderApi;
 use ya_utils_actix::actix_handler::send_message;
 
 use crate::execution::{ExeUnitDesc, GetExeUnit, TaskRunner, UpdateActivity};
+use crate::hardware;
 use crate::market::{
     provider_market::{OnShutdown, UpdateMarket},
     CreateOffer, Preset, Presets, ProviderMarket,
@@ -24,11 +25,18 @@ pub struct ProviderAgent {
     runner: Addr<TaskRunner>,
     task_manager: Addr<TaskManager>,
     node_info: NodeInfo,
+    hardware: hardware::Manager,
 }
 
 impl ProviderAgent {
     pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+        let data_dir = config.data_dir.get_or_create()?;
         let api = ProviderApi::try_from(&args.api)?;
+
+        // FIXME: proper workspace configuration
+        if !config.presets_file.exists() {
+            Presets::default().save_to_file(&config.presets_file)?;
+        }
 
         let registry = config.registry()?;
         registry.validate()?;
@@ -41,12 +49,14 @@ impl ProviderAgent {
             TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
 
         let node_info = ProviderAgent::create_node_info(&args.node).await;
+        let hardware = hardware::Manager::try_new(data_dir)?;
 
         let mut provider = ProviderAgent {
             market,
             runner,
             task_manager,
             node_info,
+            hardware,
         };
         provider.initialize(args, config).await?;
 
@@ -104,7 +114,7 @@ impl ProviderAgent {
                 preset,
                 offer_definition: OfferDefinition {
                     node_info: self.node_info.clone(),
-                    service: Self::create_service_info(&exeunit_desc),
+                    service: self.create_service_info(&exeunit_desc),
                     com_info,
                     constraints: cnts,
                 },
@@ -115,10 +125,6 @@ impl ProviderAgent {
     }
 
     fn build_constraints(&self) -> anyhow::Result<String> {
-        // Provider requires expiration property from Requestor.
-
-        // If user set subnet name, we should add constraint for filtering
-        // nodes that didn't set the same name in properties.
         let mut cnts = constraints!["golem.srv.comp.expiration" > 0,];
         if let Some(subnet) = self.node_info.subnet.clone() {
             cnts = cnts.and(constraints!["golem.node.debug.subnet" == subnet,]);
@@ -143,10 +149,9 @@ impl ProviderAgent {
         node_info
     }
 
-    fn create_service_info(exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
-        let inf = InfNodeInfo::new().with_mem(1.0).with_storage(10.0);
-
-        ServiceInfo::new(inf, exeunit_desc.build())
+    #[inline]
+    fn create_service_info(&self, exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
+        ServiceInfo::new(self.hardware.remaining().into(), exeunit_desc.build())
     }
 
     pub async fn wait_for_ctrl_c(self) -> anyhow::Result<()> {
