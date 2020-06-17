@@ -388,6 +388,7 @@ impl Manager {
 }
 
 impl Manager {
+    #[allow(dead_code)]
     #[inline]
     pub fn event_receiver(&self) -> broadcast::Receiver<Event> {
         self.broadcast.subscribe()
@@ -398,6 +399,7 @@ impl Manager {
         self.res_remaining.lock().unwrap().clone()
     }
 
+    #[allow(dead_code)]
     pub fn allocate(&mut self, id: impl ToString, res: Resources) -> Result<(), Error> {
         let id = id.to_string();
         if self.res_alloc.contains_key(&id) {
@@ -413,6 +415,7 @@ impl Manager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn release(&mut self, id: impl ToString) -> Result<(), Error> {
         let id = id.to_string();
         match self.res_alloc.remove(&id) {
