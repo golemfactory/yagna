@@ -6,10 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ya_agreement_utils::{
-    ClauseOperator::{And},
-    ConstraintKey, ConstraintValue, Constraints,
-};
+use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_client::cli::RequestorApi;
 use ya_client::model::market::{
     proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent,
@@ -32,31 +29,25 @@ pub(crate) fn build_demand(
         },
     });
 
-    let common_constraint = Constraints::new_clause(
-        And,
-        vec![
-            ConstraintKey::new("golem.inf.mem.gib").greater_than(ConstraintValue::new(0.5)),
-            ConstraintKey::new("golem.inf.storage.gib").greater_than(ConstraintValue::new(1)),
-            ConstraintKey::new("golem.com.pricing.model").equal_to(ConstraintValue::new("linear")),
-        ],
-    );
-    let subnet_constraint = match subnet {
-        Some(subnet) => {
-            log::info!("Using subnet: {}", subnet);
-            properties.as_object_mut().unwrap().insert(
-                "golem.node.debug.subnet".to_string(),
-                serde_json::Value::String(subnet.clone()),
-            );
-            common_constraint.and(Constraints::new_single(
-                ConstraintKey::new("golem.node.debug.subnet").equal_to(ConstraintValue::new(serde_json::Value::String(subnet.clone())))
-            )).to_string()
-        }
-        None => common_constraint.to_string(),
+    let mut cnts = constraints![
+        "golem.inf.mem.gib" > 0.5,
+        "golem.inf.storage.gib" > 1,
+        "golem.com.pricing.model" == "linear",
+    ];
+    if let Some(subnet) = subnet {
+        log::info!("Using subnet: {}", subnet);
+        properties.as_object_mut().unwrap().insert(
+            "golem.node.debug.subnet".to_string(),
+            serde_json::Value::String(subnet.clone()),
+        );
+        cnts = cnts.and(constraints![
+            "golem.node.debug.subnet" == serde_json::Value::String(subnet.clone()),
+        ]);
     };
 
     Demand {
         properties,
-        constraints: subnet_constraint,
+        constraints: cnts.to_string(),
 
         demand_id: Default::default(),
         requestor_id: Default::default(),
