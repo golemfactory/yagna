@@ -33,11 +33,12 @@ impl<'s> From<&'s Url> for HttpAuth<'s> {
 
 fn request(method: Method, url: Url) -> awc::ClientRequest {
     let builder = awc::ClientBuilder::new();
-    let client = match HttpAuth::from(&url) {
-        HttpAuth::None => builder.finish(),
-        HttpAuth::Basic { username, password } => builder.basic_auth(username, password).finish(),
-    };
-    client.request(method, url.to_string())
+    match HttpAuth::from(&url) {
+        HttpAuth::None => builder,
+        HttpAuth::Basic { username, password } => builder.basic_auth(username, password),
+    }
+    .finish()
+    .request(method, url.to_string())
 }
 
 pub struct HttpTransferProvider {
