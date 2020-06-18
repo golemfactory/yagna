@@ -34,15 +34,15 @@ pub mod local {
         pub fn body(&self) -> &M {
             &self.body
         }
-
-        pub fn set_id(&mut self, id: String) {
-            self.id = Some(id)
-        }
     }
 
     impl<M> SendBroadcastMessage<M> {
         pub fn topic(&self) -> &str {
             self.topic.as_ref()
+        }
+
+        pub fn set_id(&mut self, id: String) {
+            self.id = Some(id)
         }
     }
 
