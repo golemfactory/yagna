@@ -4135,6 +4135,7 @@ dependencies = [
  "mio",
  "mio-named-pipes",
  "mio-uds",
+ "num_cpus",
  "pin-project-lite",
  "signal-hook-registry",
  "slab 0.4.2",
@@ -5277,11 +5278,16 @@ name = "ya-runtime-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes 0.5.4",
+ "env_logger 0.7.1",
+ "futures 0.3.5",
  "log 0.4.8",
  "prost 0.6.1",
  "prost-build 0.6.1",
  "serde",
  "serde_json",
+ "tokio 0.2.21",
+ "tokio-util 0.2.0",
 ]
 
 [[package]]

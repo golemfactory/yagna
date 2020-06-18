@@ -1,4 +1,4 @@
 pub mod deploy;
 
-#[cfg(feature="server")]
+#[cfg(feature = "server")]
 pub mod server;

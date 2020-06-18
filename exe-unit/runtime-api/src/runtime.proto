@@ -4,6 +4,12 @@ package ya_runtime_api;
 message Request {
     uint64 id = 1;
 
+    oneof command {
+        Hello hello = 2;
+        RunProcess run = 10;
+        KillProcess kill = 11;
+    }
+
     message Hello {
         string version = 1;
     }
@@ -21,24 +27,25 @@ message Request {
         int32 signal = 2;
     }
 
-    oneof Command {
-        Hello hello = 2;
-        RunProcess run = 10;
-        KillProcess kill = 11;
-    }
 }
 
 message Response {
+    // if false then id represents correlation id for response message.
     bool event = 1;
     uint64 id = 2;
 
-    oneof Command {
+    oneof command {
         Error error = 3;
+        Hello hello = 4;
         RunProcess run = 10;
         KillProcess kill = 11;
 
         // Events
         ProcessStatus status = 20;
+    }
+
+    message Hello {
+        string version = 1;
     }
 
     enum ErrorCode {
