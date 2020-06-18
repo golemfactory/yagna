@@ -1,8 +1,8 @@
-use crate::schema::{pay_payment, pay_payment_x_debit_note, pay_payment_x_invoice};
+use crate::schema::{pay_activity_payment, pay_agreement_payment, pay_payment};
 use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
-use ya_client_model::payment::Payment;
+use ya_client_model::payment as api_model;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
@@ -11,8 +11,10 @@ use ya_persistence::types::{BigDecimalField, Role};
 pub struct WriteObj {
     pub id: String,
     pub owner_id: NodeId,
-    pub role: String,
-    pub agreement_id: String,
+    pub peer_id: NodeId,
+    pub payee_addr: String,
+    pub payer_addr: String,
+    pub role: Role,
     pub allocation_id: Option<String>,
     pub amount: BigDecimalField,
     pub details: Vec<u8>,
@@ -21,7 +23,9 @@ pub struct WriteObj {
 impl WriteObj {
     pub fn new_sent(
         payer_id: NodeId,
-        agreement_id: String,
+        payee_id: NodeId,
+        payer_addr: String,
+        payee_addr: String,
         allocation_id: String,
         amount: BigDecimal,
         details: Vec<u8>,
@@ -29,20 +33,24 @@ impl WriteObj {
         Self {
             id: Uuid::new_v4().to_string(),
             owner_id: payer_id,
-            role: Role::Requestor.to_string(),
-            agreement_id,
+            peer_id: payee_id,
+            payer_addr,
+            payee_addr,
+            role: Role::Requestor,
             allocation_id: Some(allocation_id),
             amount: amount.into(),
             details,
         }
     }
 
-    pub fn new_received(payment: Payment, payee_id: NodeId) -> Self {
+    pub fn new_received(payment: api_model::Payment) -> Self {
         Self {
             id: payment.payment_id,
-            owner_id: payee_id,
-            role: Role::Provider.to_string(),
-            agreement_id: payment.agreement_id,
+            owner_id: payment.payee_id,
+            peer_id: payment.payer_id,
+            payer_addr: payment.payer_addr,
+            payee_addr: payment.payee_addr,
+            role: Role::Provider,
             allocation_id: None,
             amount: payment.amount.into(),
             details: base64::decode(&payment.details).unwrap(), // FIXME: unwrap
@@ -56,16 +64,14 @@ impl WriteObj {
 pub struct ReadObj {
     pub id: String,
     pub owner_id: NodeId,
+    pub peer_id: NodeId,
+    pub payee_addr: String,
+    pub payer_addr: String,
     pub role: Role,
-    pub agreement_id: String,
     pub allocation_id: Option<String>,
     pub amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub details: Vec<u8>,
-
-    pub peer_id: NodeId,    // From agreement
-    pub payee_addr: String, // From agreement
-    pub payer_addr: String, // From agreement
 }
 
 impl ReadObj {
@@ -83,8 +89,12 @@ impl ReadObj {
         }
     }
 
-    pub fn into_api_model(self, debit_note_ids: Vec<String>, invoice_ids: Vec<String>) -> Payment {
-        Payment {
+    pub fn into_api_model(
+        self,
+        activity_payments: Vec<ActivityPayment>,
+        agreement_payments: Vec<AgreementPayment>,
+    ) -> api_model::Payment {
+        api_model::Payment {
             payer_id: self.payer_id(),
             payee_id: self.payee_id(),
             payment_id: self.id,
@@ -92,29 +102,48 @@ impl ReadObj {
             payee_addr: self.payee_addr,
             amount: self.amount.into(),
             timestamp: Utc.from_utc_datetime(&self.timestamp),
-            agreement_id: self.agreement_id,
             allocation_id: self.allocation_id,
-            debit_note_ids: Some(debit_note_ids),
-            invoice_ids: Some(invoice_ids),
+            activity_payments: activity_payments.into_iter().map(Into::into).collect(),
+            agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
             details: base64::encode(&self.details),
         }
     }
 }
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
-#[table_name = "pay_payment_x_debit_note"]
-#[primary_key(payment_id, debit_note_id, owner_id)]
-pub struct PaymentXDebitNote {
+#[table_name = "pay_activity_payment"]
+#[primary_key(payment_id, activity_id, owner_id)]
+pub struct ActivityPayment {
     pub payment_id: String,
-    pub debit_note_id: String,
+    pub activity_id: String,
     pub owner_id: NodeId,
+    pub amount: BigDecimalField,
+}
+
+impl Into<api_model::ActivityPayment> for ActivityPayment {
+    fn into(self) -> api_model::ActivityPayment {
+        api_model::ActivityPayment {
+            activity_id: self.activity_id,
+            amount: self.amount.0,
+        }
+    }
 }
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
-#[table_name = "pay_payment_x_invoice"]
-#[primary_key(payment_id, invoice_id, owner_id)]
-pub struct PaymentXInvoice {
+#[table_name = "pay_agreement_payment"]
+#[primary_key(payment_id, agreement_id, owner_id)]
+pub struct AgreementPayment {
     pub payment_id: String,
-    pub invoice_id: String,
+    pub agreement_id: String,
     pub owner_id: NodeId,
+    pub amount: BigDecimalField,
+}
+
+impl Into<api_model::AgreementPayment> for AgreementPayment {
+    fn into(self) -> api_model::AgreementPayment {
+        api_model::AgreementPayment {
+            agreement_id: self.agreement_id,
+            amount: self.amount.0,
+        }
+    }
 }

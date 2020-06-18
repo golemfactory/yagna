@@ -2,14 +2,14 @@ use actix::{Actor, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
-use std::path::PathBuf;
-#[cfg(windows)]
-use std::path::{Component, Prefix};
+use std::ffi::OsString;
+use std::path::{Component, PathBuf, Prefix};
 use structopt::StructOpt;
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
+use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::metrics::MetricsService;
 use ya_exe_unit::service::signal::SignalMonitor;
 use ya_exe_unit::service::transfer::TransferService;
@@ -30,6 +30,9 @@ pub struct Cli {
     /// Runtime binary
     #[structopt(long, short)]
     pub binary: PathBuf,
+    /// Hand off resource cap limiting to the Runtime
+    #[structopt(long = "cap-handoff", parse(from_flag = std::ops::Not::not))]
+    pub supervise_caps: bool,
     #[structopt(subcommand)]
     pub command: Command,
 }
@@ -45,41 +48,24 @@ pub enum Command {
     },
 }
 
-#[cfg(not(windows))]
-pub fn win_canonicalize_workaround(path: PathBuf) -> PathBuf {
-    path
-}
-
 // canonicalize on Windows adds `\\?` (or `%3f` when url-encoded) prefix
-#[cfg(windows)]
-pub fn win_canonicalize_workaround(path: PathBuf) -> PathBuf {
-    let mut disk_letter = None;
+fn sanitize_path(path: PathBuf) -> PathBuf {
+    if !cfg!(windows) {
+        return path;
+    }
 
-    // There seems to be no easy way to replace one prefix with another...
-    let result = path
-        .components()
-        .into_iter()
-        .filter(|c| match c {
-            Component::Prefix(prefix) => match prefix.kind() {
-                Prefix::Verbatim(_) => false,
-                Prefix::VerbatimDisk(disk) => {
-                    disk_letter = Some(disk);
-                    false
-                }
-                _ => true,
-            },
-            _ => true,
-        })
-        .collect::<PathBuf>();
-
-    // ...so in case a VerbatimDisk letter was found - prepend it in front of the path
-    match disk_letter {
-        Some(letter) => {
-            let mut aggr = PathBuf::from(format!("{}:", char::from(letter)));
-            aggr.push(result);
-            aggr
-        }
-        None => result,
+    let mut components = path.components();
+    match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::Disk(_) => path,
+            Prefix::VerbatimDisk(disk) => {
+                let mut p = OsString::from(format!("{}:", disk as char));
+                p.push(components.as_path());
+                PathBuf::from(p)
+            }
+            _ => panic!("Invalid path: {:?}", path),
+        },
+        _ => path,
     }
 }
 
@@ -90,20 +76,27 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
             _ => bail!("Can't create directory: {}, {}", path.display(), error),
         }
     }
-    Ok(win_canonicalize_workaround(path.canonicalize()?))
+    Ok(sanitize_path(path.canonicalize()?))
 }
 
 fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
 
     let cli: Cli = Cli::from_args();
+
+    let work_dir = create_path(&cli.work_dir)?;
+    let cache_dir = create_path(&cli.cache_dir)?;
+    let agreement = Agreement::try_from(&cli.agreement)?;
+    let runtime_args = RuntimeArgs::new(&work_dir, &agreement, !cli.supervise_caps);
+
     let mut commands = None;
     let mut ctx = ExeUnitContext {
         activity_id: None,
         report_url: None,
-        agreement: Agreement::try_from(&cli.agreement)?,
-        work_dir: create_path(&cli.work_dir)?,
-        cache_dir: create_path(&cli.cache_dir)?,
+        agreement,
+        work_dir,
+        cache_dir,
+        runtime_args,
     };
 
     log::debug!("CLI args: {:?}", cli);
@@ -125,7 +118,7 @@ fn run() -> anyhow::Result<()> {
 
     let sys = System::new("exe-unit");
 
-    let metrics = MetricsService::try_new(&ctx, Some(10000))?.start();
+    let metrics = MetricsService::try_new(&ctx, Some(10000), cli.supervise_caps)?.start();
     let transfers = TransferService::new(&ctx).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
     let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
@@ -135,7 +128,7 @@ fn run() -> anyhow::Result<()> {
     if let Some(exe_script) = commands {
         let msg = activity::Exec {
             activity_id: String::new(),
-            batch_id: "fake_batch_id".into(),
+            batch_id: hex::encode(&rand::random::<[u8; 16]>()),
             exe_script,
             timeout: None,
         };
@@ -186,9 +179,6 @@ mod test {
             .canonicalize()
             .expect("should canonicalize: c:\\");
 
-        assert_eq!(
-            PathBuf::from(r"C:\Windows\System32"),
-            win_canonicalize_workaround(path)
-        );
+        assert_eq!(PathBuf::from(r"C:\Windows\System32"), sanitize_path(path));
     }
 }

@@ -61,18 +61,24 @@ pub mod local {
     }
 
     impl Subscribe {
-        pub fn with_endpoint<M: BroadcastMessage>(endpoint: impl Into<String>) -> Self {
-            let topic = M::TOPIC.to_owned();
-            let endpoint = endpoint.into();
-            Self { topic, endpoint }
-        }
-
         pub fn topic(&self) -> &str {
             self.topic.as_ref()
         }
 
         pub fn endpoint(&self) -> &str {
             self.endpoint.as_ref()
+        }
+    }
+
+    pub trait ToEndpoint<M: BroadcastMessage> {
+        fn into_subscribe_msg(endpoint: impl Into<String>) -> Subscribe;
+    }
+
+    impl<M: BroadcastMessage> ToEndpoint<M> for M {
+        fn into_subscribe_msg(endpoint: impl Into<String>) -> Subscribe {
+            let topic = M::TOPIC.to_owned();
+            let endpoint = endpoint.into();
+            Subscribe { topic, endpoint }
         }
     }
 

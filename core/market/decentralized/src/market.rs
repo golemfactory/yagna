@@ -4,39 +4,59 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::matcher::{Matcher, MatcherInitError};
-use crate::negotiation::NegotiationInitError;
+use crate::api::{provider, requestor};
+use crate::db::models::Demand as ModelDemand;
+use crate::db::models::Offer as ModelOffer;
+use crate::matcher::{Matcher, MatcherError, MatcherInitError};
+use crate::migrations;
+use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
-use crate::protocol::{DiscoveryBuilder, DiscoveryGSB};
+use crate::protocol::DiscoveryBuilder;
 
-use ya_core_model::market::BUS_ID;
+use ya_client::error::Error::ModelError;
+use ya_client::model::market::{Demand, Offer};
+use ya_client::model::ErrorMessage;
+use ya_core_model::market::{private, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
+use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::scope::ExtendableScope;
 
 #[derive(Error, Debug)]
-pub enum MarketError {}
+pub enum MarketError {
+    #[error(transparent)]
+    Matcher(#[from] MatcherError),
+    #[error(transparent)]
+    Negotiation(#[from] NegotiationError),
+    #[error("Internal error: {0}.")]
+    InternalError(#[from] ErrorMessage),
+}
 
 #[derive(Error, Debug)]
 pub enum MarketInitError {
-    #[error("Failed to initialize Offers matcher. Error: {}.", .0)]
+    #[error("Failed to initialize Offers matcher. Error: {0}.")]
     Matcher(#[from] MatcherInitError),
-    #[error("Failed to initialize negotiation engine. Error: {}.", .0)]
+    #[error("Failed to initialize negotiation engine. Error: {0}.")]
     Negotiation(#[from] NegotiationInitError),
+    #[error("Failed to migrate market database. Error: {0}.")]
+    Migration(#[from] anyhow::Error),
 }
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    matcher: Arc<Matcher>,
-    provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
-    requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
+    pub matcher: Arc<Matcher>,
+    pub provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
+    pub requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
 }
 
 impl MarketService {
     pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
+        db.apply_migration(migrations::run_with_output)?;
+
         // TODO: Set Matcher independent parameters here or remove this todo.
         let builder = DiscoveryBuilder::new();
 
-        let (matcher, listeners) = Matcher::new::<DiscoveryGSB>(builder, db)?;
+        let (matcher, listeners) = Matcher::new(builder, db)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
         let requestor_engine =
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
@@ -48,18 +68,24 @@ impl MarketService {
         })
     }
 
-    pub async fn bind_gsb(&self, prefix: String) -> Result<(), MarketInitError> {
-        self.matcher.bind_gsb(prefix.clone()).await?;
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: &str,
+        private_prefix: &str,
+    ) -> Result<(), MarketInitError> {
+        self.matcher.bind_gsb(public_prefix, private_prefix).await?;
         self.provider_negotiation_engine
-            .bind_gsb(prefix.clone())
+            .bind_gsb(public_prefix, private_prefix)
             .await?;
-        self.requestor_negotiation_engine.bind_gsb(prefix).await?;
+        self.requestor_negotiation_engine
+            .bind_gsb(public_prefix, private_prefix)
+            .await?;
         Ok(())
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb(BUS_ID.to_string()).await?)
+        Ok(market.bind_gsb(BUS_ID, private::BUS_ID).await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
@@ -70,7 +96,67 @@ impl MarketService {
                 panic!("Market initialization impossible. Check error logs.")
             }
         };
-        actix_web::web::scope(crate::MARKET_API_PATH).data(market)
+
+        actix_web::web::scope(crate::MARKET_API_PATH)
+            .data(market)
+            .extend(provider::register_endpoints)
+            .extend(requestor::register_endpoints)
+    }
+
+    pub async fn subscribe_offer(
+        &self,
+        offer: &Offer,
+        id: Identity,
+    ) -> Result<String, MarketError> {
+        let offer = ModelOffer::from_new(offer, &id);
+        let subscription_id = offer.id.to_string();
+
+        self.matcher.subscribe_offer(&offer).await?;
+        self.provider_negotiation_engine
+            .subscribe_offer(&offer)
+            .await?;
+        Ok(subscription_id)
+    }
+
+    pub async fn unsubscribe_offer(
+        &self,
+        subscription_id: String,
+        id: Identity,
+    ) -> Result<(), MarketError> {
+        // TODO: Authorize unsubscribe caller.
+
+        self.provider_negotiation_engine
+            .unsubscribe_offer(&subscription_id)
+            .await?;
+        Ok(self.matcher.unsubscribe_offer(&subscription_id).await?)
+    }
+
+    pub async fn subscribe_demand(
+        &self,
+        demand: &Demand,
+        id: Identity,
+    ) -> Result<String, MarketError> {
+        let demand = ModelDemand::from_new(demand, &id);
+        let subscription_id = demand.id.to_string();
+
+        self.matcher.subscribe_demand(&demand).await?;
+        self.requestor_negotiation_engine
+            .subscribe_demand(&demand)
+            .await?;
+        Ok(subscription_id)
+    }
+
+    pub async fn unsubscribe_demand(
+        &self,
+        subscription_id: String,
+        id: Identity,
+    ) -> Result<(), MarketError> {
+        // TODO: Authorize unsubscribe caller.
+
+        self.requestor_negotiation_engine
+            .unsubscribe_demand(&subscription_id)
+            .await?;
+        Ok(self.matcher.unsubscribe_demand(&subscription_id).await?)
     }
 }
 

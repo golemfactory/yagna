@@ -2,21 +2,20 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
 use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::{WebClient, WebInterface};
+use ya_client::web::WebClient;
 use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInvoice};
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let provider = PaymentProviderApi::from_client(
-        WebClient::builder()
-            .host_port("127.0.0.1:7465/payment-api/v1/")
-            .build()?,
-    );
-    let requestor = PaymentRequestorApi::from_client(
-        WebClient::builder()
-            .host_port("127.0.0.1:7465/payment-api/v1/")
-            .build()?,
-    );
+    let log_level = std::env::var("RUST_LOG").unwrap_or("info".to_owned());
+    std::env::set_var("RUST_LOG", log_level);
+    env_logger::init();
+
+    let client = WebClient::builder().build();
+    let provider: PaymentProviderApi = client.interface()?;
+    let requestor: PaymentRequestorApi = client.interface()?;
+
+    log::info!("Issuing invoice...");
     let invoice = provider
         .issue_invoice(&NewInvoice {
             agreement_id: "agreement_id".to_string(),
@@ -25,8 +24,13 @@ async fn main() -> anyhow::Result<()> {
             payment_due_date: Utc::now(),
         })
         .await?;
-    provider.send_invoice(&invoice.invoice_id).await?;
+    log::info!("Invoice issued.");
 
+    log::info!("Sending invoice...");
+    provider.send_invoice(&invoice.invoice_id).await?;
+    log::info!("Invoice sent.");
+
+    log::info!("Creating allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
             total_amount: BigDecimal::from(10u64),
@@ -34,9 +38,10 @@ async fn main() -> anyhow::Result<()> {
             make_deposit: false,
         })
         .await?;
+    log::info!("Allocation created.");
 
-    // FIXME: -1 sec is needed because timestamps have 1 sec accuracy
-    let now = Utc::now() - chrono::Duration::seconds(1);
+    log::info!("Accepting invoice...");
+    let now = Utc::now();
     requestor
         .accept_invoice(
             &invoice.invoice_id,
@@ -46,15 +51,20 @@ async fn main() -> anyhow::Result<()> {
             },
         )
         .await?;
+    log::info!("Invoice accepted.");
 
+    log::info!("Waiting for payment...");
     let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
     let mut payments = provider.get_payments(Some(&now), timeout).await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
     assert_eq!(&payment.amount, &invoice.amount);
+    log::info!("Payment verified correctly.");
 
+    log::info!("Verifying invoice status...");
     let invoice = provider.get_invoice(&invoice.invoice_id).await?;
     assert_eq!(invoice.status, DocumentStatus::Settled);
+    log::info!("Invoice status verified correctly.");
 
     Ok(())
 }

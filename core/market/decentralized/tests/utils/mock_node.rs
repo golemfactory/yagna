@@ -1,11 +1,17 @@
 use anyhow::{anyhow, Context, Result};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ya_core_model::net;
+use ya_client::model::NodeId;
 use ya_market_decentralized::MarketService;
+use ya_net::bcast;
 use ya_persistence::executor::DbExecutor;
+use ya_service_api_web::middleware::Identity;
+
+use super::mock_net::MockNet;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -15,14 +21,20 @@ pub struct MarketsNetwork {
 
 /// Store all object associated with single market
 /// for example: Database
+#[allow(unused)]
 pub struct MarketNode {
     market: Arc<MarketService>,
     name: String,
+    /// For now only mock default Identity.
+    identity: Identity,
 }
 
 impl MarketsNetwork {
-    pub fn new<Str: AsRef<str>>(dir_name: Str) -> Self {
+    pub async fn new<Str: AsRef<str>>(dir_name: Str) -> Self {
         let test_dir = prepare_test_dir(dir_name).unwrap();
+
+        let bcast = bcast::BCastService::default();
+        MockNet::gsb(bcast).await.unwrap();
 
         MarketsNetwork {
             markets: vec![],
@@ -37,11 +49,15 @@ impl MarketsNetwork {
         let db = self.init_database(name.as_ref())?;
         let market = Arc::new(MarketService::new(&db)?);
 
-        let gsb_prefix = format!("{}/{}/market", net::BUS_ID, name.as_ref());
-        market.bind_gsb(gsb_prefix).await?;
+        let public_gsb_prefix = format!("/{}", name.as_ref());
+        let local_gsb_prefix = format!("/{}", name.as_ref());
+        market
+            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
+            .await?;
 
         let market_node = MarketNode {
             name: name.as_ref().to_string(),
+            identity: generate_identity(name.as_ref()),
             market,
         };
 
@@ -54,6 +70,15 @@ impl MarketsNetwork {
             .iter()
             .find(|node| node.name == name)
             .map(|node| node.market.clone())
+            .unwrap()
+    }
+
+    #[allow(unused)]
+    pub fn get_default_id(&self, name: &str) -> Identity {
+        self.markets
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.identity.clone())
             .unwrap()
     }
 
@@ -85,4 +110,14 @@ fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf, anyhow::E
     fs::create_dir_all(&test_dir)
         .with_context(|| format!("Creating test directory: {}", test_dir.display()))?;
     Ok(test_dir)
+}
+
+fn generate_identity(name: &str) -> Identity {
+    let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
+
+    Identity {
+        name: name.to_string(),
+        role: "manager".to_string(),
+        identity: NodeId::from(random_node_id[..].as_bytes()),
+    }
 }

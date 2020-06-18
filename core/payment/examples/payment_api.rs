@@ -26,6 +26,77 @@ struct Args {
     agreement_id: String,
 }
 
+#[cfg(feature = "dummy-driver")]
+mod driver {
+    use super::{DbExecutor, EthAccount};
+    use ya_payment_driver::PaymentDriverService;
+
+    pub async fn start(
+        db: &DbExecutor,
+        _provider_account: Box<EthAccount>,
+        _requestor_account: Box<EthAccount>,
+    ) -> anyhow::Result<()> {
+        PaymentDriverService::gsb(db).await?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "gnt-driver")]
+mod driver {
+    use super::{DbExecutor, EthAccount};
+    use futures::Future;
+    use std::convert::TryInto;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use ya_core_model::identity;
+    use ya_payment_driver::PaymentDriverService;
+    use ya_service_bus::typed as bus;
+
+    pub async fn start(
+        db: &DbExecutor,
+        provider_account: Box<EthAccount>,
+        requestor_account: Box<EthAccount>,
+    ) -> anyhow::Result<()> {
+        let provider_sign_tx = get_sign_tx(provider_account);
+        let requestor_sign_tx = get_sign_tx(requestor_account);
+
+        PaymentDriverService::gsb(db).await?;
+
+        fake_sign_tx(Box::new(provider_sign_tx));
+        fake_sign_tx(Box::new(requestor_sign_tx));
+        Ok(())
+    }
+
+    fn get_sign_tx(
+        account: Box<EthAccount>,
+    ) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+        let account: Arc<EthAccount> = account.into();
+        move |msg| {
+            let account = account.clone();
+            let fut = async move {
+                let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
+                let signature = account.sign(&msg).unwrap();
+                let mut v = Vec::with_capacity(65);
+                v.push(signature.v);
+                v.extend_from_slice(&signature.r);
+                v.extend_from_slice(&signature.s);
+                v
+            };
+            Box::pin(fut)
+        }
+    }
+
+    fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
+        let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> =
+            sign_tx.into();
+        bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
+            let sign_tx = sign_tx.clone();
+            let msg = msg.payload;
+            async move { Ok(sign_tx(msg).await) }
+        });
+    }
+}
+
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     std::env::set_var(
@@ -49,11 +120,12 @@ async fn main() -> anyhow::Result<()> {
         requestor_id
     );
 
-    let database_url = "file:yagna.db";
+    let database_url = "file:payment.db";
     let db = DbExecutor::new(database_url)?;
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
+    driver::start(&db, provider_account, requestor_account).await?;
     let processor = PaymentProcessor::new(db.clone());
     ya_payment::service::bind_service(&db, processor);
 
