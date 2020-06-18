@@ -1,0 +1,79 @@
+syntax = "proto3";
+package ya_runtime_api;
+
+message Request {
+    uint64 id = 1;
+
+    message Hello {
+        string version = 1;
+    }
+
+    message RunProcess {
+        string bin = 1;
+        repeated string args = 2;
+        string work_dir = 3;
+        Output stdout = 4;
+        Output stderr = 5;
+    }
+
+    message KillProcess {
+        uint64 pid = 1;
+        int32 signal = 2;
+    }
+
+    oneof Command {
+        Hello hello = 2;
+        RunProcess run = 10;
+        KillProcess kill = 11;
+    }
+}
+
+message Response {
+    bool event = 1;
+    uint64 id = 2;
+
+    oneof Command {
+        Error error = 3;
+        RunProcess run = 10;
+        KillProcess kill = 11;
+
+        // Events
+        ProcessStatus status = 20;
+    }
+
+    enum ErrorCode {
+        INTERNAL = 0;
+        NOT_FOUND = 1;
+        BAD_REQUEST = 2;
+    }
+
+    message Error {
+        ErrorCode code = 1;
+        string message = 2;
+        map<string, string> context = 3;
+    }
+
+    message RunProcess {
+        uint64 pid = 1;
+    }
+
+    message KillProcess {}
+
+    message ProcessStatus {
+        uint64 pid = 1;
+        bool running = 2;
+        int32 return_code = 3;
+        bytes stdout = 4;
+        bytes stderr = 5;
+    }
+
+}
+
+message Output {
+    // No-type = /dev/null
+    // at_end(buffer size) = last n bytes are returned.
+    oneof type {
+        uint32 at_end = 2;
+    }
+}
+

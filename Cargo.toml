@@ -81,6 +81,7 @@ members = [
     "core/serv-api/interfaces",
     "core/serv-api/web",
     "exe-unit",
+    "exe-unit/runtime-api",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
