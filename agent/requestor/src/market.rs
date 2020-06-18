@@ -40,9 +40,7 @@ pub(crate) fn build_demand(
             "golem.node.debug.subnet".to_string(),
             serde_json::Value::String(subnet.clone()),
         );
-        cnts = cnts.and(constraints![
-            "golem.node.debug.subnet" == serde_json::Value::String(subnet.clone()),
-        ]);
+        cnts = cnts.and(constraints!["golem.node.debug.subnet" == subnet.clone(),]);
     };
 
     Demand {
