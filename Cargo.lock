@@ -5186,6 +5186,7 @@ dependencies = [
  "tokio 0.2.21",
  "url 2.1.1",
  "uuid 0.8.1",
+ "ya-agreement-utils",
  "ya-client",
 ]
 
