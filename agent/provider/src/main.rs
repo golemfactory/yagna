@@ -21,8 +21,9 @@ async fn main() -> anyhow::Result<()> {
 
     let cli_args = StartupConfig::from_args();
     let mut config = cli_args.config;
-    config.presets_file = config.data_dir.get_or_create()?.join(config.presets_file);
-    config.hardware_file = config.data_dir.get_or_create()?.join(config.hardware_file);
+    let data_dir = config.data_dir.get_or_create()?;
+    config.presets_file = data_dir.join(config.presets_file);
+    config.hardware_file = data_dir.join(config.hardware_file);
 
     match cli_args.commands {
         Commands::Run(args) => {

@@ -1,15 +1,13 @@
 use crate::startup_config::FileMonitor;
-use actix::Arbiter;
+use futures::StreamExt;
 use notify::DebouncedEvent;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::fmt;
 use std::io;
 use std::ops::{Add, Not, Sub};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use structopt::StructOpt;
 use tokio::sync::broadcast;
 use ya_agreement_utils::{CpuInfo, InfNodeInfo};
@@ -56,15 +54,7 @@ pub enum Error {
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    ConfigurationChanged(Resources),
-}
-
-impl fmt::Display for Event {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Event::ConfigurationChanged(res) => write!(f, "Configuration changed: {:?}", res),
-        }
-    }
+    HardwareChanged,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, StructOpt)]
@@ -259,55 +249,81 @@ impl Profiles {
         self.profiles.get(&self.active).unwrap()
     }
 
-    pub fn set_active(&mut self, name: impl ToString) -> Result<&Resources, Error> {
+    pub fn set_active(&mut self, name: impl ToString) -> Result<(), Error> {
         let name = name.to_string();
         if self.profiles.contains_key(&name).not() {
             return Err(ProfileError::Unknown(name).into());
         }
         self.active = name;
-        Ok(self.get_active())
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct Manager {
-    res_available: Resources,
-    res_cap: Arc<Mutex<Resources>>,
-    res_remaining: Arc<Mutex<Resources>>,
-    res_alloc: HashMap<String, Resources>,
-    profiles: Arc<Mutex<Profiles>>,
     monitor: Option<FileMonitor>,
+    state: Arc<Mutex<ManagerState>>,
     broadcast: broadcast::Sender<Event>,
+}
+
+#[derive(Debug)]
+struct ManagerState {
+    profiles: Profiles,
+    res_available: Resources,
+    res_cap: Resources,
+    res_remaining: Resources,
+    res_alloc: HashMap<String, Resources>,
+}
+
+impl ManagerState {
+    fn update_profiles(&mut self, profiles: Profiles) -> Result<bool, Error> {
+        self.profiles = profiles;
+        self.change_profile(self.profiles.active.clone())
+    }
+
+    fn change_profile(&mut self, name: impl ToString) -> Result<bool, Error> {
+        let name = name.to_string();
+        log::info!("Activating hardware profile '{}'", name);
+        self.profiles.set_active(&name)?;
+
+        let res = self.profiles.get_active().clone().cap(&self.res_available);
+        if res == self.res_cap {
+            log::info!("Hardware configuration unchanged");
+            Ok(false)
+        } else {
+            let delta = self.res_cap - res;
+            self.res_cap = res;
+            self.res_remaining = self.res_remaining - delta;
+            log::info!("Hardware resources cap: {:?}", self.res_cap);
+            log::info!("Hardware resources remaining: {:?}", self.res_remaining);
+            Ok(true)
+        }
+    }
 }
 
 impl Manager {
     pub fn try_new<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let current_dir = std::env::current_dir()?;
         let profiles = Profiles::load_or_create(&path)?;
-        let active_profile = profiles.active.clone();
+        let mut state = ManagerState {
+            profiles,
+            res_available: Resources::try_new(&current_dir)?,
+            res_cap: Resources::empty(),
+            res_remaining: Resources::empty(),
+            res_alloc: HashMap::new(),
+        };
+        state.change_profile(state.profiles.active.clone())?;
 
-        let (tx, mut rx) = broadcast::channel(16);
-        Arbiter::spawn(async move {
-            let delay = Duration::from_secs_f32(0.5);
-            loop {
-                if let Ok(evt) = rx.try_recv() {
-                    log::info!("{}", evt);
-                } else {
-                    tokio::time::delay_for(delay).await;
-                }
-            }
+        let (tx, rx) = broadcast::channel(16);
+        actix_rt::Arbiter::spawn(async move {
+            rx.for_each(|_| futures::future::ready(())).await;
         });
 
         let mut manager = Manager {
-            res_available: Resources::try_new(&current_dir)?,
-            res_cap: Arc::new(Mutex::new(Resources::empty())),
-            res_remaining: Arc::new(Mutex::new(Resources::empty())),
-            res_alloc: HashMap::new(),
-            profiles: Arc::new(Mutex::new(profiles)),
             monitor: None,
+            state: Arc::new(Mutex::new(state)),
             broadcast: tx,
         };
-        manager.switch_profile(active_profile)?;
         manager.spawn_monitor(path)?;
 
         Ok(manager)
@@ -318,28 +334,30 @@ impl Manager {
             return Ok(());
         }
 
-        let profiles = self.profiles.clone();
-        let res_available = self.res_available.clone();
-        let res_cap = self.res_cap.clone();
-        let res_remaining = self.res_remaining.clone();
+        let state = self.state.clone();
         let broadcast = self.broadcast.clone();
-
         let monitor = FileMonitor::spawn(path, move |e| match e {
             DebouncedEvent::Write(p)
+            | DebouncedEvent::Rename(_, p)
             // e.g. file re-created
             | DebouncedEvent::Create(p)
             // e.g. file permissions fixed
-            | DebouncedEvent::Chmod(p)
-            | DebouncedEvent::Rename(_, p)=> {
-                let mut profs = profiles.lock().unwrap();
-                *profs = match Profiles::load(&p) {
-                    Ok(p) => p,
-                    Err(e) => return log::warn!("Error reading hw profiles from {:?}: {:?}", p, e),
+            | DebouncedEvent::Chmod(p) => {
+                match Profiles::load(&p) {
+                    Ok(p) => {
+                        let mut state = state.lock().unwrap();
+                        match state.update_profiles(p) {
+                            Ok(true) => {
+                                if let Err(e) = broadcast.send(Event::HardwareChanged) {
+                                    log::error!("Error broadcasting hardware configuration change: {:?}", e);
+                                }
+                            }
+                            Err(err) => log::warn!("Error updating hardware configuration: {:?}", err),
+                            _ => (),
+                        }
+                    },
+                    Err(e) => log::warn!("Error reading hardware profiles from {:?}: {:?}", p, e),
                 };
-
-                log::info!("Activating profile '{}'", profs.active);
-                let mut res = profs.get_active().clone();
-                Self::switch_resources(&mut res, &res_available, &res_cap, &res_remaining, &broadcast);
             }
             _ => (),
         })
@@ -347,43 +365,6 @@ impl Manager {
 
         self.monitor = Some(monitor);
         Ok(())
-    }
-
-    pub fn switch_profile(&mut self, name: impl ToString) -> Result<(), Error> {
-        let name = name.to_string();
-        let mut res = {
-            let mut profiles = self.profiles.lock().unwrap();
-            profiles.set_active(&name)?.clone()
-        };
-
-        log::info!("Activating profile '{}'", name);
-        Self::switch_resources(
-            &mut res,
-            &self.res_available,
-            &self.res_cap,
-            &self.res_remaining,
-            &self.broadcast,
-        );
-        Ok(())
-    }
-
-    fn switch_resources(
-        res: &mut Resources,
-        res_available: &Resources,
-        res_cap: &Arc<Mutex<Resources>>,
-        res_remaining: &Arc<Mutex<Resources>>,
-        broadcast: &broadcast::Sender<Event>,
-    ) {
-        let active = res.cap(&res_available);
-        let mut cap = res_cap.lock().unwrap();
-        let mut remaining = res_remaining.lock().unwrap();
-        let delta = *cap - active;
-        *cap = active;
-        *remaining = *remaining - delta;
-
-        if let Err(e) = broadcast.send(Event::ConfigurationChanged(cap.clone())) {
-            log::error!("Error broadcasting configuration change: {:?}", e);
-        }
     }
 }
 
@@ -396,33 +377,29 @@ impl Manager {
 
     #[inline]
     pub fn remaining(&self) -> Resources {
-        self.res_remaining.lock().unwrap().clone()
+        let state = self.state.lock().unwrap();
+        state.res_remaining.clone()
     }
 
     #[allow(dead_code)]
-    pub fn allocate(&mut self, id: impl ToString, res: Resources) -> Result<(), Error> {
-        let id = id.to_string();
-        if self.res_alloc.contains_key(&id) {
+    pub fn allocate(&mut self, id: String, res: Resources) -> Result<(), Error> {
+        let mut state = self.state.lock().unwrap();
+        if state.res_alloc.contains_key(&id) {
             return Err(Error::AlreadyAllocated(id));
         }
-
-        let mut pool = self.res_remaining.lock().unwrap();
-        if *pool < res {
+        if state.res_remaining < res {
             return Err(Error::InsufficientResources);
         }
-        *pool = *pool - res;
-        self.res_alloc.insert(id, res);
+        state.res_remaining = state.res_remaining - res;
+        state.res_alloc.insert(id, res);
         Ok(())
     }
 
     #[allow(dead_code)]
-    pub fn release(&mut self, id: impl ToString) -> Result<(), Error> {
-        let id = id.to_string();
-        match self.res_alloc.remove(&id) {
-            Some(res) => {
-                let mut pool = self.res_remaining.lock().unwrap();
-                *pool = *pool + res;
-            }
+    pub fn release(&mut self, id: String) -> Result<(), Error> {
+        let mut state = self.state.lock().unwrap();
+        match state.res_alloc.remove(&id) {
+            Some(res) => state.res_remaining = state.res_remaining + res,
             _ => return Err(Error::NotAllocated(id)),
         }
         Ok(())
@@ -469,7 +446,7 @@ fn partition_space(path: &Path) -> Result<u64, Error> {
 mod tests {
     use super::*;
 
-    fn profiles() -> Arc<Mutex<Profiles>> {
+    fn profiles() -> Profiles {
         let active = DEFAULT_PROFILE_NAME.to_string();
         let resources = Resources {
             cpu_threads: 4,
@@ -477,8 +454,7 @@ mod tests {
             storage_gib: 100.,
         };
         let profiles = vec![(active.clone(), resources)].into_iter().collect();
-
-        Arc::new(Mutex::new(Profiles { active, profiles }))
+        Profiles { active, profiles }
     }
 
     #[test]
@@ -542,12 +518,15 @@ mod tests {
             mem_gib: 24.,
             storage_gib: 200.,
         };
-        let mut man = Manager {
+        let state = ManagerState {
             res_available: res.clone(),
-            res_cap: Arc::new(Mutex::new(res.clone())),
-            res_remaining: Arc::new(Mutex::new(res.clone())),
+            res_cap: res.clone(),
+            res_remaining: res.clone(),
             res_alloc: HashMap::new(),
             profiles: profiles(),
+        };
+        let mut man = Manager {
+            state: Arc::new(Mutex::new(state)),
             monitor: None,
             broadcast: broadcast::channel(1).0,
         };
@@ -557,14 +536,14 @@ mod tests {
             storage_gib: 12.37,
         };
 
-        man.allocate("1", alloc.clone()).unwrap();
-        man.allocate("2", alloc.clone()).unwrap();
-        man.allocate("3", alloc.clone()).unwrap();
-        man.release("1").unwrap();
-        man.release("2").unwrap();
-        man.release("3").unwrap();
+        man.allocate("1".into(), alloc.clone()).unwrap();
+        man.allocate("2".into(), alloc.clone()).unwrap();
+        man.allocate("3".into(), alloc.clone()).unwrap();
+        man.release("1".into()).unwrap();
+        man.release("2".into()).unwrap();
+        man.release("3".into()).unwrap();
 
-        let remaining = man.res_remaining.lock().unwrap();
+        let remaining = man.state.lock().unwrap().res_remaining;
         assert_eq!(remaining.cpu_threads, res.cpu_threads);
         assert_eq!(remaining.mem_gib, res.mem_gib);
         assert_eq!(remaining.storage_gib, res.storage_gib);
@@ -577,12 +556,15 @@ mod tests {
             mem_gib: 24.,
             storage_gib: 200.,
         };
-        let mut man = Manager {
+        let state = ManagerState {
             res_available: res.clone(),
-            res_cap: Arc::new(Mutex::new(res.clone())),
-            res_remaining: Arc::new(Mutex::new(res.clone())),
+            res_cap: res.clone(),
+            res_remaining: res.clone(),
             res_alloc: HashMap::new(),
             profiles: profiles(),
+        };
+        let mut man = Manager {
+            state: Arc::new(Mutex::new(state)),
             monitor: None,
             broadcast: broadcast::channel(1).0,
         };
@@ -592,12 +574,12 @@ mod tests {
             storage_gib: 12.37,
         };
 
-        man.allocate("1", alloc.clone()).unwrap();
-        assert!(man.allocate("1", alloc).is_err());
-        assert!(man.release("2").is_err());
+        man.allocate("1".into(), alloc.clone()).unwrap();
+        assert!(man.allocate("1".into(), alloc).is_err());
+        assert!(man.release("2".into()).is_err());
         assert!(man
             .allocate(
-                "3",
+                "3".into(),
                 Resources {
                     cpu_threads: 1000,
                     mem_gib: 10000.,
