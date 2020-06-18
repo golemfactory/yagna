@@ -2,6 +2,7 @@ use crate::PaymentDriver;
 use crate::PaymentDriverResult;
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
+use ya_client_model::NodeId;
 use ya_core_model::driver::{
     AccountBalance, AccountMode, Balance, PaymentAmount, PaymentConfirmation, PaymentDetails,
     PaymentStatus,
@@ -23,6 +24,14 @@ impl PaymentDriverProcessor {
             driver: Arc::new(driver),
             db_executor,
         }
+    }
+
+    pub async fn account_locked(&self, identity: NodeId) -> PaymentDriverResult<()> {
+        self.driver.account_locked(identity).await
+    }
+
+    pub async fn account_unlocked(&self, identity: NodeId) -> PaymentDriverResult<()> {
+        self.driver.account_unlocked(identity).await
     }
 
     pub async fn init(&self, mode: AccountMode, address: &str) -> PaymentDriverResult<()> {

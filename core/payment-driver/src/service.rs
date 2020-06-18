@@ -149,6 +149,16 @@ async fn account_event(
     _caller: String,
     msg: ya_core_model::identity::event::Event,
 ) -> Result<(), ya_core_model::identity::Error> {
-    log::info!("account event: {:?}", msg);
+    log::debug!("account event: {:?}", msg);
+    let _ = match msg {
+        ya_core_model::identity::event::Event::AccountLocked { identity } => {
+            processor.account_locked(identity).await
+        }
+        ya_core_model::identity::event::Event::AccountUnlocked { identity } => {
+            processor.account_unlocked(identity).await
+        }
+    }
+    .map_err(|e| log::error!("Identity event listener error: {:?}", e));
+
     Ok(())
 }

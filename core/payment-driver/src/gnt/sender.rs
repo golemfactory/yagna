@@ -19,6 +19,7 @@ use web3::contract::tokens::Tokenize;
 use web3::contract::Contract;
 use web3::types::TransactionReceipt;
 use web3::Transport;
+use ya_client_model::NodeId;
 use ya_persistence::executor::DbExecutor;
 
 const NONCE_EXPIRE: Duration = Duration::from_secs(12);
@@ -93,6 +94,7 @@ impl Message for WaitForTx {
 }
 
 pub struct TransactionSender {
+    active_accounts: HashMap<String, NodeId>,
     ethereum_client: Arc<EthereumClient>,
     nonces: HashMap<Address, U256>,
     next_reservation_id: u64,
@@ -106,6 +108,7 @@ pub struct TransactionSender {
 impl TransactionSender {
     pub fn new(ethereum_client: Arc<EthereumClient>, db: DbExecutor) -> Addr<Self> {
         let me = TransactionSender {
+            active_accounts: Default::default(),
             ethereum_client,
             db,
             nonces: Default::default(),
@@ -687,5 +690,42 @@ impl TransactionSender {
         }
         .into_actor(self);
         ctx.spawn(job);
+    }
+}
+
+pub struct AccountLocked {
+    pub identity: NodeId,
+}
+
+impl Message for AccountLocked {
+    type Result = Result<(), PaymentDriverError>;
+}
+
+impl Handler<AccountLocked> for TransactionSender {
+    type Result = ActorResponse<Self, (), PaymentDriverError>;
+
+    fn handle(&mut self, msg: AccountLocked, _ctx: &mut Self::Context) -> Self::Result {
+        log::info!("Account: {:?} gets locked", msg.identity.to_string());
+        self.active_accounts
+            .insert(msg.identity.to_string(), msg.identity);
+        ActorResponse::reply(Ok(()))
+    }
+}
+
+pub struct AccountUnlocked {
+    pub identity: NodeId,
+}
+
+impl Message for AccountUnlocked {
+    type Result = Result<(), PaymentDriverError>;
+}
+
+impl Handler<AccountUnlocked> for TransactionSender {
+    type Result = ActorResponse<Self, (), PaymentDriverError>;
+
+    fn handle(&mut self, msg: AccountUnlocked, _ctx: &mut Self::Context) -> Self::Result {
+        log::info!("Account: {:?} gets unlocked", msg.identity.to_string());
+        self.active_accounts.remove(&msg.identity.to_string());
+        ActorResponse::reply(Ok(()))
     }
 }

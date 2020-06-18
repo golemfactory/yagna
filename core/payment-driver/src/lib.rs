@@ -1,5 +1,6 @@
 use crate::processor::PaymentDriverProcessor;
 use chrono::{DateTime, Utc};
+use ya_client_model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
 
@@ -42,6 +43,18 @@ pub trait PaymentDriver {
         &self,
         mode: AccountMode,
         address: &str,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
+
+    /// Notification when identity gets locked and the driver cannot send transactions
+    fn account_locked<'a>(
+        &self,
+        identity: NodeId,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
+
+    /// Notification when identity gets unlocked and the driver can send transactions
+    fn account_unlocked<'a>(
+        &self,
+        identity: NodeId,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Returns account balance

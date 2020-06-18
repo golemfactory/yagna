@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use ya_client_model::NodeId;
 use ya_core_model::driver::{
     AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
     PaymentDetails, PaymentStatus,
@@ -32,6 +33,20 @@ impl PaymentDriver for DummyDriver {
         &self,
         _mode: AccountMode,
         _address: &str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
+        Box::pin(future::ready(Ok(())))
+    }
+
+    fn account_locked<'a>(
+        &self,
+        identity: NodeId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
+        Box::pin(future::ready(Ok(())))
+    }
+
+    fn account_unlocked<'a>(
+        &self,
+        identity: NodeId,
     ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         Box::pin(future::ready(Ok(())))
     }

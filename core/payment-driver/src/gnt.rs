@@ -23,12 +23,15 @@ use crate::utils;
 use std::future::Future;
 use std::pin::Pin;
 
+use crate::gnt::sender::{AccountLocked, AccountUnlocked};
+
 use crate::utils::{
     payment_status_to_i32, PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
     PAYMENT_STATUS_NOT_ENOUGH_GAS,
 };
 use std::sync::Arc;
 use web3::Transport;
+use ya_client_model::NodeId;
 use ya_core_model::driver::{
     AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
     PaymentDetails, PaymentStatus,
@@ -284,6 +287,24 @@ impl PaymentDriver for GntDriver {
                 future::ok(()).right_future()
             },
         )
+    }
+
+    /// Notification when identity gets locked and the driver cannot send transactions
+    fn account_locked<'a>(
+        &self,
+        identity: NodeId,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+        let tx_sender = self.tx_sender.clone();
+        Box::pin(async move { tx_sender.send(AccountLocked { identity }).await? })
+    }
+
+    /// Notification when identity gets unlocked and the driver can send transactions
+    fn account_unlocked<'a>(
+        &self,
+        identity: NodeId,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+        let tx_sender = self.tx_sender.clone();
+        Box::pin(async move { tx_sender.send(AccountUnlocked { identity }).await? })
     }
 
     /// Returns account balance
