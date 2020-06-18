@@ -1,9 +1,7 @@
 /// Broadcast support service
-
 // Note: This file is derived from core/net module. It serves only as mock
 // so we don't have to keep it compatible.
 // It was moved here, because this file is not expected to be public in net module.
-
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::rc::Rc;

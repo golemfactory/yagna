@@ -12,6 +12,7 @@ pub struct MockNet;
 // because GSB router is a static singleton (shared state) and consecutive bindings
 // for same addr (ie. local_net::BUS_ID) are being overwritten and only last is effective
 // which means there might be interlace in BCastService instances being used
+// `bcast_singleton.rs` is a try to handle it, but unsuccessful yet
 impl MockNet {
     pub async fn gsb(bcast: bcast::BCastService) -> anyhow::Result<()> {
         log::info!("initializing BCast on mock net");
