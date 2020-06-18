@@ -8,6 +8,7 @@ use ya_client::model::market::{Demand, Offer, Proposal};
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
+use ya_service_api_web::middleware::Identity;
 
 use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
@@ -80,16 +81,16 @@ impl Matcher {
         let database1 = db.clone();
         let database2 = db.clone();
         let discovery = Discovery::new(
-            move |msg: OfferReceived| {
+            move |_caller: String, msg: OfferReceived| {
                 let database = database1.clone();
                 on_offer_received(database, msg)
             },
-            move |msg: OfferUnsubscribed| {
+            move |_caller: String, msg: OfferUnsubscribed| {
                 let database = database2.clone();
                 on_offer_unsubscribed(database, msg)
             },
-            move |msg: RetrieveOffers| async move {
-                log::info!("Offers request received. Unimplemented.");
+            move |caller: String, msg: RetrieveOffers| async move {
+                log::info!("Offers request received from: {}. Unimplemented.", caller);
                 Ok(vec![])
             },
         )?;
@@ -157,7 +158,11 @@ impl Matcher {
         Ok(())
     }
 
-    pub async fn unsubscribe_offer(&self, subscription_id: &str) -> Result<(), MatcherError> {
+    pub async fn unsubscribe_offer(
+        &self,
+        id: Identity,
+        subscription_id: &str,
+    ) -> Result<(), MatcherError> {
         let subscription_id = SubscriptionId::from_str(subscription_id)?;
         self.db
             .as_dao::<OfferDao>()
@@ -171,7 +176,7 @@ impl Matcher {
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .broadcast_unsubscribe(subscription_id.clone())
+            .broadcast_unsubscribe(id.identity.to_string(), subscription_id.clone())
             .await
             .map_err(|error| {
                 log::warn!(
@@ -292,7 +297,8 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
         // We store only our Offers to keep history. Offers from other nodes
         // should be removed.
         // We are sure that we don't remove our Offer here, because we would got
-        // error in mark_offer_as_unsubscribed.
+        // `AlreadyUnsubscribed` error from `mark_offer_as_unsubscribed` above,
+        // as it was already invoked before broadcast in `unsubscribe_offer`.
         // TODO: Maybe we should add check here, to be sure, that we don't remove own Offers.
         log::debug!("Removing unsubscribed Offer [{}].", &msg.subscription_id);
         let _ = db
@@ -312,7 +318,7 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
         let reason = match error {
             UnsubscribeError::OfferExpired(_) => StopPropagateReason::Expired,
             UnsubscribeError::AlreadyUnsubscribed(_) => StopPropagateReason::AlreadyUnsubscribed,
-            _ => StopPropagateReason::Error(format!("{}", error)),
+            _ => StopPropagateReason::Error(error.to_string()),
         };
         Ok(Propagate::False(reason))
     })

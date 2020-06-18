@@ -10,6 +10,7 @@ use ya_core_model::net;
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint,
 };
+use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, Handle, RpcEndpoint, RpcMessage};
 
 use super::callbacks::{CallbackHandler, CallbackMessage, HandlerSlot};
@@ -77,28 +78,30 @@ impl Discovery {
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in DiscoveryBuilder::bind_offer_received.
     pub async fn broadcast_offer(&self, offer: ModelOffer) -> Result<(), DiscoveryError> {
-        log::info!("Broadcasting offer [{}] to the network.", &offer.id);
+        log::info!("Broadcasting offer [{}].", &offer.id);
 
-        let msg = OfferReceived { offer };
-        let bcast_msg = SendBroadcastMessage::new(msg);
+        let original_sender = offer.node_id.clone();
+        let bcast_msg = SendBroadcastMessage::new(OfferReceived { offer });
 
-        let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+        let _ = bus::service(net::local::BUS_ID)
+            .send_as(original_sender, bcast_msg)
+            .await?;
         Ok(())
     }
 
     pub async fn broadcast_unsubscribe(
         &self,
+        caller: String,
         subscription_id: SubscriptionId,
     ) -> Result<(), DiscoveryError> {
-        log::info!(
-            "Broadcasting unsubscribe offer [{}] to the network.",
-            &subscription_id
-        );
+        log::info!("Broadcasting unsubscribe offer [{}].", &subscription_id);
 
         let msg = OfferUnsubscribed { subscription_id };
         let bcast_msg = SendBroadcastMessage::new(msg);
 
-        let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+        let _ = bus::service(net::local::BUS_ID)
+            .send_as(caller, bcast_msg)
+            .await?;
         Ok(())
     }
 
@@ -188,7 +191,7 @@ impl Discovery {
             &caller,
         );
 
-        match callback.call(caller, msg).await? {
+        match callback.call(caller.clone(), msg).await? {
             Propagate::True => {
                 log::info!(
                     "Propagating further unsubscribe Offer [{}].",
@@ -196,7 +199,10 @@ impl Discovery {
                 );
 
                 // TODO: Should we retry in case of fail?
-                if let Err(error) = self.broadcast_unsubscribe(subscription_id.clone()).await {
+                if let Err(error) = self
+                    .broadcast_unsubscribe(caller, subscription_id.clone())
+                    .await
+                {
                     log::error!(
                         "Error propagating further unsubscribe Offer [{}].",
                         subscription_id,

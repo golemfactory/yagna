@@ -124,7 +124,7 @@ impl MarketService {
         self.provider_negotiation_engine
             .unsubscribe_offer(&subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_offer(&subscription_id).await?)
+        Ok(self.matcher.unsubscribe_offer(id, &subscription_id).await?)
     }
 
     pub async fn subscribe_demand(

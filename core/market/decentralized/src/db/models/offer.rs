@@ -18,7 +18,7 @@ pub struct Offer {
     pub id: SubscriptionId,
     pub properties: String,
     pub constraints: String,
-    pub node_id: String,
+    pub node_id: String, // TODO: NodeId
 
     /// Creation time of Offer on Provider side.
     pub creation_ts: NaiveDateTime,
@@ -39,7 +39,7 @@ pub struct OfferUnsubscribed {
     pub id: SubscriptionId,
     pub insertion_ts: NaiveDateTime,
     pub expiration_ts: NaiveDateTime,
-    pub node_id: String,
+    pub node_id: String, // TODO: NodeId
 }
 
 #[derive(Clone, Debug, Identifiable, Insertable)]
@@ -47,7 +47,7 @@ pub struct OfferUnsubscribed {
 pub struct NewOfferUnsubscribed {
     pub id: SubscriptionId,
     pub expiration_ts: NaiveDateTime,
-    pub node_id: String,
+    pub node_id: String, // TODO: NodeId
 }
 
 impl Offer {

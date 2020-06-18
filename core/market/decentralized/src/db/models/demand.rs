@@ -17,7 +17,7 @@ pub struct Demand {
     pub id: SubscriptionId,
     pub properties: String,
     pub constraints: String,
-    pub node_id: String,
+    pub node_id: String, // TODO: NodeId
 
     /// Creation time of Demand on Requestor side.
     pub creation_ts: NaiveDateTime,

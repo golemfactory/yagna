@@ -24,6 +24,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
+        // env_logger::init();
         let network = MarketsNetwork::new("test_broadcast_offer")
             .await
             .add_market_instance("Node-1")
@@ -70,6 +71,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
+        // env_logger::init();
         let network = MarketsNetwork::new("test_broadcast_offer_validation")
             .await
             .add_market_instance("Node-1")
@@ -111,6 +113,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
+        // env_logger::init();
         let network = MarketsNetwork::new("test_broadcast_stop_conditions")
             .await
             .add_market_instance("Node-1")
@@ -150,7 +153,7 @@ mod tests {
         let network = network
             .add_discovery_instance(
                 "Node-3",
-                move |_msg: OfferReceived| {
+                move |_caller: String, _msg: OfferReceived| {
                     let offers_counter = counter.clone();
                     async move {
                         offers_counter.fetch_add(1, Ordering::SeqCst);

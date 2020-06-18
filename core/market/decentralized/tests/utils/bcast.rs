@@ -1,8 +1,8 @@
-// Broadcast support service
+/// Broadcast support service
 
-// Note: This file is copied from core/net module. It serves only as mock
+// Note: This file is derived from core/net module. It serves only as mock
 // so we don't have to keep it compatible.
-// It was move here, because this file is not expected to be public in net module.
+// It was moved here, because this file is not expected to be public in net module.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -16,35 +16,24 @@ pub struct BCastService {
 
 #[derive(Default)]
 struct BCastServiceInner {
-    last_id: u64,
-    topics: BTreeMap<String, Vec<(u64, Rc<str>)>>,
+    topics: BTreeMap<String, Vec<Rc<str>>>,
 }
 
 impl BCastService {
-    pub fn add(&self, subscribe: local_net::Subscribe) -> (bool, u64) {
+    pub fn add(&self, subscribe: local_net::Subscribe) {
         let mut me = self.inner.borrow_mut();
-        let id = me.last_id;
         let receivers = me
             .topics
             .entry(subscribe.topic().to_owned())
-            .or_insert_with(Default::default);
-
-        let is_new = receivers.is_empty();
-        receivers.push((id, subscribe.endpoint().into()));
-        me.last_id += 1;
-        (is_new, id)
+            .or_insert_with(Default::default)
+            .push(subscribe.endpoint().into());
     }
 
     pub fn resolve(&self, topic: &str) -> Vec<Rc<str>> {
         let me = self.inner.borrow();
         me.topics
             .get(topic)
-            .map(|receivers| {
-                receivers
-                    .iter()
-                    .map(|(_, endpoint)| endpoint.clone())
-                    .collect()
-            })
+            .map(|receivers| receivers.iter().map(|endpoint| endpoint.clone()).collect())
             .unwrap_or_default()
     }
 }

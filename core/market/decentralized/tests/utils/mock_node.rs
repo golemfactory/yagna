@@ -30,7 +30,7 @@ pub struct MarketNode {
     market: Arc<MarketService>,
     name: String,
     /// For now only mock default Identity.
-    identity: Identity,
+    id: Identity,
     /// Direct access to underlying database.
     db: DbExecutor,
 }
@@ -42,15 +42,15 @@ pub struct DiscoveryNode {
     discovery: Discovery,
     name: String,
     /// For now only mock default Identity.
-    identity: Identity,
+    id: Identity,
 }
 
 impl MarketsNetwork {
     /// Remember that dir_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new<Str: AsRef<str>>(dir_name: Str) -> Self {
-        let test_dir = prepare_test_dir(&dir_name).unwrap();
+    pub async fn new<Str: AsRef<str>>(test_name: Str) -> Self {
+        let test_dir = prepare_test_dir(&test_name).unwrap();
 
         let bcast = bcast::BCastService::default();
         MockNet::gsb(bcast).await.unwrap();
@@ -59,7 +59,7 @@ impl MarketsNetwork {
             markets: vec![],
             discoveries: vec![],
             test_dir,
-            test_name: dir_name.as_ref().to_string(),
+            test_name: test_name.as_ref().to_string(),
         }
     }
 
@@ -78,7 +78,7 @@ impl MarketsNetwork {
 
         let market_node = MarketNode {
             name: name.as_ref().to_string(),
-            identity: generate_identity(name.as_ref()),
+            id: generate_identity(name.as_ref()),
             market,
             db,
         };
@@ -104,7 +104,7 @@ impl MarketsNetwork {
 
         let discovery_node = DiscoveryNode {
             name: name.as_ref().to_string(),
-            identity: generate_identity(name.as_ref()),
+            id: generate_identity(name.as_ref()),
             discovery,
         };
 
@@ -128,13 +128,13 @@ impl MarketsNetwork {
             .unwrap()
     }
 
-    pub fn get_default_id(&self, name: &str) -> Identity {
+    pub fn get_default_id(&self, node_name: &str) -> Identity {
         self.markets
             .iter()
-            .map(|n| (&n.name, &n.identity))
-            .chain(self.discoveries.iter().map(|n| (&n.name, &n.identity)))
-            .find(|node| node.0 == name)
-            .map(|node| node.1.clone())
+            .map(|n| (&n.name, &n.id))
+            .chain(self.discoveries.iter().map(|n| (&n.name, &n.id)))
+            .find(|&(name, _id)| name == &node_name)
+            .map(|(_name, id)| id.clone())
             .unwrap()
     }
 
@@ -193,15 +193,22 @@ pub mod default {
     };
     use ya_market_decentralized::Offer;
 
-    pub async fn empty_on_offer_received(_msg: OfferReceived) -> Result<Propagate, ()> {
+    pub async fn empty_on_offer_received(
+        _caller: String,
+        _msg: OfferReceived,
+    ) -> Result<Propagate, ()> {
         Ok(Propagate::False(StopPropagateReason::AlreadyExists))
     }
 
-    pub async fn empty_on_offer_unsubscribed(_msg: OfferUnsubscribed) -> Result<Propagate, ()> {
+    pub async fn empty_on_offer_unsubscribed(
+        _caller: String,
+        _msg: OfferUnsubscribed,
+    ) -> Result<Propagate, ()> {
         Ok(Propagate::False(StopPropagateReason::AlreadyUnsubscribed))
     }
 
     pub async fn empty_on_retrieve_offers(
+        _caller: String,
         _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])

@@ -26,7 +26,7 @@ impl<'c> AsDao<'c> for OfferDao<'c> {
 #[derive(Error, Debug)]
 pub enum UnsubscribeError {
     #[error("Can't unsubscribe not existing offer: {0}.")]
-    OfferDoesntExist(SubscriptionId),
+    OfferNotFound(SubscriptionId),
     #[error("Can't unsubscribe expired offer: {0}.")]
     OfferExpired(SubscriptionId),
     #[error("Offer [{0}] already unsubscribed.")]
@@ -87,23 +87,23 @@ impl<'c> OfferDao<'c> {
     ) -> Result<(), UnsubscribeError> {
         let subscription_id = subscription_id.clone();
         Ok(do_with_transaction(self.pool, move |conn| {
-            let unsubscribe: NewOfferUnsubscribed = match query_offer(conn, &subscription_id)? {
-                OfferState::Active(offer) => offer.into_unsubscribe(),
+            match query_offer(conn, &subscription_id)? {
+                OfferState::Active(offer) => {
+                    diesel::insert_into(dsl_unsubscribed::market_offer_unsubscribed)
+                        .values(offer.into_unsubscribe())
+                        .execute(conn)?;
+                    Ok(())
+                }
                 OfferState::Expired(_) => {
-                    Err(UnsubscribeError::OfferExpired(subscription_id.clone()))?
+                    Err(UnsubscribeError::OfferExpired(subscription_id.clone()))
                 }
                 OfferState::Unsubscribed(_) => Err(UnsubscribeError::AlreadyUnsubscribed(
                     subscription_id.clone(),
-                ))?,
+                )),
                 OfferState::NotFound => {
-                    Err(UnsubscribeError::OfferDoesntExist(subscription_id.clone()))?
+                    Err(UnsubscribeError::OfferNotFound(subscription_id.clone()))
                 }
-            };
-
-            diesel::insert_into(dsl_unsubscribed::market_offer_unsubscribed)
-                .values(unsubscribe)
-                .execute(conn)?;
-            Result::<(), UnsubscribeError>::Ok(())
+            }
         })
         .await?)
     }

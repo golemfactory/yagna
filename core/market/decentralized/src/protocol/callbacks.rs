@@ -66,11 +66,11 @@ pub type CallbackResult<MsgType> =
 impl<
         MsgType: CallbackMessage,
         Output: OutputFuture<MsgType>,
-        F: FnMut(MsgType) -> Output + Send + Sync + 'static,
+        F: FnMut(String, MsgType) -> Output + Send + Sync + 'static,
     > CallbackHandler<MsgType> for F
 {
-    fn handle(&mut self, _caller: String, msg: MsgType) -> CallbackFuture<MsgType> {
-        Box::pin(self(msg))
+    fn handle(&mut self, caller: String, msg: MsgType) -> CallbackFuture<MsgType> {
+        Box::pin(self(caller, msg))
     }
 }
 
