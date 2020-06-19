@@ -2,7 +2,7 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::mock_node::default::*;
+    use crate::utils::mock_node::{default::*, wait_for_bcast};
     use crate::utils::mock_offer::example_offer;
     use crate::utils::MarketsNetwork;
 
@@ -21,6 +21,7 @@ mod tests {
     use std::time::Duration;
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
+    /// Than sending unsubscribe should remove Offer from other nodes.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
@@ -38,29 +39,27 @@ mod tests {
         let market1: Arc<MarketService> = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
-        let mut offer = Offer::new(json!({}), "()".to_string());
+        let offer = Offer::new(json!({}), "()".to_string());
         let subscription_id = market1.subscribe_offer(&offer, identity1.clone()).await?;
-
-        // Fill expected values for further comparison.
-        offer.provider_id = Some(identity1.identity.to_string());
-        offer.offer_id = Some(subscription_id.clone());
+        let offer = market1.matcher.get_offer(&subscription_id).await?;
+        assert!(offer.is_some());
 
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
         let market3: Arc<MarketService> = network.get_market("Node-3");
+        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_some()).await?;
+        assert_eq!(offer, market2.matcher.get_offer(&subscription_id).await?);
+        assert_eq!(offer, market3.matcher.get_offer(&subscription_id).await?);
 
-        // Wait for Offer propagation.
-        // TODO: How to wait without assuming any number of seconds?
-        tokio::time::delay_for(Duration::from_millis(30)).await;
+        // Unsubscribe Offer. Wait some delay for propagation.
+        market1
+            .unsubscribe_offer(subscription_id.clone(), identity1.clone())
+            .await?;
 
-        assert_eq!(
-            offer,
-            market2.matcher.get_offer(&subscription_id).await?.unwrap()
-        );
-        assert_eq!(
-            offer,
-            market3.matcher.get_offer(&subscription_id).await?.unwrap()
-        );
+        // Expect, that Offer will disappear on other nodes.
+        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_none()).await?;
+        assert!(market2.matcher.get_offer(&subscription_id).await?.is_none());
+        assert!(market3.matcher.get_offer(&subscription_id).await?.is_none());
 
         Ok(())
     }
@@ -85,7 +84,7 @@ mod tests {
             .await?;
 
         let market1: Arc<MarketService> = network.get_market("Node-1");
-        let market2: Discovery = network.get_discovery("Node-2");
+        let discovery2: Discovery = network.get_discovery("Node-2");
         let identity2 = network.get_default_id("Node-2");
 
         // Prepare Offer with subscription id changed to invalid.
@@ -95,8 +94,8 @@ mod tests {
         offer.id = false_subscription_id.clone();
 
         // Offer should be propagated to market1, but he should reject it.
-        market2.broadcast_offer(offer).await?;
-        tokio::time::delay_for(Duration::from_millis(30)).await;
+        discovery2.broadcast_offer(offer).await?;
+        tokio::time::delay_for(Duration::from_millis(50)).await;
 
         assert!(market1
             .matcher
@@ -128,10 +127,15 @@ mod tests {
         let subscription_id = market1
             .subscribe_offer(&example_offer(), identity1.clone())
             .await?;
-        // Wait for propagation.
-        tokio::time::delay_for(Duration::from_millis(30)).await;
+        let offer = market1.matcher.get_offer(&subscription_id).await?;
+        assert!(offer.is_some());
 
-        // Get model Offer for future broadcasting.
+        // Expect, that Offer will appear on other nodes.
+        let market2: Arc<MarketService> = network.get_market("Node-2");
+        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_some()).await?;
+        assert_eq!(offer, market2.matcher.get_offer(&subscription_id).await?);
+
+        // Get model Offer for direct broadcasting below.
         let db = network.get_database("Node-1");
         let model_offer = db
             .as_dao::<OfferDao>()
@@ -144,7 +148,11 @@ mod tests {
         market1
             .unsubscribe_offer(subscription_id.clone(), identity1.clone())
             .await?;
-        tokio::time::delay_for(Duration::from_millis(30)).await;
+        assert!(market1.matcher.get_offer(&subscription_id).await?.is_none());
+
+        // Expect, that Offer will disappear on other nodes.
+        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_none()).await?;
+        assert!(market2.matcher.get_offer(&subscription_id).await?.is_none());
 
         // Send the same Offer using Discovery interface directly.
         // Number of returning Offers will be counted.
@@ -171,7 +179,7 @@ mod tests {
 
         // Wait for Offer propagation.
         // TODO: How to wait without assuming any number of seconds?
-        tokio::time::delay_for(Duration::from_millis(30)).await;
+        tokio::time::delay_for(Duration::from_millis(50)).await;
 
         assert_eq!(
             offers_counter.load(Ordering::SeqCst),

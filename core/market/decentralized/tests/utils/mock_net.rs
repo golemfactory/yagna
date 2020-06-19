@@ -14,7 +14,7 @@ pub struct MockNet;
 // which means there might be interlace in BCastService instances being used
 // `bcast_singleton.rs` is a try to handle it, but unsuccessful yet
 impl MockNet {
-    pub async fn gsb(bcast: bcast::BCastService) -> anyhow::Result<()> {
+    pub fn gsb(bcast: bcast::BCastService) -> anyhow::Result<()> {
         log::info!("initializing BCast on mock net");
 
         let bcast_service_id = <SendBroadcastMessage<serde_json::Value> as RpcMessage>::ID;
