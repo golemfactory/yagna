@@ -7,14 +7,20 @@ use diesel::types::{FromSql, ToSql};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
+use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
+use ya_client::model::ErrorMessage;
+
 use super::{generate_random_id, hash_proposal, SubscriptionId};
 use crate::db::models::Demand as ModelDemand;
+use crate::db::models::MarketEvent;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
 
+/// TODO: Could we avoid having separate enum type for database
+///  and separate for client?
 #[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
 #[sql_type = "Integer"]
-pub enum State {
+pub enum ProposalState {
     /// Proposal arrived from the market as response to subscription
     Initial = 0,
     /// Bespoke counter-proposal issued by one party directly to other party (negotiation phase)
@@ -25,6 +31,11 @@ pub enum State {
     Accepted = 3,
     /// Not accepted nor rejected before validity period
     Expired = 4,
+}
+
+pub enum OwnerType {
+    Provider,
+    Requestor,
 }
 
 /// Represents negotiation between Requestor and Provider related
@@ -79,18 +90,19 @@ pub struct Proposal {
     pub properties: String,
     pub constraints: String,
 
-    pub state: State,
+    pub state: ProposalState,
     pub creation_ts: NaiveDateTime,
     pub expiration_ts: NaiveDateTime,
 }
 
-enum OwnerType {
-    Provider,
-    Requestor,
+/// Proposal together with Negotiation object related with it.
+pub struct ProposalExt {
+    pub negotiation: Negotiation,
+    pub proposal: Proposal,
 }
 
 impl Proposal {
-    pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> (Proposal, Negotiation) {
+    pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> ProposalExt {
         let negotiation = Negotiation::new(&demand, &offer, OwnerType::Requestor);
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
@@ -103,12 +115,35 @@ impl Proposal {
             negotiation_id: negotiation.id.clone(),
             properties: offer.properties,
             constraints: offer.constraints,
-            state: State::Initial,
+            state: ProposalState::Initial,
             creation_ts,
             expiration_ts,
         };
 
-        (proposal, negotiation)
+        ProposalExt {
+            proposal,
+            negotiation,
+        }
+    }
+}
+
+impl ProposalExt {
+    pub fn into_client(self) -> Result<ClientProposal, ErrorMessage> {
+        let properties = serde_json::from_str(&self.proposal.properties).map_err(|error| {
+            format!(
+                "Can't serialize Proposal properties from database!!! Error: {}",
+                error
+            )
+        })?;
+
+        Ok(ClientProposal {
+            properties,
+            constraints: self.proposal.constraints,
+            proposal_id: Some(self.proposal.id),
+            issuer_id: Some(self.negotiation.provider_id),
+            state: Some(State::from(self.proposal.state)),
+            prev_proposal_id: self.proposal.prev_proposal_id,
+        })
     }
 }
 
@@ -137,7 +172,19 @@ impl Negotiation {
     }
 }
 
-impl<DB: Backend> ToSql<Integer, DB> for State
+impl From<ProposalState> for State {
+    fn from(state: ProposalState) -> Self {
+        match state {
+            ProposalState::Initial => State::Initial,
+            ProposalState::Rejected => State::Rejected,
+            ProposalState::Draft => State::Draft,
+            ProposalState::Accepted => State::Accepted,
+            ProposalState::Expired => State::Expired,
+        }
+    }
+}
+
+impl<DB: Backend> ToSql<Integer, DB> for ProposalState
 where
     i32: ToSql<Integer, DB>,
 {
@@ -146,16 +193,16 @@ where
     }
 }
 
-impl<DB> FromSql<Integer, DB> for State
+impl<DB> FromSql<Integer, DB> for ProposalState
 where
     i32: FromSql<Integer, DB>,
     DB: Backend,
 {
     fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        Ok(
-            FromPrimitive::from_i32(i32::from_sql(bytes)?).ok_or(anyhow::anyhow!(
-                "Invalid conversion from i32 to Proposal State."
-            ))?,
-        )
+        let enum_value = i32::from_sql(bytes)?;
+        Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
+            "Invalid conversion from {} (i32) to Proposal State.",
+            enum_value
+        ))?)
     }
 }

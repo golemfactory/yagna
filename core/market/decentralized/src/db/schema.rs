@@ -69,7 +69,7 @@ table! {
 table! {
     market_proposal (id) {
         id -> Text,
-        prev_proposal_id -> Text,
+        prev_proposal_id -> Nullable<Text>,
 
         negotiation_id -> Text,
 

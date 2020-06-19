@@ -92,7 +92,7 @@ CREATE TABLE market_negotiation(
 
 CREATE TABLE market_proposal(
     id VARCHAR(100) NOT NULL PRIMARY KEY,
-    prev_proposal_id VARCHAR(100) NOT NULL,
+    prev_proposal_id VARCHAR(100),
     negotiation_id VARCHAR(100) NOT NULL,
 
     properties TEXT NOT NULL,
