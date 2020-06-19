@@ -5,4 +5,4 @@ mod subscription;
 pub use demand::Demand;
 pub use offer::{Offer, OfferUnsubscribed};
 
-pub use subscription::{SubscriptionId, SubscriptionParseError};
+pub use subscription::SubscriptionId;

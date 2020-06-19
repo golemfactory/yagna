@@ -38,7 +38,7 @@ async fn subscribe(
     body: Json<Demand>,
     id: Identity,
 ) -> HttpResponse {
-    match market.subscribe_demand(&body.into_inner(), id).await {
+    match market.subscribe_demand(&body.into_inner(), &id).await {
         Ok(subscription_id) => response::created(subscription_id),
         // TODO: Translate MarketError to better HTTP response.
         Err(error) => response::server_error(&format!("{}", error)),
@@ -57,7 +57,7 @@ async fn unsubscribe(
     id: Identity,
 ) -> HttpResponse {
     let subscription_id = path.into_inner().subscription_id;
-    match market.unsubscribe_demand(subscription_id.clone(), id).await {
+    match market.unsubscribe_demand(&subscription_id, &id).await {
         Ok(()) => response::ok("Ok"),
         // TODO: Translate MatcherError to better HTTP response.
         Err(error) => response::server_error(&format!("{}", error)),

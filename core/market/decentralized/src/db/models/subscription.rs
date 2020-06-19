@@ -5,7 +5,7 @@ use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
 use std::io::Write;
 use std::str::FromStr;
@@ -25,14 +25,30 @@ pub enum SubscriptionParseError {
     InvalidLength(String),
 }
 
-#[derive(
-    Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", random_id, hash)]
 #[sql_type = "Text"]
 pub struct SubscriptionId {
     random_id: String,
     hash: String,
+}
+
+impl Serialize for SubscriptionId {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SubscriptionId {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, <D as Deserializer<'de>>::Error> {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
+    }
 }
 
 /// TODO: Should be cryptographically strong.
@@ -87,6 +103,7 @@ pub fn hash(
     hasher.input(node_id);
     // We can't change format freely, because it is important to compute hash.
     // Is there any other solution, to compute hash, that is format independent?
+    // TODO: increase precision issue #353
     hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%S").to_string());
     hasher.input(expiration_ts.format("%Y-%m-%d %H:%M:%S").to_string());
 

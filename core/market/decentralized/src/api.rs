@@ -1,8 +1,10 @@
+use serde::Deserialize;
+
+use crate::SubscriptionId;
+
 pub mod provider;
 pub mod requestor;
 pub mod response;
-
-use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
 pub const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
@@ -14,12 +16,12 @@ pub struct PathAgreement {
 
 #[derive(Deserialize)]
 pub struct PathSubscription {
-    pub subscription_id: String,
+    pub subscription_id: SubscriptionId,
 }
 
 #[derive(Deserialize)]
 pub struct PathSubscriptionProposal {
-    pub subscription_id: String,
+    pub subscription_id: SubscriptionId,
     pub proposal_id: String,
 }
 

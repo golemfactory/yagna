@@ -10,7 +10,7 @@ use ya_client::model::{market::Offer, NodeId};
 use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
-use ya_market_decentralized::MarketService;
+use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -188,7 +188,7 @@ fn generate_identity(name: &str) -> Identity {
 pub async fn wait_for_bcast(
     grace_millis: u64,
     market: &MarketService,
-    subscription_id: &str,
+    subscription_id: &SubscriptionId,
     stop_condition: impl Fn(Option<Offer>) -> bool + Send + Sync + 'static,
 ) -> Result<()> {
     let steps = 20;

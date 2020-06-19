@@ -8,7 +8,7 @@ use crate::api::{provider, requestor};
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::matcher::{Matcher, MatcherError, MatcherInitError};
-use crate::migrations;
+use crate::{migrations, SubscriptionId};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 
@@ -102,57 +102,54 @@ impl MarketService {
     pub async fn subscribe_offer(
         &self,
         offer: &Offer,
-        id: Identity,
-    ) -> Result<String, MarketError> {
+        id: &Identity,
+    ) -> Result<SubscriptionId, MarketError> {
         let offer = ModelOffer::from_new(offer, &id);
-        let subscription_id = offer.id.to_string();
 
         self.matcher.subscribe_offer(&offer).await?;
         self.provider_negotiation_engine
             .subscribe_offer(&offer)
             .await?;
-        Ok(subscription_id)
+        Ok(offer.id)
     }
 
     pub async fn unsubscribe_offer(
         &self,
-        subscription_id: String,
-        id: Identity,
+        subscription_id: &SubscriptionId,
+        id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-
         self.provider_negotiation_engine
-            .unsubscribe_offer(&subscription_id)
+            .unsubscribe_offer(subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_offer(id, &subscription_id).await?)
+        Ok(self.matcher.unsubscribe_offer(id, subscription_id).await?)
     }
 
     pub async fn subscribe_demand(
         &self,
         demand: &Demand,
-        id: Identity,
-    ) -> Result<String, MarketError> {
+        id: &Identity,
+    ) -> Result<SubscriptionId, MarketError> {
         let demand = ModelDemand::from_new(demand, &id);
-        let subscription_id = demand.id.to_string();
 
         self.matcher.subscribe_demand(&demand).await?;
         self.requestor_negotiation_engine
             .subscribe_demand(&demand)
             .await?;
-        Ok(subscription_id)
+        Ok(demand.id)
     }
 
     pub async fn unsubscribe_demand(
         &self,
-        subscription_id: String,
-        id: Identity,
+        subscription_id: &SubscriptionId,
+        id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
 
         self.requestor_negotiation_engine
-            .unsubscribe_demand(&subscription_id)
+            .unsubscribe_demand(subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_demand(&subscription_id).await?)
+        Ok(self.matcher.unsubscribe_demand(subscription_id).await?)
     }
 }
 

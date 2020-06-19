@@ -40,7 +40,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let offer = Offer::new(json!({}), "()".to_string());
-        let subscription_id = market1.subscribe_offer(&offer, identity1.clone()).await?;
+        let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
         let offer = market1.matcher.get_offer(&subscription_id).await?;
         assert!(offer.is_some());
 
@@ -53,7 +53,7 @@ mod tests {
 
         // Unsubscribe Offer. Wait some delay for propagation.
         market1
-            .unsubscribe_offer(subscription_id.clone(), identity1.clone())
+            .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
 
         // Expect, that Offer will disappear on other nodes.
@@ -88,10 +88,10 @@ mod tests {
         let identity2 = network.get_default_id("Node-2");
 
         // Prepare Offer with subscription id changed to invalid.
-        let false_subscription_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
+        let invalid_subscription_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
         let offer = example_offer();
         let mut offer = ModelOffer::from_new(&offer, &identity2);
-        offer.id = false_subscription_id.clone();
+        offer.id = invalid_subscription_id.clone();
 
         // Offer should be propagated to market1, but he should reject it.
         discovery2.broadcast_offer(offer).await?;
@@ -99,7 +99,7 @@ mod tests {
 
         assert!(market1
             .matcher
-            .get_offer(false_subscription_id.to_string())
+            .get_offer(&invalid_subscription_id)
             .await?
             .is_none());
         Ok(())
@@ -125,7 +125,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_offer(&example_offer(), identity1.clone())
+            .subscribe_offer(&example_offer(), &identity1)
             .await?;
         let offer = market1.matcher.get_offer(&subscription_id).await?;
         assert!(offer.is_some());
@@ -139,14 +139,14 @@ mod tests {
         let db = network.get_database("Node-1");
         let model_offer = db
             .as_dao::<OfferDao>()
-            .get_offer(&SubscriptionId::from_str(subscription_id.as_ref())?)
+            .get_offer(&subscription_id)
             .await?
             .unwrap();
 
         // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
         // database on Node-2, since it's foreign Offer.
         market1
-            .unsubscribe_offer(subscription_id.clone(), identity1.clone())
+            .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
         assert!(market1.matcher.get_offer(&subscription_id).await?.is_none());
 

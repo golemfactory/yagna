@@ -13,7 +13,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
-use crate::db::models::{SubscriptionId, SubscriptionParseError};
+use crate::db::models::SubscriptionId;
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
@@ -26,7 +26,7 @@ pub enum DemandError {
     #[error("Failed to save Demand. Error: {0}.")]
     SaveDemandFailure(#[from] DbError),
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
-    RemoveDemandFailure(DbError, String),
+    RemoveDemandFailure(DbError, SubscriptionId),
     #[error("Demand [{0}] doesn't exist.")]
     DemandNotExists(SubscriptionId),
 }
@@ -160,10 +160,9 @@ impl Matcher {
 
     pub async fn unsubscribe_offer(
         &self,
-        id: Identity,
-        subscription_id: &str,
+        id: &Identity,
+        subscription_id: &SubscriptionId,
     ) -> Result<(), MatcherError> {
-        let subscription_id = SubscriptionId::from_str(subscription_id)?;
         self.db
             .as_dao::<OfferDao>()
             .mark_offer_as_unsubscribed(&subscription_id)
@@ -188,19 +187,19 @@ impl Matcher {
         Ok(())
     }
 
-    pub async fn unsubscribe_demand(&self, subscription_id: &str) -> Result<(), MatcherError> {
-        let subscription_id = SubscriptionId::from_str(subscription_id)?;
+    pub async fn unsubscribe_demand(
+        &self,
+        subscription_id: &SubscriptionId,
+    ) -> Result<(), MatcherError> {
         let removed = self
             .db
             .as_dao::<DemandDao>()
             .remove_demand(&subscription_id)
             .await
-            .map_err(|error| {
-                DemandError::RemoveDemandFailure(error, subscription_id.to_string())
-            })?;
+            .map_err(|error| DemandError::RemoveDemandFailure(error, subscription_id.clone()))?;
 
         if !removed {
-            Err(DemandError::DemandNotExists(subscription_id))?;
+            Err(DemandError::DemandNotExists(subscription_id.clone()))?;
         }
         Ok(())
     }
@@ -209,14 +208,14 @@ impl Matcher {
     // Offer/Demand query
     // =========================================== //
 
-    pub async fn get_offer<Str: AsRef<str>>(
+    pub async fn get_offer(
         &self,
-        subscription_id: Str,
+        subscription_id: &SubscriptionId,
     ) -> Result<Option<Offer>, MatcherError> {
         let model_offer: Option<ModelOffer> = self
             .db
             .as_dao::<OfferDao>()
-            .get_offer(&SubscriptionId::from_str(subscription_id.as_ref())?)
+            .get_offer(subscription_id)
             .await?;
 
         match model_offer {
@@ -225,14 +224,14 @@ impl Matcher {
         }
     }
 
-    pub async fn get_demand<Str: AsRef<str>>(
+    pub async fn get_demand(
         &self,
-        subscription_id: Str,
+        subscription_id: &SubscriptionId,
     ) -> Result<Option<Demand>, MatcherError> {
         let model_demand: Option<ModelDemand> = self
             .db
             .as_dao::<DemandDao>()
-            .get_demand(&SubscriptionId::from_str(subscription_id.as_ref())?)
+            .get_demand(subscription_id)
             .await?;
 
         match model_demand {
@@ -330,12 +329,6 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
 
 impl From<ErrorMessage> for MatcherError {
     fn from(e: ErrorMessage) -> Self {
-        MatcherError::InternalError(e.to_string())
-    }
-}
-
-impl From<SubscriptionParseError> for MatcherError {
-    fn from(e: SubscriptionParseError) -> Self {
         MatcherError::InternalError(e.to_string())
     }
 }
