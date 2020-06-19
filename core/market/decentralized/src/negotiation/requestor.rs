@@ -3,23 +3,26 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
+use super::errors::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError};
+use super::EventNotifier;
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::EventError;
 use crate::db::models::Proposal as ModelProposal;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
 use crate::db::models::{Offer as ModelOffer, ProposalExt};
+use crate::db::DbResult;
 use crate::matcher::DraftProposal;
 
+use crate::negotiation::notifier::NotifierError;
 use ya_client::model::market::event::RequestorEvent;
+use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
-
-use super::errors::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError};
-use crate::db::DbResult;
 
 /// Requestor part of negotiation logic.
 /// TODO: Too long name.
 pub struct RequestorNegotiationEngine {
     db: DbExecutor,
+    notifier: EventNotifier,
 }
 
 impl RequestorNegotiationEngine {
@@ -27,8 +30,13 @@ impl RequestorNegotiationEngine {
         db: DbExecutor,
         proposal_receiver: UnboundedReceiver<DraftProposal>,
     ) -> Result<Arc<RequestorNegotiationEngine>, NegotiationInitError> {
-        let engine = RequestorNegotiationEngine { db: db.clone() };
-        tokio::spawn(proposal_receiver_thread(db, proposal_receiver));
+        let notifier = EventNotifier::new();
+        let engine = RequestorNegotiationEngine {
+            db: db.clone(),
+            notifier: notifier.clone(),
+        };
+
+        tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
         Ok(Arc::new(engine))
     }
 
@@ -60,42 +68,78 @@ impl RequestorNegotiationEngine {
         max_events: i32,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
         let subscription_id = SubscriptionId::from_str(subscription_id)?;
-        let events = self
-            .db
-            .as_dao::<EventsDao>()
-            .take_requestor_events(&subscription_id, max_events)
-            .await?;
+        loop {
+            let events = get_events_from_db(&self.db, &subscription_id, max_events).await?;
+            if events.len() > 0 {
+                log::debug!("Returning {} events", events.len());
+                return Ok(events);
+            }
 
-        // Map model events to client RequestorEvent.
-        let results = futures::stream::iter(events)
-            .then(|event| event.into_client_requestor_event(&self.db))
-            .collect::<Vec<Result<RequestorEvent, EventError>>>()
-            .await;
+            log::debug!(
+                "Waiting for events for subscription [{}] {} seconds.",
+                &subscription_id,
+                timeout
+            );
+            if let Err(error) = self
+                .notifier
+                .wait_for_event_with_timeout(&subscription_id, timeout)
+                .await
+            {
+                match error {
+                    NotifierError::Timeout(_) => {
+                        return Ok(vec![]);
+                    }
+                    NotifierError::ChannelClosed(_) => {
+                        return Err(QueryEventsError::InternalError(format!("{}", error)))
+                    }
+                };
+            }
 
-        // Filter errors. Can we do something better with errors, than logging them?
-        let events = results
-            .into_iter()
-            .inspect(|result| {
-                if let Err(error) = result {
-                    log::warn!("Error converting event to client type: {}", error);
-                }
-            })
-            .filter_map(|event| event.ok())
-            .collect::<Vec<RequestorEvent>>();
-
-        // TODO: If there were no events:
-        //  - Spawn future waiting for timeout
-        //  - Wait either for timeout or for incoming message about new event.
-        Ok(events)
+            log::debug!("")
+            // Ok result means, that event with required subscription id was added.
+            // We can go to next loop to get this event from db. But still we aren't sure
+            // that list won't be empty, because other query_events can wait for the same event.
+            // TODO: We should subtract elapsed time from timeout.
+        }
     }
+}
+
+async fn get_events_from_db(
+    db: &DbExecutor,
+    subscription_id: &SubscriptionId,
+    max_events: i32,
+) -> Result<Vec<RequestorEvent>, QueryEventsError> {
+    let events = db
+        .as_dao::<EventsDao>()
+        .take_requestor_events(subscription_id, max_events)
+        .await?;
+
+    // Map model events to client RequestorEvent.
+    let results = futures::stream::iter(events)
+        .then(|event| event.into_client_requestor_event(&db))
+        .collect::<Vec<Result<RequestorEvent, EventError>>>()
+        .await;
+
+    // Filter errors. Can we do something better with errors, than logging them?
+    Ok(results
+        .into_iter()
+        .inspect(|result| {
+            if let Err(error) = result {
+                log::warn!("Error converting event to client type: {}", error);
+            }
+        })
+        .filter_map(|event| event.ok())
+        .collect::<Vec<RequestorEvent>>())
 }
 
 pub async fn proposal_receiver_thread(
     db: DbExecutor,
     mut proposal_receiver: UnboundedReceiver<DraftProposal>,
+    notifier: EventNotifier,
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {
         let db = db.clone();
+        let notifier = notifier.clone();
         match async move {
             log::info!("Received proposal from matcher. Adding to events queue.");
 
@@ -109,11 +153,13 @@ pub async fn proposal_receiver_thread(
                 .await?;
 
             // Create Proposal Event and add it to queue (database).
+            let subscription_id = negotiation.subscription_id.clone();
             db.as_dao::<EventsDao>()
                 .add_requestor_event(proposal, negotiation)
                 .await?;
-            // TODO: Send channel message to wake all query_events waiting for proposals.
-            //  Channel should send subscription id related to proposal.
+
+            // Send channel message to wake all query_events waiting for proposals.
+            notifier.notify(&subscription_id).await;
             DbResult::<()>::Ok(())
         }
         .await

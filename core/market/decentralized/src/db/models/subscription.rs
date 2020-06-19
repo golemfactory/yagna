@@ -73,6 +73,15 @@ impl SubscriptionId {
     }
 }
 
+impl Default for SubscriptionId {
+    fn default() -> Self {
+        SubscriptionId {
+            random_id: "0".to_string(),
+            hash: "0".to_string(),
+        }
+    }
+}
+
 pub fn hash(
     properties: &str,
     constraints: &str,

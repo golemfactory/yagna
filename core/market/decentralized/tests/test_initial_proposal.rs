@@ -80,7 +80,7 @@ mod tests {
         // We expect that, the same event won't be available again.
         let events = market1
             .requestor_engine
-            .query_events(&subscription_id, 0.0, 5)
+            .query_events(&subscription_id, 1.0, 5)
             .await?;
 
         assert_eq!(events.len(), 0);

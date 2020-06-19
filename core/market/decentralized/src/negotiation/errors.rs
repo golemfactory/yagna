@@ -12,6 +12,8 @@ pub enum NegotiationInitError {}
 
 #[derive(Error, Debug)]
 pub enum QueryEventsError {
+    #[error("Timeout waiting for events for subscription [{0}].")]
+    Timeout(SubscriptionId),
     #[error("Invalid subscription id. {0}")]
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error("Failed to get events from database. Error: {0}.")]
