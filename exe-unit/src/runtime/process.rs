@@ -1,13 +1,14 @@
 use crate::error::Error;
 use crate::message::{ExecCmd, ExecCmdResult, SetTaskPackagePath, Shutdown};
-use crate::runtime::Runtime;
+use crate::process::ProcessTree;
+use crate::runtime::{Runtime, RuntimeArgs};
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use futures::prelude::*;
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::PathBuf;
-use std::process::{Output, Stdio};
+use std::process::Stdio;
 use tokio::process::Command;
 use ya_client_model::activity::{CommandResult, ExeScriptCommand};
 
@@ -24,16 +25,16 @@ fn process_kill_timeout_seconds() -> i64 {
 
 pub struct RuntimeProcess {
     binary: PathBuf,
-    work_dir: PathBuf,
+    runtime_args: RuntimeArgs,
     task_package_path: Option<PathBuf>,
-    children: HashSet<u32>,
+    children: HashSet<ProcessTree>,
 }
 
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
             binary,
-            work_dir: ctx.work_dir.clone(),
+            runtime_args: ctx.runtime_args.clone(),
             task_package_path: None,
             children: HashSet::new(),
         }
@@ -43,13 +44,9 @@ impl RuntimeProcess {
         let pkg_path = self
             .task_package_path
             .clone()
-            .ok_or(Error::RuntimeError("Task package path missing".to_owned()))?;
-        let mut args = vec![
-            OsString::from("--workdir"),
-            self.work_dir.clone().into_os_string(),
-            OsString::from("--task-package"),
-            OsString::from(pkg_path),
-        ];
+            .ok_or(Error::RuntimeError("Missing task package path".to_owned()))?;
+
+        let mut args = self.runtime_args.to_command_line(&pkg_path);
         args.extend(cmd_args);
         Ok(args)
     }
@@ -71,22 +68,25 @@ impl Actor for RuntimeProcess {
 
 #[derive(Debug, Message)]
 #[rtype("()")]
-struct AddChild(u32);
+struct AddProcessTree(ProcessTree);
 
 #[derive(Debug, Message)]
 #[rtype("()")]
-struct RemoveChild(u32);
+struct RemoveProcessTree(ProcessTree);
 
 impl Handler<ExecCmd> for RuntimeProcess {
     type Result = ActorResponse<Self, ExecCmdResult, Error>;
 
     fn handle(&mut self, msg: ExecCmd, ctx: &mut Self::Context) -> Self::Result {
         let cmd_args = match msg.0.clone() {
-            ExeScriptCommand::Deploy {} => Some(vec![OsString::from("deploy")]),
+            ExeScriptCommand::Deploy {} => {
+                let result = vec![OsString::from("deploy")];
+                result
+            }
             ExeScriptCommand::Start { args } => {
                 let mut result = vec![OsString::from("start")];
                 result.extend(args.into_iter().map(OsString::from));
-                Some(result)
+                result
             }
             ExeScriptCommand::Run { entry_point, args } => {
                 let mut result = vec![
@@ -95,57 +95,55 @@ impl Handler<ExecCmd> for RuntimeProcess {
                     OsString::from(entry_point),
                 ];
                 result.extend(args.into_iter().map(OsString::from));
-                Some(result)
+                result
             }
-            _ => None,
+            _ => {
+                let fut = futures::future::ok(ExecCmdResult {
+                    result: CommandResult::Ok,
+                    stdout: None,
+                    stderr: None,
+                });
+                return ActorResponse::r#async(fut.into_actor(self));
+            }
         };
 
         let address = ctx.address();
-        match cmd_args {
-            Some(cmd_args) => {
-                let binary = self.binary.clone();
-                let args = self.args(cmd_args);
-                let current_path = std::env::current_dir();
-                log::info!(
-                    "Executing {:?} with {:?} from path {:?}",
-                    binary,
-                    args,
-                    current_path
-                );
+        let binary = self.binary.clone();
+        let args = self.args(cmd_args);
+        let current_path = std::env::current_dir();
+        log::info!(
+            "Executing {:?} with {:?} from path {:?}",
+            binary,
+            args,
+            current_path
+        );
 
-                let fut = async move {
-                    let child = Command::new(binary)
-                        .kill_on_drop(true)
-                        .args(args?)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()?;
-                    let pid = child.id();
+        let fut = async move {
+            let child = Command::new(binary)
+                .kill_on_drop(true)
+                .args(args?)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?;
 
-                    address.do_send(AddChild(pid));
-                    let result = child.wait_with_output().await;
-                    address.do_send(RemoveChild(pid));
-                    let output = result?;
+            let tree =
+                ProcessTree::try_new(child.id()).map_err(|e| Error::RuntimeError(e.to_string()))?;
 
-                    Ok(ExecCmdResult {
-                        result: output_to_result(&output),
-                        stdout: Some(vec_to_string(output.stdout)),
-                        stderr: Some(vec_to_string(output.stderr)),
-                    })
-                };
-                ActorResponse::r#async(fut.into_actor(self))
-            }
-            None => {
-                let fut = async {
-                    Ok(ExecCmdResult {
-                        result: CommandResult::Ok,
-                        stdout: None,
-                        stderr: None,
-                    })
-                };
-                ActorResponse::r#async(fut.into_actor(self))
-            }
-        }
+            address.do_send(AddProcessTree(tree.clone()));
+            let result = child.wait_with_output().await;
+            address.do_send(RemoveProcessTree(tree));
+            let output = result?;
+
+            Ok(ExecCmdResult {
+                result: match output.status.success() {
+                    true => CommandResult::Ok,
+                    _ => CommandResult::Error,
+                },
+                stdout: Some(vec_to_string(output.stdout)),
+                stderr: Some(vec_to_string(output.stderr)),
+            })
+        };
+        ActorResponse::r#async(fut.into_actor(self))
     }
 }
 
@@ -157,18 +155,18 @@ impl Handler<SetTaskPackagePath> for RuntimeProcess {
     }
 }
 
-impl Handler<AddChild> for RuntimeProcess {
-    type Result = <AddChild as Message>::Result;
+impl Handler<AddProcessTree> for RuntimeProcess {
+    type Result = <AddProcessTree as Message>::Result;
 
-    fn handle(&mut self, msg: AddChild, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: AddProcessTree, _: &mut Self::Context) -> Self::Result {
         self.children.insert(msg.0);
     }
 }
 
-impl Handler<RemoveChild> for RuntimeProcess {
-    type Result = <RemoveChild as Message>::Result;
+impl Handler<RemoveProcessTree> for RuntimeProcess {
+    type Result = <RemoveProcessTree as Message>::Result;
 
-    fn handle(&mut self, msg: RemoveChild, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RemoveProcessTree, _: &mut Self::Context) -> Self::Result {
         self.children.remove(&msg.0);
     }
 }
@@ -178,18 +176,10 @@ impl Handler<Shutdown> for RuntimeProcess {
 
     fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
         let timeout = process_kill_timeout_seconds();
-        future::join_all(self.children.drain().map(|p| kill_pid(p, timeout)))
+        let futs = self.children.drain().map(move |t| t.kill(timeout));
+        futures::future::join_all(futs)
             .map(|_| Ok(()))
             .boxed_local()
-    }
-}
-
-#[inline]
-fn output_to_result(output: &Output) -> CommandResult {
-    if output.status.success() {
-        CommandResult::Ok
-    } else {
-        CommandResult::Error
     }
 }
 
@@ -201,57 +191,5 @@ fn vec_to_string(vec: Vec<u8>) -> String {
             .into_iter()
             .map(|&c| c as char)
             .collect::<String>(),
-    }
-}
-
-#[cfg(windows)]
-async fn kill_pid(_: u32, _: i64) {
-    // FIXME: implement for win32
-    unimplemented!()
-}
-
-#[cfg(not(windows))]
-async fn kill_pid(pid: u32, timeout: i64) {
-    use chrono::Local;
-    use nix::sys::signal;
-    use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
-    use nix::unistd::Pid;
-    use std::time::Duration;
-
-    fn alive(pid: Pid) -> bool {
-        match waitpid(pid, Some(WaitPidFlag::WNOHANG)) {
-            Ok(status) => match status {
-                WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
-                _ => true,
-            },
-            _ => false,
-        }
-    }
-
-    let pid = Pid::from_raw(pid as i32);
-    let delay = Duration::from_secs_f32(timeout as f32 / 10.);
-    let started = Local::now().timestamp();
-
-    if let Ok(_) = signal::kill(pid, signal::Signal::SIGTERM) {
-        log::info!("Sent SIGTERM to process {:?}", pid);
-
-        loop {
-            let elapsed = Local::now().timestamp() >= started + timeout as i64;
-            match alive(pid) {
-                true => {
-                    if elapsed {
-                        log::info!("Sending SIGKILL to process {:?}", pid);
-                        if let Ok(_) = signal::kill(pid, signal::Signal::SIGKILL) {
-                            let _ = waitpid(pid, None);
-                        }
-                    }
-                }
-                _ => break,
-            }
-            match elapsed {
-                true => break,
-                _ => tokio::time::delay_for(delay).await,
-            }
-        }
     }
 }

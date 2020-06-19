@@ -4,6 +4,7 @@ use anyhow::{anyhow, bail};
 use std::convert::TryFrom;
 use std::time::Duration;
 
+use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
 use ya_client::cli::ProviderApi;
 use ya_utils_actix::actix_handler::send_message;
@@ -98,14 +99,14 @@ impl ProviderAgent {
             })?;
 
             // Create simple offer on market.
-            let constraints = self.build_constraints()?;
+            let cnts = self.build_constraints()?;
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
                     node_info: self.node_info.clone(),
                     service: Self::create_service_info(&exeunit_desc),
                     com_info,
-                    constraints,
+                    constraints: cnts,
                 },
             };
             self.market.send(create_offer_message).await??
@@ -118,14 +119,11 @@ impl ProviderAgent {
 
         // If user set subnet name, we should add constraint for filtering
         // nodes that didn't set the same name in properties.
-        // TODO: Write better constraints building.
-        match self.node_info.subnet.clone() {
-            Some(subnet) => Ok(format!(
-                "(&(golem.node.debug.subnet={})(golem.srv.comp.expiration>0))",
-                subnet,
-            )),
-            None => Ok(format!("(golem.srv.comp.expiration>0)")),
+        let mut cnts = constraints!["golem.srv.comp.expiration" > 0,];
+        if let Some(subnet) = self.node_info.subnet.clone() {
+            cnts = cnts.and(constraints!["golem.node.debug.subnet" == subnet,]);
         }
+        Ok(cnts.to_string())
     }
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {

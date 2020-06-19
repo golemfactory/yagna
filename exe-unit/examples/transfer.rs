@@ -14,6 +14,7 @@ use tempdir::TempDir;
 use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::error::Error;
+use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::transfer::{DeployImage, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
 
@@ -154,26 +155,28 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let agreement = Agreement {
-        agreement: AgreementView {
+        inner: AgreementView {
             agreement_id: String::new(),
             json: Value::Null,
         },
-        agreement_id: String::new(),
         task_package: format!(
             "hash://sha3:{}:http://127.0.0.1:8001/rnd",
             hex::encode(hash)
         ),
         usage_vector: Vec::new(),
         usage_limits: HashMap::new(),
+        infrastructure: HashMap::new(),
     };
 
     log::debug!("Starting TransferService");
+    let runtime_args = RuntimeArgs::new(&work_dir, &agreement, true);
     let exe_ctx = ExeUnitContext {
         activity_id: None,
         report_url: None,
         agreement,
         work_dir: work_dir.clone(),
         cache_dir,
+        runtime_args,
     };
     let transfer_service = TransferService::new(&exe_ctx);
     let addr = transfer_service.start();
@@ -195,56 +198,12 @@ async fn main() -> anyhow::Result<()> {
     transfer(
         &addr,
         "http://127.0.0.1:8001/rnd",
-        "container:/rnd_container",
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &work_dir, "rnd_container");
-
-    transfer(
-        &addr,
-        "container:/rnd_container",
-        "container:/rnd_container2",
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &work_dir, "rnd_container2");
-
-    transfer(
-        &addr,
-        "container:/rnd_container2",
         "http://127.0.0.1:8002/rnd_upload",
     )
     .await
     .expect("transfer failed");
     verify_hash(&hash, temp_dir.path(), "rnd_upload");
-
-    transfer(
-        &addr,
-        "container:/rnd_container2",
-        &format!("file:{}/rnd_local", sub_dir.to_str().unwrap()),
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &sub_dir, "rnd_local");
-
-    transfer(
-        &addr,
-        &format!("file:{}/rnd_local", sub_dir.to_str().unwrap()),
-        &format!("file:{}/rnd_local2", sub_dir.to_str().unwrap()),
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &sub_dir, "rnd_local2");
-
-    transfer(
-        &addr,
-        "http://127.0.0.1:8001/rnd",
-        "http://127.0.0.1:8002/rnd_upload2",
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, temp_dir.path(), "rnd_upload2");
+    log::warn!("Verification complete");
 
     Ok(())
 }
