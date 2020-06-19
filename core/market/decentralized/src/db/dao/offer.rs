@@ -35,8 +35,12 @@ pub enum UnsubscribeError {
     DatabaseError(DbError),
 }
 
-/// Returns state of Offer in database. Since we keep our Offers
-/// and remove other node's Offers, Unsubscribed and Expired Offers are Options.
+/// Internal Offer state.
+///
+/// Since we keep only Offers subscribed locally
+/// (Offers from other nodes are removed upon unsubscribe)
+/// Unsubscribed and Expired Offers are Options.
+// TODO: cleanup external expired offers
 pub enum OfferState {
     Active(ModelOffer),
     Unsubscribed(Option<ModelOffer>),
@@ -121,14 +125,12 @@ impl<'c> OfferDao<'c> {
 }
 
 fn query_offer(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<OfferState> {
-    let is_unsubscribed = is_unsubscribed(conn, subscription_id)?;
-
     let offer: Option<ModelOffer> = dsl::market_offer
         .filter(dsl::id.eq(&subscription_id))
         .first(conn)
         .optional()?;
 
-    if is_unsubscribed {
+    if is_unsubscribed(conn, subscription_id)? {
         return Ok(OfferState::Unsubscribed(offer));
     }
 
@@ -136,17 +138,17 @@ fn query_offer(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<Of
         None => OfferState::NotFound,
         Some(offer) => match offer.expiration_ts > Utc::now().naive_utc() {
             true => OfferState::Active(offer),
-            false => OfferState::Expired(Some(offer)),
+            false => OfferState::Expired(Some(offer)), // TODO: cleanup external expired offers
         },
     })
 }
 
 fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
-    let unsubscribed: Option<OfferUnsubscribed> = dsl_unsubscribed::market_offer_unsubscribed
+    Ok(dsl_unsubscribed::market_offer_unsubscribed
         .filter(dsl_unsubscribed::id.eq(&subscription_id))
-        .first(conn)
-        .optional()?;
-    Ok(unsubscribed.is_some())
+        .first::<OfferUnsubscribed>(conn)
+        .optional()?
+        .is_some())
 }
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for UnsubscribeError {
