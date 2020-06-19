@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ya_client::model::{market::Offer, NodeId};
+use ya_client::model::NodeId;
 use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
@@ -189,14 +189,14 @@ pub async fn wait_for_bcast(
     grace_millis: u64,
     market: &MarketService,
     subscription_id: &SubscriptionId,
-    stop_condition: impl Fn(Option<Offer>) -> bool + Send + Sync + 'static,
+    stop_is_some: bool,
 ) -> Result<()> {
     let steps = 20;
     let wait_step = Duration::from_millis(grace_millis / steps);
     let matcher = market.matcher.clone();
     for _ in 0..steps {
         tokio::time::delay_for(wait_step).await;
-        if stop_condition(matcher.get_offer(&subscription_id).await?) {
+        if matcher.get_offer(&subscription_id).await?.is_some() == stop_is_some {
             break;
         }
     }

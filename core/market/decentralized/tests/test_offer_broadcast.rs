@@ -10,7 +10,6 @@ mod tests {
     use ya_market_decentralized::protocol::{
         Discovery, OfferReceived, Propagate, StopPropagateReason,
     };
-    use ya_market_decentralized::testing::OfferDao;
     use ya_market_decentralized::Offer as ModelOffer;
     use ya_market_decentralized::{MarketService, SubscriptionId};
 
@@ -47,7 +46,7 @@ mod tests {
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
         let market3: Arc<MarketService> = network.get_market("Node-3");
-        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_some()).await?;
+        wait_for_bcast(1000, &market2, &subscription_id, true).await?;
         assert_eq!(offer, market2.matcher.get_offer(&subscription_id).await?);
         assert_eq!(offer, market3.matcher.get_offer(&subscription_id).await?);
 
@@ -57,7 +56,7 @@ mod tests {
             .await?;
 
         // Expect, that Offer will disappear on other nodes.
-        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_none()).await?;
+        wait_for_bcast(1000, &market2, &subscription_id, false).await?;
         assert!(market2.matcher.get_offer(&subscription_id).await?.is_none());
         assert!(market3.matcher.get_offer(&subscription_id).await?.is_none());
 
@@ -132,16 +131,8 @@ mod tests {
 
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
-        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_some()).await?;
+        wait_for_bcast(1000, &market2, &subscription_id, true).await?;
         assert_eq!(offer, market2.matcher.get_offer(&subscription_id).await?);
-
-        // Get model Offer for direct broadcasting below.
-        let db = network.get_database("Node-1");
-        let model_offer = db
-            .as_dao::<OfferDao>()
-            .get_offer(&subscription_id)
-            .await?
-            .unwrap();
 
         // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
         // database on Node-2, since it's foreign Offer.
@@ -151,7 +142,7 @@ mod tests {
         assert!(market1.matcher.get_offer(&subscription_id).await?.is_none());
 
         // Expect, that Offer will disappear on other nodes.
-        wait_for_bcast(1000, &market2, &subscription_id, |o| o.is_none()).await?;
+        wait_for_bcast(1000, &market2, &subscription_id, false).await?;
         assert!(market2.matcher.get_offer(&subscription_id).await?.is_none());
 
         // Send the same Offer using Discovery interface directly.
@@ -175,7 +166,7 @@ mod tests {
 
         // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
         let market3: Discovery = network.get_discovery("Node-3");
-        market3.broadcast_offer(model_offer).await?;
+        market3.broadcast_offer(offer.unwrap()).await?;
 
         // Wait for Offer propagation.
         // TODO: How to wait without assuming any number of seconds?

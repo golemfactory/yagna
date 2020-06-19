@@ -1,9 +1,6 @@
-use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
-use diesel::prelude::*;
+use chrono::{Duration, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::str::FromStr;
-use uuid::Uuid;
 
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -12,7 +9,7 @@ use super::SubscriptionId;
 use crate::db::models::subscription::SubscriptionValidationError;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize, PartialEq)]
 #[table_name = "market_offer"]
 pub struct Offer {
     pub id: SubscriptionId,
@@ -115,7 +112,7 @@ impl Offer {
 mod tests {
     use super::*;
     use chrono::{NaiveDate, NaiveTime};
-    use serde_json::json;
+    use std::str::FromStr;
     use ya_client::model::NodeId;
 
     #[test]

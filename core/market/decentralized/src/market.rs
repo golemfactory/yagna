@@ -1,6 +1,4 @@
 use lazy_static::lazy_static;
-use std::env::current_dir;
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
@@ -12,7 +10,6 @@ use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::{migrations, SubscriptionId};
 
-use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{private, BUS_ID};

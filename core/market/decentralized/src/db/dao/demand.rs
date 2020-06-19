@@ -1,6 +1,5 @@
 use chrono::Utc;
 
-use ya_persistence::executor::Error;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::db::models::Demand as ModelDemand;

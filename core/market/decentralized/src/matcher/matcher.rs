@@ -1,10 +1,7 @@
-use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use ya_client::model::market::{Demand, Offer, Proposal};
+use ya_client::model::market::Proposal;
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
@@ -14,11 +11,7 @@ use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::models::{SubscriptionId, SubscriptionValidationError};
-use crate::db::*;
-use crate::migrations;
-use crate::protocol::{
-    Discovery, DiscoveryError, DiscoveryInitError, Propagate, StopPropagateReason,
-};
+use crate::protocol::{Discovery, DiscoveryInitError, Propagate, StopPropagateReason};
 use crate::protocol::{OfferReceived, OfferUnsubscribed, RetrieveOffers};
 
 #[derive(Error, Debug)]
@@ -211,33 +204,23 @@ impl Matcher {
     pub async fn get_offer(
         &self,
         subscription_id: &SubscriptionId,
-    ) -> Result<Option<Offer>, MatcherError> {
-        let model_offer: Option<ModelOffer> = self
+    ) -> Result<Option<ModelOffer>, MatcherError> {
+        Ok(self
             .db
             .as_dao::<OfferDao>()
             .get_offer(subscription_id)
-            .await?;
-
-        match model_offer {
-            Some(model_offer) => Ok(Some(model_offer.into_client_offer()?)),
-            None => Ok(None),
-        }
+            .await?)
     }
 
     pub async fn get_demand(
         &self,
         subscription_id: &SubscriptionId,
-    ) -> Result<Option<Demand>, MatcherError> {
-        let model_demand: Option<ModelDemand> = self
+    ) -> Result<Option<ModelDemand>, MatcherError> {
+        Ok(self
             .db
             .as_dao::<DemandDao>()
             .get_demand(subscription_id)
-            .await?;
-
-        match model_demand {
-            Some(model_demand) => Ok(Some(model_demand.into_client_offer()?)),
-            None => Ok(None),
-        }
+            .await?)
     }
 }
 

@@ -31,7 +31,7 @@ mod tests {
 
         // Offer should be available in database after subscribe.
         let got_offer = market1.matcher.get_offer(&subscription_id).await?.unwrap();
-        assert_eq!(got_offer, offer);
+        assert_eq!(got_offer.into_client_offer().unwrap(), offer);
 
         // Unsubscribe should fail on not existing subscription id.
         let not_existent_subscription_id = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
@@ -72,7 +72,7 @@ mod tests {
 
         // Offer should be available in database after subscribe.
         let got_demand = market1.matcher.get_demand(&subscription_id).await?.unwrap();
-        assert_eq!(got_demand, demand);
+        assert_eq!(got_demand.into_client_demand().unwrap(), demand);
 
         // Unsubscribe should fail on not existing subscription id.
         let not_existent_subscription_id = "00000000000000000000000000000002-0000000000000000000000000000000000000000000000000000000000000003".parse().unwrap();

@@ -1,8 +1,5 @@
-use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
-use diesel::prelude::*;
+use chrono::{Duration, NaiveDateTime, Utc};
 use serde_json;
-use std::str::FromStr;
-use uuid::Uuid;
 
 use ya_client::model::{market::Demand as ClientDemand, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -10,7 +7,7 @@ use ya_service_api_web::middleware::Identity;
 use super::SubscriptionId;
 use crate::db::schema::market_demand;
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable, PartialEq)]
 #[table_name = "market_demand"]
 pub struct Demand {
     pub id: SubscriptionId,
@@ -59,7 +56,7 @@ impl Demand {
         }
     }
 
-    pub fn into_client_offer(&self) -> Result<ClientDemand, ErrorMessage> {
+    pub fn into_client_demand(&self) -> Result<ClientDemand, ErrorMessage> {
         Ok(ClientDemand {
             demand_id: Some(self.id.to_string()),
             requestor_id: Some(self.node_id.to_string()), // TODO: use NodeId in client: issue #352

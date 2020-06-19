@@ -8,7 +8,7 @@ use super::{
 };
 use crate::market::MarketService;
 
-use ya_client::model::market::{Agreement, AgreementProposal, Demand, Proposal};
+use ya_client::model::market::{AgreementProposal, Demand, Proposal};
 use ya_service_api_web::middleware::Identity;
 
 // This file contains market REST endpoints. Responsibility of these functions
