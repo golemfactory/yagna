@@ -28,7 +28,7 @@ pub enum DemandError {
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
     RemoveDemandFailure(DbError, String),
     #[error("Demand [{0}] doesn't exist.")]
-    DemandNotExists(String),
+    DemandNotExists(SubscriptionId),
 }
 
 #[derive(Error, Debug)]
@@ -200,7 +200,7 @@ impl Matcher {
             })?;
 
         if !removed {
-            Err(DemandError::DemandNotExists(subscription_id.to_string()))?;
+            Err(DemandError::DemandNotExists(subscription_id))?;
         }
         Ok(())
     }
