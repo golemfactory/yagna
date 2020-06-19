@@ -76,7 +76,7 @@ impl Discovery {
     }
 
     /// Broadcasts offer to other nodes in network. Connected nodes will
-    /// get call to function bound in DiscoveryBuilder::bind_offer_received.
+    /// get call to function bound in `offer_received`.
     pub async fn broadcast_offer(&self, offer: ModelOffer) -> Result<(), DiscoveryError> {
         log::info!("Broadcasting offer [{}].", &offer.id);
 
