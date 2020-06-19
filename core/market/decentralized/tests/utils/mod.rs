@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-#![allow(unused)]
 
 pub mod bcast;
 mod mock_net;

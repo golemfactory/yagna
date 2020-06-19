@@ -20,11 +20,10 @@ struct BCastServiceInner {
 impl BCastService {
     pub fn add(&self, subscribe: local_net::Subscribe) {
         let mut me = self.inner.borrow_mut();
-        let receivers = me
-            .topics
+        me.topics
             .entry(subscribe.topic().to_owned())
             .or_insert_with(Default::default)
-            .push(subscribe.endpoint().into());
+            .push(subscribe.endpoint().into())
     }
 
     pub fn resolve(&self, topic: &str) -> Vec<Rc<str>> {
