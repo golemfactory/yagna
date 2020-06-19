@@ -8,9 +8,9 @@ use crate::api::{provider, requestor};
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::matcher::{Matcher, MatcherError, MatcherInitError};
-use crate::{migrations, SubscriptionId};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
+use crate::{migrations, SubscriptionId};
 
 use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
@@ -87,9 +87,9 @@ impl MarketService {
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
         let market = match MARKET.get_or_init_market(&ctx.component()) {
             Ok(market) => market,
-            Err(error) => {
-                log::error!("{}", error);
-                panic!("Market initialization impossible. Check error logs.")
+            Err(e) => {
+                log::error!("REST API initialization failed: {}", e);
+                panic!("Market Service initialization impossible: {}", e)
             }
         };
 

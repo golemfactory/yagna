@@ -147,7 +147,7 @@ impl MarketsNetwork {
     fn init_database(&self, name: &str) -> Result<DbExecutor> {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
-            .map_err(|error| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, error))?;
+            .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))?;
         Ok(db)
     }
 

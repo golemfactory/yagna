@@ -152,7 +152,7 @@ fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResul
 }
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for UnsubscribeError {
-    fn from(err: ErrorType) -> Self {
-        UnsubscribeError::DatabaseError(err.into())
+    fn from(e: ErrorType) -> Self {
+        UnsubscribeError::DatabaseError(e.into())
     }
 }

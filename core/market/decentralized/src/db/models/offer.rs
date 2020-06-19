@@ -9,6 +9,7 @@ use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
+use crate::db::models::subscription::SubscriptionValidationError;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
@@ -81,10 +82,10 @@ impl Offer {
             offer_id: Some(self.id.to_string()),
             provider_id: Some(self.node_id.to_string()), // TODO: use NodeId in client: issue #352
             constraints: self.constraints.clone(),
-            properties: serde_json::from_str(&self.properties).map_err(|error| {
+            properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
-                    "Can't serialize Offer properties from database!!! Error: {}",
-                    error
+                    "Can't serialize Offer properties from database. Error: {}",
+                    e
                 )
             })?,
         })
@@ -99,14 +100,14 @@ impl Offer {
         }
     }
 
-    pub fn validate(&self) -> Result<(), ErrorMessage> {
-        Ok(self.id.validate(
+    pub fn validate(&self) -> Result<(), SubscriptionValidationError> {
+        self.id.validate(
             &self.properties,
             &self.constraints,
             &self.node_id,
             &self.creation_ts,
             &self.expiration_ts,
-        )?)
+        )
     }
 }
 

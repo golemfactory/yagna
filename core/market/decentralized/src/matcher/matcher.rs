@@ -13,7 +13,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
-use crate::db::models::SubscriptionId;
+use crate::db::models::{SubscriptionId, SubscriptionValidationError};
 use crate::db::*;
 use crate::migrations;
 use crate::protocol::{
@@ -47,8 +47,10 @@ pub enum MatcherError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     OfferError(#[from] OfferError),
-    #[error("Internal error: {0}.")]
-    InternalError(String),
+    #[error(transparent)]
+    SubscriptionValidation(#[from] SubscriptionValidationError),
+    #[error("Unexpected Internal error: {0}.")]
+    UnexpectedError(String),
 }
 
 #[derive(Error, Debug)]
@@ -57,8 +59,6 @@ pub enum MatcherInitError {
     DiscoveryError(#[from] DiscoveryInitError),
     #[error("Failed to initialize database. Error: {0}.")]
     DatabaseError(#[from] DbError),
-    #[error("Failed to migrate market database. Error: {0}.")]
-    MigrationError(#[from] anyhow::Error),
 }
 
 /// Receivers for events, that can be emitted from Matcher.
@@ -136,10 +136,10 @@ impl Matcher {
             .discovery
             .broadcast_offer(model_offer.clone())
             .await
-            .map_err(|error| {
+            .map_err(|e| {
                 log::warn!(
                     "Failed to broadcast offer [{1}]. Error: {0}.",
-                    error,
+                    e,
                     model_offer.id,
                 );
             });
@@ -167,7 +167,7 @@ impl Matcher {
             .as_dao::<OfferDao>()
             .mark_offer_as_unsubscribed(&subscription_id)
             .await
-            .map_err(|error| OfferError::UnsubscribeOfferFailure(error, subscription_id.clone()))?;
+            .map_err(|e| OfferError::UnsubscribeOfferFailure(e, subscription_id.clone()))?;
 
         // Broadcast only, if no Error occurred in previous step.
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
@@ -177,10 +177,10 @@ impl Matcher {
             .discovery
             .broadcast_unsubscribe(id.identity.to_string(), subscription_id.clone())
             .await
-            .map_err(|error| {
+            .map_err(|e| {
                 log::warn!(
                     "Failed to broadcast unsubscribe offer [{1}]. Error: {0}.",
-                    error,
+                    e,
                     subscription_id
                 );
             });
@@ -196,7 +196,7 @@ impl Matcher {
             .as_dao::<DemandDao>()
             .remove_demand(&subscription_id)
             .await
-            .map_err(|error| DemandError::RemoveDemandFailure(error, subscription_id.clone()))?;
+            .map_err(|e| DemandError::RemoveDemandFailure(e, subscription_id.clone()))?;
 
         if !removed {
             Err(DemandError::DemandNotExists(subscription_id.clone()))?;
@@ -281,8 +281,8 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         Result::<_, MatcherError>::Ok(propagate)
     }
     .await
-    .or_else(|error| {
-        let reason = StopPropagateReason::Error(format!("{}", error));
+    .or_else(|e| {
+        let reason = StopPropagateReason::Error(format!("{}", e));
         Ok(Propagate::False(reason))
     })
 }
@@ -304,7 +304,7 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
             .as_dao::<OfferDao>()
             .remove_offer(&msg.subscription_id)
             .await
-            .map_err(|error| {
+            .map_err(|_| {
                 log::warn!(
                     "Failed to remove offer [{}] during unsubscribe.",
                     &msg.subscription_id
@@ -313,11 +313,11 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
         Result::<_, UnsubscribeError>::Ok(Propagate::True)
     }
     .await
-    .or_else(|error| {
-        let reason = match error {
+    .or_else(|e| {
+        let reason = match e {
             UnsubscribeError::OfferExpired(_) => StopPropagateReason::Expired,
             UnsubscribeError::AlreadyUnsubscribed(_) => StopPropagateReason::AlreadyUnsubscribed,
-            _ => StopPropagateReason::Error(error.to_string()),
+            _ => StopPropagateReason::Error(e.to_string()),
         };
         Ok(Propagate::False(reason))
     })
@@ -329,12 +329,12 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
 
 impl From<ErrorMessage> for MatcherError {
     fn from(e: ErrorMessage) -> Self {
-        MatcherError::InternalError(e.to_string())
+        MatcherError::UnexpectedError(e.to_string())
     }
 }
 
 impl From<DbError> for MatcherError {
     fn from(e: DbError) -> Self {
-        MatcherError::InternalError(e.to_string())
+        MatcherError::UnexpectedError(e.to_string())
     }
 }

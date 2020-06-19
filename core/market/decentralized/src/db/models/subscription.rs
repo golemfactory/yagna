@@ -15,15 +15,26 @@ use uuid::Uuid;
 use digest::generic_array::GenericArray;
 use ya_client::model::{ErrorMessage, NodeId};
 
-#[derive(Error, Debug)]
+const RANDOM_PREFIX_LEN: usize = 32;
+const HASH_SUFFIX_LEN: usize = 64;
+
+#[derive(Error, Debug, PartialEq)]
 pub enum SubscriptionParseError {
     #[error("Subscription id [{0}] has invalid format.")]
     InvalidFormat(String),
     #[error("Subscription id [{0}] contains non hexadecimal characters.")]
     NotHexadecimal(String),
-    #[error("Subscription id [{0}] has invalid length.")]
+    #[error(
+        "Subscription id [{0}] has invalid length. Should be |{}|-|{}|",
+        RANDOM_PREFIX_LEN,
+        HASH_SUFFIX_LEN
+    )]
     InvalidLength(String),
 }
+
+#[derive(Error, Debug, PartialEq)]
+#[error("Subscription id [{0}] doesn't match content hash [{1}].")]
+pub struct SubscriptionValidationError(SubscriptionId, String);
 
 #[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", random_id, hash)]
@@ -77,13 +88,10 @@ impl SubscriptionId {
         node_id: &NodeId,
         creation_ts: &NaiveDateTime,
         expiration_ts: &NaiveDateTime,
-    ) -> Result<(), ErrorMessage> {
+    ) -> Result<(), SubscriptionValidationError> {
         let hash = hash(properties, constraints, node_id, creation_ts, expiration_ts);
         if self.hash != hash {
-            Err(ErrorMessage::new(format!(
-                "Invalid subscription id [{}]. Hash doesn't match content hash [{}].",
-                &self, hash,
-            )))?;
+            return Err(SubscriptionValidationError(self.clone(), hash));
         }
         Ok(())
     }
@@ -128,11 +136,11 @@ impl FromStr for SubscriptionId {
             Err(SubscriptionParseError::NotHexadecimal(s.to_string()))?;
         }
 
-        if elements[0].len() != 32 {
+        if elements[0].len() != RANDOM_PREFIX_LEN {
             Err(SubscriptionParseError::InvalidLength(s.to_string()))?;
         }
 
-        if elements[1].len() != 64 {
+        if elements[1].len() != HASH_SUFFIX_LEN {
             Err(SubscriptionParseError::InvalidLength(s.to_string()))?;
         }
 
@@ -159,40 +167,144 @@ where
     String: FromSql<Text, DB>,
 {
     fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
-        let string = String::from_sql(bytes)?;
-        match SubscriptionId::from_str(&string) {
-            Ok(subscription) => Ok(subscription),
-            Err(error) => Err(error.into()),
-        }
+        Ok(String::from_sql(bytes)?.parse()?)
     }
 }
 
 impl From<SubscriptionParseError> for ErrorMessage {
-    fn from(err: SubscriptionParseError) -> Self {
-        ErrorMessage::new(err.to_string())
+    fn from(e: SubscriptionParseError) -> Self {
+        ErrorMessage::new(e.to_string())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::models::subscription::SubscriptionParseError::{
+        InvalidFormat, InvalidLength, NotHexadecimal,
+    };
+    use chrono::NaiveDate;
 
     #[test]
-    fn test_subscription_from_str() {
+    fn should_parse_subscription_id() {
         let subscription_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53";
 
         let sub_id = SubscriptionId::from_str(subscription_id).unwrap();
         assert_eq!(
-            sub_id.hash.as_str(),
+            &sub_id.hash,
             "edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53"
         );
+        assert_eq!(&sub_id.random_id, "c76161077d0343ab85ac986eb5f6ea38");
+    }
+
+    #[test]
+    fn should_be_case_sensitive_subscription_id() {
+        assert_ne!(
+            SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").unwrap(),
+            SubscriptionId::from_str("C76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").unwrap(),
+        );
+    }
+
+    #[test]
+    fn should_fail_to_parse_subscription_id() {
+        assert_eq!(SubscriptionId::from_str(""), Err(InvalidFormat("".into())));
         assert_eq!(
-            sub_id.random_id.as_str(),
-            "c76161077d0343ab85ac986eb5f6ea38"
+            SubscriptionId::from_str("a"),
+            Err(InvalidFormat("a".into()))
+        );
+        assert_eq!(
+            SubscriptionId::from_str("x-x"),
+            Err(NotHexadecimal("x-x".into()))
+        );
+        assert_eq!(
+            SubscriptionId::from_str("gfht-ertry"),
+            Err(NotHexadecimal("gfht-ertry".into()))
+        );
+        let invalid_len = SubscriptionId::from_str("34324-241");
+        assert_eq!(invalid_len, Err(InvalidLength("34324-241".into())));
+        assert_eq!(
+            invalid_len.unwrap_err().to_string(),
+            "Subscription id [34324-241] has invalid length. Should be |32|-|64|"
         );
 
-        assert_eq!(SubscriptionId::from_str("34324-241").is_ok(), false);
-        assert_eq!(SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").is_ok(), false);
-        assert_eq!(SubscriptionId::from_str("gfht-ertry").is_ok(), false);
+        assert_eq!(
+            SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-"),
+            Err(InvalidLength("c76161077d0343ab85ac986eb5f6ea38-".into()))
+        );
+        assert_eq!(
+            SubscriptionId::from_str(
+                "-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53"
+            ),
+            Err(InvalidLength(
+                "-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53".into()
+            ))
+        );
+        assert_eq!(
+            SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38F-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53"),
+            Err(InvalidLength("c76161077d0343ab85ac986eb5f6ea38F-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53".into()))
+        );
+        assert_eq!(
+            SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53F"),
+            Err(InvalidLength("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53F".into()))
+        );
+        assert_eq!(
+            SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38F-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53F"),
+            Err(InvalidLength("c76161077d0343ab85ac986eb5f6ea38F-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53F".into()))
+        );
+    }
+
+    #[test]
+    fn should_validate() {
+        let properties = "{}";
+        let constraints = "()";
+        let node_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
+        let creation_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(18, 53, 1);
+        let expiration_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(20, 19, 17);
+        let good_subscription_id = SubscriptionId::generate_id(
+            properties,
+            constraints,
+            &node_id,
+            &creation_ts,
+            &expiration_ts,
+        );
+        assert_eq!(
+            good_subscription_id.validate(
+                properties,
+                constraints,
+                &node_id,
+                &creation_ts,
+                &expiration_ts
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn should_not_validate() {
+        let bad_subscription_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").unwrap();
+        let properties = "{}";
+        let constraints = "()";
+        let node_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
+        let creation_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(18, 53, 1);
+        let expiration_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(20, 19, 17);
+        assert_eq!(
+            bad_subscription_id.validate(
+                properties,
+                constraints,
+                &node_id,
+                &creation_ts,
+                &expiration_ts
+            ),
+            Err(SubscriptionValidationError(
+                bad_subscription_id,
+                hash(
+                    properties,
+                    constraints,
+                    &node_id,
+                    &creation_ts,
+                    &expiration_ts
+                )
+            ))
+        );
     }
 }

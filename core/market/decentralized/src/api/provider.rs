@@ -39,7 +39,7 @@ async fn subscribe(
     match market.subscribe_offer(&body.into_inner(), &id).await {
         Ok(subscription_id) => response::created(subscription_id),
         // TODO: Translate MarketError to better HTTP response.
-        Err(error) => response::server_error(&format!("{}", error)),
+        Err(e) => response::server_error(&e.to_string()),
     }
 }
 
@@ -58,7 +58,7 @@ async fn unsubscribe(
     match market.unsubscribe_offer(&subscription_id, &id).await {
         Ok(()) => response::ok("Ok"),
         // TODO: Translate MatcherError to better HTTP response.
-        Err(error) => response::server_error(&format!("{}", error)),
+        Err(e) => response::server_error(&e.to_string()),
     }
 }
 

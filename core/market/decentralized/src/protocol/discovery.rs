@@ -162,9 +162,9 @@ impl Discovery {
                 log::info!("Propagating further Offer [{}].", offer_id,);
 
                 // TODO: Should we retry in case of fail?
-                if let Err(error) = self.broadcast_offer(offer).await {
+                if let Err(_) = self.broadcast_offer(offer).await {
                     log::error!(
-                        "Error propagating further Offer [{}] from provider [{}].",
+                        "Error propagating Offer [{}] from provider [{}] further.",
                         offer_id,
                         provider_id
                     );
@@ -199,19 +199,19 @@ impl Discovery {
                 );
 
                 // TODO: Should we retry in case of fail?
-                if let Err(error) = self
+                if let Err(_) = self
                     .broadcast_unsubscribe(caller, subscription_id.clone())
                     .await
                 {
                     log::error!(
-                        "Error propagating further unsubscribe Offer [{}].",
+                        "Error propagating unsubscribe Offer [{}] further.",
                         subscription_id,
                     );
                 }
             }
             Propagate::False(reason) => {
                 log::info!(
-                    "Not propagating unsubscribe Offer [{}] for reason: {}.",
+                    "Not propagating unsubscribe Offer [{}] because: {}.",
                     subscription_id,
                     reason
                 );
