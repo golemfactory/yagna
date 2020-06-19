@@ -13,7 +13,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use digest::generic_array::GenericArray;
-use ya_client::model::ErrorMessage;
+use ya_client::model::{ErrorMessage, NodeId};
 
 #[derive(Error, Debug)]
 pub enum SubscriptionParseError {
@@ -44,7 +44,7 @@ impl SubscriptionId {
     pub fn generate_id(
         properties: &str,
         constraints: &str,
-        node_id: &str,
+        node_id: &NodeId,
         creation_ts: &NaiveDateTime,
         expiration_ts: &NaiveDateTime,
     ) -> SubscriptionId {
@@ -58,7 +58,7 @@ impl SubscriptionId {
         &self,
         properties: &str,
         constraints: &str,
-        node_id: &str,
+        node_id: &NodeId,
         creation_ts: &NaiveDateTime,
         expiration_ts: &NaiveDateTime,
     ) -> Result<(), ErrorMessage> {
@@ -76,7 +76,7 @@ impl SubscriptionId {
 pub fn hash(
     properties: &str,
     constraints: &str,
-    node_id: &str,
+    node_id: &NodeId,
     creation_ts: &NaiveDateTime,
     expiration_ts: &NaiveDateTime,
 ) -> String {

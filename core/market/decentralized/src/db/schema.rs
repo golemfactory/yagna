@@ -4,6 +4,7 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
+
         creation_ts -> Timestamp,
         insertion_ts -> Nullable<Timestamp>,
         expiration_ts -> Timestamp,
@@ -16,6 +17,7 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
+
         creation_ts -> Timestamp,
         insertion_ts -> Nullable<Timestamp>,
         expiration_ts -> Timestamp,
@@ -25,9 +27,10 @@ table! {
 table! {
     market_offer_unsubscribed (id) {
         id -> Text,
-        insertion_ts -> Timestamp,
-        expiration_ts -> Timestamp,
         node_id -> Text,
+
+        insertion_ts -> Nullable<Timestamp>,
+        expiration_ts -> Timestamp,
     }
 }
 

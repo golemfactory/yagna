@@ -6,7 +6,7 @@ use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
-use crate::db::models::{NewOfferUnsubscribed, Offer as ModelOffer, OfferUnsubscribed};
+use crate::db::models::{Offer as ModelOffer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl;
 use crate::db::schema::market_offer_unsubscribed::dsl as dsl_unsubscribed;
 use crate::db::DbResult;

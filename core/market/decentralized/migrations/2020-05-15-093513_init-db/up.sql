@@ -13,9 +13,10 @@ CREATE TABLE market_offer (
 
 CREATE TABLE market_offer_unsubscribed (
     id VARCHAR(97) NOT NULL PRIMARY KEY,
+    node_id VARCHAR(20) NOT NULL,
+
     insertion_ts DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expiration_ts DATETIME NOT NULL,
-    node_id VARCHAR(20) NOT NULL
+    expiration_ts DATETIME NOT NULL
 );
 
 CREATE TABLE market_demand (
