@@ -23,7 +23,6 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
-        env_logger::init();
         let network = MarketsNetwork::new("test_query_initial_proposal")
             .await
             .add_market_instance("Node-1")
@@ -65,7 +64,7 @@ mod tests {
         // We expect that proposal will be available as event.
         let events = market1
             .requestor_engine
-            .query_events(&subscription_id, 0.0, 1)
+            .query_events(&subscription_id, 0.0, 5)
             .await?;
 
         assert_eq!(events.len(), 1);
@@ -77,6 +76,14 @@ mod tests {
 
         assert_eq!(proposal.prev_proposal_id, None);
         assert_eq!(proposal.state()?, &State::Initial);
+
+        // We expect that, the same event won't be available again.
+        let events = market1
+            .requestor_engine
+            .query_events(&subscription_id, 0.0, 5)
+            .await?;
+
+        assert_eq!(events.len(), 0);
 
         Ok(())
     }
