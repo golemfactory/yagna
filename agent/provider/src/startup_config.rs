@@ -12,7 +12,7 @@ use ya_client::cli::ApiOpts;
 use ya_utils_path::data_dir::DataDir;
 
 /// Common configuration for all Provider commands.
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 pub struct ProviderConfig {
     /// Descriptor file (JSON) for available ExeUnits
     #[structopt(
@@ -65,8 +65,6 @@ pub struct RunConfig {
     pub node: NodeConfig,
     #[structopt(flatten)]
     pub runner_config: TaskRunnerConfig,
-    /// Offer presets, that will be sent to market.
-    pub presets: Vec<String>,
 }
 
 #[derive(StructOpt)]
@@ -84,16 +82,20 @@ pub struct PresetNoInteractive {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum PresetsConfig {
+    /// List available presets
     List,
+    /// List active presets
+    Active,
+    /// Create a preset
     Create {
         #[structopt(long)]
         no_interactive: bool,
         #[structopt(flatten)]
         params: PresetNoInteractive,
     },
-    Remove {
-        name: String,
-    },
+    /// Remove a preset
+    Remove { name: String },
+    /// Update a preset
     Update {
         name: String,
         #[structopt(long)]
@@ -101,6 +103,11 @@ pub enum PresetsConfig {
         #[structopt(flatten)]
         params: PresetNoInteractive,
     },
+    /// Activate a preset
+    Activate { name: String },
+    /// Deactivate a preset
+    Deactivate { name: String },
+    /// List available metrics
     ListMetrics,
 }
 
@@ -109,10 +116,16 @@ pub enum PresetsConfig {
 pub enum ProfileConfig {
     /// List available profiles
     List,
-    /// Show profile details
-    Show { name: String },
+    /// Show the name of an active profile
+    Active,
     /// Create a new profile
     Create {
+        name: String,
+        #[structopt(flatten)]
+        resources: Resources,
+    },
+    /// Update a profile
+    Update {
         name: String,
         #[structopt(flatten)]
         resources: Resources,
@@ -162,10 +175,10 @@ pub struct FileMonitor {
 }
 
 impl FileMonitor {
-    pub fn spawn<P, F>(path: P, handler: F) -> std::result::Result<Self, notify::Error>
+    pub fn spawn<P, H>(path: P, handler: H) -> std::result::Result<Self, notify::Error>
     where
         P: AsRef<Path>,
-        F: Fn(DebouncedEvent) -> () + Send + 'static,
+        H: Fn(DebouncedEvent) -> () + Send + 'static,
     {
         let path = path.as_ref().to_path_buf();
         let path_th = path.clone();
@@ -177,9 +190,10 @@ impl FileMonitor {
         let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)?;
 
         std::thread::spawn(move || {
-            watcher
-                .watch(&path_th, RecursiveMode::NonRecursive)
-                .unwrap();
+            if let Err(e) = watcher.watch(&path_th, RecursiveMode::NonRecursive) {
+                log::error!("Unable to monitor path '{:?}': {}", path_th, e);
+                return;
+            }
             loop {
                 if let Ok(event) = rx.try_recv() {
                     handler(event);
@@ -196,6 +210,21 @@ impl FileMonitor {
             path,
             thread_ctl: Some(tx_ctl),
         })
+    }
+
+    pub fn on_modified<F>(f: F) -> impl Fn(DebouncedEvent) -> ()
+    where
+        F: Fn(PathBuf) -> () + Send + 'static,
+    {
+        move |e| match e {
+            DebouncedEvent::Write(p)
+            | DebouncedEvent::Chmod(p)
+            | DebouncedEvent::Create(p)
+            | DebouncedEvent::Rename(_, p) => {
+                f(p);
+            }
+            _ => (),
+        }
     }
 }
 

@@ -8,7 +8,7 @@ use std::{
 
 pub const DEFAULT_ORG_NAME: &str = "GolemFactory";
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DataDir(PathBuf);
 
 impl DataDir {

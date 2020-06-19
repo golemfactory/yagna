@@ -1,6 +1,5 @@
+use crate::events::Event;
 use crate::startup_config::FileMonitor;
-use futures::StreamExt;
-use notify::DebouncedEvent;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -9,13 +8,12 @@ use std::ops::{Add, Not, Sub};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
-use tokio::sync::broadcast;
+use tokio::sync::watch;
 use ya_agreement_utils::{CpuInfo, InfNodeInfo};
 use ya_utils_path::SwapSave;
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const CPU_THREADS_RESERVED: i32 = 1;
-
 pub static MIN_CAPS: Resources = Resources {
     cpu_threads: 1,
     mem_gib: 0.1,
@@ -52,11 +50,6 @@ pub enum Error {
     Io(#[from] io::Error),
 }
 
-#[derive(Clone, Debug)]
-pub enum Event {
-    HardwareChanged,
-}
-
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub struct Resources {
@@ -72,6 +65,14 @@ pub struct Resources {
 }
 
 impl Resources {
+    pub fn new_empty() -> Self {
+        Resources {
+            cpu_threads: 0,
+            mem_gib: 0.,
+            storage_gib: 0.,
+        }
+    }
+
     pub fn try_new(work_dir: &Path) -> Result<Self, Error> {
         Ok(Resources {
             cpu_threads: num_cpus::get() as i32,
@@ -89,12 +90,8 @@ impl Resources {
         })
     }
 
-    pub fn empty() -> Self {
-        Resources {
-            cpu_threads: 0,
-            mem_gib: 0.,
-            storage_gib: 0.,
-        }
+    pub fn depleted(&self) -> bool {
+        self.cpu_threads <= 0 || self.mem_gib <= 0. || self.storage_gib <= 0.
     }
 
     pub fn cap(mut self, res: &Resources) -> Self {
@@ -131,6 +128,8 @@ impl PartialOrd for Resources {
         }
     }
 }
+
+impl Eq for Resources {}
 
 impl Add for Resources {
     type Output = Resources;
@@ -178,13 +177,6 @@ pub struct Profiles {
 }
 
 impl Profiles {
-    pub fn try_default<P: AsRef<Path>>(work_dir: P) -> Result<Self, Error> {
-        let resources = Resources::try_default(work_dir.as_ref())?;
-        let active = DEFAULT_PROFILE_NAME.to_string();
-        let profiles = vec![(active.clone(), resources)].into_iter().collect();
-        Ok(Profiles { active, profiles })
-    }
-
     pub fn load_or_create<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let path = path.as_ref();
         match path.exists() {
@@ -213,9 +205,18 @@ impl Profiles {
         Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
     }
 
+    fn try_default<P: AsRef<Path>>(work_dir: P) -> Result<Self, Error> {
+        let resources = Resources::try_default(work_dir.as_ref())?;
+        let active = DEFAULT_PROFILE_NAME.to_string();
+        let profiles = vec![(active.clone(), resources)].into_iter().collect();
+        Ok(Profiles { active, profiles })
+    }
+}
+
+impl Profiles {
     #[inline]
-    pub fn list(&self) -> Vec<String> {
-        self.profiles.keys().cloned().collect()
+    pub fn list(&self) -> HashMap<String, Resources> {
+        self.profiles.clone()
     }
 
     #[inline]
@@ -224,8 +225,13 @@ impl Profiles {
     }
 
     #[inline]
+    pub fn get_mut(&mut self, name: impl ToString) -> Option<&mut Resources> {
+        self.profiles.get_mut(&name.to_string())
+    }
+
+    #[inline]
     pub fn add(&mut self, name: impl ToString, resources: Resources) -> Result<(), Error> {
-        if resources < Resources::empty() {
+        if resources < Resources::new_empty() {
             return Err(Error::InsufficientResources);
         }
         self.profiles.insert(name.to_string(), resources);
@@ -245,8 +251,8 @@ impl Profiles {
     }
 
     #[inline]
-    pub fn get_active(&self) -> &Resources {
-        self.profiles.get(&self.active).unwrap()
+    pub fn active(&self) -> &String {
+        &self.active
     }
 
     pub fn set_active(&mut self, name: impl ToString) -> Result<(), Error> {
@@ -261,9 +267,10 @@ impl Profiles {
 
 #[derive(Debug)]
 pub struct Manager {
-    monitor: Option<FileMonitor>,
     state: Arc<Mutex<ManagerState>>,
-    broadcast: broadcast::Sender<Event>,
+    monitor: Option<FileMonitor>,
+    sender: Option<watch::Sender<Event>>,
+    receiver: watch::Receiver<Event>,
 }
 
 #[derive(Debug)]
@@ -276,7 +283,8 @@ struct ManagerState {
 }
 
 impl ManagerState {
-    fn update_profiles(&mut self, profiles: Profiles) -> Result<bool, Error> {
+    #[inline]
+    fn update(&mut self, profiles: Profiles) -> Result<bool, Error> {
         self.profiles = profiles;
         self.change_profile(self.profiles.active.clone())
     }
@@ -285,10 +293,14 @@ impl ManagerState {
         let name = name.to_string();
         log::info!("Activating hardware profile '{}'", name);
         self.profiles.set_active(&name)?;
+        let res = self
+            .profiles
+            .get(&self.profiles.active)
+            .cloned()
+            .ok_or_else(|| ProfileError::Unknown(name))?
+            .cap(&self.res_available);
 
-        let res = self.profiles.get_active().clone().cap(&self.res_available);
         if res == self.res_cap {
-            log::info!("Hardware configuration unchanged");
             Ok(false)
         } else {
             let delta = self.res_cap - res;
@@ -308,77 +320,54 @@ impl Manager {
         let mut state = ManagerState {
             profiles,
             res_available: Resources::try_new(&current_dir)?,
-            res_cap: Resources::empty(),
-            res_remaining: Resources::empty(),
+            res_cap: Resources::new_empty(),
+            res_remaining: Resources::new_empty(),
             res_alloc: HashMap::new(),
         };
         state.change_profile(state.profiles.active.clone())?;
 
-        let (tx, rx) = broadcast::channel(16);
-        actix_rt::Arbiter::spawn(async move {
-            rx.for_each(|_| futures::future::ready(())).await;
-        });
-
-        let mut manager = Manager {
-            monitor: None,
+        let (tx, rx) = watch::channel(Event::Initialized);
+        Ok(Manager {
             state: Arc::new(Mutex::new(state)),
-            broadcast: tx,
-        };
-        manager.spawn_monitor(path)?;
-
-        Ok(manager)
+            monitor: None,
+            sender: Some(tx),
+            receiver: rx,
+        })
     }
 
-    fn spawn_monitor<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        if let Some(_) = self.monitor {
-            return Ok(());
-        }
-
+    pub fn spawn_monitor<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        let tx = self.sender.take().unwrap();
         let state = self.state.clone();
-        let broadcast = self.broadcast.clone();
-        let monitor = FileMonitor::spawn(path, move |e| match e {
-            DebouncedEvent::Write(p)
-            | DebouncedEvent::Rename(_, p)
-            // e.g. file re-created
-            | DebouncedEvent::Create(p)
-            // e.g. file permissions fixed
-            | DebouncedEvent::Chmod(p) => {
-                match Profiles::load(&p) {
-                    Ok(p) => {
-                        let mut state = state.lock().unwrap();
-                        match state.update_profiles(p) {
-                            Ok(true) => {
-                                if let Err(e) = broadcast.send(Event::HardwareChanged) {
-                                    log::error!("Error broadcasting hardware configuration change: {:?}", e);
-                                }
-                            }
-                            Err(err) => log::warn!("Error updating hardware configuration: {:?}", err),
-                            _ => (),
-                        }
+        let handler = move |p| match Profiles::load(&p) {
+            Ok(profiles) => {
+                let result = { state.lock().unwrap().update(profiles) };
+                match result {
+                    Ok(val) => match val {
+                        true => tx.broadcast(Event::HardwareChanged).unwrap_or_default(),
+                        false => log::info!("Hardware configuration unchanged"),
                     },
-                    Err(e) => log::warn!("Error reading hardware profiles from {:?}: {:?}", p, e),
-                };
+                    Err(err) => log::warn!("Error updating hardware configuration: {:?}", err),
+                }
             }
-            _ => (),
-        })
-        .map_err(Error::from)?;
+            Err(e) => log::warn!("Error reading hardware profiles from {:?}: {:?}", p, e),
+        };
 
+        let monitor = FileMonitor::spawn(path, FileMonitor::on_modified(handler))?;
         self.monitor = Some(monitor);
         Ok(())
+    }
+
+    #[inline]
+    pub fn event_receiver(&self) -> watch::Receiver<Event> {
+        self.receiver.clone()
     }
 }
 
 impl Manager {
-    #[allow(dead_code)]
     #[inline]
-    pub fn event_receiver(&self) -> broadcast::Receiver<Event> {
-        self.broadcast.subscribe()
-    }
-
-    #[inline]
-    pub fn remaining(&self) -> Resources {
+    pub fn capped(&self) -> Resources {
         let state = self.state.lock().unwrap();
-        state.res_remaining.clone()
+        state.res_cap.clone()
     }
 
     #[allow(dead_code)]
@@ -525,10 +514,12 @@ mod tests {
             res_alloc: HashMap::new(),
             profiles: profiles(),
         };
+        let (tx, rx) = watch::channel(Event::Initialized);
         let mut man = Manager {
             state: Arc::new(Mutex::new(state)),
             monitor: None,
-            broadcast: broadcast::channel(1).0,
+            sender: Some(tx),
+            receiver: rx,
         };
         let alloc = Resources {
             cpu_threads: 1,
@@ -563,10 +554,12 @@ mod tests {
             res_alloc: HashMap::new(),
             profiles: profiles(),
         };
+        let (tx, rx) = watch::channel(Event::Initialized);
         let mut man = Manager {
             state: Arc::new(Mutex::new(state)),
             monitor: None,
-            broadcast: broadcast::channel(1).0,
+            sender: Some(tx),
+            receiver: rx,
         };
         let alloc = Resources {
             cpu_threads: 1,

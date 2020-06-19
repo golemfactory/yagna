@@ -118,6 +118,7 @@ This can be displayed using `cargo run -p ya-provider run --help`
 | market-url     | Market api address. |`YAGNA_MARKET_URL`|
 | activity-url   | Activity api address. |`YAGNA_ACTIVITY_URL`|
 | payment-url    | Payment api address. |`YAGNA_PAYMENT_URL`|
+| data-dir       | Path to a directory where configuration files are stored. |`DATA_DIR`| 
 | node-name      | Node name to use in agreements. |`NODE_NAME`| 
 | subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes. |`SUBNET`| 
 | exe-unit-path  | Path to JSON descriptor file for ExeUnits. |`EXE_UNIT_PATH`|
@@ -183,12 +184,8 @@ Properties:
 
 ## Presets
 
-Provider uses presets to create market offers. In current version presets are
-defined in `presets.json` file, that should be placed in working directory.
-You can copy example presets
- ```bash
- cp ../agent/provider/examples/presets.json .
-```
+Provider uses presets to create market offers. On the first run, the Provider Agent will create 
+a `default` preset. Presets are saved in a `presets.json` file, located in application's data directory.
 
 You can list presets by running command:
 `cargo run -p ya-provider preset list`
@@ -197,7 +194,7 @@ The result will be something like this:
 ```
 Available Presets:
 
-Name:               amazing-offer
+Name:               default
 ExeUnit:            wasmtime
 Pricing model:      linear
 Coefficients:
@@ -205,21 +202,6 @@ Coefficients:
     CPU             0.2 GNT
     Init price      1 GNT
 
-Name:               high-cpu
-ExeUnit:            wasmtime
-Pricing model:      linear
-Coefficients:
-    Duration        0.01 GNT
-    CPU             1.2 GNT
-    Init price      1.5 GNT
-
-Name:               lame-offer
-ExeUnit:            wasmtime
-Pricing model:      linear
-Coefficients:
-    Duration        0 GNT
-    CPU             0 GNT
-    Init price      0 GNT
 ```
 
 Coefficients describe unit price of ExeUnit metrics:
@@ -228,7 +210,15 @@ Coefficients describe unit price of ExeUnit metrics:
 * CPU - `golem.usage.cpu_sec`
 * Init price - constant price per created activity 
 
-When running provider, you must enumerate all presets, that you want to use.
+In order to publish an offer based on a preset, that preset needs to be activated first.
+
+### Active presets
+
+To list all active presets, type:
+
+```bash
+cargo run -p ya-provider preset active
+```
 
 ### Creating presets
 
@@ -254,6 +244,8 @@ If you don't specify any of price values, it will be defaulted to `0.0`.
 
 ### Updating presets
 
+Note: updating a preset will cancel all related offer subscriptions. 
+
 Updating in interactive mode:
 
 ```bash
@@ -274,8 +266,24 @@ You can omit some parameters and the will be filled with previous values.
 
 ### Removing presets
 
+Note: removing a preset will cancel all related offer subscriptions.
+
 ```bash
 cargo run -p ya-provider preset remove new-preset
+```
+
+### Activating and deactivating presets
+
+When you activate a preset, a new offer will be published to the marketplace.
+
+```bash
+cargo run -p ya-provider preset activate new-preset
+```
+
+Note: deactivating a preset will cancel all related offer subscriptions.
+
+```bash
+cargo run -p ya-provider preset deactivate new-preset
 ```
 
 ### Listing metrics
@@ -291,14 +299,108 @@ CPU            golem.usage.cpu_sec
 Left column is name of preset that should be used in commands. On the right side
 you can see agreement property, that will be set in usage vector.
 
+## Hardware profiles
+
+Hardware profiles control the maximum amount of hardware resources assigned to computations.
+Provider Agent **does not allow you to allocate all of your system resources**. The remaining 
+logical CPU cores, memory and storage will be utilized by the background applications,
+the operating system and Provider Agent itself.
+
+Note: updating or activating another hardware profile will cancel all current offer subscriptions.
+
+The available sub-commands for `profile` are:
+
+```
+list        List available profiles
+active      Show the name of an active profile
+create      Create a new profile
+update      Update a profile
+remove      Remove an existing profile
+activate    Activate a profile
+```
+
+### Listing profiles
+
+```bash 
+cargo run -- profile list
+```
+
+will print an output similar to:
+
+```
+{
+  "default": {
+    "cpu_threads": 3,
+    "mem_gib": 10.9375,
+    "storage_gib": 73.57168884277344
+  }
+}
+```
+
+### Display the active profile
+
+```bash 
+cargo run -- profile active
+```
+
+will print:
+
+```
+"default"
+```
+
+### Creating a profile
+
+Usage:
+```bash
+ya-provider profile create \
+    <name> \
+    --cpu-threads <cpu-threads> \
+    --mem-gib <mem-gib> \
+    --storage-gib <storage-gib>
+```
+
+E.g.:
+```bash
+ya-provider profile create half --cpu-threads 2  --mem-gib 8. --storage-gib 256.
+```
+
+### Updating a profile
+
+Note: updating a profile will cancel all current offer subscriptions. 
+
+Usage is similar to profile creation.
+
+E.g.:
+```bash
+ya-provider profile update half --cpu-threads 3  --mem-gib 5. --storage-gib 128.
+```
+
+### Removing a profile
+
+Note: removing an active profile will cancel all current offer subscriptions. 
+
+E.g.:
+```bash
+ya-provider profile remove half
+```
+
+### Activating a profile
+
+Note: activating a different profile will cancel all current offer subscriptions.
+
+E.g.:
+```bash
+ya-provider profile activate some_other_profile
+```
+
 ## Running the Provider Agent
 
 While the yagna service is still running (and you are in the `ya-prov` directory)
 you can now start Provider Agent.
-You must enumerate all presets, you want Provider Agent to publish as Offers on the Market:
 
 ```bash
-cargo run -p ya-provider run high-cpu amazing-offer
+cargo run -p ya-provider run
 ```
 
 ## Mock requestor

@@ -1,6 +1,8 @@
+use actix::Actor;
 use std::env;
 use structopt::{clap, StructOpt};
 
+mod events;
 mod execution;
 mod hardware;
 mod market;
@@ -12,6 +14,7 @@ mod task_manager;
 mod task_state;
 
 use crate::hardware::Profiles;
+use crate::provider_agent::{Initialize, Shutdown};
 use provider_agent::ProviderAgent;
 use startup_config::{Commands, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig};
 
@@ -33,13 +36,17 @@ async fn main() -> anyhow::Result<()> {
             let app_name = clap::crate_name!();
             log::info!("Starting {}...", app_name);
 
-            ProviderAgent::new(args, config)
-                .await?
-                .wait_for_ctrl_c()
-                .await
+            let agent = ProviderAgent::new(args, config).await?.start();
+            agent.send(Initialize).await??;
+
+            let _ = tokio::signal::ctrl_c().await;
+            log::info!("SIGINT received, Shutting down {}...", clap::crate_name!());
+            agent.send(Shutdown).await??;
+            Ok(())
         }
         Commands::Preset(presets_cmd) => match presets_cmd {
             PresetsConfig::List => ProviderAgent::list_presets(config),
+            PresetsConfig::Active => ProviderAgent::active_presets(config),
             PresetsConfig::Create {
                 no_interactive,
                 params,
@@ -62,26 +69,31 @@ async fn main() -> anyhow::Result<()> {
                     ProviderAgent::update_preset_interactive(config, name)
                 }
             }
+            PresetsConfig::Activate { name } => ProviderAgent::activate_preset(config, name),
+            PresetsConfig::Deactivate { name } => ProviderAgent::deactivate_preset(config, name),
             PresetsConfig::ListMetrics => ProviderAgent::list_metrics(config),
         },
         Commands::Profile(profile_cmd) => {
             let path = config.hardware_file;
             match profile_cmd {
                 ProfileConfig::List => {
-                    for profile in Profiles::load(&path)?.list() {
-                        println!("{}", profile);
-                    }
+                    let profiles = Profiles::load(&path)?.list();
+                    println!("{}", serde_json::to_string_pretty(&profiles)?);
                 }
-                ProfileConfig::Show { name } => match Profiles::load(&path)?.get(&name) {
-                    Some(res) => println!("{}", serde_json::to_string_pretty(res)?),
-                    None => return Err(hardware::ProfileError::Unknown(name).into()),
-                },
                 ProfileConfig::Create { name, resources } => {
                     let mut profiles = Profiles::load_or_create(&path)?;
                     if let Some(_) = profiles.get(&name) {
                         return Err(hardware::ProfileError::AlreadyExists(name).into());
                     }
                     profiles.add(name, resources)?;
+                    profiles.save(path)?;
+                }
+                ProfileConfig::Update { name, resources } => {
+                    let mut profiles = Profiles::load_or_create(&path)?;
+                    match profiles.get_mut(&name) {
+                        Some(profile) => *profile = resources,
+                        _ => return Err(hardware::ProfileError::Unknown(name).into()),
+                    }
                     profiles.save(path)?;
                 }
                 ProfileConfig::Remove { name } => {
@@ -93,6 +105,10 @@ async fn main() -> anyhow::Result<()> {
                     let mut profiles = Profiles::load(&path)?;
                     profiles.set_active(name)?;
                     profiles.save(path)?;
+                }
+                ProfileConfig::Active => {
+                    let profiles = Profiles::load(&path)?;
+                    println!("{}", serde_json::to_string_pretty(profiles.active())?);
                 }
             }
             Ok(())

@@ -44,7 +44,12 @@ pub struct UpdateMarket;
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
-pub struct OnShutdown;
+pub struct Unsubscribe(pub OfferKind);
+
+pub enum OfferKind {
+    Any,
+    WithPresets(Vec<String>),
+}
 
 /// Async code emits this event to ProviderMarket, which reacts to it
 /// and broadcasts same event to external world.
@@ -60,7 +65,7 @@ pub struct AgreementApproved {
 
 /// Send when subscribing to market will be finished.
 #[rtype(result = "Result<()>")]
-#[derive(Clone, Message)]
+#[derive(Debug, Clone, Message)]
 pub struct OfferSubscription {
     subscription_id: String,
     preset: Preset,
@@ -152,17 +157,14 @@ impl ProviderMarket {
         Ok(())
     }
 
-    async fn on_shutdown(
+    async fn unsubscribe(
         market_api: Arc<MarketProviderApi>,
         subscriptions: Vec<String>,
     ) -> Result<()> {
-        log::info!("Unsubscribing all active offers");
-
         for subscription in subscriptions.iter() {
             log::info!("Unsubscribing: {}", subscription);
             market_api.unsubscribe(&subscription).await?;
         }
-        log::info!("All Offers unsubscribed successfully.");
         Ok(())
     }
 
@@ -439,13 +441,6 @@ impl ProviderMarket {
         self.agreement_signed_signal.on_subscribe(msg);
         Ok(())
     }
-
-    pub fn list_subscriptions(&self) -> Vec<String> {
-        self.offer_subscriptions
-            .keys()
-            .map(|id| id.clone())
-            .collect()
-    }
 }
 
 // =========================================== //
@@ -560,14 +555,37 @@ impl Handler<AgreementBroken> for ProviderMarket {
     }
 }
 
-impl Handler<OnShutdown> for ProviderMarket {
+impl Handler<Unsubscribe> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, _msg: OnShutdown, _ctx: &mut Context<Self>) -> Self::Result {
-        let subscriptions = self.list_subscriptions();
-        let client = self.market_api.clone();
+    fn handle(&mut self, msg: Unsubscribe, _ctx: &mut Context<Self>) -> Self::Result {
+        let subscriptions = match msg.0 {
+            OfferKind::Any => {
+                log::info!("Unsubscribing all active offers");
+                std::mem::replace(&mut self.offer_subscriptions, HashMap::new())
+                    .into_iter()
+                    .map(|(k, _)| k)
+                    .collect::<Vec<_>>()
+            }
+            OfferKind::WithPresets(preset_names) => {
+                let subs = self
+                    .offer_subscriptions
+                    .iter()
+                    .filter_map(|(n, sub)| match preset_names.contains(&sub.preset.name) {
+                        true => Some(n.clone()),
+                        false => None,
+                    })
+                    .collect::<Vec<_>>();
+                subs.iter().for_each(|s| {
+                    self.offer_subscriptions.remove(s);
+                });
 
-        ActorResponse::r#async(ProviderMarket::on_shutdown(client, subscriptions).into_actor(self))
+                log::info!("Unsubscribing {} active offer(s)", subs.len());
+                subs
+            }
+        };
+        let client = self.market_api.clone();
+        ActorResponse::r#async(ProviderMarket::unsubscribe(client, subscriptions).into_actor(self))
     }
 }
 
