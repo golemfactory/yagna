@@ -87,8 +87,8 @@ pub fn hash(
     hasher.input(node_id);
     // We can't change format freely, because it is important to compute hash.
     // Is there any other solution, to compute hash, that is format independent?
-    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%S").to_string());
-    hasher.input(expiration_ts.format("%Y-%m-%d %H:%M:%S").to_string());
+    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
+    hasher.input(expiration_ts.format("%Y-%m-%d %H:%M:%f").to_string());
 
     format!("{:x}", hasher.result())
 }
@@ -102,7 +102,7 @@ pub fn hash_proposal(
 
     hasher.input(offer_id.to_string());
     hasher.input(demand_id.to_string());
-    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%S").to_string());
+    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
 
     format!("{:x}", hasher.result())
 }

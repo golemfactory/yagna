@@ -7,13 +7,13 @@ CREATE TABLE market_offer (
 	node_id VARCHAR(20) NOT NULL,
 
 	creation_ts DATETIME NOT NULL,
-	insertion_ts DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	insertion_ts DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
 	expiration_ts DATETIME NOT NULL
 );
 
 CREATE TABLE market_offer_unsubscribed (
     id VARCHAR(97) NOT NULL PRIMARY KEY,
-    insertion_ts DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    insertion_ts DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     expiration_ts DATETIME NOT NULL,
     node_id VARCHAR(20) NOT NULL
 );
@@ -25,7 +25,7 @@ CREATE TABLE market_demand (
 	node_id VARCHAR(20) NOT NULL,
 
 	creation_ts DATETIME NOT NULL,
-	insertion_ts DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	insertion_ts DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
 	expiration_ts DATETIME NOT NULL
 );
 
@@ -45,7 +45,7 @@ INSERT INTO market_event_type(id, event_type, role) VALUES
 CREATE TABLE market_requestor_event(
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL,
-    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     event_type INTEGER NOT NULL,
     artifact_id VARCHAR(100) NOT NULL,
 
@@ -56,7 +56,7 @@ CREATE TABLE market_requestor_event(
 CREATE TABLE market_provider_event(
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     subscription_id INTEGER NOT NULL,
-    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     event_type INTEGER NOT NULL,
     artifact_id VARCHAR(100) NOT NULL,
 

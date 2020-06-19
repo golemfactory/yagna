@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_offer_validation_good_hash() {
-        let subscription_id = "c76161077d0343ab85ac986eb5f6ea38-4f068a6ac3140bd1b00a44ddf2b61556ab4ab232201a4a957f1c7fbf191090b3";
+        let subscription_id = "d2ffb76af1e147949f9adae42b76ae66-fa4170dfa3e047a49cf672efe8a204bbb1be174d082692db8852e487f202c8d7";
         let node_id = "12412abcf3112412abcf".to_string();
 
         let offer = Offer {
@@ -166,7 +166,14 @@ mod tests {
                 NaiveTime::from_hms(15, 1, 1),
             ),
         };
-        println!("{}", offer.id.to_string());
+        let id = SubscriptionId::generate_id(
+            &offer.properties,
+            &offer.constraints,
+            &offer.node_id,
+            &offer.creation_ts,
+            &offer.expiration_ts,
+        );
+        println!("{}", id);
 
         offer.validate().unwrap();
     }
