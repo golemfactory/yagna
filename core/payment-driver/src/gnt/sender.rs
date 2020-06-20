@@ -1,9 +1,10 @@
 use crate::dao::transaction::TransactionDao;
 use crate::ethereum::EthereumClient;
-use crate::models::{TransactionStatus, TxType};
+use crate::models::{PaymentEntity, TransactionStatus, TxType};
 use crate::utils::u256_from_big_endian_hex;
-use crate::{utils, PaymentDriverError, SignTx};
+use crate::{utils, PaymentDriverError, PaymentDriverResult, SignTx};
 
+use crate::dao::payment::PaymentDao;
 use actix::prelude::*;
 use chrono::Utc;
 use ethereum_tx_sign::RawTransaction;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use web3::contract::tokens::Tokenize;
 use web3::contract::Contract;
+use web3::transports::Http;
 use web3::types::TransactionReceipt;
 use web3::Transport;
 use ya_client_model::NodeId;
@@ -130,6 +132,7 @@ impl Actor for TransactionSender {
         self.start_confirmation_job(ctx);
         self.start_block_traces(ctx);
         self.load_txs(ctx);
+        self.start_payment_job(ctx);
     }
 }
 
@@ -541,6 +544,31 @@ impl TransactionSender {
         let _ = ctx.spawn(fut);
     }
 
+    fn start_payment_job(&mut self, ctx: &mut Context<Self>) {
+        let dao: PaymentDao = self.db.clone().as_dao();
+        let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
+            for address in act.active_accounts.keys() {
+                let db = act.db.clone();
+                let account = address.clone();
+                Arbiter::spawn(async move {
+                    let dao: PaymentDao = db.as_dao();
+                    dao.get_pending_payments(account.clone()).await.map_or_else(
+                        |e| {
+                            log::error!(
+                                "Failed to fetch pending payments for {:?} : {:?}",
+                                account,
+                                e
+                            )
+                        },
+                        |payments| {
+                            log::info!("Pending payments for {:?} : {:?}", account, payments)
+                        },
+                    );
+                });
+            }
+        });
+    }
+
     fn start_confirmation_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
             if act.pending_confirmations.is_empty() {
@@ -706,8 +734,7 @@ impl Handler<AccountLocked> for TransactionSender {
 
     fn handle(&mut self, msg: AccountLocked, _ctx: &mut Self::Context) -> Self::Result {
         log::info!("Account: {:?} is locked", msg.identity.to_string());
-        self.active_accounts
-            .insert(msg.identity.to_string(), msg.identity);
+        self.active_accounts.remove(&msg.identity.to_string());
         ActorResponse::reply(Ok(()))
     }
 }
@@ -725,7 +752,8 @@ impl Handler<AccountUnlocked> for TransactionSender {
 
     fn handle(&mut self, msg: AccountUnlocked, _ctx: &mut Self::Context) -> Self::Result {
         log::info!("Account: {:?} is unlocked", msg.identity.to_string());
-        self.active_accounts.remove(&msg.identity.to_string());
+        self.active_accounts
+            .insert(msg.identity.to_string(), msg.identity);
         ActorResponse::reply(Ok(()))
     }
 }
