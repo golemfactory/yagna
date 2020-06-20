@@ -37,6 +37,9 @@ use ya_core_model::driver::{
     PaymentDetails, PaymentStatus,
 };
 
+use ya_core_model::identity;
+use ya_service_bus::typed as bus;
+
 mod config;
 mod faucet;
 mod sender;
@@ -205,6 +208,33 @@ pub struct GntDriver {
     tx_sender: Addr<sender::TransactionSender>,
 }
 
+async fn load_active_accounts(tx_sender: Addr<sender::TransactionSender>) {
+    log::info!("Load active accounts on driver start");
+    match bus::service(identity::BUS_ID).call(identity::List {}).await {
+        Err(e) => log::error!("failed to list identities: {}", e),
+        Ok(Err(e)) => log::error!("failed to list identities: {}", e),
+        Ok(Ok(identities)) => {
+            log::debug!("Listed identities: {:?}", identities);
+            for identity in identities {
+                if !identity.is_locked {
+                    let _ = tx_sender
+                        .send(AccountUnlocked {
+                            identity: identity.node_id,
+                        })
+                        .await
+                        .map_err(|e| {
+                            log::error!(
+                                "Failed to add active identity ({:?}): {:?}",
+                                identity.node_id,
+                                e
+                            )
+                        });
+                }
+            }
+        }
+    }
+}
+
 impl GntDriver {
     /// Creates new driver
     pub async fn new(db: DbExecutor) -> PaymentDriverResult<GntDriver> {
@@ -218,6 +248,11 @@ impl GntDriver {
         let gnt_contract = Arc::new(prepare_gnt_contract(&ethereum_client, &env)?);
         let faucet_contract = prepare_gnt_faucet_contract(&ethereum_client, &env)?.map(Arc::new);
         let tx_sender = sender::TransactionSender::new(ethereum_client.clone(), db.clone());
+
+        let sender = tx_sender.clone();
+        Arbiter::spawn(async move {
+            load_active_accounts(sender).await;
+        });
 
         Ok(GntDriver {
             db,

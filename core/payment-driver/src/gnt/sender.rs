@@ -705,7 +705,7 @@ impl Handler<AccountLocked> for TransactionSender {
     type Result = ActorResponse<Self, (), PaymentDriverError>;
 
     fn handle(&mut self, msg: AccountLocked, _ctx: &mut Self::Context) -> Self::Result {
-        log::info!("Account: {:?} gets locked", msg.identity.to_string());
+        log::info!("Account: {:?} is locked", msg.identity.to_string());
         self.active_accounts
             .insert(msg.identity.to_string(), msg.identity);
         ActorResponse::reply(Ok(()))
@@ -724,7 +724,7 @@ impl Handler<AccountUnlocked> for TransactionSender {
     type Result = ActorResponse<Self, (), PaymentDriverError>;
 
     fn handle(&mut self, msg: AccountUnlocked, _ctx: &mut Self::Context) -> Self::Result {
-        log::info!("Account: {:?} gets unlocked", msg.identity.to_string());
+        log::info!("Account: {:?} is unlocked", msg.identity.to_string());
         self.active_accounts.remove(&msg.identity.to_string());
         ActorResponse::reply(Ok(()))
     }
