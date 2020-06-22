@@ -25,13 +25,13 @@ impl<'c> AsDao<'c> for OfferDao<'c> {
 
 #[derive(Error, Debug)]
 pub enum UnsubscribeError {
-    #[error("Can't unsubscribe not existing offer: {0}.")]
-    OfferNotFound(SubscriptionId),
-    #[error("Can't unsubscribe expired offer: {0}.")]
-    OfferExpired(SubscriptionId),
-    #[error("Offer [{0}] already unsubscribed.")]
-    AlreadyUnsubscribed(SubscriptionId),
-    #[error(transparent)]
+    #[error("Can't unsubscribe not existing offer.")]
+    OfferNotFound,
+    #[error("Can't unsubscribe expired offer.")]
+    OfferExpired,
+    #[error("Offer already unsubscribed.")]
+    AlreadyUnsubscribed,
+    #[error("Can't unsubscribe offer. Database error: {0}")]
     DatabaseError(DbError),
 }
 
@@ -98,15 +98,9 @@ impl<'c> OfferDao<'c> {
                         .execute(conn)?;
                     Ok(())
                 }
-                OfferState::Expired(_) => {
-                    Err(UnsubscribeError::OfferExpired(subscription_id.clone()))
-                }
-                OfferState::Unsubscribed(_) => Err(UnsubscribeError::AlreadyUnsubscribed(
-                    subscription_id.clone(),
-                )),
-                OfferState::NotFound => {
-                    Err(UnsubscribeError::OfferNotFound(subscription_id.clone()))
-                }
+                OfferState::Expired(_) => Err(UnsubscribeError::OfferExpired),
+                OfferState::Unsubscribed(_) => Err(UnsubscribeError::AlreadyUnsubscribed),
+                OfferState::NotFound => Err(UnsubscribeError::OfferNotFound),
             }
         })
         .await?)

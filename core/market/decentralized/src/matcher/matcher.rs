@@ -28,7 +28,7 @@ pub enum DemandError {
 pub enum OfferError {
     #[error("Failed to save Offer. Error: {0}.")]
     SaveOfferFailure(#[from] DbError),
-    #[error("Failed to remove Offer [{1}]. Error: {0}.")]
+    #[error("Failed to unsubscribe Offer [{1}]. Error: {0}.")]
     UnsubscribeOfferFailure(UnsubscribeError, SubscriptionId),
     #[error("Offer [{0}] doesn't exist.")]
     OfferNotExists(SubscriptionId),
@@ -293,13 +293,13 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
                     &msg.subscription_id
                 );
             });
-        Result::<_, UnsubscribeError>::Ok(Propagate::True)
+        Ok(Propagate::True)
     }
     .await
     .or_else(|e| {
         let reason = match e {
-            UnsubscribeError::OfferExpired(_) => StopPropagateReason::Expired,
-            UnsubscribeError::AlreadyUnsubscribed(_) => StopPropagateReason::AlreadyUnsubscribed,
+            UnsubscribeError::OfferExpired => StopPropagateReason::Expired,
+            UnsubscribeError::AlreadyUnsubscribed => StopPropagateReason::AlreadyUnsubscribed,
             _ => StopPropagateReason::Error(e.to_string()),
         };
         Ok(Propagate::False(reason))

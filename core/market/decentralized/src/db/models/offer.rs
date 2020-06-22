@@ -88,12 +88,12 @@ impl Offer {
         })
     }
 
-    pub fn into_unsubscribe(&self) -> OfferUnsubscribed {
+    pub fn into_unsubscribe(self) -> OfferUnsubscribed {
         OfferUnsubscribed {
-            id: self.id.clone(),
-            node_id: self.node_id.clone(),
+            id: self.id,
+            node_id: self.node_id,
             insertion_ts: None,
-            expiration_ts: self.expiration_ts.clone(),
+            expiration_ts: self.expiration_ts,
         }
     }
 
