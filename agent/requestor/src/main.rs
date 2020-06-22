@@ -176,6 +176,11 @@ async fn main() -> anyhow::Result<()> {
         &settings.subnet,
     );
 
+    log::debug!(
+        "Demand created: {}",
+        serde_json::to_string_pretty(&my_demand).unwrap()
+    );
+
     let subscription_id = api.market.subscribe(&my_demand).await?;
     log::info!("\n\n DEMAND SUBSCRIBED: {}", subscription_id);
 
