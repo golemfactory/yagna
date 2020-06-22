@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 pub mod bcast;
-mod mock_net;
+pub mod mock_net;
 pub mod mock_node;
 pub mod mock_offer;
 

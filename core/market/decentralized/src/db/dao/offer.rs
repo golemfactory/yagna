@@ -25,11 +25,11 @@ impl<'c> AsDao<'c> for OfferDao<'c> {
 
 #[derive(Error, Debug)]
 pub enum UnsubscribeError {
-    #[error("Can't unsubscribe not existing offer.")]
+    #[error("Can't unsubscribe not existing offer")]
     OfferNotFound,
-    #[error("Can't unsubscribe expired offer.")]
+    #[error("Can't unsubscribe expired offer")]
     OfferExpired,
-    #[error("Offer already unsubscribed.")]
+    #[error("Offer already unsubscribed")]
     AlreadyUnsubscribed,
     #[error("Can't unsubscribe offer. Database error: {0}")]
     DatabaseError(DbError),

@@ -14,7 +14,6 @@ use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use super::bcast;
 use super::mock_net::MockNet;
 
 /// Instantiates market test nodes inside one process.
@@ -53,8 +52,7 @@ impl MarketsNetwork {
     pub async fn new<Str: AsRef<str>>(test_name: Str) -> Self {
         let test_dir = prepare_test_dir(&test_name).unwrap();
 
-        let bcast = bcast::BCastService::default();
-        MockNet::gsb(bcast).unwrap();
+        MockNet::gsb().unwrap();
 
         MarketsNetwork {
             markets: vec![],
@@ -162,7 +160,7 @@ fn test_data_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test-workdir")
 }
 
-fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf, anyhow::Error> {
+pub fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf, anyhow::Error> {
     let test_dir: PathBuf = test_data_dir().join(dir_name.as_ref());
 
     if test_dir.exists() {

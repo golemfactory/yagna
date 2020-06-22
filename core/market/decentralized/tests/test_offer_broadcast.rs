@@ -47,6 +47,7 @@ mod tests {
         let market2: Arc<MarketService> = network.get_market("Node-2");
         let market3: Arc<MarketService> = network.get_market("Node-3");
         wait_for_bcast(1000, &market2, &subscription_id, true).await?;
+        // TODO: strip insertion ts from comparsion
         assert_eq!(offer, market2.matcher.get_offer(&subscription_id).await?);
         assert_eq!(offer, market3.matcher.get_offer(&subscription_id).await?);
 

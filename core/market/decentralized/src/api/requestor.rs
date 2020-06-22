@@ -1,8 +1,7 @@
 use actix_web::web::{Data, Json, Path, Query};
-use actix_web::{HttpResponse, Scope};
+use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
-use super::response;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
 };
@@ -37,17 +36,16 @@ async fn subscribe(
     market: Data<Arc<MarketService>>,
     body: Json<Demand>,
     id: Identity,
-) -> HttpResponse {
-    match market.subscribe_demand(&body.into_inner(), &id).await {
-        Ok(subscription_id) => response::created(subscription_id),
-        // TODO: Translate MarketError to better HTTP response.
-        Err(e) => response::server_error(&e.to_string()),
-    }
+) -> impl Responder {
+    market
+        .subscribe_demand(&body.into_inner(), &id)
+        .await
+        .map(|id| HttpResponse::Created().json(id))
 }
 
 #[actix_web::get("/demands")]
 async fn get_demands(market: Data<Arc<MarketService>>, id: Identity) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::delete("/demands/{subscription_id}")]
@@ -55,13 +53,12 @@ async fn unsubscribe(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscription>,
     id: Identity,
-) -> HttpResponse {
+) -> impl Responder {
     let subscription_id = path.into_inner().subscription_id;
-    match market.unsubscribe_demand(&subscription_id, &id).await {
-        Ok(()) => response::ok("Ok"),
-        // TODO: Translate MatcherError to better HTTP response.
-        Err(e) => response::server_error(&e.to_string()),
-    }
+    market
+        .unsubscribe_demand(&subscription_id, &id)
+        .await
+        .map(|x| HttpResponse::Ok().json("Ok"))
 }
 
 #[actix_web::get("/demands/{subscription_id}/events")]
@@ -71,7 +68,7 @@ async fn collect(
     query: Query<QueryTimeoutMaxEvents>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}")]
@@ -81,7 +78,7 @@ async fn counter_proposal(
     body: Json<Proposal>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::get("/demands/{subscription_id}/proposals/{proposal_id}")]
@@ -90,7 +87,7 @@ async fn get_proposal(
     path: Path<PathSubscriptionProposal>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::delete("/demands/{subscription_id}/proposals/{proposal_id}")]
@@ -99,7 +96,7 @@ async fn reject_proposal(
     path: Path<PathSubscriptionProposal>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements")]
@@ -108,7 +105,7 @@ async fn create_agreement(
     body: Json<AgreementProposal>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -117,7 +114,7 @@ async fn get_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/confirm")]
@@ -126,7 +123,7 @@ async fn confirm_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/wait")]
@@ -136,7 +133,7 @@ async fn wait_for_approval(
     query: Query<QueryTimeout>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::delete("/agreements/{agreement_id}")]
@@ -145,7 +142,7 @@ async fn cancel_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/terminate")]
@@ -154,5 +151,5 @@ async fn terminate_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
