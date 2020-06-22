@@ -160,6 +160,11 @@ cargo build
 cd ../yagna/ya-prov
 ```
 
+You also need to build ExeUnit supervisor.
+```bash
+cargo build -p ya-exe-unit
+```
+
 You can list available ExeUnits with command:
 
 ```bash
