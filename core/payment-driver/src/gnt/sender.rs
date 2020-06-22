@@ -5,15 +5,18 @@ use crate::utils::u256_from_big_endian_hex;
 use crate::{utils, PaymentDriverError, PaymentDriverResult, SignTx};
 
 use crate::dao::payment::PaymentDao;
+use crate::gnt::common;
 use actix::prelude::*;
 use chrono::Utc;
 use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H256, U256};
 use futures3::channel::oneshot;
 use futures3::prelude::*;
+use std::cell::{Ref, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use web3::contract::tokens::Tokenize;
@@ -25,6 +28,60 @@ use ya_client_model::NodeId;
 use ya_persistence::executor::DbExecutor;
 
 const NONCE_EXPIRE: Duration = Duration::from_secs(12);
+const GNT_TRANSFER_GAS: u32 = 55000;
+
+async fn transfer_gnt(
+    gnt_contract: Arc<Contract<Http>>,
+    tx_sender: Addr<TransactionSender>,
+    gnt_amount: U256,
+    address: Address,
+    recipient: Address,
+    sign_tx: SignTx<'_>,
+    gas_price: U256,
+    chain_id: u64,
+) -> PaymentDriverResult<String> {
+    if gnt_amount
+        > utils::big_dec_to_u256(
+            common::get_gnt_balance(&gnt_contract, address)
+                .await?
+                .amount,
+        )?
+    {
+        return Err(PaymentDriverError::InsufficientFunds);
+    }
+
+    let mut batch = Builder::new(address, gas_price, chain_id);
+    batch.push(
+        &gnt_contract,
+        "transfer",
+        (recipient, gnt_amount),
+        GNT_TRANSFER_GAS.into(),
+    );
+    let r = batch.send_to(tx_sender, sign_tx).await?;
+    Ok(r.into_iter().next().unwrap())
+}
+
+struct Accounts {
+    accounts: HashMap<String, NodeId>,
+}
+
+impl Accounts {
+    pub fn add_account(&mut self, account: NodeId) {
+        self.accounts.insert(account.to_string(), account);
+    }
+
+    pub fn remove_account(&mut self, account: NodeId) {
+        self.accounts.remove(&account.to_string());
+    }
+
+    pub fn list_accounts(&self) -> Vec<String> {
+        self.accounts.keys().cloned().collect()
+    }
+
+    pub fn is_active(&self, account: String) -> bool {
+        self.accounts.contains_key(&account)
+    }
+}
 
 #[derive(Clone)]
 pub struct Reservation {
@@ -96,7 +153,7 @@ impl Message for WaitForTx {
 }
 
 pub struct TransactionSender {
-    active_accounts: HashMap<String, NodeId>,
+    active_accounts: Rc<RefCell<Accounts>>,
     ethereum_client: Arc<EthereumClient>,
     nonces: HashMap<Address, U256>,
     next_reservation_id: u64,
@@ -109,8 +166,11 @@ pub struct TransactionSender {
 
 impl TransactionSender {
     pub fn new(ethereum_client: Arc<EthereumClient>, db: DbExecutor) -> Addr<Self> {
+        let active_accounts = Rc::new(RefCell::new(Accounts {
+            accounts: Default::default(),
+        }));
         let me = TransactionSender {
-            active_accounts: Default::default(),
+            active_accounts,
             ethereum_client,
             db,
             nonces: Default::default(),
@@ -545,9 +605,8 @@ impl TransactionSender {
     }
 
     fn start_payment_job(&mut self, ctx: &mut Context<Self>) {
-        let dao: PaymentDao = self.db.clone().as_dao();
         let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
-            for address in act.active_accounts.keys() {
+            for address in act.active_accounts.borrow().list_accounts() {
                 let db = act.db.clone();
                 let account = address.clone();
                 Arbiter::spawn(async move {
@@ -561,7 +620,9 @@ impl TransactionSender {
                             )
                         },
                         |payments| {
-                            log::info!("Pending payments for {:?} : {:?}", account, payments)
+                            for payment in payments {
+                                log::info!("Processing payment: {:?}", payment);
+                            }
                         },
                     );
                 });
@@ -734,7 +795,9 @@ impl Handler<AccountLocked> for TransactionSender {
 
     fn handle(&mut self, msg: AccountLocked, _ctx: &mut Self::Context) -> Self::Result {
         log::info!("Account: {:?} is locked", msg.identity.to_string());
-        self.active_accounts.remove(&msg.identity.to_string());
+        self.active_accounts
+            .borrow_mut()
+            .remove_account(msg.identity);
         ActorResponse::reply(Ok(()))
     }
 }
@@ -752,8 +815,12 @@ impl Handler<AccountUnlocked> for TransactionSender {
 
     fn handle(&mut self, msg: AccountUnlocked, _ctx: &mut Self::Context) -> Self::Result {
         log::info!("Account: {:?} is unlocked", msg.identity.to_string());
-        self.active_accounts
-            .insert(msg.identity.to_string(), msg.identity);
+        self.active_accounts.borrow_mut().add_account(msg.identity);
         ActorResponse::reply(Ok(()))
     }
+}
+
+async fn process_payment(payment: PaymentEntity) -> PaymentDriverResult<()> {
+    log::info!("Processing payment: {:?}", payment);
+    Ok(())
 }
