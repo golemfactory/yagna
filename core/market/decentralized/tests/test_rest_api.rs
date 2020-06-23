@@ -51,7 +51,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     // env_logger::init();
 
     // given
-    let (db, mut app) = init_db_app("test_rest_subscribe").await;
+    let (db, mut app) = init_db_app("test_rest_subscribe_offer").await;
 
     let mut offer = utils::example_offer();
 
@@ -118,7 +118,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     // env_logger::init();
 
     // given
-    let (db, mut app) = init_db_app("test_rest_subscribe").await;
+    let (db, mut app) = init_db_app("test_rest_subscribe_demand").await;
 
     let mut demand = utils::example_demand();
 
