@@ -112,7 +112,7 @@ impl Discovery {
         let myself = self.clone();
         // /private/market/market-protocol-mk1-offer
         let broadcast_address = format!("{}/{}", private_prefix, OfferReceived::TOPIC);
-        net::local::bind_broadcast_with_caller(
+        ya_net::bind_broadcast_with_caller(
             &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferReceived>| {
                 let myself = myself.clone();
@@ -125,7 +125,7 @@ impl Discovery {
         let myself = self.clone();
         // /private/market/market-protocol-mk1-offer-unsubscribe
         let broadcast_address = format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC);
-        net::local::bind_broadcast_with_caller(
+        ya_net::bind_broadcast_with_caller(
             &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
                 let myself = myself.clone();
