@@ -2,4 +2,4 @@ mod matcher;
 mod resolver;
 
 pub use matcher::Matcher;
-pub use matcher::{MatcherError, MatcherInitError};
+pub use matcher::{DemandError, MatcherError, MatcherInitError, OfferError};

@@ -4,11 +4,11 @@
 #![allow(unused_variables)]
 // #![allow(unused_imports)]
 
-mod api;
 mod db;
 mod market;
 mod matcher;
 mod negotiation;
+mod rest_api;
 
 pub mod protocol;
 pub use db::models::{Demand, Offer, SubscriptionId};

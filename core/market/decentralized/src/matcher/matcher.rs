@@ -13,7 +13,6 @@ use crate::db::models::Offer as ModelOffer;
 use crate::db::models::{SubscriptionId, SubscriptionValidationError};
 use crate::protocol::{Discovery, DiscoveryInitError, Propagate, StopPropagateReason};
 use crate::protocol::{OfferReceived, OfferUnsubscribed, RetrieveOffers};
-use actix_web::{HttpResponse, ResponseError};
 
 #[derive(Error, Debug)]
 pub enum DemandError {
@@ -23,17 +22,6 @@ pub enum DemandError {
     RemoveDemandFailure(DbError, SubscriptionId),
     #[error("Demand [{0}] doesn't exist.")]
     DemandNotExists(SubscriptionId),
-}
-
-impl ResponseError for DemandError {
-    fn error_response(&self) -> HttpResponse {
-        match self {
-            DemandError::DemandNotExists(e) => {
-                HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
-            }
-            _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
-        }
-    }
 }
 
 #[derive(Error, Debug)]
@@ -46,25 +34,6 @@ pub enum OfferError {
     OfferNotExists(SubscriptionId),
 }
 
-impl ResponseError for OfferError {
-    fn error_response(&self) -> HttpResponse {
-        let msg = ErrorMessage::new(self.to_string());
-        match self {
-            OfferError::OfferNotExists(e) => {
-                HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
-            }
-            OfferError::UnsubscribeOfferFailure(e, id) => match e {
-                UnsubscribeError::OfferNotFound | UnsubscribeError::AlreadyUnsubscribed => {
-                    HttpResponse::NotFound().json(msg)
-                }
-                UnsubscribeError::OfferExpired => HttpResponse::Gone().json(msg),
-                UnsubscribeError::DatabaseError(_) => HttpResponse::InternalServerError().json(msg),
-            },
-            _ => HttpResponse::InternalServerError().json(msg),
-        }
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum MatcherError {
     #[error(transparent)]
@@ -75,21 +44,6 @@ pub enum MatcherError {
     SubscriptionValidation(#[from] SubscriptionValidationError),
     #[error("Unexpected Internal error: {0}.")]
     UnexpectedError(String),
-}
-
-impl ResponseError for MatcherError {
-    fn error_response(&self) -> HttpResponse {
-        match self {
-            MatcherError::DemandError(e) => e.error_response(),
-            MatcherError::OfferError(e) => e.error_response(),
-            MatcherError::SubscriptionValidation(e) => {
-                HttpResponse::BadRequest().json(ErrorMessage::new(e.to_string()))
-            }
-            MatcherError::UnexpectedError(e) => {
-                HttpResponse::InternalServerError().json(ErrorMessage::new(e.to_string()))
-            }
-        }
-    }
 }
 
 #[derive(Error, Debug)]

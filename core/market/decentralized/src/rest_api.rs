@@ -5,6 +5,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::SubscriptionId;
 
+mod error;
 pub mod provider;
 pub mod requestor;
 

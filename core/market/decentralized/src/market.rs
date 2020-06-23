@@ -2,15 +2,14 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::api::{path_config, provider, requestor};
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::matcher::{Matcher, MatcherError, MatcherInitError};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
+use crate::rest_api;
 use crate::{migrations, SubscriptionId};
 
-use actix_web::{HttpResponse, ResponseError};
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{private, BUS_ID};
@@ -27,22 +26,6 @@ pub enum MarketError {
     Negotiation(#[from] NegotiationError),
     #[error("Internal error: {0}.")]
     InternalError(#[from] ErrorMessage),
-}
-
-impl From<MarketError> for actix_web::HttpResponse {
-    fn from(e: MarketError) -> Self {
-        e.error_response()
-    }
-}
-
-impl ResponseError for MarketError {
-    fn error_response(&self) -> HttpResponse {
-        match self {
-            MarketError::Matcher(e) => e.error_response(),
-            MarketError::Negotiation(e) => e.error_response(),
-            MarketError::InternalError(e) => HttpResponse::InternalServerError().json(e),
-        }
-    }
 }
 
 #[derive(Error, Debug)]
@@ -112,9 +95,9 @@ impl MarketService {
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
         actix_web::web::scope(crate::MARKET_API_PATH)
             .data(myself)
-            .app_data(path_config())
-            .extend(provider::register_endpoints)
-            .extend(requestor::register_endpoints)
+            .app_data(rest_api::path_config())
+            .extend(rest_api::provider::register_endpoints)
+            .extend(rest_api::requestor::register_endpoints)
     }
 
     pub async fn subscribe_offer(
