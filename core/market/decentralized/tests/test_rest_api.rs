@@ -1,6 +1,7 @@
 use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{
+    error::PathError,
     http::{header, StatusCode},
     test, App,
 };
@@ -10,7 +11,7 @@ use actix_web::dev::ServiceResponse;
 use serde::de::DeserializeOwned;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_core_model::market;
-use ya_market_decentralized::testing::{DemandDao, OfferDao};
+use ya_market_decentralized::testing::{DemandDao, OfferDao, SubscriptionParseError};
 use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
@@ -36,8 +37,11 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        "Path deserialize error: Subscription id [invalid-id] contains non hexadecimal characters.",
-        &result.message.unwrap()
+        PathError::Deserialize(serde::de::Error::custom(
+            SubscriptionParseError::NotHexadecimal("invalid-id".to_string())
+        ))
+        .to_string(),
+        result.message.unwrap()
     );
 }
 
