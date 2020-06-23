@@ -127,8 +127,8 @@ impl MarketsNetwork {
     pub fn get_default_id(&self, node_name: &str) -> Identity {
         self.markets
             .iter()
-            .map(|n| (&n.name, &n.id))
-            .chain(self.discoveries.iter().map(|n| (&n.name, &n.id)))
+            .map(|node| (&node.name, &node.id))
+            .chain(self.discoveries.iter().map(|node| (&node.name, &node.id)))
             .find(|&(name, _id)| name == &node_name)
             .map(|(_name, id)| id.clone())
             .unwrap()

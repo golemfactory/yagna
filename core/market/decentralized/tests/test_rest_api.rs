@@ -19,7 +19,7 @@ mod utils;
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn test_rest_invbalid_subscription_id_should_return_400() {
+async fn test_rest_invalid_subscription_id_should_return_400() {
     // env_logger::init();
 
     // given
