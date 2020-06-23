@@ -42,6 +42,12 @@ pub trait RuntimeEvent {
     fn on_process_status(&self, _status: ProcessStatus) {}
 }
 
+pub trait ProcessControl {
+    fn id(&self) -> u32;
+
+    fn kill(&self);
+}
+
 mod client;
 mod service;
 

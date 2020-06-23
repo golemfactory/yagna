@@ -46,7 +46,7 @@ impl server::RuntimeService for RuntimeMock {
 impl server::RuntimeEvent for EventMock {}
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "debug")
     }
@@ -59,7 +59,7 @@ async fn main() {
 
         let mut cmd = Command::new(exe);
         cmd.env("X_SERVER", "1");
-        let c = server::spawn(cmd, EventMock).await;
+        let c = server::spawn(cmd, EventMock).await?;
         log::debug!("hello_result={:?}", c.hello("0.0.0x").await);
         let mut run = server::RunProcess::default();
         run.bin = "sleep".to_owned();
@@ -72,4 +72,5 @@ async fn main() {
         log::info!("start sleep2 sleep3");
         log::info!("sleep23={:?}", future::join(sleep_2, sleep_3).await);
     }
+    Ok(())
 }
