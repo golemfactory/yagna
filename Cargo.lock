@@ -4852,6 +4852,7 @@ version = "0.1.0"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
+ "log 0.4.8",
  "serde",
  "serde_bytes",
  "thiserror",
@@ -4945,7 +4946,9 @@ dependencies = [
 name = "ya-market-decentralized"
 version = "0.1.0"
 dependencies = [
+ "actix-http",
  "actix-rt",
+ "actix-service",
  "actix-web",
  "anyhow",
  "chrono",
@@ -4963,6 +4966,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
+ "structopt",
  "thiserror",
  "tokio 0.2.21",
  "uuid 0.8.1",

@@ -1,9 +1,11 @@
-use ya_persistence::executor::Error;
+use chrono::Utc;
+
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::db::models::Demand as ModelDemand;
 use crate::db::schema::market_demand::dsl;
 use crate::db::DbResult;
+use crate::SubscriptionId;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 #[allow(unused)]
@@ -18,14 +20,17 @@ impl<'c> AsDao<'c> for DemandDao<'c> {
 }
 
 impl<'c> DemandDao<'c> {
-    pub async fn get_demand<Str: AsRef<str>>(
+    pub async fn get_demand(
         &self,
-        subscription_id: Str,
+        subscription_id: &SubscriptionId,
     ) -> DbResult<Option<ModelDemand>> {
-        let subscription_id = subscription_id.as_ref().to_string();
+        let subscription_id = subscription_id.clone();
+        let now = Utc::now().naive_utc();
+
         readonly_transaction(self.pool, move |conn| {
             let demand: Option<ModelDemand> = dsl::market_demand
                 .filter(dsl::id.eq(&subscription_id))
+                .filter(dsl::expiration_ts.ge(now))
                 .first(conn)
                 .optional()?;
             match demand {
@@ -47,8 +52,8 @@ impl<'c> DemandDao<'c> {
         .await
     }
 
-    pub async fn remove_demand<Str: AsRef<str>>(&self, subscription_id: Str) -> DbResult<bool> {
-        let subscription_id = subscription_id.as_ref().to_string();
+    pub async fn remove_demand(&self, subscription_id: &SubscriptionId) -> DbResult<bool> {
+        let subscription_id = subscription_id.clone();
 
         do_with_transaction(self.pool, move |conn| {
             let num_deleted =

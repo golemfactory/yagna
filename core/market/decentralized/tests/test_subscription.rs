@@ -23,27 +23,28 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let mut offer = example_offer();
-        let subscription_id = market1.subscribe_offer(&offer, identity1.clone()).await?;
+        let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
 
         // Fill expected values for further comparison.
         offer.provider_id = Some(identity1.identity.to_string());
-        offer.offer_id = Some(subscription_id.clone());
+        offer.offer_id = Some(subscription_id.to_string());
 
         // Offer should be available in database after subscribe.
         let got_offer = market1.matcher.get_offer(&subscription_id).await?.unwrap();
-        assert_eq!(got_offer, offer);
+        assert_eq!(got_offer.into_client_offer().unwrap(), offer);
 
         // Unsubscribe should fail on not existing subscription id.
+        let not_existent_subscription_id = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
         assert!(market1
-            .unsubscribe_offer("".to_string(), identity1.clone())
+            .unsubscribe_offer(&not_existent_subscription_id, &identity1)
             .await
             .is_err());
 
         market1
-            .unsubscribe_offer(subscription_id.to_string(), identity1.clone())
+            .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
 
-        // Offer should be removed from database after unsubscribed.
+        // Offer shouldn't be available after unsubscribed.
         assert!(market1.matcher.get_offer(&subscription_id).await?.is_none());
 
         Ok(())
@@ -63,24 +64,25 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let mut demand = example_demand();
-        let subscription_id = market1.subscribe_demand(&demand, identity1.clone()).await?;
+        let subscription_id = market1.subscribe_demand(&demand, &identity1).await?;
 
         // Fill expected values for further comparison.
         demand.requestor_id = Some(identity1.identity.to_string());
-        demand.demand_id = Some(subscription_id.clone());
+        demand.demand_id = Some(subscription_id.to_string());
 
         // Offer should be available in database after subscribe.
         let got_demand = market1.matcher.get_demand(&subscription_id).await?.unwrap();
-        assert_eq!(got_demand, demand);
+        assert_eq!(got_demand.into_client_demand().unwrap(), demand);
 
         // Unsubscribe should fail on not existing subscription id.
+        let not_existent_subscription_id = "00000000000000000000000000000002-0000000000000000000000000000000000000000000000000000000000000003".parse().unwrap();
         assert!(market1
-            .unsubscribe_demand("".to_string(), identity1.clone())
+            .unsubscribe_demand(&not_existent_subscription_id, &identity1)
             .await
             .is_err());
 
         market1
-            .unsubscribe_demand(subscription_id.to_string(), identity1.clone())
+            .unsubscribe_demand(&subscription_id, &identity1)
             .await?;
 
         // Offer should be removed from database after unsubscribed.

@@ -1,8 +1,12 @@
 use anyhow::bail;
+use std::future::Future;
 
 use ya_client_model::node_id::{NodeId, ParseError};
 use ya_core_model::net;
-use ya_service_bus::typed as bus;
+use ya_core_model::net::local::{
+    BindBroadcastError, BroadcastMessage, SendBroadcastMessage, ToEndpoint,
+};
+use ya_service_bus::{typed as bus, Handle, RpcEndpoint, RpcMessage};
 
 pub(crate) const FROM_BUS_ID: &str = "/from";
 
@@ -102,6 +106,41 @@ pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String
         }
     }
     bail!("invalid net-from destination: {}", from_addr)
+}
+
+pub async fn bind_broadcast_with_caller<MsgType, Output, F>(
+    broadcast_address: &str,
+    handler: F,
+) -> Result<Handle, BindBroadcastError>
+where
+    MsgType: BroadcastMessage + Send + Sync + 'static,
+    Output: Future<
+            Output = Result<
+                <SendBroadcastMessage<MsgType> as RpcMessage>::Item,
+                <SendBroadcastMessage<MsgType> as RpcMessage>::Error,
+            >,
+        > + 'static,
+    F: FnMut(String, SendBroadcastMessage<MsgType>) -> Output + 'static,
+{
+    log::debug!("Creating broadcast topic {}.", MsgType::TOPIC);
+
+    // We send Subscribe message to local net, which will create Topic
+    // and add broadcast_address to be endpoint, which will be called, when someone
+    // will broadcast any Message related to this Topic.
+    let subscribe_msg = MsgType::into_subscribe_msg(broadcast_address);
+    bus::service(net::local::BUS_ID)
+        .send(subscribe_msg)
+        .await??;
+
+    log::debug!(
+        "Binding handler '{}' for broadcast topic {}.",
+        broadcast_address,
+        MsgType::TOPIC
+    );
+
+    // We created endpoint address above. Now we must add handler, which will
+    // handle broadcasts forwarded to this address.
+    Ok(bus::bind_with_caller(broadcast_address, handler))
 }
 
 #[cfg(test)]
