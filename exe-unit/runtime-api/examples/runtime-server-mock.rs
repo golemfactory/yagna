@@ -1,13 +1,15 @@
 use futures::prelude::*;
 use std::env;
-use std::process::Command;
+
+use std::time::Duration;
 use tokio;
 use ya_runtime_api::server;
 use ya_runtime_api::server::AsyncResponse;
 use ya_runtime_api::server::RuntimeService;
-use std::time::Duration;
 
 struct RuntimeMock;
+
+struct EventMock;
 
 impl server::RuntimeService for RuntimeMock {
     fn hello(&self, version: &str) -> AsyncResponse<String> {
@@ -17,22 +19,31 @@ impl server::RuntimeService for RuntimeMock {
 
     fn run_process(
         &self,
-        run: server::RunProcess,
+        _run: server::RunProcess,
     ) -> server::AsyncResponse<server::RunProcessResp> {
         async {
-            let mut resp : server::RunProcessResp = Default::default();
+            let mut resp: server::RunProcessResp = Default::default();
             resp.pid = 100;
             log::debug!("before delay_for");
             tokio::time::delay_for(Duration::from_secs(3)).await;
             log::debug!("after delay_for");
             Ok(resp)
-        }.boxed_local()
+        }
+        .boxed_local()
     }
 
     fn kill_process(&self, kill: server::KillProcess) -> AsyncResponse<()> {
-        unimplemented!()
+        log::debug!("got kill: {:?}", kill);
+        future::ok(()).boxed_local()
+    }
+
+    fn shutdown(&self) -> AsyncResponse<'_, ()> {
+        log::debug!("got shutdown");
+        future::ok(()).boxed_local()
     }
 }
+
+impl server::RuntimeEvent for EventMock {}
 
 #[tokio::main]
 async fn main() {
@@ -41,14 +52,14 @@ async fn main() {
     }
     env_logger::init();
     if env::var("X_SERVER").is_ok() {
-        server::run(RuntimeMock).await
+        server::run(|_e| RuntimeMock).await
     } else {
         use tokio::process::Command;
         let exe = env::current_exe().unwrap();
 
         let mut cmd = Command::new(exe);
         cmd.env("X_SERVER", "1");
-        let c = server::spawn(cmd).await;
+        let c = server::spawn(cmd, EventMock).await;
         log::debug!("hello_result={:?}", c.hello("0.0.0x").await);
         let mut run = server::RunProcess::default();
         run.bin = "sleep".to_owned();
@@ -59,6 +70,6 @@ async fn main() {
         log::info!("start sleep1");
         log::info!("sleep1={:?}", sleep_1.await);
         log::info!("start sleep2 sleep3");
-        log::info!("sleep23={:?}",future::join(sleep_2, sleep_3).await);
+        log::info!("sleep23={:?}", future::join(sleep_2, sleep_3).await);
     }
 }

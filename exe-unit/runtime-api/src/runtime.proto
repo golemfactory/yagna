@@ -8,6 +8,7 @@ message Request {
         Hello hello = 2;
         RunProcess run = 10;
         KillProcess kill = 11;
+        Shutdown shutdown = 12;
     }
 
     message Hello {
@@ -27,6 +28,10 @@ message Request {
         int32 signal = 2;
     }
 
+    message Shutdown {
+
+    }
+
 }
 
 message Response {
@@ -39,6 +44,7 @@ message Response {
         Hello hello = 4;
         RunProcess run = 10;
         KillProcess kill = 11;
+        Shutdown shutdown = 12;
 
         // Events
         ProcessStatus status = 20;
@@ -73,6 +79,8 @@ message Response {
         bytes stdout = 4;
         bytes stderr = 5;
     }
+
+    message Shutdown {}
 
 }
 

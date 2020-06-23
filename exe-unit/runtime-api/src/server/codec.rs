@@ -1,7 +1,7 @@
-use bytes::{BufMut, BytesMut};
+use bytes::BytesMut;
 use futures::{Sink, Stream};
-use prost::{DecodeError, EncodeError, Message};
-use std::io;
+use prost::Message;
+
 use std::marker::PhantomData;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};
@@ -30,7 +30,7 @@ impl<M: Message> Codec<M> {
         tokio_util::codec::FramedRead::new(output, Self::new())
     }
 
-    pub fn sink(input: impl AsyncWrite) -> impl Sink<M, Error=anyhow::Error> {
+    pub fn sink(input: impl AsyncWrite) -> impl Sink<M, Error = anyhow::Error> {
         tokio_util::codec::FramedWrite::new(input, Self::new())
     }
 }
@@ -40,8 +40,8 @@ impl<M: Message> Encoder for Codec<M> {
     type Error = anyhow::Error;
 
     fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let len = item.encoded_len() ;
-        dst.reserve(len+ prost::length_delimiter_len(len));
+        let len = item.encoded_len();
+        dst.reserve(len + prost::length_delimiter_len(len));
         Message::encode_length_delimited(&item, dst)?;
         Ok(())
     }

@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use futures::lock::Mutex;
-use futures::prelude::*;
-use std::fmt::Debug;
-use futures::SinkExt;
 use super::*;
+use futures::lock::Mutex;
+
+use futures::SinkExt;
+use std::collections::HashMap;
+use std::fmt::Debug;
 
 struct ClientInner<Out> {
     ids: u64,
@@ -16,8 +16,8 @@ struct Client<Out> {
 }
 
 impl<Out: Sink<proto::Request> + Unpin> Client<Out>
-    where
-        Out::Error: Debug,
+where
+    Out::Error: Debug,
 {
     fn new(output: Out) -> Self {
         let inner = Mutex::new(ClientInner {
@@ -61,8 +61,8 @@ impl<Out: Sink<proto::Request> + Unpin> Client<Out>
 }
 
 impl<Out: Sink<proto::Request> + Unpin> RuntimeService for Arc<Client<Out>>
-    where
-        Out::Error: Debug,
+where
+    Out::Error: Debug,
 {
     fn hello(&self, version: &str) -> AsyncResponse<'_, String> {
         let request = proto::Request {
@@ -79,7 +79,7 @@ impl<Out: Sink<proto::Request> + Unpin> RuntimeService for Arc<Client<Out>>
                 _ => panic!("invalid response"),
             }
         }
-            .boxed_local()
+        .boxed_local()
     }
 
     fn run_process(&self, run: RunProcess) -> AsyncResponse<RunProcessResp> {
@@ -95,17 +95,49 @@ impl<Out: Sink<proto::Request> + Unpin> RuntimeService for Arc<Client<Out>>
                 _ => panic!("invalid response"),
             }
         }
-            .boxed_local()
+        .boxed_local()
     }
 
     fn kill_process(&self, kill: KillProcess) -> AsyncResponse<()> {
-        unimplemented!()
+        let request = proto::Request {
+            id: 0,
+            command: Some(proto::request::Command::Kill(kill)),
+        };
+        let fut = self.call(request);
+        async move {
+            match fut.await.command {
+                Some(proto::response::Command::Kill(_kill)) => Ok(()),
+                Some(proto::response::Command::Error(error)) => Err(error),
+                _ => panic!("invalid response"),
+            }
+        }
+        .boxed_local()
+    }
+
+    fn shutdown(&self) -> AsyncResponse<'_, ()> {
+        let shutdown = proto::request::Shutdown::default();
+        let request = proto::Request {
+            id: 0,
+            command: Some(proto::request::Command::Shutdown(shutdown)),
+        };
+        let fut = self.call(request);
+        async move {
+            match fut.await.command {
+                Some(proto::response::Command::Shutdown(_shutdown)) => Ok(()),
+                Some(proto::response::Command::Error(error)) => Err(error),
+                _ => panic!("invalid response"),
+            }
+        }
+        .boxed_local()
     }
 }
 
 // sends Request, recv Response
-pub async fn spawn(mut command: process::Command) -> impl RuntimeService + Clone {
-    let (tx, rx) = futures::channel::mpsc::unbounded::<proto::Response>();
+pub async fn spawn(
+    mut command: process::Command,
+    event_handler: impl RuntimeEvent + Send + 'static,
+) -> impl RuntimeService + Clone {
+    let (_tx, _rx) = futures::channel::mpsc::unbounded::<proto::Response>();
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn().expect("run failed");
@@ -115,16 +147,24 @@ pub async fn spawn(mut command: process::Command) -> impl RuntimeService + Clone
     let client = Arc::new(Client::new(stdin));
     {
         let client = client.clone();
-        let mut stdout = tokio_util::codec::FramedRead::new(stdout, codec::Codec::default());
+        let mut stdout =
+            tokio_util::codec::FramedRead::new(stdout, codec::Codec::<proto::Response>::default());
         let pump = async move {
             while let Some(it) = stdout.next().await {
                 let it = it.unwrap();
-                client.handle_response(it).await;
+                if it.event {
+                    handle_event(it, &event_handler)
+                } else {
+                    client.handle_response(it).await;
+                }
             }
         };
         let _ = tokio::task::spawn(async move {
             let _ = future::join(pump, child).await;
         });
     }
+
+    fn handle_event(_response: proto::Response, _event_handler: &impl RuntimeEvent) {}
+
     client
 }
