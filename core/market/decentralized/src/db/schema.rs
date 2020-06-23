@@ -4,6 +4,7 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
+
         creation_ts -> Timestamp,
         insertion_ts -> Nullable<Timestamp>,
         expiration_ts -> Timestamp,
@@ -16,10 +17,23 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
+
         creation_ts -> Timestamp,
         insertion_ts -> Nullable<Timestamp>,
         expiration_ts -> Timestamp,
     }
 }
 
-allow_tables_to_appear_in_same_query!(market_demand, market_offer,);
+table! {
+    market_offer_unsubscribed (id) {
+        id -> Text,
+        node_id -> Text,
+
+        insertion_ts -> Nullable<Timestamp>,
+        expiration_ts -> Timestamp,
+    }
+}
+
+allow_tables_to_appear_in_same_query!(market_demand, market_offer, market_offer_unsubscribed);
+
+joinable!(market_offer -> market_offer_unsubscribed (id));
