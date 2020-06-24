@@ -29,4 +29,5 @@ pub mod testing {
     pub use super::db::models::{Demand, Offer, SubscriptionId};
     pub use super::matcher::DraftProposal;
     pub use super::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
+    pub use super::negotiation::QueryEventsError;
 }

@@ -1,5 +1,6 @@
 use chrono::Utc;
 use futures::stream::{self, StreamExt};
+use num_traits::real::Real;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -67,11 +68,16 @@ impl RequestorNegotiationEngine {
         &self,
         subscription_id: &String,
         timeout: f32,
-        max_events: i32,
+        max_events: Option<i32>,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
+        let subscription_id = SubscriptionId::from_str(subscription_id)?;
         let mut timeout = Duration::from_millis((1000.0 * timeout) as u64);
         let stop_time = Instant::now() + timeout;
-        let subscription_id = SubscriptionId::from_str(subscription_id)?;
+        let max_events = max_events.unwrap_or(i32::max_value());
+
+        if max_events < 0 {
+            Err(QueryEventsError::InvalidMaxEvents(max_events))?
+        }
 
         loop {
             let events = get_events_from_db(&self.db, &subscription_id, max_events).await?;
