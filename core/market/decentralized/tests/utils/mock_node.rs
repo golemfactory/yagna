@@ -191,10 +191,10 @@ pub async fn wait_for_bcast(
 ) -> Result<()> {
     let steps = 20;
     let wait_step = Duration::from_millis(grace_millis / steps);
-    let matcher = market.matcher.clone();
+    let store = market.store.clone();
     for _ in 0..steps {
         tokio::time::delay_for(wait_step).await;
-        if matcher.get_offer(&subscription_id).await?.is_some() == stop_is_some {
+        if store.get_offer(&subscription_id).await?.is_some() == stop_is_some {
             break;
         }
     }

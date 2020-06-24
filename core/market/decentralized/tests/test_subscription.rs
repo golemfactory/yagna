@@ -30,7 +30,7 @@ mod tests {
         offer.offer_id = Some(subscription_id.to_string());
 
         // Offer should be available in database after subscribe.
-        let got_offer = market1.matcher.get_offer(&subscription_id).await?.unwrap();
+        let got_offer = market1.store.get_offer(&subscription_id).await?.unwrap();
         assert_eq!(got_offer.into_client_offer().unwrap(), offer);
 
         // Unsubscribe should fail on not existing subscription id.
@@ -45,7 +45,7 @@ mod tests {
             .await?;
 
         // Offer shouldn't be available after unsubscribed.
-        assert!(market1.matcher.get_offer(&subscription_id).await?.is_none());
+        assert!(market1.store.get_offer(&subscription_id).await?.is_none());
 
         Ok(())
     }
@@ -71,7 +71,7 @@ mod tests {
         demand.demand_id = Some(subscription_id.to_string());
 
         // Offer should be available in database after subscribe.
-        let got_demand = market1.matcher.get_demand(&subscription_id).await?.unwrap();
+        let got_demand = market1.store.get_demand(&subscription_id).await?.unwrap();
         assert_eq!(got_demand.into_client_demand().unwrap(), demand);
 
         // Unsubscribe should fail on not existing subscription id.
@@ -86,11 +86,7 @@ mod tests {
             .await?;
 
         // Offer should be removed from database after unsubscribed.
-        assert!(market1
-            .matcher
-            .get_demand(&subscription_id)
-            .await?
-            .is_none());
+        assert!(market1.store.get_demand(&subscription_id).await?.is_none());
 
         Ok(())
     }

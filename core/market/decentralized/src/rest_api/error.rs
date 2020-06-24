@@ -19,6 +19,8 @@ impl ResponseError for MarketError {
     fn error_response(&self) -> HttpResponse {
         match self {
             MarketError::Matcher(e) => e.error_response(),
+            MarketError::OfferError(e) => e.error_response(),
+            MarketError::DemandError(e) => e.error_response(),
             MarketError::Negotiation(e) => e.error_response(),
             MarketError::InternalError(e) => HttpResponse::InternalServerError().json(e),
         }

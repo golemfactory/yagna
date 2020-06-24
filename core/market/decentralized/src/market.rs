@@ -4,7 +4,9 @@ use thiserror::Error;
 
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
-use crate::matcher::{Matcher, MatcherError, MatcherInitError};
+use crate::matcher::{
+    DemandError, Matcher, MatcherError, MatcherInitError, OfferError, SubscriptionStore,
+};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 use crate::rest_api;
@@ -23,6 +25,10 @@ pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
     #[error(transparent)]
+    OfferError(#[from] OfferError),
+    #[error(transparent)]
+    DemandError(#[from] DemandError),
+    #[error(transparent)]
     Negotiation(#[from] NegotiationError),
     #[error("Internal error: {0}.")]
     InternalError(#[from] ErrorMessage),
@@ -40,7 +46,8 @@ pub enum MarketInitError {
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    pub matcher: Arc<Matcher>,
+    pub matcher: Matcher,
+    pub store: SubscriptionStore,
     pub provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
     pub requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
 }
@@ -55,7 +62,8 @@ impl MarketService {
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
-            matcher: Arc::new(matcher),
+            matcher,
+            store: SubscriptionStore::new(db.clone()),
             provider_negotiation_engine: provider_engine,
             requestor_negotiation_engine: requestor_engine,
         })
@@ -107,6 +115,7 @@ impl MarketService {
     ) -> Result<SubscriptionId, MarketError> {
         let offer = ModelOffer::from_new(offer, &id);
 
+        self.store.create_offer(&offer).await?;
         self.matcher.subscribe_offer(&offer).await?;
         self.provider_negotiation_engine
             .subscribe_offer(&offer)
@@ -120,6 +129,9 @@ impl MarketService {
         id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
+        self.store
+            .mark_offer_as_unsubscribed(subscription_id)
+            .await?;
         self.provider_negotiation_engine
             .unsubscribe_offer(subscription_id)
             .await?;
@@ -133,7 +145,7 @@ impl MarketService {
     ) -> Result<SubscriptionId, MarketError> {
         let demand = ModelDemand::from_new(demand, &id);
 
-        self.matcher.subscribe_demand(&demand).await?;
+        self.store.create_demand(&demand).await?;
         self.requestor_negotiation_engine
             .subscribe_demand(&demand)
             .await?;
@@ -150,7 +162,8 @@ impl MarketService {
         self.requestor_negotiation_engine
             .unsubscribe_demand(subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_demand(subscription_id).await?)
+        // TODO: shouldn't remove precede negotiation unsubscribe?
+        Ok(self.store.remove_demand(subscription_id).await?)
     }
 }
 
