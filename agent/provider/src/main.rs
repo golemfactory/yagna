@@ -77,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
             let path = config.hardware_file;
             match profile_cmd {
                 ProfileConfig::List => {
-                    let profiles = Profiles::load(&path)?.list();
+                    let profiles = Profiles::load_or_create(&path)?.list();
                     println!("{}", serde_json::to_string_pretty(&profiles)?);
                 }
                 ProfileConfig::Create { name, resources } => {
@@ -97,17 +97,17 @@ async fn main() -> anyhow::Result<()> {
                     profiles.save(path)?;
                 }
                 ProfileConfig::Remove { name } => {
-                    let mut profiles = Profiles::load(&path)?;
+                    let mut profiles = Profiles::load_or_create(&path)?;
                     profiles.remove(name)?;
                     profiles.save(path)?;
                 }
                 ProfileConfig::Activate { name } => {
-                    let mut profiles = Profiles::load(&path)?;
+                    let mut profiles = Profiles::load_or_create(&path)?;
                     profiles.set_active(name)?;
                     profiles.save(path)?;
                 }
                 ProfileConfig::Active => {
-                    let profiles = Profiles::load(&path)?;
+                    let profiles = Profiles::load_or_create(&path)?;
                     println!("{}", serde_json::to_string_pretty(profiles.active())?);
                 }
             }
