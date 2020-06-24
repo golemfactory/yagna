@@ -120,7 +120,10 @@ impl<'c> OfferDao<'c> {
     }
 }
 
-fn query_offer(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<OfferState> {
+pub(super) fn query_offer(
+    conn: &ConnType,
+    subscription_id: &SubscriptionId,
+) -> DbResult<OfferState> {
     let is_unsubscribed = is_unsubscribed(conn, subscription_id)?;
 
     let offer: Option<ModelOffer> = dsl::market_offer
@@ -141,7 +144,7 @@ fn query_offer(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<Of
     })
 }
 
-fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
+pub(super) fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
     let unsubscribed: Option<OfferUnsubscribed> = dsl_unsubscribed::market_offer_unsubscribed
         .filter(dsl_unsubscribed::id.eq(&subscription_id))
         .first(conn)

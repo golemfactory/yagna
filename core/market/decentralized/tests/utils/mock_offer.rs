@@ -10,9 +10,8 @@ use ya_market_decentralized::testing::SubscriptionId;
 use ya_market_decentralized::testing::{DemandDao, OfferDao};
 use ya_market_decentralized::MarketService;
 
-use crate::utils::MarketsNetwork;
 use crate::utils::mock_node::MarketNode;
-
+use crate::utils::MarketsNetwork;
 
 #[allow(unused)]
 pub fn example_offer() -> Offer {
@@ -50,7 +49,8 @@ impl MarketNode {
         let subscription_id = market1.subscribe_demand(demand, identity1).await?;
         let subscription_id = SubscriptionId::from_str(&subscription_id)?;
 
-        self.inject_proposal_for_demand(offer, &subscription_id).await
+        self.inject_proposal_for_demand(offer, &subscription_id)
+            .await
     }
 
     pub async fn inject_proposal_for_demand(

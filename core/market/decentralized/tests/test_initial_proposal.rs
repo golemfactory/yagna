@@ -4,8 +4,8 @@ mod utils;
 mod tests {
     use ya_client::model::market::event::RequestorEvent;
     use ya_client::model::market::proposal::State;
-    use ya_market_decentralized::testing::SubscriptionId;
     use ya_market_decentralized::testing::QueryEventsError;
+    use ya_market_decentralized::testing::SubscriptionId;
     use ya_market_decentralized::MarketService;
 
     use crate::utils::mock_offer::{example_demand, example_offer};
@@ -106,6 +106,7 @@ mod tests {
     }
 
     /// Tests if query events returns proper error on invalid input
+    /// or unsubscribed demand.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
@@ -116,6 +117,7 @@ mod tests {
 
         let node1 = network.get_node("Node-1");
         let market1: Arc<MarketService> = network.get_market("Node-1");
+        let identity1 = network.get_default_id("Node-1");
 
         let (_offer_id, demand_id) = node1
             .inject_proposal(&example_offer(), &example_demand())
@@ -125,10 +127,11 @@ mod tests {
         match market1
             .requestor_engine
             .query_events(&demand_id.to_string(), 0.0, Some(-5))
-            .await {
+            .await
+        {
             Err(QueryEventsError::InvalidMaxEvents(value)) => {
                 assert_eq!(value, -5);
-            },
+            }
             _ => panic!("Negative maxEvents - expected error"),
         };
 
@@ -139,6 +142,22 @@ mod tests {
             .query_events(&demand_id.to_string(), 1.0, Some(0))
             .await?;
         assert_eq!(events.len(), 0);
+
+        // Query events returns error, if Demand was unsubscribed.
+        market1
+            .unsubscribe_demand(demand_id.to_string(), identity1.clone())
+            .await?;
+
+        match market1
+            .requestor_engine
+            .query_events(&demand_id.to_string(), 0.0, None)
+            .await
+        {
+            Err(QueryEventsError::Unsubscribed(subscription_id)) => {
+                assert_eq!(&subscription_id, &demand_id);
+            }
+            _ => panic!("Expected Unsubscribed error."),
+        }
 
         Ok(())
     }

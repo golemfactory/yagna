@@ -77,6 +77,8 @@ impl RequestorNegotiationEngine {
 
         if max_events < 0 {
             Err(QueryEventsError::InvalidMaxEvents(max_events))?
+        } else if max_events == 0 {
+            return Ok(vec![]);
         }
 
         loop {

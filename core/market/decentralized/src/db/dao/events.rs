@@ -6,6 +6,7 @@ use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
+use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::models::MarketEvent;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
@@ -22,6 +23,10 @@ pub enum TakeEventsError {
         num_removed: usize,
         to_remove: usize,
     },
+    #[error("Subscription [{0}] not found. Could be unsubscribed.")]
+    SubscriptionNotFound(SubscriptionId),
+    #[error("Subscription [{0}] expired.")]
+    SubscriptionExpired(SubscriptionId),
     #[error(transparent)]
     DatabaseError(DbError),
 }
@@ -59,6 +64,16 @@ impl<'c> EventsDao<'c> {
     ) -> Result<Vec<MarketEvent>, TakeEventsError> {
         let subscription_id = subscription_id.clone();
         Ok(do_with_transaction(self.pool, move |conn| {
+            match demand_status(conn, &subscription_id)? {
+                DemandState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
+                    subscription_id.clone(),
+                ))?,
+                DemandState::Expired(_) => Err(TakeEventsError::SubscriptionExpired(
+                    subscription_id.clone(),
+                ))?,
+                _ => (),
+            };
+
             let events = dsl_requestor::market_requestor_event
                 .filter(dsl_requestor::subscription_id.eq(&subscription_id))
                 .order_by(dsl_requestor::timestamp.asc())

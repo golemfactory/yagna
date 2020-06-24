@@ -1,7 +1,7 @@
 use chrono::Utc;
 
-use ya_persistence::executor::Error;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{ConnType, Error};
 
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::SubscriptionId;
@@ -18,6 +18,13 @@ impl<'c> AsDao<'c> for DemandDao<'c> {
     fn as_dao(pool: &'c PoolType) -> Self {
         Self { pool }
     }
+}
+
+/// Returns state of Demand in database.
+pub enum DemandState {
+    Active(ModelDemand),
+    Expired(Option<ModelDemand>),
+    NotFound,
 }
 
 impl<'c> DemandDao<'c> {
@@ -63,5 +70,23 @@ impl<'c> DemandDao<'c> {
             Ok(num_deleted > 0)
         })
         .await
+    }
+}
+
+pub(super) fn demand_status(
+    conn: &ConnType,
+    subscription_id: &SubscriptionId,
+) -> DbResult<DemandState> {
+    let demand: Option<ModelDemand> = dsl::market_demand
+        .filter(dsl::id.eq(&subscription_id))
+        .first(conn)
+        .optional()?;
+
+    match demand {
+        Some(demand) => match demand.expiration_ts > Utc::now().naive_utc() {
+            true => Ok(DemandState::Active(demand)),
+            false => Ok(DemandState::Expired(Some(demand))),
+        },
+        None => Ok(DemandState::NotFound),
     }
 }
