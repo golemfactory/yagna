@@ -1,7 +1,10 @@
 use crate::dao::transaction::TransactionDao;
 use crate::ethereum::EthereumClient;
 use crate::models::{PaymentEntity, TransactionStatus, TxType};
-use crate::utils::u256_from_big_endian_hex;
+use crate::utils::{
+    u256_from_big_endian_hex, PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
+    PAYMENT_STATUS_NOT_ENOUGH_GAS,
+};
 use crate::{utils, PaymentDriverError, PaymentDriverResult, SignTx};
 
 use crate::dao::payment::PaymentDao;
@@ -12,7 +15,7 @@ use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H256, U256};
 use futures3::channel::oneshot;
 use futures3::prelude::*;
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::ops::Range;
@@ -29,37 +32,6 @@ use ya_persistence::executor::DbExecutor;
 
 const NONCE_EXPIRE: Duration = Duration::from_secs(12);
 const GNT_TRANSFER_GAS: u32 = 55000;
-
-async fn transfer_gnt(
-    gnt_contract: Arc<Contract<Http>>,
-    tx_sender: Addr<TransactionSender>,
-    gnt_amount: U256,
-    address: Address,
-    recipient: Address,
-    sign_tx: SignTx<'_>,
-    gas_price: U256,
-    chain_id: u64,
-) -> PaymentDriverResult<String> {
-    if gnt_amount
-        > utils::big_dec_to_u256(
-            common::get_gnt_balance(&gnt_contract, address)
-                .await?
-                .amount,
-        )?
-    {
-        return Err(PaymentDriverError::InsufficientFunds);
-    }
-
-    let mut batch = Builder::new(address, gas_price, chain_id);
-    batch.push(
-        &gnt_contract,
-        "transfer",
-        (recipient, gnt_amount),
-        GNT_TRANSFER_GAS.into(),
-    );
-    let r = batch.send_to(tx_sender, sign_tx).await?;
-    Ok(r.into_iter().next().unwrap())
-}
 
 struct Accounts {
     accounts: HashMap<String, NodeId>,
@@ -78,8 +50,11 @@ impl Accounts {
         self.accounts.keys().cloned().collect()
     }
 
-    pub fn is_active(&self, account: String) -> bool {
-        self.accounts.contains_key(&account)
+    pub fn get_node_id(&self, account: &str) -> Option<NodeId> {
+        match self.accounts.get(account) {
+            None => None,
+            Some(&node_id) => Some(node_id),
+        }
     }
 }
 
@@ -155,6 +130,7 @@ impl Message for WaitForTx {
 pub struct TransactionSender {
     active_accounts: Rc<RefCell<Accounts>>,
     ethereum_client: Arc<EthereumClient>,
+    gnt_contract: Arc<Contract<Http>>,
     nonces: HashMap<Address, U256>,
     next_reservation_id: u64,
     pending_reservations: Vec<(TxReq, oneshot::Sender<Reservation>)>,
@@ -165,13 +141,18 @@ pub struct TransactionSender {
 }
 
 impl TransactionSender {
-    pub fn new(ethereum_client: Arc<EthereumClient>, db: DbExecutor) -> Addr<Self> {
+    pub fn new(
+        ethereum_client: Arc<EthereumClient>,
+        gnt_contract: Arc<Contract<Http>>,
+        db: DbExecutor,
+    ) -> Addr<Self> {
         let active_accounts = Rc::new(RefCell::new(Accounts {
             accounts: Default::default(),
         }));
         let me = TransactionSender {
             active_accounts,
             ethereum_client,
+            gnt_contract,
             db,
             nonces: Default::default(),
             next_reservation_id: 0,
@@ -607,25 +588,29 @@ impl TransactionSender {
     fn start_payment_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
             for address in act.active_accounts.borrow().list_accounts() {
-                let db = act.db.clone();
-                let account = address.clone();
-                Arbiter::spawn(async move {
-                    let dao: PaymentDao = db.as_dao();
-                    dao.get_pending_payments(account.clone()).await.map_or_else(
-                        |e| {
-                            log::error!(
-                                "Failed to fetch pending payments for {:?} : {:?}",
+                log::info!("payment job for: {:?}", address);
+                match act.active_accounts.borrow().get_node_id(address.as_str()) {
+                    None => continue,
+                    Some(node_id) => {
+                        let account = address.clone();
+                        let client = act.ethereum_client.clone();
+                        let gnt_contract = act.gnt_contract.clone();
+                        let tx_sender = ctx.address();
+                        let db = act.db.clone();
+                        let sign_tx = utils::get_sign_tx(node_id);
+                        Arbiter::spawn(async move {
+                            process_payments(
                                 account,
-                                e
+                                client,
+                                gnt_contract,
+                                tx_sender,
+                                db,
+                                &sign_tx,
                             )
-                        },
-                        |payments| {
-                            for payment in payments {
-                                log::info!("Processing payment: {:?}", payment);
-                            }
-                        },
-                    );
-                });
+                            .await;
+                        });
+                    }
+                }
             }
         });
     }
@@ -820,7 +805,116 @@ impl Handler<AccountUnlocked> for TransactionSender {
     }
 }
 
-async fn process_payment(payment: PaymentEntity) -> PaymentDriverResult<()> {
+async fn process_payments(
+    account: String,
+    client: Arc<EthereumClient>,
+    gnt_contract: Arc<Contract<Http>>,
+    tx_sender: Addr<TransactionSender>,
+    db: DbExecutor,
+    sign_tx: SignTx<'_>,
+) {
+    match db
+        .as_dao::<PaymentDao>()
+        .get_pending_payments(account.clone())
+        .await
+    {
+        Err(e) => log::error!(
+            "Failed to fetch pending payments for {:?} : {:?}",
+            account,
+            e
+        ),
+        Ok(payments) => {
+            for payment in payments {
+                let _ = process_payment(
+                    payment.clone(),
+                    client.clone(),
+                    gnt_contract.clone(),
+                    tx_sender.clone(),
+                    db.clone(),
+                    sign_tx,
+                )
+                .await
+                .map_err(|e| {
+                    log::error!("Failed to process payment: {:?}, error: {:?}", payment, e)
+                });
+            }
+        }
+    };
+}
+
+async fn process_payment(
+    payment: PaymentEntity,
+    client: Arc<EthereumClient>,
+    gnt_contract: Arc<Contract<Http>>,
+    tx_sender: Addr<TransactionSender>,
+    db: DbExecutor,
+    sign_tx: SignTx<'_>,
+) -> PaymentDriverResult<()> {
     log::info!("Processing payment: {:?}", payment);
+    let gas_price = client.get_gas_price().await?;
+    let chain_id = client.chain_id();
+    match transfer_gnt(
+        gnt_contract,
+        tx_sender,
+        utils::u256_from_big_endian_hex(payment.amount),
+        utils::str_to_addr(&payment.sender)?,
+        utils::str_to_addr(&payment.recipient)?,
+        sign_tx,
+        gas_price,
+        chain_id,
+    )
+    .await
+    {
+        Ok(tx_id) => {
+            db.as_dao::<PaymentDao>()
+                .update_tx_id(payment.invoice_id, tx_id)
+                .await?;
+        }
+        Err(e) => {
+            db.as_dao::<PaymentDao>()
+                .update_status(
+                    payment.invoice_id,
+                    match e {
+                        PaymentDriverError::InsufficientFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
+                        PaymentDriverError::InsufficientGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
+                        _ => PAYMENT_STATUS_FAILED,
+                    },
+                )
+                .await?;
+            log::error!("GNT transfer failed: {}", e);
+            return Err(e);
+        }
+    }
     Ok(())
+}
+
+async fn transfer_gnt(
+    gnt_contract: Arc<Contract<Http>>,
+    tx_sender: Addr<TransactionSender>,
+    gnt_amount: U256,
+    address: Address,
+    recipient: Address,
+    sign_tx: SignTx<'_>,
+    gas_price: U256,
+    chain_id: u64,
+) -> PaymentDriverResult<String> {
+    if gnt_amount
+        > utils::big_dec_to_u256(
+            common::get_gnt_balance(&gnt_contract, address)
+                .await?
+                .amount,
+        )?
+    {
+        return Err(PaymentDriverError::InsufficientFunds);
+    }
+
+    let mut batch = Builder::new(address, gas_price, chain_id);
+    batch.push(
+        &gnt_contract,
+        "transfer",
+        (recipient, gnt_amount),
+        GNT_TRANSFER_GAS.into(),
+    );
+    let r = batch.send_to(tx_sender, sign_tx).await?;
+    Ok(r.into_iter().next().unwrap())
 }

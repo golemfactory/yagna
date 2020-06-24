@@ -6,10 +6,15 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H160, H256, U256};
+use futures3::{Future, FutureExt};
 use num_bigint::ToBigInt;
 use sha3::{Digest, Sha3_512};
+use std::pin::Pin;
 use std::str::FromStr;
+use ya_client_model::NodeId;
 use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
+use ya_core_model::identity;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 
@@ -125,6 +130,15 @@ pub fn payment_entity_to_status(payment: &PaymentEntity) -> PaymentStatus {
         PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
         PAYMENT_STATUS_FAILED => PaymentStatus::Failed,
         _ => PaymentStatus::Unknown,
+    }
+}
+
+pub fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+    move |payload| {
+        let fut = bus::service(identity::BUS_ID)
+            .send(identity::Sign { node_id, payload })
+            .map(|x| x.unwrap().unwrap());
+        Box::pin(fut)
     }
 }
 

@@ -7,7 +7,7 @@ use crate::schema::gnt_driver_payment::dsl;
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
 
 use crate::utils::{payment_entity_to_status, PAYMENT_STATUS_OK};
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::Utc;
 use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 

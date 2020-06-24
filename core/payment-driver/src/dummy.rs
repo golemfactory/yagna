@@ -39,14 +39,14 @@ impl PaymentDriver for DummyDriver {
 
     fn account_locked<'a>(
         &self,
-        identity: NodeId,
+        _identity: NodeId,
     ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         Box::pin(future::ready(Ok(())))
     }
 
     fn account_unlocked<'a>(
         &self,
-        identity: NodeId,
+        _identity: NodeId,
     ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         Box::pin(future::ready(Ok(())))
     }
