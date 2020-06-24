@@ -135,6 +135,18 @@ mod tests {
             _ => panic!("Negative maxEvents - expected error"),
         };
 
+        // Negative timeout should be treated as immediate checking events and return.
+        let events = market1
+            .requestor_engine
+            .query_events(&demand_id.to_string(), -5.0, None)
+            .await?;
+        assert_eq!(events.len(), 1);
+
+        // Restore available Proposal
+        let (_offer_id, demand_id) = node1
+            .inject_proposal(&example_offer(), &example_demand())
+            .await?;
+
         // maxEvents equal to 0 isn't forbidden value, but should return 0 events,
         // even if they exist.
         let events = market1
