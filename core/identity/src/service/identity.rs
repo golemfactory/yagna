@@ -57,10 +57,11 @@ fn send_event(s: Ref<Subscription>, event: model::event::Event) -> impl Future<O
         for endpoint in subscriptions {
             let msg = event.clone();
             Arbiter::spawn(async move {
-                match bus::service(&endpoint).call(msg.clone()).await {
-                    Err(e) => log::error!("failed to send event: {}", e),
-                    Ok(Err(e)) => log::error!("failed to send event: {}", e),
-                    Ok(Ok(_)) => log::debug!("sent event: {:?} to {}", msg, endpoint),
+                log::debug!("Sending event: {:?}", msg);
+                match bus::service(&endpoint).call(msg).await {
+                    Err(e) => log::error!("Failed to send event: {:?}", e),
+                    Ok(Err(e)) => log::error!("Failed to send event: {:?}", e),
+                    Ok(Ok(_)) => log::debug!("Event sent to {:?}", endpoint),
                 }
             });
         }

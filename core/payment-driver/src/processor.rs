@@ -7,22 +7,19 @@ use ya_core_model::driver::{
     AccountBalance, AccountMode, Balance, PaymentAmount, PaymentConfirmation, PaymentDetails,
     PaymentStatus,
 };
-use ya_persistence::executor::DbExecutor;
 
 #[derive(Clone)]
 pub struct PaymentDriverProcessor {
     driver: Arc<dyn PaymentDriver + Send + Sync + 'static>,
-    db_executor: DbExecutor,
 }
 
 impl PaymentDriverProcessor {
-    pub fn new<D>(driver: D, db_executor: DbExecutor) -> Self
+    pub fn new<D>(driver: D) -> Self
     where
         D: PaymentDriver + Send + Sync + 'static,
     {
         Self {
             driver: Arc::new(driver),
-            db_executor,
         }
     }
 

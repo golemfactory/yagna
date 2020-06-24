@@ -32,6 +32,7 @@ use ya_persistence::executor::DbExecutor;
 
 const NONCE_EXPIRE: Duration = Duration::from_secs(12);
 const GNT_TRANSFER_GAS: u32 = 55000;
+const TRANSFER_CONTRACT_FUNCTION: &str = "transfer";
 
 struct Accounts {
     accounts: HashMap<String, NodeId>,
@@ -51,10 +52,7 @@ impl Accounts {
     }
 
     pub fn get_node_id(&self, account: &str) -> Option<NodeId> {
-        match self.accounts.get(account) {
-            None => None,
-            Some(&node_id) => Some(node_id),
-        }
+        self.accounts.get(account).cloned()
     }
 }
 
@@ -779,10 +777,10 @@ impl Handler<AccountLocked> for TransactionSender {
     type Result = ActorResponse<Self, (), PaymentDriverError>;
 
     fn handle(&mut self, msg: AccountLocked, _ctx: &mut Self::Context) -> Self::Result {
-        log::info!("Account: {:?} is locked", msg.identity.to_string());
         self.active_accounts
             .borrow_mut()
             .remove_account(msg.identity);
+        log::info!("Account: {:?} is locked", msg.identity.to_string());
         ActorResponse::reply(Ok(()))
     }
 }
@@ -799,8 +797,8 @@ impl Handler<AccountUnlocked> for TransactionSender {
     type Result = ActorResponse<Self, (), PaymentDriverError>;
 
     fn handle(&mut self, msg: AccountUnlocked, _ctx: &mut Self::Context) -> Self::Result {
-        log::info!("Account: {:?} is unlocked", msg.identity.to_string());
         self.active_accounts.borrow_mut().add_account(msg.identity);
+        log::info!("Account: {:?} is unlocked", msg.identity.to_string());
         ActorResponse::reply(Ok(()))
     }
 }
@@ -898,20 +896,20 @@ async fn transfer_gnt(
     gas_price: U256,
     chain_id: u64,
 ) -> PaymentDriverResult<String> {
-    if gnt_amount
-        > utils::big_dec_to_u256(
-            common::get_gnt_balance(&gnt_contract, address)
-                .await?
-                .amount,
-        )?
-    {
+    let gnt_balance = utils::big_dec_to_u256(
+        common::get_gnt_balance(&gnt_contract, address)
+            .await?
+            .amount,
+    )?;
+
+    if gnt_amount > gnt_balance {
         return Err(PaymentDriverError::InsufficientFunds);
     }
 
     let mut batch = Builder::new(address, gas_price, chain_id);
     batch.push(
         &gnt_contract,
-        "transfer",
+        TRANSFER_CONTRACT_FUNCTION,
         (recipient, gnt_amount),
         GNT_TRANSFER_GAS.into(),
     );

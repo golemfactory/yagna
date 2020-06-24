@@ -109,7 +109,7 @@ impl PaymentDriverService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db: DbExecutor = context.component();
         let driver = payment_driver_factory(&db).await?;
-        let processor = PaymentDriverProcessor::new(driver, db.clone());
+        let processor = PaymentDriverProcessor::new(driver);
         self::service::bind_service(&db, processor);
         self::service::subscribe_to_identity_events().await;
         Ok(())
