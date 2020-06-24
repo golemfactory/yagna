@@ -105,6 +105,54 @@ mod tests {
         Ok(())
     }
 
+    /// Query events will return before timeout will elapse, if Demand will be unsubscribed.
+    #[cfg_attr(not(feature = "market-test-suite"), ignore)]
+    #[actix_rt::test]
+    async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Error> {
+        let network = MarketsNetwork::new("test_query_events_unsubscribe_notification")
+            .await
+            .add_market_instance("Node-1")
+            .await?;
+
+        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let identity1 = network.get_default_id("Node-1");
+
+        let subscription_id = market1
+            .subscribe_demand(&example_demand(), identity1.clone())
+            .await?;
+        let subscription_id = SubscriptionId::from_str(&subscription_id)?;
+        let demand_id = subscription_id.clone();
+
+        // Query events, when no Proposal are in the queue yet.
+        // We set timeout and we expect that function will wait until events will come.
+        let query_handle = tokio::spawn(async move {
+            match market1
+                .requestor_engine
+                .query_events(&subscription_id.to_string(), 0.5, Some(5))
+                .await
+            {
+                Err(QueryEventsError::Unsubscribed(id)) => {
+                    assert_eq!(id, subscription_id);
+                }
+                _ => panic!("Expected unsubscribed error."),
+            }
+            Result::<(), anyhow::Error>::Ok(())
+        });
+
+        // Unsubscribe Demand. query_events should return with unsubscribed error.
+        tokio::time::delay_for(Duration::from_millis(200)).await;
+
+        let market1: Arc<MarketService> = network.get_market("Node-1");
+        market1
+            .unsubscribe_demand(demand_id.to_string(), identity1.clone())
+            .await?;
+
+        // Protect from eternal waiting.
+        tokio::time::timeout(Duration::from_millis(700), query_handle).await???;
+
+        Ok(())
+    }
+
     /// Tests if query events returns proper error on invalid input
     /// or unsubscribed demand.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]

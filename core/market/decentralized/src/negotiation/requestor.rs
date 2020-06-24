@@ -58,9 +58,11 @@ impl RequestorNegotiationEngine {
 
     pub async fn unsubscribe_demand(
         &self,
-        subscription_id: &String,
+        subscription_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        // TODO: Implement
+        self.notifier.stop_notifying(subscription_id).await;
+        // TODO: We could remove all events related to this subscription.
+        //  Moreover probably we should remove all resources related to Proposals.
         Ok(())
     }
 
@@ -99,6 +101,7 @@ impl RequestorNegotiationEngine {
                     NotifierError::ChannelClosed(_) => {
                         Err(QueryEventsError::InternalError(format!("{}", error)))
                     }
+                    NotifierError::Unsubscribed(id) => Err(QueryEventsError::Unsubscribed(id)),
                 };
             }
             // Ok result means, that event with required subscription id was added.

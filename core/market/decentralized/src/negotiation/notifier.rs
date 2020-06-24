@@ -15,6 +15,8 @@ use crate::db::models::SubscriptionId;
 pub enum NotifierError {
     #[error("Timeout while waiting for events for subscription [{0}]")]
     Timeout(SubscriptionId),
+    #[error("Unsubscribed [{0}]")]
+    Unsubscribed(SubscriptionId),
     #[error("Channel closed while waiting for events for subscription [{0}]")]
     ChannelClosed(SubscriptionId),
 }
@@ -22,7 +24,13 @@ pub enum NotifierError {
 /// Allows to listen to new incoming events and notify if event was generated.
 #[derive(Clone)]
 pub struct EventNotifier {
-    sender: Sender<SubscriptionId>,
+    sender: Sender<Notification<SubscriptionId>>,
+}
+
+#[derive(Clone)]
+enum Notification<Type> {
+    NewEvent(Type),
+    StopEvents(Type),
 }
 
 impl EventNotifier {
@@ -34,8 +42,16 @@ impl EventNotifier {
 
     pub async fn notify(&self, subscription_id: &SubscriptionId) {
         let sender = self.sender.clone();
+        let to_send = Notification::<SubscriptionId>::NewEvent(subscription_id.clone());
         // TODO: How to handle this error?
-        let _ = sender.send(subscription_id.clone());
+        let _ = sender.send(to_send);
+    }
+
+    pub async fn stop_notifying(&self, subscription_id: &SubscriptionId) {
+        let sender = self.sender.clone();
+        let to_send = Notification::<SubscriptionId>::StopEvents(subscription_id.clone());
+        // TODO: How to handle this error?
+        let _ = sender.send(to_send);
     }
 
     pub async fn wait_for_event(
@@ -44,8 +60,15 @@ impl EventNotifier {
     ) -> Result<(), NotifierError> {
         let mut receiver = self.sender.subscribe();
         while let Ok(value) = receiver.recv().await {
-            if &value == subscription_id {
-                return Ok(());
+            match value {
+                Notification::<SubscriptionId>::NewEvent(value) => {
+                    if &value == subscription_id {
+                        return Ok(());
+                    }
+                }
+                Notification::<SubscriptionId>::StopEvents(subscription_id) => {
+                    return Err(NotifierError::Unsubscribed(subscription_id));
+                }
             }
         }
         Err(NotifierError::ChannelClosed(subscription_id.clone()))

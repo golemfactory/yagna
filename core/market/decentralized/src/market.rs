@@ -5,13 +5,14 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::api::{provider, requestor};
-use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
+use crate::db::models::{Demand as ModelDemand, SubscriptionId};
 use crate::matcher::{Matcher, MatcherError, MatcherInitError};
 use crate::migrations;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
 
+use std::str::FromStr;
 use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
@@ -143,11 +144,16 @@ impl MarketService {
         id: Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
+        let subscription_id = SubscriptionId::from_str(&subscription_id)
+            .map_err(|e| MatcherError::InternalError(format!("{}", e)))?;
 
         self.requestor_engine
             .unsubscribe_demand(&subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_demand(&subscription_id).await?)
+        Ok(self
+            .matcher
+            .unsubscribe_demand(&subscription_id.to_string())
+            .await?)
     }
 }
 
