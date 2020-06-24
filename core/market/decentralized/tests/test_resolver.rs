@@ -9,7 +9,7 @@ mod tests {
     use ya_client::model::market::Proposal;
     use ya_market_decentralized::MarketService;
 
-    use crate::utils::{example_demand, example_offer, MarketStore, MarketsNetwork};
+    use crate::utils::{sample_client_demand, sample_client_offer, MarketStore, MarketsNetwork};
     use std::future::Future;
 
     /// Test adds Offer on single node. Mocked Resolver should emit dummy Proposal.
@@ -25,7 +25,7 @@ mod tests {
 
         let id1 = network.get_default_id("Node-1");
         let market1: &mut MarketService = network.get_market_mut("Node-1");
-        let offer = example_offer();
+        let offer = sample_client_offer();
 
         // when
         let subscription_id = market1.subscribe_offer(&offer, &id1).await?;
@@ -59,7 +59,9 @@ mod tests {
         let market1: &mut MarketService = network.get_market_mut("Node-1");
 
         // when: Add Offer on Node-1
-        let subscription_id = market1.subscribe_offer(&example_offer(), &id1).await?;
+        let subscription_id = market1
+            .subscribe_offer(&sample_client_offer(), &id1)
+            .await?;
 
         // then: It should be resolved locally
         let proposal_rx = &mut market1.requestor_negotiation_engine.proposal_receiver;
@@ -86,7 +88,7 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let demand = example_demand();
+        let demand = sample_client_demand();
         let id1 = network.get_default_id("Node-1");
         let market1: &mut MarketService = network.get_market_mut("Node-1");
 
@@ -121,7 +123,9 @@ mod tests {
         let market1: &mut MarketService = network.get_market_mut("Node-1");
 
         // when: Add Demand on Node-1
-        let subscription_id = market1.subscribe_demand(&example_demand(), &id1).await?;
+        let subscription_id = market1
+            .subscribe_demand(&sample_client_demand(), &id1)
+            .await?;
 
         // then: It should be resolved locally
         let proposal_rx = &mut market1.requestor_negotiation_engine.proposal_receiver;

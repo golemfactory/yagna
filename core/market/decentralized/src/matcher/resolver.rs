@@ -130,28 +130,10 @@ fn matches(offers: &Offer, demands: &Demand) -> Result<bool, ResolverError> {
     Ok(true)
 }
 
-// TODO: a bit hacky - straighten this
-#[cfg(test)]
-#[path = "../../tests/utils/mock_offer.rs"]
-mod mock_offer;
-
 #[cfg(test)]
 mod tests {
-    use super::mock_offer::{example_demand, example_offer, mock_id};
-    use super::*;
-    use chrono::{Duration, Utc};
-
-    fn sample_offer() -> Offer {
-        let creation_ts = Utc::now().naive_utc();
-        let expiration_ts = creation_ts + Duration::hours(1);
-        Offer::from_new(&example_offer(), &mock_id(), creation_ts, expiration_ts)
-    }
-
-    fn sample_demand() -> Demand {
-        let creation_ts = Utc::now().naive_utc();
-        let expiration_ts = creation_ts + Duration::hours(1);
-        Demand::from_new(&example_demand(), &mock_id(), creation_ts, expiration_ts)
-    }
+    use crate::matcher::resolver::matches;
+    use crate::testing::mock_offer::{sample_demand, sample_offer};
 
     #[test]
     fn matches_empty() {

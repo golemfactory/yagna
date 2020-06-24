@@ -5084,6 +5084,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.21",
  "uuid 0.8.1",
+ "ya-agreement-utils",
  "ya-client",
  "ya-core-model",
  "ya-net",

@@ -8,6 +8,7 @@ edition = "2018"
 market-test-suite = []
 
 [dependencies]
+ya-agreement-utils = "0.1"
 ya-client = "0.3"
 ya-core-model = { version = "0.1", features = ["market", "net"] }
 ya-net = "0.1"

@@ -51,7 +51,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     // given
     let (db, mut app) = init_db_app("test_rest_subscribe_offer").await;
 
-    let mut client_offer = utils::example_offer();
+    let mut client_offer = utils::sample_client_offer();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/offers")
@@ -112,7 +112,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     // given
     let (db, mut app) = init_db_app("test_rest_subscribe_demand").await;
 
-    let mut client_demand = utils::example_demand();
+    let mut client_demand = utils::sample_client_demand();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/demands")

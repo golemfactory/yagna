@@ -6,7 +6,7 @@ mod tests {
     use ya_market_decentralized::testing::{DemandError, OfferError};
     use ya_market_decentralized::MarketService;
 
-    use crate::utils::mock_offer::{example_demand, example_offer};
+    use crate::utils;
     use crate::utils::{MarketStore, MarketsNetwork};
     // use crate::utils::assert_err_eq;
 
@@ -23,7 +23,7 @@ mod tests {
         let market1: &MarketService = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
-        let mut offer = example_offer();
+        let mut offer = utils::sample_client_offer();
         let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
 
         // Fill expected values for further comparison.
@@ -67,7 +67,7 @@ mod tests {
         let market1: &MarketService = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
-        let mut demand = example_demand();
+        let mut demand = utils::sample_client_demand();
         let subscription_id = market1.subscribe_demand(&demand, &identity1).await?;
 
         // Fill expected values for further comparison.

@@ -11,6 +11,8 @@ mod negotiation;
 mod rest_api;
 
 pub mod protocol;
+pub mod testing;
+
 pub use db::models::{Demand, Offer, SubscriptionId};
 pub use market::MarketService;
 
@@ -22,11 +24,4 @@ extern crate diesel;
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
     struct _Dummy;
-}
-
-/// These exports are expected to be used only in tests.
-pub mod testing {
-    pub use super::db::models::SubscriptionParseError;
-    pub use super::matcher::SubscriptionStore;
-    pub use super::matcher::{DemandError, MatcherError, OfferError};
 }

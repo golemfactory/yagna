@@ -3,19 +3,17 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use chrono;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
 
     use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
+    use ya_market_decentralized::testing::mock_offer::{sample_client_offer, sample_offer};
     use ya_market_decentralized::testing::OfferError;
-    use ya_market_decentralized::Offer as ModelOffer;
     use ya_market_decentralized::{MarketService, SubscriptionId};
 
     use crate::utils::mock_node::{default::*, wait_for_bcast};
-    use crate::utils::mock_offer::example_offer;
     use crate::utils::{MarketStore, MarketsNetwork};
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
@@ -23,7 +21,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
-        // env_logger::init();
+        let _ = env_logger::builder().try_init();
         let network = MarketsNetwork::new("test_broadcast_offer")
             .await
             .add_market_instance("Node-1")
@@ -37,7 +35,9 @@ mod tests {
         let market1: &MarketService = network.get_market("Node-1");
         let id1 = network.get_default_id("Node-1");
 
-        let subscription_id = market1.subscribe_offer(&example_offer(), &id1).await?;
+        let subscription_id = market1
+            .subscribe_offer(&sample_client_offer(), &id1)
+            .await?;
         let offer = market1.get_offer(&subscription_id).await?;
 
         // Expect, that Offer will appear on other nodes.
@@ -66,7 +66,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
-        // env_logger::init();
+        let _ = env_logger::builder().try_init();
         let network = MarketsNetwork::new("test_broadcast_offer_validation")
             .await
             .add_market_instance("Node-1")
@@ -81,13 +81,10 @@ mod tests {
 
         let market1: &MarketService = network.get_market("Node-1");
         let discovery2: Discovery = network.get_discovery("Node-2");
-        let id2 = network.get_default_id("Node-2");
 
         // Prepare Offer with subscription id changed to invalid.
         let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
-        let creation_ts = chrono::Utc::now().naive_utc();
-        let expiration_ts = creation_ts + chrono::Duration::hours(24);
-        let mut offer = ModelOffer::from_new(&example_offer(), &id2, creation_ts, expiration_ts);
+        let mut offer = sample_offer();
         offer.id = invalid_id.clone();
 
         // Offer should be propagated to market1, but he should reject it.
@@ -108,7 +105,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
-        // env_logger::init();
+        let _ = env_logger::builder().try_init();
         let network = MarketsNetwork::new("test_broadcast_stop_conditions")
             .await
             .add_market_instance("Node-1")
@@ -121,7 +118,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_offer(&example_offer(), &identity1)
+            .subscribe_offer(&sample_client_offer(), &identity1)
             .await?;
         let offer = market1.get_offer(&subscription_id).await?;
 
