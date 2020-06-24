@@ -54,17 +54,10 @@ impl EventNotifier {
     pub async fn wait_for_event_with_timeout(
         &self,
         subscription_id: &SubscriptionId,
-        timeout: f32,
+        timeout: Duration,
     ) -> Result<(), NotifierError> {
-        let timeout = (1000.0 * timeout) as u64;
         let notifier = self.clone();
-
-        match tokio::time::timeout(
-            Duration::from_millis(timeout),
-            notifier.wait_for_event(subscription_id),
-        )
-        .await
-        {
+        match tokio::time::timeout(timeout, notifier.wait_for_event(subscription_id)).await {
             Err(_) => Err(NotifierError::Timeout(subscription_id.clone())),
             Ok(wait_result) => wait_result,
         }

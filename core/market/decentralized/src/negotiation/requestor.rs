@@ -1,6 +1,8 @@
+use chrono::Utc;
 use futures::stream::{self, StreamExt};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use super::errors::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError};
@@ -67,39 +69,33 @@ impl RequestorNegotiationEngine {
         timeout: f32,
         max_events: i32,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
+        let mut timeout = Duration::from_millis((1000.0 * timeout) as u64);
+        let stop_time = Instant::now() + timeout;
         let subscription_id = SubscriptionId::from_str(subscription_id)?;
+
         loop {
             let events = get_events_from_db(&self.db, &subscription_id, max_events).await?;
             if events.len() > 0 {
-                log::debug!("Returning {} events", events.len());
                 return Ok(events);
             }
 
-            log::debug!(
-                "Waiting for events for subscription [{}] {} seconds.",
-                &subscription_id,
-                timeout
-            );
+            timeout = stop_time - Instant::now();
+
             if let Err(error) = self
                 .notifier
                 .wait_for_event_with_timeout(&subscription_id, timeout)
                 .await
             {
-                match error {
-                    NotifierError::Timeout(_) => {
-                        return Ok(vec![]);
-                    }
+                return match error {
+                    NotifierError::Timeout(_) => Ok(vec![]),
                     NotifierError::ChannelClosed(_) => {
-                        return Err(QueryEventsError::InternalError(format!("{}", error)))
+                        Err(QueryEventsError::InternalError(format!("{}", error)))
                     }
                 };
             }
-
-            log::debug!("")
             // Ok result means, that event with required subscription id was added.
             // We can go to next loop to get this event from db. But still we aren't sure
-            // that list won't be empty, because other query_events can wait for the same event.
-            // TODO: We should subtract elapsed time from timeout.
+            // that list won't be empty, because other query_events calls can wait for the same event.
         }
     }
 }

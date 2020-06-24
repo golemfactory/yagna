@@ -4,9 +4,7 @@ mod utils;
 mod tests {
     use ya_client::model::market::event::RequestorEvent;
     use ya_client::model::market::proposal::State;
-    use ya_market_decentralized::testing::DraftProposal;
     use ya_market_decentralized::testing::SubscriptionId;
-    use ya_market_decentralized::testing::{DemandDao, OfferDao};
     use ya_market_decentralized::MarketService;
 
     use crate::utils::mock_offer::{example_demand, example_offer};
@@ -28,43 +26,16 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
+        let node1 = network.get_node("Node-1");
         let market1: Arc<MarketService> = network.get_market("Node-1");
-        let identity1 = network.get_default_id("Node-1");
-
-        let subscription_id = market1
-            .subscribe_demand(&example_demand(), identity1.clone())
+        let (_offer_id, subscription_id) = node1
+            .inject_proposal(&example_offer(), &example_demand())
             .await?;
-
-        // We need model Offer. So we will get it from database.
-        let offer_id = market1
-            .subscribe_offer(&example_offer(), identity1.clone())
-            .await?;
-
-        // Get model Demand to directly inject it into negotiation engine.
-        let db = network.get_database("Node-1");
-        let model_demand = db
-            .as_dao::<DemandDao>()
-            .get_demand(&SubscriptionId::from_str(subscription_id.as_ref())?)
-            .await?
-            .unwrap();
-
-        let model_offer = db
-            .as_dao::<OfferDao>()
-            .get_offer(&SubscriptionId::from_str(offer_id.as_ref())?)
-            .await?
-            .unwrap();
-
-        let proposal = DraftProposal {
-            offer: model_offer,
-            demand: model_demand,
-        };
-        market1.matcher.emit_proposal(proposal)?;
-        tokio::time::delay_for(Duration::from_millis(30)).await;
 
         // We expect that proposal will be available as event.
         let events = market1
             .requestor_engine
-            .query_events(&subscription_id, 0.0, 5)
+            .query_events(&subscription_id.to_string(), 0.0, 5)
             .await?;
 
         assert_eq!(events.len(), 1);
@@ -80,11 +51,54 @@ mod tests {
         // We expect that, the same event won't be available again.
         let events = market1
             .requestor_engine
-            .query_events(&subscription_id, 1.0, 5)
+            .query_events(&subscription_id.to_string(), 1.0, 5)
             .await?;
 
         assert_eq!(events.len(), 0);
 
+        Ok(())
+    }
+
+    /// Query_events should hang on endpoint until event will come
+    /// or timeout elapses.
+    #[cfg_attr(not(feature = "market-test-suite"), ignore)]
+    #[actix_rt::test]
+    async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
+        let network = MarketsNetwork::new("test_query_events_timeout")
+            .await
+            .add_market_instance("Node-1")
+            .await?;
+
+        let node1 = network.get_node("Node-1");
+        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let identity1 = network.get_default_id("Node-1");
+
+        let subscription_id = market1.subscribe_demand(&example_demand(), identity1.clone()).await?;
+        let subscription_id = SubscriptionId::from_str(&subscription_id)?;
+
+        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let demand_id = subscription_id.clone();
+
+        // Query events, when no Proposal are in the queue yet.
+        // We set timeout and we expect that function will wait until events will come.
+        let query_handle = tokio::spawn(async move {
+            let events = market1
+                .requestor_engine
+                .query_events(&subscription_id.to_string(), 1.0, 5)
+                .await?;
+            assert_eq!(events.len(), 1);
+            Result::<(), anyhow::Error>::Ok(())
+        });
+
+        // Inject proposal before timeout will elapse. We expect that Proposal
+        // event will be generated and query events will return it.
+        tokio::time::delay_for(Duration::from_millis(500)).await;
+        node1
+            .inject_proposal_for_demand(&example_offer(), &demand_id)
+            .await?;
+
+        // Protect from eternal waiting.
+        tokio::time::timeout(Duration::from_millis(1100), query_handle).await???;
         Ok(())
     }
 }
