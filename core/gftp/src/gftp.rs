@@ -1,7 +1,6 @@
 use anyhow::{Context, Error, Result};
 use futures::lock::Mutex;
 use futures::prelude::*;
-use log::{debug, info, warn};
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use sha3::{Digest, Sha3_256};
@@ -75,7 +74,7 @@ impl FileDesc {
             chunk_size
         } as usize;
 
-        debug!("Reading chunk at offset: {}, size: {}", offset, chunk_size);
+        log::debug!("Reading chunk at offset: {}, size: {}", offset, chunk_size);
         let mut buffer = vec![0u8; bytes_to_read];
         {
             let mut file = self.file.lock().await;
@@ -117,14 +116,14 @@ pub async fn download_from_url(url: &Url, dst_path: &Path) -> Result<()> {
 
 pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Result<()> {
     let remote = node_id.try_service(&model::file_bus_id(hash))?;
-    debug!("Creating target file {}", dst_path.display());
+    log::debug!("Creating target file {}", dst_path.display());
 
     let mut file = create_dest_file(dst_path)?;
 
-    info!("Loading file {} metadata.", dst_path.display());
+    log::debug!("Loading file {} metadata.", dst_path.display());
     let metadata = remote.send(model::GetMetadata {}).await??;
 
-    debug!("Metadata: file size {}.", metadata.file_size);
+    log::debug!("Metadata: file size {}.", metadata.file_size);
 
     let chunk_size = DEFAULT_CHUNK_SIZE;
     let num_chunks = (metadata.file_size + (chunk_size - 1)) / chunk_size; // Divide and round up.
@@ -209,24 +208,25 @@ async fn upload_finished(
     msg: model::UploadFinished,
 ) -> Result<(), model::Error> {
     if let Some(expected_hash) = msg.hash {
-        info!("Upload finished. Verifying hash...");
+        log::debug!("Upload finished. Verifying hash...");
 
         let mut file = file.lock().await;
         let real_hash = hash_file_sha256(&mut file)
             .map_err(|error| model::Error::InternalError(error.to_string()))?;
 
         if expected_hash != real_hash {
-            warn!(
+            log::debug!(
                 "Uploaded file hash {} is different than expected hash {}.",
-                &real_hash, &expected_hash
+                &real_hash,
+                &expected_hash
             );
             //TODO: We should notify publisher about not matching hash.
             //      Now we send error only for uploader.
             return Err(model::Error::IntegrityError);
         }
-        info!("File hash matches expected hash {}.", &expected_hash);
+        log::debug!("File hash matches expected hash {}.", &expected_hash);
     } else {
-        info!("Upload finished. Expected file hash not provided. Omitting validation.");
+        log::debug!("Upload finished. Expected file hash not provided. Omitting validation.");
     }
 
     //TODO: unsubscribe gsb events.
@@ -241,7 +241,7 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
     let (node_id, random_filename) = extract_url(url)?;
     let remote = node_id.try_service(&model::file_bus_id(&random_filename))?;
 
-    debug!("Opening file to send {}.", path.display());
+    log::debug!("Opening file to send {}.", path.display());
 
     let chunk_size = DEFAULT_CHUNK_SIZE;
 
@@ -257,14 +257,14 @@ pub async fn upload_file(path: &Path, url: &Url) -> Result<()> {
         .try_for_each(|_| future::ok(()))
         .await?;
 
-    debug!("Computing file hash.");
+    log::debug!("Computing file hash.");
     let hash = hash_file_sha256(&mut File::open(path)?)?;
 
-    info!("File [{}] has hash [{}].", path.display(), &hash);
+    log::debug!("File [{}] has hash [{}].", path.display(), &hash);
     remote
         .call(model::UploadFinished { hash: Some(hash) })
         .await??;
-    info!("Upload finished correctly.");
+    log::debug!("Upload finished correctly.");
     Ok(())
 }
 
