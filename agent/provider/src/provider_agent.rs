@@ -150,7 +150,7 @@ impl ProviderAgent {
     }
 
     pub fn list_presets(config: ProviderConfig) -> anyhow::Result<()> {
-        let presets = PresetManager::from_file(&config.presets_file)?;
+        let presets = PresetManager::load_or_create(&config.presets_file)?;
         println!("Available Presets:");
 
         for preset in presets.list().iter() {
@@ -174,7 +174,7 @@ impl ProviderAgent {
         config: ProviderConfig,
         params: PresetNoInteractive,
     ) -> anyhow::Result<()> {
-        let mut presets = PresetManager::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let mut preset = Preset::default();
@@ -204,7 +204,7 @@ impl ProviderAgent {
     }
 
     pub fn create_preset_interactive(config: ProviderConfig) -> anyhow::Result<()> {
-        let mut presets = PresetManager::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let exeunits = registry
@@ -226,13 +226,13 @@ impl ProviderAgent {
     }
 
     pub fn remove_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
-        let mut presets = PresetManager::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.remove_preset(&name)?;
         presets.save_to_file(&config.presets_file)
     }
 
     pub fn active_presets(config: ProviderConfig) -> anyhow::Result<()> {
-        let presets = PresetManager::from_file(&config.presets_file)?;
+        let presets = PresetManager::load_or_create(&config.presets_file)?;
         for preset in presets.active() {
             println!("\n{}", preset);
         }
@@ -240,19 +240,19 @@ impl ProviderAgent {
     }
 
     pub fn activate_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
-        let mut presets = PresetManager::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.activate(&name)?;
         presets.save_to_file(&config.presets_file)
     }
 
     pub fn deactivate_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
-        let mut presets = PresetManager::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.deactivate(&name)?;
         presets.save_to_file(&config.presets_file)
     }
 
     pub fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Result<()> {
-        let mut presets = PresetManager::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let exeunits = registry
@@ -280,7 +280,7 @@ impl ProviderAgent {
         name: String,
         params: PresetNoInteractive,
     ) -> anyhow::Result<()> {
-        let mut presets = PresetManager::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let mut preset = presets.get(&name)?;
