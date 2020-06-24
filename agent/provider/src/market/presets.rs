@@ -1,13 +1,68 @@
 use crate::events::Event;
 use crate::startup_config::FileMonitor;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use tokio::sync::watch;
 use ya_utils_path::SwapSave;
+
+#[derive(Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq, EnumIter)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum Coefficient {
+    Duration,
+    Cpu,
+    Initial,
+}
+
+impl Coefficient {
+    #[inline]
+    pub fn variants() -> impl Iterator<Item = Coefficient> {
+        Self::iter()
+    }
+
+    pub fn to_property(&self) -> Option<&str> {
+        let property = match self {
+            Coefficient::Duration => "golem.usage.duration_sec",
+            Coefficient::Cpu => "golem.usage.cpu_sec",
+            Coefficient::Initial => return None,
+        };
+        Some(property)
+    }
+
+    pub fn to_readable(&self) -> &str {
+        match self {
+            Coefficient::Duration => "Duration",
+            Coefficient::Cpu => "CPU",
+            Coefficient::Initial => "Init price",
+        }
+    }
+}
+
+impl fmt::Display for Coefficient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl<'s> TryFrom<&'s str> for Coefficient {
+    type Error = Error;
+
+    fn try_from(value: &'s str) -> Result<Self> {
+        match value {
+            "Init price" => Ok(Coefficient::Initial),
+            "Duration" => Ok(Coefficient::Duration),
+            "CPU" => Ok(Coefficient::Cpu),
+            _ => Err(anyhow!("Invalid coefficient: {}", value)),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
@@ -16,7 +71,7 @@ pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
     pub pricing_model: String,
-    pub usage_coeffs: Vec<f64>,
+    pub usage_coeffs: HashMap<Coefficient, f64>,
 }
 
 /// Responsible for presets management.
@@ -283,47 +338,22 @@ impl Default for PresetManager {
     }
 }
 
-impl Preset {
-    /// List usage metrics names, that should be added to agreement
-    /// as 'properties.golem.com.usage.vector'. We could store them in preset
-    /// in the future, but now let's treat them as constants, because there's
-    /// not so many of them.
-    pub fn list_usage_metrics(&self) -> Vec<String> {
-        vec!["golem.usage.duration_sec", "golem.usage.cpu_sec"]
-            .into_iter()
-            .map(ToString::to_string)
-            .collect()
-    }
-
-    pub fn list_readable_metrics(&self) -> Vec<String> {
-        vec!["Duration", "CPU"]
-            .into_iter()
-            .map(ToString::to_string)
-            .collect()
-    }
-
-    pub fn update_price(&mut self, metric: &str, price: f64) -> Result<()> {
-        let idx = if metric == "Init price" {
-            self.list_readable_metrics().len()
-        } else {
-            self.list_readable_metrics()
-                .iter()
-                .position(|name| name == metric)
-                .ok_or(anyhow!("Metric [{}] not found.", metric))?
-        };
-        self.usage_coeffs[idx] = price;
-        Ok(())
-    }
-}
-
 impl Default for Preset {
     // FIXME: sane defaults
     fn default() -> Self {
+        let usage_coeffs = vec![
+            (Coefficient::Duration, 0.1),
+            (Coefficient::Cpu, 1.0),
+            (Coefficient::Initial, 1.0),
+        ]
+        .into_iter()
+        .collect();
+
         Preset {
             name: "default".to_string(),
             exeunit_name: "wasmtime".to_string(),
             pricing_model: "linear".to_string(),
-            usage_coeffs: vec![0.1, 0.2, 1.0],
+            usage_coeffs,
         }
     }
 }
@@ -359,11 +389,7 @@ impl fmt::Display for Preset {
         )?;
         write!(f, "{}\n", "Coefficients:")?;
 
-        for (coeff, name) in self
-            .usage_coeffs
-            .iter()
-            .zip(self.list_readable_metrics().iter())
-        {
+        for (name, coeff) in self.usage_coeffs.iter() {
             write!(f, "    {:width$}{} GNT\n", name, coeff, width = align_coeff)?;
         }
 
@@ -371,7 +397,7 @@ impl fmt::Display for Preset {
             f,
             "    {:16}{} GNT",
             "Init price",
-            self.usage_coeffs[self.usage_coeffs.len() - 1]
+            self.usage_coeffs.get(&Coefficient::Initial).unwrap(),
         )?;
         Ok(())
     }
