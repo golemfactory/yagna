@@ -6,7 +6,8 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::db::models::{Demand, Offer};
 use crate::protocol::{
-    Discovery, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
+    Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, Propagate, Reason,
+    RetrieveOffers,
 };
 use crate::SubscriptionId;
 
@@ -38,24 +39,16 @@ impl Matcher {
         let (proposal_tx, proposal_rx) = unbounded_channel::<Proposal>();
         let resolver = Resolver::new(store.clone(), proposal_tx);
 
-        let store1 = store.clone();
-        let store2 = store.clone();
-        let resolver1 = resolver.clone();
-        let discovery = Discovery::new(
-            move |caller: String, msg: OfferReceived| {
-                let store = store1.clone();
-                let resolver = resolver1.clone();
-                on_offer_received(store, resolver, caller, msg)
-            },
-            move |caller: String, msg: OfferUnsubscribed| {
-                let store = store2.clone();
-                on_offer_unsubscribed(store, caller, msg)
-            },
-            move |caller: String, msg: RetrieveOffers| async move {
+        let discovery = DiscoveryBuilder::default()
+            .data(store.clone())
+            .data(resolver.clone())
+            .add_data_handler(on_offer_received)
+            .add_data_handler(on_offer_unsubscribed)
+            .add_handler(move |caller: String, msg: RetrieveOffers| async move {
                 log::info!("Offers request received from: {}. Unimplemented.", caller);
                 Ok(vec![])
-            },
-        )?;
+            })
+            .build();
 
         let matcher = Matcher {
             store,
@@ -88,6 +81,7 @@ impl Matcher {
         id: &Identity,
         offer: &ClientOffer,
     ) -> Result<Offer, MatcherError> {
+        // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         let offer = self.store.create_offer(id, offer).await?;
         self.resolver.receive(&offer)?;
@@ -148,7 +142,6 @@ impl Matcher {
 }
 
 pub(crate) async fn on_offer_received(
-    store: SubscriptionStore,
     resolver: Resolver,
     _caller: String,
     msg: OfferReceived,
@@ -158,7 +151,8 @@ pub(crate) async fn on_offer_received(
     // not only Offers from other nodes.
 
     let subscription = Subscription::from(&msg.offer);
-    store
+    resolver
+        .store
         .store_offer(msg.offer)
         .await
         .map(|propagate| match propagate {

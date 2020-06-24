@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use ya_client::model::NodeId;
 use ya_market_decentralized::protocol::{
-    CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
+    CallbackHandler, Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
 use ya_market_decentralized::testing::{DemandError, OfferError};
 use ya_market_decentralized::{Demand, MarketService, Offer, SubscriptionId};
@@ -93,7 +93,11 @@ impl MarketsNetwork {
         let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
         let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
 
-        let discovery = Discovery::new(offer_received, offer_unsubscribed, retrieve_offers)?;
+        let discovery = DiscoveryBuilder::default()
+            .add_handler(offer_received)
+            .add_handler(offer_unsubscribed)
+            .add_handler(retrieve_offers)
+            .build();
         discovery
             .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
             .await?;

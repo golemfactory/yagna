@@ -9,8 +9,10 @@ use ya_core_model::net;
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-use super::callbacks::{CallbackHandler, CallbackMessage, HandlerSlot};
 use crate::db::models::{Offer as ModelOffer, SubscriptionId};
+use crate::protocol::{CallbackMessage, HandlerSlot};
+
+pub mod builder;
 
 // =========================================== //
 // Errors
@@ -57,19 +59,6 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
-    pub fn new(
-        offer_received: impl CallbackHandler<OfferReceived>,
-        offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
-        retrieve_offers: impl CallbackHandler<RetrieveOffers>,
-    ) -> Result<Discovery, DiscoveryInitError> {
-        let inner = Arc::new(DiscoveryImpl {
-            offer_received: HandlerSlot::new(offer_received),
-            offer_unsubscribed: HandlerSlot::new(offer_unsubscribed),
-            retrieve_offers: HandlerSlot::new(retrieve_offers),
-        });
-        Ok(Discovery { inner })
-    }
-
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in `offer_received`.
     pub async fn broadcast_offer(&self, offer: ModelOffer) -> Result<(), DiscoveryError> {
@@ -286,7 +275,7 @@ impl CallbackMessage for RetrieveOffers {
 // =========================================== //
 
 impl DiscoveryInitError {
-    fn from_pair(addr: String, e: net::local::BindBroadcastError) -> Self {
+    fn from_pair(addr: String, e: BindBroadcastError) -> Self {
         match e {
             BindBroadcastError::GsbError(e) => {
                 DiscoveryInitError::BindingGsbFailed(addr, e.to_string())

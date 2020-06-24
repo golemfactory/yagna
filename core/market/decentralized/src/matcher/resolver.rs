@@ -26,7 +26,7 @@ impl From<&Demand> for Subscription {
 /// Resolves the match relation for the specific Offer-Demand pair.
 #[derive(Clone)]
 pub struct Resolver {
-    store: SubscriptionStore,
+    pub(crate) store: SubscriptionStore,
     subscription_tx: UnboundedSender<Subscription>,
     proposal_tx: UnboundedSender<Proposal>,
 }
