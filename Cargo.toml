@@ -65,7 +65,7 @@ features=["static-openssl"]
 members = [
     "agent/provider",
     "agent/requestor",
-    "agent/batch-requestor",
+    "agent/requestor-sdk",
     "core/activity",
     "core/gftp",
     "core/identity",

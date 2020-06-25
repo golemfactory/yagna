@@ -56,6 +56,7 @@ impl AgreementProducer {
             let _ = ctx.spawn(
                 async move {
                     let run_after = tokio::time::Instant::now() + Duration::from_secs(8);
+                    log::info!("collecting events");
                     let events = match requestor_api
                         .collect(&subscription_id, Some(8.0), Some(5))
                         .await
@@ -63,6 +64,7 @@ impl AgreementProducer {
                         Ok(v) => v,
                         Err(e) => return log::error!("Failed to get market events: {}", e),
                     };
+                    log::info!("received {} events", events.len());
                     if events.is_empty() {
                         tokio::time::delay_until(run_after).await
                     }
