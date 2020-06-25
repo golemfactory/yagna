@@ -14,7 +14,7 @@ use ya_persistence::executor::{DbExecutor, Error as DbError};
 
 use super::SubscriptionId;
 use crate::db::dao::ProposalDao;
-use crate::db::models::{Negotiation, OwnerType, Proposal};
+use crate::db::models::{OwnerType, Proposal};
 use crate::db::schema::market_requestor_event;
 
 #[derive(Error, Debug)]
@@ -60,18 +60,14 @@ pub struct NewMarketEvent {
 }
 
 impl MarketEvent {
-    pub fn from_proposal(
-        proposal: &Proposal,
-        negotiation: &Negotiation,
-        role: OwnerType,
-    ) -> NewMarketEvent {
+    pub fn from_proposal(proposal: &Proposal, role: OwnerType) -> NewMarketEvent {
         NewMarketEvent {
-            subscription_id: negotiation.subscription_id.clone(),
+            subscription_id: proposal.negotiation.subscription_id.clone(),
             event_type: match role {
                 OwnerType::Requestor => EventType::RequestorProposal,
                 OwnerType::Provider => EventType::ProviderProposal,
             },
-            artifact_id: proposal.id.clone(),
+            artifact_id: proposal.body.id.clone(),
         }
     }
 

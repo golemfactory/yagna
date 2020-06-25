@@ -7,7 +7,6 @@ use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::EventError;
-use crate::db::models::ProposalExt;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
@@ -145,18 +144,15 @@ pub async fn proposal_receiver_thread(
             log::info!("Received proposal from matcher. Adding to events queue.");
 
             // Add proposal to database together with Negotiation record.
-            let ProposalExt {
-                proposal,
-                negotiation,
-            } = db
+            let proposal = db
                 .as_dao::<ProposalDao>()
                 .new_initial_proposal(proposal.demand, proposal.offer)
                 .await?;
 
             // Create Proposal Event and add it to queue (database).
-            let subscription_id = negotiation.subscription_id.clone();
+            let subscription_id = proposal.negotiation.subscription_id.clone();
             db.as_dao::<EventsDao>()
-                .add_requestor_event(proposal, negotiation)
+                .add_requestor_event(proposal)
                 .await?;
 
             // Send channel message to wake all query_events waiting for proposals.

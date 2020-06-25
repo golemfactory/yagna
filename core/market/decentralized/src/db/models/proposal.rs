@@ -80,7 +80,7 @@ pub struct Negotiation {
 /// subscription ids and creation timestamp.
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_proposal"]
-pub struct Proposal {
+pub struct DbProposal {
     pub id: String,
     pub prev_proposal_id: Option<String>,
 
@@ -95,20 +95,20 @@ pub struct Proposal {
 }
 
 /// Proposal together with Negotiation object related with it.
-pub struct ProposalExt {
+pub struct Proposal {
     pub negotiation: Negotiation,
-    pub proposal: Proposal,
+    pub body: DbProposal,
 }
 
-impl Proposal {
-    pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> ProposalExt {
+impl DbProposal {
+    pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> Proposal {
         let negotiation = Negotiation::new(&demand, &offer, OwnerType::Requestor);
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
         let expiration_ts = creation_ts + Duration::minutes(10);
         let proposal_id = hash_proposal(&offer.id, &demand.id, &creation_ts);
 
-        let proposal = Proposal {
+        let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: None,
             negotiation_id: negotiation.id.clone(),
@@ -119,16 +119,16 @@ impl Proposal {
             expiration_ts,
         };
 
-        ProposalExt {
-            proposal,
+        Proposal {
+            body: proposal,
             negotiation,
         }
     }
 }
 
-impl ProposalExt {
+impl Proposal {
     pub fn into_client(self) -> Result<ClientProposal, ErrorMessage> {
-        let properties = serde_json::from_str(&self.proposal.properties).map_err(|error| {
+        let properties = serde_json::from_str(&self.body.properties).map_err(|error| {
             format!(
                 "Can't serialize Proposal properties from database!!! Error: {}",
                 error
@@ -137,11 +137,11 @@ impl ProposalExt {
 
         Ok(ClientProposal {
             properties,
-            constraints: self.proposal.constraints,
-            proposal_id: Some(self.proposal.id),
+            constraints: self.body.constraints,
+            proposal_id: Some(self.body.id),
             issuer_id: Some(self.negotiation.provider_id.to_string()),
-            state: Some(State::from(self.proposal.state)),
-            prev_proposal_id: self.proposal.prev_proposal_id,
+            state: Some(State::from(self.body.state)),
+            prev_proposal_id: self.body.prev_proposal_id,
         })
     }
 }
