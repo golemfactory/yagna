@@ -26,3 +26,6 @@ core/market/decentralized/tests/test-workdir/*
 
 # Requestor dir
 **/ya-req
+
+# Keys
+**/*.key

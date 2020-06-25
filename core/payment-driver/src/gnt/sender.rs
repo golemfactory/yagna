@@ -586,7 +586,7 @@ impl TransactionSender {
     fn start_payment_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
             for address in act.active_accounts.borrow().list_accounts() {
-                log::info!("payment job for: {:?}", address);
+                log::debug!("payment job for: {:?}", address);
                 match act.active_accounts.borrow().get_node_id(address.as_str()) {
                     None => continue,
                     Some(node_id) => {
@@ -822,6 +822,7 @@ async fn process_payments(
             e
         ),
         Ok(payments) => {
+            log::debug!("Payments: {:?}", payments);
             for payment in payments {
                 let _ = process_payment(
                     payment.clone(),

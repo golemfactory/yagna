@@ -7,7 +7,6 @@ use crate::schema::gnt_driver_payment::dsl;
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
 
 use crate::utils::{payment_entity_to_status, PAYMENT_STATUS_OK};
-use chrono::Utc;
 use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
@@ -42,7 +41,6 @@ impl<'c> PaymentDao<'c> {
             let payments: Vec<PaymentEntity> = dsl::gnt_driver_payment
                 .filter(dsl::sender.eq(address))
                 .filter(dsl::status.eq(crate::utils::PAYMENT_STATUS_NOT_YET))
-                .filter(dsl::payment_due_date.gt(Utc::now().naive_utc()))
                 .order(dsl::payment_due_date.asc())
                 .load(conn)?;
             Ok(payments)

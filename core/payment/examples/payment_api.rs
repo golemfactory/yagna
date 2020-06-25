@@ -48,6 +48,7 @@ mod driver {
     use std::convert::TryInto;
     use std::pin::Pin;
     use std::sync::Arc;
+    use ya_client_model::NodeId;
     use ya_core_model::identity;
     use ya_payment_driver::PaymentDriverService;
     use ya_service_bus::typed as bus;
@@ -57,6 +58,10 @@ mod driver {
         provider_account: Box<EthAccount>,
         requestor_account: Box<EthAccount>,
     ) -> anyhow::Result<()> {
+        let requestor = NodeId::from(requestor_account.address().as_ref());
+        fake_list_identities(vec![requestor]);
+        fake_subscribe_to_events();
+
         let provider_sign_tx = get_sign_tx(provider_account);
         let requestor_sign_tx = get_sign_tx(requestor_account);
 
@@ -65,6 +70,29 @@ mod driver {
         fake_sign_tx(Box::new(provider_sign_tx));
         fake_sign_tx(Box::new(requestor_sign_tx));
         Ok(())
+    }
+
+    fn fake_list_identities(identities: Vec<NodeId>) {
+        bus::bind(identity::BUS_ID, move |_msg: identity::List| {
+            let ids = identities.clone();
+            let mut accounts: Vec<identity::IdentityInfo> = vec![];
+            for id in ids {
+                accounts.push(identity::IdentityInfo {
+                    alias: None,
+                    node_id: id,
+                    is_default: false,
+                    is_locked: false,
+                });
+            }
+            async move { Ok(accounts) }
+        });
+    }
+
+    fn fake_subscribe_to_events() {
+        bus::bind(
+            identity::BUS_ID,
+            move |_msg: identity::Subscribe| async move { Ok(identity::Ack {}) },
+        );
     }
 
     fn get_sign_tx(
