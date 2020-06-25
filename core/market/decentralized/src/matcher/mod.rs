@@ -1,5 +1,5 @@
 mod matcher;
 mod resolver;
 
+pub use matcher::{DemandError, MatcherError, MatcherInitError, OfferError};
 pub use matcher::{DraftProposal, Matcher};
-pub use matcher::{MatcherError, MatcherInitError};

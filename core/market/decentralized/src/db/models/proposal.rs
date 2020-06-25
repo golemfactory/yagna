@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
@@ -8,11 +8,10 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
-use ya_client::model::ErrorMessage;
+use ya_client::model::{ErrorMessage, NodeId};
 
 use super::{generate_random_id, hash_proposal, SubscriptionId};
 use crate::db::models::Demand as ModelDemand;
-use crate::db::models::MarketEvent;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
 
@@ -61,10 +60,10 @@ pub struct Negotiation {
 
     /// TODO: Use NodeId in all identity_id, requestor_id, provider_id.
     /// Owner of this Negotiation record on local yagna daemon.
-    pub identity_id: String,
+    pub identity_id: NodeId,
     /// Ids of negotiating nodes (identities).
-    pub requestor_id: String,
-    pub provider_id: String,
+    pub requestor_id: NodeId,
+    pub provider_id: NodeId,
 
     /// This field is None, as long Agreement wasn't negotiated (or negotiations
     /// can be broken and never finish with Agreement)
@@ -140,7 +139,7 @@ impl ProposalExt {
             properties,
             constraints: self.proposal.constraints,
             proposal_id: Some(self.proposal.id),
-            issuer_id: Some(self.negotiation.provider_id),
+            issuer_id: Some(self.negotiation.provider_id.to_string()),
             state: Some(State::from(self.proposal.state)),
             prev_proposal_id: self.proposal.prev_proposal_id,
         })

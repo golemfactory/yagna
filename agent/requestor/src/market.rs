@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_client::cli::RequestorApi;
 use ya_client::model::market::{
     proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent,
@@ -28,29 +29,23 @@ pub(crate) fn build_demand(
         },
     });
 
-    let subnet_constraint = match subnet {
-        Some(subnet) => {
-            log::info!("Using subnet: {}", subnet);
-            properties.as_object_mut().unwrap().insert(
-                "golem.node.debug.subnet".to_string(),
-                serde_json::Value::String(subnet.clone()),
-            );
-            format!("(golem.node.debug.subnet={})", subnet.clone())
-        }
-        None => "".to_string(),
+    let mut cnts = constraints![
+        "golem.inf.mem.gib" > 0.5,
+        "golem.inf.storage.gib" > 1,
+        "golem.com.pricing.model" == "linear",
+    ];
+    if let Some(subnet) = subnet {
+        log::info!("Using subnet: {}", subnet);
+        properties.as_object_mut().unwrap().insert(
+            "golem.node.debug.subnet".to_string(),
+            serde_json::Value::String(subnet.clone()),
+        );
+        cnts = cnts.and(constraints!["golem.node.debug.subnet" == subnet.clone(),]);
     };
 
     Demand {
         properties,
-        constraints: format!(
-            "(&
-            (golem.inf.mem.gib>0.5)
-            (golem.inf.storage.gib>1)
-            (golem.com.pricing.model=linear)
-            {}
-        )",
-            subnet_constraint
-        ),
+        constraints: cnts.to_string(),
 
         demand_id: Default::default(),
         requestor_id: Default::default(),

@@ -5,13 +5,11 @@ mod tests {
     use ya_client::model::market::event::RequestorEvent;
     use ya_client::model::market::proposal::State;
     use ya_market_decentralized::testing::QueryEventsError;
-    use ya_market_decentralized::testing::SubscriptionId;
     use ya_market_decentralized::MarketService;
 
     use crate::utils::mock_offer::{example_demand, example_offer};
     use crate::utils::MarketsNetwork;
 
-    use std::str::FromStr;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -36,7 +34,7 @@ mod tests {
         // We expect that proposal will be available as event.
         let events = market1
             .requestor_engine
-            .query_events(&subscription_id.to_string(), 0.0, Some(5))
+            .query_events(&subscription_id, 0.0, Some(5))
             .await?;
 
         assert_eq!(events.len(), 1);
@@ -52,7 +50,7 @@ mod tests {
         // We expect that, the same event won't be available again.
         let events = market1
             .requestor_engine
-            .query_events(&subscription_id.to_string(), 1.0, Some(5))
+            .query_events(&subscription_id, 1.0, Some(5))
             .await?;
 
         assert_eq!(events.len(), 0);
@@ -75,9 +73,8 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_demand(&example_demand(), identity1.clone())
+            .subscribe_demand(&example_demand(), &identity1)
             .await?;
-        let subscription_id = SubscriptionId::from_str(&subscription_id)?;
 
         let market1: Arc<MarketService> = network.get_market("Node-1");
         let demand_id = subscription_id.clone();
@@ -87,7 +84,7 @@ mod tests {
         let query_handle = tokio::spawn(async move {
             let events = market1
                 .requestor_engine
-                .query_events(&subscription_id.to_string(), 1.0, Some(5))
+                .query_events(&subscription_id, 1.0, Some(5))
                 .await?;
             assert_eq!(events.len(), 1);
             Result::<(), anyhow::Error>::Ok(())
@@ -118,9 +115,8 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_demand(&example_demand(), identity1.clone())
+            .subscribe_demand(&example_demand(), &identity1)
             .await?;
-        let subscription_id = SubscriptionId::from_str(&subscription_id)?;
         let demand_id = subscription_id.clone();
 
         // Query events, when no Proposal are in the queue yet.
@@ -128,7 +124,7 @@ mod tests {
         let query_handle = tokio::spawn(async move {
             match market1
                 .requestor_engine
-                .query_events(&subscription_id.to_string(), 0.5, Some(5))
+                .query_events(&subscription_id, 0.5, Some(5))
                 .await
             {
                 Err(QueryEventsError::Unsubscribed(id)) => {
@@ -143,9 +139,7 @@ mod tests {
         tokio::time::delay_for(Duration::from_millis(200)).await;
 
         let market1: Arc<MarketService> = network.get_market("Node-1");
-        market1
-            .unsubscribe_demand(demand_id.to_string(), identity1.clone())
-            .await?;
+        market1.unsubscribe_demand(&demand_id, &identity1).await?;
 
         // Protect from eternal waiting.
         tokio::time::timeout(Duration::from_millis(700), query_handle).await???;
@@ -174,7 +168,7 @@ mod tests {
         // We should reject calls with negative maxEvents.
         match market1
             .requestor_engine
-            .query_events(&demand_id.to_string(), 0.0, Some(-5))
+            .query_events(&demand_id, 0.0, Some(-5))
             .await
         {
             Err(QueryEventsError::InvalidMaxEvents(value)) => {
@@ -186,7 +180,7 @@ mod tests {
         // Negative timeout should be treated as immediate checking events and return.
         let events = market1
             .requestor_engine
-            .query_events(&demand_id.to_string(), -5.0, None)
+            .query_events(&demand_id, -5.0, None)
             .await?;
         assert_eq!(events.len(), 1);
 
@@ -199,18 +193,16 @@ mod tests {
         // even if they exist.
         let events = market1
             .requestor_engine
-            .query_events(&demand_id.to_string(), 1.0, Some(0))
+            .query_events(&demand_id, 1.0, Some(0))
             .await?;
         assert_eq!(events.len(), 0);
 
         // Query events returns error, if Demand was unsubscribed.
-        market1
-            .unsubscribe_demand(demand_id.to_string(), identity1.clone())
-            .await?;
+        market1.unsubscribe_demand(&demand_id, &identity1).await?;
 
         match market1
             .requestor_engine
-            .query_events(&demand_id.to_string(), 0.0, None)
+            .query_events(&demand_id, 0.0, None)
             .await
         {
             Err(QueryEventsError::Unsubscribed(subscription_id)) => {

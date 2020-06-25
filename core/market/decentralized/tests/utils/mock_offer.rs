@@ -1,5 +1,3 @@
-use async_trait::async_trait;
-use std::str::FromStr;
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,7 +9,6 @@ use ya_market_decentralized::testing::{DemandDao, OfferDao};
 use ya_market_decentralized::MarketService;
 
 use crate::utils::mock_node::MarketNode;
-use crate::utils::MarketsNetwork;
 
 #[allow(unused)]
 pub fn example_offer() -> Offer {
@@ -44,10 +41,8 @@ impl MarketNode {
         demand: &Demand,
     ) -> Result<(SubscriptionId, SubscriptionId), anyhow::Error> {
         let market1: Arc<MarketService> = self.market.clone();
-        let identity1 = self.identity.clone();
-
-        let subscription_id = market1.subscribe_demand(demand, identity1).await?;
-        let subscription_id = SubscriptionId::from_str(&subscription_id)?;
+        let identity1 = self.id.clone();
+        let subscription_id = market1.subscribe_demand(demand, &identity1).await?;
 
         self.inject_proposal_for_demand(offer, &subscription_id)
             .await
@@ -59,10 +54,10 @@ impl MarketNode {
         demand_id: &SubscriptionId,
     ) -> Result<(SubscriptionId, SubscriptionId), anyhow::Error> {
         let market1: Arc<MarketService> = self.market.clone();
-        let identity1 = self.identity.clone();
+        let identity1 = self.id.clone();
 
         // We need model Offer. So we will get it from database.
-        let offer_id = market1.subscribe_offer(offer, identity1.clone()).await?;
+        let offer_id = market1.subscribe_offer(offer, &identity1).await?;
 
         // Get model Demand to directly inject it into negotiation engine.
         let db = self.db.clone();
@@ -72,11 +67,7 @@ impl MarketNode {
             .await?
             .unwrap();
 
-        let model_offer = db
-            .as_dao::<OfferDao>()
-            .get_offer(&SubscriptionId::from_str(offer_id.as_ref())?)
-            .await?
-            .unwrap();
+        let model_offer = db.as_dao::<OfferDao>().get_offer(&offer_id).await?.unwrap();
 
         let proposal = DraftProposal {
             offer: model_offer,
@@ -85,7 +76,6 @@ impl MarketNode {
         market1.matcher.emit_proposal(proposal)?;
         tokio::time::delay_for(Duration::from_millis(30)).await;
 
-        let offer_id = SubscriptionId::from_str(offer_id.as_ref())?;
         Ok((offer_id, demand_id.clone()))
     }
 }

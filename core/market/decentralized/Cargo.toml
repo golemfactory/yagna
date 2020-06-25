@@ -10,11 +10,12 @@ market-test-suite = []
 [dependencies]
 ya-client = "0.3"
 ya-core-model = { version = "0.1", features = ["market", "net"] }
+ya-net = "0.1"
 ya-persistence = "0.2"
 ya-service-api = "0.1"
-ya-service-bus = "0.2"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
+ya-service-bus = "0.2"
 
 actix-web = "2.0"
 anyhow = "1.0"
@@ -38,10 +39,12 @@ tokio = { version = "0.2", features = ["time", "sync"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
+actix-http = "1.0.1"
 actix-rt = "1.0.0"
-async-trait = "0.1.36"
+actix-service = "1.0"
 env_logger = "0.7"
 rand = "0.7.2"
 serde_json = "1.0"
+structopt = "0.3"
 tokio = { version = "0.2", features = ["macros", "rt-core"] }
 

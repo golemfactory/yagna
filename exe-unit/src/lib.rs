@@ -28,6 +28,7 @@ mod handlers;
 pub mod message;
 pub mod metrics;
 mod notify;
+pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod state;
@@ -322,6 +323,7 @@ pub struct ExeUnitContext {
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub runtime_args: RuntimeArgs,
 }
 
 impl ExeUnitContext {

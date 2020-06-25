@@ -1,20 +1,16 @@
 use chrono::prelude::*;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use std::marker::Send;
 use std::sync::Arc;
 use thiserror::Error;
 
 use ya_client::model::ErrorMessage;
 use ya_core_model::net;
-use ya_core_model::net::local::{
-    BindBroadcastError, BroadcastMessage, SendBroadcastMessage, Subscribe, ToEndpoint,
-};
-use ya_service_bus::{typed as bus, Handle, RpcEndpoint, RpcMessage};
+use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use super::callbacks::{CallbackHandler, CallbackMessage, HandlerSlot};
 use crate::db::models::{Offer as ModelOffer, SubscriptionId};
-use std::future::Future;
 
 // =========================================== //
 // Errors
@@ -24,9 +20,9 @@ use std::future::Future;
 pub enum DiscoveryError {
     #[error(transparent)]
     RemoteError(#[from] DiscoveryRemoteError),
-    #[error("Failed to broadcast caused by gsb error: {}.", .0)]
+    #[error("Failed to broadcast caused by gsb error: {0}.")]
     GsbError(String),
-    #[error("Internal error: {}.", .0)]
+    #[error("Internal error: {0}.")]
     InternalError(String),
 }
 
@@ -37,10 +33,10 @@ pub enum DiscoveryRemoteError {}
 pub enum DiscoveryInitError {
     #[error("Uninitialized callback '{0}'.")]
     UninitializedCallback(String),
-    #[error("Failed to bind to gsb. Error: {}.", .0)]
-    BindingGsbFailed(String),
-    #[error("Failed to subscribe to broadcast. Error: {0}.")]
-    BroadcastSubscribeFailed(String),
+    #[error("Failed to bind broadcast `{0}` to gsb. Error: {1}.")]
+    BindingGsbFailed(String, String),
+    #[error("Failed to subscribe to broadcast `{0}`. Error: {1}.")]
+    BroadcastSubscribeFailed(String, String),
 }
 
 // =========================================== //
@@ -75,30 +71,32 @@ impl Discovery {
     }
 
     /// Broadcasts offer to other nodes in network. Connected nodes will
-    /// get call to function bound in DiscoveryBuilder::bind_offer_received.
+    /// get call to function bound in `offer_received`.
     pub async fn broadcast_offer(&self, offer: ModelOffer) -> Result<(), DiscoveryError> {
-        log::info!("Broadcasting offer [{}] to the network.", &offer.id);
+        log::info!("Broadcasting offer [{}].", &offer.id);
 
-        let msg = OfferReceived { offer };
-        let bcast_msg = SendBroadcastMessage::new(msg);
+        let original_sender = offer.node_id.clone();
+        let bcast_msg = SendBroadcastMessage::new(OfferReceived { offer });
 
-        let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+        let _ = bus::service(net::local::BUS_ID)
+            .send_as(original_sender, bcast_msg)
+            .await?;
         Ok(())
     }
 
     pub async fn broadcast_unsubscribe(
         &self,
+        caller: String,
         subscription_id: SubscriptionId,
     ) -> Result<(), DiscoveryError> {
-        log::info!(
-            "Broadcasting unsubscribe offer [{}] to the network.",
-            &subscription_id
-        );
+        log::info!("Broadcasting unsubscribe offer [{}].", &subscription_id);
 
         let msg = OfferUnsubscribed { subscription_id };
         let bcast_msg = SendBroadcastMessage::new(msg);
 
-        let _ = bus::service(net::local::BUS_ID).send(bcast_msg).await?;
+        let _ = bus::service(net::local::BUS_ID)
+            .send_as(caller, bcast_msg)
+            .await?;
         Ok(())
     }
 
@@ -112,26 +110,30 @@ impl Discovery {
         private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
-        net::local::bind_broadcast_with_caller(
-            // /private/market/market-protocol-mk1-offer
-            &format!("{}/{}", private_prefix, OfferReceived::TOPIC),
+        // /private/market/market-protocol-mk1-offer
+        let broadcast_address = format!("{}/{}", private_prefix, OfferReceived::TOPIC);
+        ya_net::bind_broadcast_with_caller(
+            &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferReceived>| {
                 let myself = myself.clone();
                 myself.on_offer_received(caller, msg.body().to_owned())
             },
         )
-        .await?;
+        .await
+        .map_err(|e| DiscoveryInitError::from_pair(broadcast_address, e))?;
 
         let myself = self.clone();
-        net::local::bind_broadcast_with_caller(
-            // /private/market/market-protocol-mk1-offer-unsubscribe
-            &format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC),
+        // /private/market/market-protocol-mk1-offer-unsubscribe
+        let broadcast_address = format!("{}/{}", private_prefix, OfferUnsubscribed::TOPIC);
+        ya_net::bind_broadcast_with_caller(
+            &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
                 let myself = myself.clone();
                 myself.on_offer_unsubscribed(caller, msg.body().to_owned())
             },
         )
-        .await?;
+        .await
+        .map_err(|e| DiscoveryInitError::from_pair(broadcast_address, e))?;
 
         Ok(())
     }
@@ -157,9 +159,10 @@ impl Discovery {
                 // TODO: Should we retry in case of fail?
                 if let Err(error) = self.broadcast_offer(offer).await {
                     log::error!(
-                        "Error propagating further Offer [{}] from provider [{}].",
+                        "Error propagating Offer [{}] from provider [{}] further. Error: {}",
                         offer_id,
-                        provider_id
+                        provider_id,
+                        error,
                     );
                 }
             }
@@ -184,7 +187,7 @@ impl Discovery {
             &caller,
         );
 
-        match callback.call(caller, msg).await? {
+        match callback.call(caller.clone(), msg).await? {
             Propagate::True => {
                 log::info!(
                     "Propagating further unsubscribe Offer [{}].",
@@ -192,16 +195,20 @@ impl Discovery {
                 );
 
                 // TODO: Should we retry in case of fail?
-                if let Err(error) = self.broadcast_unsubscribe(subscription_id.clone()).await {
+                if let Err(error) = self
+                    .broadcast_unsubscribe(caller, subscription_id.clone())
+                    .await
+                {
                     log::error!(
-                        "Error propagating further unsubscribe Offer [{}].",
+                        "Error propagating unsubscribe Offer [{}] further. Error: {}",
                         subscription_id,
+                        error,
                     );
                 }
             }
             Propagate::False(reason) => {
                 log::info!(
-                    "Not propagating unsubscribe Offer [{}] for reason: {}.",
+                    "Not propagating unsubscribe Offer [{}] because: {}.",
                     subscription_id,
                     reason
                 );
@@ -278,22 +285,22 @@ impl CallbackMessage for RetrieveOffers {
 // Errors From impls
 // =========================================== //
 
-impl From<net::local::BindBroadcastError> for DiscoveryInitError {
-    fn from(err: net::local::BindBroadcastError) -> Self {
-        match err {
-            BindBroadcastError::GsbError(error) => {
-                DiscoveryInitError::BindingGsbFailed(format!("{}", error))
+impl DiscoveryInitError {
+    fn from_pair(addr: String, e: net::local::BindBroadcastError) -> Self {
+        match e {
+            BindBroadcastError::GsbError(e) => {
+                DiscoveryInitError::BindingGsbFailed(addr, e.to_string())
             }
-            BindBroadcastError::SubscribeError(error) => {
-                DiscoveryInitError::BroadcastSubscribeFailed(format!("{}", error))
+            BindBroadcastError::SubscribeError(e) => {
+                DiscoveryInitError::BroadcastSubscribeFailed(addr, e.to_string())
             }
         }
     }
 }
 
 impl From<ya_service_bus::error::Error> for DiscoveryError {
-    fn from(err: ya_service_bus::error::Error) -> Self {
-        DiscoveryError::GsbError(format!("{}", err))
+    fn from(e: ya_service_bus::error::Error) -> Self {
+        DiscoveryError::GsbError(e.to_string())
     }
 }
 

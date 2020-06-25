@@ -1,24 +1,19 @@
-use chrono::Utc;
-use futures::stream::{self, StreamExt};
-use num_traits::real::Real;
-use std::str::FromStr;
+use futures::stream::StreamExt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use super::errors::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError};
+use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::EventError;
-use crate::db::models::Proposal as ModelProposal;
+use crate::db::models::ProposalExt;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
-use crate::db::models::{Offer as ModelOffer, ProposalExt};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
 
 use crate::negotiation::notifier::NotifierError;
 use ya_client::model::market::event::RequestorEvent;
-use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 
 /// Requestor part of negotiation logic.
@@ -68,11 +63,10 @@ impl RequestorNegotiationEngine {
 
     pub async fn query_events(
         &self,
-        subscription_id: &String,
+        subscription_id: &SubscriptionId,
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
-        let subscription_id = SubscriptionId::from_str(subscription_id)?;
         let mut timeout = Duration::from_millis((1000.0 * timeout) as u64);
         let stop_time = Instant::now() + timeout;
         let max_events = max_events.unwrap_or(i32::max_value());
@@ -84,7 +78,7 @@ impl RequestorNegotiationEngine {
         }
 
         loop {
-            let events = get_events_from_db(&self.db, &subscription_id, max_events).await?;
+            let events = get_events_from_db(&self.db, subscription_id, max_events).await?;
             if events.len() > 0 {
                 return Ok(events);
             }
@@ -93,7 +87,7 @@ impl RequestorNegotiationEngine {
 
             if let Err(error) = self
                 .notifier
-                .wait_for_event_with_timeout(&subscription_id, timeout)
+                .wait_for_event_with_timeout(subscription_id, timeout)
                 .await
             {
                 return match error {

@@ -8,8 +8,16 @@ use super::bcast;
 
 pub struct MockNet;
 
+// TODO: all tests using this mock net implementation should be run sequentially
+// because GSB router is a static singleton (shared state) and consecutive bindings
+// for same addr (ie. local_net::BUS_ID) are being overwritten and only last is effective
+// which means there might be interlace in BCastService instances being used
+// `bcast_singleton.rs` is a try to handle it, but unsuccessful yet
 impl MockNet {
-    pub async fn gsb(bcast: bcast::BCastService) -> anyhow::Result<()> {
+    pub fn gsb() -> anyhow::Result<()> {
+        let bcast = bcast::BCastService::default();
+        log::info!("initializing BCast on mock net");
+
         let bcast_service_id = <SendBroadcastMessage<serde_json::Value> as RpcMessage>::ID;
 
         {
@@ -17,8 +25,9 @@ impl MockNet {
             let _ = bus::bind(local_net::BUS_ID, move |subscribe: local_net::Subscribe| {
                 let bcast = bcast.clone();
                 async move {
-                    let (_, id) = bcast.add(subscribe);
-                    Ok(id)
+                    log::debug!("subscribing BCast: {:?}", subscribe);
+                    bcast.add(subscribe);
+                    Ok(0) // ignored id
                 }
             });
         }
@@ -40,6 +49,7 @@ impl MockNet {
                     let topic = msg_json.topic().to_owned();
                     let endpoints = bcast.resolve(&topic);
 
+                    log::debug!("BCasting on {} to {:?} from {}", topic, endpoints, caller);
                     for endpoint in endpoints {
                         let addr = format!("{}/{}", endpoint, bcast_service_id);
                         let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;

@@ -1,13 +1,6 @@
-use futures::select_biased;
-use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
-use tokio::prelude::*;
-use tokio::sync::broadcast::{channel, Receiver, Sender};
-use tokio::sync::Mutex;
-
-use ya_client::model::market::event::RequestorEvent;
-use ya_client::model::ErrorMessage;
+use tokio::sync::broadcast::{channel, Sender};
 
 use crate::db::models::SubscriptionId;
 

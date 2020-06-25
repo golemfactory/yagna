@@ -114,7 +114,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
             let _ = address.send(SetState::from(state)).await;
             let _ = address.send(Stop::default()).await;
 
-            for mut service in services.into_iter() {
+            for mut service in services {
                 service.stop().await;
             }
 

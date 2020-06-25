@@ -1,10 +1,6 @@
-use chrono::Utc;
-use thiserror::Error;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use ya_persistence::executor::Error as DbError;
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::db::models::Proposal;
 use crate::db::models::{Demand as ModelDemand, Negotiation};
@@ -12,7 +8,6 @@ use crate::db::models::{Offer as ModelOffer, ProposalExt};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
 use crate::db::DbResult;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,

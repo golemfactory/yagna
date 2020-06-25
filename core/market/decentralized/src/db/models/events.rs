@@ -8,15 +8,14 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use thiserror::Error;
 
-use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
-use ya_client::model::market::proposal::Proposal as ClientProposal;
+use ya_client::model::market::event::RequestorEvent;
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::{DbExecutor, Error as DbError};
 
 use super::SubscriptionId;
 use crate::db::dao::ProposalDao;
 use crate::db::models::{Negotiation, OwnerType, Proposal};
-use crate::db::schema::{market_provider_event, market_requestor_event};
+use crate::db::schema::market_requestor_event;
 
 #[derive(Error, Debug)]
 pub enum EventError {

@@ -2,7 +2,6 @@ use thiserror::Error;
 
 use crate::db::dao::TakeEventsError;
 use crate::db::models::{SubscriptionId, SubscriptionParseError};
-use ya_persistence::executor::Error as DbError;
 
 #[derive(Error, Debug)]
 pub enum NegotiationError {}
@@ -12,8 +11,6 @@ pub enum NegotiationInitError {}
 
 #[derive(Error, Debug)]
 pub enum QueryEventsError {
-    #[error("Timeout waiting for events for subscription [{0}].")]
-    Timeout(SubscriptionId),
     #[error("Subscription [{0}] was already unsubscribed.")]
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]

@@ -1,7 +1,7 @@
 use chrono::Utc;
 
+use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
-use ya_persistence::executor::{ConnType, Error};
 
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::SubscriptionId;

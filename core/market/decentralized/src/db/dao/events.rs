@@ -1,20 +1,14 @@
-use chrono::Utc;
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use thiserror::Error;
 
 use ya_persistence::executor::Error as DbError;
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
+use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::models::MarketEvent;
-use crate::db::models::Offer as ModelOffer;
-use crate::db::models::{Demand as ModelDemand, SubscriptionId};
-use crate::db::models::{Negotiation, OwnerType, Proposal, ProposalExt};
-use crate::db::schema::market_provider_event::dsl as dsl_provider;
+use crate::db::models::{Negotiation, OwnerType, Proposal, SubscriptionId};
 use crate::db::schema::market_requestor_event::dsl as dsl_requestor;
 use crate::db::DbResult;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 #[derive(Error, Debug)]
 pub enum TakeEventsError {

@@ -1306,19 +1306,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aafcde04e90a5226a6443b7aabdb016ba2f8307c847d524724bd9b346dd1a2d3"
-dependencies = [
- "atty",
- "humantime 1.3.0",
- "log 0.4.8",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
@@ -2801,17 +2788,6 @@ name = "ppv-lite86"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "237a5ed80e274dbc66f86bd59c1e25edc039660be53194b5fe0a482e0f2612ea"
-
-[[package]]
-name = "pretty_env_logger"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "717ee476b1690853d222af4634056d830b5197ffd747726a9a1eee6da9f49074"
-dependencies = [
- "chrono",
- "env_logger 0.6.2",
- "log 0.4.8",
-]
 
 [[package]]
 name = "prettytable-rs"
@@ -4915,7 +4891,6 @@ dependencies = [
  "libproc",
  "log 0.4.8",
  "nix 0.17.0",
- "pretty_env_logger",
  "procfs",
  "rand 0.7.3",
  "regex",
@@ -4982,10 +4957,11 @@ dependencies = [
 name = "ya-market-decentralized"
 version = "0.1.0"
 dependencies = [
+ "actix-http",
  "actix-rt",
+ "actix-service",
  "actix-web",
  "anyhow",
- "async-trait",
  "chrono",
  "derive_more 0.99.7",
  "diesel",
@@ -5003,11 +4979,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
+ "structopt",
  "thiserror",
  "tokio 0.2.21",
  "uuid 0.8.1",
  "ya-client",
  "ya-core-model",
+ "ya-net",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -5225,6 +5203,7 @@ dependencies = [
  "tokio 0.2.21",
  "url 2.1.1",
  "uuid 0.8.1",
+ "ya-agreement-utils",
  "ya-client",
 ]
 
