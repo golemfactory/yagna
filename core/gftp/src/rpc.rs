@@ -154,7 +154,7 @@ pub enum RpcBody {
 #[serde(rename_all = "snake_case")]
 pub enum RpcRequest {
     /// Prints out version
-    Version,
+    Version {},
     /// Publishes files (blocking)
     Publish { files: Vec<PathBuf> },
     /// Stops publishing a file
@@ -179,7 +179,7 @@ pub enum RpcRequest {
         file: PathBuf,
     },
     /// Shuts down the server
-    Shutdown,
+    Shutdown {},
 }
 
 #[derive(Serialize, Deserialize, Debug)]

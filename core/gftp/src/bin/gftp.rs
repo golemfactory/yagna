@@ -50,7 +50,7 @@ async fn execute(id: Option<RpcId>, request: RpcRequest, verbose: bool) -> ExecM
 
 async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -> Result<ExecMode> {
     let exec_mode = match request {
-        RpcRequest::Version => {
+        RpcRequest::Version {} => {
             let version = clap::crate_version!().to_string();
             RpcMessage::response(id, RpcResult::String(version)).print(verbose);
             ExecMode::OneShot
@@ -96,7 +96,7 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
             RpcMessage::file_response(id, file, url).print(verbose);
             ExecMode::OneShot
         }
-        RpcRequest::Shutdown => {
+        RpcRequest::Shutdown {} => {
             RpcMessage::response(id, RpcResult::Status(RpcStatusResult::Ok)).print(verbose);
             ExecMode::Shutdown
         }

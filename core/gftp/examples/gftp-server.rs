@@ -9,7 +9,6 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 use structopt::StructOpt;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdin, ChildStdout, Command};
@@ -17,7 +16,7 @@ use tokio::process::{ChildStdin, ChildStdout, Command};
 static SEQ: AtomicUsize = AtomicUsize::new(0);
 type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
-/// Build the GFTP binary, start the daemon and then run this example with:
+/// Build the GFTP binary, start the daemon and run:
 ///
 /// `cargo run --example gftp-server ../../target/debug/gftp Cargo.toml`
 #[derive(StructOpt)]
@@ -140,7 +139,7 @@ async fn main() -> Result<()> {
     let mut reader = BufReader::new(stdout);
 
     log::info!("sending version request");
-    let req = RpcRequest::Version;
+    let req = RpcRequest::Version {};
     send(&mut stdin, &mut reader, req).await?;
 
     log::info!("sending publish request");
@@ -162,8 +161,6 @@ async fn main() -> Result<()> {
         result => return Err(anyhow!("Invalid result: {:?}", result)),
     }
 
-    tokio::time::delay_for(Duration::from_secs_f32(1.5)).await;
-
     log::info!("sending erroneous close request");
     let req = RpcRequest::Close { urls };
     match send(&mut stdin, &mut reader, req).await? {
@@ -174,8 +171,6 @@ async fn main() -> Result<()> {
         }
         result => return Err(anyhow!("Invalid result: {:?}", result)),
     }
-
-    tokio::time::delay_for(Duration::from_secs_f32(1.5)).await;
 
     log::info!("sending publish request (for download)");
     let files = vec![args.share.clone()];
@@ -227,7 +222,7 @@ async fn main() -> Result<()> {
     }
 
     log::info!("sending shutdown request");
-    let req = RpcRequest::Shutdown;
+    let req = RpcRequest::Shutdown {};
     send(&mut stdin, &mut reader, req).await?;
 
     child.await?;
