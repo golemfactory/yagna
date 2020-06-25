@@ -412,6 +412,7 @@ impl Router {
         let addr = format!("{}/{}", addr, T::ID);
         if let Some(slot) = self.handlers.get_mut(&addr) {
             (if let Some(h) = slot.recipient() {
+                log::debug!("trying to locally send to :{}", addr);
                 h.send(msg).map_err(Error::from).left_future()
             } else {
                 slot.send(RpcRawCall::from_envelope_addr(msg, addr))

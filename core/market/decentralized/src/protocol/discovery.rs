@@ -68,7 +68,7 @@ impl Discovery {
         let bcast_msg = SendBroadcastMessage::new(OfferReceived { offer });
 
         let _ = bus::service(net::local::BUS_ID)
-            .send_as(original_sender, bcast_msg)
+            .send_as(original_sender, bcast_msg) // TODO: should we send as our (default) identity?
             .await?;
         Ok(())
     }
@@ -229,7 +229,7 @@ pub enum Propagate {
     No(Reason),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OfferReceived {
     pub offer: ModelOffer,

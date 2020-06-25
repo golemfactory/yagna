@@ -1,20 +1,23 @@
 use anyhow::{anyhow, Context, Result};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_client::model::NodeId;
 use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
+use ya_market_decentralized::testing::mock_offer::generate_identity;
 use ya_market_decentralized::testing::{DemandError, OfferError};
 use ya_market_decentralized::{Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use super::mock_net::MockNet;
+use super::{bcast::BCast, mock_net::MockNet};
+
+#[cfg(feature = "bcast-singleton")]
+use super::bcast::singleton::BCastService;
+#[cfg(not(feature = "bcast-singleton"))]
+use super::bcast::BCastService;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -52,7 +55,7 @@ impl MarketsNetwork {
     pub async fn new<Str: AsRef<str>>(test_name: Str) -> Self {
         let test_dir = prepare_test_dir(&test_name).unwrap();
 
-        MockNet::gsb().unwrap();
+        MockNet::default().bind_gsb();
 
         MarketsNetwork {
             markets: vec![],
@@ -78,7 +81,7 @@ impl MarketsNetwork {
             market,
             db,
         };
-
+        BCastService::default().register(&market_node.id.identity, &self.test_name);
         self.markets.push(market_node);
         Ok(self)
     }
@@ -108,6 +111,7 @@ impl MarketsNetwork {
             discovery,
         };
 
+        BCastService::default().register(&discovery_node.id.identity, &self.test_name);
         self.discoveries.push(discovery_node);
         Ok(self)
     }
@@ -182,16 +186,6 @@ pub fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf> {
     fs::create_dir_all(&test_dir)
         .with_context(|| format!("Creating test directory: {}", test_dir.display()))?;
     Ok(test_dir)
-}
-
-fn generate_identity(name: &str) -> Identity {
-    let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
-
-    Identity {
-        name: name.to_string(),
-        role: "manager".to_string(),
-        identity: NodeId::from(random_node_id[..].as_bytes()),
-    }
 }
 
 /// Facilitates waiting for broadcast propagation.

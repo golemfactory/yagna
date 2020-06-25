@@ -3,18 +3,20 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
+    use futures::{channel::mpsc, prelude::*};
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
 
     use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
-    use ya_market_decentralized::testing::mock_offer::{sample_client_offer, sample_offer};
-    use ya_market_decentralized::testing::OfferError;
     use ya_market_decentralized::{MarketService, SubscriptionId};
 
-    use crate::utils::mock_node::{default::*, wait_for_bcast};
-    use crate::utils::{MarketStore, MarketsNetwork};
+    use crate::utils::mock_node::default::*;
+    use crate::utils::{wait_for_bcast, MarketStore, MarketsNetwork};
+
+    use ya_market_decentralized::testing::mock_offer::{sample_client_offer, sample_offer};
+    use ya_market_decentralized::testing::OfferError;
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
     /// Than sending unsubscribe should remove Offer from other nodes.
@@ -146,6 +148,7 @@ mod tests {
 
         // Send the same Offer using Discovery interface directly.
         // Number of returning Offers will be counted.
+        let (tx, mut rx) = mpsc::channel::<()>(1);
         let offers_counter = Arc::new(AtomicUsize::new(0));
         let counter = offers_counter.clone();
         let network = network
@@ -153,8 +156,10 @@ mod tests {
                 "Node-3",
                 move |_caller: String, _msg: OfferReceived| {
                     let offers_counter = counter.clone();
+                    let mut tx = tx.clone();
                     async move {
                         offers_counter.fetch_add(1, Ordering::SeqCst);
+                        tx.send(()).await.unwrap();
                         Ok(Propagate::No(Reason::AlreadyExists))
                     }
                 },
@@ -164,12 +169,11 @@ mod tests {
             .await?;
 
         // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
-        let market3: Discovery = network.get_discovery("Node-3");
-        market3.broadcast_offer(offer).await?;
+        let discovery3: Discovery = network.get_discovery("Node-3");
+        discovery3.broadcast_offer(offer).await?;
 
-        // Wait for Offer propagation.
-        // TODO: How to wait without assuming any number of seconds?
-        tokio::time::delay_for(Duration::from_millis(50)).await;
+        // Wait for broadcast.
+        rx.next().await;
 
         assert_eq!(
             offers_counter.load(Ordering::SeqCst),
