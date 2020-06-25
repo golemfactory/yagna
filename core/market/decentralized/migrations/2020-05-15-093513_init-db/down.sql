@@ -2,3 +2,4 @@
 
 DROP TABLE "market_offer";
 DROP TABLE "market_demand";
+DROP TABLE "market_offer_unsubscribes";
