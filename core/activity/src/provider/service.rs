@@ -5,7 +5,7 @@ use futures::prelude::*;
 use std::convert::From;
 use std::time::Duration;
 
-use ya_client_model::activity::{ActivityState, ActivityUsage, State};
+use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
 use ya_core_model::activity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
@@ -13,21 +13,42 @@ use ya_service_bus::{timeout::*, typed::ServiceBinder};
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
     get_activity_agreement, get_agreement, get_persisted_state, get_persisted_usage,
-    RpcMessageResult,
+    set_persisted_state, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
-const DEFAULT_INACTIVITY_LIMIT_SECONDS: i64 = 10;
-const MIN_INACTIVITY_LIMIT_SECONDS: i64 = 2;
+const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
+const DEFAULT_INACTIVITY_LIMIT_SECONDS: f64 = 10.;
+const DEFAULT_UNRESPONSIVE_LIMIT_SECONDS: f64 = 5.;
+const MIN_INACTIVITY_LIMIT_SECONDS: f64 = 2.;
+const MIN_UNRESPONSIVE_LIMIT_SECONDS: f64 = 2.;
 
-fn inactivity_limit_seconds() -> i64 {
-    let limit = std::env::var(INACTIVITY_LIMIT_SECONDS_ENV_VAR)
+#[inline]
+fn inactivity_limit_seconds() -> f64 {
+    seconds_limit(
+        INACTIVITY_LIMIT_SECONDS_ENV_VAR,
+        DEFAULT_INACTIVITY_LIMIT_SECONDS,
+        MIN_INACTIVITY_LIMIT_SECONDS,
+    )
+}
+
+#[inline]
+fn unresponsive_limit_seconds() -> f64 {
+    seconds_limit(
+        UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR,
+        DEFAULT_UNRESPONSIVE_LIMIT_SECONDS,
+        MIN_UNRESPONSIVE_LIMIT_SECONDS,
+    )
+}
+
+fn seconds_limit(env_var: &str, default_val: f64, min_val: f64) -> f64 {
+    let limit = std::env::var(env_var)
         .and_then(|v| v.parse().map_err(|_| std::env::VarError::NotPresent))
-        .unwrap_or(DEFAULT_INACTIVITY_LIMIT_SECONDS);
-    std::cmp::max(limit, MIN_INACTIVITY_LIMIT_SECONDS)
+        .unwrap_or(default_val);
+    limit.max(min_val)
 }
 
 pub fn bind_gsb(db: &DbExecutor) {
@@ -186,8 +207,10 @@ fn enqueue_destroy_evt(
 async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_id: impl ToString) {
     let activity_id = activity_id.to_string();
     let provider_id = provider_id.to_string();
-    let limit_seconds = inactivity_limit_seconds();
-    let delay = Duration::from_secs_f64(limit_seconds as f64 / 3.);
+    let limit_s = inactivity_limit_seconds();
+    let unresp_s = unresponsive_limit_seconds();
+    let delay = Duration::from_secs_f64(1.);
+    let mut prev_state: Option<ActivityState> = None;
 
     log::debug!("Starting activity monitor: {}", activity_id);
 
@@ -196,17 +219,31 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
             if !state.state.alive() {
                 break;
             }
-            let inactive_seconds = Utc::now().timestamp() - usage.timestamp;
-            if inactive_seconds > limit_seconds {
-                log::warn!(
-                    "activity {} inactive for {}s. Destroying...",
-                    activity_id,
-                    inactive_seconds
-                );
+
+            let dt = (Utc::now().timestamp() - usage.timestamp) as f64;
+            if dt > limit_s {
+                log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
                 enqueue_destroy_evt(db, &activity_id, &provider_id).await;
                 break;
+            } else if state.state.0 != State::Unresponsive && dt >= unresp_s {
+                log::warn!("activity {} unresponsive after {}s", activity_id, dt);
+                let new_state = ActivityState::from(StatePair(State::Unresponsive, state.state.1));
+                prev_state = Some(state);
+                if let Err(e) = set_persisted_state(&db, &activity_id, new_state).await {
+                    log::error!("cannot update activity {} state: {}", activity_id, e);
+                }
+            } else if state.state.0 == State::Unresponsive && dt < unresp_s {
+                log::warn!("activity {} is now responsive", activity_id);
+                let state = match prev_state.take() {
+                    Some(state) => state,
+                    _ => panic!("unknown pre-unresponsive state of activity {}", activity_id),
+                };
+                if let Err(e) = set_persisted_state(&db, &activity_id, state).await {
+                    log::error!("cannot update activity {} state: {}", activity_id, e);
+                }
             }
         };
+
         tokio::time::delay_for(delay).await;
     }
 

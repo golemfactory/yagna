@@ -1,17 +1,23 @@
 use futures::prelude::*;
+use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use ya_service_bus::RpcMessage;
+/// Implement for callback message parameter.
+pub trait CallbackMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
+    type Item: Serialize + DeserializeOwned + 'static + Sync + Send;
+    type Error: Serialize + DeserializeOwned + 'static + Sync + Send + Debug;
+}
 
 /// Object for storing callback functions.
 #[derive(Clone)]
-pub struct HandlerSlot<MsgType: RpcMessage> {
+pub struct HandlerSlot<MsgType: CallbackMessage> {
     slot: Arc<Mutex<Box<dyn CallbackHandler<MsgType>>>>,
 }
 
-impl<MsgType: RpcMessage> HandlerSlot<MsgType> {
+impl<MsgType: CallbackMessage> HandlerSlot<MsgType> {
     pub fn new(callback: impl CallbackHandler<MsgType>) -> HandlerSlot<MsgType> {
         HandlerSlot {
             slot: Arc::new(Mutex::new(Box::new(callback))),
@@ -30,15 +36,13 @@ impl<MsgType: RpcMessage> HandlerSlot<MsgType> {
 /// Trait to use in functions for binding callbacks.
 /// Example:
 /// ```rust
-/// use ya_service_bus::RpcMessage;
-/// use ya_market_decentralized::protocol::{CallbackHandler, HandlerSlot};
+/// use ya_market_decentralized::protocol::{CallbackHandler, HandlerSlot, CallbackMessage};
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Clone, Serialize, Deserialize)]
 /// struct GenericMessage;
 ///
-/// impl RpcMessage for GenericMessage {
-///     const ID :&'static str = "GenericMessage";
+/// impl CallbackMessage for GenericMessage {
 ///     type Item = String;
 ///     type Error=();
 /// }
@@ -49,29 +53,29 @@ impl<MsgType: RpcMessage> HandlerSlot<MsgType> {
 ///     //slot.call(format!("caller-id"), GenericMessage{}).await
 /// }
 /// ```
-pub trait CallbackHandler<MsgType: RpcMessage>: Send + Sync + 'static {
+pub trait CallbackHandler<MsgType: CallbackMessage>: Send + Sync + 'static {
     fn handle(&mut self, caller: String, msg: MsgType) -> CallbackFuture<MsgType>;
 }
 
 pub type CallbackFuture<MsgType> = Pin<Box<dyn OutputFuture<MsgType>>>;
 pub type CallbackResult<MsgType> =
-    Result<<MsgType as RpcMessage>::Item, <MsgType as RpcMessage>::Error>;
+    Result<<MsgType as CallbackMessage>::Item, <MsgType as CallbackMessage>::Error>;
 
 /// Implements callback handler for FnMut to enable passing
 /// lambdas and other functions to handlers.
 impl<
-        MsgType: RpcMessage,
+        MsgType: CallbackMessage,
         Output: OutputFuture<MsgType>,
-        F: FnMut(MsgType) -> Output + Send + Sync + 'static,
+        F: FnMut(String, MsgType) -> Output + Send + Sync + 'static,
     > CallbackHandler<MsgType> for F
 {
-    fn handle(&mut self, _caller: String, msg: MsgType) -> CallbackFuture<MsgType> {
-        Box::pin(self(msg))
+    fn handle(&mut self, caller: String, msg: MsgType) -> CallbackFuture<MsgType> {
+        Box::pin(self(caller, msg))
     }
 }
 
 /// Shortcut for writing complicated Future signature.
-pub trait OutputFuture<MsgType: RpcMessage>: Send + Sync + 'static
+pub trait OutputFuture<MsgType: CallbackMessage>: Send + Sync + 'static
 where
     Self: Future<Output = CallbackResult<MsgType>> + Send + Sync + 'static,
 {
@@ -80,7 +84,7 @@ where
 /// All futures will implement OutputFuture.
 impl<T, MsgType> OutputFuture<MsgType> for T
 where
-    MsgType: RpcMessage,
+    MsgType: CallbackMessage,
     T: Future<Output = CallbackResult<MsgType>> + Send + Sync + 'static,
 {
 }

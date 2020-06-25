@@ -198,56 +198,12 @@ async fn main() -> anyhow::Result<()> {
     transfer(
         &addr,
         "http://127.0.0.1:8001/rnd",
-        "container:/rnd_container",
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &work_dir, "rnd_container");
-
-    transfer(
-        &addr,
-        "container:/rnd_container",
-        "container:/rnd_container2",
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &work_dir, "rnd_container2");
-
-    transfer(
-        &addr,
-        "container:/rnd_container2",
         "http://127.0.0.1:8002/rnd_upload",
     )
     .await
     .expect("transfer failed");
     verify_hash(&hash, temp_dir.path(), "rnd_upload");
-
-    transfer(
-        &addr,
-        "container:/rnd_container2",
-        &format!("file:{}/rnd_local", sub_dir.to_str().unwrap()),
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &sub_dir, "rnd_local");
-
-    transfer(
-        &addr,
-        &format!("file:{}/rnd_local", sub_dir.to_str().unwrap()),
-        &format!("file:{}/rnd_local2", sub_dir.to_str().unwrap()),
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, &sub_dir, "rnd_local2");
-
-    transfer(
-        &addr,
-        "http://127.0.0.1:8001/rnd",
-        "http://127.0.0.1:8002/rnd_upload2",
-    )
-    .await
-    .expect("transfer failed");
-    verify_hash(&hash, temp_dir.path(), "rnd_upload2");
+    log::warn!("Verification complete");
 
     Ok(())
 }

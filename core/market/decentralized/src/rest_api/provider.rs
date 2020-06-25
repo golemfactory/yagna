@@ -1,14 +1,13 @@
 use actix_web::web::{Data, Json, Path, Query};
-use actix_web::{HttpResponse, Scope};
+use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
-use super::response;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
 };
 use crate::market::MarketService;
 
-use ya_client::model::market::{Agreement, AgreementProposal, Offer, Proposal};
+use ya_client::model::market::{Offer, Proposal};
 use ya_service_api_web::middleware::Identity;
 
 // This file contains market REST endpoints. Responsibility of these functions
@@ -35,17 +34,16 @@ async fn subscribe(
     market: Data<Arc<MarketService>>,
     body: Json<Offer>,
     id: Identity,
-) -> HttpResponse {
-    match market.subscribe_offer(&body.into_inner(), id).await {
-        Ok(subscription_id) => response::created(subscription_id),
-        // TODO: Translate MarketError to better HTTP response.
-        Err(error) => response::server_error(&format!("{}", error)),
-    }
+) -> impl Responder {
+    market
+        .subscribe_offer(&body.into_inner(), &id)
+        .await
+        .map(|id| HttpResponse::Created().json(id))
 }
 
 #[actix_web::get("/offers")]
 async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::delete("/offers/{subscription_id}")]
@@ -53,13 +51,11 @@ async fn unsubscribe(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscription>,
     id: Identity,
-) -> HttpResponse {
-    let subscription_id = path.into_inner().subscription_id;
-    match market.unsubscribe_offer(subscription_id.clone(), id).await {
-        Ok(()) => response::ok("Ok"),
-        // TODO: Translate MatcherError to better HTTP response.
-        Err(error) => response::server_error(&format!("{}", error)),
-    }
+) -> impl Responder {
+    market
+        .unsubscribe_offer(&path.into_inner().subscription_id, &id)
+        .await
+        .map(|x| HttpResponse::Ok().json("Ok"))
 }
 
 #[actix_web::get("/offers/{subscription_id}/events")]
@@ -69,7 +65,7 @@ async fn collect(
     query: Query<QueryTimeoutMaxEvents>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}")]
@@ -79,7 +75,7 @@ async fn counter_proposal(
     body: Json<Proposal>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::get("/offers/{subscription_id}/proposals/{proposal_id}")]
@@ -88,7 +84,7 @@ async fn get_proposal(
     path: Path<PathSubscriptionProposal>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::delete("/offers/{subscription_id}/proposals/{proposal_id}")]
@@ -97,7 +93,7 @@ async fn reject_proposal(
     path: Path<PathSubscriptionProposal>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/approve")]
@@ -107,7 +103,7 @@ async fn approve_agreement(
     query: Query<QueryTimeout>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]
@@ -116,7 +112,7 @@ async fn reject_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/terminate")]
@@ -125,7 +121,7 @@ async fn terminate_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -134,5 +130,5 @@ async fn get_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> HttpResponse {
-    response::not_implemented()
+    HttpResponse::NotImplemented().finish()
 }
