@@ -1721,6 +1721,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "structopt",
+ "tempdir",
  "thiserror",
  "tokio 0.2.21",
  "url 2.1.1",

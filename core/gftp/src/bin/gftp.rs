@@ -1,11 +1,12 @@
 use actix_rt::Arbiter;
 use anyhow::Result;
-use futures::future::FutureExt;
-use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest};
+use env_logger::{Builder, Env, Target};
+use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult};
 use std::mem;
 use structopt::{clap, StructOpt};
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
+use tokio::time::Duration;
 
 #[derive(StructOpt)]
 struct Args {
@@ -24,7 +25,7 @@ struct Args {
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Command {
     #[structopt(flatten)]
-    Request(RpcRequest),
+    Command(RpcRequest),
     /// Starts in JSON RPC server mode
     Server,
 }
@@ -33,6 +34,7 @@ enum Command {
 enum ExecMode {
     OneShot,
     Service,
+    Shutdown,
 }
 
 async fn execute(id: Option<RpcId>, request: RpcRequest, verbose: bool) -> ExecMode {
@@ -48,86 +50,109 @@ async fn execute(id: Option<RpcId>, request: RpcRequest, verbose: bool) -> ExecM
 
 async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -> Result<ExecMode> {
     let exec_mode = match request {
+        RpcRequest::Version => {
+            let version = clap::crate_version!().to_string();
+            RpcMessage::response(id, RpcResult::String(version)).print(verbose);
+            ExecMode::OneShot
+        }
         RpcRequest::Publish { files } => {
             let mut result = Vec::new();
-            let len = files.len();
             for file in files {
                 let url = gftp::publish(&file).await?;
                 result.push((file, url));
             }
-            match len {
+            match result.len() {
                 0 => RpcMessage::request_error(id),
-                _ => RpcMessage::response_mult(id, result),
+                _ => RpcMessage::files_response(id, result),
             }
             .print(verbose);
             ExecMode::Service
         }
-        RpcRequest::Download { url, output_file } => {
-            gftp::download_from_url(&url, &output_file).await?;
-            RpcMessage::response(id, output_file, url).print(verbose);
+        RpcRequest::Close { urls } => {
+            let mut statuses = Vec::with_capacity(urls.len());
+            for url in urls {
+                let result = gftp::close(&url).await?;
+                statuses.push(result.into())
+            }
+            match statuses.len() {
+                0 => RpcMessage::request_error(id),
+                _ => RpcMessage::response(id, RpcResult::Statuses(statuses)),
+            }
+            .print(verbose);
             ExecMode::OneShot
         }
-        RpcRequest::AwaitUpload { output_file } => {
+        RpcRequest::Download { url, output_file } => {
+            gftp::download_from_url(&url, &output_file).await?;
+            RpcMessage::file_response(id, output_file, url).print(verbose);
+            ExecMode::OneShot
+        }
+        RpcRequest::Receive { output_file } => {
             let url = gftp::open_for_upload(&output_file).await?;
-            RpcMessage::response(id, output_file, url).print(verbose);
+            RpcMessage::file_response(id, output_file, url).print(verbose);
             ExecMode::Service
         }
         RpcRequest::Upload { file, url } => {
             gftp::upload_file(&file, &url).await?;
-            RpcMessage::response(id, file, url).print(verbose);
+            RpcMessage::file_response(id, file, url).print(verbose);
             ExecMode::OneShot
+        }
+        RpcRequest::Shutdown => {
+            RpcMessage::response(id, RpcResult::Status(RpcStatusResult::Ok)).print(verbose);
+            ExecMode::Shutdown
         }
     };
 
     Ok(exec_mode)
 }
 
+async fn server_loop() {
+    let mut reader = io::BufReader::new(io::stdin());
+    let mut buffer = String::new();
+    let verbose = true;
+
+    loop {
+        let string = match reader.read_line(&mut buffer).await {
+            Ok(_) => mem::replace(&mut buffer, String::new()),
+            Err(_) => break,
+        };
+        match serde_json::from_str::<RpcMessage>(&string) {
+            Ok(msg) => {
+                let id = msg.id.clone();
+                if let Err(error) = msg.validate() {
+                    RpcMessage::error(id.as_ref(), error).print(verbose);
+                    continue;
+                }
+                match msg.body {
+                    RpcBody::Request { request } => Arbiter::spawn(async move {
+                        if let ExecMode::Shutdown = execute(id, request, verbose).await {
+                            tokio::time::delay_for(Duration::from_secs(1)).await;
+                            std::process::exit(0);
+                        }
+                    }),
+                    _ => RpcMessage::request_error(id.as_ref()).print(verbose),
+                }
+            }
+            Err(err) => RpcMessage::error(None, err).print(verbose),
+        }
+    }
+}
+
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    env_logger::init();
+
+    let mut builder = Builder::from_env(Env::new());
+    builder.target(Target::Stderr);
+    builder.init();
 
     let args = Args::from_args();
-    let mut verbose = args.verbose;
-
     match args.command {
-        Command::Request(request) => {
-            if let ExecMode::Service = execute(None, request, verbose).await {
-                actix_rt::signal::ctrl_c().await?;
-            }
-        }
-        Command::Server => {
-            let mut reader = io::BufReader::new(io::stdin());
-            let mut buffer = String::new();
-            verbose = true;
-
-            loop {
-                match reader.read_line(&mut buffer).await {
-                    Ok(_) => {
-                        let string = mem::replace(&mut buffer, String::new());
-                        match serde_json::from_str::<RpcMessage>(&string) {
-                            Ok(msg) => {
-                                if let Err(error) = msg.validate() {
-                                    RpcMessage::error(msg.id.as_ref(), error).print(verbose);
-                                    continue;
-                                }
-                                match msg.body {
-                                    RpcBody::Request { request } => Arbiter::spawn(
-                                        execute(msg.id, request, verbose).map(|_| ()),
-                                    ),
-                                    _ => RpcMessage::request_error(msg.id.as_ref()).print(verbose),
-                                }
-                            }
-                            Err(err) => RpcMessage::error(None, err).print(verbose),
-                        }
-                    }
-                    Err(err) => {
-                        buffer.clear();
-                        RpcMessage::error(None, err).print(verbose);
-                    }
-                }
-            }
-        }
+        Command::Command(request) => match execute(None, request, args.verbose).await {
+            ExecMode::Service => actix_rt::signal::ctrl_c().await?,
+            _ => log::debug!("Shutting down"),
+        },
+        Command::Server => server_loop().await,
     }
+
     Ok(())
 }

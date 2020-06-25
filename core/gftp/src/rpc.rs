@@ -69,28 +69,24 @@ impl RpcMessage {
         }
     }
 
-    pub fn response(id: Option<&RpcId>, file: PathBuf, url: Url) -> Self {
+    pub fn response(id: Option<&RpcId>, result: RpcResult) -> Self {
         RpcMessage {
             jsonrpc: JSON_RPC_VERSION.to_string(),
             id: id.cloned(),
-            body: RpcBody::Result {
-                result: RpcResult::Single(RpcFileResult { file, url }),
-            },
+            body: RpcBody::Result { result },
         }
     }
 
-    pub fn response_mult(id: Option<&RpcId>, items: Vec<(PathBuf, Url)>) -> Self {
+    pub fn file_response(id: Option<&RpcId>, file: PathBuf, url: Url) -> Self {
+        Self::response(id, RpcResult::File(RpcFileResult { file, url }))
+    }
+
+    pub fn files_response(id: Option<&RpcId>, items: Vec<(PathBuf, Url)>) -> Self {
         let items = items
             .into_iter()
             .map(|(file, url)| RpcFileResult { file, url })
             .collect();
-        RpcMessage {
-            jsonrpc: JSON_RPC_VERSION.to_string(),
-            id: id.cloned(),
-            body: RpcBody::Result {
-                result: RpcResult::Multiple(items),
-            },
-        }
+        Self::response(id, RpcResult::Files(items))
     }
 
     pub fn error<E: Into<JsonRpcError> + ToString>(id: Option<&RpcId>, err: E) -> Self {
@@ -108,16 +104,7 @@ impl RpcMessage {
     }
 
     pub fn request_error(id: Option<&RpcId>) -> Self {
-        RpcMessage {
-            jsonrpc: JSON_RPC_VERSION.to_string(),
-            id: id.cloned(),
-            body: RpcBody::Error {
-                error: RpcError {
-                    message: "invalid request".to_string(),
-                    code: JsonRpcError::InvalidRequest as i32,
-                },
-            },
-        }
+        Self::error(id, JsonRpcError::InvalidRequest)
     }
 
     pub fn validate(&self) -> Result<(), JsonRpcError> {
@@ -128,28 +115,27 @@ impl RpcMessage {
     }
 
     pub fn print(&self, verbose: bool) {
-        match verbose {
-            true => print!("{}\r\n", serde_json::to_string(self).unwrap()),
-            false => match &self.body {
-                RpcBody::Request { .. } => (),
-                _ => print!("{}\r\n", serde_json::to_string(&self.body).unwrap()),
-            },
-        }
-        std::io::stdout().flush().unwrap();
+        let mut stdout = std::io::stdout();
+        let json = match verbose {
+            true => serde_json::to_string(self).unwrap(),
+            false => serde_json::to_string(&self.body).unwrap(),
+        };
+        let _ = stdout.write_fmt(format_args!("{}\r\n", json));
+        let _ = stdout.flush();
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum RpcId {
-    Int(i32),
-    Float(f32),
+    Int(i64),
+    Float(f64),
     String(String),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum RpcBody {
     Request {
         #[serde(flatten)]
@@ -165,10 +151,14 @@ pub enum RpcBody {
 
 #[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
 #[serde(tag = "method", content = "params")]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum RpcRequest {
+    /// Prints out version
+    Version,
     /// Publishes files (blocking)
     Publish { files: Vec<PathBuf> },
+    /// Stops publishing a file
+    Close { urls: Vec<Url> },
     /// Downloads a file
     Download {
         /// Source URL
@@ -177,7 +167,7 @@ pub enum RpcRequest {
         output_file: PathBuf,
     },
     /// Waits for file upload (blocking)
-    AwaitUpload {
+    Receive {
         /// Destination path
         output_file: PathBuf,
     },
@@ -188,22 +178,45 @@ pub enum RpcRequest {
         /// Source path
         file: PathBuf,
     },
+    /// Shuts down the server
+    Shutdown,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum RpcResult {
-    Single(RpcFileResult),
-    Multiple(Vec<RpcFileResult>),
+    String(String),
+    File(RpcFileResult),
+    Files(Vec<RpcFileResult>),
+    Status(RpcStatusResult),
+    Statuses(Vec<RpcStatusResult>),
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum RpcStatusResult {
+    Ok,
+    Error,
+}
+
+impl From<bool> for RpcStatusResult {
+    fn from(b: bool) -> Self {
+        match b {
+            true => RpcStatusResult::Ok,
+            false => RpcStatusResult::Error,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
 pub struct RpcFileResult {
     pub file: PathBuf,
     pub url: Url,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
 pub struct RpcError {
     pub code: i32,
     pub message: String,

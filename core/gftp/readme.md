@@ -39,7 +39,7 @@ cargo run -p gftp -- download \
 Publish file for upload (blocking):
 
 ```
-cargo run -p gftp -- await-upload workdir/gftp-upload/License
+cargo run -p gftp -- receive workdir/gftp-upload/License
 ```
 
 Upload file on provider side:
@@ -70,7 +70,7 @@ JSON RPC messages can be sent to application's stdin. **Each JSON object needs t
 
 ### AwaitUpload
 ```json
-{"jsonrpc": "2.0", "id": "3", "method": "await-upload", "params": {"output_file": "/home/me/upload.bin"}}
+{"jsonrpc": "2.0", "id": "3", "method": "receive", "params": {"output_file": "/home/me/upload.bin"}}
 ```
 
 ### Upload

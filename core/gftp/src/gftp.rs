@@ -1,4 +1,4 @@
-use anyhow::{Context, Error, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use futures::lock::Mutex;
 use futures::prelude::*;
 use rand::distributions::Alphanumeric;
@@ -103,6 +103,20 @@ pub async fn publish(path: &Path) -> Result<Url> {
     filedesc.bind_handlers();
 
     Ok(gftp_url(&filedesc.hash).await?)
+}
+
+pub async fn close(url: &Url) -> Result<bool> {
+    let hash_name = match url.path_segments() {
+        Some(segments) => match segments.last() {
+            Some(segment) => segment,
+            _ => return Err(anyhow!("Invalid URL: {:?}", url)),
+        },
+        _ => return Err(anyhow!("Invalid URL: {:?}", url)),
+    };
+
+    bus::unbind(model::file_bus_id(hash_name).as_str())
+        .await
+        .map_err(|e| anyhow!(e))
 }
 
 // =========================================== //
