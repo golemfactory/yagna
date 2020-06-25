@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::io::Write;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
@@ -73,8 +73,22 @@ impl RpcMessage {
         RpcMessage {
             jsonrpc: JSON_RPC_VERSION.to_string(),
             id: id.cloned(),
-            body: RpcBody::Response {
-                response: RpcResponse { file, url },
+            body: RpcBody::Result {
+                result: RpcResult::Single(RpcFileResult { file, url }),
+            },
+        }
+    }
+
+    pub fn response_mult(id: Option<&RpcId>, items: Vec<(PathBuf, Url)>) -> Self {
+        let items = items
+            .into_iter()
+            .map(|(file, url)| RpcFileResult { file, url })
+            .collect();
+        RpcMessage {
+            jsonrpc: JSON_RPC_VERSION.to_string(),
+            id: id.cloned(),
+            body: RpcBody::Result {
+                result: RpcResult::Multiple(items),
             },
         }
     }
@@ -93,13 +107,13 @@ impl RpcMessage {
         }
     }
 
-    pub fn type_error(id: Option<&RpcId>) -> Self {
+    pub fn request_error(id: Option<&RpcId>) -> Self {
         RpcMessage {
             jsonrpc: JSON_RPC_VERSION.to_string(),
             id: id.cloned(),
             body: RpcBody::Error {
                 error: RpcError {
-                    message: "invalid message type".to_string(),
+                    message: "invalid request".to_string(),
                     code: JsonRpcError::InvalidRequest as i32,
                 },
             },
@@ -115,18 +129,13 @@ impl RpcMessage {
 
     pub fn print(&self, verbose: bool) {
         match verbose {
-            true => print!("{}", self),
+            true => print!("{}\r\n", serde_json::to_string(self).unwrap()),
             false => match &self.body {
                 RpcBody::Request { .. } => (),
-                body => print!("{}", body),
+                _ => print!("{}\r\n", serde_json::to_string(&self.body).unwrap()),
             },
         }
-    }
-}
-
-impl fmt::Display for RpcMessage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}\n\0", serde_json::to_string_pretty(self).unwrap())
+        std::io::stdout().flush().unwrap();
     }
 }
 
@@ -146,18 +155,12 @@ pub enum RpcBody {
         #[serde(flatten)]
         request: RpcRequest,
     },
-    Response {
-        response: RpcResponse,
+    Result {
+        result: RpcResult,
     },
     Error {
         error: RpcError,
     },
-}
-
-impl fmt::Display for RpcBody {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}\n\0", serde_json::to_string_pretty(self).unwrap())
-    }
 }
 
 #[derive(Serialize, Deserialize, StructOpt, Debug, Clone)]
@@ -188,7 +191,14 @@ pub enum RpcRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct RpcResponse {
+#[serde(untagged)]
+pub enum RpcResult {
+    Single(RpcFileResult),
+    Multiple(Vec<RpcFileResult>),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RpcFileResult {
     pub file: PathBuf,
     pub url: Url,
 }

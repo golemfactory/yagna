@@ -49,10 +49,17 @@ async fn execute(id: Option<RpcId>, request: RpcRequest, verbose: bool) -> ExecM
 async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -> Result<ExecMode> {
     let exec_mode = match request {
         RpcRequest::Publish { files } => {
+            let mut result = Vec::new();
+            let len = files.len();
             for file in files {
                 let url = gftp::publish(&file).await?;
-                RpcMessage::response(id, file, url).print(verbose);
+                result.push((file, url));
             }
+            match len {
+                0 => RpcMessage::request_error(id),
+                _ => RpcMessage::response_mult(id, result),
+            }
+            .print(verbose);
             ExecMode::Service
         }
         RpcRequest::Download { url, output_file } => {
@@ -75,19 +82,6 @@ async fn execute_inner(id: Option<&RpcId>, request: RpcRequest, verbose: bool) -
     Ok(exec_mode)
 }
 
-fn buffer_to_string(buffer: Vec<u8>) -> String {
-    match String::from_utf8(buffer) {
-        Ok(utf8) => utf8.to_owned(),
-        Err(error) => error
-            .as_bytes()
-            .into_iter()
-            .map(|&c| c as char)
-            .collect::<String>(),
-    }
-    .trim_matches('\0')
-    .to_string()
-}
-
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -104,13 +98,13 @@ async fn main() -> Result<()> {
         }
         Command::Server => {
             let mut reader = io::BufReader::new(io::stdin());
-            let mut buffer = Vec::<u8>::new();
+            let mut buffer = String::new();
             verbose = true;
 
             loop {
-                match reader.read_until(b'\0', &mut buffer).await {
+                match reader.read_line(&mut buffer).await {
                     Ok(_) => {
-                        let string = buffer_to_string(mem::replace(&mut buffer, Vec::new()));
+                        let string = mem::replace(&mut buffer, String::new());
                         match serde_json::from_str::<RpcMessage>(&string) {
                             Ok(msg) => {
                                 if let Err(error) = msg.validate() {
@@ -121,7 +115,7 @@ async fn main() -> Result<()> {
                                     RpcBody::Request { request } => Arbiter::spawn(
                                         execute(msg.id, request, verbose).map(|_| ()),
                                     ),
-                                    _ => RpcMessage::type_error(msg.id.as_ref()).print(verbose),
+                                    _ => RpcMessage::request_error(msg.id.as_ref()).print(verbose),
                                 }
                             }
                             Err(err) => RpcMessage::error(None, err).print(verbose),
