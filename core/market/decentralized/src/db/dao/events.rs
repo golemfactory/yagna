@@ -96,6 +96,19 @@ impl<'c> EventsDao<'c> {
         })
         .await?)
     }
+
+    pub async fn remove_requestor_events(&self, subscription_id: &SubscriptionId) -> DbResult<()> {
+        let subscription_id = subscription_id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            diesel::delete(
+                dsl_requestor::market_requestor_event
+                    .filter(dsl_requestor::subscription_id.eq(&subscription_id)),
+            )
+            .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
 }
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for TakeEventsError {

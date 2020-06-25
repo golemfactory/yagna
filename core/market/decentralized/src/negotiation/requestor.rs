@@ -6,8 +6,8 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::EventError;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
+use crate::db::models::{EventError, MarketEvent};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
 
@@ -55,8 +55,21 @@ impl RequestorNegotiationEngine {
         subscription_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
         self.notifier.stop_notifying(subscription_id).await;
-        // TODO: We could remove all events related to this subscription.
-        //  Moreover probably we should remove all resources related to Proposals.
+
+        // We can ignore error, if removing events failed, because they will be never
+        // queried again and don't collide with other subscriptions.
+        let _ = self
+            .db
+            .as_dao::<EventsDao>()
+            .remove_requestor_events(subscription_id)
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "Failed to remove events related to subscription [{}].",
+                    subscription_id
+                )
+            });
+        // TODO: We could remove all resources related to Proposals.
         Ok(())
     }
 
