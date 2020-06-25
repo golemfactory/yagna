@@ -67,8 +67,7 @@ golem:                       ## TODO: should we change to yagna? (requires chang
               caps: ["fs"]
        srv:
         comp:
-          wasm:
-            task_package: *
+          task_package: *
 
 ```
 
