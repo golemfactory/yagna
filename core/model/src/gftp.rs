@@ -11,6 +11,8 @@ pub fn file_bus_id(hash: &str) -> String {
 pub enum Error {
     #[error("Can't read from file. {0}")]
     ReadError(String),
+    #[error("Can't write to file. {0}")]
+    WriteError(String),
     #[error("File hash verification failed.")]
     IntegrityError,
     #[error("Internal error: {0}.")]

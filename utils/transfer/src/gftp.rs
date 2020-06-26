@@ -88,26 +88,21 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                 let remote = node_id.try_service(&model::file_bus_id(&random_filename))?;
 
                 let mut offset: usize = 0;
-
                 while let Some(result) = rx.next().await {
                     let bytes = result?.into_bytes();
                     let n = (bytes.len() + chunk_size - 1) / chunk_size;
-
                     for i in 0..n {
                         let start = i * chunk_size;
                         let end = start + min(bytes.len() - start, chunk_size);
-                        let content = bytes[start..end].to_vec();
-
                         let chunk = GftpChunk {
                             offset: offset as u64,
-                            content,
+                            content: bytes[start..end].to_vec(),
                         };
                         offset += chunk.content.len();
-
                         remote.call(model::UploadChunk { chunk }).await??;
                     }
                 }
-
+                remote.call(model::UploadFinished { hash: None }).await??;
                 Result::<(), Error>::Ok(())
             }
             .map_err(Error::from);
