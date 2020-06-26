@@ -213,4 +213,49 @@ mod tests {
 
         Ok(())
     }
+
+    /// Generate proposals for multiple subscriptions. Query events should return
+    /// only events related for requested subscription and shouldn't affect remaining events.
+    #[cfg_attr(not(feature = "market-test-suite"), ignore)]
+    #[actix_rt::test]
+    async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Error> {
+        let network = MarketsNetwork::new("test_query_events_for_multiple_subscriptions")
+            .await
+            .add_market_instance("Node-1")
+            .await?;
+
+        let node1 = network.get_node("Node-1");
+        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let identity1 = network.get_default_id("Node-1");
+
+        // Spawn 3 proposals.
+        let (_offer_id1, demand_id1) = node1
+            .inject_proposal(&example_offer(), &example_demand())
+            .await?;
+
+        let (_offer_id2, demand_id2) = node1
+            .inject_proposal(&example_offer(), &example_demand())
+            .await?;
+
+        let (_offer_id3, demand_id3) = node1
+            .inject_proposal(&example_offer(), &example_demand())
+            .await?;
+
+        // Check events related to first and last subscription.
+        let events = market1
+            .requestor_engine
+            .query_events(&demand_id1, 0.0, Some(5))
+            .await?;
+        assert_eq!(events.len(), 1);
+
+        // Unsubscribe subscription 3. Events on subscription 2 should be still available.
+        market1.unsubscribe_demand(&demand_id3, &identity1).await?;
+
+        let events = market1
+            .requestor_engine
+            .query_events(&demand_id2, 0.0, Some(5))
+            .await?;
+        assert_eq!(events.len(), 1);
+        Ok(())
+    }
 }

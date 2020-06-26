@@ -6,8 +6,8 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 use crate::db::dao::{EventsDao, ProposalDao};
+use crate::db::models::EventError;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
-use crate::db::models::{EventError, MarketEvent};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
 
