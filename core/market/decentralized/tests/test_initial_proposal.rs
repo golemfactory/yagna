@@ -258,4 +258,78 @@ mod tests {
         assert_eq!(events.len(), 1);
         Ok(())
     }
+
+    /// Run to query events in the same time.
+    /// The same event shouldn't be returned twice.
+    #[cfg_attr(not(feature = "market-test-suite"), ignore)]
+    #[actix_rt::test]
+    async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
+        let network = MarketsNetwork::new("test_simultaneous_query_events")
+            .await
+            .add_market_instance("Node-1")
+            .await?;
+
+        let node1 = network.get_node("Node-1");
+        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let identity1 = network.get_default_id("Node-1");
+
+        let subscription_id = market1
+            .subscribe_demand(&example_demand(), &identity1)
+            .await?;
+
+        let demand_id1 = subscription_id.clone();
+        let demand_id2 = subscription_id.clone();
+
+        let market = market1.clone();
+        let query1 = tokio::spawn(async move {
+            let events = market
+                .requestor_engine
+                .query_events(&demand_id1, 0.5, Some(5))
+                .await?;
+            Result::<_, anyhow::Error>::Ok(events)
+        });
+
+        let market = market1.clone();
+        let query2 = tokio::spawn(async move {
+            let events = market
+                .requestor_engine
+                .query_events(&demand_id2, 0.5, Some(5))
+                .await?;
+            Result::<_, anyhow::Error>::Ok(events)
+        });
+
+        // Wait for a while, before event will be injected. We want to trigger notifications.
+        // Generate 2 proposals. Each waiting query events call will take an event.
+        tokio::time::delay_for(Duration::from_millis(100)).await;
+        let _ = node1
+            .inject_proposal_for_demand(&example_offer(), &subscription_id)
+            .await?;
+        let _ = node1
+            .inject_proposal_for_demand(&example_offer(), &subscription_id)
+            .await?;
+
+        let mut events1 = tokio::time::timeout(Duration::from_millis(700), query1).await???;
+        let events2 = tokio::time::timeout(Duration::from_millis(700), query2).await???;
+
+        // We expect no events duplication.
+        assert_eq!(events1.len() + events2.len(), 2);
+        events1.extend(events2.iter().cloned());
+
+        let ids = events1
+            .into_iter()
+            .map(|event| match event {
+                RequestorEvent::ProposalEvent { proposal, .. } => proposal.proposal_id.unwrap(),
+                _ => panic!("Expected ProposalEvents"),
+            })
+            .collect::<Vec<String>>();
+        assert_ne!(ids[0], ids[1]);
+
+        // We expect, there are no events left.
+        let events = market1
+            .requestor_engine
+            .query_events(&subscription_id, 0.0, Some(5))
+            .await?;
+        assert_eq!(events.len(), 0);
+        Ok(())
+    }
 }

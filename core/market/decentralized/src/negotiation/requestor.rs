@@ -95,6 +95,10 @@ impl RequestorNegotiationEngine {
                 return Ok(events);
             }
 
+            // Solves panic 'supplied instant is later than self'.
+            if stop_time < Instant::now() {
+                return Ok(vec![]);
+            }
             timeout = stop_time - Instant::now();
 
             if let Err(error) = self
