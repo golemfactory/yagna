@@ -1,19 +1,19 @@
 use tokio::sync::mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use ya_client::model::market::Proposal;
+use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer, Proposal};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::models::Offer;
-use crate::protocol::{Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers};
+use crate::db::models::{Demand, Offer};
+use crate::protocol::{
+    Discovery, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
+};
 use crate::SubscriptionId;
 
-use crate::matcher::handlers::{on_offer_received, on_offer_unsubscribed};
-pub use error::{DemandError, MatcherError, MatcherInitError, OfferError};
+pub use error::{DemandError, MatcherError, MatcherInitError, OfferError, UnsubscribeError};
 pub use store::SubscriptionStore;
 
 mod error;
-mod handlers;
 mod resolver;
 mod store;
 
@@ -25,7 +25,7 @@ pub struct EventsListeners {
 /// Responsible for storing Offers and matching them with demands.
 #[derive(Clone)]
 pub struct Matcher {
-    db: DbExecutor,
+    pub store: SubscriptionStore,
     discovery: Discovery,
     proposal_emitter: UnboundedSender<Proposal>,
 }
@@ -34,16 +34,17 @@ impl Matcher {
     pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         // TODO: Implement Discovery callbacks.
 
-        let database1 = db.clone();
-        let database2 = db.clone();
+        let store = SubscriptionStore::new(db.clone());
+        let store1 = store.clone();
+        let store2 = store.clone();
         let discovery = Discovery::new(
             move |caller: String, msg: OfferReceived| {
-                let database = database1.clone();
-                on_offer_received(database, caller, msg)
+                let store = store1.clone();
+                on_offer_received(store, caller, msg)
             },
             move |caller: String, msg: OfferUnsubscribed| {
-                let database = database2.clone();
-                on_offer_unsubscribed(database, caller, msg)
+                let store = store2.clone();
+                on_offer_unsubscribed(store, caller, msg)
             },
             move |caller: String, msg: RetrieveOffers| async move {
                 log::info!("Offers request received from: {}. Unimplemented.", caller);
@@ -53,7 +54,7 @@ impl Matcher {
         let (emitter, receiver) = unbounded_channel::<Proposal>();
 
         let matcher = Matcher {
-            db: db.clone(),
+            store: store,
             discovery,
             proposal_emitter: emitter,
         };
@@ -80,9 +81,15 @@ impl Matcher {
     // Offer/Demand subscription
     // =========================================== //
 
-    pub async fn subscribe_offer(&self, offer: &Offer) -> Result<(), MatcherError> {
+    pub async fn subscribe_offer(
+        &self,
+        id: &Identity,
+        offer: &ClientOffer,
+    ) -> Result<Offer, MatcherError> {
         // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
+        let offer = self.store.create_offer(id, offer).await?;
+
         let _ = self
             .discovery
             .broadcast_offer(offer.clone())
@@ -90,7 +97,7 @@ impl Matcher {
             .map_err(|e| {
                 log::warn!("Failed to broadcast offer [{}]. Error: {}.", offer.id, e,);
             });
-        Ok(())
+        Ok(offer)
     }
 
     pub async fn unsubscribe_offer(
@@ -98,6 +105,8 @@ impl Matcher {
         id: &Identity,
         subscription_id: &SubscriptionId,
     ) -> Result<(), MatcherError> {
+        self.store.mark_offer_unsubscribed(subscription_id).await?;
+
         // Broadcast only, if no Error occurred in previous step.
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
         // - We shouldn't bother agent with broadcasts
@@ -116,7 +125,52 @@ impl Matcher {
         Ok(())
     }
 
+    pub async fn subscribe_demand(
+        &self,
+        id: &Identity,
+        demand: &ClientDemand,
+    ) -> Result<Demand, MatcherError> {
+        let demand = self.store.create_demand(id, demand).await?;
+
+        // TODO: Try to match demand with offers currently existing in database.
+        //  We shouldn't await here on this.
+        Ok(demand)
+    }
+
+    pub async fn unsubscribe_demand(
+        &self,
+        _id: &Identity,
+        subscription_id: &SubscriptionId,
+    ) -> Result<(), MatcherError> {
+        Ok(self.store.remove_demand(subscription_id).await?)
+    }
+
     pub fn emit_proposal(&self, proposal: Proposal) -> Result<(), SendError<Proposal>> {
         self.proposal_emitter.send(proposal)
     }
+}
+
+pub(crate) async fn on_offer_received(
+    store: SubscriptionStore,
+    _caller: String,
+    msg: OfferReceived,
+) -> Result<Propagate, ()> {
+    store.checked_store_offer(msg.offer).await.or_else(|e| {
+        let msg = format!("{}", e);
+        Ok(Propagate::No(Reason::Error(msg)))
+    })
+}
+
+pub(crate) async fn on_offer_unsubscribed(
+    store: SubscriptionStore,
+    _caller: String,
+    msg: OfferUnsubscribed,
+) -> Result<Propagate, ()> {
+    store
+        .checked_remove_offer(&msg.subscription_id)
+        .await
+        .or_else(|e| {
+            let msg = format!("{}", e);
+            Ok(Propagate::No(Reason::Error(msg)))
+        })
 }

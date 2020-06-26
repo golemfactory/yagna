@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use serde_json;
 
 use ya_client::model::{market::Demand as ClientDemand, ErrorMessage, NodeId};
@@ -26,16 +26,15 @@ pub struct Demand {
 impl Demand {
     /// Creates new model demand. If ClientDemand has id already assigned,
     /// it will be ignored and regenerated.
-    pub fn from_new(demand: &ClientDemand, id: &Identity) -> Demand {
+    pub fn from_new(
+        demand: &ClientDemand,
+        id: &Identity,
+        creation_ts: NaiveDateTime,
+        expiration_ts: NaiveDateTime,
+    ) -> Demand {
         let properties = demand.properties.to_string();
         let constraints = demand.constraints.clone();
         let node_id = id.identity;
-
-        // TODO: Set default expiration time. In future provider should set expiration.
-        // TODO: Creation time should be included in subscription id hash.
-        // This function creates new Demand, so creation time should be equal to addition time.
-        let creation_ts = Utc::now().naive_utc();
-        let expiration_ts = creation_ts + Duration::hours(24);
 
         let id = SubscriptionId::generate_id(
             &properties,

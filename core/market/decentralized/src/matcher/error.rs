@@ -1,28 +1,45 @@
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::Error as DbError;
 
-use crate::db::dao::UnsubscribeError;
 use crate::db::models::{SubscriptionId, SubscriptionValidationError};
 use crate::protocol::DiscoveryInitError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DemandError {
     #[error("Failed to save Demand. Error: {0}.")]
-    SaveDemandFailure(#[from] DbError),
+    SaveError(#[from] DbError),
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
-    RemoveDemandFailure(DbError, SubscriptionId),
+    RemoveError(DbError, SubscriptionId),
     #[error("Demand [{0}] doesn't exist.")]
-    DemandNotExists(SubscriptionId),
+    NotExists(SubscriptionId),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum OfferError {
     #[error("Failed to save Offer. Error: {0}.")]
-    SaveOfferFailure(#[from] DbError),
+    SaveError(#[from] DbError),
     #[error("Failed to unsubscribe Offer [{1}]. Error: {0}.")]
-    UnsubscribeOfferFailure(UnsubscribeError, SubscriptionId),
+    UnsubscribeError(UnsubscribeError, SubscriptionId),
+    #[error("Failed to remove Demand [{1}]. Error: {0}.")]
+    RemoveError(DbError, SubscriptionId),
     #[error("Offer [{0}] doesn't exist.")]
-    OfferNotExists(SubscriptionId),
+    NotExists(SubscriptionId),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum UnsubscribeError {
+    #[error("Can't unsubscribe expired offer")]
+    OfferExpired,
+    #[error("Offer already unsubscribed")]
+    AlreadyUnsubscribed,
+    #[error("Can't unsubscribe offer. Database error: {0}")]
+    DatabaseError(DbError),
+}
+
+impl<E: Into<DbError>> From<E> for UnsubscribeError {
+    fn from(e: E) -> Self {
+        UnsubscribeError::DatabaseError(e.into())
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

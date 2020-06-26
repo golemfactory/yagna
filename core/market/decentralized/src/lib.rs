@@ -26,8 +26,6 @@ pub mod migrations {
 
 /// These exports are expected to be used only in tests.
 pub mod testing {
-    pub use super::db::{
-        dao::{DemandDao, OfferDao},
-        models::SubscriptionParseError,
-    };
+    pub use super::db::models::SubscriptionParseError;
+    pub use super::matcher::SubscriptionStore;
 }

@@ -3,9 +3,8 @@ use actix_web::{HttpResponse, ResponseError};
 use ya_client::model::ErrorMessage;
 
 use crate::{
-    db::dao::UnsubscribeError,
     market::MarketError,
-    matcher::{DemandError, MatcherError, OfferError},
+    matcher::{DemandError, MatcherError, OfferError, UnsubscribeError},
     negotiation::NegotiationError,
 };
 
@@ -47,7 +46,7 @@ impl ResponseError for NegotiationError {}
 impl ResponseError for DemandError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            DemandError::DemandNotExists(e) => {
+            DemandError::NotExists(e) => {
                 HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
             }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
@@ -59,14 +58,13 @@ impl ResponseError for OfferError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            OfferError::OfferNotExists(e) => {
+            OfferError::NotExists(e) => {
                 HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
             }
-            OfferError::UnsubscribeOfferFailure(e, id) => match e {
-                UnsubscribeError::OfferNotFound | UnsubscribeError::AlreadyUnsubscribed => {
-                    HttpResponse::NotFound().json(msg)
+            OfferError::UnsubscribeError(e, id) => match e {
+                UnsubscribeError::OfferExpired | UnsubscribeError::AlreadyUnsubscribed => {
+                    HttpResponse::Gone().json(msg)
                 }
-                UnsubscribeError::OfferExpired => HttpResponse::Gone().json(msg),
                 UnsubscribeError::DatabaseError(_) => HttpResponse::InternalServerError().json(msg),
             },
             _ => HttpResponse::InternalServerError().json(msg),
