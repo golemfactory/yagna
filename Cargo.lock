@@ -5270,7 +5270,7 @@ dependencies = [
  "actix",
  "actix-rt",
  "anyhow",
- "bigdecimal 0.1.2",
+ "bigdecimal",
  "chrono",
  "dotenv 0.15.0",
  "env_logger 0.6.2",
