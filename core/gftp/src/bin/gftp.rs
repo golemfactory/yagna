@@ -112,9 +112,19 @@ async fn server_loop() {
 
     loop {
         let string = match reader.read_line(&mut buffer).await {
-            Ok(_) => mem::replace(&mut buffer, String::new()),
-            Err(_) => break,
+            Ok(read) => match read {
+                0 => break,
+                _ => match buffer.trim().is_empty() {
+                    true => continue,
+                    _ => mem::replace(&mut buffer, String::new()),
+                },
+            },
+            Err(error) => {
+                log::error!("Error reading from stdin: {:?}", error);
+                break;
+            }
         };
+
         match serde_json::from_str::<RpcMessage>(&string) {
             Ok(msg) => {
                 let id = msg.id.clone();
