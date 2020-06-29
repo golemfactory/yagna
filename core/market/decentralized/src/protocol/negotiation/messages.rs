@@ -29,6 +29,7 @@ pub mod requestor {
 #[serde(rename_all = "camelCase")]
 pub struct ProposalReceived {
     pub proposal_id: String,
+    // TODO: We should send Demand part of the proposal.
 }
 
 impl RpcMessage for ProposalReceived {

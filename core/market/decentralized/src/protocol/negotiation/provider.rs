@@ -8,7 +8,11 @@ use super::messages::{
     ProposalRejected,
 };
 
+use ya_client::model::NodeId;
+use ya_core_model::market::BUS_ID;
+use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::typed as bus;
+use ya_service_bus::RpcEndpoint;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -45,23 +49,77 @@ impl NegotiationApi {
         }
     }
 
-    pub async fn counter_proposal(&self) -> Result<(), ProposalError> {
-        unimplemented!()
+    pub async fn counter_proposal(
+        &self,
+        id: NodeId,
+        proposal_id: &str,
+        owner: NodeId,
+    ) -> Result<(), ProposalError> {
+        let msg = ProposalReceived {
+            proposal_id: proposal_id.to_string(),
+        };
+        net::from(id)
+            .to(owner)
+            .service(&requestor::proposal_addr(BUS_ID))
+            .send(msg)
+            .await??;
+        Ok(())
     }
 
-    pub async fn reject_proposal(&self) -> Result<(), ProposalError> {
-        unimplemented!()
+    // TODO: Use model Proposal struct.
+    pub async fn reject_proposal(
+        &self,
+        id: NodeId,
+        proposal_id: &str,
+        owner: NodeId,
+    ) -> Result<(), ProposalError> {
+        let msg = ProposalRejected {
+            proposal_id: proposal_id.to_string(),
+        };
+        net::from(id)
+            .to(owner)
+            .service(&requestor::proposal_addr(BUS_ID))
+            .send(msg)
+            .await??;
+        Ok(())
     }
 
-    pub async fn approve_agreement(&self) -> Result<(), AgreementError> {
-        unimplemented!()
+    /// TODO: pass agreement signature.
+    pub async fn approve_agreement(
+        &self,
+        id: NodeId,
+        agreement_id: &str,
+        owner: NodeId,
+    ) -> Result<(), AgreementError> {
+        let msg = AgreementApproved {
+            agreement_id: agreement_id.to_string(),
+        };
+        net::from(id)
+            .to(owner)
+            .service(&requestor::agreement_addr(BUS_ID))
+            .send(msg)
+            .await??;
+        Ok(())
     }
 
-    pub async fn reject_agreement(&self) -> Result<(), AgreementError> {
-        unimplemented!()
+    pub async fn reject_agreement(
+        &self,
+        id: NodeId,
+        agreement_id: &str,
+        owner: NodeId,
+    ) -> Result<(), AgreementError> {
+        let msg = AgreementRejected {
+            agreement_id: agreement_id.to_string(),
+        };
+        net::from(id)
+            .to(owner)
+            .service(&requestor::agreement_addr(BUS_ID))
+            .send(msg)
+            .await??;
+        Ok(())
     }
 
-    pub async fn on_initial_proposal_received(
+    async fn on_initial_proposal_received(
         self,
         caller: String,
         msg: InitialProposalReceived,
@@ -74,7 +132,7 @@ impl NegotiationApi {
         self.inner.initial_proposal_received.call(caller, msg).await
     }
 
-    pub async fn on_proposal_received(
+    async fn on_proposal_received(
         self,
         caller: String,
         msg: ProposalReceived,
@@ -87,7 +145,7 @@ impl NegotiationApi {
         self.inner.proposal_received.call(caller, msg).await
     }
 
-    pub async fn on_proposal_rejected(
+    async fn on_proposal_rejected(
         self,
         caller: String,
         msg: ProposalRejected,
@@ -100,7 +158,7 @@ impl NegotiationApi {
         self.inner.proposal_rejected.call(caller, msg).await
     }
 
-    pub async fn on_agreement_received(
+    async fn on_agreement_received(
         self,
         caller: String,
         msg: AgreementReceived,
@@ -113,7 +171,7 @@ impl NegotiationApi {
         self.inner.agreement_received.call(caller, msg).await
     }
 
-    pub async fn on_agreement_cancelled(
+    async fn on_agreement_cancelled(
         self,
         caller: String,
         msg: AgreementRejected,
