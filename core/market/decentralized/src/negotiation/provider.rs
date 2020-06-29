@@ -4,16 +4,30 @@ use crate::{db::models::Offer as ModelOffer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};
+use crate::protocol::negotiation::messages::{
+    AgreementReceived, AgreementRejected, InitialProposalReceived, ProposalReceived,
+    ProposalRejected,
+};
+use crate::protocol::negotiation::provider::NegotiationApi;
 
 /// Provider part of negotiation logic.
 /// TODO: Too long name.
 pub struct ProviderNegotiationEngine {
     db: DbExecutor,
+    api: NegotiationApi,
 }
 
 impl ProviderNegotiationEngine {
     pub fn new(db: DbExecutor) -> Result<Arc<ProviderNegotiationEngine>, NegotiationInitError> {
-        Ok(Arc::new(ProviderNegotiationEngine { db }))
+        let api = NegotiationApi::new(
+            move |_caller: String, msg: InitialProposalReceived| async move { unimplemented!() },
+            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
+            move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
+            move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
+            move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
+        );
+
+        Ok(Arc::new(ProviderNegotiationEngine { api, db }))
     }
 
     pub async fn bind_gsb(

@@ -1,19 +1,11 @@
-use thiserror::Error;
 use serde::{Deserialize, Serialize};
-
-
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum NegotiationApiInitError {
-
-}
+use thiserror::Error;
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum ProposalError {
-
-}
+pub enum NegotiationApiInitError {}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum AgreementError {
+pub enum ProposalError {}
 
-}
-
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum AgreementError {}
