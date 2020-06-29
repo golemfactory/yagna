@@ -2,10 +2,13 @@ use std::sync::Arc;
 
 use super::super::callbacks::{CallbackHandler, HandlerSlot};
 use super::errors::{AgreementError, NegotiationApiInitError, ProposalError};
+use super::messages::*;
 use super::messages::{
     AgreementReceived, AgreementRejected, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
 };
+
+use ya_service_bus::typed as bus;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -42,15 +45,6 @@ impl NegotiationApi {
         }
     }
 
-    pub async fn bind_gsb(
-        &self,
-        public_prefix: &str,
-        private_prefix: &str,
-    ) -> Result<(), NegotiationApiInitError> {
-        // TODO: Implement.
-        Ok(())
-    }
-
     pub async fn counter_proposal(&self) -> Result<(), ProposalError> {
         unimplemented!()
     }
@@ -65,5 +59,122 @@ impl NegotiationApi {
 
     pub async fn reject_agreement(&self) -> Result<(), AgreementError> {
         unimplemented!()
+    }
+
+    pub async fn on_initial_proposal_received(
+        self,
+        caller: String,
+        msg: InitialProposalReceived,
+    ) -> Result<(), ProposalError> {
+        log::debug!(
+            "Negotiation API: Received initial proposal [{}] from [{}].",
+            &msg.proposal_id,
+            &caller
+        );
+        self.inner.initial_proposal_received.call(caller, msg).await
+    }
+
+    pub async fn on_proposal_received(
+        self,
+        caller: String,
+        msg: ProposalReceived,
+    ) -> Result<(), ProposalError> {
+        log::debug!(
+            "Negotiation API: Received proposal [{}] from [{}].",
+            &msg.proposal_id,
+            &caller
+        );
+        self.inner.proposal_received.call(caller, msg).await
+    }
+
+    pub async fn on_proposal_rejected(
+        self,
+        caller: String,
+        msg: ProposalRejected,
+    ) -> Result<(), ProposalError> {
+        log::debug!(
+            "Negotiation API: Proposal [{}] rejected by [{}].",
+            &msg.proposal_id,
+            &caller
+        );
+        self.inner.proposal_rejected.call(caller, msg).await
+    }
+
+    pub async fn on_agreement_received(
+        self,
+        caller: String,
+        msg: AgreementReceived,
+    ) -> Result<(), AgreementError> {
+        log::debug!(
+            "Negotiation API: Agreement proposal [{}] sent by [{}].",
+            &msg.agreement_id,
+            &caller
+        );
+        self.inner.agreement_received.call(caller, msg).await
+    }
+
+    pub async fn on_agreement_cancelled(
+        self,
+        caller: String,
+        msg: AgreementRejected,
+    ) -> Result<(), AgreementError> {
+        log::debug!(
+            "Negotiation API: Agreement [{}] cancelled by [{}].",
+            &msg.agreement_id,
+            &caller
+        );
+        self.inner.agreement_cancelled.call(caller, msg).await
+    }
+
+    pub async fn bind_gsb(
+        &self,
+        public_prefix: &str,
+        private_prefix: &str,
+    ) -> Result<(), NegotiationApiInitError> {
+        let myself = self.clone();
+        let _ = bus::bind_with_caller(
+            &provider::proposal_addr(public_prefix),
+            move |caller: String, msg: InitialProposalReceived| {
+                let myself = myself.clone();
+                myself.on_initial_proposal_received(caller, msg)
+            },
+        );
+
+        let myself = self.clone();
+        let _ = bus::bind_with_caller(
+            &provider::proposal_addr(public_prefix),
+            move |caller: String, msg: ProposalReceived| {
+                let myself = myself.clone();
+                myself.on_proposal_received(caller, msg)
+            },
+        );
+
+        let myself = self.clone();
+        let _ = bus::bind_with_caller(
+            &provider::proposal_addr(public_prefix),
+            move |caller: String, msg: ProposalRejected| {
+                let myself = myself.clone();
+                myself.on_proposal_rejected(caller, msg)
+            },
+        );
+
+        let myself = self.clone();
+        let _ = bus::bind_with_caller(
+            &provider::agreement_addr(public_prefix),
+            move |caller: String, msg: AgreementReceived| {
+                let myself = myself.clone();
+                myself.on_agreement_received(caller, msg)
+            },
+        );
+
+        let myself = self.clone();
+        let _ = bus::bind_with_caller(
+            &provider::agreement_addr(public_prefix),
+            move |caller: String, msg: AgreementRejected| {
+                let myself = myself.clone();
+                myself.on_agreement_cancelled(caller, msg)
+            },
+        );
+        Ok(())
     }
 }
