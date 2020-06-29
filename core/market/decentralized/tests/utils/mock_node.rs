@@ -10,6 +10,7 @@ use ya_client::model::NodeId;
 use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
+use ya_market_decentralized::testing::{DemandError, OfferError};
 use ya_market_decentralized::{Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -187,34 +188,33 @@ pub async fn wait_for_bcast(
     grace_millis: u64,
     market: &MarketService,
     subscription_id: &SubscriptionId,
-    stop_is_some: bool,
-) -> Result<()> {
+    stop_is_ok: bool,
+) {
     let steps = 20;
     let wait_step = Duration::from_millis(grace_millis / steps);
     let store = market.matcher.store.clone();
     for _ in 0..steps {
         tokio::time::delay_for(wait_step).await;
-        if store.get_offer(&subscription_id).await?.is_some() == stop_is_some {
+        if store.get_offer(&subscription_id).await.is_ok() == stop_is_ok {
             break;
         }
     }
-    Ok(())
 }
 
 #[async_trait::async_trait]
 pub trait MarketStore {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Option<Offer>>;
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Option<Demand>>;
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError>;
+    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
 }
 
 #[async_trait::async_trait]
 impl MarketStore for MarketService {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Option<Offer>> {
-        Ok(self.matcher.store.get_offer(id).await?)
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError> {
+        self.matcher.store.get_offer(id).await
     }
 
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Option<Demand>> {
-        Ok(self.matcher.store.get_demand(id).await?)
+    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
+        self.matcher.store.get_demand(id).await
     }
 }
 

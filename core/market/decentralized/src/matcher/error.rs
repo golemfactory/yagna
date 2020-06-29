@@ -7,39 +7,35 @@ use crate::protocol::DiscoveryInitError;
 #[derive(thiserror::Error, Debug)]
 pub enum DemandError {
     #[error("Failed to save Demand. Error: {0}.")]
-    SaveError(#[from] DbError),
+    SaveError(DbError),
+    #[error("Failed to get Demand [{1}]. Error: {0}.")]
+    GetError(DbError, SubscriptionId),
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
     RemoveError(DbError, SubscriptionId),
-    #[error("Demand [{0}] doesn't exist.")]
-    NotExists(SubscriptionId),
+    #[error("Demand [{0}] not found.")]
+    NotFound(SubscriptionId),
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum OfferError {
+    #[error("Failed to get Offer [{1}]. Error: {0}.")]
+    GetError(DbError, SubscriptionId),
     #[error("Failed to save Offer. Error: {0}.")]
-    SaveError(#[from] DbError),
-    #[error("Failed to unsubscribe Offer [{1}]. Error: {0}.")]
-    UnsubscribeError(UnsubscribeError, SubscriptionId),
-    #[error("Failed to remove Demand [{1}]. Error: {0}.")]
+    SaveError(DbError, SubscriptionId),
+    #[error("Offer [{0}] already unsubscribed.")]
+    AlreadyUnsubscribed(SubscriptionId),
+    #[error("Failed to unsubscribe Offer: {1}. Error: {0}")]
+    UnsubscribeError(DbError, SubscriptionId),
+    #[error("Can't unsubscribe expired Offer [{0}].")]
+    Expired(SubscriptionId),
+    #[error("Failed to remove Offer [{1}]. Error: {0}.")]
     RemoveError(DbError, SubscriptionId),
-    #[error("Offer [{0}] doesn't exist.")]
-    NotExists(SubscriptionId),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum UnsubscribeError {
-    #[error("Can't unsubscribe expired offer")]
-    OfferExpired,
-    #[error("Offer already unsubscribed")]
-    AlreadyUnsubscribed,
-    #[error("Can't unsubscribe offer. Database error: {0}")]
-    DatabaseError(DbError),
-}
-
-impl<E: Into<DbError>> From<E> for UnsubscribeError {
-    fn from(e: E) -> Self {
-        UnsubscribeError::DatabaseError(e.into())
-    }
+    #[error("Offer [{0}] not found.")]
+    NotFound(SubscriptionId),
+    #[error(transparent)]
+    SubscriptionValidation(#[from] SubscriptionValidationError),
+    #[error("Unexpected Offer error: {0}.")]
+    UnexpectedError(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -48,9 +44,7 @@ pub enum MatcherError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     OfferError(#[from] OfferError),
-    #[error(transparent)]
-    SubscriptionValidation(#[from] SubscriptionValidationError),
-    #[error("Unexpected Internal error: {0}.")]
+    #[error("Unexpected Matcher error: {0}.")]
     UnexpectedError(String),
 }
 

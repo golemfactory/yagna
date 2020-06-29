@@ -1,13 +1,16 @@
+#[macro_use]
 mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::mock_offer::{example_demand, example_offer};
-    use crate::utils::{MarketStore, MarketsNetwork};
+    use std::sync::Arc;
 
+    use ya_market_decentralized::testing::{DemandError, OfferError};
     use ya_market_decentralized::MarketService;
 
-    use std::sync::Arc;
+    use crate::utils::mock_offer::{example_demand, example_offer};
+    use crate::utils::{MarketStore, MarketsNetwork};
+    // use crate::utils::assert_err_eq;
 
     /// Test subscribes offers, checks if offer is available
     /// and than unsubscribes. Checking broadcasting behavior is out of scope.
@@ -30,7 +33,7 @@ mod tests {
         offer.offer_id = Some(subscription_id.to_string());
 
         // Offer should be available in database after subscribe.
-        let got_offer = market1.get_offer(&subscription_id).await?.unwrap();
+        let got_offer = market1.get_offer(&subscription_id).await?;
         assert_eq!(got_offer.into_client_offer().unwrap(), offer);
 
         // Unsubscribe should fail on not existing subscription id.
@@ -45,7 +48,10 @@ mod tests {
             .await?;
 
         // Offer shouldn't be available after unsubscribed.
-        assert!(market1.get_offer(&subscription_id).await?.is_none());
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market1.get_offer(&subscription_id).await
+        );
 
         Ok(())
     }
@@ -71,7 +77,7 @@ mod tests {
         demand.demand_id = Some(subscription_id.to_string());
 
         // Offer should be available in database after subscribe.
-        let got_demand = market1.get_demand(&subscription_id).await?.unwrap();
+        let got_demand = market1.get_demand(&subscription_id).await?;
         assert_eq!(got_demand.into_client_demand().unwrap(), demand);
 
         // Unsubscribe should fail on not existing subscription id.
@@ -86,7 +92,10 @@ mod tests {
             .await?;
 
         // Offer should be removed from database after unsubscribed.
-        assert!(market1.get_demand(&subscription_id).await?.is_none());
+        assert_err_eq!(
+            DemandError::NotFound(subscription_id.clone()),
+            market1.get_demand(&subscription_id).await
+        );
 
         Ok(())
     }

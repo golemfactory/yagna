@@ -1,3 +1,4 @@
+#[macro_use]
 mod utils;
 
 #[cfg(test)]
@@ -11,6 +12,7 @@ mod tests {
 
     use ya_client::model::market::Offer;
     use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
+    use ya_market_decentralized::testing::OfferError;
     use ya_market_decentralized::Offer as ModelOffer;
     use ya_market_decentralized::{MarketService, SubscriptionId};
 
@@ -40,12 +42,11 @@ mod tests {
         let offer = Offer::new(json!({}), "()".to_string());
         let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
         let offer = market1.get_offer(&subscription_id).await?;
-        assert!(offer.is_some());
 
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
         let market3: Arc<MarketService> = network.get_market("Node-3");
-        wait_for_bcast(1000, &market2, &subscription_id, true).await?;
+        wait_for_bcast(1000, &market2, &subscription_id, true).await;
         // TODO: strip insertion ts from comparsion
         assert_eq!(offer, market2.get_offer(&subscription_id).await?);
         assert_eq!(offer, market3.get_offer(&subscription_id).await?);
@@ -54,11 +55,12 @@ mod tests {
         market1
             .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
-
+        let expected_error = OfferError::AlreadyUnsubscribed(subscription_id.clone());
+        assert_err_eq!(expected_error, market1.get_offer(&subscription_id).await);
         // Expect, that Offer will disappear on other nodes.
-        wait_for_bcast(1000, &market2, &subscription_id, false).await?;
-        assert!(market2.get_offer(&subscription_id).await?.is_none());
-        assert!(market3.get_offer(&subscription_id).await?.is_none());
+        wait_for_bcast(1000, &market2, &subscription_id, false).await;
+        assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
+        assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
 
         Ok(())
     }
@@ -98,7 +100,10 @@ mod tests {
         discovery2.broadcast_offer(offer).await?;
         tokio::time::delay_for(Duration::from_millis(50)).await;
 
-        assert!(market1.get_offer(&invalid_id).await?.is_none());
+        assert_err_eq!(
+            OfferError::NotFound(invalid_id.clone()),
+            market1.get_offer(&invalid_id).await,
+        );
         Ok(())
     }
 
@@ -125,11 +130,10 @@ mod tests {
             .subscribe_offer(&example_offer(), &identity1)
             .await?;
         let offer = market1.get_offer(&subscription_id).await?;
-        assert!(offer.is_some());
 
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
-        wait_for_bcast(1000, &market2, &subscription_id, true).await?;
+        wait_for_bcast(1000, &market2, &subscription_id, true).await;
         assert_eq!(offer, market2.get_offer(&subscription_id).await?);
 
         // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
@@ -137,11 +141,17 @@ mod tests {
         market1
             .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
-        assert!(market1.get_offer(&subscription_id).await?.is_none());
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market1.get_offer(&subscription_id).await
+        );
 
         // Expect, that Offer will disappear on other nodes.
-        wait_for_bcast(1000, &market2, &subscription_id, false).await?;
-        assert!(market2.get_offer(&subscription_id).await?.is_none());
+        wait_for_bcast(1000, &market2, &subscription_id, false).await;
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market2.get_offer(&subscription_id).await
+        );
 
         // Send the same Offer using Discovery interface directly.
         // Number of returning Offers will be counted.
@@ -164,7 +174,7 @@ mod tests {
 
         // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
         let market3: Discovery = network.get_discovery("Node-3");
-        market3.broadcast_offer(offer.unwrap()).await?;
+        market3.broadcast_offer(offer).await?;
 
         // Wait for Offer propagation.
         // TODO: How to wait without assuming any number of seconds?

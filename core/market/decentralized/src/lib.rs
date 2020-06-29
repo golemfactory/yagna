@@ -28,4 +28,5 @@ pub mod migrations {
 pub mod testing {
     pub use super::db::models::SubscriptionParseError;
     pub use super::matcher::SubscriptionStore;
+    pub use super::matcher::{DemandError, MatcherError, OfferError};
 }

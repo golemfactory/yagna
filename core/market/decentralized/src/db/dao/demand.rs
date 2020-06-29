@@ -25,15 +25,11 @@ impl<'c> DemandDao<'c> {
         let now = Utc::now().naive_utc();
 
         readonly_transaction(self.pool, move |conn| {
-            let demand: Option<Demand> = dsl::market_demand
+            Ok(dsl::market_demand
                 .filter(dsl::id.eq(&subscription_id))
                 .filter(dsl::expiration_ts.ge(now))
                 .first(conn)
-                .optional()?;
-            match demand {
-                Some(model_demand) => Ok(Some(model_demand)),
-                None => Ok(None),
-            }
+                .optional()?)
         })
         .await
     }

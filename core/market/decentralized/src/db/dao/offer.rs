@@ -58,6 +58,8 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
+    /// In single transaction checks offer state and if `Active` inserts unsubscription marker.
+    /// Returns state as before operation. `Active` means unsubscribe has succeeded.
     pub async fn mark_unsubscribed(
         &self,
         subscription_id: &SubscriptionId,
@@ -109,7 +111,7 @@ fn query_state(
         None => OfferState::NotFound,
         Some(offer) => match offer.expiration_ts > validation_ts {
             true => OfferState::Active(offer),
-            false => OfferState::Expired(Some(offer)), // TODO: cleanup external expired offers
+            false => OfferState::Expired(Some(offer)),
         },
     })
 }

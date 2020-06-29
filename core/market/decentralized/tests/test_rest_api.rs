@@ -7,7 +7,9 @@ use actix_web::dev::ServiceResponse;
 use serde::de::DeserializeOwned;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_core_model::market;
-use ya_market_decentralized::testing::{SubscriptionParseError, SubscriptionStore};
+use ya_market_decentralized::testing::{
+    DemandError, OfferError, SubscriptionParseError, SubscriptionStore,
+};
 use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
@@ -71,7 +73,6 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     let offer = SubscriptionStore::new(db)
         .get_offer(&subscription_id)
         .await
-        .unwrap()
         .unwrap();
     // then
     assert_eq!(offer.into_client_offer(), Ok(client_offer));
@@ -98,10 +99,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        format!(
-            "Failed to unsubscribe Offer [{}]. Error: Offer already unsubscribed.",
-            subscription_id
-        ),
+        OfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
 }
@@ -136,7 +134,6 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     let demand = SubscriptionStore::new(db)
         .get_demand(&subscription_id)
         .await
-        .unwrap()
         .unwrap();
     // then
     assert_eq!(demand.into_client_demand(), Ok(client_demand));
@@ -163,7 +160,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        format!("Demand [{}] doesn\'t exist.", subscription_id),
+        DemandError::NotFound(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
 }

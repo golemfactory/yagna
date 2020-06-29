@@ -10,7 +10,7 @@ use crate::protocol::{
 };
 use crate::SubscriptionId;
 
-pub use error::{DemandError, MatcherError, MatcherInitError, OfferError, UnsubscribeError};
+pub use error::{DemandError, MatcherError, MatcherInitError, OfferError};
 pub use store::SubscriptionStore;
 
 mod error;
@@ -23,7 +23,6 @@ pub struct EventsListeners {
 }
 
 /// Responsible for storing Offers and matching them with demands.
-#[derive(Clone)]
 pub struct Matcher {
     pub store: SubscriptionStore,
     discovery: Discovery,
@@ -155,10 +154,31 @@ pub(crate) async fn on_offer_received(
     _caller: String,
     msg: OfferReceived,
 ) -> Result<Propagate, ()> {
-    store.checked_store_offer(msg.offer).await.or_else(|e| {
-        let msg = format!("{}", e);
-        Ok(Propagate::No(Reason::Error(msg)))
-    })
+    // We shouldn't propagate Offer, if we already have it in our database.
+    // Note that when we broadcast our Offer, it will reach us too, so it concerns
+    // not only Offers from other nodes.
+
+    store
+        .checked_store_offer(msg.offer)
+        .await
+        .map(|propagate| match propagate {
+            true => Propagate::Yes,
+            false => Propagate::No(Reason::AlreadyExists),
+        })
+        .or_else(|e| match e {
+            // Stop propagation for expired and unsubscribed Offers to avoid infinite broadcast.
+            OfferError::AlreadyUnsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
+            OfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
+            // Below errors are not possible to get from checked_store_offer
+            OfferError::NotFound(_)
+            | OfferError::UnsubscribeError(_, _)
+            | OfferError::RemoveError(_, _)
+            | OfferError::UnexpectedError(_) => {
+                log::error!("Unexpected error handling offer reception: {}.", e);
+                panic!("Should not happened: {}.", e)
+            }
+            _ => Ok(Propagate::No(Reason::Error(format!("{}", e)))),
+        })
 }
 
 pub(crate) async fn on_offer_unsubscribed(
@@ -169,8 +189,23 @@ pub(crate) async fn on_offer_unsubscribed(
     store
         .checked_remove_offer(&msg.subscription_id)
         .await
-        .or_else(|e| {
-            let msg = format!("{}", e);
-            Ok(Propagate::No(Reason::Error(msg)))
+        .map(|_| Propagate::Yes)
+        .or_else(|e| match e {
+            OfferError::UnsubscribeError(_, _)
+            | OfferError::RemoveError(_, _)
+            | OfferError::UnexpectedError(_) => {
+                log::error!("Propagating Offer unsubscription, while error: {}", e);
+                // TODO: how should we handle it locally?
+                Ok(Propagate::Yes)
+            }
+            OfferError::NotFound(_) => Ok(Propagate::No(Reason::NotFound)),
+            OfferError::AlreadyUnsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
+            OfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
+            OfferError::SaveError(_, _)
+            | OfferError::GetError(_, _)
+            | OfferError::SubscriptionValidation(_) => {
+                log::error!("Unexpected error handling offer unsubscription: {}.", e);
+                panic!("Should not happened: {}.", e)
+            }
         })
 }
