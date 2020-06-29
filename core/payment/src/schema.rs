@@ -27,7 +27,7 @@ table! {
         peer_id -> Text,
         payee_addr -> Text,
         payer_addr -> Text,
-        payment_platform -> Nullable<Text>,
+        payment_platform -> Text,
         total_amount_due -> Text,
         total_amount_accepted -> Text,
         total_amount_paid -> Text,
@@ -47,6 +47,8 @@ table! {
     pay_allocation (id) {
         id -> Text,
         owner_id -> Text,
+        payment_platform -> Text,
+        address -> Text,
         total_amount -> Text,
         spent_amount -> Text,
         remaining_amount -> Text,
@@ -125,12 +127,29 @@ table! {
 }
 
 table! {
+    pay_order (id, driver) {
+        id -> Text,
+        driver -> Text,
+        amount -> Text,
+        payee_id -> Text,
+        payer_id -> Text,
+        payee_addr -> Text,
+        payer_addr -> Text,
+        payment_platform -> Text,
+        invoice_id -> Nullable<Text>,
+        debit_note_id -> Nullable<Text>,
+        is_paid -> Bool,
+    }
+}
+
+table! {
     pay_payment (id, owner_id) {
         id -> Text,
         owner_id -> Text,
         peer_id -> Text,
         payee_addr -> Text,
         payer_addr -> Text,
+        payment_platform -> Text,
         role -> Text,
         allocation_id -> Nullable<Text>,
         amount -> Text,
@@ -158,5 +177,6 @@ allow_tables_to_appear_in_same_query!(
     pay_invoice,
     pay_invoice_event,
     pay_invoice_x_activity,
+    pay_order,
     pay_payment,
 );

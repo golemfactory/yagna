@@ -1,6 +1,6 @@
+use crate::DEFAULT_PAYMENT_PLATFORM;
 use structopt::*;
-use ya_client_model::NodeId;
-use ya_core_model::{identity as id_api, payment::local as pay};
+use ya_core_model::{driver, identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -8,14 +8,17 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
     Init {
-        identity: Option<NodeId>,
+        driver: String,
+        address: Option<String>,
         #[structopt(long, short)]
         requestor: bool,
         #[structopt(long, short)]
         provider: bool,
     },
     Status {
-        identity: Option<NodeId>,
+        address: Option<String>,
+        #[structopt(long, short)]
+        platform: Option<String>,
     },
 }
 
@@ -23,25 +26,30 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Init {
-                identity,
+                address,
+                driver,
                 requestor,
                 provider,
             } => {
-                let identity = resolve_identity(identity).await?;
-                bus::service(pay::BUS_ID)
-                    .call(pay::Init {
-                        identity,
-                        requestor,
-                        provider,
-                    })
+                let address = resolve_address(address).await?;
+                let mut mode = driver::AccountMode::NONE;
+                if requestor {
+                    mode |= driver::AccountMode::SEND;
+                }
+                if provider {
+                    mode |= driver::AccountMode::RECV;
+                }
+                bus::service(driver::BUS_ID_PREFIX.to_string() + &driver)
+                    .call(driver::Init::new(address, mode))
                     .await??;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { identity } => {
-                let identity = resolve_identity(identity).await?;
+            PaymentCli::Status { address, platform } => {
+                let address = resolve_address(address).await?;
+                let platform = platform.unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned());
                 CommandOutput::object(
                     bus::service(pay::BUS_ID)
-                        .call(pay::GetStatus::from(identity))
+                        .call(pay::GetStatus { address, platform })
                         .await??,
                 )
             }
@@ -49,8 +57,8 @@ impl PaymentCli {
     }
 }
 
-async fn resolve_identity(identity: Option<NodeId>) -> anyhow::Result<NodeId> {
-    if let Some(id) = identity {
+async fn resolve_address(address: Option<String>) -> anyhow::Result<String> {
+    if let Some(id) = address {
         return Ok(id);
     }
 
@@ -59,7 +67,7 @@ async fn resolve_identity(identity: Option<NodeId>) -> anyhow::Result<NodeId> {
         .await??;
 
     if let Some(id) = id {
-        return Ok(id.node_id);
+        return Ok(id.node_id.to_string());
     }
 
     anyhow::bail!("Default identity not found")
