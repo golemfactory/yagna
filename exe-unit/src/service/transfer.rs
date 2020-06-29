@@ -503,6 +503,39 @@ mod test {
         check_resolve("/out/lib/libc.so", "/tmp/vol-5/libc.so");
     }
 
+    // [ContainerVolume { name: "", path: "" }, ContainerVolume { name: "", path: "" }, ContainerVo
+    //        │ lume { name: "", path: "" }]
+    #[test]
+    fn test_resolve_3() {
+        let c = ContainerTransferProvider::new(
+            "/tmp".into(),
+            vec![
+                ContainerVolume {
+                    name: "vol-bd959639-9148-4d7c-8ba2-05a654e84476".into(),
+                    path: "/golem/output".into(),
+                },
+                ContainerVolume {
+                    name: "vol-4d59d1d6-2571-4ab8-a86a-b6199a9a1f4b".into(),
+                    path: "/golem/resource".into(),
+                },
+                ContainerVolume {
+                    name: "vol-b51194da-2fce-45b7-bff8-37e4ef8f7535".into(),
+                    path: "/golem/work".into(),
+                },
+            ],
+        );
+
+        let check_resolve = |container_path, expected_result| {
+            assert_eq!(
+                c.resolve_path(container_path).unwrap(),
+                Path::new(expected_result)
+            )
+        };
+
+        check_resolve("/golem/resource/scene.blend", "/tmp/vol-4d59d1d6-2571-4ab8-a86a-b6199a9a1f4b/scene.blend");
+   }
+
+
     #[test]
     fn test_resolve_compat() {
         let c = ContainerTransferProvider::new(
