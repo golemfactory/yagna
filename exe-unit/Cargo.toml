@@ -60,6 +60,7 @@ url = "2.1.1"
 
 [dev-dependencies]
 ya-sb-router = "0.1"
+ya-runtime-api= { version = "0.1", path ="runtime-api", features=["codec", "server"] }
 
 actix-files = "0.2.1"
 actix-rt = "1.0.0"
