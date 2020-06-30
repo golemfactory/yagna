@@ -30,4 +30,6 @@ pub mod testing {
         dao::{DemandDao, OfferDao},
         models::SubscriptionParseError,
     };
+
+    pub use super::protocol::negotiation;
 }

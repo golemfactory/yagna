@@ -7,21 +7,21 @@ use ya_service_bus::RpcMessage;
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/provider/proposal/", prefix)
+        format!("{}/protocol/negotiation/provider/proposal", prefix)
     }
 
     pub fn agreement_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/provider/agreement/", prefix)
+        format!("{}/protocol/negotiation/provider/agreement", prefix)
     }
 }
 
 pub mod requestor {
     pub fn proposal_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/requestor/proposal/", prefix)
+        format!("{}/protocol/negotiation/requestor/proposal", prefix)
     }
 
     pub fn agreement_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/requestor/agreement/", prefix)
+        format!("{}/protocol/negotiation/requestor/agreement", prefix)
     }
 }
 
