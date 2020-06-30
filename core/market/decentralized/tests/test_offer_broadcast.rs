@@ -4,13 +4,11 @@ mod utils;
 #[cfg(test)]
 mod tests {
     use chrono;
-    use serde_json::json;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
 
-    use ya_client::model::market::Offer;
     use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
     use ya_market_decentralized::testing::OfferError;
     use ya_market_decentralized::Offer as ModelOffer;
@@ -36,25 +34,22 @@ mod tests {
             .await?;
 
         // Add Offer on Node-1. It should be propagated to remaining nodes.
-        let market1: Arc<MarketService> = network.get_market("Node-1");
-        let identity1 = network.get_default_id("Node-1");
+        let market1: &MarketService = network.get_market("Node-1");
+        let id1 = network.get_default_id("Node-1");
 
-        let offer = Offer::new(json!({}), "()".to_string());
-        let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
+        let subscription_id = market1.subscribe_offer(&example_offer(), &id1).await?;
         let offer = market1.get_offer(&subscription_id).await?;
 
         // Expect, that Offer will appear on other nodes.
-        let market2: Arc<MarketService> = network.get_market("Node-2");
-        let market3: Arc<MarketService> = network.get_market("Node-3");
+        let market2: &MarketService = network.get_market("Node-2");
+        let market3: &MarketService = network.get_market("Node-3");
         wait_for_bcast(1000, &market2, &subscription_id, true).await;
         // TODO: strip insertion ts from comparsion
         assert_eq!(offer, market2.get_offer(&subscription_id).await?);
         assert_eq!(offer, market3.get_offer(&subscription_id).await?);
 
         // Unsubscribe Offer. Wait some delay for propagation.
-        market1
-            .unsubscribe_offer(&subscription_id, &identity1)
-            .await?;
+        market1.unsubscribe_offer(&subscription_id, &id1).await?;
         let expected_error = OfferError::AlreadyUnsubscribed(subscription_id.clone());
         assert_err_eq!(expected_error, market1.get_offer(&subscription_id).await);
         // Expect, that Offer will disappear on other nodes.
@@ -84,16 +79,15 @@ mod tests {
             )
             .await?;
 
-        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let market1: &MarketService = network.get_market("Node-1");
         let discovery2: Discovery = network.get_discovery("Node-2");
-        let identity2 = network.get_default_id("Node-2");
+        let id2 = network.get_default_id("Node-2");
 
         // Prepare Offer with subscription id changed to invalid.
         let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
-        let offer = example_offer();
         let creation_ts = chrono::Utc::now().naive_utc();
         let expiration_ts = creation_ts + chrono::Duration::hours(24);
-        let mut offer = ModelOffer::from_new(&offer, &identity2, creation_ts, expiration_ts);
+        let mut offer = ModelOffer::from_new(&example_offer(), &id2, creation_ts, expiration_ts);
         offer.id = invalid_id.clone();
 
         // Offer should be propagated to market1, but he should reject it.
@@ -123,7 +117,7 @@ mod tests {
             .await?;
 
         // Add Offer on Node-1. It should be propagated to remaining nodes.
-        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let market1: &MarketService = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
@@ -132,7 +126,7 @@ mod tests {
         let offer = market1.get_offer(&subscription_id).await?;
 
         // Expect, that Offer will appear on other nodes.
-        let market2: Arc<MarketService> = network.get_market("Node-2");
+        let market2: &MarketService = network.get_market("Node-2");
         wait_for_bcast(1000, &market2, &subscription_id, true).await;
         assert_eq!(offer, market2.get_offer(&subscription_id).await?);
 

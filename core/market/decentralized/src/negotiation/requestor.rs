@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
@@ -11,19 +10,18 @@ use super::errors::{NegotiationError, NegotiationInitError};
 /// TODO: Too long name.
 pub struct RequestorNegotiationEngine {
     db: DbExecutor,
-    proposal_receiver: UnboundedReceiver<Proposal>,
+    pub proposal_receiver: UnboundedReceiver<Proposal>,
 }
 
 impl RequestorNegotiationEngine {
     pub fn new(
         db: DbExecutor,
         proposal_receiver: UnboundedReceiver<Proposal>,
-    ) -> Result<Arc<RequestorNegotiationEngine>, NegotiationInitError> {
-        let engine = RequestorNegotiationEngine {
+    ) -> Result<RequestorNegotiationEngine, NegotiationInitError> {
+        Ok(RequestorNegotiationEngine {
             db,
             proposal_receiver,
-        };
-        Ok(Arc::new(engine))
+        })
     }
 
     pub async fn bind_gsb(

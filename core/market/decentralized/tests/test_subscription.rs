@@ -3,8 +3,6 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use ya_market_decentralized::testing::{DemandError, OfferError};
     use ya_market_decentralized::MarketService;
 
@@ -22,7 +20,7 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let market1: &MarketService = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
         let mut offer = example_offer();
@@ -66,7 +64,7 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let market1: &MarketService = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
         let mut demand = example_demand();

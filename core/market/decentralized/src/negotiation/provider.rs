@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{db::models::Offer as ModelOffer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 
@@ -12,8 +10,8 @@ pub struct ProviderNegotiationEngine {
 }
 
 impl ProviderNegotiationEngine {
-    pub fn new(db: DbExecutor) -> Result<Arc<ProviderNegotiationEngine>, NegotiationInitError> {
-        Ok(Arc::new(ProviderNegotiationEngine { db }))
+    pub fn new(db: DbExecutor) -> Result<ProviderNegotiationEngine, NegotiationInitError> {
+        Ok(ProviderNegotiationEngine { db })
     }
 
     pub async fn bind_gsb(

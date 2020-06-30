@@ -3,7 +3,6 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use ya_client::model::NodeId;
@@ -28,7 +27,7 @@ pub struct MarketsNetwork {
 /// Store all object associated with single market
 /// for example: Database
 pub struct MarketNode {
-    market: Arc<MarketService>,
+    market: MarketService,
     name: String,
     /// For now only mock default Identity.
     id: Identity,
@@ -65,7 +64,7 @@ impl MarketsNetwork {
 
     pub async fn add_market_instance<Str: AsRef<str>>(mut self, name: Str) -> Result<Self> {
         let db = self.init_database(name.as_ref())?;
-        let market = Arc::new(MarketService::new(&db)?);
+        let market = MarketService::new(&db)?;
 
         let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
         let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
@@ -109,11 +108,19 @@ impl MarketsNetwork {
         Ok(self)
     }
 
-    pub fn get_market(&self, name: &str) -> Arc<MarketService> {
+    pub fn get_market(&self, name: &str) -> &MarketService {
         self.markets
             .iter()
             .find(|node| node.name == name)
-            .map(|node| node.market.clone())
+            .map(|node| &node.market)
+            .unwrap()
+    }
+
+    pub fn get_market_mut(&mut self, name: &str) -> &mut MarketService {
+        self.markets
+            .iter_mut()
+            .find(|node| node.name == name)
+            .map(|node| &mut node.market)
             .unwrap()
     }
 
