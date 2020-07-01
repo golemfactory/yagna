@@ -1,17 +1,15 @@
 use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
-use actix_web::{
-    error::PathError,
-    http::{header, StatusCode},
-    test, App,
-};
+use actix_web::{error::PathError, http::StatusCode, test, App};
 
 use actix_web::body::MessageBody;
 use actix_web::dev::ServiceResponse;
 use serde::de::DeserializeOwned;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_core_model::market;
-use ya_market_decentralized::testing::{DemandDao, OfferDao, SubscriptionParseError};
+use ya_market_decentralized::testing::{
+    DemandError, OfferError, SubscriptionParseError, SubscriptionStore,
+};
 use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
@@ -53,15 +51,14 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     // given
     let (db, mut app) = init_db_app("test_rest_subscribe_offer").await;
 
-    let mut offer = utils::example_offer();
+    let mut client_offer = utils::example_offer();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/offers")
-        .header(header::CONTENT_TYPE, "application/json")
-        .set_json(&offer)
+        .set_json(&client_offer)
         .to_request();
 
-    // when
+    // when create offer
     let resp = test::call_service(&mut app, req).await;
 
     // then
@@ -70,23 +67,21 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     log::debug!("subscription_id: {}", subscription_id);
 
     // given
-    offer.offer_id = Some(subscription_id.to_string());
-    offer.provider_id = Some(mock_id().identity.to_string());
-    // when
-    let model_offer = db
-        .as_dao::<OfferDao>()
+    client_offer.offer_id = Some(subscription_id.to_string());
+    client_offer.provider_id = Some(mock_id().identity.to_string());
+    // when get from subscription store
+    let offer = SubscriptionStore::new(db)
         .get_offer(&subscription_id)
         .await
-        .unwrap()
         .unwrap();
     // then
-    assert_eq!(model_offer.into_client_offer(), Ok(offer));
+    assert_eq!(offer.into_client_offer(), Ok(client_offer));
 
     // given
     let req = test::TestRequest::delete()
         .uri(&format!("/market-api/v1/offers/{}", subscription_id))
         .to_request();
-    // when
+    // when unsubscribe
     let resp = test::call_service(&mut app, req).await;
     // then
     assert_eq!(resp.status(), StatusCode::OK);
@@ -97,17 +92,14 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     let req = test::TestRequest::delete()
         .uri(&format!("/market-api/v1/offers/{}", subscription_id))
         .to_request();
-    // when
+    // when unsubscribe again
     let resp = test::call_service(&mut app, req).await;
     // then
-    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    assert_eq!(resp.status(), StatusCode::GONE);
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        format!(
-            "Failed to unsubscribe Offer [{}]. Error: Offer already unsubscribed.",
-            subscription_id
-        ),
+        OfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
 }
@@ -120,12 +112,11 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     // given
     let (db, mut app) = init_db_app("test_rest_subscribe_demand").await;
 
-    let mut demand = utils::example_demand();
+    let mut client_demand = utils::example_demand();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/demands")
-        .header(header::CONTENT_TYPE, "application/json")
-        .set_json(&demand)
+        .set_json(&client_demand)
         .to_request();
 
     // when
@@ -137,17 +128,15 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     log::debug!("subscription_id: {}", subscription_id);
 
     // given
-    demand.demand_id = Some(subscription_id.to_string());
-    demand.requestor_id = Some(mock_id().identity.to_string());
+    client_demand.demand_id = Some(subscription_id.to_string());
+    client_demand.requestor_id = Some(mock_id().identity.to_string());
     // when
-    let model_demand = db
-        .as_dao::<DemandDao>()
+    let demand = SubscriptionStore::new(db)
         .get_demand(&subscription_id)
         .await
-        .unwrap()
         .unwrap();
     // then
-    assert_eq!(model_demand.into_client_demand(), Ok(demand));
+    assert_eq!(demand.into_client_demand(), Ok(client_demand));
 
     // given
     let req = test::TestRequest::delete()
@@ -171,7 +160,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        format!("Demand [{}] doesn\'t exist.", subscription_id),
+        DemandError::NotFound(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
 }
