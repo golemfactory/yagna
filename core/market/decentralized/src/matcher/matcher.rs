@@ -190,6 +190,12 @@ impl Matcher {
     // =========================================== //
     // Offer/Demand query
     // =========================================== //
+    pub async fn get_offers(
+        &self,
+    ) -> Result<Vec<Offer>, MatcherError> {
+        let model_offers = self.db.as_dao::<OfferDao>().get_offers().await?;
+        Ok(model_offers.into_iter().map(|o| o.into_client_offer().unwrap()).collect())
+    }
 
     pub async fn get_offer<Str: AsRef<str>>(
         &self,

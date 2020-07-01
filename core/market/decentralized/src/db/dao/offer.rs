@@ -36,6 +36,12 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
+    pub async fn get_offers(&self) -> DbResult<Vec<ModelOffer>> {
+        readonly_transaction(self.pool, move |conn| {
+            Ok(dsl::market_offer.limit(1024).load::<ModelOffer>(conn)?)
+        }).await
+    }
+
     pub async fn create_offer(&self, offer: &ModelOffer) -> DbResult<()> {
         let offer = offer.clone();
         do_with_transaction(self.pool, move |conn| {
