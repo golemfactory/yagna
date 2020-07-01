@@ -159,7 +159,7 @@ pub(crate) async fn on_offer_received(
     // not only Offers from other nodes.
 
     store
-        .checked_store_offer(msg.offer)
+        .store_offer(msg.offer)
         .await
         .map(|propagate| match propagate {
             true => Propagate::Yes,
@@ -187,7 +187,7 @@ pub(crate) async fn on_offer_unsubscribed(
     msg: OfferUnsubscribed,
 ) -> Result<Propagate, ()> {
     store
-        .checked_remove_offer(&msg.subscription_id)
+        .remove_offer(&msg.subscription_id)
         .await
         .map(|_| Propagate::Yes)
         .or_else(|e| match e {

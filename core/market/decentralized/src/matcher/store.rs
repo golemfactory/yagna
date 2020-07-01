@@ -73,7 +73,7 @@ impl SubscriptionStore {
     /// should be removed.
     /// This is meant to be called upon receiving unsubscribe broadcast. To work correctly
     /// it assumes `mark_offer_unsubscribed` was invoked before broadcast in `unsubscribe_offer`.
-    pub async fn checked_remove_offer(&self, id: &SubscriptionId) -> Result<(), OfferError> {
+    pub async fn remove_offer(&self, id: &SubscriptionId) -> Result<(), OfferError> {
         // If `mark_offer_unsubscribed` was called before we won't remove our Offer here,
         // because `AlreadyUnsubscribed` error will pop-up.
         self.mark_offer_unsubscribed(id).await?;
@@ -89,7 +89,7 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn checked_store_offer(&self, offer: Offer) -> Result<bool, OfferError> {
+    pub async fn store_offer(&self, offer: Offer) -> Result<bool, OfferError> {
         // Will reject Offer, if hash was computed incorrectly. In most cases
         // it could mean, that it could be some kind of attack.
         offer.validate()?;
