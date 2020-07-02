@@ -4,7 +4,7 @@ mod provider;
 mod requestor;
 
 pub use notifier::EventNotifier;
-pub use provider::ProviderNegotiationEngine;
-pub use requestor::RequestorNegotiationEngine;
+pub use provider::ProviderBroker;
+pub use requestor::RequestorBroker;
 
 pub use errors::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError};

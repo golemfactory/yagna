@@ -10,6 +10,5 @@ pub use offer::{Offer, OfferUnsubscribed};
 pub use proposal::{DbProposal, Negotiation, OwnerType, Proposal};
 
 pub use subscription::{
-    generate_random_id, hash_proposal, SubscriptionId, SubscriptionParseError,
-    SubscriptionValidationError,
+    generate_random_id, SubscriptionId, SubscriptionParseError, SubscriptionValidationError,
 };

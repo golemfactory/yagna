@@ -6,7 +6,7 @@ use crate::db::models::Offer as ModelOffer;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
 use crate::matcher::{Matcher, MatcherError, MatcherInitError};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
-use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
+use crate::negotiation::{ProviderBroker, RequestorBroker};
 
 use crate::migrations;
 use crate::rest_api;
@@ -42,8 +42,8 @@ pub enum MarketInitError {
 /// Structure connecting all market objects.
 pub struct MarketService {
     pub matcher: Arc<Matcher>,
-    pub provider_engine: Arc<ProviderNegotiationEngine>,
-    pub requestor_engine: Arc<RequestorNegotiationEngine>,
+    pub provider_engine: Arc<ProviderBroker>,
+    pub requestor_engine: Arc<RequestorBroker>,
 }
 
 impl MarketService {
@@ -51,9 +51,8 @@ impl MarketService {
         db.apply_migration(migrations::run_with_output)?;
 
         let (matcher, listeners) = Matcher::new(db)?;
-        let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
-        let requestor_engine =
-            RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
+        let provider_engine = ProviderBroker::new(db.clone())?;
+        let requestor_engine = RequestorBroker::new(db.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
             matcher: Arc::new(matcher),

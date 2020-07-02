@@ -9,7 +9,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::dao::*;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
-use crate::db::models::{SubscriptionId, SubscriptionParseError, SubscriptionValidationError};
+use crate::db::models::{SubscriptionId, SubscriptionValidationError};
 use crate::protocol::{Discovery, DiscoveryInitError, Propagate, StopPropagateReason};
 use crate::protocol::{OfferReceived, OfferUnsubscribed, RetrieveOffers};
 
@@ -274,8 +274,8 @@ async fn on_offer_received(db: DbExecutor, msg: OfferReceived) -> Result<Propaga
         Result::<_, MatcherError>::Ok(propagate)
     }
     .await
-    .or_else(|error| {
-        let reason = StopPropagateReason::Error(format!("{}", error));
+    .or_else(|e| {
+        let reason = StopPropagateReason::Error(e.to_string());
         Ok(Propagate::False(reason))
     })
 }
@@ -306,11 +306,11 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
         Result::<_, UnsubscribeError>::Ok(Propagate::True)
     }
     .await
-    .or_else(|error| {
-        let reason = match error {
+    .or_else(|e| {
+        let reason = match e {
             UnsubscribeError::OfferExpired => StopPropagateReason::Expired,
             UnsubscribeError::AlreadyUnsubscribed => StopPropagateReason::AlreadyUnsubscribed,
-            _ => StopPropagateReason::Error(format!("{}", error)),
+            _ => StopPropagateReason::Error(e.to_string()),
         };
         Ok(Propagate::False(reason))
     })
@@ -322,12 +322,6 @@ async fn on_offer_unsubscribed(db: DbExecutor, msg: OfferUnsubscribed) -> Result
 
 impl From<ErrorMessage> for MatcherError {
     fn from(e: ErrorMessage) -> Self {
-        MatcherError::UnexpectedError(e.to_string())
-    }
-}
-
-impl From<SubscriptionParseError> for MatcherError {
-    fn from(e: SubscriptionParseError) -> Self {
         MatcherError::UnexpectedError(e.to_string())
     }
 }

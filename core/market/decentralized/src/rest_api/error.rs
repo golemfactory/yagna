@@ -77,7 +77,7 @@ impl ResponseError for QueryEventsError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             QueryEventsError::Unsubscribed(_) => HttpResponse::NotFound().json(msg),
-            QueryEventsError::SubscriptionExpired(_) => HttpResponse::Gone().json(msg),
+            QueryEventsError::SubscriptionExpired(_) => HttpResponse::NotFound().json(msg),
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(_) => {
                 HttpResponse::BadRequest().json(msg)
             }

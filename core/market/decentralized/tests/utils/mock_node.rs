@@ -90,7 +90,7 @@ impl MarketsNetwork {
         offer_received: impl CallbackHandler<OfferReceived>,
         offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
         retrieve_offers: impl CallbackHandler<RetrieveOffers>,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> Result<Self> {
         let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
         let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
 

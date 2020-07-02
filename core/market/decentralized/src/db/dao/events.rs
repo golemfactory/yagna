@@ -36,9 +36,9 @@ impl<'c> AsDao<'c> for EventsDao<'c> {
 }
 
 impl<'c> EventsDao<'c> {
-    pub async fn add_requestor_event(&self, proposal: Proposal) -> DbResult<()> {
+    pub async fn add_proposal_event(&self, proposal: Proposal, owner: OwnerType) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            let event = MarketEvent::from_proposal(&proposal, OwnerType::Requestor);
+            let event = MarketEvent::from_proposal(&proposal, owner);
             diesel::insert_into(dsl::market_event)
                 .values(event)
                 .execute(conn)?;

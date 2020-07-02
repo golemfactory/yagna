@@ -75,8 +75,6 @@ mod tests {
         let subscription_id = market1
             .subscribe_demand(&example_demand(), &identity1)
             .await?;
-
-        let market1: Arc<MarketService> = network.get_market("Node-1");
         let demand_id = subscription_id.clone();
 
         // Query events, when no Proposal are in the queue yet.
@@ -178,10 +176,13 @@ mod tests {
         };
 
         // Negative timeout should be treated as immediate checking events and return.
-        let events = market1
-            .requestor_engine
-            .query_events(&demand_id, -5.0, None)
-            .await?;
+        let events = tokio::time::timeout(
+            Duration::from_millis(20),
+            market1
+                .requestor_engine
+                .query_events(&demand_id, -5.0, None),
+        )
+        .await??;
         assert_eq!(events.len(), 1);
 
         // Restore available Proposal
@@ -259,7 +260,7 @@ mod tests {
         Ok(())
     }
 
-    /// Run to query events in the same time.
+    /// Run two query events in the same time.
     /// The same event shouldn't be returned twice.
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
@@ -278,9 +279,8 @@ mod tests {
             .await?;
 
         let demand_id1 = subscription_id.clone();
-        let demand_id2 = subscription_id.clone();
-
         let market = market1.clone();
+
         let query1 = tokio::spawn(async move {
             let events = market
                 .requestor_engine
@@ -290,10 +290,12 @@ mod tests {
         });
 
         let market = market1.clone();
+        let demand_id1 = subscription_id.clone();
+
         let query2 = tokio::spawn(async move {
             let events = market
                 .requestor_engine
-                .query_events(&demand_id2, 0.5, Some(5))
+                .query_events(&demand_id1, 0.5, Some(5))
                 .await?;
             Result::<_, anyhow::Error>::Ok(events)
         });

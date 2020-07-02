@@ -4,13 +4,15 @@ use diesel::deserialize;
 use diesel::serialize::Output;
 use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
+use digest::Digest;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use sha3::Sha3_256;
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
 use ya_client::model::{ErrorMessage, NodeId};
 
-use super::{generate_random_id, hash_proposal, SubscriptionId};
+use super::{generate_random_id, SubscriptionId};
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
@@ -100,7 +102,21 @@ pub struct Proposal {
     pub body: DbProposal,
 }
 
-impl DbProposal {
+pub fn hash_proposal(
+    offer_id: &SubscriptionId,
+    demand_id: &SubscriptionId,
+    creation_ts: &NaiveDateTime,
+) -> String {
+    let mut hasher = Sha3_256::new();
+
+    hasher.input(offer_id.to_string());
+    hasher.input(demand_id.to_string());
+    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
+
+    format!("{:x}", hasher.result())
+}
+
+impl Proposal {
     pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> Proposal {
         let negotiation = Negotiation::new(&demand, &offer, OwnerType::Requestor);
         let creation_ts = Utc::now().naive_utc();
@@ -124,9 +140,7 @@ impl DbProposal {
             negotiation,
         }
     }
-}
 
-impl Proposal {
     pub fn into_client(self) -> Result<ClientProposal, ErrorMessage> {
         let properties = serde_json::from_str(&self.body.properties).map_err(|error| {
             format!(

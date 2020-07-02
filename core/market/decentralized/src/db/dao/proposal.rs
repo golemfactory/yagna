@@ -26,7 +26,7 @@ impl<'c> ProposalDao<'c> {
         offer: ModelOffer,
     ) -> DbResult<Proposal> {
         do_with_transaction(self.pool, move |conn| {
-            let proposal = DbProposal::new_initial(demand, offer);
+            let proposal = Proposal::new_initial(demand, offer);
             diesel::insert_into(dsl_negotiation::market_negotiation)
                 .values(&proposal.negotiation)
                 .execute(conn)?;

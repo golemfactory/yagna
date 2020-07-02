@@ -6,8 +6,8 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::EventError;
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
+use crate::db::models::{EventError, OwnerType};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
 
@@ -16,19 +16,18 @@ use ya_client::model::market::event::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
 
 /// Requestor part of negotiation logic.
-/// TODO: Too long name.
-pub struct RequestorNegotiationEngine {
+pub struct RequestorBroker {
     db: DbExecutor,
     notifier: EventNotifier,
 }
 
-impl RequestorNegotiationEngine {
+impl RequestorBroker {
     pub fn new(
         db: DbExecutor,
         proposal_receiver: UnboundedReceiver<DraftProposal>,
-    ) -> Result<Arc<RequestorNegotiationEngine>, NegotiationInitError> {
+    ) -> Result<Arc<RequestorBroker>, NegotiationInitError> {
         let notifier = EventNotifier::new();
-        let engine = RequestorNegotiationEngine {
+        let engine = RequestorBroker {
             db: db.clone(),
             notifier: notifier.clone(),
         };
@@ -79,7 +78,7 @@ impl RequestorNegotiationEngine {
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
-        let mut timeout = Duration::from_millis((1000.0 * timeout) as u64);
+        let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
         let stop_time = Instant::now() + timeout;
         let max_events = max_events.unwrap_or(i32::max_value());
 
@@ -169,7 +168,7 @@ pub async fn proposal_receiver_thread(
             // Create Proposal Event and add it to queue (database).
             let subscription_id = proposal.negotiation.subscription_id.clone();
             db.as_dao::<EventsDao>()
-                .add_requestor_event(proposal)
+                .add_proposal_event(proposal, OwnerType::Requestor)
                 .await?;
 
             // Send channel message to wake all query_events waiting for proposals.

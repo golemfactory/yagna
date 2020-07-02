@@ -88,11 +88,11 @@ CREATE TABLE market_proposal(
     constraints TEXT NOT NULL,
 
     state INTEGER NOT NULL,
-	creation_ts DATETIME NOT NULL,
-	expiration_ts DATETIME NOT NULL,
+    creation_ts DATETIME NOT NULL,
+    expiration_ts DATETIME NOT NULL,
 
-	FOREIGN KEY(state) REFERENCES market_proposal_state (id),
-	FOREIGN KEY(negotiation_id) REFERENCES market_negotiation (id)
+    FOREIGN KEY(state) REFERENCES market_proposal_state (id),
+    FOREIGN KEY(negotiation_id) REFERENCES market_negotiation (id)
 );
 
 

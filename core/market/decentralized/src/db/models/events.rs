@@ -37,8 +37,6 @@ pub enum EventType {
     RequestorPropertyQuery = 2002,
 }
 
-/// TODO: We need two separate tables for Provider and Requestor events.
-///  This way we can avoid storing additional field with flag.
 #[derive(Clone, Debug, Queryable)]
 pub struct MarketEvent {
     pub id: i32,
