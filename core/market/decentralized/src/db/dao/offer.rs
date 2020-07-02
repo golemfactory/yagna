@@ -48,6 +48,13 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
+    pub async fn get_offers(&self) -> DbResult<Vec<Offer>> {
+        readonly_transaction(self.pool, move |conn| {
+            Ok(dsl::market_offer.load::<Offer>(conn)?)
+        })
+        .await
+    }
+
     pub async fn insert(&self, offer: Offer) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::market_offer)

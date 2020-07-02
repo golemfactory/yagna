@@ -102,6 +102,10 @@ impl MarketService {
             .extend(rest_api::requestor::register_endpoints)
     }
 
+    pub async fn get_offers(&self) -> Result<Vec<Offer>, MarketError> {
+        Ok(self.matcher.store.get_offers().await?)
+    }
+
     pub async fn subscribe_offer(
         &self,
         offer: &Offer,

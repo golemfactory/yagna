@@ -20,6 +20,8 @@ pub enum DemandError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum OfferError {
+    #[error("Failed to get Offers. Error: {0}.")]
+    GetMany(DbError),
     #[error("Failed to get Offer [{1}]. Error: {0}.")]
     GetError(DbError, SubscriptionId),
     #[error("Failed to save Offer. Error: {0}.")]
