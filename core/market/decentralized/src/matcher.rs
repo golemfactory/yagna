@@ -1,6 +1,6 @@
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
-use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer, Proposal};
+use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -19,9 +19,16 @@ pub use error::{DemandError, MatcherError, MatcherInitError, OfferError};
 use resolver::{Resolver, Subscription};
 pub use store::SubscriptionStore;
 
+/// Stores proposal generated from resolver.
+#[derive(Debug)]
+pub struct RawProposal {
+    pub offer: Offer,
+    pub demand: Demand,
+}
+
 /// Receivers for events, that can be emitted from Matcher.
 pub struct EventsListeners {
-    pub proposal_rx: UnboundedReceiver<Proposal>,
+    pub proposal_rx: UnboundedReceiver<RawProposal>,
 }
 
 /// Responsible for storing Offers and matching them with demands.
@@ -36,7 +43,7 @@ impl Matcher {
         // TODO: Implement Discovery callbacks.
 
         let store = SubscriptionStore::new(db.clone());
-        let (proposal_tx, proposal_rx) = unbounded_channel::<Proposal>();
+        let (proposal_tx, proposal_rx) = unbounded_channel::<RawProposal>();
         let resolver = Resolver::new(store.clone(), proposal_tx);
 
         let discovery = DiscoveryBuilder::default()

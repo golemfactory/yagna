@@ -1,8 +1,6 @@
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use ya_client::model::market::{proposal::State, Proposal};
-
-use super::{error::ResolverError, SubscriptionStore};
+use super::{error::ResolverError, RawProposal, SubscriptionStore};
 use crate::db::models::{Demand, Offer, SubscriptionId};
 
 #[derive(Debug)]
@@ -28,11 +26,11 @@ impl From<&Demand> for Subscription {
 pub struct Resolver {
     pub(crate) store: SubscriptionStore,
     subscription_tx: UnboundedSender<Subscription>,
-    proposal_tx: UnboundedSender<Proposal>,
+    proposal_tx: UnboundedSender<RawProposal>,
 }
 
 impl Resolver {
-    pub fn new(store: SubscriptionStore, proposal_tx: UnboundedSender<Proposal>) -> Self {
+    pub fn new(store: SubscriptionStore, proposal_tx: UnboundedSender<RawProposal>) -> Self {
         let (subscription_tx, subscription_rx) = unbounded_channel::<Subscription>();
 
         let resolver = Resolver {
@@ -41,6 +39,7 @@ impl Resolver {
             proposal_tx,
         };
 
+        // TODO: simplify
         tokio::spawn({
             let resolver = resolver.clone();
             async move {
@@ -57,75 +56,57 @@ impl Resolver {
         Ok(self.subscription_tx.send(subscription.into())?)
     }
 
-    // TODO: it is mocked; emits dummy Proposal upon every Subscription
+    // TODO: it is mocked; emits dummy RawProposal upon every Subscription
     async fn process_incoming_subscriptions(
         &self,
         mut subscription_rx: UnboundedReceiver<Subscription>,
     ) {
-        while let Some(new_subs) = subscription_rx.recv().await {
-            log::debug!("processing incoming subscription {:?}", new_subs);
-            // TODO: here we will use Store to get list of all active Offers or Demands
-            // TODO: to be resolved against newcomer subscription
-            let (proposal, id) = match new_subs {
+        while let Some(subscription) = subscription_rx.recv().await {
+            log::debug!("processing incoming subscription {:?}", subscription);
+            match subscription {
                 Subscription::Offer(id) => {
                     log::info!("TODO: resolve new Offer: {:?}", id);
+                    // TODO: get rid of unwraps
                     let offer = self.store.get_offer(&id).await.unwrap();
-                    let client_offer = offer.clone().into_client_offer().unwrap();
-                    (
-                        Proposal {
-                            properties: client_offer.properties,
-                            constraints: client_offer.constraints,
-                            proposal_id: Some(id.to_string()), // TODO: generate new id
-                            issuer_id: Some(offer.node_id.to_string()),
-                            state: Some(State::Initial),
-                            prev_proposal_id: None,
-                        },
-                        id,
-                    )
+                    let demands = self.store.get_all_demands().await.unwrap();
+
+                    for demand in demands {
+                        self.emit_if_matches(offer.clone(), demand);
+                    }
                 }
                 Subscription::Demand(id) => {
                     log::info!("TODO: resolve new Demand: {:?}", id);
                     let demand = self.store.get_demand(&id).await.unwrap();
-                    let client_demand = demand.clone().into_client_demand().unwrap();
-                    (
-                        Proposal {
-                            properties: client_demand.properties,
-                            constraints: client_demand.constraints,
-                            proposal_id: Some(id.to_string()), // TODO: generate new id
-                            issuer_id: Some(demand.node_id.to_string()),
-                            state: Some(State::Initial),
-                            prev_proposal_id: None,
-                        },
-                        id,
-                    )
+                    let offers = self.store.get_all_offers().await.unwrap();
+
+                    for offer in offers {
+                        self.emit_if_matches(offer, demand.clone());
+                    }
                 }
-            };
-            // TODO: upon finding matching pair we will send a proposal
-
-            if let Err(e) = self.proposal_tx.send(proposal) {
-                // TODO: should we stop processing events / panic ?
-                log::error!("Failed to emit proposal for subscription [{:?}]: {}", id, e)
-            };
-        }
-    }
-}
-
-pub fn find_matches<'a>(
-    offers: &'a Vec<Offer>,
-    demands: &'a Vec<Demand>,
-) -> Result<Vec<(&'a Offer, &'a Demand)>, ResolverError> {
-    let mut res = vec![];
-    for offer in offers {
-        for demand in demands {
-            if matches(offer, demand)? {
-                res.push((offer, demand));
             }
         }
     }
-    Ok(res)
+
+    fn emit_if_matches(&self, offer: Offer, demand: Demand) {
+        if !matches(&offer, &demand).unwrap() {
+            return;
+        }
+
+        let offer_id = offer.id.clone();
+        let demand_id = demand.id.clone();
+        if let Err(e) = self.proposal_tx.send(RawProposal { offer, demand }) {
+            // TODO: should we stop processing events / panic ?
+            log::error!(
+                "Failed to emit proposal [offer_id:{}, demand_id:{}]: {}",
+                offer_id,
+                demand_id,
+                e
+            )
+        };
+    }
 }
 
-fn matches(offers: &Offer, demands: &Demand) -> Result<bool, ResolverError> {
+fn matches(offer: &Offer, demand: &Demand) -> Result<bool, ResolverError> {
     // TODO
     Ok(true)
 }

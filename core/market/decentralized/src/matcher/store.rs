@@ -76,6 +76,15 @@ impl SubscriptionStore {
             .collect())
     }
 
+    pub async fn get_all_offers(&self) -> Result<Vec<Offer>, OfferError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_all_offers()
+            .await
+            .map_err(|e| OfferError::GetMany(e))?)
+    }
+
     pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError> {
         let now = Utc::now().naive_utc();
         match self.db.as_dao::<OfferDao>().select(id, now).await {
@@ -146,6 +155,15 @@ impl SubscriptionStore {
             Ok(Some(demand)) => Ok(demand),
             Ok(None) => Err(DemandError::NotFound(id.clone())),
         }
+    }
+
+    pub async fn get_all_demands(&self) -> Result<Vec<Demand>, DemandError> {
+        Ok(self
+            .db
+            .as_dao::<DemandDao>()
+            .get_all_demands()
+            .await
+            .map_err(|e| DemandError::GetMany(e))?)
     }
 
     pub async fn remove_demand(&self, id: &SubscriptionId) -> Result<(), DemandError> {

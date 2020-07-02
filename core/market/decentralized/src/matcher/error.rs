@@ -8,10 +8,12 @@ use crate::{Demand, Offer};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DemandError {
-    #[error("Failed to save Demand. Error: {0}.")]
-    SaveError(DbError),
+    #[error("Failed to get Offers. Error: {0}.")]
+    GetMany(DbError),
     #[error("Failed to get Demand [{1}]. Error: {0}.")]
     GetError(DbError, SubscriptionId),
+    #[error("Failed to save Demand. Error: {0}.")]
+    SaveError(DbError),
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
     RemoveError(DbError, SubscriptionId),
     #[error("Demand [{0}] not found.")]

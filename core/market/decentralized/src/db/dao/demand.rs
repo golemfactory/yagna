@@ -34,6 +34,13 @@ impl<'c> DemandDao<'c> {
         .await
     }
 
+    pub async fn get_all_demands(&self) -> DbResult<Vec<Demand>> {
+        readonly_transaction(self.pool, move |conn| {
+            Ok(dsl::market_demand.load::<Demand>(conn)?)
+        })
+        .await
+    }
+
     pub async fn insert(&self, demand: &Demand) -> DbResult<()> {
         let demand = demand.clone();
         do_with_transaction(self.pool, move |conn| {

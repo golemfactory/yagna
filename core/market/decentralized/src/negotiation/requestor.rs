@@ -1,22 +1,22 @@
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::db::models::{Demand as ModelDemand, SubscriptionId};
-use ya_client::model::market::Proposal;
 use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};
+use crate::db::models::{Demand as ModelDemand, SubscriptionId};
+use crate::matcher::RawProposal;
 
 /// Requestor part of negotiation logic.
 /// TODO: Too long name.
 pub struct RequestorNegotiationEngine {
     db: DbExecutor,
-    pub proposal_receiver: UnboundedReceiver<Proposal>,
+    pub proposal_receiver: UnboundedReceiver<RawProposal>,
 }
 
 impl RequestorNegotiationEngine {
     pub fn new(
         db: DbExecutor,
-        proposal_receiver: UnboundedReceiver<Proposal>,
+        proposal_receiver: UnboundedReceiver<RawProposal>,
     ) -> Result<RequestorNegotiationEngine, NegotiationInitError> {
         Ok(RequestorNegotiationEngine {
             db,
