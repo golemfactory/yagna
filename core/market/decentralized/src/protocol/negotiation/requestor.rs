@@ -56,7 +56,7 @@ impl NegotiationApi {
         };
         net::from(id)
             .to(owner)
-            .service(&requestor::proposal_addr(BUS_ID))
+            .service(&provider::proposal_addr(BUS_ID))
             .send(msg)
             .await??;
         Ok(())
@@ -70,12 +70,14 @@ impl NegotiationApi {
         proposal_id: &str,
         owner: NodeId,
     ) -> Result<(), ProposalError> {
+        log::debug!("Counter proposal [{}] sent by [{}].", proposal_id, owner);
+
         let msg = ProposalReceived {
             proposal_id: proposal_id.to_string(),
         };
         net::from(id)
             .to(owner)
-            .service(&requestor::proposal_addr(BUS_ID))
+            .service(&provider::proposal_addr(BUS_ID))
             .send(msg)
             .await??;
         Ok(())
@@ -93,7 +95,7 @@ impl NegotiationApi {
         };
         net::from(id)
             .to(owner)
-            .service(&requestor::proposal_addr(BUS_ID))
+            .service(&provider::proposal_addr(BUS_ID))
             .send(msg)
             .await??;
         Ok(())
@@ -112,7 +114,7 @@ impl NegotiationApi {
         };
         net::from(id)
             .to(owner)
-            .service(&requestor::agreement_addr(BUS_ID))
+            .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .await??;
         Ok(())
@@ -132,7 +134,7 @@ impl NegotiationApi {
         };
         net::from(id)
             .to(owner)
-            .service(&requestor::agreement_addr(BUS_ID))
+            .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .await??;
         Ok(())

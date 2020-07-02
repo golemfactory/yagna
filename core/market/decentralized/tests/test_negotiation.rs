@@ -8,6 +8,7 @@ mod tests {
     use ya_market_decentralized::protocol::negotiation::messages::ProposalReceived;
 
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio::sync::Mutex;
 
     /// Test if negotiation api calls are forwarded to other instances
@@ -29,6 +30,7 @@ mod tests {
                 "Node-1",
                 empty_on_initial_proposal,
                 move |_caller: String, msg: ProposalReceived| {
+                    log::info!("Proposal received callback");
                     let proposals = proposals_clone.clone();
                     async move {
                         proposals.lock().await.push(msg.proposal_id.clone());
@@ -55,8 +57,9 @@ mod tests {
 
         let test_proposal_id = "352435685".to_string();
         negotiatior2
-            .counter_proposal(identity1.identity, &test_proposal_id, identity2.identity)
+            .counter_proposal(identity2.identity, &test_proposal_id, identity1.identity)
             .await?;
+        tokio::time::delay_for(Duration::from_millis(100)).await;
 
         assert_eq!(proposals.lock().await.len(), 1);
         assert_eq!(proposals.lock().await[0], test_proposal_id);

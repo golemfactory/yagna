@@ -24,6 +24,7 @@ use super::mock_net::MockNet;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
+    net: MockNet,
     markets: Vec<MarketNode>,
     discoveries: Vec<DiscoveryNode>,
     negotiations: Vec<NegotiationNode>,
@@ -69,10 +70,10 @@ impl MarketsNetwork {
     /// to avoid potential name clashes.
     pub async fn new<Str: AsRef<str>>(test_name: Str) -> Self {
         let test_dir = prepare_test_dir(&test_name).unwrap();
-
-        MockNet::gsb().unwrap();
+        let net = MockNet::new().unwrap();
 
         MarketsNetwork {
+            net,
             markets: vec![],
             discoveries: vec![],
             negotiations: vec![],
@@ -85,8 +86,8 @@ impl MarketsNetwork {
         let db = self.init_database(name.as_ref())?;
         let market = Arc::new(MarketService::new(&db)?);
 
-        let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
-        let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
+        let (public_gsb_prefix, local_gsb_prefix) =
+            self.net.gsb_prefixes(&self.test_name, name.as_ref());
         market
             .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
             .await?;
@@ -98,6 +99,9 @@ impl MarketsNetwork {
             db,
         };
 
+        self.net
+            .register_node(&market_node.id.identity, &public_gsb_prefix)
+            .await?;
         self.markets.push(market_node);
         Ok(self)
     }
@@ -109,8 +113,8 @@ impl MarketsNetwork {
         offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
         retrieve_offers: impl CallbackHandler<RetrieveOffers>,
     ) -> Result<Self> {
-        let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
-        let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
+        let (public_gsb_prefix, local_gsb_prefix) =
+            self.net.gsb_prefixes(&self.test_name, name.as_ref());
 
         let discovery = Discovery::new(offer_received, offer_unsubscribed, retrieve_offers)?;
         discovery
@@ -123,6 +127,9 @@ impl MarketsNetwork {
             discovery,
         };
 
+        self.net
+            .register_node(&discovery_node.id.identity, &public_gsb_prefix)
+            .await?;
         self.discoveries.push(discovery_node);
         Ok(self)
     }
@@ -187,8 +194,8 @@ impl MarketsNetwork {
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
     ) -> Result<Self> {
-        let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
-        let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
+        let (public_gsb_prefix, local_gsb_prefix) =
+            self.net.gsb_prefixes(&self.test_name, name.as_ref());
 
         let provider_api = provider::NegotiationApi::new(
             prov_initial_proposal_received,
@@ -218,6 +225,9 @@ impl MarketsNetwork {
             requestor: requestor_api,
         };
 
+        self.net
+            .register_node(&node.id.identity, &public_gsb_prefix)
+            .await?;
         self.negotiations.push(node);
         Ok(self)
     }
