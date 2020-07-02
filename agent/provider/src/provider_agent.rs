@@ -1,6 +1,7 @@
 use crate::events::Event;
 use crate::execution::{GetExeUnit, TaskRunner, UpdateActivity};
 use crate::hardware;
+use crate::market::presets::Coefficient;
 use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments};
@@ -160,12 +161,10 @@ impl ProviderAgent {
     }
 
     pub fn list_metrics(_: ProviderConfig) -> anyhow::Result<()> {
-        let preset = Preset::default();
-        let metrics_names = preset.list_readable_metrics();
-        let metrics = preset.list_usage_metrics();
-
-        for (metric, name) in metrics.iter().zip(metrics_names.iter()) {
-            println!("{:15}{}", name, metric);
+        for entry in Coefficient::variants() {
+            if let Some(property) = entry.to_property() {
+                println!("{:15}{}", entry, property);
+            }
         }
         Ok(())
     }
@@ -185,7 +184,9 @@ impl ProviderAgent {
         preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
 
         for (name, price) in params.price.iter() {
-            preset.update_price(name, *price)?;
+            preset
+                .usage_coeffs
+                .insert(Coefficient::try_from(name.as_str())?, *price);
         }
 
         // Validate ExeUnit existence and pricing model.
@@ -291,7 +292,9 @@ impl ProviderAgent {
         preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
 
         for (name, price) in params.price.iter() {
-            preset.update_price(name, *price)?;
+            preset
+                .usage_coeffs
+                .insert(Coefficient::try_from(name.as_str())?, *price);
         }
 
         // Validate ExeUnit existence and pricing model.

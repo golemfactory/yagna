@@ -5,7 +5,7 @@ use serde_json::json;
 use ya_agreement_utils::ComInfo;
 
 use super::model::{PaymentDescription, PaymentModel};
-use crate::market::presets::Preset;
+use crate::market::presets::{Coefficient, Preset};
 
 /// Computes computations costs.
 pub struct LinearPricing {
@@ -64,10 +64,18 @@ impl LinearPricingOffer {
         }
     }
 
-    pub fn add_coefficient(&mut self, coeff_name: &str, value: f64) -> &mut LinearPricingOffer {
-        self.usage_params.push(coeff_name.to_string());
+    pub fn add_coefficient(
+        &mut self,
+        coefficient: &Coefficient,
+        value: f64,
+    ) -> Result<&mut LinearPricingOffer> {
+        let property = coefficient
+            .to_property()
+            .ok_or_else(|| anyhow!("Invalid coefficient: {}", coefficient))?
+            .to_string();
+        self.usage_params.push(property);
         self.usage_coeffs.push(value);
-        return self;
+        Ok(self)
     }
 
     /// Adds constant cost paid no matter how many resources computations will consume.
@@ -113,15 +121,19 @@ impl LinearPricingOffer {
         }
 
         let mut pricing_offer = LinearPricingOffer::new();
-        preset
-            .list_usage_metrics()
-            .iter()
-            .zip(preset.usage_coeffs.iter())
-            .for_each(|(metric, value)| {
-                pricing_offer.add_coefficient(metric, *value);
-            });
+        for coefficient in Coefficient::variants() {
+            if let Some(value) = preset.usage_coeffs.get(&coefficient) {
+                match coefficient {
+                    Coefficient::Initial => {
+                        pricing_offer.initial_cost(*value);
+                    }
+                    _ => {
+                        pricing_offer.add_coefficient(&coefficient, *value)?;
+                    }
+                }
+            }
+        }
 
-        pricing_offer.initial_cost(preset.usage_coeffs[preset.usage_coeffs.len() - 1]);
         Ok(pricing_offer)
     }
 }
