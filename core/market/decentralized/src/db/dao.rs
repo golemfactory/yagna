@@ -2,4 +2,4 @@ mod demand;
 mod offer;
 
 pub use demand::DemandDao;
-pub use offer::OfferDao;
+pub use offer::{OfferDao, OfferState};

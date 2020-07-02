@@ -1,11 +1,26 @@
+use actix_web::{error::InternalError, http::StatusCode, web::PathConfig};
+use serde::Deserialize;
+
+use ya_client::model::ErrorMessage;
+
+use crate::SubscriptionId;
+
+mod error;
 pub mod provider;
 pub mod requestor;
-pub mod response;
-
-use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
 pub const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
+
+pub fn path_config() -> PathConfig {
+    PathConfig::default().error_handler(|err, req| {
+        InternalError::new(
+            serde_json::to_string(&ErrorMessage::new(err.to_string())).unwrap(),
+            StatusCode::BAD_REQUEST,
+        )
+        .into()
+    })
+}
 
 #[derive(Deserialize)]
 pub struct PathAgreement {
@@ -14,12 +29,12 @@ pub struct PathAgreement {
 
 #[derive(Deserialize)]
 pub struct PathSubscription {
-    pub subscription_id: String,
+    pub subscription_id: SubscriptionId,
 }
 
 #[derive(Deserialize)]
 pub struct PathSubscriptionProposal {
-    pub subscription_id: String,
+    pub subscription_id: SubscriptionId,
     pub proposal_id: String,
 }
 
