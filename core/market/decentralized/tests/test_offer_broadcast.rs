@@ -1,23 +1,24 @@
+#[macro_use]
 mod utils;
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::mock_node::{default::*, wait_for_bcast};
-    use crate::utils::mock_offer::example_offer;
-    use crate::utils::MarketsNetwork;
-
-    use ya_client::model::market::Offer;
-    use ya_market_decentralized::protocol::{
-        Discovery, OfferReceived, Propagate, StopPropagateReason,
-    };
-    use ya_market_decentralized::Offer as ModelOffer;
-    use ya_market_decentralized::{MarketService, SubscriptionId};
-
+    use chrono;
     use serde_json::json;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+
+    use ya_client::model::market::Offer;
+    use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
+    use ya_market_decentralized::testing::OfferError;
+    use ya_market_decentralized::Offer as ModelOffer;
+    use ya_market_decentralized::{MarketService, SubscriptionId};
+
+    use crate::utils::mock_node::{default::*, wait_for_bcast};
+    use crate::utils::mock_offer::example_offer;
+    use crate::utils::{MarketStore, MarketsNetwork};
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
     /// Than sending unsubscribe should remove Offer from other nodes.
@@ -40,26 +41,26 @@ mod tests {
 
         let offer = Offer::new(json!({}), "()".to_string());
         let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
-        let offer = market1.matcher.get_offer(&subscription_id).await?;
-        assert!(offer.is_some());
+        let offer = market1.get_offer(&subscription_id).await?;
 
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
         let market3: Arc<MarketService> = network.get_market("Node-3");
-        wait_for_bcast(1000, &market2, &subscription_id, true).await?;
+        wait_for_bcast(1000, &market2, &subscription_id, true).await;
         // TODO: strip insertion ts from comparsion
-        assert_eq!(offer, market2.matcher.get_offer(&subscription_id).await?);
-        assert_eq!(offer, market3.matcher.get_offer(&subscription_id).await?);
+        assert_eq!(offer, market2.get_offer(&subscription_id).await?);
+        assert_eq!(offer, market3.get_offer(&subscription_id).await?);
 
         // Unsubscribe Offer. Wait some delay for propagation.
         market1
             .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
-
+        let expected_error = OfferError::AlreadyUnsubscribed(subscription_id.clone());
+        assert_err_eq!(expected_error, market1.get_offer(&subscription_id).await);
         // Expect, that Offer will disappear on other nodes.
-        wait_for_bcast(1000, &market2, &subscription_id, false).await?;
-        assert!(market2.matcher.get_offer(&subscription_id).await?.is_none());
-        assert!(market3.matcher.get_offer(&subscription_id).await?.is_none());
+        wait_for_bcast(1000, &market2, &subscription_id, false).await;
+        assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
+        assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
 
         Ok(())
     }
@@ -88,20 +89,21 @@ mod tests {
         let identity2 = network.get_default_id("Node-2");
 
         // Prepare Offer with subscription id changed to invalid.
-        let invalid_subscription_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
+        let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
         let offer = example_offer();
-        let mut offer = ModelOffer::from_new(&offer, &identity2);
-        offer.id = invalid_subscription_id.clone();
+        let creation_ts = chrono::Utc::now().naive_utc();
+        let expiration_ts = creation_ts + chrono::Duration::hours(24);
+        let mut offer = ModelOffer::from_new(&offer, &identity2, creation_ts, expiration_ts);
+        offer.id = invalid_id.clone();
 
         // Offer should be propagated to market1, but he should reject it.
         discovery2.broadcast_offer(offer).await?;
         tokio::time::delay_for(Duration::from_millis(50)).await;
 
-        assert!(market1
-            .matcher
-            .get_offer(&invalid_subscription_id)
-            .await?
-            .is_none());
+        assert_err_eq!(
+            OfferError::NotFound(invalid_id.clone()),
+            market1.get_offer(&invalid_id).await,
+        );
         Ok(())
     }
 
@@ -127,24 +129,29 @@ mod tests {
         let subscription_id = market1
             .subscribe_offer(&example_offer(), &identity1)
             .await?;
-        let offer = market1.matcher.get_offer(&subscription_id).await?;
-        assert!(offer.is_some());
+        let offer = market1.get_offer(&subscription_id).await?;
 
         // Expect, that Offer will appear on other nodes.
         let market2: Arc<MarketService> = network.get_market("Node-2");
-        wait_for_bcast(1000, &market2, &subscription_id, true).await?;
-        assert_eq!(offer, market2.matcher.get_offer(&subscription_id).await?);
+        wait_for_bcast(1000, &market2, &subscription_id, true).await;
+        assert_eq!(offer, market2.get_offer(&subscription_id).await?);
 
         // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
         // database on Node-2, since it's foreign Offer.
         market1
             .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
-        assert!(market1.matcher.get_offer(&subscription_id).await?.is_none());
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market1.get_offer(&subscription_id).await
+        );
 
         // Expect, that Offer will disappear on other nodes.
-        wait_for_bcast(1000, &market2, &subscription_id, false).await?;
-        assert!(market2.matcher.get_offer(&subscription_id).await?.is_none());
+        wait_for_bcast(1000, &market2, &subscription_id, false).await;
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market2.get_offer(&subscription_id).await
+        );
 
         // Send the same Offer using Discovery interface directly.
         // Number of returning Offers will be counted.
@@ -157,7 +164,7 @@ mod tests {
                     let offers_counter = counter.clone();
                     async move {
                         offers_counter.fetch_add(1, Ordering::SeqCst);
-                        Ok(Propagate::False(StopPropagateReason::AlreadyExists))
+                        Ok(Propagate::No(Reason::AlreadyExists))
                     }
                 },
                 empty_on_offer_unsubscribed,
@@ -167,7 +174,7 @@ mod tests {
 
         // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
         let market3: Discovery = network.get_discovery("Node-3");
-        market3.broadcast_offer(offer.unwrap()).await?;
+        market3.broadcast_offer(offer).await?;
 
         // Wait for Offer propagation.
         // TODO: How to wait without assuming any number of seconds?
