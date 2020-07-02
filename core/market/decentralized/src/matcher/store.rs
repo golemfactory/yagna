@@ -59,15 +59,20 @@ impl SubscriptionStore {
     }
 
     pub async fn get_offers(&self) -> Result<Vec<ClientOffer>, OfferError> {
-        let model_offers = self
+        Ok(self
             .db
             .as_dao::<OfferDao>()
             .get_offers()
             .await
-            .map_err(|e| OfferError::GetMany(e))?;
-        Ok(model_offers
+            .map_err(|e| OfferError::GetMany(e))?
             .into_iter()
-            .map(|o| o.into_client_offer().unwrap())
+            .filter_map(|o| match o.into_client_offer() {
+                Err(e) => {
+                    log::error!("Skipping Offer because of: {}", e);
+                    None
+                }
+                Ok(o) => Some(o),
+            })
             .collect())
     }
 
