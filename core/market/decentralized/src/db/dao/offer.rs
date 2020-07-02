@@ -51,7 +51,8 @@ impl<'c> OfferDao<'c> {
     pub async fn get_offers(&self) -> DbResult<Vec<Offer>> {
         readonly_transaction(self.pool, move |conn| {
             Ok(dsl::market_offer.limit(1024).load::<Offer>(conn)?)
-        }).await
+        })
+        .await
     }
 
     pub async fn insert(&self, offer: Offer) -> DbResult<()> {

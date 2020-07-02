@@ -203,6 +203,7 @@ pub(crate) async fn on_offer_unsubscribed(
             OfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
             OfferError::SaveError(_, _)
             | OfferError::GetError(_, _)
+            | OfferError::GetMany(_)
             | OfferError::SubscriptionValidation(_) => {
                 log::error!("Unexpected error handling offer unsubscription: {}.", e);
                 panic!("Should not happened: {}.", e)
