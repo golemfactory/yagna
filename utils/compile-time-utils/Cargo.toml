@@ -6,4 +6,4 @@ edition = "2018"
 description = "Compile-time utilities"
 
 [dependencies]
-lazy_static = "1.4"
+git-version = "0.3.4"

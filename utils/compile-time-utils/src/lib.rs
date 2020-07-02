@@ -1,16 +1,16 @@
-#[macro_export]
-macro_rules! define_version_string {
-    () => {
-        #[macro_use]
-        extern crate lazy_static;
+pub use git_version::git_version;
 
-        lazy_static! {
-            static ref VERSION: String = {
-                match option_env!("GITHUB_SHA") {
-                    Some(sha) => format!("{}-{}", env!("CARGO_PKG_VERSION"), &sha[0..8]),
-                    None => String::from(env!("CARGO_PKG_VERSION")),
-                }
-            };
-        }
+#[macro_export]
+macro_rules! crate_version_commit {
+    () => {
+        Box::leak(
+            [
+                env!("CARGO_PKG_VERSION"),
+                "-",
+                ya_compile_time_utils::git_version!(),
+            ]
+            .join("")
+            .into_boxed_str(),
+        ) as &str
     };
 }
