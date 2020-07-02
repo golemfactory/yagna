@@ -207,7 +207,7 @@ async fn chunk_uploaded(
         ))
     })?;
     file.write_all(&chunk.content[..]).map_err(|error| {
-        model::Error::ReadError(format!(
+        model::Error::WriteError(format!(
             "Can't write {} bytes at offset {}, error: {}",
             chunk.content.len(),
             chunk.offset,
@@ -221,10 +221,13 @@ async fn upload_finished(
     file: Arc<Mutex<File>>,
     msg: model::UploadFinished,
 ) -> Result<(), model::Error> {
+    let mut file = file.lock().await;
+    file.flush()
+        .map_err(|error| model::Error::WriteError(format!("Can't flush file: {}", error)))?;
+
     if let Some(expected_hash) = msg.hash {
         log::debug!("Upload finished. Verifying hash...");
 
-        let mut file = file.lock().await;
         let real_hash = hash_file_sha256(&mut file)
             .map_err(|error| model::Error::InternalError(error.to_string()))?;
 
