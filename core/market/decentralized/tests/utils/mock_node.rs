@@ -16,7 +16,8 @@ use ya_market_decentralized::testing::negotiation::messages::{
 };
 use ya_market_decentralized::testing::negotiation::provider;
 use ya_market_decentralized::testing::negotiation::requestor;
-use ya_market_decentralized::{MarketService, SubscriptionId};
+use ya_market_decentralized::testing::{DemandError, OfferError};
+use ya_market_decentralized::{Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -301,7 +302,7 @@ fn test_data_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test-workdir")
 }
 
-pub fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf, anyhow::Error> {
+pub fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf> {
     let test_dir: PathBuf = test_data_dir().join(dir_name.as_ref());
 
     if test_dir.exists() {
@@ -328,24 +329,39 @@ pub async fn wait_for_bcast(
     grace_millis: u64,
     market: &MarketService,
     subscription_id: &SubscriptionId,
-    stop_is_some: bool,
-) -> Result<()> {
+    stop_is_ok: bool,
+) {
     let steps = 20;
     let wait_step = Duration::from_millis(grace_millis / steps);
-    let matcher = market.matcher.clone();
+    let store = market.matcher.store.clone();
     for _ in 0..steps {
         tokio::time::delay_for(wait_step).await;
-        if matcher.get_offer(&subscription_id).await?.is_some() == stop_is_some {
+        if store.get_offer(&subscription_id).await.is_ok() == stop_is_ok {
             break;
         }
     }
-    Ok(())
+}
+
+#[async_trait::async_trait]
+pub trait MarketStore {
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError>;
+    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+}
+
+#[async_trait::async_trait]
+impl MarketStore for MarketService {
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError> {
+        self.matcher.store.get_offer(id).await
+    }
+
+    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
+        self.matcher.store.get_demand(id).await
+    }
 }
 
 pub mod default {
     use ya_market_decentralized::protocol::{
-        DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, RetrieveOffers,
-        StopPropagateReason,
+        DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
     };
     use ya_market_decentralized::testing::negotiation::errors::{AgreementError, ProposalError};
     use ya_market_decentralized::testing::negotiation::messages::{
@@ -358,14 +374,14 @@ pub mod default {
         _caller: String,
         _msg: OfferReceived,
     ) -> Result<Propagate, ()> {
-        Ok(Propagate::False(StopPropagateReason::AlreadyExists))
+        Ok(Propagate::No(Reason::AlreadyExists))
     }
 
     pub async fn empty_on_offer_unsubscribed(
         _caller: String,
         _msg: OfferUnsubscribed,
     ) -> Result<Propagate, ()> {
-        Ok(Propagate::False(StopPropagateReason::AlreadyUnsubscribed))
+        Ok(Propagate::No(Reason::Unsubscribed))
     }
 
     pub async fn empty_on_retrieve_offers(

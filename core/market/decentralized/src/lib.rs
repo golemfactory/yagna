@@ -31,5 +31,7 @@ pub mod testing {
         models::SubscriptionParseError,
     };
 
+    pub use super::matcher::SubscriptionStore;
+    pub use super::matcher::{DemandError, MatcherError, OfferError};
     pub use super::protocol::negotiation;
 }
