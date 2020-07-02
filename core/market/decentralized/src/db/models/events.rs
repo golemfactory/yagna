@@ -15,7 +15,7 @@ use ya_persistence::executor::{DbExecutor, Error as DbError};
 use super::SubscriptionId;
 use crate::db::dao::ProposalDao;
 use crate::db::models::{OwnerType, Proposal};
-use crate::db::schema::market_requestor_event;
+use crate::db::schema::market_event;
 
 #[derive(Error, Debug)]
 pub enum EventError {
@@ -51,8 +51,7 @@ pub struct MarketEvent {
 }
 
 #[derive(Clone, Debug, Insertable)]
-#[table_name = "market_provider_event"]
-#[table_name = "market_requestor_event"]
+#[table_name = "market_event"]
 pub struct NewMarketEvent {
     pub subscription_id: SubscriptionId,
     pub event_type: EventType,

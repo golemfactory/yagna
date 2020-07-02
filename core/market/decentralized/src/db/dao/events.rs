@@ -7,7 +7,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::models::MarketEvent;
 use crate::db::models::{OwnerType, Proposal, SubscriptionId};
-use crate::db::schema::market_requestor_event::dsl as dsl_requestor;
+use crate::db::schema::market_event::dsl;
 use crate::db::DbResult;
 
 #[derive(Error, Debug)]
@@ -39,7 +39,7 @@ impl<'c> EventsDao<'c> {
     pub async fn add_requestor_event(&self, proposal: Proposal) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             let event = MarketEvent::from_proposal(&proposal, OwnerType::Requestor);
-            diesel::insert_into(dsl_requestor::market_requestor_event)
+            diesel::insert_into(dsl::market_event)
                 .values(event)
                 .execute(conn)?;
             Ok(())
@@ -64,9 +64,9 @@ impl<'c> EventsDao<'c> {
                 _ => (),
             };
 
-            let events = dsl_requestor::market_requestor_event
-                .filter(dsl_requestor::subscription_id.eq(&subscription_id))
-                .order_by(dsl_requestor::timestamp.asc())
+            let events = dsl::market_event
+                .filter(dsl::subscription_id.eq(&subscription_id))
+                .order_by(dsl::timestamp.asc())
                 .limit(max_events as i64)
                 .load::<MarketEvent>(conn)?;
 
@@ -77,9 +77,9 @@ impl<'c> EventsDao<'c> {
             let first_event = events.first();
             if let Some(first_event) = first_event {
                 let num_removed = diesel::delete(
-                    dsl_requestor::market_requestor_event
-                        .filter(dsl_requestor::subscription_id.eq(&subscription_id))
-                        .filter(dsl_requestor::timestamp.le(first_event.timestamp)),
+                    dsl::market_event
+                        .filter(dsl::subscription_id.eq(&subscription_id))
+                        .filter(dsl::timestamp.le(first_event.timestamp)),
                 )
                 .execute(conn)?;
 
@@ -100,11 +100,8 @@ impl<'c> EventsDao<'c> {
     pub async fn remove_requestor_events(&self, subscription_id: &SubscriptionId) -> DbResult<()> {
         let subscription_id = subscription_id.clone();
         do_with_transaction(self.pool, move |conn| {
-            diesel::delete(
-                dsl_requestor::market_requestor_event
-                    .filter(dsl_requestor::subscription_id.eq(&subscription_id)),
-            )
-            .execute(conn)?;
+            diesel::delete(dsl::market_event.filter(dsl::subscription_id.eq(&subscription_id)))
+                .execute(conn)?;
             Ok(())
         })
         .await

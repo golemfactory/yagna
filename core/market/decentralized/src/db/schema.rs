@@ -43,17 +43,7 @@ table! {
 }
 
 table! {
-    market_requestor_event (id) {
-        id -> Integer,
-        subscription_id -> Text,
-        timestamp -> Timestamp,
-        event_type -> Integer,
-        artifact_id -> Text,
-    }
-}
-
-table! {
-    market_provider_event (id) {
+    market_event (id) {
         id -> Integer,
         subscription_id -> Text,
         timestamp -> Timestamp,
