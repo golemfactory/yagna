@@ -1,19 +1,13 @@
 use lazy_static::lazy_static;
-use std::env::current_dir;
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::api::{provider, requestor};
-use crate::db::models::Demand as ModelDemand;
-use crate::db::models::Offer as ModelOffer;
-use crate::matcher::{Matcher, MatcherError, MatcherInitError};
-use crate::migrations;
+use crate::matcher::{DemandError, Matcher, MatcherError, MatcherInitError, OfferError};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
-use crate::protocol::DiscoveryBuilder;
+use crate::rest_api;
+use crate::{migrations, SubscriptionId};
 
-use ya_client::error::Error::ModelError;
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{private, BUS_ID};
@@ -26,6 +20,10 @@ use ya_service_api_web::scope::ExtendableScope;
 pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
+    #[error(transparent)]
+    OfferError(#[from] OfferError),
+    #[error(transparent)]
+    DemandError(#[from] DemandError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
     #[error("Internal error: {0}.")]
@@ -44,7 +42,7 @@ pub enum MarketInitError {
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    pub matcher: Arc<Matcher>,
+    pub matcher: Matcher,
     pub provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
     pub requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
 }
@@ -53,16 +51,13 @@ impl MarketService {
     pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
         db.apply_migration(migrations::run_with_output)?;
 
-        // TODO: Set Matcher independent parameters here or remove this todo.
-        let builder = DiscoveryBuilder::new();
-
-        let (matcher, listeners) = Matcher::new(builder, db)?;
+        let (matcher, listeners) = Matcher::new(db)?;
         let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
         let requestor_engine =
             RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
-            matcher: Arc::new(matcher),
+            matcher,
             provider_negotiation_engine: provider_engine,
             requestor_negotiation_engine: requestor_engine,
         })
@@ -91,78 +86,75 @@ impl MarketService {
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
         let market = match MARKET.get_or_init_market(&ctx.component()) {
             Ok(market) => market,
-            Err(error) => {
-                log::error!("{}", error);
-                panic!("Market initialization impossible. Check error logs.")
+            Err(e) => {
+                log::error!("REST API initialization failed: {}", e);
+                panic!("Market Service initialization impossible: {}", e)
             }
         };
+        MarketService::bind_rest(market)
+    }
 
+    pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
         actix_web::web::scope(crate::MARKET_API_PATH)
-            .data(market)
-            .extend(provider::register_endpoints)
-            .extend(requestor::register_endpoints)
+            .data(myself)
+            .app_data(rest_api::path_config())
+            .extend(rest_api::provider::register_endpoints)
+            .extend(rest_api::requestor::register_endpoints)
     }
 
     pub async fn get_offers(
         &self,
     ) -> Result<Vec<Offer>, MarketError> {
-        Ok(self.matcher.get_offers().await?)
+        Ok(self.matcher.store.get_offers().await?)
     }
 
     pub async fn subscribe_offer(
         &self,
         offer: &Offer,
-        id: Identity,
-    ) -> Result<String, MarketError> {
-        let offer = ModelOffer::from_new(offer, &id);
-        let subscription_id = offer.id.to_string();
-
-        self.matcher.subscribe_offer(&offer).await?;
+        id: &Identity,
+    ) -> Result<SubscriptionId, MarketError> {
+        let offer = self.matcher.subscribe_offer(id, offer).await?;
         self.provider_negotiation_engine
             .subscribe_offer(&offer)
             .await?;
-        Ok(subscription_id)
+        Ok(offer.id)
     }
 
     pub async fn unsubscribe_offer(
         &self,
-        subscription_id: String,
-        id: Identity,
+        subscription_id: &SubscriptionId,
+        id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-
         self.provider_negotiation_engine
-            .unsubscribe_offer(&subscription_id)
+            .unsubscribe_offer(subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_offer(&subscription_id).await?)
+        Ok(self.matcher.unsubscribe_offer(id, subscription_id).await?)
     }
 
     pub async fn subscribe_demand(
         &self,
         demand: &Demand,
-        id: Identity,
-    ) -> Result<String, MarketError> {
-        let demand = ModelDemand::from_new(demand, &id);
-        let subscription_id = demand.id.to_string();
-
-        self.matcher.subscribe_demand(&demand).await?;
+        id: &Identity,
+    ) -> Result<SubscriptionId, MarketError> {
+        let demand = self.matcher.subscribe_demand(id, demand).await?;
         self.requestor_negotiation_engine
             .subscribe_demand(&demand)
             .await?;
-        Ok(subscription_id)
+        Ok(demand.id)
     }
 
     pub async fn unsubscribe_demand(
         &self,
-        subscription_id: String,
-        id: Identity,
+        subscription_id: &SubscriptionId,
+        id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-
         self.requestor_negotiation_engine
-            .unsubscribe_demand(&subscription_id)
+            .unsubscribe_demand(subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_demand(&subscription_id).await?)
+        // TODO: shouldn't remove precede negotiation unsubscribe?
+        Ok(self.matcher.unsubscribe_demand(id, subscription_id).await?)
     }
 }
 

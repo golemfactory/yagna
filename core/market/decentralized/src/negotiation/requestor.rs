@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::db::models::Demand as ModelDemand;
+use crate::db::models::{Demand as ModelDemand, SubscriptionId};
 use ya_client::model::market::Proposal;
 use ya_persistence::executor::DbExecutor;
 
@@ -41,7 +41,7 @@ impl RequestorNegotiationEngine {
 
     pub async fn unsubscribe_demand(
         &self,
-        subscription_id: &String,
+        subscription_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())

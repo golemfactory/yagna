@@ -12,12 +12,16 @@ cargo run --no-default-features --features market-decentralized service run
 
 To test market-test-suite run:
 ```
-cargo test --workspace --features ya-market-decentralized/market-test-suite
+RUST_TEST_THREADS=1 cargo test --workspace --features ya-market-decentralized/market-test-suite
 ```
 or for market crate only
 ```
-cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite
+RUST_TEST_THREADS=1 cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite
 ```
+
+Note that market tests should be run in single thread.
+We should investigate in future, why they sometimes fail with multiple threads
+and tests running simultaneously.
 
 ### Running with logs enabled
 
