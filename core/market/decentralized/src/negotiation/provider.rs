@@ -5,7 +5,7 @@ use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};
 use crate::protocol::negotiation::messages::{
-    AgreementReceived, AgreementRejected, InitialProposalReceived, ProposalReceived,
+    AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
@@ -24,7 +24,7 @@ impl ProviderNegotiationEngine {
             move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
             move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
-            move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
+            move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
         );
 
         Ok(Arc::new(ProviderNegotiationEngine { api, db }))

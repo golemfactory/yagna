@@ -129,7 +129,7 @@ impl NegotiationApi {
         agreement_id: &str,
         owner: NodeId,
     ) -> Result<(), AgreementError> {
-        let msg = AgreementRejected {
+        let msg = AgreementCancelled {
             agreement_id: agreement_id.to_string(),
         };
         net::from(id)

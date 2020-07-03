@@ -39,7 +39,7 @@ mod tests {
                 },
                 empty_on_proposal_rejected,
                 empty_on_agreement_received,
-                empty_on_agreement_rejected,
+                empty_on_agreement_cancelled,
             )
             .await?
             .add_requestor_negotiation_api(

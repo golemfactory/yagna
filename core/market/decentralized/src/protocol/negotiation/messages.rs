@@ -89,7 +89,6 @@ impl RpcMessage for AgreementApproved {
     type Error = AgreementError;
 }
 
-/// Agreement was cancelled or rejected.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementRejected {
@@ -98,6 +97,18 @@ pub struct AgreementRejected {
 
 impl RpcMessage for AgreementRejected {
     const ID: &'static str = "AgreementRejected";
+    type Item = ();
+    type Error = AgreementError;
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgreementCancelled {
+    pub agreement_id: String,
+}
+
+impl RpcMessage for AgreementCancelled {
+    const ID: &'static str = "AgreementCancelled";
     type Item = ();
     type Error = AgreementError;
 }

@@ -11,8 +11,8 @@ use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
 use ya_market_decentralized::testing::negotiation::messages::{
-    AgreementApproved, AgreementReceived, AgreementRejected, InitialProposalReceived,
-    ProposalReceived, ProposalRejected,
+    AgreementApproved, AgreementCancelled, AgreementReceived, AgreementRejected,
+    InitialProposalReceived, ProposalReceived, ProposalRejected,
 };
 use ya_market_decentralized::testing::negotiation::provider;
 use ya_market_decentralized::testing::negotiation::requestor;
@@ -142,7 +142,7 @@ impl MarketsNetwork {
         prov_proposal_received: impl CallbackHandler<ProposalReceived>,
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
-        prov_agreement_cancelled: impl CallbackHandler<AgreementRejected>,
+        prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
     ) -> Result<Self> {
         self.add_negotiation_api(
             name.as_ref(),
@@ -173,7 +173,7 @@ impl MarketsNetwork {
             default::empty_on_proposal_received,
             default::empty_on_proposal_rejected,
             default::empty_on_agreement_received,
-            default::empty_on_agreement_rejected,
+            default::empty_on_agreement_cancelled,
             req_proposal_received,
             req_proposal_rejected,
             req_agreement_approved,
@@ -189,7 +189,7 @@ impl MarketsNetwork {
         prov_proposal_received: impl CallbackHandler<ProposalReceived>,
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
-        prov_agreement_cancelled: impl CallbackHandler<AgreementRejected>,
+        prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
         req_proposal_received: impl CallbackHandler<ProposalReceived>,
         req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
@@ -360,6 +360,7 @@ impl MarketStore for MarketService {
 }
 
 pub mod default {
+    use ya_market_decentralized::protocol::negotiation::messages::AgreementCancelled;
     use ya_market_decentralized::protocol::{
         DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
     };
@@ -429,6 +430,13 @@ pub mod default {
     pub async fn empty_on_agreement_rejected(
         _caller: String,
         _msg: AgreementRejected,
+    ) -> Result<(), AgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_cancelled(
+        _caller: String,
+        _msg: AgreementCancelled,
     ) -> Result<(), AgreementError> {
         Ok(())
     }

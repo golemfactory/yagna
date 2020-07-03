@@ -4,8 +4,8 @@ use super::super::callbacks::{CallbackHandler, HandlerSlot};
 use super::errors::{AgreementError, NegotiationApiInitError, ProposalError};
 use super::messages::*;
 use super::messages::{
-    AgreementReceived, AgreementRejected, InitialProposalReceived, ProposalReceived,
-    ProposalRejected,
+    AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
+    ProposalReceived, ProposalRejected,
 };
 
 use ya_client::model::NodeId;
@@ -26,7 +26,7 @@ struct NegotiationImpl {
     proposal_received: HandlerSlot<ProposalReceived>,
     proposal_rejected: HandlerSlot<ProposalRejected>,
     agreement_received: HandlerSlot<AgreementReceived>,
-    agreement_cancelled: HandlerSlot<AgreementRejected>,
+    agreement_cancelled: HandlerSlot<AgreementCancelled>,
 }
 
 impl NegotiationApi {
@@ -35,7 +35,7 @@ impl NegotiationApi {
         proposal_received: impl CallbackHandler<ProposalReceived>,
         proposal_rejected: impl CallbackHandler<ProposalRejected>,
         agreement_received: impl CallbackHandler<AgreementReceived>,
-        agreement_cancelled: impl CallbackHandler<AgreementRejected>,
+        agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
     ) -> NegotiationApi {
         let negotiation_impl = NegotiationImpl {
             initial_proposal_received: HandlerSlot::new(initial_proposal_received),
@@ -174,7 +174,7 @@ impl NegotiationApi {
     async fn on_agreement_cancelled(
         self,
         caller: String,
-        msg: AgreementRejected,
+        msg: AgreementCancelled,
     ) -> Result<(), AgreementError> {
         log::debug!(
             "Negotiation API: Agreement [{}] cancelled by [{}].",
@@ -228,7 +228,7 @@ impl NegotiationApi {
         let myself = self.clone();
         let _ = bus::bind_with_caller(
             &provider::agreement_addr(public_prefix),
-            move |caller: String, msg: AgreementRejected| {
+            move |caller: String, msg: AgreementCancelled| {
                 let myself = myself.clone();
                 myself.on_agreement_cancelled(caller, msg)
             },
