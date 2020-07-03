@@ -11,7 +11,7 @@ use super::messages::{
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::typed as bus;
+use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::RpcEndpoint;
 
 /// Responsible for communication with markets on other nodes
@@ -189,50 +189,31 @@ impl NegotiationApi {
         public_prefix: &str,
         private_prefix: &str,
     ) -> Result<(), NegotiationApiInitError> {
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &provider::proposal_addr(public_prefix),
-            move |caller: String, msg: InitialProposalReceived| {
-                let myself = myself.clone();
-                myself.on_initial_proposal_received(caller, msg)
-            },
-        );
-
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &provider::proposal_addr(public_prefix),
-            move |caller: String, msg: ProposalReceived| {
+        ServiceBinder::new(&provider::proposal_addr(public_prefix), &(), self.clone())
+            .bind_with_processor(
+                move |_, myself, caller: String, msg: InitialProposalReceived| {
+                    let myself = myself.clone();
+                    myself.on_initial_proposal_received(caller, msg)
+                },
+            )
+            .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
                 let myself = myself.clone();
                 myself.on_proposal_received(caller, msg)
-            },
-        );
-
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &provider::proposal_addr(public_prefix),
-            move |caller: String, msg: ProposalRejected| {
+            })
+            .bind_with_processor(move |_, myself, caller: String, msg: ProposalRejected| {
                 let myself = myself.clone();
                 myself.on_proposal_rejected(caller, msg)
-            },
-        );
+            });
 
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &provider::agreement_addr(public_prefix),
-            move |caller: String, msg: AgreementReceived| {
+        ServiceBinder::new(&provider::agreement_addr(public_prefix), &(), self.clone())
+            .bind_with_processor(move |_, myself, caller: String, msg: AgreementReceived| {
                 let myself = myself.clone();
                 myself.on_agreement_received(caller, msg)
-            },
-        );
-
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &provider::agreement_addr(public_prefix),
-            move |caller: String, msg: AgreementCancelled| {
+            })
+            .bind_with_processor(move |_, myself, caller: String, msg: AgreementCancelled| {
                 let myself = myself.clone();
                 myself.on_agreement_cancelled(caller, msg)
-            },
-        );
+            });
         Ok(())
     }
 }

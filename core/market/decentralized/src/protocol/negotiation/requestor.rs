@@ -8,7 +8,7 @@ use super::messages::{AgreementApproved, AgreementRejected, ProposalReceived, Pr
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::typed as bus;
+use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::RpcEndpoint;
 
 /// Responsible for communication with markets on other nodes
@@ -197,41 +197,25 @@ impl NegotiationApi {
         public_prefix: &str,
         private_prefix: &str,
     ) -> Result<(), NegotiationApiInitError> {
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &requestor::proposal_addr(public_prefix),
-            move |caller: String, msg: ProposalReceived| {
+        ServiceBinder::new(&requestor::proposal_addr(public_prefix), &(), self.clone())
+            .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
                 let myself = myself.clone();
                 myself.on_proposal_received(caller, msg)
-            },
-        );
-
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &requestor::proposal_addr(public_prefix),
-            move |caller: String, msg: ProposalRejected| {
+            })
+            .bind_with_processor(move |_, myself, caller: String, msg: ProposalRejected| {
                 let myself = myself.clone();
                 myself.on_proposal_rejected(caller, msg)
-            },
-        );
+            });
 
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &requestor::agreement_addr(public_prefix),
-            move |caller: String, msg: AgreementApproved| {
+        ServiceBinder::new(&requestor::agreement_addr(public_prefix), &(), self.clone())
+            .bind_with_processor(move |_, myself, caller: String, msg: AgreementApproved| {
                 let myself = myself.clone();
                 myself.on_agreement_approved(caller, msg)
-            },
-        );
-
-        let myself = self.clone();
-        let _ = bus::bind_with_caller(
-            &requestor::agreement_addr(public_prefix),
-            move |caller: String, msg: AgreementRejected| {
+            })
+            .bind_with_processor(move |_, myself, caller: String, msg: AgreementRejected| {
                 let myself = myself.clone();
                 myself.on_agreement_rejected(caller, msg)
-            },
-        );
+            });
         Ok(())
     }
 }
