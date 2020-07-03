@@ -4,8 +4,6 @@ use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
 pub enum RpcMessageError {
-    #[error("Schedule payment error: {0}")]
-    Schedule(#[from] local::ScheduleError),
     #[error("Send error: {0}")]
     Send(#[from] public::SendError),
     #[error("Accept/reject error: {0}")]
@@ -25,16 +23,6 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
-
-    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-    pub enum ScheduleError {
-        #[error("Currency conversion error: {0}")]
-        Conversion(String),
-        #[error("Invalid address: {0}")]
-        Address(String),
-        #[error("Payment driver error: {0}")]
-        Driver(String),
-    }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -119,7 +107,7 @@ pub mod local {
     impl RpcMessage for SchedulePayment {
         const ID: &'static str = "SchedulePayment";
         type Item = ();
-        type Error = ScheduleError;
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]

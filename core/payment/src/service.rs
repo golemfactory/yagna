@@ -34,7 +34,7 @@ mod local {
         processor: PaymentProcessor,
         sender: String,
         msg: SchedulePayment,
-    ) -> Result<(), ScheduleError> {
+    ) -> Result<(), GenericError> {
         processor.schedule_payment(msg).await?;
         Ok(())
     }
@@ -63,7 +63,8 @@ mod local {
         sender: String,
         msg: NotifyPayment,
     ) -> Result<(), GenericError> {
-        processor.notify_payment(msg).await
+        processor.notify_payment(msg).await?;
+        Ok(())
     }
 
     async fn get_status(
@@ -116,9 +117,10 @@ mod public {
     use super::*;
 
     use crate::dao::*;
-    use crate::error::{DbError, Error, PaymentError};
+    use crate::error::DbError;
     use crate::utils::*;
 
+    use crate::error::processor::VerifyPaymentError;
     use ya_client_model::payment::*;
     use ya_client_model::NodeId;
     use ya_core_model::payment::public::*;
@@ -423,11 +425,14 @@ mod public {
         }
 
         match processor.verify_payment(payment).await {
-            Err(Error::Payment(PaymentError::Driver(e))) => return Err(SendError::ServiceError(e)),
-            Err(e) => return Err(SendError::BadRequest(e.to_string())),
-            Ok(_) => {}
+            Ok(_) => Ok(Ack {}),
+            Err(e) => match e {
+                VerifyPaymentError::ConfirmationEncoding => {
+                    Err(SendError::BadRequest(e.to_string()))
+                }
+                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+                _ => Err(SendError::ServiceError(e.to_string())),
+            },
         }
-
-        Ok(Ack {})
     }
 }
