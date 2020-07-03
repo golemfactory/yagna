@@ -27,8 +27,8 @@ pub fn match_weak<'a>(
     let result1 = demand.constraints.resolve(&offer.properties);
     let result2 = offer.constraints.resolve(&demand.properties);
 
-    log::debug!("Result1: {:?}", result1);
-    log::debug!("Result2: {:?}", result2);
+    log::debug!("Demand constraints with Offer properties: {:?}", result1);
+    log::debug!("Offer constraints with Demand properties: {:?}", result2);
 
     let mut un_props1 = vec![]; // undefined properties in result 1
     let mut un_props2 = vec![]; // undefined properties in result 2

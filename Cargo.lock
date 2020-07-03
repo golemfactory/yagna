@@ -5189,10 +5189,13 @@ dependencies = [
  "asnom",
  "chrono",
  "decimal",
+ "env_logger 0.7.1",
  "log 0.4.8",
  "nom 2.2.1",
  "regex",
  "semver",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
