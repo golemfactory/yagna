@@ -43,7 +43,7 @@ async fn subscribe(
 
 #[actix_web::get("/offers")]
 async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> HttpResponse {
-    match market.get_offers().await {
+    match market.get_offers(Some(id)).await {
         Ok(offers) => HttpResponse::Ok().json(offers),
         Err(error) => HttpResponse::InternalServerError().json(&format!("{}", error)),
     }
