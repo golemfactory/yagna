@@ -12,9 +12,11 @@ use crate::db::DbResult;
 use crate::matcher::DraftProposal;
 
 use ya_client::model::market::event::RequestorEvent;
+use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_persistence::executor::DbExecutor;
 
 use crate::negotiation::notifier::NotifierError;
+use crate::negotiation::ProposalError;
 use crate::protocol::negotiation::messages::{
     AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected,
 };
@@ -85,6 +87,49 @@ impl RequestorBroker {
             });
         // TODO: We could remove all resources related to Proposals.
         Ok(())
+    }
+
+    pub async fn counter_proposal(
+        &self,
+        subscription_id: &SubscriptionId,
+        prev_proposal_id: &str,
+        proposal: &ClientProposal,
+    ) -> Result<String, ProposalError> {
+        // TODO: Everything should happen under transaction.
+        let prev_proposal = self
+            .db
+            .as_dao::<ProposalDao>()
+            .get_proposal(prev_proposal_id)
+            .await
+            .map_err(|e| {
+                ProposalError::FailedGetProposal(prev_proposal_id.to_string(), e.to_string())
+            })?
+            .ok_or_else(|| {
+                ProposalError::ProposalNotFound(
+                    prev_proposal_id.to_string(),
+                    subscription_id.clone(),
+                )
+            })?;
+
+        if &prev_proposal.negotiation.subscription_id != subscription_id {
+            Err(ProposalError::ProposalNotFound(
+                prev_proposal_id.to_string(),
+                subscription_id.clone(),
+            ))?
+        }
+
+        let new_proposal = prev_proposal.counter_with(proposal);
+        let proposal_id = new_proposal.body.id.clone();
+        self.db
+            .as_dao::<ProposalDao>()
+            .save_proposal(new_proposal)
+            .await
+            .map_err(|e| ProposalError::FailedSaveProposal(prev_proposal_id.to_string(), e))?;
+
+        // TODO: Check if subscription is active
+        // TODO: Check if this proposal wasn't already countered.
+        // TODO: Send proposal to Provider.
+        Ok(proposal_id)
     }
 
     pub async fn query_events(

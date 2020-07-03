@@ -4,6 +4,8 @@ use thiserror::Error;
 use crate::db::dao::TakeEventsError;
 use crate::db::models::{SubscriptionId, SubscriptionParseError};
 
+use ya_persistence::executor::Error as DbError;
+
 #[derive(Error, Debug)]
 pub enum NegotiationError {}
 
@@ -30,7 +32,18 @@ pub enum QueryEventsError {
 }
 
 #[derive(Error, Debug)]
-pub enum ProposalError {}
+pub enum ProposalError {
+    #[error("Subscription [{0}] was already unsubscribed.")]
+    Unsubscribed(SubscriptionId),
+    #[error("Subscription [{0}] expired.")]
+    SubscriptionExpired(SubscriptionId),
+    #[error("Proposal [{0}] not found for subscription [{1}].")]
+    ProposalNotFound(String, SubscriptionId),
+    #[error("Failed to get Proposal [{0}]. Error: [{1}]")]
+    FailedGetProposal(String, String),
+    #[error("Failed to save counter Proposal of [{0}]. Error: [{1}]")]
+    FailedSaveProposal(String, DbError),
+}
 
 impl From<TakeEventsError> for QueryEventsError {
     fn from(e: TakeEventsError) -> Self {

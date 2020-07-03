@@ -141,6 +141,28 @@ impl Proposal {
         }
     }
 
+    pub fn counter_with(mut self, proposal: &ClientProposal) -> Proposal {
+        let creation_ts = Utc::now().naive_utc();
+        // TODO: How to set expiration? Config?
+        let expiration_ts = creation_ts + Duration::minutes(10);
+        let proposal_id = hash_proposal(
+            &self.negotiation.offer_id,
+            &self.negotiation.demand_id,
+            &creation_ts,
+        );
+
+        self.body.prev_proposal_id = Some(self.body.id.clone());
+        self.body.id = proposal_id;
+        self.body.properties = proposal.properties.to_string();
+        self.body.constraints = proposal.constraints.clone();
+        self.body.creation_ts = creation_ts;
+        self.body.expiration_ts = expiration_ts;
+        self.body.state = ProposalState::Draft;
+        // We leave negotiation id the same.
+
+        self
+    }
+
     pub fn into_client(self) -> Result<ClientProposal, ErrorMessage> {
         let properties = serde_json::from_str(&self.body.properties).map_err(|error| {
             format!(

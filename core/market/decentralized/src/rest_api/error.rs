@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
 
+use crate::negotiation::ProposalError;
 use crate::{
     market::MarketError,
     matcher::{DemandError, MatcherError, OfferError},
@@ -74,6 +75,15 @@ impl ResponseError for QueryEventsError {
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(_) => {
                 HttpResponse::BadRequest().json(msg)
             }
+            _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for ProposalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
             _ => HttpResponse::InternalServerError().json(msg),
         }
     }

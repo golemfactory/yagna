@@ -39,6 +39,16 @@ impl<'c> ProposalDao<'c> {
         .await
     }
 
+    pub async fn save_proposal(&self, proposal: Proposal) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::insert_into(dsl::market_proposal)
+                .values(&proposal.body)
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn get_proposal(&self, proposal_id: &str) -> DbResult<Option<Proposal>> {
         let proposal_id = proposal_id.to_string();
         readonly_transaction(self.pool, move |conn| {
@@ -60,6 +70,18 @@ impl<'c> ProposalDao<'c> {
                 negotiation,
                 body: proposal,
             }))
+        })
+        .await
+    }
+
+    pub async fn has_counter_proposal(&self, proposal_id: &str) -> DbResult<bool> {
+        let proposal_id = proposal_id.to_string();
+        readonly_transaction(self.pool, move |conn| {
+            let proposal: Option<DbProposal> = dsl::market_proposal
+                .filter(dsl::prev_proposal_id.eq(&proposal_id))
+                .first(conn)
+                .optional()?;
+            Ok(proposal.is_some())
         })
         .await
     }
