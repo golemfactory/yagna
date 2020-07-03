@@ -1,10 +1,6 @@
-extern crate chrono;
-extern crate market_api;
-extern crate semver;
-
 use semver::Version;
 
-use market_api::resolver::properties::*;
+use ya_market_resolver::resolver::properties::*;
 
 // #region Version type
 

@@ -1,7 +1,4 @@
-extern crate chrono;
-extern crate market_api;
-
-use market_api::resolver::properties::*;
+use ya_market_resolver::resolver::properties::*;
 
 // #region List type
 #[test]

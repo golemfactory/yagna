@@ -1,12 +1,8 @@
-extern crate asnom;
-extern crate market_api;
-extern crate nom;
-
-use market_api::resolver::expression::*;
-use market_api::resolver::ldap_parser::parse;
-use market_api::resolver::properties::*;
-use market_api::resolver::*;
-use market_api::*;
+use ya_market_resolver::resolver::expression::*;
+use ya_market_resolver::resolver::ldap_parser::parse;
+use ya_market_resolver::resolver::properties::*;
+use ya_market_resolver::resolver::*;
+use ya_market_resolver::*;
 
 #[test]
 fn prepare_offer_error_for_empty() {

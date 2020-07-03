@@ -1,14 +1,10 @@
-extern crate chrono;
-extern crate decimal;
-extern crate market_api;
-
 use std::collections::*;
 
 use chrono::*;
 use decimal::*;
 
-use market_api::resolver::errors::ParseError;
-use market_api::resolver::properties::*;
+use ya_market_resolver::resolver::errors::ParseError;
+use ya_market_resolver::resolver::properties::*;
 
 // #region from_value()
 #[test]

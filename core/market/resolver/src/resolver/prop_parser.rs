@@ -248,7 +248,7 @@ named!(
     true_literal<Literal>,
     ws!(ws!(map!(
         alt!(tag!("true") | tag!("True") | tag!("TRUE")),
-        |val| { (Literal::Bool(true)) }
+        |val| { Literal::Bool(true) }
     )))
 );
 
@@ -320,7 +320,10 @@ pub fn parse_prop_ref_with_aspect(
             if rest == "" {
                 Ok(t)
             } else {
-                Err(format!("Parsing error: unexpected text {}", rest))
+                Err(format!(
+                    "Parsing aspect type error: unexpected text {}",
+                    rest
+                ))
             }
         }
         IResult::Incomplete(_needed) => {
@@ -330,7 +333,10 @@ pub fn parse_prop_ref_with_aspect(
                     if rest == "" {
                         Ok(t)
                     } else {
-                        Err(format!("Parsing error: unexpected text {}", rest))
+                        Err(format!(
+                            "Parsing aspect no type error: unexpected text {}",
+                            rest
+                        ))
                     }
                 }
                 IResult::Incomplete(_) | IResult::Error(_) => parse_prop_ref_no_aspect(input),
@@ -350,7 +356,10 @@ fn parse_prop_ref_no_aspect(input: &str) -> Result<(&str, Option<&str>, Option<&
             if rest == "" {
                 Ok(t)
             } else {
-                Err(format!("Parsing error: unexpected text {}", rest))
+                Err(format!(
+                    "Parsing no aspect type error: unexpected text {}",
+                    rest
+                ))
             }
         }
         IResult::Incomplete(_) | IResult::Error(_) => match prop_ref_no_type(input) {
@@ -358,7 +367,10 @@ fn parse_prop_ref_no_aspect(input: &str) -> Result<(&str, Option<&str>, Option<&
                 if rest == "" {
                     Ok(t)
                 } else {
-                    Err(format!("Parsing error: unexpected text {}", rest))
+                    Err(format!(
+                        "Parsing no aspect no type error: unexpected text {}",
+                        rest
+                    ))
                 }
             }
             IResult::Incomplete(_) | IResult::Error(_) => {
@@ -378,7 +390,7 @@ pub fn parse_prop_ref_as_list(input: &str) -> Result<Vec<&str>, String> {
             if rest == "" {
                 Ok(t)
             } else {
-                Err(format!("Parsing error: unexpected text {}", rest))
+                Err(format!("Parsing list error: unexpected text {}", rest))
             }
         }
         IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),

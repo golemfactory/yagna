@@ -1,6 +1,3 @@
-extern crate chrono;
-extern crate uuid;
-
 pub mod errors;
 pub mod expression;
 pub mod ldap_parser;

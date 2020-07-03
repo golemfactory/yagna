@@ -1,8 +1,4 @@
-extern crate asnom;
-extern crate market_api;
-extern crate nom;
-
-use market_api::resolver::ldap_parser::*;
+use ya_market_resolver::resolver::ldap_parser::*;
 
 use asnom::common::TagClass;
 use asnom::structures::{ExplicitTag, OctetString, Sequence, Tag};

@@ -5184,15 +5184,15 @@ dependencies = [
 
 [[package]]
 name = "ya-market-resolver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "asnom",
  "chrono",
  "decimal",
+ "log 0.4.8",
  "nom 2.2.1",
  "regex",
  "semver",
- "uuid 0.7.4",
 ]
 
 [[package]]

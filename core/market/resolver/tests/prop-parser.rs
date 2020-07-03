@@ -1,6 +1,4 @@
-extern crate market_api;
-
-use market_api::resolver::prop_parser::*;
+use ya_market_resolver::resolver::prop_parser::*;
 
 #[test]
 fn parse_prop_def_for_simple_prop() {
@@ -37,7 +35,7 @@ fn parse_prop_ref_with_aspect_no_aspect_impl_type() {
 fn parse_prop_ref_with_aspect_syntax_error_1() {
     assert_eq!(
         parse_prop_ref_with_aspect("prop$asda"),
-        Err("Parsing error: unexpected text $asda".to_string())
+        Err("Parsing no aspect no type error: unexpected text $asda".to_string())
     );
 }
 
@@ -45,7 +43,7 @@ fn parse_prop_ref_with_aspect_syntax_error_1() {
 fn parse_prop_ref_with_aspect_syntax_error_2() {
     assert_eq!(
         parse_prop_ref_with_aspect("prop[[asda]"),
-        Err("Parsing error: unexpected text [[asda]".to_string())
+        Err("Parsing no aspect no type error: unexpected text [[asda]".to_string())
     );
 }
 

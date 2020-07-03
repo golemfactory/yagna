@@ -1,10 +1,8 @@
-extern crate market_api;
-
-use market_api::resolver::errors::*;
-use market_api::resolver::matching::*;
-use market_api::resolver::properties::*;
-use market_api::resolver::*;
-use market_api::{Demand, Offer};
+use ya_market_resolver::resolver::errors::*;
+use ya_market_resolver::resolver::matching::*;
+use ya_market_resolver::resolver::properties::*;
+use ya_market_resolver::resolver::*;
+use ya_market_resolver::{Demand, Offer};
 
 #[test]
 fn match_weak_simple_match() {

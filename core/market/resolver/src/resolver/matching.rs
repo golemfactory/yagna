@@ -21,14 +21,14 @@ pub fn match_weak<'a>(
     demand: &'a PreparedDemand,
     offer: &'a PreparedOffer,
 ) -> Result<MatchResult<'a>, MatchError> {
-    println!("Demand: {:?}", demand);
-    println!("Offer: {:?}", offer);
+    log::debug!("Demand: {:?}", demand);
+    log::debug!("Offer: {:?}", offer);
 
     let result1 = demand.constraints.resolve(&offer.properties);
     let result2 = offer.constraints.resolve(&demand.properties);
 
-    println!("Result1: {:?}", result1);
-    println!("Result2: {:?}", result2);
+    log::debug!("Result1: {:?}", result1);
+    log::debug!("Result2: {:?}", result2);
 
     let mut un_props1 = vec![]; // undefined properties in result 1
     let mut un_props2 = vec![]; // undefined properties in result 2

@@ -1,10 +1,6 @@
-extern crate asnom;
-extern crate market_api;
-extern crate nom;
-
-use market_api::resolver::expression::*;
-use market_api::resolver::ldap_parser::parse;
-use market_api::resolver::properties::*;
+use ya_market_resolver::resolver::expression::*;
+use ya_market_resolver::resolver::ldap_parser::parse;
+use ya_market_resolver::resolver::properties::*;
 
 #[test]
 fn resolve_multistep_with_supplemented_props() {

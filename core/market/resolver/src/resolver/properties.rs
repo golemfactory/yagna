@@ -1,9 +1,3 @@
-extern crate chrono;
-extern crate decimal;
-extern crate regex;
-extern crate semver;
-extern crate uuid;
-
 use std::str;
 
 use chrono::{DateTime, Utc};
@@ -388,9 +382,9 @@ impl<'a> PropertySet<'a> {
                 Ok((prop_name, prop_value)) => {
                     result.properties.insert(prop_name, prop_value);
                 }
-                Err(_error) => {
+                Err(e) => {
                     // do nothing??? ignore the faulty property
-                    println!("Error: {:?}", _error);
+                    log::debug!("Error: {:?}", e);
                 }
             }
         }
