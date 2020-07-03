@@ -58,6 +58,7 @@ impl<'c> OrderDao<'c> {
                     dsl::payment_platform,
                     dsl::invoice_id,
                     dsl::debit_note_id,
+                    dsl::allocation_id,
                     dsl::is_paid,
                     invoice_dsl::agreement_id.nullable(),
                     debit_note_dsl::activity_id.nullable(),

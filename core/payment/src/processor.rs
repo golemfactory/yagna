@@ -163,10 +163,12 @@ impl PaymentProcessor {
                 (Some(activity_id), None) => activity_payments.push(ActivityPayment {
                     activity_id,
                     amount,
+                    allocation_id: Some(order.allocation_id.clone()),
                 }),
                 (None, Some(agreement_id)) => agreement_payments.push(AgreementPayment {
                     agreement_id,
                     amount,
+                    allocation_id: Some(order.allocation_id.clone()),
                 }),
                 _ => return NotifyPaymentError::invalid_order(&order),
             }
@@ -186,7 +188,6 @@ impl PaymentProcessor {
                 payer_addr,
                 payee_addr,
                 payment_platform,
-                "allocation_id".to_owned(), // FIXME
                 msg.amount,
                 msg.confirmation.confirmation,
                 activity_payments,

@@ -16,6 +16,7 @@ pub struct WriteObj {
     pub payment_platform: String,
     pub invoice_id: Option<String>,
     pub debit_note_id: Option<String>,
+    pub allocation_id: String,
     pub is_paid: bool,
 }
 
@@ -32,6 +33,7 @@ pub struct ReadObj {
     pub payment_platform: String,
     pub invoice_id: Option<String>,
     pub debit_note_id: Option<String>,
+    pub allocation_id: String,
     pub is_paid: bool,
 
     pub agreement_id: Option<String>, // From invoice
@@ -55,6 +57,7 @@ impl WriteObj {
             payment_platform: msg.payment_platform,
             invoice_id,
             debit_note_id,
+            allocation_id: msg.allocation_id,
             is_paid: false,
         }
     }

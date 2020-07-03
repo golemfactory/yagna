@@ -32,13 +32,24 @@ fn insert_activity_payments(
     log::trace!("Inserting activity payments...");
     for activity_payment in activity_payments {
         let amount = activity_payment.amount.into();
+        let allocation_id = activity_payment.allocation_id;
+
         activity::increase_amount_paid(&activity_payment.activity_id, &owner_id, &amount, conn)?;
+
+        // Update spent & remaining amount for allocation (if applicable)
+        if let Some(allocation_id) = &allocation_id {
+            log::trace!("Updating spent & remaining amount for allocation...");
+            allocation::spend_from_allocation(allocation_id, &amount, conn)?;
+            log::trace!("Allocation updated.");
+        }
+
         diesel::insert_into(activity_pay_dsl::pay_activity_payment)
             .values(DbActivityPayment {
                 payment_id: payment_id.clone(),
                 activity_id: activity_payment.activity_id,
                 owner_id: owner_id.clone(),
                 amount,
+                allocation_id,
             })
             .execute(conn)
             .map(|_| ())?;
@@ -56,13 +67,24 @@ fn insert_agreement_payments(
     log::trace!("Inserting agreement payments...");
     for agreement_payment in agreement_payments {
         let amount = agreement_payment.amount.into();
+        let allocation_id = agreement_payment.allocation_id;
+
         agreement::increase_amount_paid(&agreement_payment.agreement_id, &owner_id, &amount, conn)?;
+
+        // Update spent & remaining amount for allocation (if applicable)
+        if let Some(allocation_id) = &allocation_id {
+            log::trace!("Updating spent & remaining amount for allocation...");
+            allocation::spend_from_allocation(allocation_id, &amount, conn)?;
+            log::trace!("Allocation updated.");
+        }
+
         diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
             .values(DbAgreementPayment {
                 payment_id: payment_id.clone(),
                 agreement_id: agreement_payment.agreement_id,
                 owner_id: owner_id.clone(),
                 amount,
+                allocation_id,
             })
             .execute(conn)
             .map(|_| ())?;
@@ -86,7 +108,6 @@ impl<'c> PaymentDao<'c> {
     ) -> DbResult<()> {
         let payment_id = payment.id.clone();
         let owner_id = payment.owner_id.clone();
-        let allocation_id = payment.allocation_id.clone();
         let amount = payment.amount.clone();
 
         do_with_transaction(self.pool, move |conn| {
@@ -98,13 +119,6 @@ impl<'c> PaymentDao<'c> {
 
             insert_activity_payments(activity_payments, &payment_id, &owner_id, &conn)?;
             insert_agreement_payments(agreement_payments, &payment_id, &owner_id, &conn)?;
-
-            // Update spent & remaining amount for allocation (if applicable)
-            if let Some(allocation_id) = &allocation_id {
-                log::trace!("Updating spent & remaining amount for allocation...");
-                allocation::spend_from_allocation(allocation_id, &amount, conn)?;
-                log::trace!("Allocation updated.");
-            }
 
             Ok(())
         })
@@ -118,7 +132,6 @@ impl<'c> PaymentDao<'c> {
         payer_addr: String,
         payee_addr: String,
         payment_platform: String,
-        allocation_id: String,
         amount: BigDecimal,
         details: Vec<u8>,
         activity_payments: Vec<ActivityPayment>,
@@ -130,7 +143,6 @@ impl<'c> PaymentDao<'c> {
             payer_addr,
             payee_addr,
             payment_platform,
-            allocation_id,
             amount,
             details,
         );

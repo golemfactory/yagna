@@ -16,6 +16,7 @@ table! {
         activity_id -> Text,
         owner_id -> Text,
         amount -> Text,
+        allocation_id -> Nullable<Text>,
     }
 }
 
@@ -40,6 +41,7 @@ table! {
         agreement_id -> Text,
         owner_id -> Text,
         amount -> Text,
+        allocation_id -> Nullable<Text>,
     }
 }
 
@@ -138,6 +140,7 @@ table! {
         payment_platform -> Text,
         invoice_id -> Nullable<Text>,
         debit_note_id -> Nullable<Text>,
+        allocation_id -> Text,
         is_paid -> Bool,
     }
 }
@@ -151,18 +154,19 @@ table! {
         payer_addr -> Text,
         payment_platform -> Text,
         role -> Text,
-        allocation_id -> Nullable<Text>,
         amount -> Text,
         timestamp -> Timestamp,
         details -> Binary,
     }
 }
 
+joinable!(pay_activity_payment -> pay_allocation (allocation_id));
+joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
 joinable!(pay_debit_note -> pay_document_status (status));
 joinable!(pay_debit_note_event -> pay_event_type (event_type));
 joinable!(pay_invoice -> pay_document_status (status));
 joinable!(pay_invoice_event -> pay_event_type (event_type));
-joinable!(pay_payment -> pay_allocation (allocation_id));
+joinable!(pay_order -> pay_allocation (allocation_id));
 
 allow_tables_to_appear_in_same_query!(
     pay_activity,
