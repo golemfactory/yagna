@@ -39,10 +39,11 @@ impl<'c> ProposalDao<'c> {
         .await
     }
 
-    pub async fn save_proposal(&self, proposal: Proposal) -> DbResult<()> {
+    pub async fn save_proposal(&self, proposal: &Proposal) -> DbResult<()> {
+        let proposal = proposal.body.clone();
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::market_proposal)
-                .values(&proposal.body)
+                .values(&proposal)
                 .execute(conn)?;
             Ok(())
         })

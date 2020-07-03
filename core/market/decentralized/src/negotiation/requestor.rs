@@ -96,6 +96,8 @@ impl RequestorBroker {
         proposal: &ClientProposal,
     ) -> Result<String, ProposalError> {
         // TODO: Everything should happen under transaction.
+        // TODO: Check if subscription is active
+        // TODO: Check if this proposal wasn't already countered.
         let prev_proposal = self
             .db
             .as_dao::<ProposalDao>()
@@ -118,17 +120,24 @@ impl RequestorBroker {
             ))?
         }
 
+        let is_initial = prev_proposal.body.prev_proposal_id.is_none();
         let new_proposal = prev_proposal.counter_with(proposal);
         let proposal_id = new_proposal.body.id.clone();
         self.db
             .as_dao::<ProposalDao>()
-            .save_proposal(new_proposal)
+            .save_proposal(&new_proposal)
             .await
             .map_err(|e| ProposalError::FailedSaveProposal(prev_proposal_id.to_string(), e))?;
 
-        // TODO: Check if subscription is active
-        // TODO: Check if this proposal wasn't already countered.
-        // TODO: Send proposal to Provider.
+        // Send Proposal to Provider. Note that it can be either our first communication with
+        // Provider or we negotiated with him already, so we need to send different message in each
+        // of these cases.
+        match is_initial {
+            true => self.api.initial_proposal(new_proposal).await,
+            false => self.api.counter_proposal(new_proposal).await,
+        }
+        .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.to_string(), e))?;
+
         Ok(proposal_id)
     }
 

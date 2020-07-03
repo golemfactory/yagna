@@ -1,4 +1,6 @@
-use crate::protocol::negotiation::errors::NegotiationApiInitError;
+use crate::protocol::negotiation::errors::{
+    NegotiationApiInitError, ProposalError as ApiProposalError,
+};
 use thiserror::Error;
 
 use crate::db::dao::TakeEventsError;
@@ -41,8 +43,10 @@ pub enum ProposalError {
     ProposalNotFound(String, SubscriptionId),
     #[error("Failed to get Proposal [{0}]. Error: [{1}]")]
     FailedGetProposal(String, String),
-    #[error("Failed to save counter Proposal of [{0}]. Error: [{1}]")]
+    #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]
     FailedSaveProposal(String, DbError),
+    #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
+    FailedSendProposal(String, ApiProposalError),
 }
 
 impl From<TakeEventsError> for QueryEventsError {

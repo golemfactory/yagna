@@ -4,6 +4,7 @@ use crate::{db::models::Offer as ModelOffer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};
+use crate::protocol::negotiation::errors::ProposalError;
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
@@ -11,6 +12,7 @@ use crate::protocol::negotiation::messages::{
 use crate::protocol::negotiation::provider::NegotiationApi;
 
 /// Provider part of negotiation logic.
+#[derive(Clone)]
 pub struct ProviderBroker {
     db: DbExecutor,
     api: NegotiationApi,
@@ -18,8 +20,12 @@ pub struct ProviderBroker {
 
 impl ProviderBroker {
     pub fn new(db: DbExecutor) -> Result<Arc<ProviderBroker>, NegotiationInitError> {
+        let db1 = db.clone();
         let api = NegotiationApi::new(
-            move |_caller: String, msg: InitialProposalReceived| async move { unimplemented!() },
+            move |caller: String, msg: InitialProposalReceived| {
+                let db = db1.clone();
+                on_initial_proposal(db, caller, msg)
+            },
             move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
             move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
@@ -50,4 +56,12 @@ impl ProviderBroker {
         // TODO: Implement
         Ok(())
     }
+}
+
+async fn on_initial_proposal(
+    db: DbExecutor,
+    caller: String,
+    msg: InitialProposalReceived,
+) -> Result<(), ProposalError> {
+    Ok(())
 }

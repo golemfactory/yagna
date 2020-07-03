@@ -1,7 +1,9 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 use super::super::callbacks::CallbackMessage;
 use super::errors::{AgreementError, ProposalError};
+use crate::SubscriptionId;
 
 use ya_service_bus::RpcMessage;
 
@@ -26,10 +28,20 @@ pub mod requestor {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ProposalContent {
+    pub proposal_id: String,
+    pub properties: String,
+    pub constraints: String,
+
+    pub creation_ts: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalReceived {
-    pub proposal_id: String,
-    // TODO: We should send Demand part of the proposal.
+    pub prev_proposal_id: String,
+    pub proposal: ProposalContent,
 }
 
 impl RpcMessage for ProposalReceived {
@@ -41,8 +53,10 @@ impl RpcMessage for ProposalReceived {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitialProposalReceived {
-    pub proposal_id: String,
-    // TODO: We should send Requestor Demand and proposal id.
+    pub proposal: ProposalContent,
+
+    pub offer_id: SubscriptionId,
+    pub demand_id: SubscriptionId,
 }
 
 impl RpcMessage for InitialProposalReceived {
