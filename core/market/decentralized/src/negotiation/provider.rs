@@ -11,14 +11,13 @@ use crate::protocol::negotiation::messages::{
 use crate::protocol::negotiation::provider::NegotiationApi;
 
 /// Provider part of negotiation logic.
-/// TODO: Too long name.
-pub struct ProviderNegotiationEngine {
+pub struct ProviderBroker {
     db: DbExecutor,
     api: NegotiationApi,
 }
 
-impl ProviderNegotiationEngine {
-    pub fn new(db: DbExecutor) -> Result<Arc<ProviderNegotiationEngine>, NegotiationInitError> {
+impl ProviderBroker {
+    pub fn new(db: DbExecutor) -> Result<Arc<ProviderBroker>, NegotiationInitError> {
         let api = NegotiationApi::new(
             move |_caller: String, msg: InitialProposalReceived| async move { unimplemented!() },
             move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
@@ -27,7 +26,7 @@ impl ProviderNegotiationEngine {
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
         );
 
-        Ok(Arc::new(ProviderNegotiationEngine { api, db }))
+        Ok(Arc::new(ProviderBroker { api, db }))
     }
 
     pub async fn bind_gsb(

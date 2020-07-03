@@ -26,6 +26,7 @@ ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = { version = "0.1", features = ["gnt-driver"] }
+ya-payment-driver = { version = "0.1", features = ["gnt-driver"] }
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
@@ -103,10 +104,11 @@ ya-market-forwarding = { path = "core/market/forwarding" }
 ya-market-decentralized = { path = "core/market/decentralized" }
 ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
+ya-payment-driver = { path = "core/payment-driver" }
+
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
-ya-payment-driver = { path = "core/payment-driver" }
 ya-persistence = { path = "core/persistence" }
 ya-service-api = { path = "core/serv-api" }
 ya-service-api-cache = { path = "core/serv-api/cache" }
@@ -121,8 +123,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "074639b2b67c0f6e5e3252dfc4b0a914823ea568"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "074639b2b67c0f6e5e3252dfc4b0a914823ea568"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b1653df7bc1f921af2c1267af2fe09b662424d37"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b1653df7bc1f921af2c1267af2fe09b662424d37"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }

@@ -2489,6 +2489,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
+dependencies = [
+ "proc-macro2 0.4.30",
+ "quote 0.6.13",
+ "syn 0.15.44",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4927,7 +4938,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "awc",
  "backtrace",
@@ -4948,7 +4959,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -4963,6 +4974,7 @@ name = "ya-core-model"
 version = "0.1.0"
 dependencies = [
  "bigdecimal",
+ "bitflags 1.2.1",
  "chrono",
  "log 0.4.8",
  "serde",
@@ -5075,6 +5087,8 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
+ "num-derive",
+ "num-traits",
  "r2d2",
  "rand 0.7.3",
  "serde",
@@ -5227,7 +5241,11 @@ dependencies = [
  "ureq",
  "uuid 0.8.1",
  "web3",
+ "ya-client-model",
+ "ya-core-model",
  "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -5569,6 +5587,7 @@ dependencies = [
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
+ "ya-payment-driver",
  "ya-persistence",
  "ya-sb-proto",
  "ya-sb-router",
