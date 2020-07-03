@@ -6,14 +6,13 @@ use ya_persistence::executor::DbExecutor;
 use super::errors::{NegotiationError, NegotiationInitError};
 
 /// Provider part of negotiation logic.
-/// TODO: Too long name.
-pub struct ProviderNegotiationEngine {
+pub struct ProviderBroker {
     db: DbExecutor,
 }
 
-impl ProviderNegotiationEngine {
-    pub fn new(db: DbExecutor) -> Result<Arc<ProviderNegotiationEngine>, NegotiationInitError> {
-        Ok(Arc::new(ProviderNegotiationEngine { db }))
+impl ProviderBroker {
+    pub fn new(db: DbExecutor) -> Result<Arc<ProviderBroker>, NegotiationInitError> {
+        Ok(Arc::new(ProviderBroker { db }))
     }
 
     pub async fn bind_gsb(

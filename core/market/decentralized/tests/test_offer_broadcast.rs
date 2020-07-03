@@ -3,22 +3,22 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::mock_node::{default::*, wait_for_bcast, MarketStore};
+    use crate::utils::mock_offer::example_offer;
+    use crate::utils::MarketsNetwork;
+
+    use ya_client::model::market::Offer;
+    use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
+    use ya_market_decentralized::testing::SubscriptionId;
+    use ya_market_decentralized::testing::{Offer as ModelOffer, OfferError};
+    use ya_market_decentralized::MarketService;
+
     use chrono;
     use serde_json::json;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
-
-    use ya_client::model::market::Offer;
-    use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
-    use ya_market_decentralized::testing::OfferError;
-    use ya_market_decentralized::Offer as ModelOffer;
-    use ya_market_decentralized::{MarketService, SubscriptionId};
-
-    use crate::utils::mock_node::{default::*, wait_for_bcast};
-    use crate::utils::mock_offer::example_offer;
-    use crate::utils::{MarketStore, MarketsNetwork};
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
     /// Than sending unsubscribe should remove Offer from other nodes.
@@ -47,7 +47,6 @@ mod tests {
         let market2: Arc<MarketService> = network.get_market("Node-2");
         let market3: Arc<MarketService> = network.get_market("Node-3");
         wait_for_bcast(1000, &market2, &subscription_id, true).await;
-        // TODO: strip insertion ts from comparsion
         assert_eq!(offer, market2.get_offer(&subscription_id).await?);
         assert_eq!(offer, market3.get_offer(&subscription_id).await?);
 
@@ -185,6 +184,17 @@ mod tests {
             1,
             "We expect to receive Offer only from ourselves"
         );
+
+        // We expect, that Offers won't be available on other nodes now
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market1.get_offer(&subscription_id).await,
+        );
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market2.get_offer(&subscription_id).await,
+        );
+
         Ok(())
     }
 }

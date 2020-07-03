@@ -5,7 +5,7 @@ use ya_client::model::ErrorMessage;
 use crate::{
     market::MarketError,
     matcher::{DemandError, MatcherError, OfferError},
-    negotiation::NegotiationError,
+    negotiation::{NegotiationError, QueryEventsError},
 };
 
 impl From<MarketError> for actix_web::HttpResponse {
@@ -59,6 +59,20 @@ impl ResponseError for OfferError {
             OfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
             OfferError::AlreadyUnsubscribed(_) | OfferError::Expired(_) => {
                 HttpResponse::Gone().json(msg)
+            }
+            _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for QueryEventsError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            QueryEventsError::Unsubscribed(_) => HttpResponse::NotFound().json(msg),
+            QueryEventsError::SubscriptionExpired(_) => HttpResponse::NotFound().json(msg),
+            QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(_) => {
+                HttpResponse::BadRequest().json(msg)
             }
             _ => HttpResponse::InternalServerError().json(msg),
         }

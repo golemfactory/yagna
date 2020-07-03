@@ -67,8 +67,15 @@ async fn collect(
     path: Path<PathSubscription>,
     query: Query<QueryTimeoutMaxEvents>,
     id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+) -> impl Responder {
+    let subscription_id = path.into_inner().subscription_id;
+    let timeout = query.timeout;
+    let max_events = query.max_events;
+    market
+        .requestor_engine
+        .query_events(&subscription_id, timeout, max_events)
+        .await
+        .map(|events| HttpResponse::Ok().json(events))
 }
 
 #[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}")]
