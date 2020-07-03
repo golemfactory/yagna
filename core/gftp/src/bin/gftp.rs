@@ -1,3 +1,4 @@
+use actix_rt::Arbiter;
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
 use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult};
@@ -6,7 +7,6 @@ use structopt::{clap, StructOpt};
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
 use tokio::time::Duration;
-use actix_rt::Arbiter;
 
 #[derive(StructOpt)]
 struct Args {

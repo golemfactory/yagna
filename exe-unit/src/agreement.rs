@@ -26,8 +26,8 @@ impl TryFrom<Value> for Agreement {
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         let agreement = AgreementView::try_from(value)?;
-        let task_package = agreement
-            .pointer_typed::<String>("/demand/properties/golem/srv/comp/task_package")?;
+        let task_package =
+            agreement.pointer_typed::<String>("/demand/properties/golem/srv/comp/task_package")?;
         let usage_vector =
             agreement.pointer_typed::<Vec<String>>("/offer/properties/golem/com/usage/vector")?;
         let infra = agreement.properties::<f64>("/offer/properties/golem/inf")?;

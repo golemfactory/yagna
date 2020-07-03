@@ -12,7 +12,7 @@ use std::convert::TryFrom;
 use std::io;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::{
@@ -306,7 +306,6 @@ impl Handler<TransferResource> for TransferService {
                     .await
                     .map_err(TransferError::from)??;
                 address.send(RemoveAbortHandle(abort)).await?;
-
                 log::info!("Transfer of {:?} to {:?} finished", from.url, to.url);
                 Ok(())
             }
@@ -532,9 +531,11 @@ mod test {
             )
         };
 
-        check_resolve("/golem/resource/scene.blend", "/tmp/vol-4d59d1d6-2571-4ab8-a86a-b6199a9a1f4b/scene.blend");
-   }
-
+        check_resolve(
+            "/golem/resource/scene.blend",
+            "/tmp/vol-4d59d1d6-2571-4ab8-a86a-b6199a9a1f4b/scene.blend",
+        );
+    }
 
     #[test]
     fn test_resolve_compat() {
