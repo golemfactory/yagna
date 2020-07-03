@@ -1,7 +1,4 @@
-use crate::{
-    utils, AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
-    PaymentDetails, PaymentDriver, PaymentDriverError, PaymentStatus, SignTx,
-};
+use crate::{utils, PaymentDriver, PaymentDriverError};
 use chrono::{DateTime, Utc};
 use futures3::lock::Mutex;
 use futures3::prelude::*;
@@ -12,6 +9,11 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use ya_client_model::NodeId;
+use ya_core_model::driver::{
+    AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
+    PaymentDetails, PaymentStatus,
+};
 
 #[derive(Clone)]
 pub struct DummyDriver {
@@ -27,12 +29,25 @@ impl DummyDriver {
 }
 
 impl PaymentDriver for DummyDriver {
-    fn init(
+    fn init<'a>(
         &self,
         _mode: AccountMode,
         _address: &str,
-        _sign_tx: SignTx<'_>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
+        Box::pin(future::ready(Ok(())))
+    }
+
+    fn account_locked<'a>(
+        &self,
+        _identity: NodeId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
+        Box::pin(future::ready(Ok(())))
+    }
+
+    fn account_unlocked<'a>(
+        &self,
+        _identity: NodeId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         Box::pin(future::ready(Ok(())))
     }
 
@@ -60,8 +75,7 @@ impl PaymentDriver for DummyDriver {
         sender: &str,
         recipient: &str,
         _due_date: DateTime<Utc>,
-        _sign_tx: SignTx<'a>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
         let payments = self.payments.clone();
         let details = PaymentDetails {
             recipient: recipient.to_string(),
@@ -78,22 +92,6 @@ impl PaymentDriver for DummyDriver {
                     entry.insert(details);
                     Ok(())
                 }
-            }
-        })
-    }
-
-    fn reschedule_payment<'a>(
-        &self,
-        invoice_id: &str,
-        _sign_tx: SignTx<'a>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'static>> {
-        let invoice_id = invoice_id.to_owned();
-        let payments = self.payments.clone();
-
-        Box::pin(async move {
-            match payments.lock().await.get(&invoice_id) {
-                Some(_) => Ok(()),
-                None => Err(PaymentDriverError::PaymentNotFound(invoice_id)),
             }
         })
     }

@@ -4974,6 +4974,7 @@ name = "ya-core-model"
 version = "0.1.0"
 dependencies = [
  "bigdecimal",
+ "bitflags 1.2.1",
  "chrono",
  "log 0.4.8",
  "serde",
@@ -5240,7 +5241,11 @@ dependencies = [
  "ureq",
  "uuid 0.8.1",
  "web3",
+ "ya-client-model",
+ "ya-core-model",
  "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -5582,6 +5587,7 @@ dependencies = [
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
+ "ya-payment-driver",
  "ya-persistence",
  "ya-sb-proto",
  "ya-sb-router",
