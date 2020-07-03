@@ -24,6 +24,7 @@ use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::PaymentService;
+use ya_payment_driver::PaymentDriverService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -164,6 +165,8 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(gsb)]
+    PaymentDriver(PaymentDriverService),
 }
 
 #[derive(StructOpt, Debug)]

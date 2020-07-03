@@ -29,14 +29,15 @@ struct Args {
 #[cfg(feature = "dummy-driver")]
 mod driver {
     use super::{DbExecutor, EthAccount};
-    use ya_payment_driver::{DummyDriver, PaymentDriver};
+    use ya_payment_driver::PaymentDriverService;
 
-    pub async fn get(
-        _db: &DbExecutor,
+    pub async fn start(
+        db: &DbExecutor,
         _provider_account: Box<EthAccount>,
         _requestor_account: Box<EthAccount>,
-    ) -> anyhow::Result<impl PaymentDriver> {
-        Ok(DummyDriver::new())
+    ) -> anyhow::Result<()> {
+        PaymentDriverService::gsb(db).await?;
+        Ok(())
     }
 }
 
@@ -47,30 +48,51 @@ mod driver {
     use std::convert::TryInto;
     use std::pin::Pin;
     use std::sync::Arc;
-    use ya_payment::utils::fake_sign_tx;
-    use ya_payment_driver::{AccountMode, GntDriver, PaymentDriver};
+    use ya_client_model::NodeId;
+    use ya_core_model::identity;
+    use ya_payment_driver::PaymentDriverService;
+    use ya_service_bus::typed as bus;
 
-    pub async fn get(
+    pub async fn start(
         db: &DbExecutor,
         provider_account: Box<EthAccount>,
         requestor_account: Box<EthAccount>,
-    ) -> anyhow::Result<impl PaymentDriver> {
-        let provider_addr = hex::encode(provider_account.address());
-        let requestor_addr = hex::encode(requestor_account.address());
+    ) -> anyhow::Result<()> {
+        let requestor = NodeId::from(requestor_account.address().as_ref());
+        fake_list_identities(vec![requestor]);
+        fake_subscribe_to_events();
+
         let provider_sign_tx = get_sign_tx(provider_account);
         let requestor_sign_tx = get_sign_tx(requestor_account);
 
-        let driver = GntDriver::new(db.clone()).await?;
-        driver
-            .init(AccountMode::RECV, &provider_addr, &provider_sign_tx)
-            .await?;
-        driver
-            .init(AccountMode::SEND, &requestor_addr, &requestor_sign_tx)
-            .await?;
+        PaymentDriverService::gsb(db).await?;
 
         fake_sign_tx(Box::new(provider_sign_tx));
         fake_sign_tx(Box::new(requestor_sign_tx));
-        Ok(driver)
+        Ok(())
+    }
+
+    fn fake_list_identities(identities: Vec<NodeId>) {
+        bus::bind(identity::BUS_ID, move |_msg: identity::List| {
+            let ids = identities.clone();
+            let mut accounts: Vec<identity::IdentityInfo> = vec![];
+            for id in ids {
+                accounts.push(identity::IdentityInfo {
+                    alias: None,
+                    node_id: id,
+                    is_default: false,
+                    is_locked: false,
+                });
+            }
+            async move { Ok(accounts) }
+        });
+    }
+
+    fn fake_subscribe_to_events() {
+        bus::bind(
+            identity::BUS_ID,
+            move |_msg: identity::Subscribe| async move { Ok(identity::Ack {}) },
+        );
     }
 
     fn get_sign_tx(
@@ -90,6 +112,16 @@ mod driver {
             };
             Box::pin(fut)
         }
+    }
+
+    fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
+        let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> =
+            sign_tx.into();
+        bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
+            let sign_tx = sign_tx.clone();
+            let msg = msg.payload;
+            async move { Ok(sign_tx(msg).await) }
+        });
     }
 }
 
@@ -121,8 +153,8 @@ async fn main() -> anyhow::Result<()> {
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
-    let driver = driver::get(&db, provider_account, requestor_account).await?;
-    let processor = PaymentProcessor::new(driver, db.clone());
+    driver::start(&db, provider_account, requestor_account).await?;
+    let processor = PaymentProcessor::new(db.clone());
     ya_payment::service::bind_service(&db, processor);
 
     let agreement = market::Agreement {

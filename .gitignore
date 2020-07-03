@@ -21,3 +21,12 @@ core/market/decentralized/tests/test-workdir/*
 **/*.db
 **/*.db-shm
 **/*.db-wal
+
+# Provider dir
+**/ya-prov
+
+# Requestor dir
+**/ya-req
+
+# Keys
+**/*.key

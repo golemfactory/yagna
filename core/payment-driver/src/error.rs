@@ -32,6 +32,10 @@ pub enum PaymentDriverError {
     MissingEnvironmentVariable(&'static str),
     #[error("Unknown chain: {0}")]
     UnknownChain(String),
+    #[error("Account is locked: {0}")]
+    AccountLocked(String),
+    #[error("GSB error: {0}")]
+    GSBError(String),
 }
 
 impl PaymentDriverError {
