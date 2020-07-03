@@ -2946,7 +2946,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce49aefe0a6144a45de32927c77bd2859a5f7677b55f220ae5b744e87389c212"
 dependencies = [
- "bytes 0.5.4",
+ "bytes 0.5.5",
  "prost-derive 0.6.1",
 ]
 
@@ -2974,7 +2974,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
 dependencies = [
- "bytes 0.5.4",
+ "bytes 0.5.5",
  "heck",
  "itertools",
  "log 0.4.8",
@@ -3008,8 +3008,8 @@ dependencies = [
  "anyhow",
  "itertools",
  "proc-macro2 1.0.18",
- "quote 1.0.6",
- "syn 1.0.30",
+ "quote 1.0.7",
+ "syn 1.0.33",
 ]
 
 [[package]]
@@ -3028,7 +3028,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1834f67c0697c001304b75be76f67add9c89742eda3a085ad8ee0bb38c3417aa"
 dependencies = [
- "bytes 0.5.4",
+ "bytes 0.5.5",
  "prost 0.6.1",
 ]
 
@@ -4927,7 +4927,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "awc",
  "backtrace",
@@ -4948,7 +4948,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5313,7 +5313,7 @@ name = "ya-runtime-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bytes 0.5.4",
+ "bytes 0.5.5",
  "env_logger 0.7.1",
  "futures 0.3.5",
  "log 0.4.8",
