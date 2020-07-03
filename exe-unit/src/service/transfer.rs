@@ -1,4 +1,4 @@
-use crate::commands::ContainerVolume;
+use crate::deploy::ContainerVolume;
 use crate::error::Error;
 use crate::message::Shutdown;
 use crate::util::path::{CachePath, ProjectedPath};

@@ -84,6 +84,7 @@ pub struct InfNodeInfo {
 }
 
 impl InfNodeInfo {
+    #[deprecated(note = "Please use Default::default instead")]
     pub fn new() -> Self {
         Self::default()
     }
@@ -98,6 +99,13 @@ impl InfNodeInfo {
     pub fn with_storage(self, storage_gib: f64) -> Self {
         Self {
             storage_gib: Some(storage_gib),
+            ..self
+        }
+    }
+
+    pub fn with_cpu(self, cpu_info: CpuInfo) -> Self {
+        Self {
+            cpu_info: Some(cpu_info),
             ..self
         }
     }
