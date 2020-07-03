@@ -27,13 +27,14 @@ pub struct MarketsNetwork {
 
 /// Store all object associated with single market
 /// for example: Database
+#[derive(Clone)]
 pub struct MarketNode {
-    market: Arc<MarketService>,
-    name: String,
+    pub market: Arc<MarketService>,
+    pub name: String,
     /// For now only mock default Identity.
-    id: Identity,
+    pub id: Identity,
     /// Direct access to underlying database.
-    db: DbExecutor,
+    pub db: DbExecutor,
 }
 
 /// Stores mock discovery node, that doesn't include full
@@ -122,6 +123,14 @@ impl MarketsNetwork {
             .iter()
             .find(|node| node.name == name)
             .map(|node| node.discovery.clone())
+            .unwrap()
+    }
+
+    pub fn get_node(&self, name: &str) -> MarketNode {
+        self.markets
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.clone())
             .unwrap()
     }
 
@@ -222,7 +231,7 @@ pub mod default {
     use ya_market_decentralized::protocol::{
         DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
     };
-    use ya_market_decentralized::Offer;
+    use ya_market_decentralized::testing::Offer;
 
     pub async fn empty_on_offer_received(
         _caller: String,

@@ -43,24 +43,6 @@ pub struct SubscriptionId {
     hash: String,
 }
 
-impl Serialize for SubscriptionId {
-    fn serialize<S: Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for SubscriptionId {
-    fn deserialize<D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, <D as Deserializer<'de>>::Error> {
-        let s = String::deserialize(deserializer)?;
-        FromStr::from_str(&s).map_err(de::Error::custom)
-    }
-}
-
 /// TODO: Should be cryptographically strong.
 pub fn generate_random_id() -> String {
     Uuid::new_v4().to_simple().to_string()
@@ -110,9 +92,8 @@ pub fn hash(
     hasher.input(node_id);
     // We can't change format freely, because it is important to compute hash.
     // Is there any other solution, to compute hash, that is format independent?
-    // TODO: increase precision issue #353
-    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%S").to_string());
-    hasher.input(expiration_ts.format("%Y-%m-%d %H:%M:%S").to_string());
+    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
+    hasher.input(expiration_ts.format("%Y-%m-%d %H:%M:%f").to_string());
 
     format!("{:x}", hasher.result())
 }
@@ -167,6 +148,24 @@ where
 {
     fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
         Ok(String::from_sql(bytes)?.parse()?)
+    }
+}
+
+impl Serialize for SubscriptionId {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SubscriptionId {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, <D as Deserializer<'de>>::Error> {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
     }
 }
 

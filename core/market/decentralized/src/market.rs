@@ -2,11 +2,13 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+use crate::db::models::SubscriptionId;
 use crate::matcher::{DemandError, Matcher, MatcherError, MatcherInitError, OfferError};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
-use crate::negotiation::{ProviderNegotiationEngine, RequestorNegotiationEngine};
+use crate::negotiation::{ProviderBroker, RequestorBroker};
+
+use crate::migrations;
 use crate::rest_api;
-use crate::{migrations, SubscriptionId};
 
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
@@ -43,8 +45,8 @@ pub enum MarketInitError {
 /// Structure connecting all market objects.
 pub struct MarketService {
     pub matcher: Matcher,
-    pub provider_negotiation_engine: Arc<ProviderNegotiationEngine>,
-    pub requestor_negotiation_engine: Arc<RequestorNegotiationEngine>,
+    pub provider_engine: Arc<ProviderBroker>,
+    pub requestor_engine: Arc<RequestorBroker>,
 }
 
 impl MarketService {
@@ -52,14 +54,13 @@ impl MarketService {
         db.apply_migration(migrations::run_with_output)?;
 
         let (matcher, listeners) = Matcher::new(db)?;
-        let provider_engine = ProviderNegotiationEngine::new(db.clone())?;
-        let requestor_engine =
-            RequestorNegotiationEngine::new(db.clone(), listeners.proposal_receiver)?;
+        let provider_engine = ProviderBroker::new(db.clone())?;
+        let requestor_engine = RequestorBroker::new(db.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
             matcher,
-            provider_negotiation_engine: provider_engine,
-            requestor_negotiation_engine: requestor_engine,
+            provider_engine,
+            requestor_engine,
         })
     }
 
@@ -69,10 +70,10 @@ impl MarketService {
         private_prefix: &str,
     ) -> Result<(), MarketInitError> {
         self.matcher.bind_gsb(public_prefix, private_prefix).await?;
-        self.provider_negotiation_engine
+        self.provider_engine
             .bind_gsb(public_prefix, private_prefix)
             .await?;
-        self.requestor_negotiation_engine
+        self.requestor_engine
             .bind_gsb(public_prefix, private_prefix)
             .await?;
         Ok(())
@@ -108,9 +109,7 @@ impl MarketService {
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
         let offer = self.matcher.subscribe_offer(id, offer).await?;
-        self.provider_negotiation_engine
-            .subscribe_offer(&offer)
-            .await?;
+        self.provider_engine.subscribe_offer(&offer).await?;
         Ok(offer.id)
     }
 
@@ -120,7 +119,7 @@ impl MarketService {
         id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-        self.provider_negotiation_engine
+        self.provider_engine
             .unsubscribe_offer(subscription_id)
             .await?;
         Ok(self.matcher.unsubscribe_offer(id, subscription_id).await?)
@@ -132,9 +131,7 @@ impl MarketService {
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
         let demand = self.matcher.subscribe_demand(id, demand).await?;
-        self.requestor_negotiation_engine
-            .subscribe_demand(&demand)
-            .await?;
+        self.requestor_engine.subscribe_demand(&demand).await?;
         Ok(demand.id)
     }
 
@@ -144,7 +141,8 @@ impl MarketService {
         id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-        self.requestor_negotiation_engine
+
+        self.requestor_engine
             .unsubscribe_demand(subscription_id)
             .await?;
         // TODO: shouldn't remove precede negotiation unsubscribe?
