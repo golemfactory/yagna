@@ -34,6 +34,7 @@ ya-client-model = "0.1"
 ya-service-bus = "0.2"
 ya-transfer = "0.1"
 ya-agreement-utils = "0.1"
+ya-runtime-api= { version = "0.1", path ="runtime-api", features=["server"] }
 
 actix = "0.9"
 anyhow = "1.0.19"

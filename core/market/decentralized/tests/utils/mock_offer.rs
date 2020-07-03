@@ -5,10 +5,9 @@ use std::time::Duration;
 use ya_client::model::market::{Demand, Offer};
 use ya_market_decentralized::testing::DraftProposal;
 use ya_market_decentralized::testing::SubscriptionId;
-use ya_market_decentralized::testing::{DemandDao, OfferDao};
 use ya_market_decentralized::MarketService;
 
-use crate::utils::mock_node::MarketNode;
+use crate::utils::mock_node::{MarketNode, MarketStore};
 
 #[allow(unused)]
 pub fn example_offer() -> Offer {
@@ -60,14 +59,8 @@ impl MarketNode {
         let offer_id = market1.subscribe_offer(offer, &identity1).await?;
 
         // Get model Demand to directly inject it into negotiation engine.
-        let db = self.db.clone();
-        let model_demand = db
-            .as_dao::<DemandDao>()
-            .get_demand(&demand_id)
-            .await?
-            .unwrap();
-
-        let model_offer = db.as_dao::<OfferDao>().get_offer(&offer_id).await?.unwrap();
+        let model_demand = market1.get_demand(&demand_id).await?;
+        let model_offer = market1.get_offer(&offer_id).await?;
 
         let proposal = DraftProposal {
             offer: model_offer,

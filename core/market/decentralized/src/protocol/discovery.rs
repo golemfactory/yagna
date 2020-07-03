@@ -153,7 +153,7 @@ impl Discovery {
         );
 
         match callback.call(caller, msg).await? {
-            Propagate::True => {
+            Propagate::Yes => {
                 log::info!("Propagating further Offer [{}].", offer_id,);
 
                 // TODO: Should we retry in case of fail?
@@ -166,7 +166,7 @@ impl Discovery {
                     );
                 }
             }
-            Propagate::False(reason) => {
+            Propagate::No(reason) => {
                 log::info!(
                     "Not propagating Offer [{}] for reason: {}.",
                     offer_id,
@@ -188,7 +188,7 @@ impl Discovery {
         );
 
         match callback.call(caller.clone(), msg).await? {
-            Propagate::True => {
+            Propagate::Yes => {
                 log::info!(
                     "Propagating further unsubscribe Offer [{}].",
                     &subscription_id,
@@ -206,7 +206,7 @@ impl Discovery {
                     );
                 }
             }
-            Propagate::False(reason) => {
+            Propagate::No(reason) => {
                 log::info!(
                     "Not propagating unsubscribe Offer [{}] because: {}.",
                     subscription_id,
@@ -223,21 +223,23 @@ impl Discovery {
 // =========================================== //
 
 #[derive(Serialize, Deserialize, Display)]
-pub enum StopPropagateReason {
+pub enum Reason {
     #[display(fmt = "Offer already exists in database")]
     AlreadyExists,
-    #[display(fmt = "Error adding offer: {}", "_0")]
-    Error(String),
     #[display(fmt = "Offer already unsubscribed")]
-    AlreadyUnsubscribed,
+    Unsubscribed,
+    #[display(fmt = "Offer not found in database")]
+    NotFound,
     #[display(fmt = "Offer expired")]
     Expired,
+    #[display(fmt = "Propagation error: {}", "_0")]
+    Error(String),
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum Propagate {
-    True,
-    False(StopPropagateReason),
+    Yes,
+    No(Reason),
 }
 
 #[derive(Clone, Serialize, Deserialize)]

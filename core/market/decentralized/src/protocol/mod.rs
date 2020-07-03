@@ -2,7 +2,7 @@
 pub mod callbacks;
 mod discovery;
 
-pub use self::discovery::{Discovery, Propagate, StopPropagateReason};
+pub use self::discovery::{Discovery, Propagate, Reason};
 pub use self::discovery::{DiscoveryError, DiscoveryInitError, DiscoveryRemoteError};
 pub use self::discovery::{OfferReceived, OfferUnsubscribed, RetrieveOffers};
 

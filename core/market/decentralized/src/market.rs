@@ -2,9 +2,8 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::db::models::Offer as ModelOffer;
-use crate::db::models::{Demand as ModelDemand, SubscriptionId};
-use crate::matcher::{Matcher, MatcherError, MatcherInitError};
+use crate::db::models::SubscriptionId;
+use crate::matcher::{DemandError, Matcher, MatcherError, MatcherInitError, OfferError};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 
@@ -24,6 +23,10 @@ pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
     #[error(transparent)]
+    OfferError(#[from] OfferError),
+    #[error(transparent)]
+    DemandError(#[from] DemandError),
+    #[error(transparent)]
     Negotiation(#[from] NegotiationError),
     #[error("Internal error: {0}.")]
     InternalError(#[from] ErrorMessage),
@@ -41,7 +44,7 @@ pub enum MarketInitError {
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    pub matcher: Arc<Matcher>,
+    pub matcher: Matcher,
     pub provider_engine: Arc<ProviderBroker>,
     pub requestor_engine: Arc<RequestorBroker>,
 }
@@ -55,7 +58,7 @@ impl MarketService {
         let requestor_engine = RequestorBroker::new(db.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
-            matcher: Arc::new(matcher),
+            matcher,
             provider_engine,
             requestor_engine,
         })
@@ -105,9 +108,7 @@ impl MarketService {
         offer: &Offer,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
-        let offer = ModelOffer::from_new(offer, &id);
-
-        self.matcher.subscribe_offer(&offer).await?;
+        let offer = self.matcher.subscribe_offer(id, offer).await?;
         self.provider_engine.subscribe_offer(&offer).await?;
         Ok(offer.id)
     }
@@ -129,9 +130,7 @@ impl MarketService {
         demand: &Demand,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
-        let demand = ModelDemand::from_new(demand, &id);
-
-        self.matcher.subscribe_demand(&demand).await?;
+        let demand = self.matcher.subscribe_demand(id, demand).await?;
         self.requestor_engine.subscribe_demand(&demand).await?;
         Ok(demand.id)
     }
@@ -146,7 +145,8 @@ impl MarketService {
         self.requestor_engine
             .unsubscribe_demand(subscription_id)
             .await?;
-        Ok(self.matcher.unsubscribe_demand(subscription_id).await?)
+        // TODO: shouldn't remove precede negotiation unsubscribe?
+        Ok(self.matcher.unsubscribe_demand(id, subscription_id).await?)
     }
 }
 

@@ -22,7 +22,7 @@ use crate::state::{ExeUnitState, StateError};
 use chrono::Utc;
 
 pub mod agreement;
-mod commands;
+use ya_runtime_api::deploy;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -247,7 +247,7 @@ impl<R: Runtime> ExeUnit<R> {
         let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
         if let ExeScriptCommand::Deploy { .. } = &ctx.cmd {
             if let Some(output) = &exec_result.stdout {
-                let deploy_desc = match commands::DeployResult::from_bytes(output) {
+                let deploy_desc = match deploy::DeployResult::from_bytes(output) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("deploy failed: {}", e);
