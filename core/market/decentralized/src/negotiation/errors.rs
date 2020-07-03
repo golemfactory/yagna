@@ -1,3 +1,4 @@
+use crate::protocol::negotiation::errors::NegotiationApiInitError;
 use thiserror::Error;
 
 use crate::db::dao::TakeEventsError;
@@ -7,7 +8,10 @@ use crate::db::models::{SubscriptionId, SubscriptionParseError};
 pub enum NegotiationError {}
 
 #[derive(Error, Debug)]
-pub enum NegotiationInitError {}
+pub enum NegotiationInitError {
+    #[error("Failed to initialize Negotiation interface. Error: {0}.")]
+    ApiInitError(#[from] NegotiationApiInitError),
+}
 
 #[derive(Error, Debug)]
 pub enum QueryEventsError {

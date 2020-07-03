@@ -11,12 +11,18 @@ use crate::db::models::{EventError, OwnerType};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
 
-use crate::negotiation::notifier::NotifierError;
 use ya_client::model::market::event::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
 
+use crate::negotiation::notifier::NotifierError;
+use crate::protocol::negotiation::messages::{
+    AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected,
+};
+use crate::protocol::negotiation::requestor::NegotiationApi;
+
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
+    api: NegotiationApi,
     db: DbExecutor,
     notifier: EventNotifier,
 }
@@ -26,8 +32,16 @@ impl RequestorBroker {
         db: DbExecutor,
         proposal_receiver: UnboundedReceiver<DraftProposal>,
     ) -> Result<Arc<RequestorBroker>, NegotiationInitError> {
+        let api = NegotiationApi::new(
+            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
+            move |_caller: String, msg: ProposalRejected| async move { unimplemented!() },
+            move |caller: String, msg: AgreementApproved| async move { unimplemented!() },
+            move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
+        );
+
         let notifier = EventNotifier::new();
         let engine = RequestorBroker {
+            api,
             db: db.clone(),
             notifier: notifier.clone(),
         };
@@ -41,6 +55,7 @@ impl RequestorBroker {
         public_prefix: &str,
         private_prefix: &str,
     ) -> Result<(), NegotiationInitError> {
+        self.api.bind_gsb(public_prefix, private_prefix).await?;
         Ok(())
     }
 
