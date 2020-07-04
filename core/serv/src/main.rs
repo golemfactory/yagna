@@ -24,6 +24,7 @@ use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::PaymentService;
+use ya_payment_driver::PaymentDriverService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -43,6 +44,7 @@ use data_dir::DataDir;
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 struct CliArgs {
     /// Service data dir
     #[structopt(
@@ -164,6 +166,8 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(gsb)]
+    PaymentDriver(PaymentDriverService),
 }
 
 #[derive(StructOpt, Debug)]
