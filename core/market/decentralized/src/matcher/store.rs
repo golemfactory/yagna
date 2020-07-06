@@ -62,7 +62,10 @@ impl SubscriptionStore {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers(match id {Some(ident) => Some(ident.identity), _ => None})
+            .get_offers(match id {
+                Some(ident) => Some(ident.identity),
+                _ => None,
+            })
             .await
             .map_err(|e| OfferError::GetMany(e))?
             .into_iter()
