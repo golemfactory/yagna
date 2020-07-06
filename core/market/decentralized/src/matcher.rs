@@ -1,6 +1,6 @@
 use tokio::sync::mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer, Proposal};
+use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -17,22 +17,27 @@ mod error;
 mod resolver;
 mod store;
 
+/// Stores proposal generated from resolver.
+#[derive(Debug)]
+pub struct DraftProposal {
+    pub offer: Offer,
+    pub demand: Demand,
+}
+
 /// Receivers for events, that can be emitted from Matcher.
 pub struct EventsListeners {
-    pub proposal_receiver: UnboundedReceiver<Proposal>,
+    pub proposal_receiver: UnboundedReceiver<DraftProposal>,
 }
 
 /// Responsible for storing Offers and matching them with demands.
 pub struct Matcher {
     pub store: SubscriptionStore,
     discovery: Discovery,
-    proposal_emitter: UnboundedSender<Proposal>,
+    proposal_emitter: UnboundedSender<DraftProposal>,
 }
 
 impl Matcher {
     pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
-        // TODO: Implement Discovery callbacks.
-
         let store = SubscriptionStore::new(db.clone());
         let store1 = store.clone();
         let store2 = store.clone();
@@ -50,10 +55,10 @@ impl Matcher {
                 Ok(vec![])
             },
         )?;
-        let (emitter, receiver) = unbounded_channel::<Proposal>();
+        let (emitter, receiver) = unbounded_channel::<DraftProposal>();
 
         let matcher = Matcher {
-            store: store,
+            store,
             discovery,
             proposal_emitter: emitter,
         };
@@ -144,7 +149,7 @@ impl Matcher {
         Ok(self.store.remove_demand(subscription_id).await?)
     }
 
-    pub fn emit_proposal(&self, proposal: Proposal) -> Result<(), SendError<Proposal>> {
+    pub fn emit_proposal(&self, proposal: DraftProposal) -> Result<(), SendError<DraftProposal>> {
         self.proposal_emitter.send(proposal)
     }
 }

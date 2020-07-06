@@ -1474,6 +1474,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86d4de0081402f5e88cdac65c8dcdcc73118c1a7a465e2a05f0da05843a8ea33"
 
 [[package]]
+name = "fixedbitset"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
+
+[[package]]
 name = "flate2"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1739,6 +1745,28 @@ name = "gimli"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcc8e0c9bce37868955864dbecd2b1ab2bdf967e6f28066d65aaac620444b65c"
+
+[[package]]
+name = "git-version"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94918e83f1e01dedc2e361d00ce9487b14c58c7f40bab148026fa39d42cb41e2"
+dependencies = [
+ "git-version-macro",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "git-version-macro"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34a97a52fdee1870a34fa6e4b77570cba531b27d1838874fef4429a791a3d657"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2 1.0.18",
+ "quote 1.0.7",
+ "syn 1.0.33",
+]
 
 [[package]]
 name = "glob"
@@ -2398,6 +2426,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eb04b9f127583ed176e163fb9ec6f3e793b87e21deedd5734a69386a18a0151"
 
 [[package]]
+name = "multimap"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8883adfde9756c1d30b0f519c9b8c502a94b41ac62f696453c37c7fc0a958ce"
+
+[[package]]
 name = "native-tls"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2474,6 +2508,17 @@ dependencies = [
  "autocfg 1.0.0",
  "num-integer",
  "num-traits",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
+dependencies = [
+ "proc-macro2 0.4.30",
+ "quote 0.6.13",
+ "syn 0.15.44",
 ]
 
 [[package]]
@@ -2753,7 +2798,17 @@ version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c3659d1ee90221741f65dd128d9998311b0e40c5d3c23a62445938214abce4f"
 dependencies = [
- "fixedbitset",
+ "fixedbitset 0.1.9",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
+dependencies = [
+ "fixedbitset 0.2.0",
+ "indexmap",
 ]
 
 [[package]]
@@ -2915,7 +2970,17 @@ checksum = "96d14b1c185652833d24aaad41c5832b0be5616a590227c1fbff57c616754b23"
 dependencies = [
  "byteorder",
  "bytes 0.4.12",
- "prost-derive",
+ "prost-derive 0.5.0",
+]
+
+[[package]]
+name = "prost"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce49aefe0a6144a45de32927c77bd2859a5f7677b55f220ae5b744e87389c212"
+dependencies = [
+ "bytes 0.5.5",
+ "prost-derive 0.6.1",
 ]
 
 [[package]]
@@ -2928,12 +2993,30 @@ dependencies = [
  "heck",
  "itertools",
  "log 0.4.8",
- "multimap",
- "petgraph",
- "prost",
- "prost-types",
+ "multimap 0.4.0",
+ "petgraph 0.4.13",
+ "prost 0.5.0",
+ "prost-types 0.5.0",
  "tempfile",
- "which",
+ "which 2.0.1",
+]
+
+[[package]]
+name = "prost-build"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
+dependencies = [
+ "bytes 0.5.5",
+ "heck",
+ "itertools",
+ "log 0.4.8",
+ "multimap 0.8.1",
+ "petgraph 0.5.1",
+ "prost 0.6.1",
+ "prost-types 0.6.1",
+ "tempfile",
+ "which 3.1.1",
 ]
 
 [[package]]
@@ -2950,13 +3033,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "537aa19b95acde10a12fec4301466386f757403de4cd4e5b4fa78fb5ecb18f72"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2 1.0.18",
+ "quote 1.0.7",
+ "syn 1.0.33",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1de482a366941c8d56d19b650fac09ca08508f2a696119ee7513ad590c8bac6f"
 dependencies = [
  "bytes 0.4.12",
- "prost",
+ "prost 0.5.0",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1834f67c0697c001304b75be76f67add9c89742eda3a085ad8ee0bb38c3417aa"
+dependencies = [
+ "bytes 0.5.5",
+ "prost 0.6.1",
 ]
 
 [[package]]
@@ -4090,6 +4196,7 @@ dependencies = [
  "mio",
  "mio-named-pipes",
  "mio-uds",
+ "num_cpus",
  "pin-project-lite",
  "signal-hook-registry",
  "slab 0.4.2",
@@ -4729,6 +4836,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "widestring"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4844,7 +4960,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "awc",
  "backtrace",
@@ -4865,7 +4981,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -4876,10 +4992,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-compile-time-utils"
+version = "0.1.0"
+dependencies = [
+ "git-version",
+]
+
+[[package]]
 name = "ya-core-model"
 version = "0.1.0"
 dependencies = [
  "bigdecimal",
+ "bitflags 1.2.1",
  "chrono",
  "log 0.4.8",
  "serde",
@@ -4926,7 +5050,9 @@ dependencies = [
  "winapi 0.3.8",
  "ya-agreement-utils",
  "ya-client-model",
+ "ya-compile-time-utils",
  "ya-core-model",
+ "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
  "ya-transfer",
@@ -4991,6 +5117,8 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
+ "num-derive",
+ "num-traits",
  "r2d2",
  "rand 0.7.3",
  "serde",
@@ -5143,7 +5271,11 @@ dependencies = [
  "ureq",
  "uuid 0.8.1",
  "web3",
+ "ya-client-model",
+ "ya-core-model",
  "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -5197,6 +5329,7 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client",
  "ya-client-model",
+ "ya-compile-time-utils",
  "ya-core-model",
  "ya-utils-actix",
  "ya-utils-path",
@@ -5222,6 +5355,24 @@ dependencies = [
  "uuid 0.8.1",
  "ya-agreement-utils",
  "ya-client",
+ "ya-compile-time-utils",
+]
+
+[[package]]
+name = "ya-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes 0.5.5",
+ "env_logger 0.7.1",
+ "futures 0.3.5",
+ "log 0.4.8",
+ "prost 0.6.1",
+ "prost-build 0.6.1",
+ "serde",
+ "serde_json",
+ "tokio 0.2.21",
+ "tokio-util 0.2.0",
 ]
 
 [[package]]
@@ -5234,8 +5385,8 @@ version = "0.1.0"
 dependencies = [
  "bytes 0.4.12",
  "bytes 0.5.5",
- "prost",
- "prost-build",
+ "prost 0.5.0",
+ "prost-build 0.5.0",
  "serial_test",
  "thiserror",
  "tokio 0.2.21",
@@ -5255,12 +5406,13 @@ dependencies = [
  "futures 0.3.5",
  "lazy_static",
  "log 0.4.8",
- "prost",
+ "prost 0.5.0",
  "structopt",
  "tokio 0.2.21",
  "tokio-util 0.2.0",
  "url 2.1.1",
  "uuid 0.8.1",
+ "ya-compile-time-utils",
  "ya-sb-proto",
  "ya-sb-util",
  "ya-service-api-web",
@@ -5463,11 +5615,13 @@ dependencies = [
  "structopt",
  "url 2.1.1",
  "ya-activity",
+ "ya-compile-time-utils",
  "ya-identity",
  "ya-market-decentralized",
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
+ "ya-payment-driver",
  "ya-persistence",
  "ya-sb-proto",
  "ya-sb-router",

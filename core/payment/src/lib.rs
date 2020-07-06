@@ -1,7 +1,6 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
 use crate::processor::PaymentProcessor;
-use ya_payment_driver::PaymentDriver;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::*;
 
@@ -23,20 +22,6 @@ pub mod migrations {
     struct _Dummy;
 }
 
-#[cfg(feature = "dummy-driver")]
-async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    use ya_payment_driver::DummyDriver;
-
-    Ok(DummyDriver::new())
-}
-
-#[cfg(feature = "gnt-driver")]
-async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    use ya_payment_driver::GntDriver;
-
-    Ok(GntDriver::new(db.clone()).await?)
-}
-
 pub struct PaymentService;
 
 impl Service for PaymentService {
@@ -47,8 +32,7 @@ impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db: DbExecutor = context.component();
         db.apply_migration(migrations::run_with_output)?;
-        let driver = payment_driver_factory(&db).await?;
-        let processor = PaymentProcessor::new(driver, db.clone());
+        let processor = PaymentProcessor::new(db.clone());
         self::service::bind_service(&db, processor);
         Ok(())
     }

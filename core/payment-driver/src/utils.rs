@@ -1,16 +1,29 @@
 use crate::error::PaymentDriverError;
 use crate::PaymentDriverResult;
 
-use crate::models::{TransactionEntity, TransactionStatus, TxType};
+use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus, TxType};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H160, H256, U256};
+use futures3::{Future, FutureExt};
 use num_bigint::ToBigInt;
 use sha3::{Digest, Sha3_512};
+use std::pin::Pin;
 use std::str::FromStr;
+use ya_client_model::NodeId;
+use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
+use ya_core_model::identity;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
+
+pub const PAYMENT_STATUS_UNKNOWN: i32 = 0;
+pub const PAYMENT_STATUS_NOT_YET: i32 = 1;
+pub const PAYMENT_STATUS_OK: i32 = 2;
+pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
+pub const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
+pub const PAYMENT_STATUS_FAILED: i32 = 5;
 
 pub fn str_to_addr(addr: &str) -> PaymentDriverResult<Address> {
     match addr.trim_start_matches("0x").parse() {
@@ -95,9 +108,44 @@ pub fn prepare_tx_id(raw_tx: &RawTransaction, chain_id: u64, sender: Address) ->
     format!("{:x}", Sha3_512::digest(&bytes))
 }
 
+pub fn payment_status_to_i32(status: &PaymentStatus) -> i32 {
+    match status {
+        PaymentStatus::NotYet => PAYMENT_STATUS_NOT_YET,
+        PaymentStatus::Ok(_confirmation) => PAYMENT_STATUS_OK,
+        PaymentStatus::NotEnoughFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
+        PaymentStatus::NotEnoughGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
+        PaymentStatus::Unknown => PAYMENT_STATUS_UNKNOWN,
+        PaymentStatus::Failed => PAYMENT_STATUS_FAILED,
+    }
+}
+
+pub fn payment_entity_to_status(payment: &PaymentEntity) -> PaymentStatus {
+    match payment.status {
+        PAYMENT_STATUS_OK => {
+            let confirmation: Vec<u8> = Vec::new();
+            PaymentStatus::Ok(PaymentConfirmation { confirmation })
+        }
+        PAYMENT_STATUS_NOT_YET => PaymentStatus::NotYet,
+        PAYMENT_STATUS_NOT_ENOUGH_FUNDS => PaymentStatus::NotEnoughFunds,
+        PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
+        PAYMENT_STATUS_FAILED => PaymentStatus::Failed,
+        _ => PaymentStatus::Unknown,
+    }
+}
+
+pub fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+    move |payload| {
+        let fut = bus::service(identity::BUS_ID)
+            .send(identity::Sign { node_id, payload })
+            .map(|x| x.unwrap().unwrap());
+        Box::pin(fut)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_currency_conversion() {
         let amount_str = "10000.123456789012345678";
