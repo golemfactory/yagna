@@ -1747,6 +1747,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcc8e0c9bce37868955864dbecd2b1ab2bdf967e6f28066d65aaac620444b65c"
 
 [[package]]
+name = "git-version"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94918e83f1e01dedc2e361d00ce9487b14c58c7f40bab148026fa39d42cb41e2"
+dependencies = [
+ "git-version-macro",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "git-version-macro"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34a97a52fdee1870a34fa6e4b77570cba531b27d1838874fef4429a791a3d657"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2 1.0.18",
+ "quote 1.0.7",
+ "syn 1.0.33",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2486,6 +2508,17 @@ dependencies = [
  "autocfg 1.0.0",
  "num-integer",
  "num-traits",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
+dependencies = [
+ "proc-macro2 0.4.30",
+ "quote 0.6.13",
+ "syn 0.15.44",
 ]
 
 [[package]]
@@ -4927,7 +4960,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "awc",
  "backtrace",
@@ -4948,7 +4981,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=074639b2b67c0f6e5e3252dfc4b0a914823ea568#074639b2b67c0f6e5e3252dfc4b0a914823ea568"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -4959,10 +4992,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-compile-time-utils"
+version = "0.1.0"
+dependencies = [
+ "git-version",
+]
+
+[[package]]
 name = "ya-core-model"
 version = "0.1.0"
 dependencies = [
  "bigdecimal",
+ "bitflags 1.2.1",
  "chrono",
  "log 0.4.8",
  "serde",
@@ -5009,6 +5050,7 @@ dependencies = [
  "winapi 0.3.8",
  "ya-agreement-utils",
  "ya-client-model",
+ "ya-compile-time-utils",
  "ya-core-model",
  "ya-runtime-api",
  "ya-sb-router",
@@ -5075,6 +5117,8 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
+ "num-derive",
+ "num-traits",
  "r2d2",
  "rand 0.7.3",
  "serde",
@@ -5228,7 +5272,11 @@ dependencies = [
  "ureq",
  "uuid 0.8.1",
  "web3",
+ "ya-client-model",
+ "ya-core-model",
  "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -5282,6 +5330,7 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client",
  "ya-client-model",
+ "ya-compile-time-utils",
  "ya-core-model",
  "ya-utils-actix",
  "ya-utils-path",
@@ -5307,6 +5356,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-agreement-utils",
  "ya-client",
+ "ya-compile-time-utils",
 ]
 
 [[package]]
@@ -5363,6 +5413,7 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.1.1",
  "uuid 0.8.1",
+ "ya-compile-time-utils",
  "ya-sb-proto",
  "ya-sb-util",
  "ya-service-api-web",
@@ -5565,11 +5616,13 @@ dependencies = [
  "structopt",
  "url 2.1.1",
  "ya-activity",
+ "ya-compile-time-utils",
  "ya-identity",
  "ya-market-decentralized",
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
+ "ya-payment-driver",
  "ya-persistence",
  "ya-sb-proto",
  "ya-sb-router",

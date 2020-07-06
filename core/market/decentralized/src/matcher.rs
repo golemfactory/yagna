@@ -34,14 +34,12 @@ pub struct EventsListeners {
 /// Responsible for storing Offers and matching them with demands.
 pub struct Matcher {
     pub store: SubscriptionStore,
-    resolver: Resolver,
+    pub resolver: Resolver,
     discovery: Discovery,
 }
 
 impl Matcher {
     pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
-        // TODO: Implement Discovery callbacks.
-
         let store = SubscriptionStore::new(db.clone());
         let (proposal_tx, proposal_rx) = unbounded_channel::<RawProposal>();
         let resolver = Resolver::new(store.clone(), proposal_tx);
@@ -56,6 +54,8 @@ impl Matcher {
                 Ok(vec![])
             })
             .build();
+
+        let (emitter, receiver) = unbounded_channel::<RawProposal>();
 
         let matcher = Matcher {
             store,

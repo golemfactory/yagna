@@ -10,10 +10,10 @@ mod tests {
     use std::time::Duration;
 
     use ya_market_decentralized::protocol::{Discovery, OfferReceived, Propagate, Reason};
-    use ya_market_decentralized::{MarketService, SubscriptionId};
+    use ya_market_decentralized::SubscriptionId;
 
     use crate::utils::mock_node::default::*;
-    use crate::utils::{wait_for_bcast, MarketStore, MarketsNetwork};
+    use crate::utils::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 
     use ya_market_decentralized::testing::mock_offer::{sample_client_offer, sample_offer};
     use ya_market_decentralized::testing::OfferError;
@@ -34,7 +34,7 @@ mod tests {
             .await?;
 
         // Add Offer on Node-1. It should be propagated to remaining nodes.
-        let market1: &MarketService = network.get_market("Node-1");
+        let market1 = network.get_market("Node-1");
         let id1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
@@ -43,10 +43,9 @@ mod tests {
         let offer = market1.get_offer(&subscription_id).await?;
 
         // Expect, that Offer will appear on other nodes.
-        let market2: &MarketService = network.get_market("Node-2");
-        let market3: &MarketService = network.get_market("Node-3");
+        let market2 = network.get_market("Node-2");
+        let market3 = network.get_market("Node-3");
         wait_for_bcast(1000, &market2, &subscription_id, true).await;
-        // TODO: strip insertion ts from comparsion
         assert_eq!(offer, market2.get_offer(&subscription_id).await?);
         assert_eq!(offer, market3.get_offer(&subscription_id).await?);
 
@@ -81,7 +80,7 @@ mod tests {
             )
             .await?;
 
-        let market1: &MarketService = network.get_market("Node-1");
+        let market1 = network.get_market("Node-1");
         let discovery2: Discovery = network.get_discovery("Node-2");
 
         // Prepare Offer with subscription id changed to invalid.
@@ -116,7 +115,7 @@ mod tests {
             .await?;
 
         // Add Offer on Node-1. It should be propagated to remaining nodes.
-        let market1: &MarketService = network.get_market("Node-1");
+        let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
@@ -125,7 +124,7 @@ mod tests {
         let offer = market1.get_offer(&subscription_id).await?;
 
         // Expect, that Offer will appear on other nodes.
-        let market2: &MarketService = network.get_market("Node-2");
+        let market2 = network.get_market("Node-2");
         wait_for_bcast(1000, &market2, &subscription_id, true).await;
         assert_eq!(offer, market2.get_offer(&subscription_id).await?);
 
@@ -180,6 +179,17 @@ mod tests {
             1,
             "We expect to receive Offer only from ourselves"
         );
+
+        // We expect, that Offers won't be available on other nodes now
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market1.get_offer(&subscription_id).await,
+        );
+        assert_err_eq!(
+            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            market2.get_offer(&subscription_id).await,
+        );
+
         Ok(())
     }
 }

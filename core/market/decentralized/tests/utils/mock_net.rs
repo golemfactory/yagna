@@ -1,9 +1,13 @@
 use actix_rt::Arbiter;
+use std::collections::HashMap;
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
+use ya_client::model::NodeId;
+use ya_core_model::net;
 use ya_core_model::net::{local as local_net, local::SendBroadcastMessage};
-use ya_service_bus::{typed as bus, untyped as local_bus, RpcMessage};
+use ya_service_bus::{typed as bus, untyped as local_bus, Error, RpcMessage};
 
 #[cfg(feature = "bcast-singleton")]
 use super::bcast::singleton::BCastService;
@@ -16,11 +20,15 @@ pub struct MockNet {
     inner: Arc<Mutex<MockNetInner>>,
 }
 
-struct MockNetInner;
+#[derive(Default)]
+struct MockNetInner {
+    /// Maps NodeIds to gsb prefixes of market nodes.
+    pub nodes: HashMap<NodeId, String>,
+}
 
 lazy_static::lazy_static! {
     static ref NET : MockNet = MockNet {
-        inner: Arc::new(Mutex::new(MockNetInner))
+        inner: Arc::new(Mutex::new(MockNetInner::default()))
     };
 }
 
@@ -33,8 +41,47 @@ impl Default for MockNet {
 
 impl MockNet {
     pub fn bind_gsb(&self) {
-        let me = self.inner.lock().unwrap();
-        me.bind_gsb()
+        let inner = self.inner.lock().unwrap();
+        inner.bind_gsb()
+    }
+
+    pub fn register_node(&self, node_id: &NodeId, prefix: &str) {
+        // Only two first components
+        let mut iter = prefix.split("/").fuse();
+        let prefix = match (iter.next(), iter.next(), iter.next()) {
+            (Some(""), Some(test_name), Some(name)) => format!("/{}/{}", test_name, name),
+            _ => panic!("[MockNet] Can't register prefix {}", prefix),
+        };
+
+        let mut inner = self.inner.lock().unwrap();
+        inner.nodes.insert(node_id.clone(), prefix);
+    }
+
+    async fn translate_address(&self, address: String) -> Result<String, anyhow::Error> {
+        let (_from_node, to_addr) = match parse_from_addr(&address) {
+            Ok(v) => v,
+            Err(e) => Err(Error::GsbBadRequest(e.to_string()))?,
+        };
+
+        let mut iter = to_addr.split("/").fuse();
+        let dst_id = match (iter.next(), iter.next(), iter.next()) {
+            (Some(""), Some("net"), Some(dst_id)) => dst_id,
+            _ => panic!("[MockNet] Invalid destination address {}", to_addr),
+        };
+
+        let dest_node_id = NodeId::from_str(&dst_id)?;
+        let inner = self.inner.lock().unwrap();
+        let local_prefix = inner.nodes.get(&dest_node_id);
+
+        if let Some(local_prefix) = local_prefix {
+            let net_prefix = format!("/net/{}", dst_id);
+            Ok(to_addr.replacen(&net_prefix, &local_prefix, 1))
+        } else {
+            Err(Error::GsbFailure(format!(
+                "[MockNet] Can't find destination address for endpoint [{}].",
+                &address
+            )))?
+        }
     }
 }
 
@@ -86,5 +133,56 @@ impl MockNetInner {
             }
             async move { Ok(Vec::from(resp.as_ref())) }
         });
+
+        local_bus::subscribe(FROM_BUS_ID, move |caller: &str, addr: &str, msg: &[u8]| {
+            let mock_net = MockNet::default();
+            let data = Vec::from(msg);
+            let caller = caller.to_string();
+            let addr = addr.to_string();
+
+            async move {
+                let local_addr = mock_net
+                    .translate_address(addr)
+                    .await
+                    .map_err(|e| Error::GsbBadRequest(e.to_string()))?;
+
+                log::debug!(
+                    "[MockNet] Sending message from [{}], to address [{}].",
+                    &caller,
+                    &local_addr
+                );
+                Ok(local_bus::send(&local_addr, &caller, &data).await?)
+            }
+        });
     }
+}
+
+// Copied from core/net/api.rs
+pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
+    let mut it = from_addr.split("/").fuse();
+    if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
+        (it.next(), it.next(), it.next(), it.next(), it.next())
+    {
+        to_node_id.parse::<NodeId>()?;
+        let prefix = 10 + from_node_id.len();
+        let service_id = &from_addr[prefix..];
+        if let Some(_) = it.next() {
+            return Ok((from_node_id.parse()?, net_service(service_id)));
+        }
+    }
+    anyhow::bail!("invalid net-from destination: {}", from_addr)
+}
+
+// Copied from core/net/api.rs
+#[inline]
+pub(crate) fn net_service(service: impl ToString) -> String {
+    format!("{}/{}", net::BUS_ID, service.to_string())
+}
+
+pub(crate) const FROM_BUS_ID: &str = "/from";
+
+pub fn gsb_prefixes(test_name: &str, name: &str) -> (String, String) {
+    let public_gsb_prefix = format!("/{}/{}/market", test_name, name);
+    let local_gsb_prefix = format!("/{}/{}/market", test_name, name);
+    (public_gsb_prefix, local_gsb_prefix)
 }

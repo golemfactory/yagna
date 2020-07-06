@@ -13,11 +13,28 @@ use ya_service_bus::typed as bus;
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
 use crate::id_key::{generate_new, IdentityKey};
+use actix_rt::Arbiter;
+use futures::prelude::*;
+use std::cell::{Ref, RefCell};
+use std::rc::Rc;
+
+#[derive(Default)]
+struct Subscription {
+    subscriptions: Vec<String>,
+}
+
+impl Subscription {
+    fn subscribe(&mut self, endpoint: String) {
+        self.subscriptions.push(endpoint);
+    }
+}
 
 pub struct IdentityService {
     default_key: NodeId,
     ids: HashMap<NodeId, IdentityKey>,
     alias_to_id: HashMap<String, NodeId>,
+    sender: futures::channel::mpsc::UnboundedSender<model::event::Event>,
+    subscription: Rc<RefCell<Subscription>>,
     db: DbExecutor,
 }
 
@@ -32,9 +49,39 @@ fn to_info(default_key: &NodeId, key: &IdentityKey) -> model::IdentityInfo {
     }
 }
 
+fn send_event(s: Ref<Subscription>, event: model::event::Event) -> impl Future<Output = ()> {
+    let subscriptions: Vec<String> = s.subscriptions.clone();
+    log::debug!("sending event: {:?} to {:?}", event, subscriptions);
+
+    async move {
+        for endpoint in subscriptions {
+            let msg = event.clone();
+            Arbiter::spawn(async move {
+                log::debug!("Sending event: {:?}", msg);
+                match bus::service(&endpoint).call(msg).await {
+                    Err(e) => log::error!("Failed to send event: {:?}", e),
+                    Ok(Err(e)) => log::error!("Failed to send event: {:?}", e),
+                    Ok(Ok(_)) => log::debug!("Event sent to {:?}", endpoint),
+                }
+            });
+        }
+    }
+}
+
 impl IdentityService {
     pub async fn from_db(db: DbExecutor) -> anyhow::Result<Self> {
         crate::dao::init(&db).await?;
+
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
+        let subscription = Rc::new(RefCell::new(Subscription::default()));
+        {
+            let subscription = subscription.clone();
+            Arbiter::spawn(async move {
+                let _ = receiver
+                    .for_each(|event| send_event(subscription.borrow(), event))
+                    .await;
+            })
+        }
 
         let default_key = db
             .as_dao::<IdentityDao>()
@@ -73,8 +120,14 @@ impl IdentityService {
             default_key,
             db,
             ids,
+            sender,
+            subscription,
             alias_to_id,
         })
+    }
+
+    fn sender(&self) -> &futures::channel::mpsc::UnboundedSender<model::event::Event> {
+        &self.sender
     }
 
     pub fn get_by_alias(&self, alias: &str) -> Result<Option<model::IdentityInfo>, model::Error> {
@@ -273,6 +326,14 @@ impl IdentityService {
         })
     }
 
+    pub async fn subscribe(
+        &mut self,
+        subscribe: model::Subscribe,
+    ) -> Result<model::Ack, model::Error> {
+        self.subscription.borrow_mut().subscribe(subscribe.endpoint);
+        Ok(model::Ack {})
+    }
+
     pub fn bind_service(me: Arc<Mutex<Self>>) {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |_list: model::List| {
@@ -326,22 +387,51 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |lock: model::Lock| {
             let this = this.clone();
-            async move { this.lock().await.lock(lock.node_id).await }
+            async move {
+                let mut lock_sender = this.lock().await.sender().clone();
+
+                let result = this.lock().await.lock(lock.node_id).await;
+
+                if result.is_ok() {
+                    let _ = lock_sender
+                        .send(model::event::Event::AccountLocked {
+                            identity: lock.node_id,
+                        })
+                        .await;
+                }
+
+                result
+            }
         });
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |unlock: model::Unlock| {
             let this = this.clone();
             async move {
-                this.lock()
+                let mut unlock_sender = this.lock().await.sender().clone();
+                let result = this
+                    .lock()
                     .await
                     .unlock(unlock.node_id, unlock.password.into())
-                    .await
+                    .await;
+                if result.is_ok() {
+                    let _ = unlock_sender
+                        .send(model::event::Event::AccountUnlocked {
+                            identity: unlock.node_id,
+                        })
+                        .await;
+                }
+                result
             }
         });
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |sign: model::Sign| {
             let this = this.clone();
             async move { this.lock().await.sign(sign.node_id, sign.payload).await }
+        });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |subscribe: model::Subscribe| {
+            let this = this.clone();
+            async move { this.lock().await.subscribe(subscribe).await }
         });
     }
 }

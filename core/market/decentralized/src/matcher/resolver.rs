@@ -87,7 +87,8 @@ impl Resolver {
         }
     }
 
-    fn emit_if_matches(&self, offer: Offer, demand: Demand) {
+    // TODO: return Result; stop unwrapping
+    pub fn emit_if_matches(&self, offer: Offer, demand: Demand) {
         if !matches(&offer, &demand).unwrap() {
             return;
         }

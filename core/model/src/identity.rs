@@ -5,6 +5,9 @@ use ya_service_bus::RpcMessage;
 
 pub const BUS_ID: &'static str = "/private/identity";
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Ack {}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
     #[error("initialization failed {0}")]
@@ -194,4 +197,36 @@ impl RpcMessage for Sign {
     const ID: &'static str = "Sign";
     type Item = Vec<u8>;
     type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subscribe {
+    pub endpoint: String,
+}
+
+impl RpcMessage for Subscribe {
+    const ID: &'static str = "Subscribe";
+    type Item = Ack;
+    type Error = Error;
+}
+
+pub mod event {
+    use super::Error;
+    use serde::{Deserialize, Serialize};
+    use ya_client_model::NodeId;
+    use ya_service_bus::RpcMessage;
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Event {
+        AccountLocked { identity: NodeId },
+        AccountUnlocked { identity: NodeId },
+    }
+
+    impl RpcMessage for Event {
+        const ID: &'static str = "Identity__Event";
+        type Item = ();
+        type Error = Error;
+    }
 }

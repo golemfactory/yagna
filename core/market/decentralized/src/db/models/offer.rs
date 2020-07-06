@@ -9,7 +9,7 @@ use super::SubscriptionId;
 use crate::db::models::subscription_id::SubscriptionValidationError;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
 #[table_name = "market_offer"]
 pub struct Offer {
     pub id: SubscriptionId,
@@ -83,8 +83,8 @@ impl Offer {
             constraints: self.constraints.clone(),
             properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
-                    "Can't serialize Offer properties from database. Error: {}",
-                    e
+                    "Can't serialize Offer[{}] properties from database. Error: {}",
+                    self.id, e
                 )
             })?,
         })
@@ -107,6 +107,18 @@ impl Offer {
             &self.creation_ts,
             &self.expiration_ts,
         )
+    }
+}
+
+/// PartialEq implementation that ignores insertion_ts.
+impl PartialEq for Offer {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.constraints == other.constraints
+            && self.creation_ts == other.creation_ts
+            && self.expiration_ts == other.expiration_ts
+            && self.properties == other.properties
+            && self.node_id == other.node_id
     }
 }
 
@@ -143,7 +155,7 @@ mod tests {
 
     #[test]
     fn test_offer_validation_good_hash() {
-        let subscription_id = "c76161077d0343ab85ac986eb5f6ea38-fcb5394b20806c186579c9ae076cda0616bc6aa80fa5679347d9748cd0648542";
+        let subscription_id = "c76161077d0343ab85ac986eb5f6ea38-85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55";
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {
@@ -161,7 +173,14 @@ mod tests {
                 NaiveTime::from_hms(15, 1, 1),
             ),
         };
-        println!("{}", offer.id.to_string());
+        let id = SubscriptionId::generate_id(
+            &offer.properties,
+            &offer.constraints,
+            &offer.node_id,
+            &offer.creation_ts,
+            &offer.expiration_ts,
+        );
+        println!("{}", id);
 
         offer.validate().unwrap();
     }

@@ -4,10 +4,9 @@ mod utils;
 #[cfg(test)]
 mod tests {
     use ya_market_decentralized::testing::{DemandError, OfferError};
-    use ya_market_decentralized::MarketService;
 
     use crate::utils;
-    use crate::utils::{MarketStore, MarketsNetwork};
+    use crate::utils::{MarketServiceExt, MarketsNetwork};
     // use crate::utils::assert_err_eq;
 
     /// Test subscribes offers, checks if offer is available
@@ -20,7 +19,7 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let market1: &MarketService = network.get_market("Node-1");
+        let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
         let mut offer = utils::sample_client_offer();
@@ -64,7 +63,7 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let market1: &MarketService = network.get_market("Node-1");
+        let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
         let mut demand = utils::sample_client_demand();

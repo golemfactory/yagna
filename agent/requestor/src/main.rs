@@ -22,6 +22,7 @@ const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60
 #[structopt(about = clap::crate_description!())]
 #[structopt(setting = clap::AppSettings::ColoredHelp)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,

@@ -1,13 +1,19 @@
 use anyhow::{anyhow, Context, Result};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
 use ya_market_decentralized::testing::mock_offer::generate_identity;
-use ya_market_decentralized::testing::{DemandError, OfferError};
+use ya_market_decentralized::testing::negotiation::messages::{
+    AgreementApproved, AgreementCancelled, AgreementReceived, AgreementRejected,
+    InitialProposalReceived, ProposalReceived, ProposalRejected,
+};
+use ya_market_decentralized::testing::negotiation::{provider, requestor};
+use ya_market_decentralized::testing::{DemandError, NotifierError, OfferError};
 use ya_market_decentralized::{Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -18,11 +24,14 @@ use super::{bcast::BCast, mock_net::MockNet};
 use super::bcast::singleton::BCastService;
 #[cfg(not(feature = "bcast-singleton"))]
 use super::bcast::BCastService;
+use crate::utils::mock_net::gsb_prefixes;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
+    // net: MockNet,
     markets: Vec<MarketNode>,
     discoveries: Vec<DiscoveryNode>,
+    negotiations: Vec<NegotiationNode>,
     test_dir: PathBuf,
     test_name: String,
 }
@@ -30,12 +39,12 @@ pub struct MarketsNetwork {
 /// Store all object associated with single market
 /// for example: Database
 pub struct MarketNode {
-    market: MarketService,
-    name: String,
+    pub market: Arc<MarketService>,
+    pub name: String,
     /// For now only mock default Identity.
-    id: Identity,
+    pub id: Identity,
     /// Direct access to underlying database.
-    db: DbExecutor,
+    pub db: DbExecutor,
 }
 
 /// Stores mock discovery node, that doesn't include full
@@ -48,18 +57,32 @@ pub struct DiscoveryNode {
     id: Identity,
 }
 
+/// Stores mock negotiation interfaces, that doesn't include full
+/// Market implementation.
+/// Necessary to emulate wrong nodes behavior.
+pub struct NegotiationNode {
+    provider: provider::NegotiationApi,
+    requestor: requestor::NegotiationApi,
+    name: String,
+    /// For now only mock default Identity.
+    id: Identity,
+}
+
 impl MarketsNetwork {
-    /// Remember that dir_name should be unique between all tests.
+    /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
     pub async fn new<Str: AsRef<str>>(test_name: Str) -> Self {
         let test_dir = prepare_test_dir(&test_name).unwrap();
 
         MockNet::default().bind_gsb();
+        // let net = MockNet::new().unwrap();
 
         MarketsNetwork {
+            // net,
             markets: vec![],
             discoveries: vec![],
+            negotiations: vec![],
             test_dir,
             test_name: test_name.as_ref().to_string(),
         }
@@ -67,10 +90,9 @@ impl MarketsNetwork {
 
     pub async fn add_market_instance<Str: AsRef<str>>(mut self, name: Str) -> Result<Self> {
         let db = self.init_database(name.as_ref())?;
-        let market = MarketService::new(&db)?;
+        let market = Arc::new(MarketService::new(&db)?);
 
-        let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
-        let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
+        let (public_gsb_prefix, local_gsb_prefix) = gsb_prefixes(&self.test_name, name.as_ref());
         market
             .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
             .await?;
@@ -82,6 +104,10 @@ impl MarketsNetwork {
             db,
         };
         BCastService::default().register(&market_node.id.identity, &self.test_name);
+        // self.net
+        //     .register_node(&market_node.id.identity, &public_gsb_prefix)
+        //     .await?;
+        MockNet::default().register_node(&market_node.id.identity, &public_gsb_prefix);
         self.markets.push(market_node);
         Ok(self)
     }
@@ -93,8 +119,7 @@ impl MarketsNetwork {
         offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
         retrieve_offers: impl CallbackHandler<RetrieveOffers>,
     ) -> Result<Self> {
-        let public_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
-        let local_gsb_prefix = format!("/{}/{}", &self.test_name, name.as_ref());
+        let (public_gsb_prefix, local_gsb_prefix) = gsb_prefixes(&self.test_name, name.as_ref());
 
         let discovery = DiscoveryBuilder::default()
             .add_handler(offer_received)
@@ -112,23 +137,117 @@ impl MarketsNetwork {
         };
 
         BCastService::default().register(&discovery_node.id.identity, &self.test_name);
+        // self.net
+        //     .register_node(&discovery_node.id.identity, &public_gsb_prefix)
+        //     .await?;
+        MockNet::default().register_node(&discovery_node.id.identity, &public_gsb_prefix);
         self.discoveries.push(discovery_node);
         Ok(self)
     }
 
-    pub fn get_market(&self, name: &str) -> &MarketService {
+    pub async fn add_provider_negotiation_api<Str: AsRef<str>>(
+        self,
+        name: Str,
+        prov_initial_proposal_received: impl CallbackHandler<InitialProposalReceived>,
+        prov_proposal_received: impl CallbackHandler<ProposalReceived>,
+        prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
+        prov_agreement_received: impl CallbackHandler<AgreementReceived>,
+        prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
+    ) -> Result<Self> {
+        self.add_negotiation_api(
+            name.as_ref(),
+            prov_initial_proposal_received,
+            prov_proposal_received,
+            prov_proposal_rejected,
+            prov_agreement_received,
+            prov_agreement_cancelled,
+            default::empty_on_proposal_received,
+            default::empty_on_proposal_rejected,
+            default::empty_on_agreement_approved,
+            default::empty_on_agreement_rejected,
+        )
+        .await
+    }
+
+    pub async fn add_requestor_negotiation_api<Str: AsRef<str>>(
+        self,
+        name: Str,
+        req_proposal_received: impl CallbackHandler<ProposalReceived>,
+        req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
+        req_agreement_approved: impl CallbackHandler<AgreementApproved>,
+        req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
+    ) -> Result<Self> {
+        self.add_negotiation_api(
+            name.as_ref(),
+            default::empty_on_initial_proposal,
+            default::empty_on_proposal_received,
+            default::empty_on_proposal_rejected,
+            default::empty_on_agreement_received,
+            default::empty_on_agreement_cancelled,
+            req_proposal_received,
+            req_proposal_rejected,
+            req_agreement_approved,
+            req_agreement_rejected,
+        )
+        .await
+    }
+
+    pub async fn add_negotiation_api<Str: AsRef<str>>(
+        mut self,
+        name: Str,
+        prov_initial_proposal_received: impl CallbackHandler<InitialProposalReceived>,
+        prov_proposal_received: impl CallbackHandler<ProposalReceived>,
+        prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
+        prov_agreement_received: impl CallbackHandler<AgreementReceived>,
+        prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
+        req_proposal_received: impl CallbackHandler<ProposalReceived>,
+        req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
+        req_agreement_approved: impl CallbackHandler<AgreementApproved>,
+        req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
+    ) -> Result<Self> {
+        let (public_gsb_prefix, local_gsb_prefix) = gsb_prefixes(&self.test_name, name.as_ref());
+
+        let provider_api = provider::NegotiationApi::new(
+            prov_initial_proposal_received,
+            prov_proposal_received,
+            prov_proposal_rejected,
+            prov_agreement_received,
+            prov_agreement_cancelled,
+        );
+        provider_api
+            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
+            .await?;
+
+        let requestor_api = requestor::NegotiationApi::new(
+            req_proposal_received,
+            req_proposal_rejected,
+            req_agreement_approved,
+            req_agreement_rejected,
+        );
+        requestor_api
+            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
+            .await?;
+
+        let node = NegotiationNode {
+            name: name.as_ref().to_string(),
+            id: generate_identity(name.as_ref()),
+            provider: provider_api,
+            requestor: requestor_api,
+        };
+
+        // self.net
+        //     .register_node(&node.id.identity, &public_gsb_prefix)
+        //     .await?;
+        MockNet::default().register_node(&node.id.identity, &public_gsb_prefix);
+        self.negotiations.push(node);
+        Ok(self)
+    }
+
+    pub fn get_market(&self, name: &str) -> Arc<MarketService> {
         self.markets
             .iter()
             .find(|node| node.name == name)
-            .map(|node| &node.market)
-            .unwrap()
-    }
-
-    pub fn get_market_mut(&mut self, name: &str) -> &mut MarketService {
-        self.markets
-            .iter_mut()
-            .find(|node| node.name == name)
-            .map(|node| &mut node.market)
+            .map(|node| node.market.clone())
             .unwrap()
     }
 
@@ -140,11 +259,28 @@ impl MarketsNetwork {
             .unwrap()
     }
 
+    pub fn get_provider_negotiation_api(&self, name: &str) -> provider::NegotiationApi {
+        self.negotiations
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.provider.clone())
+            .unwrap()
+    }
+
+    pub fn get_requestor_negotiation_api(&self, name: &str) -> requestor::NegotiationApi {
+        self.negotiations
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| node.requestor.clone())
+            .unwrap()
+    }
+
     pub fn get_default_id(&self, node_name: &str) -> Identity {
         self.markets
             .iter()
             .map(|node| (&node.name, &node.id))
             .chain(self.discoveries.iter().map(|node| (&node.name, &node.id)))
+            .chain(self.negotiations.iter().map(|node| (&node.name, &node.id)))
             .find(|&(name, _id)| name == &node_name)
             .map(|(_name, id)| id.clone())
             .unwrap()
@@ -207,13 +343,14 @@ pub async fn wait_for_bcast(
 }
 
 #[async_trait::async_trait]
-pub trait MarketStore {
+pub trait MarketServiceExt {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+    async fn wait_1s_for_event(&self, id: &SubscriptionId) -> Result<(), NotifierError>;
 }
 
 #[async_trait::async_trait]
-impl MarketStore for MarketService {
+impl MarketServiceExt for MarketService {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError> {
         self.matcher.store.get_offer(id).await
     }
@@ -221,13 +358,26 @@ impl MarketStore for MarketService {
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
         self.matcher.store.get_demand(id).await
     }
+
+    async fn wait_1s_for_event(&self, id: &SubscriptionId) -> Result<(), NotifierError> {
+        self.requestor_engine
+            .notifier
+            .wait_for_event_with_timeout(id, Duration::from_secs(1))
+            .await
+    }
 }
 
 pub mod default {
+    use ya_market_decentralized::protocol::negotiation::messages::AgreementCancelled;
     use ya_market_decentralized::protocol::{
         DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
     };
-    use ya_market_decentralized::Offer;
+    use ya_market_decentralized::testing::negotiation::errors::{AgreementError, ProposalError};
+    use ya_market_decentralized::testing::negotiation::messages::{
+        AgreementApproved, AgreementReceived, AgreementRejected, InitialProposalReceived,
+        ProposalReceived, ProposalRejected,
+    };
+    use ya_market_decentralized::testing::Offer;
 
     pub async fn empty_on_offer_received(
         _caller: String,
@@ -248,5 +398,54 @@ pub mod default {
         _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])
+    }
+
+    pub async fn empty_on_initial_proposal(
+        _caller: String,
+        _msg: InitialProposalReceived,
+    ) -> Result<(), ProposalError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_proposal_received(
+        _caller: String,
+        _msg: ProposalReceived,
+    ) -> Result<(), ProposalError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_proposal_rejected(
+        _caller: String,
+        _msg: ProposalRejected,
+    ) -> Result<(), ProposalError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_received(
+        _caller: String,
+        _msg: AgreementReceived,
+    ) -> Result<(), AgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_approved(
+        _caller: String,
+        _msg: AgreementApproved,
+    ) -> Result<(), AgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_rejected(
+        _caller: String,
+        _msg: AgreementRejected,
+    ) -> Result<(), AgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_cancelled(
+        _caller: String,
+        _msg: AgreementCancelled,
+    ) -> Result<(), AgreementError> {
+        Ok(())
     }
 }

@@ -58,11 +58,14 @@ impl SubscriptionStore {
             })
     }
 
-    pub async fn get_offers(&self) -> Result<Vec<ClientOffer>, OfferError> {
+    pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<ClientOffer>, OfferError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers()
+            .get_offers(match id {
+                Some(ident) => Some(ident.identity),
+                _ => None,
+            })
             .await
             .map_err(|e| OfferError::GetMany(e))?
             .into_iter()
