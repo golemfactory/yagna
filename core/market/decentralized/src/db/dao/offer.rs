@@ -1,9 +1,9 @@
 use chrono::NaiveDateTime;
 
+use ya_client::model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_service_api_web::middleware::Identity;
 
 use crate::db::models::{Offer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl;
@@ -49,11 +49,11 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
-    pub async fn get_offers(&self, id: Option<Identity>) -> DbResult<Vec<Offer>> {
+    pub async fn get_offers(&self, node_id: Option<NodeId>) -> DbResult<Vec<Offer>> {
         readonly_transaction(self.pool, move |conn| {
-            Ok(match id {
+            Ok(match node_id {
                 Some(ident) => dsl::market_offer
-                    .filter(dsl::node_id.eq(ident.identity))
+                    .filter(dsl::node_id.eq(ident))
                     .load::<Offer>(conn)?,
                 _ => dsl::market_offer.load::<Offer>(conn)?,
             })
