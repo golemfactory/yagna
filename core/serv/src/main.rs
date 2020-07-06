@@ -153,6 +153,24 @@ impl ServiceContext {
     }
 }
 
+#[cfg(feature = "dummy-driver")]
+#[ya_service_api_derive::services(ServiceContext)]
+enum Services {
+    #[enable(gsb, cli(flatten))]
+    Identity(IdentityService),
+    #[enable(gsb)]
+    Net(NetService),
+    #[enable(gsb, rest)]
+    Market(MarketService),
+    #[enable(gsb, rest)]
+    Activity(ActivityService),
+    #[enable(gsb, rest, cli)]
+    Payment(PaymentService),
+    #[enable(gsb)]
+    PaymentDriver(PaymentDriverService),
+}
+
+#[cfg(not(feature = "dummy-driver"))]
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
     #[enable(gsb, cli(flatten))]
