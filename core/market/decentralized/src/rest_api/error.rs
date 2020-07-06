@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
 
+use crate::db::dao::TakeEventsError;
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, OfferError, ResolverError},
@@ -78,8 +79,11 @@ impl ResponseError for QueryEventsError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            QueryEventsError::Unsubscribed(_) => HttpResponse::NotFound().json(msg),
-            QueryEventsError::SubscriptionExpired(_) => HttpResponse::NotFound().json(msg),
+            QueryEventsError::Unsubscribed(_)
+            | QueryEventsError::TakeEventsError(TakeEventsError::SubscriptionNotFound(_))
+            | QueryEventsError::TakeEventsError(TakeEventsError::SubscriptionExpired(_)) => {
+                HttpResponse::NotFound().json(msg)
+            }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(_) => {
                 HttpResponse::BadRequest().json(msg)
             }
