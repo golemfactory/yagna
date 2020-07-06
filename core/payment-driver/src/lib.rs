@@ -8,7 +8,6 @@ use ya_service_api_interfaces::Provider;
 #[macro_use]
 extern crate diesel;
 
-mod dummy;
 mod ethereum;
 mod models;
 mod processor;

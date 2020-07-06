@@ -76,6 +76,7 @@ members = [
     "core/net",
     "core/payment",
     "core/payment-driver",
+    "core/payment-driver/dummy",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/cache",

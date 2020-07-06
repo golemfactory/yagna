@@ -74,7 +74,7 @@ async fn get_payment_status(
 ) -> Result<PaymentStatus, GenericError> {
     log::info!("get payment status: {:?}", msg);
 
-    let invoice_id = msg.invoice_id();
+    let invoice_id = msg.allocation_id();
 
     processor
         .get_payment_status(invoice_id.as_str())
