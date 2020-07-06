@@ -48,12 +48,11 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     let _offer_remote = market_remote.get_offer(&subscription_id_remote).await?;
 
     wait_for_bcast(1000, &market_remote, &subscription_id_local, true).await;
-    wait_for_bcast(1000, &market_local, &subscription_id_remote, true).await;
 
     let mut app = test::init_service(
         App::new()
-            .wrap(mock_auth())
-            .service(MarketService::bind_rest(market_local.into())),
+            .wrap(DummyAuth::new(identity_local))
+            .service(MarketService::bind_rest(market_local)),
     )
     .await;
 
