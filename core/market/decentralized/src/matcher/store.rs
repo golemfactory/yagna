@@ -79,11 +79,12 @@ impl SubscriptionStore {
             .collect())
     }
 
-    pub async fn get_all_offers(&self) -> Result<Vec<Offer>, OfferError> {
+    pub async fn get_offers_before(&self, demand: &Demand) -> Result<Vec<Offer>, OfferError> {
+        let now = Utc::now().naive_utc();
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_all_offers()
+            .get_offers_before(demand.insertion_ts.unwrap(), now)
             .await
             .map_err(|e| OfferError::GetMany(e))?)
     }
@@ -160,11 +161,12 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn get_all_demands(&self) -> Result<Vec<Demand>, DemandError> {
+    pub async fn get_demands_before(&self, offer: &Offer) -> Result<Vec<Demand>, DemandError> {
+        let now = Utc::now().naive_utc();
         Ok(self
             .db
             .as_dao::<DemandDao>()
-            .get_all_demands()
+            .get_demands_before(offer.insertion_ts.unwrap(), now)
             .await
             .map_err(|e| DemandError::GetMany(e))?)
     }

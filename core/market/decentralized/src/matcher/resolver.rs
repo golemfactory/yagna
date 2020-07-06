@@ -68,7 +68,7 @@ impl Resolver {
                     log::info!("TODO: resolve new Offer: {:?}", id);
                     // TODO: get rid of unwraps
                     let offer = self.store.get_offer(&id).await.unwrap();
-                    let demands = self.store.get_all_demands().await.unwrap();
+                    let demands = self.store.get_demands_before(&offer).await.unwrap();
 
                     for demand in demands {
                         self.emit_if_matches(offer.clone(), demand);
@@ -77,7 +77,7 @@ impl Resolver {
                 Subscription::Demand(id) => {
                     log::info!("TODO: resolve new Demand: {:?}", id);
                     let demand = self.store.get_demand(&id).await.unwrap();
-                    let offers = self.store.get_all_offers().await.unwrap();
+                    let offers = self.store.get_offers_before(&demand).await.unwrap();
 
                     for offer in offers {
                         self.emit_if_matches(offer, demand.clone());

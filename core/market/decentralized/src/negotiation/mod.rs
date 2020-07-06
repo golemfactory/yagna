@@ -1,6 +1,6 @@
 // TODO: move to ../<mod_name>.rs
 mod errors; // TODO: remove plural form
-pub(crate) mod notifier;
+mod notifier;
 mod provider;
 mod requestor;
 

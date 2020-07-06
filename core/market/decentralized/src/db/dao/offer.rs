@@ -61,9 +61,17 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
-    pub async fn get_all_offers(&self) -> DbResult<Vec<Offer>> {
+    pub async fn get_offers_before(
+        &self,
+        insertion_ts: NaiveDateTime,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Vec<Offer>> {
         readonly_transaction(self.pool, move |conn| {
-            Ok(dsl::market_offer.load::<Offer>(conn)?)
+            Ok(dsl::market_offer
+                // TODO: ubscubscribed
+                .filter(dsl::insertion_ts.lt(insertion_ts))
+                .filter(dsl::expiration_ts.ge(validation_ts))
+                .load::<Offer>(conn)?)
         })
         .await
     }

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use ya_client::model::market::RequestorEvent;
 use ya_market_decentralized::protocol::{
     CallbackHandler, Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
@@ -13,7 +14,7 @@ use ya_market_decentralized::testing::negotiation::messages::{
     InitialProposalReceived, ProposalReceived, ProposalRejected,
 };
 use ya_market_decentralized::testing::negotiation::{provider, requestor};
-use ya_market_decentralized::testing::{DemandError, NotifierError, OfferError};
+use ya_market_decentralized::testing::{DemandError, OfferError, QueryEventsError};
 use ya_market_decentralized::{Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -346,7 +347,12 @@ pub async fn wait_for_bcast(
 pub trait MarketServiceExt {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
-    async fn wait_1s_for_event(&self, id: &SubscriptionId) -> Result<(), NotifierError>;
+    async fn query_events(
+        &self,
+        subscription_id: &SubscriptionId,
+        timeout: f32,
+        max_events: Option<i32>,
+    ) -> Result<Vec<RequestorEvent>, QueryEventsError>;
 }
 
 #[async_trait::async_trait]
@@ -359,10 +365,14 @@ impl MarketServiceExt for MarketService {
         self.matcher.store.get_demand(id).await
     }
 
-    async fn wait_1s_for_event(&self, id: &SubscriptionId) -> Result<(), NotifierError> {
+    async fn query_events(
+        &self,
+        subscription_id: &SubscriptionId,
+        timeout: f32,
+        max_events: Option<i32>,
+    ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
         self.requestor_engine
-            .notifier
-            .wait_for_event_with_timeout(id, Duration::from_secs(1))
+            .query_events(subscription_id, timeout, max_events)
             .await
     }
 }

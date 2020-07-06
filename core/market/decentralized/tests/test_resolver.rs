@@ -27,9 +27,9 @@ mod tests {
         let offer_id = provider_mkt.subscribe_offer(&offer, &id1).await?;
         let _offer = provider_mkt.get_offer(&offer_id).await?;
 
-        // then
-        // TODO: spawn and wait
-        assert!(provider_mkt.wait_1s_for_event(&offer_id).await.is_err());
+        // TODO // then
+        // let events = provider_mkt.query_events(&offer_id, 0.2, None).await?;
+        // assert_eq!(events.len(), 0);
 
         Ok(())
     }
@@ -42,28 +42,30 @@ mod tests {
         let _ = env_logger::builder().try_init();
         let network = MarketsNetwork::new("test_resolve_offer_demand")
             .await
-            .add_market_instance("Node-1")
+            .add_market_instance("Provider-1")
             .await?
-            .add_market_instance("Node-2")
+            .add_market_instance("Requestor-1")
             .await?;
 
-        let id1 = network.get_default_id("Node-1");
-        let provider_mkt = network.get_market("Node-1");
-        let id2 = network.get_default_id("Node-2");
-        let requestor_mkt = network.get_market("Node-2");
+        let id1 = network.get_default_id("Provider-1");
+        let provider_mkt = network.get_market("Provider-1");
+        let id2 = network.get_default_id("Requestor-1");
+        let requestor_mkt = network.get_market("Requestor-1");
 
-        // when: Add Offer on Node-1
+        // when: Add Offer on Provider
         let _offer_id = provider_mkt.subscribe_offer(&sample_offer(), &id1).await?;
-        // and: Add Demand on Node-2
+        // and: Add Demand on Requestor
         let demand_id = requestor_mkt
             .subscribe_demand(&sample_demand(), &id2)
             .await?;
 
-        // then: It should be resolved on Node-2
-        assert!(requestor_mkt.wait_1s_for_event(&demand_id).await.is_ok());
+        // then: It should be resolved on Requestor
+        let events = requestor_mkt.query_events(&demand_id, 0.2, None).await?;
+        assert_eq!(events.len(), 1);
 
-        // and: but not resolved on Node-1.
-        assert!(provider_mkt.wait_1s_for_event(&offer_id).await.is_err());
+        // TODO // and: but not resolved on Provider.
+        // let events = provider_mkt.query_events(&offer_id, 0.2, None).await?;
+        // assert_eq!(events.len(), 0);
 
         Ok(())
     }
@@ -87,7 +89,8 @@ mod tests {
         let demand_id = requestor_mkt.subscribe_demand(&demand, &id1).await?;
 
         // then
-        assert!(requestor_mkt.wait_1s_for_event(&demand_id).await.is_err());
+        let events = requestor_mkt.query_events(&demand_id, 0.2, None).await?;
+        assert_eq!(events.len(), 0);
 
         Ok(())
     }
@@ -100,36 +103,38 @@ mod tests {
         let _ = env_logger::builder().try_init();
         let network = MarketsNetwork::new("test_resolve_2xoffer_demand")
             .await
-            .add_market_instance("Node-1")
+            .add_market_instance("Provider-1")
             .await?
-            .add_market_instance("Node-2")
+            .add_market_instance("Provider-2")
             .await?
-            .add_market_instance("Node-3")
+            .add_market_instance("Requestor-1")
             .await?;
 
-        let id1 = network.get_default_id("Node-1");
-        let provider_mkt1 = network.get_market("Node-1");
-        let id2 = network.get_default_id("Node-2");
-        let provider_mkt2 = network.get_market("Node-2");
-        let id3 = network.get_default_id("Node-3");
-        let requestor_mkt3 = network.get_market("Node-3");
+        let id1 = network.get_default_id("Provider-1");
+        let provider_mkt1 = network.get_market("Provider-1");
+        let id2 = network.get_default_id("Provider-2");
+        let provider_mkt2 = network.get_market("Provider-2");
+        let id3 = network.get_default_id("Requestor-1");
+        let requestor_mkt = network.get_market("Requestor-1");
 
-        // when: Add Offer on Node-1
+        // when: Add Offer on Provider-1
         let _offer_id1 = provider_mkt1.subscribe_offer(&sample_offer(), &id1).await?;
-        // when: Add Offer on Node-2
+        // when: Add Offer on Provider-2
         let _offer_id2 = provider_mkt2.subscribe_offer(&sample_offer(), &id2).await?;
-        // and: Add Demand on Node-3
+        // and: Add Demand on Requestor
         let demand_id = requestor_mkt
             .subscribe_demand(&sample_demand(), &id3)
             .await?;
 
-        // then: It should be resolved on Node-3 two times
-        assert!(requestor_mkt3.wait_1s_for_event(&demand_id).await.is_ok());
-        assert!(requestor_mkt3.wait_1s_for_event(&demand_id).await.is_ok());
-
-        // and: but not resolved on Node-1 nor Node-2.
-        assert!(provider_mkt1.wait_1s_for_event(&offer_id1).await.is_err());
-        assert!(provider_mkt2.wait_1s_for_event(&offer_id2).await.is_err());
+        // then: It should be resolved on Requestor two times
+        let events = requestor_mkt.query_events(&demand_id, 0.2, None).await?;
+        assert_eq!(events.len(), 2);
+        // TODO // and: but not resolved on Provider-1
+        // let events = provider_mkt1.query_events(&offer_id1, 0.2, None).await?;
+        // assert_eq!(events.len(), 0);
+        // // and: not on Provider-2.
+        // let events = provider_mkt2.query_events(&offer_id2, 0.2, None).await?;
+        // assert_eq!(events.len(), 0);
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -42,9 +42,17 @@ impl<'c> DemandDao<'c> {
         .await
     }
 
-    pub async fn get_all_demands(&self) -> DbResult<Vec<Demand>> {
+    pub async fn get_demands_before(
+        &self,
+        insertion_ts: NaiveDateTime,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Vec<Demand>> {
+        let now = Utc::now().naive_utc();
         readonly_transaction(self.pool, move |conn| {
-            Ok(dsl::market_demand.load::<Demand>(conn)?)
+            Ok(dsl::market_demand
+                .filter(dsl::insertion_ts.le(insertion_ts))
+                .filter(dsl::expiration_ts.ge(validation_ts))
+                .load::<Demand>(conn)?)
         })
         .await
     }

@@ -4,7 +4,7 @@ pub use super::db::dao::{DemandDao, OfferDao, TakeEventsError};
 pub use super::db::models::{Demand, Offer, SubscriptionId, SubscriptionParseError};
 pub use super::matcher::{DemandError, MatcherError, OfferError};
 pub use super::matcher::{RawProposal, SubscriptionStore};
-pub use super::negotiation::{notifier::NotifierError, QueryEventsError};
+pub use super::negotiation::QueryEventsError;
 pub use super::negotiation::{ProviderBroker, RequestorBroker};
 pub use super::protocol::negotiation;
 
