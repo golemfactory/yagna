@@ -37,8 +37,10 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
-        let store = SubscriptionStore::new(db.clone());
+    pub fn new(
+        db: &DbExecutor,
+        store: SubscriptionStore,
+    ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         let store1 = store.clone();
         let store2 = store.clone();
         let discovery = Discovery::new(

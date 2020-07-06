@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::db::models::SubscriptionId;
-use crate::matcher::{DemandError, Matcher, MatcherError, MatcherInitError, OfferError};
+use crate::matcher::{
+    DemandError, Matcher, MatcherError, MatcherInitError, OfferError, SubscriptionStore,
+};
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 
@@ -53,9 +55,11 @@ impl MarketService {
     pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
         db.apply_migration(migrations::run_with_output)?;
 
-        let (matcher, listeners) = Matcher::new(db)?;
-        let provider_engine = ProviderBroker::new(db.clone())?;
-        let requestor_engine = RequestorBroker::new(db.clone(), listeners.proposal_receiver)?;
+        let store = SubscriptionStore::new(db.clone());
+        let (matcher, listeners) = Matcher::new(db, store.clone())?;
+        let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
+        let requestor_engine =
+            RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
             matcher,

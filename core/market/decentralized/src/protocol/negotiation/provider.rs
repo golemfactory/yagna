@@ -9,6 +9,7 @@ use super::messages::{
 };
 
 use crate::db::models::Proposal;
+use crate::protocol::negotiation::errors::CounterProposalError;
 
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
@@ -51,27 +52,24 @@ impl NegotiationApi {
         }
     }
 
-    pub async fn counter_proposal(&self, proposal: Proposal) -> Result<(), ProposalError> {
+    pub async fn counter_proposal(&self, proposal: Proposal) -> Result<(), CounterProposalError> {
         log::debug!(
             "Counter proposal [{}] sent by [{}].",
             proposal.body.id.clone(),
             proposal.negotiation.requestor_id
         );
 
-        if proposal.body.prev_proposal_id.is_none() {
-            Err(ProposalError::NoPreviousProposal(proposal.body.id.clone()))?
+        let prev_proposal_id = proposal.body.prev_proposal_id.clone();
+        if prev_proposal_id.is_none() {
+            Err(CounterProposalError::NoPreviousProposal(
+                proposal.body.id.clone(),
+            ))?
         }
 
-        let content = ProposalContent {
-            proposal_id: proposal.body.id.to_string(),
-            properties: proposal.body.properties,
-            constraints: proposal.body.constraints,
-            expiration_ts: proposal.body.expiration_ts,
-            creation_ts: proposal.body.creation_ts,
-        };
+        let content = ProposalContent::from(proposal.body);
         let msg = ProposalReceived {
             proposal: content,
-            prev_proposal_id: proposal.body.prev_proposal_id.unwrap(),
+            prev_proposal_id: prev_proposal_id.unwrap(),
         };
         net::from(proposal.negotiation.provider_id)
             .to(proposal.negotiation.requestor_id)
@@ -138,20 +136,32 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: InitialProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
+        let proposal_id = &msg.proposal.proposal_id.clone();
         log::debug!(
             "Negotiation API: Received initial proposal [{}] from [{}].",
-            &msg.proposal.proposal_id,
+            &proposal_id,
             &caller
         );
-        self.inner.initial_proposal_received.call(caller, msg).await
+        self.inner
+            .initial_proposal_received
+            .call(caller, msg)
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "Negotiation API: initial proposal [{}] rejected. Error: {}",
+                    proposal_id,
+                    &e
+                );
+                e
+            })
     }
 
     async fn on_proposal_received(
         self,
         caller: String,
         msg: ProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         log::debug!(
             "Negotiation API: Received proposal [{}] from [{}].",
             &msg.proposal.proposal_id,

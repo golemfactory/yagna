@@ -373,7 +373,9 @@ pub mod default {
     use ya_market_decentralized::protocol::{
         DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
     };
-    use ya_market_decentralized::testing::negotiation::errors::{AgreementError, ProposalError};
+    use ya_market_decentralized::testing::negotiation::errors::{
+        AgreementError, CounterProposalError, ProposalError,
+    };
     use ya_market_decentralized::testing::negotiation::messages::{
         AgreementApproved, AgreementReceived, AgreementRejected, InitialProposalReceived,
         ProposalReceived, ProposalRejected,
@@ -404,14 +406,14 @@ pub mod default {
     pub async fn empty_on_initial_proposal(
         _caller: String,
         _msg: InitialProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         Ok(())
     }
 
     pub async fn empty_on_proposal_received(
         _caller: String,
         _msg: ProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         Ok(())
     }
 

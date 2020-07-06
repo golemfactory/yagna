@@ -10,6 +10,7 @@ use crate::db::models::{Demand as ModelDemand, SubscriptionId};
 use crate::db::models::{EventError, OwnerType};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
+use crate::matcher::SubscriptionStore;
 
 use ya_client::model::market::event::RequestorEvent;
 use ya_client::model::market::proposal::Proposal as ClientProposal;
@@ -26,12 +27,14 @@ use crate::protocol::negotiation::requestor::NegotiationApi;
 pub struct RequestorBroker {
     api: NegotiationApi,
     db: DbExecutor,
+    store: SubscriptionStore,
     notifier: EventNotifier,
 }
 
 impl RequestorBroker {
     pub fn new(
         db: DbExecutor,
+        store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<DraftProposal>,
     ) -> Result<Arc<RequestorBroker>, NegotiationInitError> {
         let api = NegotiationApi::new(
@@ -45,6 +48,7 @@ impl RequestorBroker {
         let engine = RequestorBroker {
             api,
             db: db.clone(),
+            store,
             notifier: notifier.clone(),
         };
 

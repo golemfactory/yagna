@@ -1,5 +1,5 @@
 use crate::protocol::negotiation::errors::{
-    NegotiationApiInitError, ProposalError as ApiProposalError,
+    CounterProposalError as ApiProposalError, NegotiationApiInitError,
 };
 use thiserror::Error;
 

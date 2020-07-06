@@ -2,9 +2,12 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 use super::super::callbacks::CallbackMessage;
-use super::errors::{AgreementError, ProposalError};
+use super::errors::{AgreementError, CounterProposalError, ProposalError};
+use crate::db::models::DbProposal;
+use crate::db::models::Demand;
 use crate::SubscriptionId;
 
+use ya_client::model::NodeId;
 use ya_service_bus::RpcMessage;
 
 pub mod provider {
@@ -47,7 +50,7 @@ pub struct ProposalReceived {
 impl RpcMessage for ProposalReceived {
     const ID: &'static str = "ProposalReceived";
     type Item = ();
-    type Error = ProposalError;
+    type Error = CounterProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -62,7 +65,7 @@ pub struct InitialProposalReceived {
 impl RpcMessage for InitialProposalReceived {
     const ID: &'static str = "InitialProposalReceived";
     type Item = ();
-    type Error = ProposalError;
+    type Error = CounterProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -131,4 +134,30 @@ impl RpcMessage for AgreementCancelled {
 impl<Message: RpcMessage> CallbackMessage for Message {
     type Item = <Message as RpcMessage>::Item;
     type Error = <Message as RpcMessage>::Error;
+}
+
+impl ProposalContent {
+    pub fn from(proposal: DbProposal) -> ProposalContent {
+        ProposalContent {
+            proposal_id: proposal.id.to_string(),
+            properties: proposal.properties,
+            constraints: proposal.constraints,
+            expiration_ts: proposal.expiration_ts,
+            creation_ts: proposal.creation_ts,
+        }
+    }
+}
+
+impl InitialProposalReceived {
+    pub fn into_demand(self, owner: NodeId) -> Demand {
+        Demand {
+            id: self.demand_id,
+            properties: self.proposal.properties,
+            constraints: self.proposal.constraints,
+            node_id: owner,
+            creation_ts: self.proposal.creation_ts,
+            insertion_ts: None,
+            expiration_ts: self.proposal.expiration_ts,
+        }
+    }
 }

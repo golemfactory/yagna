@@ -117,7 +117,7 @@ impl MockNet {
                 let addr = addr.to_string();
 
                 async move {
-                    let local_addr = mock_net
+                    let (from, local_addr) = mock_net
                         .translate_address(addr)
                         .await
                         .map_err(|e| Error::GsbBadRequest(e.to_string()))?;
@@ -127,7 +127,7 @@ impl MockNet {
                         &caller,
                         &local_addr
                     );
-                    Ok(local_bus::send(&local_addr, &caller, &data).await?)
+                    Ok(local_bus::send(&local_addr, &from.to_string(), &data).await?)
                 }
             });
         }
@@ -135,8 +135,8 @@ impl MockNet {
         Ok(())
     }
 
-    async fn translate_address(&self, address: String) -> Result<String, anyhow::Error> {
-        let (_from_node, to_addr) = match parse_from_addr(&address) {
+    async fn translate_address(&self, address: String) -> Result<(NodeId, String), anyhow::Error> {
+        let (from_node, to_addr) = match parse_from_addr(&address) {
             Ok(v) => v,
             Err(e) => Err(Error::GsbBadRequest(e.to_string()))?,
         };
@@ -153,7 +153,7 @@ impl MockNet {
 
         if let Some(local_prefix) = local_prefix {
             let net_prefix = format!("/net/{}", dst_id);
-            Ok(to_addr.replacen(&net_prefix, &local_prefix, 1))
+            Ok((from_node, to_addr.replacen(&net_prefix, &local_prefix, 1)))
         } else {
             Err(Error::GsbFailure(format!(
                 "[MockNet] Can't find destination address for endpoint [{}].",
