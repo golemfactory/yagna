@@ -54,24 +54,15 @@ async fn validate_orders(
     Ok(())
 }
 
-#[derive(Clone)]
-pub struct PaymentProcessor {
-    db_executor: DbExecutor,
-    accounts: Arc<Mutex<HashMap<(String, String), (String, AccountMode)>>>, // (platform, address) -> (driver, mode)
-    drivers: Arc<Mutex<HashMap<String, String>>>,                           // driver -> platform
+#[derive(Clone, Default)]
+struct DriverRegistry {
+    accounts: HashMap<(String, String), (String, AccountMode)>, // (platform, address) -> (driver, mode)
+    drivers: HashMap<String, String>,                           // driver -> platform
 }
 
-impl PaymentProcessor {
-    pub fn new(db_executor: DbExecutor) -> Self {
-        Self {
-            db_executor,
-            accounts: Default::default(),
-            drivers: Default::default(),
-        }
-    }
-
-    pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
-        match self.drivers.lock().await.entry(msg.driver.clone()) {
+impl DriverRegistry {
+    pub fn register_account(&mut self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+        match self.drivers.entry(msg.driver.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert(msg.platform.clone());
             }
@@ -85,34 +76,24 @@ impl PaymentProcessor {
             _ => {}
         }
 
-        match self
-            .accounts
-            .lock()
-            .await
-            .entry((msg.platform, msg.address))
-        {
+        match self.accounts.entry((msg.platform, msg.address)) {
             Entry::Occupied(_) => return Err(RegisterAccountError::AlreadyRegistered),
             Entry::Vacant(entry) => entry.insert((msg.driver, msg.mode)),
         };
         Ok(())
     }
 
-    pub async fn unregister_account(
-        &self,
+    pub fn unregister_account(
+        &mut self,
         msg: UnregisterAccount,
     ) -> Result<(), UnregisterAccountError> {
-        match self
-            .accounts
-            .lock()
-            .await
-            .remove(&(msg.platform, msg.address))
-        {
+        match self.accounts.remove(&(msg.platform, msg.address)) {
             Some(_) => Ok(()),
             None => Err(UnregisterAccountError::NotRegistered),
         }
     }
 
-    async fn driver(
+    pub fn driver(
         &self,
         platform: &str,
         address: &str,
@@ -120,8 +101,6 @@ impl PaymentProcessor {
     ) -> Result<String, AccountNotRegistered> {
         match self
             .accounts
-            .lock()
-            .await
             .get(&(platform.to_owned(), address.to_owned()))
         {
             Some((driver, reg_mode)) if reg_mode.contains(mode) => Ok(driver.to_owned()),
@@ -129,15 +108,41 @@ impl PaymentProcessor {
         }
     }
 
-    async fn platform(&self, driver: &str) -> Result<String, DriverNotRegistered> {
-        match self.drivers.lock().await.get(driver) {
+    pub fn platform(&self, driver: &str) -> Result<String, DriverNotRegistered> {
+        match self.drivers.get(driver) {
             Some(platform) => Ok(platform.to_owned()),
             None => Err(DriverNotRegistered::new(driver)),
         }
     }
+}
+
+#[derive(Clone)]
+pub struct PaymentProcessor {
+    db_executor: DbExecutor,
+    registry: Arc<Mutex<DriverRegistry>>,
+}
+
+impl PaymentProcessor {
+    pub fn new(db_executor: DbExecutor) -> Self {
+        Self {
+            db_executor,
+            registry: Default::default(),
+        }
+    }
+
+    pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+        self.registry.lock().await.register_account(msg)
+    }
+
+    pub async fn unregister_account(
+        &self,
+        msg: UnregisterAccount,
+    ) -> Result<(), UnregisterAccountError> {
+        self.registry.lock().await.unregister_account(msg)
+    }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
-        let payment_platform = self.platform(&msg.driver).await?;
+        let payment_platform = self.registry.lock().await.platform(&msg.driver)?;
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
 
@@ -210,9 +215,11 @@ impl PaymentProcessor {
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         let amount = msg.amount.clone();
-        let driver = self
-            .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)
-            .await?;
+        let driver = self.registry.lock().await.driver(
+            &msg.payment_platform,
+            &msg.payer_addr,
+            AccountMode::SEND,
+        )?;
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -231,17 +238,17 @@ impl PaymentProcessor {
     }
 
     pub async fn verify_payment(&self, payment: Payment) -> Result<(), VerifyPaymentError> {
+        // TODO: Split this into smaller functions
+
         let confirmation = match base64::decode(&payment.details) {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
-        let driver = self
-            .driver(
-                &payment.payment_platform,
-                &payment.payee_addr,
-                AccountMode::RECV,
-            )
-            .await?;
+        let driver = self.registry.lock().await.driver(
+            &payment.payment_platform,
+            &payment.payee_addr,
+            AccountMode::RECV,
+        )?;
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::from(confirmation))
             .await??;
@@ -333,9 +340,11 @@ impl PaymentProcessor {
         platform: String,
         address: String,
     ) -> Result<BigDecimal, GetStatusError> {
-        let driver = self
-            .driver(&platform, &address, AccountMode::empty())
-            .await?;
+        let driver =
+            self.registry
+                .lock()
+                .await
+                .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::from(address))
             .await??;

@@ -33,6 +33,8 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Creating allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
+            address: None,          // Use default address (i.e. identity)
+            payment_platform: None, // Use default payment platform
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
