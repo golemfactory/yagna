@@ -19,13 +19,7 @@ pub fn flatten_properties(str_json_properties: &str) -> Result<Vec<String>, Flat
 
     let mut properties = vec![];
     for (k, v) in flat_properties.as_object().unwrap().iter() {
-        match v {
-            Value::Array(a) => {
-                let s_array: Vec<String> = a.iter().map(|s| s.to_string()).collect();
-                properties.push(format!("{}=[{}]", k, s_array.join(",")))
-            }
-            _ => properties.push(format!("{}={}", k, v)),
-        }
+        properties.push(format!("{}={}", k, serde_json::to_string(v).unwrap()))
     }
 
     Ok(properties)
