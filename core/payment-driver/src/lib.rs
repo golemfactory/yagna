@@ -16,12 +16,9 @@ mod utils;
 
 pub mod dao;
 pub mod error;
-pub mod gnt;
 pub mod service;
 
-pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
-pub use gnt::GntDriver;
 use std::future::Future;
 use std::pin::Pin;
 use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
@@ -82,29 +79,6 @@ pub trait PaymentDriver {
         payer: &str,
         payee: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<BigDecimal>> + 'static>>;
-}
-
-#[cfg(feature = "dummy-driver")]
-async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    Ok(DummyDriver::new())
-}
-
-#[cfg(feature = "gnt-driver")]
-async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    Ok(GntDriver::new(db.clone()).await?)
-}
-
-pub struct PaymentDriverService;
-
-impl PaymentDriverService {
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
-        let db: DbExecutor = context.component();
-        let driver = payment_driver_factory(&db).await?;
-        let processor = PaymentDriverProcessor::new(driver);
-        self::service::bind_service(&db, processor);
-        self::service::subscribe_to_identity_events().await;
-        Ok(())
-    }
 }
 
 #[cfg(test)]

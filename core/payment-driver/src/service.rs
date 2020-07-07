@@ -4,31 +4,17 @@ use ya_core_model::driver::*;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
-    log::debug!("Binding payment driver service to service bus");
 
-    bus::ServiceBinder::new(BUS_ID, db, processor)
-        .bind_with_processor(account_event)
-        .bind_with_processor(init)
-        .bind_with_processor(get_account_balance)
-        .bind_with_processor(get_payment_status)
-        .bind_with_processor(get_transaction_balance)
-        .bind_with_processor(schedule_payment)
-        .bind_with_processor(verify_payment);
-
-    log::debug!("Successfully bound payment driver service to service bus");
-}
-
-pub async fn subscribe_to_identity_events() {
-    if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
-        .send(ya_core_model::identity::Subscribe {
-            endpoint: BUS_ID.into(),
-        })
-        .await
-    {
-        log::error!("init app-key listener error: {}", e)
-    }
-}
+// pub async fn subscribe_to_identity_events() {
+//     if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
+//         .send(ya_core_model::identity::Subscribe {
+//             endpoint: BUS_ID.into(),
+//         })
+//         .await
+//     {
+//         log::error!("init app-key listener error: {}", e)
+//     }
+// }
 
 async fn init(
     _db: DbExecutor,
@@ -66,24 +52,24 @@ async fn get_account_balance(
         )
 }
 
-async fn get_payment_status(
-    _db: DbExecutor,
-    processor: PaymentDriverProcessor,
-    _caller: String,
-    msg: GetPaymentStatus,
-) -> Result<PaymentStatus, GenericError> {
-    log::info!("get payment status: {:?}", msg);
-
-    let invoice_id = msg.allocation_id();
-
-    processor
-        .get_payment_status(invoice_id.as_str())
-        .await
-        .map_or_else(
-            |e| Err(GenericError::new(e)),
-            |payment_status| Ok(payment_status),
-        )
-}
+// async fn get_payment_status(
+//     _db: DbExecutor,
+//     processor: PaymentDriverProcessor,
+//     _caller: String,
+//     msg: GetPaymentStatus,
+// ) -> Result<PaymentStatus, GenericError> {
+//     log::info!("get payment status: {:?}", msg);
+//
+//     let invoice_id = msg.allocation_id();
+//
+//     processor
+//         .get_payment_status(invoice_id.as_str())
+//         .await
+//         .map_or_else(
+//             |e| Err(GenericError::new(e)),
+//             |payment_status| Ok(payment_status),
+//         )
+// }
 
 async fn get_transaction_balance(
     _db: DbExecutor,
