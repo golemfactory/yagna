@@ -1,4 +1,5 @@
 use crate::processor::PaymentDriverProcessor;
+use bigdecimal::BigDecimal;
 use ya_core_model::driver::*;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
@@ -51,7 +52,7 @@ async fn get_account_balance(
     processor: PaymentDriverProcessor,
     _caller: String,
     msg: GetAccountBalance,
-) -> Result<AccountBalance, GenericError> {
+) -> Result<BigDecimal, GenericError> {
     log::info!("get account balance: {:?}", msg);
 
     let addr = msg.address();
@@ -89,7 +90,7 @@ async fn get_transaction_balance(
     processor: PaymentDriverProcessor,
     _caller: String,
     msg: GetTransactionBalance,
-) -> Result<Balance, GenericError> {
+) -> Result<BigDecimal, GenericError> {
     log::info!("get transaction balance: {:?}", msg);
 
     let sender = msg.sender();
@@ -106,10 +107,9 @@ async fn schedule_payment(
     processor: PaymentDriverProcessor,
     _caller: String,
     msg: SchedulePayment,
-) -> Result<Ack, GenericError> {
+) -> Result<String, GenericError> {
     log::info!("schedule payment: {:?}", msg);
 
-    let invoice_id = msg.invoice_id();
     let amount = msg.amount();
     let sender = msg.sender();
     let recipient = msg.recipient();
@@ -117,14 +117,13 @@ async fn schedule_payment(
 
     processor
         .schedule_payment(
-            invoice_id.as_str(),
             amount,
             sender.as_str(),
             recipient.as_str(),
             due_date,
         )
         .await
-        .map_or_else(|e| Err(GenericError::new(e)), |()| Ok(Ack {}))
+        .map_or_else(|e| Err(GenericError::new(e)), |r| Ok(r))
 }
 
 async fn verify_payment(

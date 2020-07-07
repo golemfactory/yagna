@@ -1,4 +1,5 @@
 use crate::processor::PaymentDriverProcessor;
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ya_client_model::NodeId;
 use ya_persistence::executor::DbExecutor;
@@ -24,10 +25,7 @@ pub use error::PaymentDriverError;
 pub use gnt::GntDriver;
 use std::future::Future;
 use std::pin::Pin;
-use ya_core_model::driver::{
-    AccountBalance, AccountMode, Balance, PaymentAmount, PaymentConfirmation, PaymentDetails,
-    PaymentStatus,
-};
+use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
 
@@ -61,23 +59,17 @@ pub trait PaymentDriver {
     fn get_account_balance(
         &self,
         address: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<BigDecimal>> + 'static>>;
 
     /// Schedules payment
     fn schedule_payment<'a>(
         &self,
-        invoice_id: &str,
-        amount: PaymentAmount,
+        amount: BigDecimal,
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<String>> + 'a>>;
 
-    /// Returns payment status
-    fn get_payment_status(
-        &self,
-        invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>>;
 
     /// Verifies payment
     fn verify_payment(
@@ -90,7 +82,7 @@ pub trait PaymentDriver {
         &self,
         payer: &str,
         payee: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<BigDecimal>> + 'static>>;
 }
 
 #[cfg(feature = "dummy-driver")]
