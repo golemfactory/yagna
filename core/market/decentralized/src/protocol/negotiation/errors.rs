@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::db::models::ProposalId;
 use crate::SubscriptionId;
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -17,7 +18,7 @@ pub enum CounterProposalError {
     #[error("Failed to broadcast caused by gsb error: {0}.")]
     GsbError(String),
     #[error("Trying to counter Proposal [{0}] without previous Proposal id set.")]
-    NoPreviousProposal(String),
+    NoPreviousProposal(ProposalId),
     #[error("Can't counter proposal due to remote node error: {0}")]
     Remote(#[from] RemoteProposalError),
 }

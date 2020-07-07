@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use super::super::callbacks::CallbackMessage;
 use super::errors::{AgreementError, CounterProposalError, ProposalError};
-use crate::db::models::DbProposal;
 use crate::db::models::Demand;
+use crate::db::models::{DbProposal, OwnerType, ProposalId};
 use crate::SubscriptionId;
 
 use ya_client::model::NodeId;
@@ -32,7 +32,7 @@ pub mod requestor {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ProposalContent {
-    pub proposal_id: String,
+    pub proposal_id: ProposalId,
     pub properties: String,
     pub constraints: String,
 
@@ -43,7 +43,7 @@ pub struct ProposalContent {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalReceived {
-    pub prev_proposal_id: String,
+    pub prev_proposal_id: ProposalId,
     pub proposal: ProposalContent,
 }
 
@@ -71,7 +71,7 @@ impl RpcMessage for InitialProposalReceived {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalRejected {
-    pub proposal_id: String,
+    pub proposal_id: ProposalId,
 }
 
 impl RpcMessage for ProposalRejected {
@@ -139,7 +139,7 @@ impl<Message: RpcMessage> CallbackMessage for Message {
 impl ProposalContent {
     pub fn from(proposal: DbProposal) -> ProposalContent {
         ProposalContent {
-            proposal_id: proposal.id.to_string(),
+            proposal_id: proposal.id,
             properties: proposal.properties,
             constraints: proposal.constraints,
             expiration_ts: proposal.expiration_ts,
@@ -159,5 +159,26 @@ impl InitialProposalReceived {
             insertion_ts: None,
             expiration_ts: self.proposal.expiration_ts,
         }
+    }
+}
+impl ProposalReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());
+        self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl InitialProposalReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl ProposalRejected {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.proposal_id = self.proposal_id.translate(owner);
+        self
     }
 }

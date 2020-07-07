@@ -6,7 +6,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::{Demand as ModelDemand, SubscriptionId};
+use crate::db::models::{Demand as ModelDemand, Proposal, SubscriptionId};
 use crate::db::models::{EventError, OwnerType};
 use crate::db::DbResult;
 use crate::matcher::DraftProposal;
@@ -81,7 +81,7 @@ impl RequestorBroker {
         let _ = self
             .db
             .as_dao::<EventsDao>()
-            .remove_requestor_events(subscription_id)
+            .remove_events(subscription_id)
             .await
             .map_err(|e| {
                 log::warn!(
@@ -142,7 +142,7 @@ impl RequestorBroker {
         }
         .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.to_string(), e))?;
 
-        Ok(proposal_id)
+        Ok(proposal_id.to_string())
     }
 
     pub async fn query_events(
@@ -200,7 +200,7 @@ async fn get_events_from_db(
 ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
     let events = db
         .as_dao::<EventsDao>()
-        .take_requestor_events(subscription_id, max_events)
+        .take_events(subscription_id, max_events, OwnerType::Requestor)
         .await?;
 
     // Map model events to client RequestorEvent.
@@ -233,9 +233,10 @@ pub async fn proposal_receiver_thread(
             log::info!("Received proposal from matcher. Adding to events queue.");
 
             // Add proposal to database together with Negotiation record.
+            let proposal = Proposal::new_initial(proposal.demand, proposal.offer);
             let proposal = db
                 .as_dao::<ProposalDao>()
-                .new_initial_proposal(proposal.demand, proposal.offer)
+                .save_initial_proposal(proposal)
                 .await?;
 
             // Create Proposal Event and add it to queue (database).

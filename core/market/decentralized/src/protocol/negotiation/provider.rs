@@ -8,9 +8,10 @@ use super::messages::{
     ProposalReceived, ProposalRejected,
 };
 
-use crate::db::models::Proposal;
+use crate::db::models::{OwnerType, Proposal, ProposalId};
 use crate::protocol::negotiation::errors::CounterProposalError;
 
+use std::str::FromStr;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
@@ -87,7 +88,7 @@ impl NegotiationApi {
         owner: NodeId,
     ) -> Result<(), ProposalError> {
         let msg = ProposalRejected {
-            proposal_id: proposal_id.to_string(),
+            proposal_id: ProposalId::from_str(&proposal_id).unwrap(),
         };
         net::from(id)
             .to(owner)
@@ -145,7 +146,7 @@ impl NegotiationApi {
         );
         self.inner
             .initial_proposal_received
-            .call(caller, msg)
+            .call(caller, msg.translate(OwnerType::Provider))
             .await
             .map_err(|e| {
                 log::warn!(
@@ -167,7 +168,10 @@ impl NegotiationApi {
             &msg.proposal.proposal_id,
             &caller
         );
-        self.inner.proposal_received.call(caller, msg).await
+        self.inner
+            .proposal_received
+            .call(caller, msg.translate(OwnerType::Provider))
+            .await
     }
 
     async fn on_proposal_rejected(
@@ -180,7 +184,10 @@ impl NegotiationApi {
             &msg.proposal_id,
             &caller
         );
-        self.inner.proposal_rejected.call(caller, msg).await
+        self.inner
+            .proposal_rejected
+            .call(caller, msg.translate(OwnerType::Provider))
+            .await
     }
 
     async fn on_agreement_received(
