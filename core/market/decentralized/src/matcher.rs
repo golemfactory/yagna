@@ -85,8 +85,8 @@ impl Matcher {
 
     pub async fn subscribe_offer(
         &self,
-        id: &Identity,
         offer: &ClientOffer,
+        id: &Identity,
     ) -> Result<Offer, MatcherError> {
         // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
@@ -130,8 +130,8 @@ impl Matcher {
 
     pub async fn subscribe_demand(
         &self,
-        id: &Identity,
         demand: &ClientDemand,
+        id: &Identity,
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
 

@@ -236,7 +236,6 @@ async fn init_db_app(
     let id = utils::generate_identity(test_name);
     BCastService::default().register(&id.identity, test_name);
     MockNet::default().bind_gsb();
-    // utils::mock_net::MockNet::new().unwrap();
 
     let test_dir = utils::mock_node::prepare_test_dir(test_name).unwrap();
     let db = DbExecutor::from_data_dir(&test_dir, "yagna").unwrap();

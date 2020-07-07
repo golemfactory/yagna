@@ -112,7 +112,7 @@ impl MarketService {
         offer: &Offer,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
-        let offer = self.matcher.subscribe_offer(id, offer).await?;
+        let offer = self.matcher.subscribe_offer(offer, id).await?;
         self.provider_engine.subscribe_offer(&offer).await?;
         Ok(offer.id)
     }
@@ -134,7 +134,7 @@ impl MarketService {
         demand: &Demand,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
-        let demand = self.matcher.subscribe_demand(id, demand).await?;
+        let demand = self.matcher.subscribe_demand(demand, id).await?;
         self.requestor_engine.subscribe_demand(&demand).await?;
         Ok(demand.id)
     }
