@@ -14,7 +14,7 @@ default=['market-forwarding']
 static-openssl=["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized']
-dummy-driver = []
+dummy-driver = ['ya-dummy-driver']
 
 [[bin]]
 name = "yagna"
@@ -26,8 +26,9 @@ ya-identity = "0.2"
 ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
 ya-net = { version = "0.1", features = ["service"] }
-ya-payment = { version = "0.1", features = ["gnt-driver"] }
-ya-payment-driver = { version = "0.1", features = ["gnt-driver"] }
+ya-payment = "0.1"
+ya-payment-driver = "0.1"
+ya-dummy-driver = { version = "0.1", optional = true }
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
@@ -107,6 +108,7 @@ ya-market-decentralized = { path = "core/market/decentralized" }
 ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver" }
+ya-dummy-driver = { path = "core/payment-driver/dummy" }
 
 
 ## CORE UTILS

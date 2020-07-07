@@ -24,6 +24,10 @@ use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::PaymentService;
+
+#[cfg(feature = "dummy-driver")]
+use ya_dummy_driver::PaymentDriverService;
+#[cfg(not(feature = "dummy-driver"))]
 use ya_payment_driver::PaymentDriverService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -153,7 +157,6 @@ impl ServiceContext {
     }
 }
 
-#[cfg(feature = "dummy-driver")]
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
     #[enable(gsb, cli(flatten))]
@@ -170,22 +173,6 @@ enum Services {
     PaymentDriver(PaymentDriverService),
 }
 
-#[cfg(not(feature = "dummy-driver"))]
-#[ya_service_api_derive::services(ServiceContext)]
-enum Services {
-    #[enable(gsb, cli(flatten))]
-    Identity(IdentityService),
-    #[enable(gsb)]
-    Net(NetService),
-    #[enable(gsb, rest)]
-    Market(MarketService),
-    #[enable(gsb, rest)]
-    Activity(ActivityService),
-    #[enable(gsb, rest, cli)]
-    Payment(PaymentService),
-    #[enable(gsb)]
-    PaymentDriver(PaymentDriverService),
-}
 
 #[derive(StructOpt, Debug)]
 enum CliCommand {

@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures3::lock::Mutex;
 use futures3::prelude::*;
 use serde_json;
@@ -11,30 +11,13 @@ use std::sync::Arc;
 use bigdecimal::BigDecimal;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{BUS_ID_PREFIX, AccountMode, PaymentConfirmation, PaymentDetails};
-use ya_payment_driver::{service, utils, PaymentDriver, PaymentDriverError};
+use ya_payment_driver::{utils, PaymentDriver, PaymentDriverError};
 use ya_payment_driver::processor::PaymentDriverProcessor;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_api_interfaces::Provider;
 
-
-const BUS_ID = BUS_ID_PREFIX.to_string() + "dummy";
-
-
-pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
-    log::debug!("Binding payment driver service to service bus");
-
-    bus::ServiceBinder::new(BUS_ID, db, processor)
-        .bind_with_processor(account_event)
-        .bind_with_processor(init)
-        .bind_with_processor(get_account_balance)
-        .bind_with_processor(get_payment_status)
-        .bind_with_processor(get_transaction_balance)
-        .bind_with_processor(schedule_payment)
-        .bind_with_processor(verify_payment);
-
-    log::debug!("Successfully bound payment driver service to service bus");
-}
-
+mod service;
 
 #[derive(Clone)]
 pub struct DummyDriver {
@@ -77,14 +60,7 @@ impl PaymentDriver for DummyDriver {
         _address: &str,
     ) -> Pin<Box<dyn Future<Output = Result<BigDecimal, PaymentDriverError>> + 'static>> {
         let amount = "1000000000000000000000000";
-        Box::pin(future::ready(Ok(BigDecimal {
-            base_currency: BigDecimal {
-                amount: utils::str_to_big_dec(&amount).unwrap(),
-            },
-            gas: Some(BigDecimal {
-                amount: utils::str_to_big_dec(&amount).unwrap(),
-            }),
-        })))
+        Box::pin(future::ready(Ok(utils::str_to_big_dec(&amount).unwrap())))
     }
 
     fn schedule_payment<'a>(
@@ -93,22 +69,22 @@ impl PaymentDriver for DummyDriver {
         sender: &str,
         recipient: &str,
         _due_date: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), PaymentDriverError>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<String, PaymentDriverError>> + 'a>> {
         let payments = self.payments.clone();
         let details = PaymentDetails {
             recipient: recipient.to_string(),
             sender: sender.to_string(),
-            amount: amount.base_currency_amount,
+            amount: amount,
             date: Some(Utc::now()),
         };
-        let invoice_id = invoice_id.to_string();
+        let payment_order_id = "123".to_string();
 
         Box::pin(async move {
-            match payments.lock().await.entry(invoice_id.clone()) {
-                Entry::Occupied(_) => Err(PaymentDriverError::PaymentAlreadyScheduled(invoice_id)),
+            match payments.lock().await.entry(payment_order_id.clone()) {
+                Entry::Occupied(_) => Err(PaymentDriverError::PaymentAlreadyScheduled(payment_order_id)),
                 Entry::Vacant(entry) => {
                     entry.insert(details);
-                    Ok(())
+                    Ok(payment_order_id)
                 }
             }
         })
@@ -146,9 +122,7 @@ impl PaymentDriver for DummyDriver {
         _payee: &str,
     ) -> Pin<Box<dyn Future<Output = Result<BigDecimal, PaymentDriverError>> + 'static>> {
         let amount = "1000000000000000000000000";
-        Box::pin(future::ready(Ok(BigDecimal {
-            amount: utils::str_to_big_dec(&amount).unwrap(),
-        })))
+        Box::pin(future::ready(Ok(utils::str_to_big_dec(&amount).unwrap())))
     }
 }
 
@@ -157,7 +131,7 @@ pub struct PaymentDriverService;
 impl PaymentDriverService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db: DbExecutor = context.component();
-        let driver = payment_driver_factory(&db).await?;
+        let driver = DummyDriver::new();
         let processor = PaymentDriverProcessor::new(driver);
         self::service::bind_service(&db, processor);
         self::service::subscribe_to_identity_events().await;

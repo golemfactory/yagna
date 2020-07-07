@@ -1,4 +1,4 @@
-use crate::processor::PaymentDriverProcessor;
+pub use crate::processor::PaymentDriverProcessor;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ya_client_model::NodeId;
@@ -10,9 +10,9 @@ extern crate diesel;
 
 mod ethereum;
 mod models;
-mod processor;
+pub mod processor;
 mod schema;
-mod utils;
+pub mod utils;
 
 pub mod dao;
 pub mod error;

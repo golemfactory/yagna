@@ -1,9 +1,40 @@
-use crate::processor::PaymentDriverProcessor;
+use ya_payment_driver::processor::PaymentDriverProcessor;
 use bigdecimal::BigDecimal;
 use ya_core_model::driver::*;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
+
+const BUS_ID_POSTFIX: &'static str = "dummy";
+
+
+pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
+    log::debug!("Binding payment driver service to service bus");
+    let BUS_ID: &str = &(BUS_ID_PREFIX.to_owned() + BUS_ID_POSTFIX);
+
+    bus::ServiceBinder::new(BUS_ID, db, processor)
+        .bind_with_processor(account_event)
+        .bind_with_processor(init)
+        .bind_with_processor(get_account_balance)
+        .bind_with_processor(get_transaction_balance)
+        .bind_with_processor(schedule_payment)
+        .bind_with_processor(verify_payment);
+
+    log::debug!("Successfully bound payment driver service to service bus");
+}
+
+
+pub async fn subscribe_to_identity_events() {
+    let BUS_ID: &str = &(BUS_ID_PREFIX.to_owned() + BUS_ID_POSTFIX);
+    if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
+        .send(ya_core_model::identity::Subscribe {
+            endpoint: BUS_ID.into(),
+        })
+        .await
+    {
+        log::error!("init app-key listener error: {}", e)
+    }
+}
 
 async fn init(
     _db: DbExecutor,
