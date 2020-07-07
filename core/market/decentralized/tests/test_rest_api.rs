@@ -175,7 +175,7 @@ async fn init_db_app(
         Error = actix_http::error::Error,
     >,
 ) {
-    utils::mock_net::MockNet::gsb().unwrap();
+    utils::mock_net::MockNet::new().unwrap();
 
     let test_dir = utils::mock_node::prepare_test_dir(test_name).unwrap();
     let db = DbExecutor::from_data_dir(&test_dir, "yagna").unwrap();

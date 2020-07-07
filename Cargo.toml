@@ -21,6 +21,7 @@ path = "core/serv/src/main.rs"
 
 [dependencies]
 ya-activity = "0.2"
+ya-compile-time-utils = "0.1"
 ya-identity = "0.2"
 ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
@@ -91,6 +92,7 @@ members = [
     "service-bus/util",
     "utils/actix_utils",
     "utils/agreement-utils",
+    "utils/compile-time-utils",
     "utils/path",
     "utils/process",
     "utils/scheduler",
@@ -131,6 +133,7 @@ ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev =
 ## OTHERS
 gftp = { path = "core/gftp" }
 ya-agreement-utils = { path = "utils/agreement-utils" }
+ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}

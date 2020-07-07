@@ -32,4 +32,5 @@ pub mod testing {
     pub use super::matcher::{DraftProposal, SubscriptionStore};
     pub use super::negotiation::QueryEventsError;
     pub use super::negotiation::{ProviderBroker, RequestorBroker};
+    pub use super::protocol::negotiation;
 }
