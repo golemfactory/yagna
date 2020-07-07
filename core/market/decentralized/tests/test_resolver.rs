@@ -4,7 +4,8 @@ mod utils;
 #[cfg(test)]
 mod tests {
     use crate::utils::{
-        sample_client_demand, sample_client_offer, MarketServiceExt, MarketsNetwork,
+        client::{sample_demand, sample_offer},
+        MarketServiceExt, MarketsNetwork,
     };
 
     /// Test adds Offer on single node. Resolver should not emit Proposal.
@@ -20,7 +21,7 @@ mod tests {
 
         let id1 = network.get_default_id("Node-1");
         let provider_mkt = network.get_market("Node-1");
-        let offer = sample_client_offer();
+        let offer = sample_offer();
 
         // when
         let offer_id = provider_mkt.subscribe_offer(&offer, &id1).await?;
@@ -52,12 +53,10 @@ mod tests {
         let requestor_mkt = network.get_market("Node-2");
 
         // when: Add Offer on Node-1
-        let offer_id = provider_mkt
-            .subscribe_offer(&sample_client_offer(), &id1)
-            .await?;
+        let _offer_id = provider_mkt.subscribe_offer(&sample_offer(), &id1).await?;
         // and: Add Demand on Node-2
         let demand_id = requestor_mkt
-            .subscribe_demand(&sample_client_demand(), &id2)
+            .subscribe_demand(&sample_demand(), &id2)
             .await?;
 
         // then: It should be resolved on Node-2
@@ -80,7 +79,7 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let demand = sample_client_demand();
+        let demand = sample_demand();
         let id1 = network.get_default_id("Node-1");
         let requestor_mkt = network.get_market("Node-1");
 
@@ -116,16 +115,12 @@ mod tests {
         let requestor_mkt3 = network.get_market("Node-3");
 
         // when: Add Offer on Node-1
-        let offer_id1 = provider_mkt1
-            .subscribe_offer(&sample_client_offer(), &id1)
-            .await?;
+        let _offer_id1 = provider_mkt1.subscribe_offer(&sample_offer(), &id1).await?;
         // when: Add Offer on Node-2
-        let offer_id2 = provider_mkt2
-            .subscribe_offer(&sample_client_offer(), &id2)
-            .await?;
+        let _offer_id2 = provider_mkt2.subscribe_offer(&sample_offer(), &id2).await?;
         // and: Add Demand on Node-3
-        let demand_id = requestor_mkt3
-            .subscribe_demand(&sample_client_demand(), &id3)
+        let demand_id = requestor_mkt
+            .subscribe_demand(&sample_demand(), &id3)
             .await?;
 
         // then: It should be resolved on Node-3 two times

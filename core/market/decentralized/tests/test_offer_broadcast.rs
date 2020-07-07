@@ -15,7 +15,7 @@ mod tests {
     use crate::utils::mock_node::default::*;
     use crate::utils::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 
-    use ya_market_decentralized::testing::mock_offer::{sample_client_offer, sample_offer};
+    use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
     use ya_market_decentralized::testing::OfferError;
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
@@ -38,7 +38,7 @@ mod tests {
         let id1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_offer(&sample_client_offer(), &id1)
+            .subscribe_offer(&client::sample_offer(), &id1)
             .await?;
         let offer = market1.get_offer(&subscription_id).await?;
 
@@ -119,7 +119,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
+            .subscribe_offer(&client::sample_offer(), &identity1)
             .await?;
         let offer = market1.get_offer(&subscription_id).await?;
 

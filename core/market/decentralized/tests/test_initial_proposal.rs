@@ -6,7 +6,7 @@ mod tests {
 
     use ya_client::model::market::event::RequestorEvent;
     use ya_client::model::market::proposal::State;
-    use ya_market_decentralized::testing::mock_offer::{sample_client_demand, sample_client_offer};
+    use ya_market_decentralized::testing::mock_offer::client::{sample_demand, sample_offer};
     use ya_market_decentralized::testing::{QueryEventsError, TakeEventsError};
 
     use crate::utils::MarketsNetwork;
@@ -51,11 +51,9 @@ mod tests {
         let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
         let demand_id = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
-        market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
-            .await?;
+        market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
         // We expect that proposal will be available as requestor event.
         let events = market1
@@ -97,9 +95,9 @@ mod tests {
         let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
         let demand_id = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
-        let offer = sample_client_offer();
+        let offer = sample_offer();
         market1.subscribe_offer(&offer, &identity1).await?;
         market1.subscribe_offer(&offer, &identity1).await?;
         market1.subscribe_offer(&offer, &identity1).await?;
@@ -148,7 +146,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let demand_id1 = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
         let demand_id1c = demand_id1.clone();
         let market1c = market1.clone();
@@ -167,9 +165,7 @@ mod tests {
         // Inject proposal before timeout will elapse. We expect that Proposal
         // event will be generated and query events will return it.
         tokio::time::delay_for(Duration::from_millis(500)).await;
-        market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
-            .await?;
+        market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
         // Protect from eternal waiting.
         tokio::time::timeout(Duration::from_millis(1100), query_handle).await???;
@@ -190,7 +186,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
         let demand_id = subscription_id.clone();
 
@@ -236,11 +232,9 @@ mod tests {
         let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
         let demand_id = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
-        market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
-            .await?;
+        market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
         // We should reject calls with negative maxEvents.
         match market1
@@ -266,11 +260,9 @@ mod tests {
 
         // Restore available Proposal
         let demand_id = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
-        market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
-            .await?;
+        market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
         // maxEvents equal to 0 isn't forbidden value, but should return 0 events,
         // even if they exist.
@@ -313,16 +305,14 @@ mod tests {
 
         // Spawn 3 Demands and 1 Offer --> shoult result in 3 Proposals.
         let demand_id1 = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
-        market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
-            .await?;
+        market1.subscribe_offer(&sample_offer(), &identity1).await?;
         let demand_id2 = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
         let demand_id3 = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
 
         // Check events related to first and last subscription.
@@ -358,7 +348,7 @@ mod tests {
         let identity1 = network.get_default_id("Node-1");
 
         let subscription_id = market1
-            .subscribe_demand(&sample_client_demand(), &identity1)
+            .subscribe_demand(&sample_demand(), &identity1)
             .await?;
 
         let demand_id1 = subscription_id.clone();
@@ -386,12 +376,8 @@ mod tests {
         // Wait for a while, before event will be injected. We want to trigger notifications.
         // Generate 2 proposals. Each waiting query events call will take an event.
         tokio::time::delay_for(Duration::from_millis(100)).await;
-        market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
-            .await?;
-        market1
-            .subscribe_offer(&sample_client_offer(), &identity1)
-            .await?;
+        market1.subscribe_offer(&sample_offer(), &identity1).await?;
+        market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
         let mut events1 = tokio::time::timeout(Duration::from_millis(700), query1).await???;
         let events2 = tokio::time::timeout(Duration::from_millis(700), query2).await???;
