@@ -5263,7 +5263,7 @@ dependencies = [
  "log 0.4.8",
  "nom 2.2.1",
  "regex",
- "semver",
+ "semver 0.9.0",
  "serde_json",
  "thiserror",
 ]
