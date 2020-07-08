@@ -35,77 +35,68 @@ impl Resolver {
     pub fn new(store: SubscriptionStore, proposal_tx: UnboundedSender<RawProposal>) -> Self {
         let (subscription_tx, subscription_rx) = unbounded_channel::<Subscription>();
 
-        let resolver = Resolver {
+        let myself = Resolver {
             store,
             subscription_tx,
             proposal_tx,
         };
 
-        // TODO: simplify
-        tokio::spawn({
-            let resolver = resolver.clone();
-            async move {
-                resolver
-                    .process_incoming_subscriptions(subscription_rx)
-                    .await
-            }
-        });
+        let resolver = myself.clone();
+        tokio::spawn(resolver.process_incoming_subscriptions(subscription_rx));
 
-        resolver
+        myself
     }
 
     pub fn receive(&self, subscription: impl Into<Subscription>) -> Result<(), ResolverError> {
         Ok(self.subscription_tx.send(subscription.into())?)
     }
 
-    // TODO: it is mocked; emits dummy RawProposal upon every Subscription
     async fn process_incoming_subscriptions(
-        &self,
+        self,
         mut subscription_rx: UnboundedReceiver<Subscription>,
     ) {
-        while let Some(subscription) = subscription_rx.recv().await {
-            log::debug!("processing incoming subscription {:?}", subscription);
-            match subscription {
-                Subscription::Offer(id) => {
-                    log::info!("TODO: resolve new Offer: {:?}", id);
-                    // TODO: get rid of unwraps
-                    let offer = self.store.get_offer(&id).await.unwrap();
-                    let demands = self.store.get_demands_before(&offer).await.unwrap();
-
-                    for demand in demands {
-                        self.emit_if_matches(offer.clone(), demand);
-                    }
-                }
-                Subscription::Demand(id) => {
-                    log::info!("TODO: resolve new Demand: {:?}", id);
-                    let demand = self.store.get_demand(&id).await.unwrap();
-                    let offers = self.store.get_offers_before(&demand).await.unwrap();
-
-                    for offer in offers {
-                        self.emit_if_matches(offer, demand.clone());
-                    }
-                }
+        while let Some(s) = subscription_rx.recv().await {
+            log::debug!("resolving incoming subscription {:?}", s);
+            if let Err(e) = self.process_single_subscription(&s).await {
+                log::warn!("Failed resolve subscription [{:?}]. Error: {}", s, e);
             }
         }
     }
 
+    async fn process_single_subscription(
+        &self,
+        subscription: &Subscription,
+    ) -> Result<(), ResolverError> {
+        match subscription {
+            Subscription::Offer(id) => {
+                let offer = self.store.get_offer(id).await?;
+                let demands = self.store.get_demands_before(&offer).await?;
+
+                for demand in demands {
+                    self.emit_if_matches(offer.clone(), demand)?;
+                }
+            }
+            Subscription::Demand(id) => {
+                let demand = self.store.get_demand(id).await?;
+                let offers = self.store.get_offers_before(&demand).await?;
+
+                for offer in offers {
+                    self.emit_if_matches(offer, demand.clone())?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     // TODO: return Result; stop unwrapping
-    pub fn emit_if_matches(&self, offer: Offer, demand: Demand) {
-        if !matches(&offer, &demand).unwrap() {
-            return;
+    pub fn emit_if_matches(&self, offer: Offer, demand: Demand) -> Result<(), ResolverError> {
+        if !matches(&offer, &demand)? {
+            return Ok(());
         }
 
         let offer_id = offer.id.clone();
         let demand_id = demand.id.clone();
-        if let Err(e) = self.proposal_tx.send(RawProposal { offer, demand }) {
-            // TODO: should we stop processing events / panic ?
-            log::error!(
-                "Failed to emit proposal [offer_id:{}, demand_id:{}]: {}",
-                offer_id,
-                demand_id,
-                e
-            )
-        };
+        Ok(self.proposal_tx.send(RawProposal { offer, demand })?)
     }
 }
 
