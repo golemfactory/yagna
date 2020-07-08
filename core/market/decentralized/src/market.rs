@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -103,8 +104,12 @@ impl MarketService {
             .extend(rest_api::requestor::register_endpoints)
     }
 
-    pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<Offer>, MarketError> {
-        Ok(self.matcher.store.get_offers(id).await?)
+    pub async fn get_offers(
+        &self,
+        id: Option<Identity>,
+        validation_ts: NaiveDateTime,
+    ) -> Result<Vec<Offer>, MarketError> {
+        Ok(self.matcher.store.get_offers(id, validation_ts).await?)
     }
 
     pub async fn subscribe_offer(

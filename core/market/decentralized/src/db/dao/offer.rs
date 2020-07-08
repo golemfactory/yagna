@@ -49,13 +49,22 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
-    pub async fn get_offers(&self, node_id: Option<NodeId>) -> DbResult<Vec<Offer>> {
+    pub async fn get_offers(
+        &self,
+        node_id: Option<NodeId>,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Vec<Offer>> {
         readonly_transaction(self.pool, move |conn| {
+            let active_offers = dsl::market_offer
+                .filter(dsl::id.ne_all(
+                    dsl_unsubscribed::market_offer_unsubscribed.select(dsl_unsubscribed::id),
+                ))
+                .filter(dsl::expiration_ts.ge(validation_ts));
             Ok(match node_id {
-                Some(ident) => dsl::market_offer
+                Some(ident) => active_offers
                     .filter(dsl::node_id.eq(ident))
                     .load::<Offer>(conn)?,
-                _ => dsl::market_offer.load::<Offer>(conn)?,
+                _ => active_offers.load::<Offer>(conn)?,
             })
         })
         .await

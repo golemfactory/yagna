@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_persistence::executor::DbExecutor;
@@ -58,14 +58,21 @@ impl SubscriptionStore {
             })
     }
 
-    pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<ClientOffer>, OfferError> {
+    pub async fn get_offers(
+        &self,
+        id: Option<Identity>,
+        validation_ts: NaiveDateTime,
+    ) -> Result<Vec<ClientOffer>, OfferError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers(match id {
-                Some(ident) => Some(ident.identity),
-                _ => None,
-            })
+            .get_offers(
+                match id {
+                    Some(ident) => Some(ident.identity),
+                    _ => None,
+                },
+                validation_ts,
+            )
             .await
             .map_err(|e| OfferError::GetMany(e))?
             .into_iter()

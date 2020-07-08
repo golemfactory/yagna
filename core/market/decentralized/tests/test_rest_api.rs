@@ -37,9 +37,16 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     let identity_remote = network.get_default_id("Node-2");
 
     let offer_local = Offer::new(json!({}), "()".to_string());
+    let offer_local_unsubscribed = Offer::new(json!({}), "()".to_string());
     let offer_remote = Offer::new(json!({}), "()".to_string());
     let subscription_id_local = market_local
         .subscribe_offer(&offer_local, &identity_local)
+        .await?;
+    let subscription_id_local_unsubscribed = market_local
+        .subscribe_offer(&offer_local_unsubscribed, &identity_local)
+        .await?;
+    market_local
+        .unsubscribe_offer(&subscription_id_local_unsubscribed, &identity_local)
         .await?;
     let subscription_id_remote = market_remote
         .subscribe_offer(&offer_remote, &identity_remote)
