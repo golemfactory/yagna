@@ -10,9 +10,9 @@ const BUS_ID_POSTFIX: &'static str = "dummy";
 
 pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
     log::debug!("Binding payment driver service to service bus");
-    let BUS_ID: &str = &(BUS_ID_PREFIX.to_owned() + BUS_ID_POSTFIX);
+    let bus_id: &str = &(BUS_ID_PREFIX.to_owned() + BUS_ID_POSTFIX);
 
-    bus::ServiceBinder::new(BUS_ID, db, processor)
+    bus::ServiceBinder::new(bus_id, db, processor)
         .bind_with_processor(account_event)
         .bind_with_processor(init)
         .bind_with_processor(get_account_balance)
@@ -25,10 +25,10 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
 
 
 pub async fn subscribe_to_identity_events() {
-    let BUS_ID: &str = &(BUS_ID_PREFIX.to_owned() + BUS_ID_POSTFIX);
+    let bus_id: &str = &(BUS_ID_PREFIX.to_owned() + BUS_ID_POSTFIX);
     if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
         .send(ya_core_model::identity::Subscribe {
-            endpoint: BUS_ID.into(),
+            endpoint: bus_id.into(),
         })
         .await
     {
@@ -71,25 +71,6 @@ async fn get_account_balance(
             |account_balance| Ok(account_balance),
         )
 }
-
-// async fn get_payment_status(
-//     _db: DbExecutor,
-//     processor: PaymentDriverProcessor,
-//     _caller: String,
-//     msg: GetPaymentStatus,
-// ) -> Result<PaymentStatus, GenericError> {
-//     log::info!("get payment status: {:?}", msg);
-//
-//     let invoice_id = msg.allocation_id();
-//
-//     processor
-//         .get_payment_status(invoice_id.as_str())
-//         .await
-//         .map_or_else(
-//             |e| Err(GenericError::new(e)),
-//             |payment_status| Ok(payment_status),
-//         )
-// }
 
 async fn get_transaction_balance(
     _db: DbExecutor,

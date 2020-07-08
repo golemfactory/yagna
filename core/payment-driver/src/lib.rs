@@ -2,8 +2,6 @@ pub use crate::processor::PaymentDriverProcessor;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ya_client_model::NodeId;
-use ya_persistence::executor::DbExecutor;
-use ya_service_api_interfaces::Provider;
 
 #[macro_use]
 extern crate diesel;
@@ -16,7 +14,6 @@ pub mod utils;
 
 pub mod dao;
 pub mod error;
-pub mod service;
 
 pub use error::PaymentDriverError;
 use std::future::Future;

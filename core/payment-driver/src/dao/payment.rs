@@ -7,7 +7,6 @@ use crate::schema::gnt_driver_payment::dsl;
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
 
 use crate::utils::{PAYMENT_STATUS_OK};
-use bigdecimal::BigDecimal;
 use ya_core_model::driver::{PaymentConfirmation};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 

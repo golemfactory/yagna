@@ -10,11 +10,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use bigdecimal::BigDecimal;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{BUS_ID_PREFIX, AccountMode, PaymentConfirmation, PaymentDetails};
+use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 use ya_payment_driver::{utils, PaymentDriver, PaymentDriverError};
 use ya_payment_driver::processor::PaymentDriverProcessor;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::{typed as bus, RpcEndpoint};
 use ya_service_api_interfaces::Provider;
 
 mod service;
@@ -77,10 +76,12 @@ impl PaymentDriver for DummyDriver {
             amount: amount,
             date: Some(Utc::now()),
         };
+        // FIXME: generate payment_order_id?
         let payment_order_id = "123".to_string();
 
         Box::pin(async move {
             match payments.lock().await.entry(payment_order_id.clone()) {
+                // FIXME: need other properties to check if Payment is already Scheduled
                 Entry::Occupied(_) => Err(PaymentDriverError::PaymentAlreadyScheduled(payment_order_id)),
                 Entry::Vacant(entry) => {
                     entry.insert(details);
@@ -89,23 +90,6 @@ impl PaymentDriver for DummyDriver {
             }
         })
     }
-
-    // fn get_payment_status(
-    //     &self,
-    //     invoice_id: &str,
-    // ) -> Pin<Box<dyn Future<Output = Result<PaymentStatus, PaymentDriverError>> + 'static>> {
-    //     let payments = self.payments.clone();
-    //     let invoice_id = invoice_id.to_owned();
-    //
-    //     Box::pin(async move {
-    //         match payments.lock().await.get(&invoice_id) {
-    //             Some(details) => Ok(PaymentStatus::Ok(PaymentConfirmation::from(
-    //                 serde_json::to_string(details).unwrap().as_bytes(),
-    //             ))),
-    //             None => Err(PaymentDriverError::PaymentNotFound(invoice_id)),
-    //         }
-    //     })
-    // }
 
     fn verify_payment<'a>(
         &'a self,
