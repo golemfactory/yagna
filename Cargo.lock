@@ -5172,6 +5172,7 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client",
  "ya-core-model",
+ "ya-market-resolver",
  "ya-net",
  "ya-persistence",
  "ya-service-api",

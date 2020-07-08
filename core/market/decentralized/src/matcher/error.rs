@@ -70,6 +70,8 @@ pub enum ResolverError {
     MatchingError(Offer, Demand),
     #[error("Failed to process incoming subscription {0:?}")]
     SendError(#[from] tokio::sync::mpsc::error::SendError<Subscription>),
+    #[error(transparent)]
+    MatchError(#[from] ya_market_resolver::MatchError),
 }
 
 impl From<ErrorMessage> for MatcherError {

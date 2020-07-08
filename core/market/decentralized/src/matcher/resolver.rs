@@ -1,5 +1,7 @@
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+use ya_market_resolver::{match_demand_offer, Match};
+
 use super::{error::ResolverError, RawProposal, SubscriptionStore};
 use crate::db::models::{Demand, Offer, SubscriptionId};
 
@@ -109,7 +111,17 @@ impl Resolver {
 
 fn matches(offer: &Offer, demand: &Demand) -> Result<bool, ResolverError> {
     // TODO
-    Ok(true)
+    Ok(
+        match match_demand_offer(
+            &demand.properties,
+            &demand.constraints,
+            &offer.properties,
+            &offer.constraints,
+        )? {
+            Match::Yes => true,
+            _ => false,
+        },
+    )
 }
 
 #[cfg(test)]
