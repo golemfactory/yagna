@@ -68,9 +68,14 @@ impl<'c> OfferDao<'c> {
     ) -> DbResult<Vec<Offer>> {
         readonly_transaction(self.pool, move |conn| {
             Ok(dsl::market_offer
-                // TODO: ubscubscribed
-                .filter(dsl::insertion_ts.lt(insertion_ts))
+                // we querying less equal here and less then in Demands
+                // not to duplicate pair subscribed at the very same moment
+                // Demands are more privileged
+                .filter(dsl::insertion_ts.le(insertion_ts))
                 .filter(dsl::expiration_ts.ge(validation_ts))
+                .filter(dsl::id.ne_all(
+                    dsl_unsubscribed::market_offer_unsubscribed.select(dsl_unsubscribed::id),
+                ))
                 .load::<Offer>(conn)?)
         })
         .await

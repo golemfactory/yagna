@@ -50,7 +50,9 @@ impl<'c> DemandDao<'c> {
         let now = Utc::now().naive_utc();
         readonly_transaction(self.pool, move |conn| {
             Ok(dsl::market_demand
-                .filter(dsl::insertion_ts.le(insertion_ts))
+                // we querying less then here and less equal in Offers
+                // not to duplicate pair subscribed at the very same moment
+                .filter(dsl::insertion_ts.lt(insertion_ts))
                 .filter(dsl::expiration_ts.ge(validation_ts))
                 .load::<Demand>(conn)?)
         })
