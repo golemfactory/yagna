@@ -54,6 +54,7 @@ impl<'c> DemandDao<'c> {
                 // not to duplicate pair subscribed at the very same moment
                 .filter(dsl::insertion_ts.lt(insertion_ts))
                 .filter(dsl::expiration_ts.ge(validation_ts))
+                .order_by(dsl::creation_ts.asc())
                 .load::<Demand>(conn)?)
         })
         .await

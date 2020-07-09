@@ -76,6 +76,7 @@ impl<'c> OfferDao<'c> {
                 .filter(dsl::id.ne_all(
                     dsl_unsubscribed::market_offer_unsubscribed.select(dsl_unsubscribed::id),
                 ))
+                .order_by(dsl::creation_ts.asc())
                 .load::<Offer>(conn)?)
         })
         .await
