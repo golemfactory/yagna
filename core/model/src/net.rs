@@ -33,15 +33,15 @@ pub mod local {
         pub fn body(&self) -> &M {
             &self.body
         }
-
-        pub fn set_id(&mut self, id: String) {
-            self.id = Some(id)
-        }
     }
 
     impl<M> SendBroadcastMessage<M> {
         pub fn topic(&self) -> &str {
             self.topic.as_ref()
+        }
+
+        pub fn set_id(&mut self, id: String) {
+            self.id = Some(id)
         }
     }
 
@@ -93,5 +93,13 @@ pub mod local {
     pub enum SubscribeError {
         #[error("{0}")]
         RuntimeException(String),
+    }
+
+    #[derive(thiserror::Error, Debug)]
+    pub enum BindBroadcastError {
+        #[error(transparent)]
+        SubscribeError(#[from] SubscribeError),
+        #[error(transparent)]
+        GsbError(#[from] ya_service_bus::error::Error),
     }
 }

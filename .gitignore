@@ -15,8 +15,18 @@ core/market/decentralized/tests/test-workdir/*
 .vscode
 
 **/.env
+.*.swp
 
 # Databases
 **/*.db
 **/*.db-shm
 **/*.db-wal
+
+# Provider dir
+**/ya-prov
+
+# Requestor dir
+**/ya-req
+
+# Keys
+**/*.key

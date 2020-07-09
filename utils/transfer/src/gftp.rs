@@ -7,6 +7,7 @@ use bytes::Bytes;
 use futures::future::ready;
 use futures::{SinkExt, StreamExt, TryFutureExt, TryStreamExt};
 use gftp::DEFAULT_CHUNK_SIZE;
+use sha3::{Digest, Sha3_256};
 use std::cmp::min;
 use std::thread;
 use url::Url;
@@ -87,27 +88,26 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                     .map_err(|_| Error::InvalidUrlError("Invalid gftp URL".to_owned()))?;
                 let remote = node_id.try_service(&model::file_bus_id(&random_filename))?;
 
+                let mut digest = Sha3_256::default();
                 let mut offset: usize = 0;
-
                 while let Some(result) = rx.next().await {
                     let bytes = result?.into_bytes();
                     let n = (bytes.len() + chunk_size - 1) / chunk_size;
-
                     for i in 0..n {
                         let start = i * chunk_size;
                         let end = start + min(bytes.len() - start, chunk_size);
-                        let content = bytes[start..end].to_vec();
-
                         let chunk = GftpChunk {
                             offset: offset as u64,
-                            content,
+                            content: bytes[start..end].to_vec(),
                         };
                         offset += chunk.content.len();
-
+                        digest.input(&chunk.content);
                         remote.call(model::UploadChunk { chunk }).await??;
                     }
                 }
 
+                let hash = Some(format!("{:x}", digest.result()));
+                remote.call(model::UploadFinished { hash }).await??;
                 Result::<(), Error>::Ok(())
             }
             .map_err(Error::from);

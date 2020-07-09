@@ -4,7 +4,7 @@ use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
 use std::ffi::OsString;
 use std::path::{Component, PathBuf, Prefix};
-use structopt::StructOpt;
+use structopt::{clap, StructOpt};
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
@@ -17,6 +17,8 @@ use ya_exe_unit::{ExeUnit, ExeUnitContext};
 use ya_service_bus::RpcEnvelope;
 
 #[derive(structopt::StructOpt, Debug)]
+#[structopt(global_setting = clap::AppSettings::ColoredHelp)]
+#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 pub struct Cli {
     /// Agreement file path
     #[structopt(long, short)]

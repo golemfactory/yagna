@@ -6,8 +6,8 @@ use crate::schema::gnt_driver_payment::dsl;
 
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
 
-use crate::payment::PAYMENT_STATUS_OK;
-use crate::{PaymentConfirmation, PaymentStatus};
+use crate::utils::{payment_entity_to_status, PAYMENT_STATUS_OK};
+use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 #[allow(unused)]
@@ -36,6 +36,18 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
+    pub async fn get_pending_payments(&self, address: String) -> DbResult<Vec<PaymentEntity>> {
+        do_with_transaction(self.pool, move |conn| {
+            let payments: Vec<PaymentEntity> = dsl::gnt_driver_payment
+                .filter(dsl::sender.eq(address))
+                .filter(dsl::status.eq(crate::utils::PAYMENT_STATUS_NOT_YET))
+                .order(dsl::payment_due_date.asc())
+                .load(conn)?;
+            Ok(payments)
+        })
+        .await
+    }
+
     pub async fn get_payment_status(&self, invoice_id: String) -> DbResult<Option<PaymentStatus>> {
         //
         readonly_transaction(self.pool, move |conn| {
@@ -48,7 +60,7 @@ impl<'c> PaymentDao<'c> {
                 None => return Ok(None),
             };
             let tx_id = payment.tx_id.clone();
-            let mut status = payment.into();
+            let mut status = payment_entity_to_status(&payment);
             if let PaymentStatus::Ok(ref mut confirmation) = &mut status {
                 let tx_id = match tx_id {
                     Some(v) => v,
