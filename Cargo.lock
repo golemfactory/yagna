@@ -4927,7 +4927,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
 dependencies = [
  "awc",
  "backtrace",
@@ -4948,7 +4948,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -4978,21 +4978,14 @@ name = "ya-dummy-driver"
 version = "0.1.0"
 dependencies = [
  "actix",
- "actix-rt",
  "anyhow",
  "bigdecimal",
  "chrono",
- "dotenv 0.15.0",
- "env_logger 0.7.1",
- "ethkey",
  "futures 0.3.5",
- "libsqlite3-sys",
  "log 0.4.8",
  "serde_json",
  "uuid 0.8.1",
- "ya-client-model",
  "ya-core-model",
- "ya-payment-driver",
  "ya-persistence",
  "ya-service-api-interfaces",
  "ya-service-bus",
@@ -5208,8 +5201,8 @@ dependencies = [
  "ya-client",
  "ya-client-model",
  "ya-core-model",
+ "ya-dummy-driver",
  "ya-net",
- "ya-payment-driver",
  "ya-persistence",
  "ya-sb-router",
  "ya-service-api",

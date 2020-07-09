@@ -75,10 +75,11 @@ pub struct ReadObj {
     pub usage_counter_vector: Option<Vec<u8>>,
     pub payment_due_date: Option<NaiveDateTime>,
 
-    pub agreement_id: String, // From activity
-    pub peer_id: NodeId,      // From agreement
-    pub payee_addr: String,   // From agreement
-    pub payer_addr: String,   // From agreement
+    pub agreement_id: String,     // From activity
+    pub peer_id: NodeId,          // From agreement
+    pub payee_addr: String,       // From agreement
+    pub payer_addr: String,       // From agreement
+    pub payment_platform: String, // From agreement
 }
 
 impl ReadObj {
@@ -113,6 +114,7 @@ impl TryFrom<ReadObj> for DebitNote {
             recipient_id,
             payee_addr: debit_note.payee_addr,
             payer_addr: debit_note.payer_addr,
+            payment_platform: debit_note.payment_platform,
             previous_debit_note_id: debit_note.previous_debit_note_id,
             timestamp: Utc.from_utc_datetime(&debit_note.timestamp),
             agreement_id: debit_note.agreement_id,

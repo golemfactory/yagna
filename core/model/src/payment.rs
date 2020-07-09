@@ -4,8 +4,6 @@ use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
 pub enum RpcMessageError {
-    #[error("Schedule payment error: {0}")]
-    Schedule(#[from] local::ScheduleError),
     #[error("Send error: {0}")]
     Send(#[from] public::SendError),
     #[error("Accept/reject error: {0}")]
@@ -25,16 +23,6 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
-
-    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-    pub enum ScheduleError {
-        #[error("Currency conversion error: {0}")]
-        Conversion(String),
-        #[error("Invalid address: {0}")]
-        Address(String),
-        #[error("Payment driver error: {0}")]
-        Driver(String),
-    }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -61,6 +49,7 @@ pub mod local {
         pub payee_id: NodeId,
         pub payer_addr: String,
         pub payee_addr: String,
+        pub payment_platform: String,
         pub allocation_id: String,
         pub amount: BigDecimal,
         pub due_date: DateTime<Utc>,
@@ -77,6 +66,7 @@ pub mod local {
                 payee_id: invoice.issuer_id,
                 payer_addr: invoice.payer_addr,
                 payee_addr: invoice.payee_addr,
+                payment_platform: invoice.payment_platform,
                 allocation_id,
                 amount,
                 due_date: invoice.payment_due_date,
@@ -97,6 +87,7 @@ pub mod local {
                 payee_id: debit_note.issuer_id,
                 payer_addr: debit_note.payer_addr,
                 payee_addr: debit_note.payee_addr,
+                payment_platform: debit_note.payment_platform,
                 allocation_id,
                 amount,
                 due_date,
@@ -116,7 +107,7 @@ pub mod local {
     impl RpcMessage for SchedulePayment {
         const ID: &'static str = "SchedulePayment";
         type Item = ();
-        type Error = ScheduleError;
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
@@ -214,7 +205,6 @@ pub mod local {
         pub requested: BigDecimal,
         pub accepted: BigDecimal,
         pub confirmed: BigDecimal,
-        pub rejected: BigDecimal,
     }
 
     impl std::ops::Add for StatusNotes {
@@ -225,8 +215,13 @@ pub mod local {
                 requested: self.requested + rhs.requested,
                 accepted: self.accepted + rhs.accepted,
                 confirmed: self.confirmed + rhs.confirmed,
-                rejected: self.rejected + rhs.rejected,
             }
+        }
+    }
+
+    impl std::iter::Sum<StatusNotes> for StatusNotes {
+        fn sum<I: Iterator<Item = StatusNotes>>(iter: I) -> Self {
+            iter.fold(Default::default(), |acc, item| acc + item)
         }
     }
 }

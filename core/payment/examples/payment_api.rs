@@ -1,19 +1,53 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
+use std::str::FromStr;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
-
+use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
+use ya_dummy_driver::{
+    PaymentDriverService as DummyDriverService, DRIVER_NAME as DUMMY_DRIVER_NAME,
+};
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
+use ya_service_bus::typed as bus;
+
+#[derive(Clone, Debug, StructOpt)]
+enum Driver {
+    Dummy,
+    Gnt,
+}
+
+impl FromStr for Driver {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        match s.to_lowercase().as_str() {
+            "dummy" => Ok(Driver::Dummy),
+            "gnt" => Ok(Driver::Gnt),
+            s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
+        }
+    }
+}
+
+impl std::fmt::Display for Driver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Driver::Dummy => write!(f, "dummy"),
+            Driver::Gnt => write!(f, "gnt"),
+        }
+    }
+}
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
+    #[structopt(long, default_value = "dummy")]
+    driver: Driver,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
     #[structopt(long, default_value = "")]
@@ -26,19 +60,9 @@ struct Args {
     agreement_id: String,
 }
 
-#[cfg(feature = "dummy-driver")]
-mod driver {
-    use super::{DbExecutor, EthAccount};
-    use ya_payment_driver::PaymentDriverService;
-
-    pub async fn start(
-        db: &DbExecutor,
-        _provider_account: Box<EthAccount>,
-        _requestor_account: Box<EthAccount>,
-    ) -> anyhow::Result<()> {
-        PaymentDriverService::gsb(db).await?;
-        Ok(())
-    }
+pub async fn start_dummy_driver() -> anyhow::Result<()> {
+    DummyDriverService::gsb(&()).await?;
+    Ok(())
 }
 
 #[cfg(feature = "gnt-driver")]
@@ -51,7 +75,6 @@ mod driver {
     use ya_client_model::NodeId;
     use ya_core_model::identity;
     use ya_payment_driver::PaymentDriverService;
-    use ya_service_bus::typed as bus;
 
     pub async fn start(
         db: &DbExecutor,
@@ -153,9 +176,24 @@ async fn main() -> anyhow::Result<()> {
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
-    driver::start(&db, provider_account, requestor_account).await?;
+
+    let driver_name = match args.driver {
+        Driver::Dummy => {
+            start_dummy_driver().await?;
+            DUMMY_DRIVER_NAME
+        }
+        Driver::Gnt => unimplemented!(),
+    };
+
     let processor = PaymentProcessor::new(db.clone());
     ya_payment::service::bind_service(&db, processor);
+
+    bus::service(driver_bus_id(driver_name))
+        .call(Init::new(provider_id.clone(), AccountMode::RECV))
+        .await??;
+    bus::service(driver_bus_id(driver_name))
+        .call(Init::new(requestor_id.clone(), AccountMode::SEND))
+        .await??;
 
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
