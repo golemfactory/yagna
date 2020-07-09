@@ -1,9 +1,9 @@
 use crate::DEFAULT_PAYMENT_PLATFORM;
 use structopt::*;
+use ya_core_model::driver::driver_bus_id;
 use ya_core_model::{driver, identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
-use ya_core_model::driver::driver_bus_id;
 
 /// Payment management.
 #[derive(StructOpt, Debug)]

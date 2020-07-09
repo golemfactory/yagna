@@ -10,7 +10,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
-use ya_core_model::driver::{self, AccountMode, PaymentConfirmation, PaymentDetails, driver_bus_id};
+use ya_core_model::driver::{
+    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails,
+};
 use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, SchedulePayment, UnregisterAccount,
     UnregisterAccountError,
