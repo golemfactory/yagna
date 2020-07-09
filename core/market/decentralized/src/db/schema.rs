@@ -91,6 +91,29 @@ table! {
     }
 }
 
+table! {
+    market_agreement (id) {
+        id -> Text,
+
+        offer_properties -> Text,
+        offer_constraints -> Text,
+
+        demand_properties -> Text,
+        demand_constraints -> Text,
+
+        provider_id -> Text,
+        requestor_id -> Text,
+
+        valid_to -> Timestamp,
+        approved_date -> Nullable<Timestamp>,
+        state -> Integer,
+
+        proposed_signature -> Text,
+        approved_signature -> Nullable<Text>,
+        committed_signature -> Nullable<Text>,
+    }
+}
+
 allow_tables_to_appear_in_same_query!(market_demand, market_offer, market_offer_unsubscribed);
 
 joinable!(market_offer -> market_offer_unsubscribed (id));
