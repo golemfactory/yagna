@@ -30,9 +30,10 @@ impl ResponseError for MarketError {
 impl ResponseError for MatcherError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            MatcherError::DemandError(e) => e.error_response(),
-            MatcherError::OfferError(e) => e.error_response(),
-            MatcherError::ResolverError(e) => e.error_response(),
+            MatcherError::DemandError(e)
+            | MatcherError::ResolverError(ResolverError::DemandError(e)) => e.error_response(),
+            MatcherError::OfferError(e)
+            | MatcherError::ResolverError(ResolverError::OfferError(e)) => e.error_response(),
             MatcherError::UnexpectedError(e) => {
                 HttpResponse::InternalServerError().json(ErrorMessage::new(e.to_string()))
             }

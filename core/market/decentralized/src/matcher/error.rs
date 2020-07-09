@@ -2,10 +2,7 @@ use ya_client::model::ErrorMessage;
 use ya_persistence::executor::Error as DbError;
 
 use crate::db::models::{SubscriptionId, SubscriptionValidationError};
-use crate::matcher::resolver::Subscription;
-use crate::matcher::RawProposal;
 use crate::protocol::DiscoveryInitError;
-use crate::{Demand, Offer};
 
 #[derive(thiserror::Error, Debug)]
 pub enum DemandError {
@@ -67,14 +64,6 @@ pub enum MatcherInitError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ResolverError {
-    #[error("Failed resolve matching relation for {0:?} and {1:?}.")]
-    MatchingError(Offer, Demand),
-    #[error("Failed to process incoming subscription {0:?}")]
-    ReceivingSubscriptionError(#[from] tokio::sync::mpsc::error::SendError<Subscription>),
-    #[error("Emitting proposal: {0}")]
-    EmittingProposalError(#[from] tokio::sync::mpsc::error::SendError<RawProposal>),
-    #[error(transparent)]
-    MatchError(#[from] ya_market_resolver::MatchError),
     #[error(transparent)]
     OfferError(#[from] OfferError),
     #[error(transparent)]

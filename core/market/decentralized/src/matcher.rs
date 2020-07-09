@@ -90,7 +90,7 @@ impl Matcher {
     ) -> Result<Offer, MatcherError> {
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         let offer = self.store.create_offer(id, offer).await?;
-        self.resolver.receive(&offer)?;
+        self.resolver.receive(&offer);
 
         let _ = self
             .discovery
@@ -134,7 +134,7 @@ impl Matcher {
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
 
-        self.resolver.receive(&demand)?;
+        self.resolver.receive(&demand);
         Ok(demand)
     }
 
@@ -163,7 +163,7 @@ pub(crate) async fn on_offer_received(
         .await
         .map(|propagate| match propagate {
             true => {
-                resolver.receive(subscription).unwrap();
+                resolver.receive(subscription);
                 Propagate::Yes
             }
             false => Propagate::No(Reason::AlreadyExists),

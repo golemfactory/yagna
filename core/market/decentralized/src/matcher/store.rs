@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_persistence::executor::DbExecutor;
@@ -76,12 +76,15 @@ impl SubscriptionStore {
             .collect())
     }
 
-    pub async fn get_offers_before(&self, demand: &Demand) -> Result<Vec<Offer>, OfferError> {
+    pub async fn get_offers_before(
+        &self,
+        insertion_ts: NaiveDateTime,
+    ) -> Result<Vec<Offer>, OfferError> {
         let now = Utc::now().naive_utc();
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers_before(demand.insertion_ts.unwrap(), now)
+            .get_offers_before(insertion_ts, now)
             .await
             .map_err(|e| OfferError::GetMany(e))?)
     }
@@ -158,12 +161,15 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn get_demands_before(&self, offer: &Offer) -> Result<Vec<Demand>, DemandError> {
+    pub async fn get_demands_before(
+        &self,
+        insertion_ts: NaiveDateTime,
+    ) -> Result<Vec<Demand>, DemandError> {
         let now = Utc::now().naive_utc();
         Ok(self
             .db
             .as_dao::<DemandDao>()
-            .get_demands_before(offer.insertion_ts.unwrap(), now)
+            .get_demands_before(insertion_ts, now)
             .await
             .map_err(|e| DemandError::GetMany(e))?)
     }

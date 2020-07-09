@@ -5,7 +5,7 @@ use ya_market_resolver::{match_demand_offer, Match};
 use super::{error::ResolverError, RawProposal, SubscriptionStore};
 use crate::db::models::{Demand, Offer, SubscriptionId};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Subscription {
     Offer(SubscriptionId),
     Demand(SubscriptionId),
@@ -47,8 +47,11 @@ impl Resolver {
         myself
     }
 
-    pub fn receive(&self, subscription: impl Into<Subscription>) -> Result<(), ResolverError> {
-        Ok(self.subscription_tx.send(subscription.into())?)
+    pub fn receive(&self, subscription: impl Into<Subscription>) {
+        let s = subscription.into();
+        if let Err(e) = self.subscription_tx.send(s.clone()) {
+            log::error!("Receiving incoming {:?} error: {:?}", s, e);
+        };
     }
 
     async fn process_incoming_subscriptions(
@@ -70,49 +73,54 @@ impl Resolver {
         match subscription {
             Subscription::Offer(id) => {
                 let offer = self.store.get_offer(id).await?;
-                let demands = self.store.get_demands_before(&offer).await?;
-
-                for demand in demands {
-                    self.emit_if_matches(offer.clone(), demand)?;
-                }
+                self.store
+                    .get_demands_before(offer.insertion_ts.unwrap())
+                    .await?
+                    .into_iter()
+                    .filter(|demand| matches(&offer, &demand))
+                    .for_each(|demand| self.emit_proposal(offer.clone(), demand));
             }
             Subscription::Demand(id) => {
                 let demand = self.store.get_demand(id).await?;
-                let offers = self.store.get_offers_before(&demand).await?;
-
-                for offer in offers {
-                    self.emit_if_matches(offer, demand.clone())?;
-                }
+                self.store
+                    .get_offers_before(demand.insertion_ts.unwrap())
+                    .await?
+                    .into_iter()
+                    .filter(|offer| matches(&offer, &demand))
+                    .for_each(|offer| self.emit_proposal(offer, demand.clone()));
             }
         }
         Ok(())
     }
 
-    // TODO: return Result; stop unwrapping
-    pub fn emit_if_matches(&self, offer: Offer, demand: Demand) -> Result<(), ResolverError> {
-        if !matches(&offer, &demand)? {
-            return Ok(());
-        }
-
+    pub fn emit_proposal(&self, offer: Offer, demand: Demand) {
         let offer_id = offer.id.clone();
         let demand_id = demand.id.clone();
-        Ok(self.proposal_tx.send(RawProposal { offer, demand })?)
+        if let Err(e) = self.proposal_tx.send(RawProposal { offer, demand }) {
+            log::warn!(
+                "Emitting proposal for Offer [{}] and Demand [{}] error: {}",
+                offer_id,
+                demand_id,
+                e
+            );
+        }
     }
 }
 
-fn matches(offer: &Offer, demand: &Demand) -> Result<bool, ResolverError> {
-    // TODO
-    Ok(
-        match match_demand_offer(
-            &demand.properties,
-            &demand.constraints,
-            &offer.properties,
-            &offer.constraints,
-        )? {
-            Match::Yes => true,
-            _ => false,
-        },
-    )
+fn matches(offer: &Offer, demand: &Demand) -> bool {
+    match match_demand_offer(
+        &demand.properties,
+        &demand.constraints,
+        &offer.properties,
+        &offer.constraints,
+    ) {
+        Ok(Match::Yes) => true,
+        Err(e) => {
+            log::warn!("Matching [{:?}] vs [{:?}] error: {}", offer, demand, e);
+            false
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -122,6 +130,6 @@ mod tests {
 
     #[test]
     fn matches_empty() {
-        assert!(matches(&sample_offer(), &sample_demand()).unwrap())
+        assert!(matches(&sample_offer(), &sample_demand()))
     }
 }
