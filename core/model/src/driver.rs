@@ -5,7 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID_PREFIX: &'static str = "/local/driver/";
+#[macro_export]
+macro_rules! driver_bus_id {
+    ($driver_name:expr) => {
+        concat!("/local/diver", stringify!($drvier_name))
+    }
+}
 
 // ************************** ERROR **************************
 
