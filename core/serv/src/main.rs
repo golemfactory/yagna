@@ -24,6 +24,10 @@ use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::PaymentService;
+
+#[cfg(feature = "dummy-driver")]
+use ya_dummy_driver::PaymentDriverService;
+#[cfg(not(feature = "dummy-driver"))]
 use ya_payment_driver::PaymentDriverService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -168,6 +172,7 @@ enum Services {
     #[enable(gsb)]
     PaymentDriver(PaymentDriverService),
 }
+
 
 #[derive(StructOpt, Debug)]
 enum CliCommand {

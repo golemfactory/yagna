@@ -12,7 +12,7 @@ use sha3::{Digest, Sha3_512};
 use std::pin::Pin;
 use std::str::FromStr;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
+use ya_core_model::driver::{PaymentConfirmation};
 use ya_core_model::identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -108,30 +108,30 @@ pub fn prepare_tx_id(raw_tx: &RawTransaction, chain_id: u64, sender: Address) ->
     format!("{:x}", Sha3_512::digest(&bytes))
 }
 
-pub fn payment_status_to_i32(status: &PaymentStatus) -> i32 {
-    match status {
-        PaymentStatus::NotYet => PAYMENT_STATUS_NOT_YET,
-        PaymentStatus::Ok(_confirmation) => PAYMENT_STATUS_OK,
-        PaymentStatus::NotEnoughFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
-        PaymentStatus::NotEnoughGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
-        PaymentStatus::Unknown => PAYMENT_STATUS_UNKNOWN,
-        PaymentStatus::Failed => PAYMENT_STATUS_FAILED,
-    }
-}
+// pub fn payment_status_to_i32(status: &PaymentStatus) -> i32 {
+//     match status {
+//         PaymentStatus::NotYet => PAYMENT_STATUS_NOT_YET,
+//         PaymentStatus::Ok(_confirmation) => PAYMENT_STATUS_OK,
+//         PaymentStatus::NotEnoughFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
+//         PaymentStatus::NotEnoughGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
+//         PaymentStatus::Unknown => PAYMENT_STATUS_UNKNOWN,
+//         PaymentStatus::Failed => PAYMENT_STATUS_FAILED,
+//     }
+// }
 
-pub fn payment_entity_to_status(payment: &PaymentEntity) -> PaymentStatus {
-    match payment.status {
-        PAYMENT_STATUS_OK => {
-            let confirmation: Vec<u8> = Vec::new();
-            PaymentStatus::Ok(PaymentConfirmation { confirmation })
-        }
-        PAYMENT_STATUS_NOT_YET => PaymentStatus::NotYet,
-        PAYMENT_STATUS_NOT_ENOUGH_FUNDS => PaymentStatus::NotEnoughFunds,
-        PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
-        PAYMENT_STATUS_FAILED => PaymentStatus::Failed,
-        _ => PaymentStatus::Unknown,
-    }
-}
+// pub fn payment_entity_to_status(payment: &PaymentEntity) -> PaymentStatus {
+//     match payment.status {
+//         PAYMENT_STATUS_OK => {
+//             let confirmation: Vec<u8> = Vec::new();
+//             PaymentStatus::Ok(PaymentConfirmation { confirmation })
+//         }
+//         PAYMENT_STATUS_NOT_YET => PaymentStatus::NotYet,
+//         PAYMENT_STATUS_NOT_ENOUGH_FUNDS => PaymentStatus::NotEnoughFunds,
+//         PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
+//         PAYMENT_STATUS_FAILED => PaymentStatus::Failed,
+//         _ => PaymentStatus::Unknown,
+//     }
+// }
 
 pub fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
     move |payload| {
