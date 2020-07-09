@@ -77,7 +77,7 @@ impl PaymentDriver for DummyDriver {
             date: Some(Utc::now()),
         };
         // FIXME: generate payment_order_id?
-        let payment_order_id = "123".to_string();
+        let payment_order_id = Arc::strong_count(&payments).to_string();
 
         Box::pin(async move {
             match payments.lock().await.entry(payment_order_id.clone()) {
