@@ -1,6 +1,5 @@
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
-use chrono::Utc;
 use std::sync::Arc;
 
 use super::{
@@ -45,7 +44,7 @@ async fn subscribe(
 #[actix_web::get("/offers")]
 async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> impl Responder {
     market
-        .get_offers(Some(id), Utc::now().naive_utc())
+        .get_offers(Some(id))
         .await
         .map(|offers| HttpResponse::Ok().json(offers))
 }
