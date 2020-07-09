@@ -100,10 +100,10 @@ impl ContainerTransferProvider {
             }
             Ok(vol_base.join(path))
         } else {
-            log::warn!("path {} not found in container", container_path);
+            log::warn!("path not found in container: {}", container_path);
             Err(TransferError::IoError(io::Error::new(
                 io::ErrorKind::NotFound,
-                anyhow::anyhow!("path {} not found in container", container_path),
+                anyhow::anyhow!("path not found in container: {}", container_path),
             )))
         }
     }
