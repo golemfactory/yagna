@@ -68,9 +68,7 @@ impl<'c> EventsDao<'c> {
             // Remove returned events from queue.
             if !events.is_empty() {
                 let ids = events.iter().map(|event| event.id).collect::<Vec<_>>();
-                if !ids.is_empty() {
-                    diesel::delete(dsl::market_event.filter(dsl::id.eq_any(ids))).execute(conn)?;
-                }
+                diesel::delete(dsl::market_event.filter(dsl::id.eq_any(ids))).execute(conn)?;
             }
 
             Ok(events)

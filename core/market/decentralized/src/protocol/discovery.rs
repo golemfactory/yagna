@@ -231,7 +231,7 @@ pub enum Propagate {
     No(Reason),
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OfferReceived {
     pub offer: ModelOffer,

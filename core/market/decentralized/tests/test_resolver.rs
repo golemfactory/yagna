@@ -17,7 +17,7 @@ mod tests {
     async fn test_single_not_resolve_offer() -> Result<(), anyhow::Error> {
         // given
         let _ = env_logger::builder().try_init();
-        let mut network = MarketsNetwork::new("test_single_resolve_offer")
+        let mut network = MarketsNetwork::new("test_single_not_resolve_offer")
             .await
             .add_matcher_instance("Node-1")
             .await?;
@@ -31,7 +31,9 @@ mod tests {
 
         // then
         let listener = network.get_event_listeners("Node-1");
-        assert!(timeout200ms(listener.proposal_rx.recv()).await.is_err());
+        assert!(timeout200ms(listener.proposal_receiver.recv())
+            .await
+            .is_err());
 
         Ok(())
     }
@@ -61,13 +63,17 @@ mod tests {
 
         // then: It should be resolved on Requestor
         let listener = network.get_event_listeners("Requestor-1");
-        let proposal = timeout200ms(listener.proposal_rx.recv()).await?.unwrap();
+        let proposal = timeout200ms(listener.proposal_receiver.recv())
+            .await?
+            .unwrap();
         assert_eq!(proposal.offer, offer);
         assert_eq!(proposal.demand, demand);
 
         // and: but not resolved on Provider.
         let listener = network.get_event_listeners("Provider-1");
-        assert!(timeout200ms(listener.proposal_rx.recv()).await.is_err());
+        assert!(timeout200ms(listener.proposal_receiver.recv())
+            .await
+            .is_err());
 
         Ok(())
     }
@@ -92,7 +98,9 @@ mod tests {
 
         // then
         let listener = network.get_event_listeners("Node-1");
-        assert!(timeout200ms(listener.proposal_rx.recv()).await.is_err());
+        assert!(timeout200ms(listener.proposal_receiver.recv())
+            .await
+            .is_err());
 
         Ok(())
     }
@@ -128,19 +136,27 @@ mod tests {
 
         // then: It should be resolved on Requestor two times
         let listener = network.get_event_listeners("Requestor-1");
-        let proposal = timeout200ms(listener.proposal_rx.recv()).await?.unwrap();
+        let proposal = timeout200ms(listener.proposal_receiver.recv())
+            .await?
+            .unwrap();
         assert_eq!(proposal.offer, offer1);
         assert_eq!(proposal.demand, demand);
-        let proposal = timeout200ms(listener.proposal_rx.recv()).await?.unwrap();
+        let proposal = timeout200ms(listener.proposal_receiver.recv())
+            .await?
+            .unwrap();
         assert_eq!(proposal.offer, offer2);
         assert_eq!(proposal.demand, demand);
 
         // and: but not resolved on Provider-1
         let listener = network.get_event_listeners("Provider-1");
-        assert!(timeout200ms(listener.proposal_rx.recv()).await.is_err());
+        assert!(timeout200ms(listener.proposal_receiver.recv())
+            .await
+            .is_err());
         // and: not on Provider-2.
         let listener = network.get_event_listeners("Provider-2");
-        assert!(timeout200ms(listener.proposal_rx.recv()).await.is_err());
+        assert!(timeout200ms(listener.proposal_receiver.recv())
+            .await
+            .is_err());
 
         Ok(())
     }

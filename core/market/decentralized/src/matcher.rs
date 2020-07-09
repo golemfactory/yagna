@@ -28,7 +28,7 @@ pub struct RawProposal {
 
 /// Receivers for events, that can be emitted from Matcher.
 pub struct EventsListeners {
-    pub proposal_rx: UnboundedReceiver<RawProposal>,
+    pub proposal_receiver: UnboundedReceiver<RawProposal>,
 }
 
 /// Responsible for storing Offers and matching them with demands.
@@ -41,8 +41,8 @@ pub struct Matcher {
 impl Matcher {
     pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         let store = SubscriptionStore::new(db.clone());
-        let (proposal_tx, proposal_rx) = unbounded_channel::<RawProposal>();
-        let resolver = Resolver::new(store.clone(), proposal_tx);
+        let (proposal_sender, proposal_receiver) = unbounded_channel::<RawProposal>();
+        let resolver = Resolver::new(store.clone(), proposal_sender);
 
         let discovery = DiscoveryBuilder::default()
             .data(store.clone())
@@ -63,7 +63,7 @@ impl Matcher {
             discovery,
         };
 
-        let listeners = EventsListeners { proposal_rx };
+        let listeners = EventsListeners { proposal_receiver };
 
         Ok((matcher, listeners))
     }
@@ -88,7 +88,6 @@ impl Matcher {
         offer: &ClientOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
-        // TODO: Run matching to find local matching demands. We shouldn't wait here.
         // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         let offer = self.store.create_offer(id, offer).await?;
         self.resolver.receive(&offer)?;

@@ -56,7 +56,7 @@ impl MarketService {
 
         let (matcher, listeners) = Matcher::new(db)?;
         let provider_engine = ProviderBroker::new(db.clone())?;
-        let requestor_engine = RequestorBroker::new(db.clone(), listeners.proposal_rx)?;
+        let requestor_engine = RequestorBroker::new(db.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
             matcher,

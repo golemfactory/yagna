@@ -12,14 +12,14 @@ pub enum Subscription {
 }
 
 impl From<&Offer> for Subscription {
-    fn from(o: &Offer) -> Self {
-        Subscription::Offer(o.id.clone())
+    fn from(offer: &Offer) -> Self {
+        Subscription::Offer(offer.id.clone())
     }
 }
 
 impl From<&Demand> for Subscription {
-    fn from(d: &Demand) -> Self {
-        Subscription::Demand(d.id.clone())
+    fn from(demand: &Demand) -> Self {
+        Subscription::Demand(demand.id.clone())
     }
 }
 
@@ -56,7 +56,7 @@ impl Resolver {
         mut subscription_rx: UnboundedReceiver<Subscription>,
     ) {
         while let Some(s) = subscription_rx.recv().await {
-            log::debug!("resolving incoming subscription {:?}", s);
+            log::debug!("Resolving incoming subscription {:?}", s);
             if let Err(e) = self.process_single_subscription(&s).await {
                 log::warn!("Failed resolve subscription [{:?}]. Error: {}", s, e);
             }

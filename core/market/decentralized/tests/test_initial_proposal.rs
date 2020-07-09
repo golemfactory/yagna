@@ -211,14 +211,21 @@ mod tests {
         market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
         // We should reject calls with negative maxEvents.
-
         let result = market1.query_events(&demand_id, 0.0, Some(-5)).await;
         assert_eq!(
             result.unwrap_err().to_string(),
             QueryEventsError::InvalidMaxEvents(-5).to_string()
         );
 
-        let events = market1.query_events(&demand_id, 0.2, None).await?;
+        // Negative timeout should be treated as immediate checking events and return.
+        tokio::time::delay_for(Duration::from_millis(200)).await;
+        let events = tokio::time::timeout(
+            Duration::from_millis(20),
+            market1
+                .requestor_engine
+                .query_events(&demand_id, -5.0, None),
+        )
+        .await??;
         assert_eq!(events.len(), 1);
 
         // Restore available Proposal
@@ -276,7 +283,7 @@ mod tests {
         // Unsubscribe subscription 3. Events on subscription 2 should be still available.
         market1.unsubscribe_demand(&demand_id3, &identity1).await?;
 
-        let events = market1.query_events(&demand_id2, 0.0, Some(5)).await?;
+        let events = market1.query_events(&demand_id2, 0.2, Some(5)).await?;
         assert_eq!(events.len(), 1);
         Ok(())
     }

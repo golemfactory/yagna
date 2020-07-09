@@ -27,7 +27,6 @@ impl DiscoveryBuilder {
             .get(&TypeId::of::<T>())
             .expect("data handler needs data");
 
-        // let data = *(boxed as &Box<dyn Any + 'static>).downcast::<&T>().unwrap();
         let data: &T = (&**boxed as &(dyn Any + 'static)).downcast_ref().unwrap();
         let data = data.clone();
         self.handlers.insert(
