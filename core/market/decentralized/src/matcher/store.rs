@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDateTime, Utc};
+use lazy_static::lazy_static;
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_persistence::executor::DbExecutor;
@@ -7,6 +8,10 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::dao::*;
 use crate::db::models::{Demand, Offer, SubscriptionId};
 use crate::matcher::error::{DemandError, OfferError};
+
+lazy_static! {
+    static ref DEFAULT_TTL: Duration = Duration::hours(24);
+}
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
@@ -25,20 +30,27 @@ impl SubscriptionStore {
     ) -> Result<Offer, OfferError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
-        let expiration_ts = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + *DEFAULT_TTL;
         let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts);
-        self.save_offer(offer.clone()).await?;
-        Ok(offer)
+        match self.db.as_dao::<OfferDao>().insert(offer.clone()).await {
+            Ok(()) => Ok(offer),
+            Err(e) => Err(OfferError::SaveError(e, offer.id)),
+        }
     }
 
-    async fn save_offer(&self, mut offer: Offer) -> Result<(), OfferError> {
-        let id = offer.id.clone();
+    pub async fn save_offer(&self, mut offer: Offer) -> Result<bool, OfferError> {
+        // Will reject Offer, if hash was computed incorrectly. In most cases
+        // it could mean, that it could be some kind of attack.
+        offer.validate()?;
+
         // Insertions timestamp should always reference our local time
         // of adding it to database, so we must reset it here.
         offer.insertion_ts = None;
+        let id = offer.id.clone();
+        let now = Utc::now().naive_utc();
         self.db
             .as_dao::<OfferDao>()
-            .insert(offer)
+            .checked_insert(offer, now)
             .await
             .map_err(|e| OfferError::SaveError(e, id))
     }
@@ -120,22 +132,6 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn store_offer(&self, offer: Offer) -> Result<bool, OfferError> {
-        // Will reject Offer, if hash was computed incorrectly. In most cases
-        // it could mean, that it could be some kind of attack.
-        offer.validate()?;
-
-        let id = offer.id.clone();
-        match self.get_offer(&id).await {
-            Ok(_offer) => Ok(false),
-            Err(OfferError::NotFound(_)) => {
-                self.save_offer(offer).await?;
-                Ok(true)
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     pub async fn create_demand(
         &self,
         id: &Identity,
@@ -143,7 +139,7 @@ impl SubscriptionStore {
     ) -> Result<Demand, DemandError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.
-        let expiration_ts = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + *DEFAULT_TTL;
         let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts);
         self.db
             .as_dao::<DemandDao>()

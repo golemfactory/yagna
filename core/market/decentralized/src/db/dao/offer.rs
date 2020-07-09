@@ -92,6 +92,25 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
+    pub async fn checked_insert(
+        &self,
+        offer: Offer,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<bool> {
+        do_with_transaction(self.pool, move |conn| {
+            match query_state(conn, &offer.id, validation_ts)? {
+                OfferState::NotFound => (),
+                _ => return Ok(false),
+            };
+
+            diesel::insert_into(dsl::market_offer)
+                .values(offer)
+                .execute(conn)?;
+            Ok(true)
+        })
+        .await
+    }
+
     /// In single transaction checks offer state and if `Active` inserts unsubscription marker.
     /// Returns state as before operation. `Active` means unsubscribe has succeeded.
     pub async fn mark_unsubscribed(

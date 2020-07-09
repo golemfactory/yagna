@@ -159,7 +159,7 @@ pub(crate) async fn on_offer_received(
     let subscription = Subscription::from(&msg.offer);
     resolver
         .store
-        .store_offer(msg.offer)
+        .save_offer(msg.offer)
         .await
         .map(|propagate| match propagate {
             true => {
