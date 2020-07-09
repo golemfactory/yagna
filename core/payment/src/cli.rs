@@ -3,6 +3,7 @@ use structopt::*;
 use ya_core_model::{driver, identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_core_model::driver::driver_bus_id;
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
@@ -39,7 +40,7 @@ impl PaymentCli {
                 if provider {
                     mode |= driver::AccountMode::RECV;
                 }
-                bus::service(driver::BUS_ID_PREFIX.to_string() + &driver)
+                bus::service(driver_bus_id(driver))
                     .call(driver::Init::new(address, mode))
                     .await??;
                 Ok(CommandOutput::NoOutput)

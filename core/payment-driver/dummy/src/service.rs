@@ -1,17 +1,16 @@
 use ya_payment_driver::processor::PaymentDriverProcessor;
 use bigdecimal::BigDecimal;
 use ya_core_model::driver::*;
-use ya_core_model::driver_bus_id;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-const BUS_ID: &'static str = driver_bus_id!("dummy");
+const DRIVER_NAME: &'static str = "dummy";
 
 
 pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
     log::debug!("Binding payment driver service to service bus");
 
-    bus::ServiceBinder::new(BUS_ID, db, processor)
+    bus::ServiceBinder::new(&driver_bus_id(DRIVER_NAME), db, processor)
         .bind_with_processor(account_event)
         .bind_with_processor(init)
         .bind_with_processor(get_account_balance)
@@ -26,7 +25,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
 pub async fn subscribe_to_identity_events() {
     if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
         .send(ya_core_model::identity::Subscribe {
-            endpoint: BUS_ID.to_string(),
+            endpoint: driver_bus_id(DRIVER_NAME),
         })
         .await
     {

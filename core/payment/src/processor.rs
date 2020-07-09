@@ -10,7 +10,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
-use ya_core_model::driver::{self, AccountMode, PaymentConfirmation, PaymentDetails};
+use ya_core_model::driver::{self, AccountMode, PaymentConfirmation, PaymentDetails, driver_bus_id};
 use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, SchedulePayment, UnregisterAccount,
     UnregisterAccountError,
@@ -22,7 +22,7 @@ use ya_service_bus::typed::Endpoint;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 fn driver_endpoint(driver: &str) -> Endpoint {
-    bus::service(driver::BUS_ID_PREFIX.to_string() + driver)
+    bus::service(driver_bus_id(driver))
 }
 
 async fn validate_orders(
