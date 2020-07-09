@@ -4,11 +4,11 @@ use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
+use crate::db::models::SubscriptionId;
 use crate::db::models::{Offer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl;
 use crate::db::schema::market_offer_unsubscribed::dsl as dsl_unsubscribed;
 use crate::db::DbResult;
-use crate::SubscriptionId;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 pub struct OfferDao<'c> {
@@ -93,7 +93,7 @@ impl<'c> OfferDao<'c> {
     }
 }
 
-fn query_state(
+pub(super) fn query_state(
     conn: &ConnType,
     subscription_id: &SubscriptionId,
     validation_ts: NaiveDateTime,
@@ -116,7 +116,7 @@ fn query_state(
     })
 }
 
-fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
+pub(super) fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
     Ok(dsl_unsubscribed::market_offer_unsubscribed
         .filter(dsl_unsubscribed::id.eq(&subscription_id))
         .first::<OfferUnsubscribed>(conn)

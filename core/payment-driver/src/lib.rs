@@ -1,4 +1,8 @@
+use crate::processor::PaymentDriverProcessor;
 use chrono::{DateTime, Utc};
+use ya_client_model::NodeId;
+use ya_persistence::executor::DbExecutor;
+use ya_service_api_interfaces::Provider;
 
 #[macro_use]
 extern crate diesel;
@@ -6,36 +10,28 @@ extern crate diesel;
 mod dummy;
 mod ethereum;
 mod models;
+mod processor;
 mod schema;
 mod utils;
 
-pub mod account;
 pub mod dao;
 pub mod error;
 pub mod gnt;
-pub mod payment;
+pub mod service;
 
-pub use account::{AccountBalance, Balance, Currency};
-use bitflags::bitflags;
 pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
 pub use gnt::GntDriver;
-pub use payment::{PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus};
 use std::future::Future;
 use std::pin::Pin;
+use ya_core_model::driver::{
+    AccountBalance, AccountMode, Balance, PaymentAmount, PaymentConfirmation, PaymentDetails,
+    PaymentStatus,
+};
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
 
 pub type SignTx<'a> = &'a (dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>);
-
-bitflags! {
-    pub struct AccountMode : usize {
-        const NONE = 0b000;
-        const RECV = 0b001;
-        const SEND = 0b010;
-        const ALL = Self::RECV.bits | Self::SEND.bits;
-    }
-}
 
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
@@ -47,7 +43,18 @@ pub trait PaymentDriver {
         &self,
         mode: AccountMode,
         address: &str,
-        sign_tx: SignTx<'a>,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
+
+    /// Notification when identity gets locked and the driver cannot send transactions
+    fn account_locked<'a>(
+        &self,
+        identity: NodeId,
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
+
+    /// Notification when identity gets unlocked and the driver can send transactions
+    fn account_unlocked<'a>(
+        &self,
+        identity: NodeId,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Returns account balance
@@ -64,14 +71,6 @@ pub trait PaymentDriver {
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-        sign_tx: SignTx<'a>,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
-
-    /// Schedules payment
-    fn reschedule_payment<'a>(
-        &self,
-        invoice_id: &str,
-        sign_tx: SignTx<'a>,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
 
     /// Returns payment status
@@ -92,6 +91,29 @@ pub trait PaymentDriver {
         payer: &str,
         payee: &str,
     ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>>;
+}
+
+#[cfg(feature = "dummy-driver")]
+async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
+    Ok(DummyDriver::new())
+}
+
+#[cfg(feature = "gnt-driver")]
+async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
+    Ok(GntDriver::new(db.clone()).await?)
+}
+
+pub struct PaymentDriverService;
+
+impl PaymentDriverService {
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
+        let db: DbExecutor = context.component();
+        let driver = payment_driver_factory(&db).await?;
+        let processor = PaymentDriverProcessor::new(driver);
+        self::service::bind_service(&db, processor);
+        self::service::subscribe_to_identity_events().await;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
