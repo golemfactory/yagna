@@ -1,42 +1,39 @@
 use crate::dao::{ActivityDao, AgreementDao, PaymentDao};
 use crate::error::{Error, PaymentError, PaymentResult};
-use crate::utils::get_sign_tx;
 use bigdecimal::BigDecimal;
-use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
+use ya_core_model::driver;
+use ya_core_model::driver::{
+    AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDetails, PaymentStatus,
+};
 use ya_core_model::payment::local::{PaymentTitle, SchedulePayment};
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
-use ya_payment_driver::{
-    AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
-    PaymentDriverError, PaymentStatus,
-};
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 #[derive(Clone)]
 pub struct PaymentProcessor {
-    driver: Arc<dyn PaymentDriver + Send + Sync + 'static>,
     db_executor: DbExecutor,
 }
 
 impl PaymentProcessor {
-    pub fn new<D>(driver: D, db_executor: DbExecutor) -> Self
-    where
-        D: PaymentDriver + Send + Sync + 'static,
-    {
-        Self {
-            driver: Arc::new(driver),
-            db_executor,
-        }
+    pub fn new(db_executor: DbExecutor) -> Self {
+        Self { db_executor }
     }
 
     async fn wait_for_payment(&self, invoice_id: &str) -> PaymentResult<PaymentConfirmation> {
         loop {
-            match self.driver.get_payment_status(&invoice_id).await? {
+            let payment_status: PaymentStatus = bus::service(driver::BUS_ID)
+                .send(driver::GetPaymentStatus::from(invoice_id.to_string()))
+                .await
+                .unwrap()
+                .unwrap();
+            match payment_status {
                 PaymentStatus::Ok(confirmation) => return Ok(confirmation),
                 PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
-                _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),
+                _ => return Err(PaymentError::Driver(String::from("Insufficient funds"))),
             }
         }
     }
@@ -105,18 +102,17 @@ impl PaymentProcessor {
             base_currency_amount: msg.amount.clone(),
             gas_amount: None,
         };
-        // TODO: Allow signing transactions with different key than node ID
-        let sign_tx = get_sign_tx(msg.payer_id);
-        self.driver
-            .schedule_payment(
-                &document_id,
+        bus::service(driver::BUS_ID)
+            .send(driver::SchedulePayment::new(
+                document_id,
                 amount,
-                &msg.payer_addr,
-                &msg.payee_addr,
-                msg.due_date,
-                &sign_tx,
-            )
-            .await?;
+                msg.payer_addr.clone(),
+                msg.payee_addr.clone(),
+                msg.due_date.clone(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
 
         let processor = self.clone();
         tokio::task::spawn_local(async move {
@@ -134,7 +130,11 @@ impl PaymentProcessor {
                 return Err(PaymentError::Verification(msg).into());
             }
         };
-        let details = self.driver.verify_payment(&confirmation).await?;
+        let details: PaymentDetails = bus::service(driver::BUS_ID)
+            .send(driver::VerifyPayment::from(confirmation))
+            .await
+            .unwrap()
+            .unwrap();
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
         let actual_amount = details.amount;
@@ -236,10 +236,15 @@ impl PaymentProcessor {
         let db_balance = agreement_dao
             .get_transaction_balance(payee_id, payee_addr, payer_addr)
             .await?;
-        let bc_balance = self
-            .driver
-            .get_transaction_balance(details.sender.as_str(), details.recipient.as_str())
-            .await?;
+        let bc_balance = bus::service(driver::BUS_ID)
+            .send(driver::GetTransactionBalance::new(
+                details.sender.clone(),
+                details.recipient.clone(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
+
         let bc_balance = bc_balance.amount;
         if bc_balance < db_balance + actual_amount {
             let msg = "Transaction balance too low (probably tx hash re-used)".to_string();
@@ -261,13 +266,21 @@ impl PaymentProcessor {
         if provider {
             mode |= AccountMode::RECV;
         }
-        let node_id = addr.parse().unwrap();
-        let sign_tx = get_sign_tx(node_id);
-        Ok(self.driver.init(mode, addr.as_str(), &sign_tx).await?)
+        bus::service(driver::BUS_ID)
+            .send(driver::Init::new(addr, mode))
+            .await
+            .unwrap()
+            .unwrap();
+        Ok(())
     }
 
     pub async fn get_status(&self, addr: &str) -> PaymentResult<BigDecimal> {
-        let balance: AccountBalance = self.driver.get_account_balance(addr).await?;
-        Ok(balance.base_currency.amount)
+        let address: String = addr.to_string();
+        let account_balance: AccountBalance = bus::service(driver::BUS_ID)
+            .send(driver::GetAccountBalance::from(address))
+            .await
+            .unwrap()
+            .unwrap();
+        Ok(account_balance.base_currency.amount)
     }
 }

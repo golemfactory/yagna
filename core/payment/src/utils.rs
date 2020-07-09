@@ -1,13 +1,10 @@
 use crate::error::{DbError, DbResult, Error, ExternalServiceError};
 use actix_web::HttpResponse;
-use futures::{Future, FutureExt};
+use futures::Future;
 use serde::{Deserialize, Serialize};
-use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
 use ya_client_model::market::Agreement;
-use ya_client_model::NodeId;
-use ya_core_model::{identity, market};
+use ya_core_model::market;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
@@ -106,24 +103,6 @@ pub mod provider {
             ))) => Ok(None),
             Err(e) => Err(e),
         }
-    }
-}
-
-pub fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
-    let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> = sign_tx.into();
-    bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
-        let sign_tx = sign_tx.clone();
-        let msg = msg.payload;
-        async move { Ok(sign_tx(msg).await) }
-    });
-}
-
-pub fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    move |payload| {
-        let fut = bus::service(identity::BUS_ID)
-            .send(identity::Sign { node_id, payload })
-            .map(|x| x.unwrap().unwrap());
-        Box::pin(fut)
     }
 }
 

@@ -26,7 +26,11 @@ pub mod migrations {
 
 /// These exports are expected to be used only in tests.
 pub mod testing {
-    pub use super::db::models::SubscriptionParseError;
-    pub use super::matcher::SubscriptionStore;
+    pub use super::db::dao::{DemandDao, OfferDao};
+    pub use super::db::models::{Demand, Offer, SubscriptionId, SubscriptionParseError};
     pub use super::matcher::{DemandError, MatcherError, OfferError};
+    pub use super::matcher::{DraftProposal, SubscriptionStore};
+    pub use super::negotiation::QueryEventsError;
+    pub use super::negotiation::{ProviderBroker, RequestorBroker};
+    pub use super::protocol::negotiation;
 }
