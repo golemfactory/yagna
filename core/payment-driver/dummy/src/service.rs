@@ -1,7 +1,12 @@
-use crate::processor::PaymentDriverProcessor;
+use ya_payment_driver::processor::PaymentDriverProcessor;
+use bigdecimal::BigDecimal;
 use ya_core_model::driver::*;
+use ya_core_model::driver_bus_id;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{typed as bus, RpcEndpoint};
+
+const BUS_ID: &'static str = driver_bus_id!("dummy");
+
 
 pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
     log::debug!("Binding payment driver service to service bus");
@@ -10,7 +15,6 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
         .bind_with_processor(account_event)
         .bind_with_processor(init)
         .bind_with_processor(get_account_balance)
-        .bind_with_processor(get_payment_status)
         .bind_with_processor(get_transaction_balance)
         .bind_with_processor(schedule_payment)
         .bind_with_processor(verify_payment);
@@ -18,10 +22,11 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentDriverProcessor) {
     log::debug!("Successfully bound payment driver service to service bus");
 }
 
+
 pub async fn subscribe_to_identity_events() {
     if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
         .send(ya_core_model::identity::Subscribe {
-            endpoint: BUS_ID.into(),
+            endpoint: BUS_ID.to_string(),
         })
         .await
     {
@@ -51,7 +56,7 @@ async fn get_account_balance(
     processor: PaymentDriverProcessor,
     _caller: String,
     msg: GetAccountBalance,
-) -> Result<AccountBalance, GenericError> {
+) -> Result<BigDecimal, GenericError> {
     log::info!("get account balance: {:?}", msg);
 
     let addr = msg.address();
@@ -65,31 +70,12 @@ async fn get_account_balance(
         )
 }
 
-async fn get_payment_status(
-    _db: DbExecutor,
-    processor: PaymentDriverProcessor,
-    _caller: String,
-    msg: GetPaymentStatus,
-) -> Result<PaymentStatus, GenericError> {
-    log::info!("get payment status: {:?}", msg);
-
-    let invoice_id = msg.invoice_id();
-
-    processor
-        .get_payment_status(invoice_id.as_str())
-        .await
-        .map_or_else(
-            |e| Err(GenericError::new(e)),
-            |payment_status| Ok(payment_status),
-        )
-}
-
 async fn get_transaction_balance(
     _db: DbExecutor,
     processor: PaymentDriverProcessor,
     _caller: String,
     msg: GetTransactionBalance,
-) -> Result<Balance, GenericError> {
+) -> Result<BigDecimal, GenericError> {
     log::info!("get transaction balance: {:?}", msg);
 
     let sender = msg.sender();
@@ -106,10 +92,9 @@ async fn schedule_payment(
     processor: PaymentDriverProcessor,
     _caller: String,
     msg: SchedulePayment,
-) -> Result<Ack, GenericError> {
+) -> Result<String, GenericError> {
     log::info!("schedule payment: {:?}", msg);
 
-    let invoice_id = msg.invoice_id();
     let amount = msg.amount();
     let sender = msg.sender();
     let recipient = msg.recipient();
@@ -117,14 +102,13 @@ async fn schedule_payment(
 
     processor
         .schedule_payment(
-            invoice_id.as_str(),
             amount,
             sender.as_str(),
             recipient.as_str(),
             due_date,
         )
         .await
-        .map_or_else(|e| Err(GenericError::new(e)), |()| Ok(Ack {}))
+        .map_or_else(|e| Err(GenericError::new(e)), |r| Ok(r))
 }
 
 async fn verify_payment(

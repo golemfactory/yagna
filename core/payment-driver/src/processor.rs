@@ -1,11 +1,11 @@
 use crate::PaymentDriver;
 use crate::PaymentDriverResult;
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{
-    AccountBalance, AccountMode, Balance, PaymentAmount, PaymentConfirmation, PaymentDetails,
-    PaymentStatus,
+    AccountMode, PaymentConfirmation, PaymentDetails,
 };
 
 #[derive(Clone)]
@@ -35,32 +35,27 @@ impl PaymentDriverProcessor {
         self.driver.init(mode, address).await
     }
 
-    pub async fn get_account_balance(&self, address: &str) -> PaymentDriverResult<AccountBalance> {
+    pub async fn get_account_balance(&self, address: &str) -> PaymentDriverResult<BigDecimal> {
         self.driver.get_account_balance(address).await
-    }
-
-    pub async fn get_payment_status(&self, invoice_id: &str) -> PaymentDriverResult<PaymentStatus> {
-        self.driver.get_payment_status(invoice_id).await
     }
 
     pub async fn get_transaction_balance(
         &self,
         sender: &str,
         recipient: &str,
-    ) -> PaymentDriverResult<Balance> {
+    ) -> PaymentDriverResult<BigDecimal> {
         self.driver.get_transaction_balance(sender, recipient).await
     }
 
     pub async fn schedule_payment(
         &self,
-        invoice_id: &str,
-        amount: PaymentAmount,
+        amount: BigDecimal,
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-    ) -> PaymentDriverResult<()> {
+    ) -> PaymentDriverResult<String> {
         self.driver
-            .schedule_payment(invoice_id, amount, sender, recipient, due_date)
+            .schedule_payment(amount, sender, recipient, due_date)
             .await
     }
 

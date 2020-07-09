@@ -4974,6 +4974,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-dummy-driver"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-rt",
+ "anyhow",
+ "bigdecimal",
+ "chrono",
+ "dotenv 0.15.0",
+ "env_logger 0.7.1",
+ "ethkey",
+ "futures 0.3.5",
+ "libsqlite3-sys",
+ "log 0.4.8",
+ "serde_json",
+ "uuid 0.8.1",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-payment-driver",
+ "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
@@ -5568,6 +5593,7 @@ dependencies = [
  "structopt",
  "url 2.1.1",
  "ya-activity",
+ "ya-dummy-driver",
  "ya-identity",
  "ya-market-decentralized",
  "ya-market-forwarding",

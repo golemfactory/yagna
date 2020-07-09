@@ -1,0 +1,33 @@
+[package]
+name = "ya-dummy-driver"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[features]
+default = []
+
+[dependencies]
+actix = "0.9"
+actix-rt = "1.0"
+anyhow = "1.0"
+bigdecimal = "0.1.0"
+chrono = { version = "0.4", features = ["serde"] }
+futures3 = { version = "0.3", features = ["compat"], package = "futures" }
+log = "0.4.8"
+serde_json = "^1.0"
+
+## yagna dependencies
+ya-client-model = { version = "0.1", features = ["with-diesel"] }
+ya-core-model = { version = "0.1", features = ["driver", "identity"] }
+ya-payment-driver = "0.1"
+ya-persistence = "0.2"
+ya-service-api-interfaces = "0.1"
+ya-service-bus = "0.2"
+
+[dev-dependencies]
+dotenv = "0.15.0"
+env_logger = "0.7.1"
+ethkey = "0.3.1"
+libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
+uuid = { version = "0.8", features = ["v4"] }

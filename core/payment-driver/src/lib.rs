@@ -1,33 +1,24 @@
-use crate::processor::PaymentDriverProcessor;
+pub use crate::processor::PaymentDriverProcessor;
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ya_client_model::NodeId;
-use ya_persistence::executor::DbExecutor;
-use ya_service_api_interfaces::Provider;
 
 #[macro_use]
 extern crate diesel;
 
-mod dummy;
 mod ethereum;
 mod models;
-mod processor;
+pub mod processor;
 mod schema;
-mod utils;
+pub mod utils;
 
 pub mod dao;
 pub mod error;
-pub mod gnt;
-pub mod service;
 
-pub use dummy::DummyDriver;
 pub use error::PaymentDriverError;
-pub use gnt::GntDriver;
 use std::future::Future;
 use std::pin::Pin;
-use ya_core_model::driver::{
-    AccountBalance, AccountMode, Balance, PaymentAmount, PaymentConfirmation, PaymentDetails,
-    PaymentStatus,
-};
+use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 
 pub type PaymentDriverResult<T> = Result<T, PaymentDriverError>;
 
@@ -61,23 +52,17 @@ pub trait PaymentDriver {
     fn get_account_balance(
         &self,
         address: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<BigDecimal>> + 'static>>;
 
     /// Schedules payment
     fn schedule_payment<'a>(
         &self,
-        invoice_id: &str,
-        amount: PaymentAmount,
+        amount: BigDecimal,
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<String>> + 'a>>;
 
-    /// Returns payment status
-    fn get_payment_status(
-        &self,
-        invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>>;
 
     /// Verifies payment
     fn verify_payment(
@@ -90,30 +75,7 @@ pub trait PaymentDriver {
         &self,
         payer: &str,
         payee: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>>;
-}
-
-#[cfg(feature = "dummy-driver")]
-async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    Ok(DummyDriver::new())
-}
-
-#[cfg(feature = "gnt-driver")]
-async fn payment_driver_factory(db: &DbExecutor) -> anyhow::Result<impl PaymentDriver> {
-    Ok(GntDriver::new(db.clone()).await?)
-}
-
-pub struct PaymentDriverService;
-
-impl PaymentDriverService {
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
-        let db: DbExecutor = context.component();
-        let driver = payment_driver_factory(&db).await?;
-        let processor = PaymentDriverProcessor::new(driver);
-        self::service::bind_service(&db, processor);
-        self::service::subscribe_to_identity_events().await;
-        Ok(())
-    }
+    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<BigDecimal>> + 'static>>;
 }
 
 #[cfg(test)]
