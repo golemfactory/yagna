@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use ya_client::model::market::event::ProviderEvent;
+use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 
@@ -10,21 +11,21 @@ use super::errors::{NegotiationError, NegotiationInitError};
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{EventError, OwnerType, Proposal};
 use crate::matcher::{QueryOfferError, SubscriptionStore};
+use crate::negotiation::common::CommonBroker;
 use crate::negotiation::notifier::{EventNotifier, NotifierError};
-use crate::negotiation::QueryEventsError;
+use crate::negotiation::{ProposalError, QueryEventsError};
 use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
-use crate::{db::models::Offer as ModelOffer, SubscriptionId};
+use crate::{db::models::Offer as ModelOffer, ProposalId, SubscriptionId};
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
 pub struct ProviderBroker {
-    db: DbExecutor,
-    store: SubscriptionStore,
+    common: CommonBroker,
     api: NegotiationApi,
     notifier: EventNotifier,
 }
@@ -50,10 +51,11 @@ impl ProviderBroker {
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
         );
 
+        let broker = CommonBroker { store, db };
+
         Ok(ProviderBroker {
             api,
-            store,
-            db,
+            common: broker,
             notifier,
         })
     }
@@ -79,6 +81,26 @@ impl ProviderBroker {
         Ok(())
     }
 
+    pub async fn counter_proposal(
+        &self,
+        subscription_id: &SubscriptionId,
+        prev_proposal_id: &ProposalId,
+        proposal: &ClientProposal,
+    ) -> Result<ProposalId, ProposalError> {
+        let (new_proposal, _) = self
+            .common
+            .counter_proposal(subscription_id, prev_proposal_id, proposal)
+            .await?;
+
+        let proposal_id = new_proposal.body.id.clone();
+        self.api
+            .counter_proposal(new_proposal)
+            .await
+            .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.clone(), e))?;
+
+        Ok(proposal_id)
+    }
+
     pub async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -96,7 +118,7 @@ impl ProviderBroker {
         }
 
         loop {
-            let events = get_events_from_db(&self.db, subscription_id, max_events).await?;
+            let events = get_events_from_db(&self.db(), subscription_id, max_events).await?;
             if events.len() > 0 {
                 return Ok(events);
             }
@@ -124,6 +146,10 @@ impl ProviderBroker {
             // We can go to next loop to get this event from db. But still we aren't sure
             // that list won't be empty, because other query_events calls can wait for the same event.
         }
+    }
+
+    fn db(&self) -> DbExecutor {
+        self.common.db.clone()
     }
 }
 
