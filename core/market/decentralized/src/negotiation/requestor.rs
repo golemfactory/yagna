@@ -8,13 +8,14 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::dao::AgreementDao;
-use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::{
-    Agreement, AgreementId, Demand as ModelDemand, EventError, OwnerType, Proposal, ProposalId,
-    SubscriptionId,
+use crate::db::{
+    dao::{AgreementDao, EventsDao, ProposalDao},
+    models::{
+        Agreement, AgreementId, Demand as ModelDemand, EventError, OwnerType, Proposal, ProposalId,
+        SubscriptionId,
+    },
+    DbResult,
 };
-use crate::db::DbResult;
 use crate::matcher::{RawProposal, SubscriptionStore};
 use crate::negotiation::errors::AgreementError;
 use crate::negotiation::{notifier::NotifierError, ProposalError};
@@ -76,21 +77,21 @@ impl RequestorBroker {
 
     pub async fn unsubscribe_demand(
         &self,
-        subscription_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.notifier.stop_notifying(subscription_id).await;
+        self.notifier.stop_notifying(demand_id).await;
 
         // We can ignore error, if removing events failed, because they will be never
         // queried again and don't collide with other subscriptions.
         let _ = self
             .db
             .as_dao::<EventsDao>()
-            .remove_events(subscription_id)
+            .remove_events(demand_id)
             .await
             .map_err(|e| {
                 log::warn!(
                     "Failed to remove events related to subscription [{}].",
-                    subscription_id
+                    demand_id
                 )
             });
         // TODO: We could remove all resources related to Proposals.
@@ -99,7 +100,7 @@ impl RequestorBroker {
 
     pub async fn counter_proposal(
         &self,
-        subscription_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
     ) -> Result<ProposalId, ProposalError> {
@@ -108,12 +109,12 @@ impl RequestorBroker {
         // TODO: Check if this proposal wasn't already countered.
         let prev_proposal = get_proposal(&self.db, prev_proposal_id)
             .await
-            .map_err(|e| ProposalError::from(&subscription_id, e))?;
+            .map_err(|e| ProposalError::from(&demand_id, e))?;
 
-        if &prev_proposal.negotiation.subscription_id != subscription_id {
+        if &prev_proposal.negotiation.subscription_id != demand_id {
             Err(ProposalError::ProposalNotFound(
                 prev_proposal_id.clone(),
-                subscription_id.clone(),
+                demand_id.clone(),
             ))?
         }
 
@@ -140,7 +141,7 @@ impl RequestorBroker {
 
     pub async fn query_events(
         &self,
-        subscription_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
@@ -155,7 +156,7 @@ impl RequestorBroker {
         }
 
         loop {
-            let events = get_events_from_db(&self.db, subscription_id, max_events).await?;
+            let events = get_events_from_db(&self.db, demand_id, max_events).await?;
             if events.len() > 0 {
                 return Ok(events);
             }
@@ -168,7 +169,7 @@ impl RequestorBroker {
 
             if let Err(error) = self
                 .notifier
-                .wait_for_event_with_timeout(subscription_id, timeout)
+                .wait_for_event_with_timeout(demand_id, timeout)
                 .await
             {
                 return match error {
@@ -224,12 +225,12 @@ impl RequestorBroker {
 
 async fn get_events_from_db(
     db: &DbExecutor,
-    subscription_id: &SubscriptionId,
+    demand_id: &SubscriptionId,
     max_events: i32,
 ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
     let events = db
         .as_dao::<EventsDao>()
-        .take_events(subscription_id, max_events, OwnerType::Requestor)
+        .take_events(demand_id, max_events, OwnerType::Requestor)
         .await?;
 
     // Map model events to client RequestorEvent.
