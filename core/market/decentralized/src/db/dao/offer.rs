@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 
+use ya_client::model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -44,6 +45,27 @@ impl<'c> OfferDao<'c> {
         let subscription_id = subscription_id.clone();
         readonly_transaction(self.pool, move |conn| {
             query_state(conn, &subscription_id, validation_ts)
+        })
+        .await
+    }
+
+    pub async fn get_offers(
+        &self,
+        node_id: Option<NodeId>,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Vec<Offer>> {
+        readonly_transaction(self.pool, move |conn| {
+            let active_offers = dsl::market_offer
+                .filter(dsl::id.ne_all(
+                    dsl_unsubscribed::market_offer_unsubscribed.select(dsl_unsubscribed::id),
+                ))
+                .filter(dsl::expiration_ts.ge(validation_ts));
+            Ok(match node_id {
+                Some(ident) => active_offers
+                    .filter(dsl::node_id.eq(ident))
+                    .load::<Offer>(conn)?,
+                _ => active_offers.load::<Offer>(conn)?,
+            })
         })
         .await
     }
