@@ -362,6 +362,7 @@ mod tests {
     #[cfg_attr(not(feature = "market-test-suite"), ignore)]
     #[actix_rt::test]
     async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
+        env_logger::init();
         let network = MarketsNetwork::new("test_query_initial_proposal")
             .await
             .add_market_instance("Node-1")
