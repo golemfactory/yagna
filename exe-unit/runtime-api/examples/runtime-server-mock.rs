@@ -3,9 +3,7 @@ use std::env;
 
 use std::time::Duration;
 use tokio;
-use ya_runtime_api::server;
-use ya_runtime_api::server::AsyncResponse;
-use ya_runtime_api::server::RuntimeService;
+use ya_runtime_api::server::{self, AsyncResponse, RuntimeEvent, RuntimeService};
 
 struct RuntimeMock;
 
@@ -45,6 +43,10 @@ impl server::RuntimeService for RuntimeMock {
 
 impl server::RuntimeEvent for EventMock {}
 
+async fn runtime_factory<E: RuntimeEvent>(_e: E) -> RuntimeMock {
+    RuntimeMock
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     if env::var("RUST_LOG").is_err() {
@@ -52,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     }
     env_logger::init();
     if env::var("X_SERVER").is_ok() {
-        server::run(|_e| RuntimeMock).await
+        server::run(runtime_factory).await
     } else {
         use tokio::process::Command;
         let exe = env::current_exe().unwrap();
