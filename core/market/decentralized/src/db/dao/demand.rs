@@ -1,13 +1,12 @@
 use chrono::{NaiveDateTime, Utc};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
-use crate::db::models::Demand;
-use crate::db::models::SubscriptionId;
+use crate::db::models::{Demand, SubscriptionId};
 use crate::db::schema::market_demand::dsl;
 use crate::db::DbResult;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 #[allow(unused)]
 pub struct DemandDao<'c> {

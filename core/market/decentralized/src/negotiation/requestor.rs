@@ -3,31 +3,29 @@ use futures::stream::StreamExt;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use super::common::get_proposal;
-use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
-use super::EventNotifier;
-use crate::db::dao::AgreementDao;
-use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::{
-    Agreement, AgreementId, Demand as ModelDemand, Proposal, ProposalId, SubscriptionId,
-};
-use crate::db::models::{EventError, OwnerType};
-use crate::db::DbResult;
-use crate::matcher::SubscriptionStore;
-
 use ya_client::model::market::event::RequestorEvent;
 use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use crate::matcher::RawProposal;
-use crate::negotiation::errors::AgreementError;
-use crate::negotiation::notifier::NotifierError;
-use crate::negotiation::ProposalError;
-use crate::protocol::negotiation::messages::{
-    AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected,
+use crate::db::dao::AgreementDao;
+use crate::db::dao::{EventsDao, ProposalDao};
+use crate::db::models::{
+    Agreement, AgreementId, Demand as ModelDemand, EventError, OwnerType, Proposal, ProposalId,
+    SubscriptionId,
 };
-use crate::protocol::negotiation::requestor::NegotiationApi;
+use crate::db::DbResult;
+use crate::matcher::{RawProposal, SubscriptionStore};
+use crate::negotiation::errors::AgreementError;
+use crate::negotiation::{notifier::NotifierError, ProposalError};
+use crate::protocol::negotiation::{
+    messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
+    requestor::NegotiationApi,
+};
+
+use super::common::get_proposal;
+use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
+use super::EventNotifier;
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {

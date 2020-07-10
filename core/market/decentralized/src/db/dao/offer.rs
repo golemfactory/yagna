@@ -1,4 +1,5 @@
 use chrono::NaiveDateTime;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_client::model::NodeId;
 use ya_persistence::executor::{
@@ -10,7 +11,6 @@ use crate::db::models::{Offer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl;
 use crate::db::schema::market_offer_unsubscribed::dsl as dsl_unsubscribed;
 use crate::db::DbResult;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 pub struct OfferDao<'c> {
     pool: &'c PoolType,
