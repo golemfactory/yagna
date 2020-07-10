@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use super::common::get_proposal;
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 use crate::db::dao::AgreementDao;
@@ -22,6 +21,7 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+use crate::negotiation::common::CommonBroker;
 use crate::negotiation::errors::AgreementError;
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::ProposalError;
@@ -32,9 +32,8 @@ use crate::protocol::negotiation::requestor::NegotiationApi;
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
+    common: CommonBroker,
     api: NegotiationApi,
-    db: DbExecutor,
-    store: SubscriptionStore,
     notifier: EventNotifier,
 }
 
@@ -51,11 +50,15 @@ impl RequestorBroker {
             move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
         );
 
+        let broker = CommonBroker {
+            store,
+            db: db.clone(),
+        };
+
         let notifier = EventNotifier::new();
         let engine = RequestorBroker {
             api,
-            db: db.clone(),
-            store,
+            common: broker,
             notifier: notifier.clone(),
         };
 
@@ -86,7 +89,7 @@ impl RequestorBroker {
         // We can ignore error, if removing events failed, because they will be never
         // queried again and don't collide with other subscriptions.
         let _ = self
-            .db
+            .db()
             .as_dao::<EventsDao>()
             .remove_events(subscription_id)
             .await
@@ -106,29 +109,12 @@ impl RequestorBroker {
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
     ) -> Result<ProposalId, ProposalError> {
-        // TODO: Everything should happen under transaction.
-        // TODO: Check if subscription is active
-        // TODO: Check if this proposal wasn't already countered.
-        let prev_proposal = get_proposal(&self.db, prev_proposal_id)
-            .await
-            .map_err(|e| ProposalError::from(&subscription_id, e))?;
+        let (new_proposal, is_initial) = self
+            .common
+            .counter_proposal(subscription_id, prev_proposal_id, proposal)
+            .await?;
 
-        if &prev_proposal.negotiation.subscription_id != subscription_id {
-            Err(ProposalError::ProposalNotFound(
-                prev_proposal_id.clone(),
-                subscription_id.clone(),
-            ))?
-        }
-
-        let is_initial = prev_proposal.body.prev_proposal_id.is_none();
-        let new_proposal = prev_proposal.counter_with(proposal);
         let proposal_id = new_proposal.body.id.clone();
-        self.db
-            .as_dao::<ProposalDao>()
-            .save_proposal(&new_proposal)
-            .await
-            .map_err(|e| ProposalError::FailedSaveProposal(prev_proposal_id.clone(), e))?;
-
         // Send Proposal to Provider. Note that it can be either our first communication with
         // Provider or we negotiated with him already, so we need to send different message in each
         // of these cases.
@@ -158,7 +144,7 @@ impl RequestorBroker {
         }
 
         loop {
-            let events = get_events_from_db(&self.db, subscription_id, max_events).await?;
+            let events = get_events_from_db(&self.db(), subscription_id, max_events).await?;
             if events.len() > 0 {
                 return Ok(events);
             }
@@ -196,7 +182,9 @@ impl RequestorBroker {
     ) -> Result<AgreementId, AgreementError> {
         // TODO: Check if we are owner of Proposal
         let offer_proposal_id = proposal_id;
-        let offer_proposal = get_proposal(&self.db, offer_proposal_id)
+        let offer_proposal = self
+            .common
+            .get_proposal(offer_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
 
@@ -205,7 +193,9 @@ impl RequestorBroker {
             .prev_proposal_id
             .clone()
             .ok_or_else(|| AgreementError::NoNegotiations(offer_proposal_id.clone()))?;
-        let demand_proposal = get_proposal(&self.db, &demand_proposal_id)
+        let demand_proposal = self
+            .common
+            .get_proposal(&demand_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
 
@@ -216,12 +206,16 @@ impl RequestorBroker {
             OwnerType::Requestor,
         );
         let id = agreement.id.clone();
-        self.db
+        self.db()
             .as_dao::<AgreementDao>()
             .save(agreement)
             .await
             .map_err(|e| AgreementError::FailedSaveAgreement(proposal_id.clone(), e))?;
         Ok(id)
+    }
+
+    fn db(&self) -> DbExecutor {
+        self.common.db.clone()
     }
 }
 

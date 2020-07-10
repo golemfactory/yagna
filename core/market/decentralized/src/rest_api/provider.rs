@@ -81,8 +81,17 @@ async fn counter_proposal(
     path: Path<PathSubscriptionProposal>,
     body: Json<Proposal>,
     id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+) -> impl Responder {
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+    let proposal = body.into_inner();
+    market
+        .provider_engine
+        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .await
+        .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
 #[actix_web::get("/offers/{subscription_id}/proposals/{proposal_id}")]
