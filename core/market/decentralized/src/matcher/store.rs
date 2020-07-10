@@ -2,6 +2,7 @@ use chrono::{Duration, NaiveDateTime, Utc};
 use lazy_static::lazy_static;
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
+use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -114,10 +115,7 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn mark_offer_unsubscribed(
-        &self,
-        id: &SubscriptionId,
-    ) -> Result<(), ModifyOfferError> {
+    async fn mark_offer_unsubscribed(&self, id: &SubscriptionId) -> Result<(), ModifyOfferError> {
         self.db
             .as_dao::<OfferDao>()
             .mark_unsubscribed(id, Utc::now().naive_utc())
@@ -131,17 +129,29 @@ impl SubscriptionStore {
             })
     }
 
-    /// We store only our Offers to keep history. Offers from other nodes
-    /// should be removed.
-    /// This is meant to be called upon receiving unsubscribe broadcast. To work correctly
-    /// it assumes `mark_offer_unsubscribed` was invoked before broadcast in `unsubscribe_offer`.
-    pub async fn unsubscribe_offer(&self, id: &SubscriptionId) -> Result<(), ModifyOfferError> {
-        // If `mark_offer_unsubscribed` was called before we won't remove our Offer here,
-        // because `AlreadyUnsubscribed` error will pop-up.
-        self.mark_offer_unsubscribed(id).await?;
-        // TODO: Maybe we should add check here, to be sure, that we don't remove own Offers.
-        log::debug!("Removing unsubscribed Offer [{}].", id);
-        match self.db.as_dao::<OfferDao>().delete(&id).await {
+    /// Local Offers are kept after unsubscribe. Offers from other nodes are removed.
+    pub async fn unsubscribe_offer(
+        &self,
+        offer_id: &SubscriptionId,
+        local_caller: bool,
+        caller_id: Option<NodeId>,
+    ) -> Result<(), ModifyOfferError> {
+        let offer = self.get_offer(offer_id).await?;
+        if caller_id != Some(offer.node_id) {
+            return Err(ModifyOfferError::NotFound(offer_id.clone()));
+        }
+
+        // If this fn was called before, we won't remove our Offer below,
+        // because `Unsubscribed` error will pop-up here.
+        self.mark_offer_unsubscribed(offer_id).await?;
+
+        if local_caller {
+            // Local Offers we mark as unsubscribed only
+            return Ok(());
+        }
+
+        log::debug!("Removing not owned unsubscribed Offer [{}].", offer_id);
+        match self.db.as_dao::<OfferDao>().delete(&offer_id).await {
             Ok(true) => Ok(()),
             Ok(false) => Err(ModifyOfferError::UnsubscribedNotRemoved(offer_id.clone())),
             Err(e) => Err(ModifyOfferError::RemoveError(e, offer_id.clone())),
@@ -185,16 +195,25 @@ impl SubscriptionStore {
             .map_err(|e| DemandError::GetMany(e))?)
     }
 
-    pub async fn remove_demand(&self, id: &SubscriptionId) -> Result<(), DemandError> {
+    pub async fn remove_demand(
+        &self,
+        demand_id: &SubscriptionId,
+        id: &Identity,
+    ) -> Result<(), DemandError> {
+        let demand = self.get_demand(demand_id).await?;
+        if id.identity != demand.node_id {
+            return Err(DemandError::NotFound(demand_id.clone()));
+        }
+
         match self
             .db
             .as_dao::<DemandDao>()
-            .delete(&id)
+            .delete(&demand_id)
             .await
-            .map_err(|e| DemandError::RemoveError(e, id.clone()))?
+            .map_err(|e| DemandError::RemoveError(e, demand_id.clone()))?
         {
             true => Ok(()),
-            false => Err(DemandError::NotFound(id.clone())),
+            false => Err(DemandError::NotFound(demand_id.clone())),
         }
     }
 }

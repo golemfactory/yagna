@@ -69,6 +69,18 @@ pub enum ModifyOfferError {
     UnsubscribedNotRemoved(SubscriptionId),
 }
 
+impl From<QueryOfferError> for ModifyOfferError {
+    fn from(e: QueryOfferError) -> Self {
+        match e {
+            QueryOfferError::NotFound(id) | QueryOfferError::Get(_, id) => {
+                ModifyOfferError::NotFound(id)
+            }
+            QueryOfferError::Unsubscribed(id) => ModifyOfferError::Unsubscribed(id),
+            QueryOfferError::Expired(id) => ModifyOfferError::Expired(id),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum MatcherError {
     #[error(transparent)]

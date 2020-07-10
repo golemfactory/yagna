@@ -110,7 +110,9 @@ impl Matcher {
         id: &Identity,
         subscription_id: &SubscriptionId,
     ) -> Result<(), MatcherError> {
-        self.store.mark_offer_unsubscribed(subscription_id).await?;
+        self.store
+            .unsubscribe_offer(subscription_id, true, Some(id.identity))
+            .await?;
 
         // Broadcast only, if no Error occurred in previous step.
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
@@ -143,10 +145,10 @@ impl Matcher {
 
     pub async fn unsubscribe_demand(
         &self,
-        _id: &Identity,
+        id: &Identity,
         subscription_id: &SubscriptionId,
     ) -> Result<(), MatcherError> {
-        Ok(self.store.remove_demand(subscription_id).await?)
+        Ok(self.store.remove_demand(subscription_id, id).await?)
     }
 }
 
@@ -183,11 +185,11 @@ pub(crate) async fn on_offer_received(
 
 pub(crate) async fn on_offer_unsubscribed(
     store: SubscriptionStore,
-    _caller: String,
+    caller: String,
     msg: OfferUnsubscribed,
 ) -> Result<Propagate, ()> {
     store
-        .unsubscribe_offer(&msg.subscription_id)
+        .unsubscribe_offer(&msg.subscription_id, false, caller.parse().ok())
         .await
         .map(|_| Propagate::Yes)
         .or_else(|e| match e {
