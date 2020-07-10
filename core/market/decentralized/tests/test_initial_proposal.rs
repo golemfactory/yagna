@@ -70,7 +70,7 @@ mod tests {
         assert_eq!(proposal.state()?, &State::Initial);
 
         // We expect that, the same event won't be available again.
-        let events = market1.query_events(&demand_id, 1.0, Some(5)).await?;
+        let events = market1.query_events(&demand_id, 0.2, Some(5)).await?;
 
         assert_eq!(events.len(), 0);
 
@@ -113,7 +113,7 @@ mod tests {
         }
 
         // We expect that, the same events won't be available again.
-        let events = market1.query_events(&demand_id, 1.0, Some(5)).await?;
+        let events = market1.query_events(&demand_id, 0.2, Some(5)).await?;
 
         assert_eq!(events.len(), 0);
 
@@ -142,18 +142,18 @@ mod tests {
         // Query events, when no Proposal are in the queue yet.
         // We set timeout and we expect that function will wait until events will come.
         let query_handle = tokio::spawn(async move {
-            let events = market1c.query_events(&demand_id1c, 1.0, Some(5)).await?;
+            let events = market1c.query_events(&demand_id1c, 0.2, Some(5)).await?;
             assert_eq!(events.len(), 1);
             Result::<(), anyhow::Error>::Ok(())
         });
 
         // Inject proposal before timeout will elapse. We expect that Proposal
         // event will be generated and query events will return it.
-        tokio::time::delay_for(Duration::from_millis(500)).await;
+        tokio::time::delay_for(Duration::from_millis(50)).await;
         market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
         // Protect from eternal waiting.
-        tokio::time::timeout(Duration::from_millis(1100), query_handle).await???;
+        tokio::time::timeout(Duration::from_millis(250), query_handle).await???;
         Ok(())
     }
 
@@ -177,7 +177,7 @@ mod tests {
         // Query events, when no Proposal are in the queue yet.
         // We set timeout and we expect that function will wait until events will come.
         let query_handle = tokio::spawn(async move {
-            match market1.query_events(&subscription_id, 0.5, Some(5)).await {
+            match market1.query_events(&subscription_id, 0.2, Some(5)).await {
                 Err(QueryEventsError::Unsubscribed(id)) => {
                     assert_eq!(id, subscription_id);
                 }
@@ -187,13 +187,13 @@ mod tests {
         });
 
         // Unsubscribe Demand. query_events should return with unsubscribed error.
-        tokio::time::delay_for(Duration::from_millis(200)).await;
+        tokio::time::delay_for(Duration::from_millis(50)).await;
 
         let market1 = network.get_market("Node-1");
         market1.unsubscribe_demand(&demand_id, &identity1).await?;
 
         // Protect from eternal waiting.
-        tokio::time::timeout(Duration::from_millis(700), query_handle).await???;
+        tokio::time::timeout(Duration::from_millis(250), query_handle).await???;
 
         Ok(())
     }
@@ -241,7 +241,7 @@ mod tests {
 
         // maxEvents equal to 0 isn't forbidden value, but should return 0 events,
         // even if they exist.
-        let events = market1.query_events(&demand_id, 1.0, Some(0)).await?;
+        let events = market1.query_events(&demand_id, 0.2, Some(0)).await?;
         assert_eq!(events.len(), 0);
 
         // Query events returns error, if Demand was unsubscribed.
@@ -306,34 +306,34 @@ mod tests {
         let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
-        let subscription_id = market1
+        let demand_id1 = market1
             .subscribe_demand(&sample_demand(), &identity1)
             .await?;
 
-        let demand_id1 = subscription_id.clone();
+        let demand_id = demand_id1.clone();
         let market = market1.clone();
 
         let query1 = tokio::spawn(async move {
-            let events = market.query_events(&demand_id1, 0.5, Some(5)).await?;
+            let events = market.query_events(&demand_id, 0.2, Some(5)).await?;
             Result::<_, anyhow::Error>::Ok(events)
         });
 
         let market = market1.clone();
-        let demand_id1 = subscription_id.clone();
+        let demand_id = demand_id1.clone();
 
         let query2 = tokio::spawn(async move {
-            let events = market.query_events(&demand_id1, 0.5, Some(5)).await?;
+            let events = market.query_events(&demand_id, 0.2, Some(5)).await?;
             Result::<_, anyhow::Error>::Ok(events)
         });
 
         // Wait for a while, before event will be injected. We want to trigger notifications.
         // Generate 2 proposals. Each waiting query events call will take an event.
-        tokio::time::delay_for(Duration::from_millis(100)).await;
+        tokio::time::delay_for(Duration::from_millis(50)).await;
         market1.subscribe_offer(&sample_offer(), &identity1).await?;
         market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
-        let mut events1 = tokio::time::timeout(Duration::from_millis(700), query1).await???;
-        let events2 = tokio::time::timeout(Duration::from_millis(700), query2).await???;
+        let mut events1 = tokio::time::timeout(Duration::from_millis(250), query1).await???;
+        let events2 = tokio::time::timeout(Duration::from_millis(250), query2).await???;
 
         // We expect no events duplication.
         assert_eq!(events1.len() + events2.len(), 2);
@@ -349,7 +349,7 @@ mod tests {
         assert_ne!(ids[0], ids[1]);
 
         // We expect, there are no events left.
-        let events = market1.query_events(&subscription_id, 0.0, Some(5)).await?;
+        let events = market1.query_events(&demand_id1, 0.0, Some(5)).await?;
         assert_eq!(events.len(), 0);
         Ok(())
     }
