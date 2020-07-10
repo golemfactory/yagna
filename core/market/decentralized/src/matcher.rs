@@ -175,7 +175,7 @@ pub(crate) async fn on_offer_received(
             // Below errors are not possible to get from checked_store_offer
             SaveOfferError::SaveError(_, _)
             | SaveOfferError::SubscriptionValidation(_)
-            | SaveOfferError::UnexpectedError(_) => {
+            | SaveOfferError::WrongState { .. } => {
                 Ok(Propagate::No(Reason::Error(format!("{}", e))))
             }
         })
@@ -192,14 +192,14 @@ pub(crate) async fn on_offer_unsubscribed(
         .map(|_| Propagate::Yes)
         .or_else(|e| match e {
             ModifyOfferError::UnsubscribeError(_, _)
-            | ModifyOfferError::RemoveError(_, _)
-            | ModifyOfferError::UnexpectedError(_) => {
-                log::error!("Propagating Offer unsubscription, while error: {}", e);
+            | ModifyOfferError::UnsubscribedNotRemoved(_)
+            | ModifyOfferError::RemoveError(_, _) => {
+                log::error!("Propagating Offer unsubscription, despite error: {}", e);
                 // TODO: how should we handle it locally?
                 Ok(Propagate::Yes)
             }
             ModifyOfferError::NotFound(_) => Ok(Propagate::No(Reason::NotFound)),
-            ModifyOfferError::AlreadyUnsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
+            ModifyOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
             ModifyOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
         })
 }

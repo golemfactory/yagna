@@ -61,10 +61,11 @@ impl SubscriptionStore {
             Ok((false, OfferState::Active(_))) => Err(SaveOfferError::Exists(id)),
             Ok((false, OfferState::Unsubscribed(_))) => Err(SaveOfferError::Unsubscribed(id)),
             Ok((_, OfferState::Expired(_))) => Err(SaveOfferError::Expired(id)),
-            Ok((inserted, state)) => Err(SaveOfferError::UnexpectedError(format!(
-                "Offer [{}] state: {:?} after insert: {}",
-                id, state, inserted
-            ))),
+            Ok((inserted, state)) => Err(SaveOfferError::WrongState {
+                state: state.to_string(),
+                inserted,
+                id,
+            }),
             Err(e) => Err(SaveOfferError::SaveError(e, id)),
         }
     }
@@ -107,9 +108,7 @@ impl SubscriptionStore {
         match self.db.as_dao::<OfferDao>().select(id, now).await {
             Err(e) => Err(QueryOfferError::Get(e, id.clone())),
             Ok(OfferState::Active(offer)) => Ok(offer),
-            Ok(OfferState::Unsubscribed(_)) => {
-                Err(QueryOfferError::AlreadyUnsubscribed(id.clone()))
-            }
+            Ok(OfferState::Unsubscribed(_)) => Err(QueryOfferError::Unsubscribed(id.clone())),
             Ok(OfferState::Expired(_)) => Err(QueryOfferError::Expired(id.clone())),
             Ok(OfferState::NotFound) => Err(QueryOfferError::NotFound(id.clone())),
         }
@@ -127,9 +126,7 @@ impl SubscriptionStore {
             .and_then(|state| match state {
                 OfferState::Active(_) => Ok(()),
                 OfferState::NotFound => Err(ModifyOfferError::NotFound(id.clone())),
-                OfferState::Unsubscribed(_) => {
-                    Err(ModifyOfferError::AlreadyUnsubscribed(id.clone()))
-                }
+                OfferState::Unsubscribed(_) => Err(ModifyOfferError::Unsubscribed(id.clone())),
                 OfferState::Expired(_) => Err(ModifyOfferError::Expired(id.clone())),
             })
     }
@@ -146,11 +143,8 @@ impl SubscriptionStore {
         log::debug!("Removing unsubscribed Offer [{}].", id);
         match self.db.as_dao::<OfferDao>().delete(&id).await {
             Ok(true) => Ok(()),
-            Ok(false) => Err(ModifyOfferError::UnexpectedError(format!(
-                "Offer [{}] marked as unsubscribed, but not removed",
-                id
-            ))),
-            Err(e) => Err(ModifyOfferError::RemoveError(e, id.clone()).into()),
+            Ok(false) => Err(ModifyOfferError::UnsubscribedNotRemoved(offer_id.clone())),
+            Err(e) => Err(ModifyOfferError::RemoveError(e, offer_id.clone())),
         }
     }
 
@@ -173,7 +167,7 @@ impl SubscriptionStore {
 
     pub async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
         match self.db.as_dao::<DemandDao>().select(id).await {
-            Err(e) => Err(DemandError::GetError(e, id.clone())),
+            Err(e) => Err(DemandError::GetSingle(e, id.clone())),
             Ok(Some(demand)) => Ok(demand),
             Ok(None) => Err(DemandError::NotFound(id.clone())),
         }

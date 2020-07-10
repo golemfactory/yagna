@@ -32,16 +32,11 @@ impl ResponseError for MarketError {
 impl ResponseError for MatcherError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            MatcherError::DemandError(e)
-            | MatcherError::ResolverError(ResolverError::DemandError(e)) => e.error_response(),
-            MatcherError::QueryOfferError(e)
-            | MatcherError::ResolverError(ResolverError::QueryOfferError(e)) => e.error_response(),
-            MatcherError::ModifyOfferError(e) => e.error_response(),
-            MatcherError::ResolverError(ResolverError::QueryOffersError(e)) => e.error_response(),
+            MatcherError::DemandError(e) => e.error_response(),
+            MatcherError::QueryOffersError(e) => e.error_response(),
+            MatcherError::QueryOfferError(e) => e.error_response(),
             MatcherError::SaveOfferError(e) => e.error_response(),
-            MatcherError::UnexpectedError(e) => {
-                HttpResponse::InternalServerError().json(ErrorMessage::new(e.to_string()))
-            }
+            MatcherError::ModifyOfferError(e) => e.error_response(),
         }
     }
 }
@@ -100,7 +95,7 @@ impl ResponseError for ModifyOfferError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             ModifyOfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
-            ModifyOfferError::AlreadyUnsubscribed(_) | ModifyOfferError::Expired(_) => {
+            ModifyOfferError::Unsubscribed(_) | ModifyOfferError::Expired(_) => {
                 HttpResponse::Gone().json(msg)
             }
             _ => HttpResponse::InternalServerError().json(msg),

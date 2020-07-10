@@ -1,5 +1,4 @@
 use chrono::prelude::*;
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -33,8 +32,6 @@ pub enum DiscoveryRemoteError {}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum DiscoveryInitError {
-    #[error("Uninitialized callback '{0}'.")]
-    UninitializedCallback(String),
     #[error("Failed to bind broadcast `{0}` to gsb. Error: {1}.")]
     BindingGsbFailed(String, String),
     #[error("Failed to subscribe to broadcast `{0}`. Error: {1}.")]
@@ -211,7 +208,7 @@ impl Discovery {
 // Discovery messages
 // =========================================== //
 
-#[derive(Serialize, Deserialize, Display)]
+#[derive(Serialize, Deserialize, derive_more::Display)]
 pub enum Reason {
     #[display(fmt = "Offer already exists in database")]
     AlreadyExists,

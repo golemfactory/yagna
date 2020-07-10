@@ -163,7 +163,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
+        ModifyOfferError::Unsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
 }

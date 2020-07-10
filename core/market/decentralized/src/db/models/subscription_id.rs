@@ -1,5 +1,4 @@
 use chrono::NaiveDateTime;
-use derive_more::Display;
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
@@ -34,7 +33,7 @@ pub enum SubscriptionParseError {
 #[error("Subscription id [{0}] doesn't match content hash [{1}].")]
 pub struct SubscriptionValidationError(SubscriptionId, String);
 
-#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
+#[derive(derive_more::Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", random_id, hash)]
 #[sql_type = "Text"]
 pub struct SubscriptionId {

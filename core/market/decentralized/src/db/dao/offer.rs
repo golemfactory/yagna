@@ -28,11 +28,15 @@ impl<'c> AsDao<'c> for OfferDao<'c> {
 /// (Offers from other nodes are removed upon unsubscribe)
 /// Unsubscribed and Expired Offers are Options.
 // TODO: cleanup external expired offers
-#[derive(Clone, Debug)]
+#[derive(Clone, derive_more::Display)]
 pub enum OfferState {
+    #[display(fmt = "Active")]
     Active(Offer),
+    #[display(fmt = "Unsubscribed")]
     Unsubscribed(Option<Offer>),
+    #[display(fmt = "Expired")]
     Expired(Option<Offer>),
+    #[display(fmt = "NotFound")]
     NotFound,
 }
 
