@@ -107,11 +107,12 @@ CREATE TABLE market_agreement(
 	provider_id VARCHAR(20) NOT NULL,
 	requestor_id VARCHAR(20) NOT NULL,
 
+    creation_ts DATETIME NOT NULL,
+    valid_to DATETIME NOT NULL,
 	state INTEGER NOT NULL,
-	valid_to DATETIME NOT NULL,
 	approved_date DATETIME,
 
-	proposed_signature TEXT NOT NULL,
+	proposed_signature TEXT,
 	approved_signature TEXT,
 	committed_signature TEXT,
     FOREIGN KEY(state) REFERENCES agreement_state (id)

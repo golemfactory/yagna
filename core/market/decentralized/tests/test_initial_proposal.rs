@@ -367,22 +367,17 @@ mod tests {
             RequestorEvent::ProposalEvent { proposal, .. } => proposal,
             _ => panic!("Invalid event Type. ProposalEvent expected"),
         };
+        let init_proposal_id = ProposalId::from_str(&init_proposal.proposal_id()?)?;
 
         let counter_proposal = init_proposal.counter_demand(example_demand())?;
         let new_proposal_id = market1
             .requestor_engine
-            .counter_proposal(
-                &subscription_id,
-                init_proposal.proposal_id()?,
-                &counter_proposal,
-            )
+            .counter_proposal(&subscription_id, &init_proposal_id, &counter_proposal)
             .await?;
-        assert_ne!(&new_proposal_id, init_proposal.proposal_id()?);
+        assert_ne!(&new_proposal_id, &init_proposal_id);
 
         // We expect that event was generated on Provider part of Node.
-        let new_proposal_id = ProposalId::from_str(&new_proposal_id)
-            .unwrap()
-            .translate(OwnerType::Provider);
+        let new_proposal_id = new_proposal_id.translate(OwnerType::Provider);
         let events = market1
             .provider_engine
             .query_events(&offer_id, 1.5, Some(5))

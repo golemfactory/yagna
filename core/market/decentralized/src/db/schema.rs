@@ -104,11 +104,12 @@ table! {
         provider_id -> Text,
         requestor_id -> Text,
 
+        creation_ts -> Timestamp,
         valid_to -> Timestamp,
         approved_date -> Nullable<Timestamp>,
         state -> Integer,
 
-        proposed_signature -> Text,
+        proposed_signature -> Nullable<Text>,
         approved_signature -> Nullable<Text>,
         committed_signature -> Nullable<Text>,
     }

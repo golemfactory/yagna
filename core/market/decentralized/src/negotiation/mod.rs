@@ -1,3 +1,4 @@
+mod common;
 mod errors;
 mod notifier;
 mod provider;
@@ -7,4 +8,6 @@ pub use notifier::EventNotifier;
 pub use provider::ProviderBroker;
 pub use requestor::RequestorBroker;
 
-pub use errors::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError};
+pub use errors::{
+    AgreementError, NegotiationError, NegotiationInitError, ProposalError, QueryEventsError,
+};

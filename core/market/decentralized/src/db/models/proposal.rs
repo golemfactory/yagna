@@ -12,6 +12,7 @@ use ya_client::model::{ErrorMessage, NodeId};
 
 use super::{generate_random_id, SubscriptionId};
 use super::{OwnerType, ProposalId};
+use crate::db::models::agreement::AgreementId;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
@@ -63,7 +64,7 @@ pub struct Negotiation {
 
     /// This field is None, as long Agreement wasn't negotiated (or negotiations
     /// can be broken and never finish with Agreement)
-    pub agreement_id: Option<String>,
+    pub agreement_id: Option<AgreementId>,
 }
 
 /// Represent smallest negotiation artifact.

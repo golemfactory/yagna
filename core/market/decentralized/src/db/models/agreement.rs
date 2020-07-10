@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
@@ -9,7 +9,11 @@ use num_traits::FromPrimitive;
 
 use ya_client::model::NodeId;
 
+use crate::db::models::{OwnerType, Proposal};
 use crate::db::schema::market_agreement;
+use crate::ProposalId;
+
+pub type AgreementId = ProposalId;
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
@@ -35,7 +39,7 @@ pub enum AgreementState {
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_agreement"]
 pub struct Agreement {
-    pub id: String,
+    pub id: AgreementId,
 
     pub offer_properties: String,
     pub offer_constraints: String,
@@ -48,14 +52,49 @@ pub struct Agreement {
 
     /// End of validity period.
     /// Agreement needs to be accepted, rejected or cancelled before this date; otherwise will expire.
+    pub creation_ts: NaiveDateTime,
     pub valid_to: NaiveDateTime,
 
     pub approved_date: Option<NaiveDateTime>,
     pub state: AgreementState,
 
-    pub proposed_signature: String,
+    pub proposed_signature: Option<String>,
     pub approved_signature: Option<String>,
     pub committed_signature: Option<String>,
+}
+
+impl Agreement {
+    pub fn new(
+        demand_proposal: Proposal,
+        offer_proposal: Proposal,
+        valid_to: NaiveDateTime,
+        owner: OwnerType,
+    ) -> Agreement {
+        let creation_ts = Utc::now().naive_utc();
+        let agreement_id = ProposalId::generate_id(
+            &offer_proposal.negotiation.offer_id,
+            &offer_proposal.negotiation.demand_id,
+            &creation_ts,
+            owner,
+        );
+
+        Agreement {
+            id: agreement_id,
+            offer_properties: offer_proposal.body.properties,
+            offer_constraints: offer_proposal.body.constraints,
+            demand_properties: demand_proposal.body.properties,
+            demand_constraints: demand_proposal.body.constraints,
+            provider_id: demand_proposal.negotiation.provider_id,
+            requestor_id: demand_proposal.negotiation.requestor_id,
+            creation_ts,
+            valid_to,
+            approved_date: None,
+            state: AgreementState::Proposal,
+            proposed_signature: None,
+            approved_signature: None,
+            committed_signature: None,
+        }
+    }
 }
 
 impl<DB: Backend> ToSql<Integer, DB> for AgreementState

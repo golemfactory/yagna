@@ -11,7 +11,7 @@ mod negotiation;
 mod rest_api;
 
 pub mod protocol;
-pub use db::models::{Demand, Offer, SubscriptionId};
+pub use db::models::{Demand, Offer, ProposalId, SubscriptionId};
 pub use market::MarketService;
 
 pub use ya_client::model::market::MARKET_API_PATH;
@@ -28,7 +28,7 @@ pub mod migrations {
 pub mod testing {
     pub use super::db::dao::{DemandDao, OfferDao};
     pub use super::db::models::{
-        Demand, Offer, OwnerType, ProposalId, SubscriptionId, SubscriptionParseError,
+        AgreementId, Demand, Offer, OwnerType, ProposalId, SubscriptionId, SubscriptionParseError,
     };
     pub use super::matcher::{DemandError, MatcherError, OfferError};
     pub use super::matcher::{DraftProposal, SubscriptionStore};
