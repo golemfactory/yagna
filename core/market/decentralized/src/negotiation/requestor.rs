@@ -32,28 +32,28 @@ use super::EventNotifier;
 pub struct RequestorBroker {
     api: NegotiationApi,
     db: DbExecutor,
-    store: SubscriptionStore,
+    _store: SubscriptionStore,
     pub notifier: EventNotifier,
 }
 
 impl RequestorBroker {
     pub fn new(
         db: DbExecutor,
-        store: SubscriptionStore,
+        _store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
         let api = NegotiationApi::new(
-            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
-            move |_caller: String, msg: ProposalRejected| async move { unimplemented!() },
-            move |caller: String, msg: AgreementApproved| async move { unimplemented!() },
-            move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalReceived| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementApproved| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
         );
 
         let notifier = EventNotifier::new();
         let engine = RequestorBroker {
             api,
             db: db.clone(),
-            store,
+            _store,
             notifier: notifier.clone(),
         };
 
@@ -70,7 +70,7 @@ impl RequestorBroker {
         Ok(())
     }
 
-    pub async fn subscribe_demand(&self, demand: &ModelDemand) -> Result<(), NegotiationError> {
+    pub async fn subscribe_demand(&self, _demand: &ModelDemand) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }
@@ -90,8 +90,9 @@ impl RequestorBroker {
             .await
             .map_err(|e| {
                 log::warn!(
-                    "Failed to remove events related to subscription [{}].",
-                    demand_id
+                    "Failed to remove events related to subscription [{}]. Error: {}.",
+                    demand_id,
+                    e
                 )
             });
         // TODO: We could remove all resources related to Proposals.
@@ -188,7 +189,7 @@ impl RequestorBroker {
 
     pub async fn create_agreement(
         &self,
-        id: Identity,
+        _id: Identity,
         proposal_id: &ProposalId,
         valid_to: DateTime<Utc>,
     ) -> Result<AgreementId, AgreementError> {

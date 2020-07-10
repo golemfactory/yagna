@@ -58,7 +58,7 @@ async fn unsubscribe(
     market
         .unsubscribe_offer(&path.into_inner().subscription_id, &id)
         .await
-        .map(|x| HttpResponse::Ok().json("Ok"))
+        .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
 #[actix_web::get("/offers/{subscription_id}/events")]
@@ -66,7 +66,7 @@ async fn collect(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscription>,
     query: Query<QueryTimeoutMaxEvents>,
-    id: Identity,
+    _id: Identity,
 ) -> impl Responder {
     let subscription_id = path.into_inner().subscription_id;
     let timeout = query.timeout;
@@ -80,65 +80,65 @@ async fn collect(
 
 #[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}")]
 async fn counter_proposal(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathSubscriptionProposal>,
-    body: Json<Proposal>,
-    id: Identity,
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathSubscriptionProposal>,
+    _body: Json<Proposal>,
+    _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::get("/offers/{subscription_id}/proposals/{proposal_id}")]
 async fn get_proposal(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathSubscriptionProposal>,
-    id: Identity,
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathSubscriptionProposal>,
+    _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::delete("/offers/{subscription_id}/proposals/{proposal_id}")]
 async fn reject_proposal(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathSubscriptionProposal>,
-    id: Identity,
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathSubscriptionProposal>,
+    _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/approve")]
 async fn approve_agreement(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathAgreement>,
-    query: Query<QueryTimeout>,
-    id: Identity,
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathAgreement>,
+    _query: Query<QueryTimeout>,
+    _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]
 async fn reject_agreement(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathAgreement>,
-    id: Identity,
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathAgreement>,
+    _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/terminate")]
 async fn terminate_agreement(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathAgreement>,
-    id: Identity,
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathAgreement>,
+    _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
 async fn get_agreement(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathAgreement>,
-    id: Identity,
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathAgreement>,
+    _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }

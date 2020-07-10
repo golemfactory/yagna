@@ -46,7 +46,6 @@ impl<'c> DemandDao<'c> {
         insertion_ts: NaiveDateTime,
         validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<Demand>> {
-        let now = Utc::now().naive_utc();
         readonly_transaction(self.pool, move |conn| {
             Ok(dsl::market_demand
                 // we querying less then here and less equal in Offers

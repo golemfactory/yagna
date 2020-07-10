@@ -50,13 +50,11 @@ impl Matcher {
             .data(resolver.clone())
             .add_data_handler(on_offer_received)
             .add_data_handler(on_offer_unsubscribed)
-            .add_handler(move |caller: String, msg: RetrieveOffers| async move {
+            .add_handler(move |caller: String, _msg: RetrieveOffers| async move {
                 log::info!("Offers request received from: {}. Unimplemented.", caller);
                 Ok(vec![])
             })
             .build();
-
-        let (emitter, receiver) = unbounded_channel::<RawProposal>();
 
         let matcher = Matcher {
             store,
@@ -169,7 +167,7 @@ pub(crate) async fn on_offer_received(
         })
         .or_else(|e| match e {
             // Stop propagation for existing, unsubscribed and expired Offers to avoid infinite broadcast.
-            SaveOfferError::Exists(id) => Ok(Propagate::No(Reason::AlreadyExists)),
+            SaveOfferError::Exists(_) => Ok(Propagate::No(Reason::AlreadyExists)),
             SaveOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
             SaveOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
             // Below errors are not possible to get from checked_store_offer

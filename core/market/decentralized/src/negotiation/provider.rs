@@ -2,8 +2,7 @@ use futures::stream::StreamExt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use ya_client::model::market::event::ProviderEvent;
-use ya_client::model::NodeId;
+use ya_client::model::{market::event::ProviderEvent, NodeId};
 use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};
@@ -44,10 +43,10 @@ impl ProviderBroker {
             move |caller: String, msg: InitialProposalReceived| {
                 on_initial_proposal(db1.clone(), store1.clone(), notifier1.clone(), caller, msg)
             },
-            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
-            move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
-            move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
-            move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalReceived| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementReceived| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
         );
 
         Ok(ProviderBroker {
@@ -66,7 +65,7 @@ impl ProviderBroker {
         Ok(self.api.bind_gsb(public_prefix, private_prefix).await?)
     }
 
-    pub async fn subscribe_offer(&self, offer: &ModelOffer) -> Result<(), NegotiationError> {
+    pub async fn subscribe_offer(&self, _offer: &ModelOffer) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }

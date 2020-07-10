@@ -92,7 +92,7 @@ impl Discovery {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: &str,
+        _public_prefix: &str,
         private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();

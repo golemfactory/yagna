@@ -55,7 +55,7 @@ impl ResponseError for ResolverError {
 impl ResponseError for DemandError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            DemandError::NotFound(e) => {
+            DemandError::NotFound(_) => {
                 HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
             }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
@@ -73,7 +73,7 @@ impl ResponseError for QueryOfferError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            QueryOfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
+            QueryOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
     }
@@ -95,7 +95,7 @@ impl ResponseError for ModifyOfferError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            ModifyOfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
+            ModifyOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
             ModifyOfferError::Unsubscribed(_) | ModifyOfferError::Expired(_) => {
                 HttpResponse::Gone().json(msg)
             }
