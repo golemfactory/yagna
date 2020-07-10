@@ -16,7 +16,7 @@ mod tests {
     use crate::utils::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 
     use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
-    use ya_market_decentralized::testing::OfferError;
+    use ya_market_decentralized::testing::{ModifyOfferError, QueryOfferError};
 
     /// Test adds offer. It should be broadcasted to other nodes in the network.
     /// Than sending unsubscribe should remove Offer from other nodes.
@@ -51,7 +51,7 @@ mod tests {
 
         // Unsubscribe Offer. Wait some delay for propagation.
         market1.unsubscribe_offer(&subscription_id, &id1).await?;
-        let expected_error = OfferError::AlreadyUnsubscribed(subscription_id.clone());
+        let expected_error = ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone());
         assert_err_eq!(expected_error, market1.get_offer(&subscription_id).await);
         // Expect, that Offer will disappear on other nodes.
         wait_for_bcast(1000, &market2, &subscription_id, false).await;
@@ -93,7 +93,7 @@ mod tests {
         tokio::time::delay_for(Duration::from_millis(50)).await;
 
         assert_err_eq!(
-            OfferError::NotFound(invalid_id.clone()),
+            QueryOfferError::NotFound(invalid_id.clone()),
             market1.get_offer(&invalid_id).await,
         );
         Ok(())
@@ -134,14 +134,14 @@ mod tests {
             .unsubscribe_offer(&subscription_id, &identity1)
             .await?;
         assert_err_eq!(
-            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()),
             market1.get_offer(&subscription_id).await
         );
 
         // Expect, that Offer will disappear on other nodes.
         wait_for_bcast(1000, &market2, &subscription_id, false).await;
         assert_err_eq!(
-            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()),
             market2.get_offer(&subscription_id).await
         );
 
@@ -182,11 +182,11 @@ mod tests {
 
         // We expect, that Offers won't be available on other nodes now
         assert_err_eq!(
-            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()),
             market1.get_offer(&subscription_id).await,
         );
         assert_err_eq!(
-            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()),
             market2.get_offer(&subscription_id).await,
         );
 

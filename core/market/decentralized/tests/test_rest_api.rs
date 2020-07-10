@@ -8,7 +8,7 @@ use serde_json::json;
 use ya_client::model::{market::Offer, ErrorMessage, NodeId};
 use ya_core_model::market;
 use ya_market_decentralized::testing::{
-    DemandError, OfferError, SubscriptionParseError, SubscriptionStore,
+    DemandError, ModifyOfferError, SubscriptionParseError, SubscriptionStore,
 };
 use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
@@ -163,7 +163,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        OfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
+        ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
 }

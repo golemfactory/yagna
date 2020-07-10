@@ -28,7 +28,7 @@ impl<'c> AsDao<'c> for OfferDao<'c> {
 /// (Offers from other nodes are removed upon unsubscribe)
 /// Unsubscribed and Expired Offers are Options.
 // TODO: cleanup external expired offers
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum OfferState {
     Active(Offer),
     Unsubscribed(Option<Offer>),
@@ -44,7 +44,7 @@ impl<'c> OfferDao<'c> {
     ) -> DbResult<OfferState> {
         let subscription_id = subscription_id.clone();
         readonly_transaction(self.pool, move |conn| {
-            query_state(conn, &subscription_id, validation_ts)
+            query_state(conn, &subscription_id, &validation_ts)
         })
         .await
     }
@@ -91,31 +91,33 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
-    pub async fn insert(&self, offer: Offer) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(dsl::market_offer)
-                .values(offer)
-                .execute(conn)?;
-            Ok(())
-        })
-        .await
-    }
-
-    pub async fn checked_insert(
+    pub async fn insert(
         &self,
         offer: Offer,
         validation_ts: NaiveDateTime,
-    ) -> DbResult<bool> {
+    ) -> DbResult<(bool, OfferState)> {
+        if offer.expiration_ts < validation_ts {
+            return Ok((false, OfferState::Expired(Some(offer))));
+        }
+
         do_with_transaction(self.pool, move |conn| {
-            match query_state(conn, &offer.id, validation_ts)? {
-                OfferState::NotFound => (),
-                _ => return Ok(false),
+            let id = offer.id.clone();
+
+            if is_unsubscribed(conn, &id)? {
+                return Ok((false, OfferState::Unsubscribed(Some(offer))));
+            }
+
+            if let Some(offer) = query_offer(conn, &id)? {
+                return Ok((false, is_expired(offer, &validation_ts)));
             };
 
             diesel::insert_into(dsl::market_offer)
                 .values(offer)
                 .execute(conn)?;
-            Ok(true)
+            // SQLite do does not support returning from insert,
+            // so we need to query again to get insertion_ts
+            let offer = query_offer(conn, &id)?.unwrap();
+            Ok((true, OfferState::Active(offer)))
         })
         .await
     }
@@ -129,7 +131,7 @@ impl<'c> OfferDao<'c> {
     ) -> DbResult<OfferState> {
         let subscription_id = subscription_id.clone();
         do_with_transaction(self.pool, move |conn| {
-            query_state(conn, &subscription_id, validation_ts).map(|state| match state {
+            query_state(conn, &subscription_id, &validation_ts).map(|state| match state {
                 OfferState::Active(offer) => {
                     diesel::insert_into(dsl_unsubscribed::market_offer_unsubscribed)
                         .values(offer.clone().into_unsubscribe())
@@ -158,12 +160,9 @@ impl<'c> OfferDao<'c> {
 pub(super) fn query_state(
     conn: &ConnType,
     subscription_id: &SubscriptionId,
-    validation_ts: NaiveDateTime,
+    validation_ts: &NaiveDateTime,
 ) -> DbResult<OfferState> {
-    let offer: Option<Offer> = dsl::market_offer
-        .filter(dsl::id.eq(&subscription_id))
-        .first(conn)
-        .optional()?;
+    let offer: Option<Offer> = query_offer(conn, &subscription_id)?;
 
     if is_unsubscribed(conn, subscription_id)? {
         return Ok(OfferState::Unsubscribed(offer));
@@ -171,11 +170,22 @@ pub(super) fn query_state(
 
     Ok(match offer {
         None => OfferState::NotFound,
-        Some(offer) => match offer.expiration_ts > validation_ts {
-            true => OfferState::Active(offer),
-            false => OfferState::Expired(Some(offer)),
-        },
+        Some(offer) => is_expired(offer, validation_ts),
     })
+}
+
+fn is_expired(offer: Offer, validation_ts: &NaiveDateTime) -> OfferState {
+    match &offer.expiration_ts > validation_ts {
+        true => OfferState::Active(offer),
+        false => OfferState::Expired(Some(offer)),
+    }
+}
+
+fn query_offer(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<Option<Offer>> {
+    Ok(dsl::market_offer
+        .filter(dsl::id.eq(&subscription_id))
+        .first(conn)
+        .optional()?)
 }
 
 pub(super) fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {

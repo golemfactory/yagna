@@ -3,9 +3,10 @@ use actix_web::{HttpResponse, ResponseError};
 use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
+use crate::matcher::error::{QueryOffersError, SaveOfferError};
 use crate::{
     market::MarketError,
-    matcher::error::{DemandError, MatcherError, OfferError, ResolverError},
+    matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
     negotiation::{NegotiationError, QueryEventsError},
 };
 
@@ -19,7 +20,8 @@ impl ResponseError for MarketError {
     fn error_response(&self) -> HttpResponse {
         match self {
             MarketError::Matcher(e) => e.error_response(),
-            MarketError::OfferError(e) => e.error_response(),
+            MarketError::QueryOfferError(e) => e.error_response(),
+            MarketError::QueryOffersError(e) => e.error_response(),
             MarketError::DemandError(e) => e.error_response(),
             MarketError::Negotiation(e) => e.error_response(),
             MarketError::InternalError(e) => HttpResponse::InternalServerError().json(e),
@@ -32,8 +34,11 @@ impl ResponseError for MatcherError {
         match self {
             MatcherError::DemandError(e)
             | MatcherError::ResolverError(ResolverError::DemandError(e)) => e.error_response(),
-            MatcherError::OfferError(e)
-            | MatcherError::ResolverError(ResolverError::OfferError(e)) => e.error_response(),
+            MatcherError::QueryOfferError(e)
+            | MatcherError::ResolverError(ResolverError::QueryOfferError(e)) => e.error_response(),
+            MatcherError::ModifyOfferError(e) => e.error_response(),
+            MatcherError::ResolverError(ResolverError::QueryOffersError(e)) => e.error_response(),
+            MatcherError::SaveOfferError(e) => e.error_response(),
             MatcherError::UnexpectedError(e) => {
                 HttpResponse::InternalServerError().json(ErrorMessage::new(e.to_string()))
             }
@@ -62,13 +67,40 @@ impl ResponseError for DemandError {
     }
 }
 
-impl ResponseError for OfferError {
+impl ResponseError for QueryOffersError {
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
+    }
+}
+
+impl ResponseError for QueryOfferError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            OfferError::SubscriptionValidation(e) => HttpResponse::BadRequest().json(msg),
-            OfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
-            OfferError::AlreadyUnsubscribed(_) | OfferError::Expired(_) => {
+            QueryOfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
+            _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for SaveOfferError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            SaveOfferError::Unsubscribed(_) | SaveOfferError::Expired(_) => {
+                HttpResponse::Gone().json(msg)
+            }
+            _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for ModifyOfferError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            ModifyOfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
+            ModifyOfferError::AlreadyUnsubscribed(_) | ModifyOfferError::Expired(_) => {
                 HttpResponse::Gone().json(msg)
             }
             _ => HttpResponse::InternalServerError().json(msg),

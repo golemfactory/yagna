@@ -99,6 +99,8 @@ impl Offer {
         }
     }
 
+    /// Will reject Offer, if hash was computed incorrectly. In most cases
+    /// it could mean, that it could be some kind of attack.
     pub fn validate(&self) -> Result<(), SubscriptionValidationError> {
         self.id.validate(
             &self.properties,

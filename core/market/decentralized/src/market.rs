@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::db::models::SubscriptionId;
-use crate::matcher::error::{DemandError, MatcherError, MatcherInitError, OfferError};
+use crate::matcher::error::{
+    DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
+};
 use crate::matcher::Matcher;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
@@ -24,7 +26,9 @@ pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
     #[error(transparent)]
-    OfferError(#[from] OfferError),
+    QueryOfferError(#[from] QueryOfferError),
+    #[error(transparent)]
+    QueryOffersError(#[from] QueryOffersError),
     #[error(transparent)]
     DemandError(#[from] DemandError),
     #[error(transparent)]

@@ -15,7 +15,7 @@ use ya_market_decentralized::testing::negotiation::messages::{
 };
 use ya_market_decentralized::testing::negotiation::{provider, requestor};
 use ya_market_decentralized::testing::{
-    DemandError, EventsListeners, Matcher, OfferError, QueryEventsError,
+    DemandError, EventsListeners, Matcher, QueryEventsError, QueryOfferError,
 };
 use ya_market_decentralized::{migrations, Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
@@ -360,7 +360,7 @@ pub async fn wait_for_bcast(
 
 #[async_trait::async_trait]
 pub trait MarketServiceExt {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError>;
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
     async fn query_events(
         &self,
@@ -372,7 +372,7 @@ pub trait MarketServiceExt {
 
 #[async_trait::async_trait]
 impl MarketServiceExt for MarketService {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError> {
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
         self.matcher.store.get_offer(id).await
     }
 

@@ -15,8 +15,11 @@ pub mod error;
 pub mod resolver;
 pub mod store;
 
-pub use error::{DemandError, MatcherError, MatcherInitError, OfferError};
-use resolver::{Resolver, Subscription};
+pub use error::{
+    DemandError, MatcherError, MatcherInitError, ModifyOfferError, QueryOfferError,
+    QueryOffersError, SaveOfferError,
+};
+use resolver::Resolver;
 pub use store::SubscriptionStore;
 
 /// Stores proposal generated from resolver.
@@ -156,34 +159,23 @@ pub(crate) async fn on_offer_received(
     // Note that when we broadcast our Offer, it will reach us too, so it concerns
     // not only Offers from other nodes.
 
-    let subscription = Subscription::from(&msg.offer);
     resolver
         .store
         .save_offer(msg.offer)
         .await
-        .map(|propagate| match propagate {
-            true => {
-                resolver.receive(subscription);
-                Propagate::Yes
-            }
-            false => Propagate::No(Reason::AlreadyExists),
+        .map(|offer| {
+            resolver.receive(&offer);
+            Propagate::Yes
         })
         .or_else(|e| match e {
-            // Stop propagation for expired and unsubscribed Offers to avoid infinite broadcast.
-            OfferError::AlreadyUnsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
-            OfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
+            // Stop propagation for existing, unsubscribed and expired Offers to avoid infinite broadcast.
+            SaveOfferError::Exists(id) => Ok(Propagate::No(Reason::AlreadyExists)),
+            SaveOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
+            SaveOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
             // Below errors are not possible to get from checked_store_offer
-            OfferError::NotFound(_)
-            | OfferError::UnsubscribeError(_, _)
-            | OfferError::GetMany(_)
-            | OfferError::RemoveError(_, _)
-            | OfferError::UnexpectedError(_) => {
-                log::error!("Unexpected error handling offer reception: {}.", e);
-                panic!("Should not happened: {}.", e)
-            }
-            OfferError::SaveError(_, _)
-            | OfferError::GetError(_, _)
-            | OfferError::SubscriptionValidation(_) => {
+            SaveOfferError::SaveError(_, _)
+            | SaveOfferError::SubscriptionValidation(_)
+            | SaveOfferError::UnexpectedError(_) => {
                 Ok(Propagate::No(Reason::Error(format!("{}", e))))
             }
         })
@@ -195,26 +187,19 @@ pub(crate) async fn on_offer_unsubscribed(
     msg: OfferUnsubscribed,
 ) -> Result<Propagate, ()> {
     store
-        .remove_offer(&msg.subscription_id)
+        .unsubscribe_offer(&msg.subscription_id)
         .await
         .map(|_| Propagate::Yes)
         .or_else(|e| match e {
-            OfferError::UnsubscribeError(_, _)
-            | OfferError::RemoveError(_, _)
-            | OfferError::UnexpectedError(_) => {
+            ModifyOfferError::UnsubscribeError(_, _)
+            | ModifyOfferError::RemoveError(_, _)
+            | ModifyOfferError::UnexpectedError(_) => {
                 log::error!("Propagating Offer unsubscription, while error: {}", e);
                 // TODO: how should we handle it locally?
                 Ok(Propagate::Yes)
             }
-            OfferError::NotFound(_) => Ok(Propagate::No(Reason::NotFound)),
-            OfferError::AlreadyUnsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
-            OfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
-            OfferError::SaveError(_, _)
-            | OfferError::GetError(_, _)
-            | OfferError::GetMany(_)
-            | OfferError::SubscriptionValidation(_) => {
-                log::error!("Unexpected error handling offer unsubscription: {}.", e);
-                panic!("Should not happened: {}.", e)
-            }
+            ModifyOfferError::NotFound(_) => Ok(Propagate::No(Reason::NotFound)),
+            ModifyOfferError::AlreadyUnsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
+            ModifyOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
         })
 }

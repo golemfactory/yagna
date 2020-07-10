@@ -3,7 +3,7 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use ya_market_decentralized::testing::{DemandError, OfferError};
+    use ya_market_decentralized::testing::{DemandError, ModifyOfferError};
 
     use crate::utils::client::{sample_demand, sample_offer};
     use crate::utils::{MarketServiceExt, MarketsNetwork};
@@ -46,7 +46,7 @@ mod tests {
 
         // Offer shouldn't be available after unsubscribed.
         assert_err_eq!(
-            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()),
             market1.get_offer(&subscription_id).await
         );
 
