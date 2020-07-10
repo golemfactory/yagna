@@ -1,7 +1,6 @@
 use futures::stream::StreamExt;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use ya_client::model::market::event::ProviderEvent;
 use ya_client::model::market::proposal::Proposal as ClientProposal;
@@ -10,11 +9,11 @@ use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError};
 use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::{EventError, OwnerType, Proposal};
+use crate::db::models::{OwnerType, Proposal};
 use crate::matcher::OfferError;
 use crate::matcher::SubscriptionStore;
 use crate::negotiation::common::CommonBroker;
-use crate::negotiation::notifier::{EventNotifier, NotifierError};
+use crate::negotiation::notifier::EventNotifier;
 use crate::negotiation::{ProposalError, QueryEventsError};
 use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::{
@@ -29,7 +28,6 @@ use crate::{db::models::Offer as ModelOffer, ProposalId, SubscriptionId};
 pub struct ProviderBroker {
     common: CommonBroker,
     api: NegotiationApi,
-    notifier: EventNotifier,
 }
 
 impl ProviderBroker {
@@ -53,12 +51,15 @@ impl ProviderBroker {
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
         );
 
-        let broker = CommonBroker { store, db };
+        let broker = CommonBroker {
+            store,
+            db,
+            notifier,
+        };
 
         Ok(Arc::new(ProviderBroker {
             api,
             common: broker,
-            notifier,
         }))
     }
 
@@ -79,7 +80,7 @@ impl ProviderBroker {
         &self,
         subscription_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.notifier.stop_notifying(subscription_id).await;
+        self.common.notifier.stop_notifying(subscription_id).await;
         Ok(())
     }
 
@@ -109,78 +110,28 @@ impl ProviderBroker {
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<ProviderEvent>, QueryEventsError> {
-        let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
-        let stop_time = Instant::now() + timeout;
-        let max_events = max_events.unwrap_or(i32::max_value());
+        let events = self
+            .common
+            .query_events(subscription_id, timeout, max_events, OwnerType::Provider)
+            .await?;
 
-        if max_events < 0 {
-            Err(QueryEventsError::InvalidMaxEvents(max_events))?
-        } else if max_events == 0 {
-            return Ok(vec![]);
-        }
-
-        loop {
-            let events = get_events_from_db(&self.db(), subscription_id, max_events).await?;
-            if events.len() > 0 {
-                return Ok(events);
-            }
-
-            // Solves panic 'supplied instant is later than self'.
-            if stop_time < Instant::now() {
-                return Ok(vec![]);
-            }
-            timeout = stop_time - Instant::now();
-
-            if let Err(error) = self
-                .notifier
-                .wait_for_event_with_timeout(subscription_id, timeout)
-                .await
-            {
-                return match error {
-                    NotifierError::Timeout(_) => Ok(vec![]),
-                    NotifierError::ChannelClosed(_) => {
-                        Err(QueryEventsError::InternalError(format!("{}", error)))
-                    }
-                    NotifierError::Unsubscribed(id) => Err(QueryEventsError::Unsubscribed(id)),
-                };
-            }
-            // Ok result means, that event with required subscription id was added.
-            // We can go to next loop to get this event from db. But still we aren't sure
-            // that list won't be empty, because other query_events calls can wait for the same event.
-        }
+        // Map model events to client RequestorEvent.
+        let db = self.db();
+        Ok(futures::stream::iter(events)
+            .then(|event| event.into_client_provider_event(&db))
+            .inspect(|result| {
+                if let Err(error) = result {
+                    log::warn!("Error converting event to client type: {}", error);
+                }
+            })
+            .filter_map(|event| async move { event.ok() })
+            .collect::<Vec<ProviderEvent>>()
+            .await)
     }
 
     fn db(&self) -> DbExecutor {
         self.common.db.clone()
     }
-}
-
-async fn get_events_from_db(
-    db: &DbExecutor,
-    subscription_id: &SubscriptionId,
-    max_events: i32,
-) -> Result<Vec<ProviderEvent>, QueryEventsError> {
-    let events = db
-        .as_dao::<EventsDao>()
-        .take_events(subscription_id, max_events, OwnerType::Provider)
-        .await?;
-
-    // Map model events to client RequestorEvent.
-    let results = futures::stream::iter(events)
-        .then(|event| event.into_client_provider_event(&db))
-        .collect::<Vec<Result<ProviderEvent, EventError>>>()
-        .await;
-
-    // Filter errors. Can we do something better with errors, than logging them?
-    Ok(results
-        .into_iter()
-        .inspect(|result| {
-            if let Err(error) = result {
-                log::warn!("Error converting event to client type: {}", error);
-            }
-        })
-        .filter_map(|event| event.ok())
-        .collect::<Vec<ProviderEvent>>())
 }
 
 async fn on_initial_proposal(
