@@ -74,7 +74,7 @@ impl SubscriptionStore {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers(id.map(|ident| ident.identity))
+            .get_offers(id.map(|ident| ident.identity), Utc::now().naive_utc())
             .await
             .map_err(|e| OfferError::GetMany(e))?
             .into_iter()
