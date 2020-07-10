@@ -52,7 +52,7 @@ pub struct Discovery {
 pub struct DiscoveryImpl {
     offer_received: HandlerSlot<OfferReceived>,
     offer_unsubscribed: HandlerSlot<OfferUnsubscribed>,
-    retrieve_offers: HandlerSlot<RetrieveOffers>,
+    _retrieve_offers: HandlerSlot<RetrieveOffers>,
 }
 
 impl Discovery {

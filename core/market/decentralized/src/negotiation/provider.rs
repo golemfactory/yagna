@@ -5,9 +5,9 @@ use std::time::{Duration, Instant};
 use ya_client::model::{market::event::ProviderEvent, NodeId};
 use ya_persistence::executor::DbExecutor;
 
-use super::errors::{NegotiationError, NegotiationInitError};
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{EventError, OwnerType, Proposal};
+use crate::db::models::{Offer as ModelOffer, SubscriptionId};
 use crate::matcher::{QueryOfferError, SubscriptionStore};
 use crate::negotiation::notifier::{EventNotifier, NotifierError};
 use crate::negotiation::QueryEventsError;
@@ -17,7 +17,8 @@ use crate::protocol::negotiation::messages::{
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
-use crate::{db::models::Offer as ModelOffer, SubscriptionId};
+
+use super::errors::{NegotiationError, NegotiationInitError};
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]

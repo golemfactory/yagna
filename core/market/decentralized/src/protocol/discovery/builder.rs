@@ -54,7 +54,7 @@ impl DiscoveryBuilder {
             inner: Arc::new(DiscoveryImpl {
                 offer_received: self.get(),
                 offer_unsubscribed: self.get(),
-                retrieve_offers: self.get(),
+                _retrieve_offers: self.get(),
             }),
         }
     }
