@@ -1,3 +1,6 @@
+// TODO: This is only temporary
+#![allow(dead_code)]
+
 use chrono::{Duration, NaiveDateTime, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;

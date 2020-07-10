@@ -1,3 +1,6 @@
+// TODO: This is only temporary
+#![allow(dead_code)]
+
 use futures::stream::StreamExt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
