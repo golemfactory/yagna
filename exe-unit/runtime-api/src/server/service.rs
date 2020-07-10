@@ -61,9 +61,10 @@ impl RuntimeEvent for EventEmiter {
     }
 }
 
-pub async fn run<Factory, Runtime>(factory: Factory)
+pub async fn run<Factory, FutureRuntime, Runtime>(factory: Factory)
 where
-    Factory: Fn(EventEmiter) -> Runtime,
+    Factory: FnOnce(EventEmiter) -> FutureRuntime,
+    FutureRuntime: Future<Output = Runtime>,
     Runtime: RuntimeService + 'static,
 {
     log::debug!("server starting");
@@ -74,7 +75,7 @@ where
     let output = Rc::new(Mutex::new(codec::Codec::<proto::Response>::sink(stdout)));
     let (tx, mut rx) = futures::channel::mpsc::unbounded::<proto::Response>();
     let emiter = EventEmiter { tx };
-    let service = Rc::new(factory(emiter));
+    let service = Rc::new(factory(emiter).await);
 
     tokio::task::LocalSet::new()
         .run_until(async {
