@@ -321,15 +321,6 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn test_get_eth_balance() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
-        let eth_balance =
-            common::get_eth_balance(&ethereum_client, utils::str_to_addr(ETH_ADDRESS)?).await?;
-        assert!(eth_balance >= utils::str_to_big_dec("0")?);
-        Ok(())
-    }
-
-    #[actix_rt::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
         let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
         let gnt_contract = common::prepare_gnt_contract(&ethereum_client, &config::CFG_TESTNET)?;

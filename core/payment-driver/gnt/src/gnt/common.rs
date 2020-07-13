@@ -45,17 +45,6 @@ pub(crate) fn prepare_gnt_faucet_contract(
     }
 }
 
-pub(crate) async fn get_eth_balance(
-    ethereum_client: &EthereumClient,
-    address: Address,
-) -> GNTDriverResult<BigDecimal> {
-    let block_number = None;
-    let amount = ethereum_client
-        .get_eth_balance(address, block_number)
-        .await?;
-    Ok(utils::u256_to_big_dec(amount)?)
-}
-
 pub(crate) async fn get_gnt_balance(
     gnt_contract: &Contract<Http>,
     address: Address,

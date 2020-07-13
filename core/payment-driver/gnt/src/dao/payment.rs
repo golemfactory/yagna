@@ -1,16 +1,12 @@
-use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{self, ExpressionMethods, QueryDsl, RunQueryDsl};
 
-use crate::models::{PaymentEntity, TransactionEntity, TX_CONFIRMED};
+use crate::models::PaymentEntity;
 use crate::schema::gnt_driver_payment::dsl;
 
-use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
-
 use crate::utils::PAYMENT_STATUS_OK;
-use ya_core_model::driver::PaymentConfirmation;
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::dao::DbResult;
-use crate::error::DbError;
 
 #[allow(unused)]
 pub struct PaymentDao<'c> {
@@ -24,20 +20,6 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
 }
 
 impl<'c> PaymentDao<'c> {
-    pub async fn get(&self, invoice_id: String) -> DbResult<Option<PaymentEntity>> {
-        do_with_transaction(self.pool, move |conn| {
-            let payment: Option<PaymentEntity> = dsl::gnt_driver_payment
-                .find(invoice_id)
-                .first(conn)
-                .optional()?;
-            match payment {
-                Some(payment) => Ok(Some(payment)),
-                None => Ok(None),
-            }
-        })
-        .await
-    }
-
     pub async fn get_pending_payments(&self, address: String) -> DbResult<Vec<PaymentEntity>> {
         do_with_transaction(self.pool, move |conn| {
             let payments: Vec<PaymentEntity> = dsl::gnt_driver_payment

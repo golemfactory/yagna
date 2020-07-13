@@ -1,6 +1,6 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use crate::models::{TransactionEntity, TransactionStatus, TxType};
+use crate::models::{TransactionEntity, TransactionStatus};
 use crate::schema::gnt_driver_transaction::dsl;
 
 use crate::dao::DbResult;
@@ -51,19 +51,6 @@ impl<'c> TransactionDao<'c> {
                 .select(dsl::nonce)
                 .load(conn)?;
             Ok(nonces)
-        })
-        .await
-    }
-
-    pub async fn get_created_txs(&self) -> DbResult<Vec<TransactionEntity>> {
-        do_with_transaction(self.pool, move |conn| {
-            let status: i32 = TransactionStatus::Created.into();
-            let tx_type: i32 = TxType::Transfer.into();
-            let txs: Vec<TransactionEntity> = dsl::gnt_driver_transaction
-                .filter(dsl::status.eq(status))
-                .filter(dsl::tx_type.eq(tx_type))
-                .load(conn)?;
-            Ok(txs)
         })
         .await
     }

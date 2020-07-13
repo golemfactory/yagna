@@ -1,7 +1,7 @@
 use crate::error::GNTDriverError;
 use crate::GNTDriverResult;
 
-use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus, TxType};
+use crate::models::{TransactionEntity, TransactionStatus, TxType};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
@@ -12,13 +12,11 @@ use sha3::{Digest, Sha3_512};
 use std::pin::Pin;
 use std::str::FromStr;
 use ya_client_model::NodeId;
-use ya_core_model::driver::PaymentConfirmation;
 use ya_core_model::identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 
-pub const PAYMENT_STATUS_UNKNOWN: i32 = 0;
 pub const PAYMENT_STATUS_NOT_YET: i32 = 1;
 pub const PAYMENT_STATUS_OK: i32 = 2;
 pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
