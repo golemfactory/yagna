@@ -22,7 +22,7 @@ pub type AgreementId = ProposalId;
 pub enum AgreementState {
     /// Newly created by a Requestor (based on Proposal)
     Proposal = 0,
-    /// Confirmed by a Requestor and send to Provider for approval
+    /// Confirmed by a Requestor and sent to Provider for approval
     Pending = 1,
     /// Cancelled by a Requestor
     Cancelled = 2,
