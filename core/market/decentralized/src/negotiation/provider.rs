@@ -1,6 +1,5 @@
 use futures::stream::StreamExt;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ya_client::model::market::event::ProviderEvent;
@@ -10,8 +9,7 @@ use ya_persistence::executor::DbExecutor;
 use super::errors::{NegotiationError, NegotiationInitError};
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{EventError, OwnerType, Proposal};
-use crate::matcher::OfferError;
-use crate::matcher::SubscriptionStore;
+use crate::matcher::{QueryOfferError, SubscriptionStore};
 use crate::negotiation::notifier::{EventNotifier, NotifierError};
 use crate::negotiation::QueryEventsError;
 use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
@@ -35,7 +33,7 @@ impl ProviderBroker {
     pub fn new(
         db: DbExecutor,
         store: SubscriptionStore,
-    ) -> Result<Arc<ProviderBroker>, NegotiationInitError> {
+    ) -> Result<ProviderBroker, NegotiationInitError> {
         let notifier = EventNotifier::new();
 
         let db1 = db.clone();
@@ -52,12 +50,12 @@ impl ProviderBroker {
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
         );
 
-        Ok(Arc::new(ProviderBroker {
+        Ok(ProviderBroker {
             api,
             store,
             db,
             notifier,
-        }))
+        })
     }
 
     pub async fn bind_gsb(
@@ -167,8 +165,8 @@ async fn on_initial_proposal(
     // Check subscription.
     let offer = match store.get_offer(&msg.offer_id).await {
         Err(e) => match e {
-            OfferError::AlreadyUnsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-            OfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
+            QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
+            QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
             _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
         },
         Ok(offer) => offer,
