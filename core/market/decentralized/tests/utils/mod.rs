@@ -4,10 +4,11 @@
 pub mod bcast;
 pub mod mock_net;
 pub mod mock_node;
-pub mod mock_offer;
 
-pub use mock_node::{MarketStore, MarketsNetwork};
-pub use mock_offer::{example_demand, example_offer};
+pub use mock_node::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
+pub use ya_market_decentralized::testing::mock_offer::{
+    client, generate_identity, sample_demand, sample_offer,
+};
 
 macro_rules! assert_err_eq {
     ($expected:expr, $actual:expr $(,)*) => {

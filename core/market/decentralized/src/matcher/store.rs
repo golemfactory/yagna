@@ -1,12 +1,21 @@
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
+use lazy_static::lazy_static;
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
+use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::dao::*;
 use crate::db::models::{Demand, Offer, SubscriptionId};
-use crate::matcher::error::{DemandError, OfferError};
+use crate::matcher::error::{
+    DemandError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
+};
+
+lazy_static! {
+    // TODO: agents should set expiration.
+    static ref DEFAULT_TTL: Duration = Duration::hours(24);
+}
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
@@ -18,90 +27,136 @@ impl SubscriptionStore {
         Self { db }
     }
 
+    /// returns newly created offer with insertion_ts
     pub async fn create_offer(
         &self,
         id: &Identity,
         offer: &ClientOffer,
-    ) -> Result<Offer, OfferError> {
+    ) -> Result<Offer, SaveOfferError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
-        let expiration_ts = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + *DEFAULT_TTL;
         let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts);
-        self.save_offer(offer.clone()).await?;
-        Ok(offer)
+        self.insert_offer(offer).await
     }
 
-    async fn save_offer(&self, mut offer: Offer) -> Result<(), OfferError> {
-        let id = offer.id.clone();
+    /// returns saved offer with insertion_ts
+    pub async fn save_offer(&self, offer: Offer) -> Result<Offer, SaveOfferError> {
+        offer.validate()?;
+        self.insert_offer(offer).await
+    }
+
+    async fn insert_offer(&self, mut offer: Offer) -> Result<Offer, SaveOfferError> {
         // Insertions timestamp should always reference our local time
         // of adding it to database, so we must reset it here.
         offer.insertion_ts = None;
-        self.db
+        let id = offer.id.clone();
+
+        match self
+            .db
             .as_dao::<OfferDao>()
-            .insert(offer)
+            .insert(offer, Utc::now().naive_utc())
             .await
-            .map_err(|e| OfferError::SaveError(e, id))
+        {
+            Ok((true, OfferState::Active(offer))) => Ok(offer),
+            Ok((false, OfferState::Active(_))) => Err(SaveOfferError::Exists(id)),
+            Ok((false, OfferState::Unsubscribed(_))) => Err(SaveOfferError::Unsubscribed(id)),
+            Ok((_, OfferState::Expired(_))) => Err(SaveOfferError::Expired(id)),
+            Ok((inserted, state)) => Err(SaveOfferError::WrongState {
+                state: state.to_string(),
+                inserted,
+                id,
+            }),
+            Err(e) => Err(SaveOfferError::SaveError(e, id)),
+        }
     }
 
-    pub async fn mark_offer_unsubscribed(&self, id: &SubscriptionId) -> Result<(), OfferError> {
+    pub async fn get_offers(
+        &self,
+        id: Option<Identity>,
+    ) -> Result<Vec<ClientOffer>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_offers(id.map(|ident| ident.identity), Utc::now().naive_utc())
+            .await
+            .map_err(|e| QueryOffersError(e))?
+            .into_iter()
+            .filter_map(|o| match o.into_client_offer() {
+                Err(e) => {
+                    log::error!("Skipping Offer because of: {}", e);
+                    None
+                }
+                Ok(o) => Some(o),
+            })
+            .collect())
+    }
+
+    pub async fn get_offers_before(
+        &self,
+        insertion_ts: NaiveDateTime,
+    ) -> Result<Vec<Offer>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_offers_before(insertion_ts, Utc::now().naive_utc())
+            .await
+            .map_err(|e| QueryOffersError(e))?)
+    }
+
+    pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
         let now = Utc::now().naive_utc();
+        match self.db.as_dao::<OfferDao>().select(id, now).await {
+            Err(e) => Err(QueryOfferError::Get(e, id.clone())),
+            Ok(OfferState::Active(offer)) => Ok(offer),
+            Ok(OfferState::Unsubscribed(_)) => Err(QueryOfferError::Unsubscribed(id.clone())),
+            Ok(OfferState::Expired(_)) => Err(QueryOfferError::Expired(id.clone())),
+            Ok(OfferState::NotFound) => Err(QueryOfferError::NotFound(id.clone())),
+        }
+    }
+
+    async fn mark_offer_unsubscribed(&self, id: &SubscriptionId) -> Result<(), ModifyOfferError> {
         self.db
             .as_dao::<OfferDao>()
-            .mark_unsubscribed(id, now)
+            .mark_unsubscribed(id, Utc::now().naive_utc())
             .await
-            .map_err(|e| OfferError::UnsubscribeError(e.into(), id.clone()))
+            .map_err(|e| ModifyOfferError::UnsubscribeError(e.into(), id.clone()))
             .and_then(|state| match state {
                 OfferState::Active(_) => Ok(()),
-                OfferState::NotFound => Err(OfferError::NotFound(id.clone())),
-                OfferState::Unsubscribed(_) => Err(OfferError::AlreadyUnsubscribed(id.clone())),
-                OfferState::Expired(_) => Err(OfferError::Expired(id.clone())),
+                OfferState::NotFound => Err(ModifyOfferError::NotFound(id.clone())),
+                OfferState::Unsubscribed(_) => Err(ModifyOfferError::Unsubscribed(id.clone())),
+                OfferState::Expired(_) => Err(ModifyOfferError::Expired(id.clone())),
             })
     }
 
-    pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError> {
-        let now = Utc::now().naive_utc();
-        match self.db.as_dao::<OfferDao>().select(id, now).await {
-            Err(e) => Err(OfferError::GetError(e, id.clone())),
-            Ok(OfferState::Active(offer)) => Ok(offer),
-            Ok(OfferState::Unsubscribed(_)) => Err(OfferError::AlreadyUnsubscribed(id.clone())),
-            Ok(OfferState::Expired(_)) => Err(OfferError::Expired(id.clone())),
-            Ok(OfferState::NotFound) => Err(OfferError::NotFound(id.clone())),
-        }
-    }
-
-    /// We store only our Offers to keep history. Offers from other nodes
-    /// should be removed.
-    /// This is meant to be called upon receiving unsubscribe broadcast. To work correctly
-    /// it assumes `mark_offer_unsubscribed` was invoked before broadcast in `unsubscribe_offer`.
-    pub async fn remove_offer(&self, id: &SubscriptionId) -> Result<(), OfferError> {
-        // If `mark_offer_unsubscribed` was called before we won't remove our Offer here,
-        // because `AlreadyUnsubscribed` error will pop-up.
-        self.mark_offer_unsubscribed(id).await?;
-        // TODO: Maybe we should add check here, to be sure, that we don't remove own Offers.
-        log::debug!("Removing unsubscribed Offer [{}].", id);
-        match self.db.as_dao::<OfferDao>().delete(&id).await {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(OfferError::UnexpectedError(format!(
-                "Offer [{}] marked as unsubscribed, but not removed",
-                id
-            ))),
-            Err(e) => Err(OfferError::RemoveError(e, id.clone()).into()),
-        }
-    }
-
-    pub async fn store_offer(&self, offer: Offer) -> Result<bool, OfferError> {
-        // Will reject Offer, if hash was computed incorrectly. In most cases
-        // it could mean, that it could be some kind of attack.
-        offer.validate()?;
-
-        let id = offer.id.clone();
-        match self.get_offer(&id).await {
-            Ok(_offer) => Ok(false),
-            Err(OfferError::NotFound(_)) => {
-                self.save_offer(offer).await?;
-                Ok(true)
+    /// Local Offers are kept after unsubscribe. Offers from other nodes are removed.
+    pub async fn unsubscribe_offer(
+        &self,
+        offer_id: &SubscriptionId,
+        local_caller: bool,
+        caller_id: Option<NodeId>,
+    ) -> Result<(), ModifyOfferError> {
+        if let Ok(offer) = self.get_offer(offer_id).await {
+            if caller_id != Some(offer.node_id) {
+                // TODO: unauthorized?
+                return Err(ModifyOfferError::NotFound(offer_id.clone()));
             }
-            Err(e) => Err(e),
+        }
+
+        // If this fn was called before, we won't remove our Offer below,
+        // because `Unsubscribed` error will pop-up here.
+        self.mark_offer_unsubscribed(offer_id).await?;
+
+        if local_caller {
+            // Local Offers we mark as unsubscribed only
+            return Ok(());
+        }
+
+        log::debug!("Removing not owned unsubscribed Offer [{}].", offer_id);
+        match self.db.as_dao::<OfferDao>().delete(&offer_id).await {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(ModifyOfferError::UnsubscribedNotRemoved(offer_id.clone())),
+            Err(e) => Err(ModifyOfferError::RemoveError(e, offer_id.clone())),
         }
     }
 
@@ -112,7 +167,7 @@ impl SubscriptionStore {
     ) -> Result<Demand, DemandError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.
-        let expiration_ts = creation_ts + Duration::hours(24);
+        let expiration_ts = creation_ts + *DEFAULT_TTL;
         let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts);
         self.db
             .as_dao::<DemandDao>()
@@ -124,22 +179,43 @@ impl SubscriptionStore {
 
     pub async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
         match self.db.as_dao::<DemandDao>().select(id).await {
-            Err(e) => Err(DemandError::GetError(e, id.clone())),
+            Err(e) => Err(DemandError::GetSingle(e, id.clone())),
             Ok(Some(demand)) => Ok(demand),
             Ok(None) => Err(DemandError::NotFound(id.clone())),
         }
     }
 
-    pub async fn remove_demand(&self, id: &SubscriptionId) -> Result<(), DemandError> {
+    pub async fn get_demands_before(
+        &self,
+        insertion_ts: NaiveDateTime,
+    ) -> Result<Vec<Demand>, DemandError> {
+        Ok(self
+            .db
+            .as_dao::<DemandDao>()
+            .get_demands_before(insertion_ts, Utc::now().naive_utc())
+            .await
+            .map_err(|e| DemandError::GetMany(e))?)
+    }
+
+    pub async fn remove_demand(
+        &self,
+        demand_id: &SubscriptionId,
+        id: &Identity,
+    ) -> Result<(), DemandError> {
+        let demand = self.get_demand(demand_id).await?;
+        if id.identity != demand.node_id {
+            return Err(DemandError::NotFound(demand_id.clone()));
+        }
+
         match self
             .db
             .as_dao::<DemandDao>()
-            .delete(&id)
+            .delete(&demand_id)
             .await
-            .map_err(|e| DemandError::RemoveError(e, id.clone()))?
+            .map_err(|e| DemandError::RemoveError(e, demand_id.clone()))?
         {
             true => Ok(()),
-            false => Err(DemandError::NotFound(id.clone())),
+            false => Err(DemandError::NotFound(demand_id.clone())),
         }
     }
 }
