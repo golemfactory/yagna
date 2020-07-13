@@ -56,7 +56,7 @@ impl MarketService {
         db.apply_migration(migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(db, store.clone())?;
+        let (matcher, listeners) = Matcher::new(store.clone())?;
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;

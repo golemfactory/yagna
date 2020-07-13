@@ -1,7 +1,6 @@
 use tokio::sync::mpsc::{error::SendError, unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::models::{Demand, Offer};
@@ -37,10 +36,7 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(
-        db: &DbExecutor,
-        store: SubscriptionStore,
-    ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
+    pub fn new(store: SubscriptionStore) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         let store1 = store.clone();
         let store2 = store.clone();
         let discovery = Discovery::new(
