@@ -8,7 +8,7 @@ use ya_persistence::executor::Error as DbError;
 
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{MarketEvent, OwnerType, Proposal};
-use crate::matcher::{OfferError, SubscriptionStore};
+use crate::matcher::{QueryOfferError, SubscriptionStore};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{EventNotifier, ProposalError, QueryEventsError};
 use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
@@ -143,8 +143,8 @@ impl CommonBroker {
             .await
         {
             Err(e) => match e {
-                OfferError::AlreadyUnsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-                OfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
+                QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
+                QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
                 _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
             },
             Ok(offer) => offer,

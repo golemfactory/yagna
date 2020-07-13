@@ -42,8 +42,11 @@ async fn subscribe(
 }
 
 #[actix_web::get("/offers")]
-async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> impl Responder {
+    market
+        .get_offers(Some(id))
+        .await
+        .map(|offers| HttpResponse::Ok().json(offers))
 }
 
 #[actix_web::delete("/offers/{subscription_id}")]

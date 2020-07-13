@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
-use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
@@ -12,7 +11,6 @@ use crate::db::models::{
     Agreement, AgreementId, Demand as ModelDemand, Proposal, ProposalId, SubscriptionId,
 };
 use crate::db::DbResult;
-use crate::matcher::DraftProposal;
 use crate::matcher::SubscriptionStore;
 
 use ya_client::model::market::event::RequestorEvent;
@@ -20,6 +18,7 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+use crate::matcher::RawProposal;
 use crate::negotiation::common::CommonBroker;
 use crate::negotiation::errors::AgreementError;
 use crate::negotiation::ProposalError;
@@ -38,8 +37,8 @@ impl RequestorBroker {
     pub fn new(
         db: DbExecutor,
         store: SubscriptionStore,
-        proposal_receiver: UnboundedReceiver<DraftProposal>,
-    ) -> Result<Arc<RequestorBroker>, NegotiationInitError> {
+        proposal_receiver: UnboundedReceiver<RawProposal>,
+    ) -> Result<RequestorBroker, NegotiationInitError> {
         let notifier = EventNotifier::new();
         let broker = CommonBroker {
             store,
@@ -65,7 +64,7 @@ impl RequestorBroker {
         };
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
-        Ok(Arc::new(engine))
+        Ok(engine)
     }
 
     pub async fn bind_gsb(
@@ -201,7 +200,7 @@ impl RequestorBroker {
 
 pub async fn proposal_receiver_thread(
     db: DbExecutor,
-    mut proposal_receiver: UnboundedReceiver<DraftProposal>,
+    mut proposal_receiver: UnboundedReceiver<RawProposal>,
     notifier: EventNotifier,
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {

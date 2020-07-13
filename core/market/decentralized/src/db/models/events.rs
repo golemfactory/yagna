@@ -82,7 +82,8 @@ impl MarketEvent {
             }),
             EventType::RequestorPropertyQuery => unimplemented!(),
             _ => Err(ErrorMessage::new(format!(
-                "Wrong MarketEvent type. Requestor event in Provider subscription."
+                "Wrong MarketEvent type [id={}]. Requestor event in Provider subscription.",
+                self.id
             )))?,
         }
     }
@@ -113,7 +114,8 @@ impl MarketEvent {
             EventType::ProviderAgreement => unimplemented!(),
             EventType::ProviderPropertyQuery => unimplemented!(),
             _ => Err(ErrorMessage::new(format!(
-                "Wrong MarketEvent type. Requestor event in Provider subscription."
+                "Wrong MarketEvent type [id={}]. Requestor event in Provider subscription.",
+                self.id
             )))?,
         }
     }
