@@ -3,13 +3,10 @@ mod utils;
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use ya_market_decentralized::testing::{DemandError, QueryOfferError};
 
-    use ya_market_decentralized::testing::{DemandError, OfferError};
-    use ya_market_decentralized::MarketService;
-
-    use crate::utils::mock_offer::{example_demand, example_offer};
-    use crate::utils::{MarketStore, MarketsNetwork};
+    use crate::utils::client::{sample_demand, sample_offer};
+    use crate::utils::{MarketServiceExt, MarketsNetwork};
     // use crate::utils::assert_err_eq;
 
     /// Test subscribes offers, checks if offer is available
@@ -22,10 +19,10 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
-        let mut offer = example_offer();
+        let mut offer = sample_offer();
         let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
 
         // Fill expected values for further comparison.
@@ -49,7 +46,7 @@ mod tests {
 
         // Offer shouldn't be available after unsubscribed.
         assert_err_eq!(
-            OfferError::AlreadyUnsubscribed(subscription_id.clone()),
+            QueryOfferError::Unsubscribed(subscription_id.clone()),
             market1.get_offer(&subscription_id).await
         );
 
@@ -66,10 +63,10 @@ mod tests {
             .add_market_instance("Node-1")
             .await?;
 
-        let market1: Arc<MarketService> = network.get_market("Node-1");
+        let market1 = network.get_market("Node-1");
         let identity1 = network.get_default_id("Node-1");
 
-        let mut demand = example_demand();
+        let mut demand = sample_demand();
         let subscription_id = market1.subscribe_demand(&demand, &identity1).await?;
 
         // Fill expected values for further comparison.
