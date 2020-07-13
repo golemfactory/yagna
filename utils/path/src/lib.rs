@@ -1,4 +1,9 @@
+use std::ffi::OsString;
+use std::io;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+
+pub mod data_dir;
 
 /// Adds security layer to paths manipulation to avoid popular attacks.
 pub trait SecurePath {
@@ -14,6 +19,37 @@ where
     fn secure_join<PathRef: AsRef<Path>>(&self, path: PathRef) -> PathBuf {
         let append = remove_insecure_chars(path);
         self.as_ref().join(&append)
+    }
+}
+
+pub trait SwapSave {
+    fn swap_save<B: AsRef<[u8]>>(&self, bytes: B) -> io::Result<()>;
+}
+
+impl<T> SwapSave for T
+where
+    T: AsRef<Path>,
+{
+    fn swap_save<B: AsRef<[u8]>>(&self, bytes: B) -> io::Result<()> {
+        let path = self.as_ref();
+        let extension = match path.extension() {
+            Some(ext) => {
+                let mut ext = ext.to_os_string();
+                ext.push(".swp");
+                ext
+            }
+            _ => OsString::from("swp"),
+        };
+        let path_tmp = path.to_path_buf().with_extension(extension);
+
+        let mut file = std::fs::File::create(&path_tmp)?;
+        file.write_all(bytes.as_ref())?;
+        file.flush()?;
+        drop(file);
+
+        std::fs::rename(path_tmp, path)?;
+
+        Ok(())
     }
 }
 
