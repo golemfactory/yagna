@@ -27,6 +27,7 @@ use crate::protocol::negotiation::{
 use super::common::get_proposal;
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
+use crate::db::models::AgreementState;
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
@@ -187,6 +188,19 @@ impl RequestorBroker {
         }
     }
 
+    /// Initiates the Agreement handshake phase.
+    ///
+    /// Formulates an Agreement artifact from the Proposal indicated by the
+    /// received Proposal Id.
+    ///
+    /// The Approval Expiry Date is added to Agreement artifact and implies
+    /// the effective timeout on the whole Agreement Confirmation sequence.
+    ///
+    /// A successful call to `create_agreement` shall immediately be followed
+    /// by a `confirm_agreement` and `wait_for_approval` call in order to listen
+    /// for responses from the Provider.
+    ///
+    /// TODO: **Note**: Moves given Proposal to `Approved` state.
     pub async fn create_agreement(
         &self,
         _id: Identity,
@@ -219,8 +233,44 @@ impl RequestorBroker {
             .as_dao::<AgreementDao>()
             .save(agreement)
             .await
-            .map_err(|e| AgreementError::FailedSaveAgreement(proposal_id.clone(), e))?;
+            .map_err(|e| AgreementError::Save(proposal_id.clone(), e))?;
         Ok(id)
+    }
+
+    /// Signs (not yet) Agreement self-created via `create_agreement`
+    /// and sends it to the Provider.
+    pub async fn confirm_agreement(
+        &self,
+        _id: Identity,
+        agreement_id: &AgreementId,
+    ) -> Result<(), AgreementError> {
+        let dao = self.db.as_dao::<AgreementDao>();
+        let agreement = match dao
+            .select(agreement_id, Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            Some(agreement) => agreement,
+        };
+
+        if agreement.state == AgreementState::Proposal {
+            self.api.propose_agreement(agreement).await?;
+            dao.update_state(agreement_id, AgreementState::Pending)
+                .await
+                .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+            return Ok(());
+        }
+
+        Err(match agreement.state {
+            AgreementState::Proposal => panic!("should not happen"),
+            AgreementState::Pending => AgreementError::Confirmed(agreement.id),
+            AgreementState::Cancelled => AgreementError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementError::Rejected(agreement.id),
+            AgreementState::Approved => AgreementError::Approved(agreement.id),
+            AgreementState::Expired => AgreementError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementError::Terminated(agreement.id),
+        })
     }
 }
 

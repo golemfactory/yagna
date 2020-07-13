@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 use ya_client::model::ErrorMessage;
 
+use crate::db::models::AgreementId;
 use crate::ProposalId;
 use crate::SubscriptionId;
 
@@ -25,7 +26,7 @@ pub fn path_config() -> PathConfig {
 
 #[derive(Deserialize)]
 pub struct PathAgreement {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 #[derive(Deserialize)]

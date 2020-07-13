@@ -4,7 +4,9 @@ use crate::protocol::negotiation::errors::{
 use thiserror::Error;
 
 use super::common::GetProposalError;
-use crate::db::models::{ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError};
+use crate::db::models::{
+    AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
+};
 use crate::db::{dao::TakeEventsError, DbError};
 
 #[derive(Error, Debug)]
@@ -21,13 +23,33 @@ pub enum AgreementError {
     #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
     ProposalNotFound(ProposalId, ProposalId),
     #[error("Can't create Agreement for Proposal {0}. Failed to get Proposal {1}. Error: {2}")]
-    FailedGetProposal(ProposalId, ProposalId, DbError),
+    GetProposal(ProposalId, ProposalId, DbError),
     #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
     NoNegotiations(ProposalId),
     #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
-    FailedSaveAgreement(ProposalId, DbError),
+    Save(ProposalId, DbError),
+    #[error("Failed to get Agreement [{0}]. Error: {1}")]
+    Get(AgreementId, DbError),
+    #[error("Failed to update Agreement [{0}]. Error: {1}")]
+    Update(AgreementId, DbError),
+    #[error("Agreement [{0}] not found.")]
+    NotFound(AgreementId),
+    #[error("Agreement [{0}] already confirmed.")]
+    Confirmed(AgreementId),
+    #[error("Agreement [{0}] cancelled.")]
+    Cancelled(AgreementId),
+    #[error("Agreement [{0}] rejected.")]
+    Rejected(AgreementId),
+    #[error("Agreement [{0}] already approved.")]
+    Approved(AgreementId),
+    #[error("Agreement [{0}] expired.")]
+    Expired(AgreementId),
+    #[error("Agreement [{0}] terminated.")]
+    Terminated(AgreementId),
     #[error("Invalid proposal id. {0}")]
     InvalidSubscriptionId(#[from] ProposalIdParseError),
+    #[error("Invalid proposal id. {0}")]
+    Protocol(#[from] crate::protocol::negotiation::errors::AgreementError),
 }
 
 #[derive(Error, Debug)]
@@ -67,7 +89,7 @@ impl AgreementError {
                 AgreementError::ProposalNotFound(promoted_proposal.clone(), id)
             }
             GetProposalError::FailedGetProposal(id, db_error) => {
-                AgreementError::FailedGetProposal(promoted_proposal.clone(), id, db_error)
+                AgreementError::GetProposal(promoted_proposal.clone(), id, db_error)
             }
         }
     }

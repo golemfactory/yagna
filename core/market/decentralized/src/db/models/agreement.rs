@@ -6,6 +6,7 @@ use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use serde::{Deserialize, Serialize};
 
 use ya_client::model::NodeId;
 
@@ -17,7 +18,9 @@ pub type AgreementId = ProposalId;
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
-#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[derive(
+    FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, Serialize, Deserialize,
+)]
 #[sql_type = "Integer"]
 pub enum AgreementState {
     /// Newly created by a Requestor (based on Proposal)
@@ -36,7 +39,7 @@ pub enum AgreementState {
     Terminated = 6,
 }
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
 #[table_name = "market_agreement"]
 pub struct Agreement {
     pub id: AgreementId,

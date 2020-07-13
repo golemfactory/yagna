@@ -8,7 +8,7 @@ use super::messages::{
     ProposalReceived, ProposalRejected,
 };
 
-use crate::db::models::{OwnerType, Proposal, ProposalId};
+use crate::db::models::{AgreementId, OwnerType, Proposal, ProposalId};
 use crate::protocol::negotiation::errors::CounterProposalError;
 
 use std::str::FromStr;
@@ -102,12 +102,10 @@ impl NegotiationApi {
     pub async fn approve_agreement(
         &self,
         id: NodeId,
-        agreement_id: &str,
+        agreement_id: AgreementId,
         owner: NodeId,
     ) -> Result<(), AgreementError> {
-        let msg = AgreementApproved {
-            agreement_id: agreement_id.to_string(),
-        };
+        let msg = AgreementApproved { agreement_id };
         net::from(id)
             .to(owner)
             .service(&requestor::agreement_addr(BUS_ID))
@@ -119,12 +117,10 @@ impl NegotiationApi {
     pub async fn reject_agreement(
         &self,
         id: NodeId,
-        agreement_id: &str,
+        agreement_id: AgreementId,
         owner: NodeId,
     ) -> Result<(), AgreementError> {
-        let msg = AgreementRejected {
-            agreement_id: agreement_id.to_string(),
-        };
+        let msg = AgreementRejected { agreement_id };
         net::from(id)
             .to(owner)
             .service(&requestor::agreement_addr(BUS_ID))
@@ -197,7 +193,7 @@ impl NegotiationApi {
     ) -> Result<(), AgreementError> {
         log::debug!(
             "Negotiation API: Agreement proposal [{}] sent by [{}].",
-            &msg.agreement_id,
+            &msg.agreement.id,
             &caller
         );
         self.inner.agreement_received.call(caller, msg).await

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::super::callbacks::CallbackMessage;
 use super::errors::{AgreementError, CounterProposalError, ProposalError};
-use crate::db::models::Demand;
+use crate::db::models::{Agreement, AgreementId, Demand};
 use crate::db::models::{DbProposal, OwnerType, ProposalId};
 use crate::SubscriptionId;
 
@@ -83,8 +83,7 @@ impl RpcMessage for ProposalRejected {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementReceived {
-    pub agreement_id: String,
-    // TODO: Send agreement content.
+    pub agreement: Agreement,
 }
 
 impl RpcMessage for AgreementReceived {
@@ -96,7 +95,7 @@ impl RpcMessage for AgreementReceived {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementApproved {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
     // TODO: We should send here signature.
 }
 
@@ -109,7 +108,7 @@ impl RpcMessage for AgreementApproved {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementRejected {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 impl RpcMessage for AgreementRejected {
@@ -121,7 +120,7 @@ impl RpcMessage for AgreementRejected {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementCancelled {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 impl RpcMessage for AgreementCancelled {
