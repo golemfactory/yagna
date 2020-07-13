@@ -1,7 +1,9 @@
 use futures::stream::StreamExt;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
+
+use ya_client::model::market::event::RequestorEvent;
+use ya_persistence::executor::DbExecutor;
 
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
@@ -9,11 +11,8 @@ use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{Demand as ModelDemand, SubscriptionId};
 use crate::db::models::{EventError, OwnerType};
 use crate::db::DbResult;
-use crate::matcher::DraftProposal;
 
-use ya_client::model::market::event::RequestorEvent;
-use ya_persistence::executor::DbExecutor;
-
+use crate::matcher::RawProposal;
 use crate::negotiation::notifier::NotifierError;
 use crate::protocol::negotiation::messages::{
     AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected,
@@ -24,14 +23,14 @@ use crate::protocol::negotiation::requestor::NegotiationApi;
 pub struct RequestorBroker {
     api: NegotiationApi,
     db: DbExecutor,
-    notifier: EventNotifier,
+    pub notifier: EventNotifier,
 }
 
 impl RequestorBroker {
     pub fn new(
         db: DbExecutor,
-        proposal_receiver: UnboundedReceiver<DraftProposal>,
-    ) -> Result<Arc<RequestorBroker>, NegotiationInitError> {
+        proposal_receiver: UnboundedReceiver<RawProposal>,
+    ) -> Result<RequestorBroker, NegotiationInitError> {
         let api = NegotiationApi::new(
             move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
             move |_caller: String, msg: ProposalRejected| async move { unimplemented!() },
@@ -47,7 +46,7 @@ impl RequestorBroker {
         };
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
-        Ok(Arc::new(engine))
+        Ok(engine)
     }
 
     pub async fn bind_gsb(
@@ -165,7 +164,7 @@ async fn get_events_from_db(
 
 pub async fn proposal_receiver_thread(
     db: DbExecutor,
-    mut proposal_receiver: UnboundedReceiver<DraftProposal>,
+    mut proposal_receiver: UnboundedReceiver<RawProposal>,
     notifier: EventNotifier,
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {

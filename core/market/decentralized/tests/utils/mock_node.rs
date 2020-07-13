@@ -1,144 +1,159 @@
 use anyhow::{anyhow, Context, Result};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ya_client::model::NodeId;
+use ya_client::model::market::RequestorEvent;
 use ya_market_decentralized::protocol::{
-    CallbackHandler, Discovery, OfferReceived, OfferUnsubscribed, RetrieveOffers,
+    CallbackHandler, Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, RetrieveOffers,
 };
+use ya_market_decentralized::testing::mock_offer::generate_identity;
 use ya_market_decentralized::testing::negotiation::messages::{
     AgreementApproved, AgreementCancelled, AgreementReceived, AgreementRejected,
     InitialProposalReceived, ProposalReceived, ProposalRejected,
 };
-use ya_market_decentralized::testing::negotiation::provider;
-use ya_market_decentralized::testing::negotiation::requestor;
-use ya_market_decentralized::testing::{DemandError, OfferError};
-use ya_market_decentralized::{Demand, MarketService, Offer, SubscriptionId};
+use ya_market_decentralized::testing::negotiation::{provider, requestor};
+use ya_market_decentralized::testing::{
+    DemandError, EventsListeners, Matcher, QueryEventsError, QueryOfferError,
+};
+use ya_market_decentralized::{migrations, Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use super::mock_net::MockNet;
+use super::{bcast::BCast, mock_net::MockNet};
+
+#[cfg(feature = "bcast-singleton")]
+use super::bcast::singleton::BCastService;
+#[cfg(not(feature = "bcast-singleton"))]
+use super::bcast::BCastService;
+use crate::utils::mock_net::gsb_prefixes;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
-    net: MockNet,
-    markets: Vec<MarketNode>,
-    discoveries: Vec<DiscoveryNode>,
-    negotiations: Vec<NegotiationNode>,
+    nodes: Vec<MockNode>,
     test_dir: PathBuf,
     test_name: String,
 }
 
-/// Store all object associated with single market
-/// for example: Database
-#[derive(Clone)]
-pub struct MarketNode {
-    pub market: Arc<MarketService>,
+pub struct MockNode {
     pub name: String,
     /// For now only mock default Identity.
     pub id: Identity,
-    /// Direct access to underlying database.
-    pub db: DbExecutor,
+    pub kind: MockNodeKind,
 }
 
-/// Stores mock discovery node, that doesn't include full
-/// Market implementation, but only Discovery interface.
-/// Necessary to emulate wrong nodes behavior.
-pub struct DiscoveryNode {
-    discovery: Discovery,
-    name: String,
-    /// For now only mock default Identity.
-    id: Identity,
+/// Internal object associated with single Node
+pub enum MockNodeKind {
+    /// Full Market Service
+    Market(Arc<MarketService>),
+    /// Just Matcher sub-service and event listener.
+    /// Used to check resolver behaviour.
+    Matcher {
+        matcher: Matcher,
+        listeners: EventsListeners,
+    },
+    /// Stores mock discovery node, that doesn't include full
+    /// Market implementation, but only Discovery interface.
+    /// Necessary to emulate wrong nodes behavior.
+    Discovery(Discovery),
+    /// Stores mock negotiation interfaces, that doesn't include full
+    /// Market implementation.
+    /// Necessary to emulate wrong nodes behavior.
+    Negotiation {
+        provider: provider::NegotiationApi,
+        requestor: requestor::NegotiationApi,
+    },
 }
 
-/// Stores mock negotiation interfaces, that doesn't include full
-/// Market implementation.
-/// Necessary to emulate wrong nodes behavior.
-pub struct NegotiationNode {
-    provider: provider::NegotiationApi,
-    requestor: requestor::NegotiationApi,
-    name: String,
-    /// For now only mock default Identity.
-    id: Identity,
+impl MockNodeKind {
+    pub async fn bind_gsb(&self, test_name: &str, name: &str) -> Result<String> {
+        let (public, local) = gsb_prefixes(test_name, name);
+
+        match self {
+            MockNodeKind::Market(market) => market.bind_gsb(&public, &local).await?,
+            MockNodeKind::Matcher { matcher, .. } => matcher.bind_gsb(&public, &local).await?,
+            MockNodeKind::Discovery(discovery) => discovery.bind_gsb(&public, &local).await?,
+            MockNodeKind::Negotiation {
+                provider,
+                requestor,
+            } => {
+                provider.bind_gsb(&public, &local).await?;
+                requestor.bind_gsb(&public, &local).await?;
+            }
+        }
+
+        Ok(public)
+    }
 }
 
 impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new<Str: AsRef<str>>(test_name: Str) -> Self {
+    pub async fn new(test_name: &str) -> Self {
+        let _ = env_logger::builder().try_init();
         let test_dir = prepare_test_dir(&test_name).unwrap();
-        let net = MockNet::new().unwrap();
+
+        MockNet::default().bind_gsb();
 
         MarketsNetwork {
-            net,
-            markets: vec![],
-            discoveries: vec![],
-            negotiations: vec![],
+            nodes: vec![],
             test_dir,
-            test_name: test_name.as_ref().to_string(),
+            test_name: test_name.to_string(),
         }
     }
 
-    pub async fn add_market_instance<Str: AsRef<str>>(mut self, name: Str) -> Result<Self> {
-        let db = self.init_database(name.as_ref())?;
-        let market = Arc::new(MarketService::new(&db)?);
+    async fn add_node(mut self, name: &str, node_kind: MockNodeKind) -> Result<MarketsNetwork> {
+        let public_gsb_prefix = node_kind.bind_gsb(&self.test_name, name).await?;
 
-        let (public_gsb_prefix, local_gsb_prefix) =
-            self.net.gsb_prefixes(&self.test_name, name.as_ref());
-        market
-            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
-            .await?;
-
-        let market_node = MarketNode {
-            name: name.as_ref().to_string(),
-            id: generate_identity(name.as_ref()),
-            market,
-            db,
+        let node = MockNode {
+            name: name.to_string(),
+            id: generate_identity(name),
+            kind: node_kind,
         };
 
-        self.net
-            .register_node(&market_node.id.identity, &public_gsb_prefix)
-            .await?;
-        self.markets.push(market_node);
+        BCastService::default().register(&node.id.identity, &self.test_name);
+        MockNet::default().register_node(&node.id.identity, &public_gsb_prefix);
+
+        self.nodes.push(node);
         Ok(self)
     }
 
-    pub async fn add_discovery_instance<Str: AsRef<str>>(
-        mut self,
-        name: Str,
+    pub async fn add_market_instance(self, name: &str) -> Result<Self> {
+        let db = self.init_database(name)?;
+        let market = Arc::new(MarketService::new(&db)?);
+        self.add_node(name, MockNodeKind::Market(market)).await
+    }
+
+    pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
+        let db = self.init_database(name)?;
+        db.apply_migration(migrations::run_with_output)?;
+        let (matcher, listeners) = Matcher::new(&db)?;
+        self.add_node(name, MockNodeKind::Matcher { matcher, listeners })
+            .await
+    }
+
+    pub async fn add_discovery_instance(
+        self,
+        name: &str,
         offer_received: impl CallbackHandler<OfferReceived>,
         offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
         retrieve_offers: impl CallbackHandler<RetrieveOffers>,
     ) -> Result<Self> {
-        let (public_gsb_prefix, local_gsb_prefix) =
-            self.net.gsb_prefixes(&self.test_name, name.as_ref());
+        let discovery = DiscoveryBuilder::default()
+            .add_handler(offer_received)
+            .add_handler(offer_unsubscribed)
+            .add_handler(retrieve_offers)
+            .build();
 
-        let discovery = Discovery::new(offer_received, offer_unsubscribed, retrieve_offers)?;
-        discovery
-            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
-            .await?;
-
-        let discovery_node = DiscoveryNode {
-            name: name.as_ref().to_string(),
-            id: generate_identity(name.as_ref()),
-            discovery,
-        };
-
-        self.net
-            .register_node(&discovery_node.id.identity, &public_gsb_prefix)
-            .await?;
-        self.discoveries.push(discovery_node);
-        Ok(self)
+        self.add_node(name, MockNodeKind::Discovery(discovery))
+            .await
     }
 
-    pub async fn add_provider_negotiation_api<Str: AsRef<str>>(
+    pub async fn add_provider_negotiation_api(
         self,
-        name: Str,
+        name: &str,
         prov_initial_proposal_received: impl CallbackHandler<InitialProposalReceived>,
         prov_proposal_received: impl CallbackHandler<ProposalReceived>,
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
@@ -146,7 +161,7 @@ impl MarketsNetwork {
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
     ) -> Result<Self> {
         self.add_negotiation_api(
-            name.as_ref(),
+            name,
             prov_initial_proposal_received,
             prov_proposal_received,
             prov_proposal_rejected,
@@ -160,16 +175,16 @@ impl MarketsNetwork {
         .await
     }
 
-    pub async fn add_requestor_negotiation_api<Str: AsRef<str>>(
+    pub async fn add_requestor_negotiation_api(
         self,
-        name: Str,
+        name: &str,
         req_proposal_received: impl CallbackHandler<ProposalReceived>,
         req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
     ) -> Result<Self> {
         self.add_negotiation_api(
-            name.as_ref(),
+            name,
             default::empty_on_initial_proposal,
             default::empty_on_proposal_received,
             default::empty_on_proposal_rejected,
@@ -183,9 +198,9 @@ impl MarketsNetwork {
         .await
     }
 
-    pub async fn add_negotiation_api<Str: AsRef<str>>(
-        mut self,
-        name: Str,
+    pub async fn add_negotiation_api(
+        self,
+        name: &str,
         prov_initial_proposal_received: impl CallbackHandler<InitialProposalReceived>,
         prov_proposal_received: impl CallbackHandler<ProposalReceived>,
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
@@ -196,100 +211,102 @@ impl MarketsNetwork {
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
     ) -> Result<Self> {
-        let (public_gsb_prefix, local_gsb_prefix) =
-            self.net.gsb_prefixes(&self.test_name, name.as_ref());
-
-        let provider_api = provider::NegotiationApi::new(
+        let provider = provider::NegotiationApi::new(
             prov_initial_proposal_received,
             prov_proposal_received,
             prov_proposal_rejected,
             prov_agreement_received,
             prov_agreement_cancelled,
         );
-        provider_api
-            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
-            .await?;
 
-        let requestor_api = requestor::NegotiationApi::new(
+        let requestor = requestor::NegotiationApi::new(
             req_proposal_received,
             req_proposal_rejected,
             req_agreement_approved,
             req_agreement_rejected,
         );
-        requestor_api
-            .bind_gsb(&public_gsb_prefix, &local_gsb_prefix)
-            .await?;
 
-        let node = NegotiationNode {
-            name: name.as_ref().to_string(),
-            id: generate_identity(name.as_ref()),
-            provider: provider_api,
-            requestor: requestor_api,
-        };
-
-        self.net
-            .register_node(&node.id.identity, &public_gsb_prefix)
-            .await?;
-        self.negotiations.push(node);
-        Ok(self)
+        self.add_node(
+            name,
+            MockNodeKind::Negotiation {
+                provider,
+                requestor,
+            },
+        )
+        .await
     }
 
     pub fn get_market(&self, name: &str) -> Arc<MarketService> {
-        self.markets
+        self.nodes
             .iter()
             .find(|node| node.name == name)
-            .map(|node| node.market.clone())
+            .map(|node| match &node.kind {
+                MockNodeKind::Market(market) => market.clone(),
+                _ => panic!("market expected"),
+            })
+            .unwrap()
+    }
+
+    pub fn get_matcher(&self, name: &str) -> &Matcher {
+        self.nodes
+            .iter()
+            .find(|node| node.name == name)
+            .map(|node| match &node.kind {
+                MockNodeKind::Matcher { matcher, .. } => matcher,
+                _ => panic!("discovery expected"),
+            })
+            .unwrap()
+    }
+
+    pub fn get_event_listeners(&mut self, name: &str) -> &mut EventsListeners {
+        self.nodes
+            .iter_mut()
+            .find(|node| node.name == name)
+            .map(|node| match &mut node.kind {
+                MockNodeKind::Matcher { listeners, .. } => listeners,
+                _ => panic!("discovery expected"),
+            })
             .unwrap()
     }
 
     pub fn get_discovery(&self, name: &str) -> Discovery {
-        self.discoveries
+        self.nodes
             .iter()
             .find(|node| node.name == name)
-            .map(|node| node.discovery.clone())
+            .map(|node| match &node.kind {
+                MockNodeKind::Discovery(discovery) => discovery.clone(),
+                _ => panic!("discovery expected"),
+            })
             .unwrap()
     }
 
     pub fn get_provider_negotiation_api(&self, name: &str) -> provider::NegotiationApi {
-        self.negotiations
+        self.nodes
             .iter()
             .find(|node| node.name == name)
-            .map(|node| node.provider.clone())
+            .map(|node| match &node.kind {
+                MockNodeKind::Negotiation { provider, .. } => provider.clone(),
+                _ => panic!("negotiation expected"),
+            })
             .unwrap()
     }
 
     pub fn get_requestor_negotiation_api(&self, name: &str) -> requestor::NegotiationApi {
-        self.negotiations
+        self.nodes
             .iter()
             .find(|node| node.name == name)
-            .map(|node| node.requestor.clone())
-            .unwrap()
-    }
-
-    pub fn get_node(&self, name: &str) -> MarketNode {
-        self.markets
-            .iter()
-            .find(|node| node.name == name)
-            .map(|node| node.clone())
+            .map(|node| match &node.kind {
+                MockNodeKind::Negotiation { requestor, .. } => requestor.clone(),
+                _ => panic!("negotiation expected"),
+            })
             .unwrap()
     }
 
     pub fn get_default_id(&self, node_name: &str) -> Identity {
-        self.markets
+        self.nodes
             .iter()
-            .map(|node| (&node.name, &node.id))
-            .chain(self.discoveries.iter().map(|node| (&node.name, &node.id)))
-            .chain(self.negotiations.iter().map(|node| (&node.name, &node.id)))
-            .find(|&(name, _id)| name == &node_name)
-            .map(|(_name, id)| id.clone())
-            .unwrap()
-    }
-
-    pub fn get_database(&self, name: &str) -> DbExecutor {
-        self.markets
-            .iter()
-            .find(|node| node.name == name)
-            .map(|node| node.db.clone())
+            .find(|node| &node.name == node_name)
+            .map(|node| node.id.clone())
             .unwrap()
     }
 
@@ -311,8 +328,8 @@ fn test_data_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test-workdir")
 }
 
-pub fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf> {
-    let test_dir: PathBuf = test_data_dir().join(dir_name.as_ref());
+pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
+    let test_dir: PathBuf = test_data_dir().join(dir_name);
 
     if test_dir.exists() {
         fs::remove_dir_all(&test_dir)
@@ -321,16 +338,6 @@ pub fn prepare_test_dir<Str: AsRef<str>>(dir_name: Str) -> Result<PathBuf> {
     fs::create_dir_all(&test_dir)
         .with_context(|| format!("Creating test directory: {}", test_dir.display()))?;
     Ok(test_dir)
-}
-
-fn generate_identity(name: &str) -> Identity {
-    let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
-
-    Identity {
-        name: name.to_string(),
-        role: "manager".to_string(),
-        identity: NodeId::from(random_node_id[..].as_bytes()),
-    }
 }
 
 /// Facilitates waiting for broadcast propagation.
@@ -352,19 +359,36 @@ pub async fn wait_for_bcast(
 }
 
 #[async_trait::async_trait]
-pub trait MarketStore {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError>;
+pub trait MarketServiceExt {
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+    async fn query_events(
+        &self,
+        subscription_id: &SubscriptionId,
+        timeout: f32,
+        max_events: Option<i32>,
+    ) -> Result<Vec<RequestorEvent>, QueryEventsError>;
 }
 
 #[async_trait::async_trait]
-impl MarketStore for MarketService {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, OfferError> {
+impl MarketServiceExt for MarketService {
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
         self.matcher.store.get_offer(id).await
     }
 
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
         self.matcher.store.get_demand(id).await
+    }
+
+    async fn query_events(
+        &self,
+        subscription_id: &SubscriptionId,
+        timeout: f32,
+        max_events: Option<i32>,
+    ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
+        self.requestor_engine
+            .query_events(subscription_id, timeout, max_events)
+            .await
     }
 }
 

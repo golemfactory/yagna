@@ -1,24 +1,30 @@
 use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
+use actix_web::{body::MessageBody, dev::ServiceResponse};
 use actix_web::{error::PathError, http::StatusCode, test, App};
-
-use crate::utils::mock_node::{wait_for_bcast, MarketStore};
-use crate::utils::MarketsNetwork;
-use actix_web::body::MessageBody;
-use actix_web::dev::ServiceResponse;
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use ya_client::model::market::Offer;
-use ya_client::model::{ErrorMessage, NodeId};
+
+use ya_client::model::{market::Offer, ErrorMessage, NodeId};
 use ya_core_model::market;
 use ya_market_decentralized::testing::{
-    DemandError, OfferError, SubscriptionParseError, SubscriptionStore,
+    DemandError, ModifyOfferError, SubscriptionParseError, SubscriptionStore,
 };
 use ya_market_decentralized::{MarketService, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
+use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 
 mod utils;
+
+use utils::client::{sample_demand, sample_offer};
+use utils::mock_node::{wait_for_bcast, MarketServiceExt};
+use utils::MarketsNetwork;
+
+#[cfg(feature = "bcast-singleton")]
+use utils::bcast::singleton::BCastService;
+#[cfg(not(feature = "bcast-singleton"))]
+use utils::bcast::BCastService;
+use utils::{bcast::BCast, mock_net::MockNet};
 
 //#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
@@ -80,7 +86,7 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
     // env_logger::init();
 
     // given
-    let (_db, mut app) = init_db_app("test_rest_non_existent").await;
+    let (_db, _node_id, mut app) = init_db_app("test_rest_non_existent").await;
 
     // when
     let req = test::TestRequest::delete()
@@ -107,9 +113,9 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     // env_logger::init();
 
     // given
-    let (db, mut app) = init_db_app("test_rest_subscribe_offer").await;
+    let (db, node_id, mut app) = init_db_app("test_rest_subscribe_offer").await;
 
-    let mut client_offer = utils::example_offer();
+    let mut client_offer = sample_offer();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/offers")
@@ -126,7 +132,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
 
     // given
     client_offer.offer_id = Some(subscription_id.to_string());
-    client_offer.provider_id = Some(mock_id().identity.to_string());
+    client_offer.provider_id = Some(node_id.to_string());
     // when get from subscription store
     let offer = SubscriptionStore::new(db)
         .get_offer(&subscription_id)
@@ -157,7 +163,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        OfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
+        ModifyOfferError::Unsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
 }
@@ -168,9 +174,9 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     // env_logger::init();
 
     // given
-    let (db, mut app) = init_db_app("test_rest_subscribe_demand").await;
+    let (db, node_id, mut app) = init_db_app("test_rest_subscribe_demand").await;
 
-    let mut client_demand = utils::example_demand();
+    let mut client_demand = sample_demand();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/demands")
@@ -187,7 +193,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
 
     // given
     client_demand.demand_id = Some(subscription_id.to_string());
-    client_demand.requestor_id = Some(mock_id().identity.to_string());
+    client_demand.requestor_id = Some(node_id.to_string());
     // when
     let demand = SubscriptionStore::new(db)
         .get_demand(&subscription_id)
@@ -227,13 +233,16 @@ async fn init_db_app(
     test_name: &str,
 ) -> (
     DbExecutor,
+    NodeId,
     impl ActixService<
         Request = Request,
         Response = ServiceResponse<Body>,
         Error = actix_http::error::Error,
     >,
 ) {
-    utils::mock_net::MockNet::new().unwrap();
+    let id = utils::generate_identity(test_name);
+    BCastService::default().register(&id.identity, test_name);
+    MockNet::default().bind_gsb();
 
     let test_dir = utils::mock_node::prepare_test_dir(test_name).unwrap();
     let db = DbExecutor::from_data_dir(&test_dir, "yagna").unwrap();
@@ -247,26 +256,12 @@ async fn init_db_app(
 
     let app = test::init_service(
         App::new()
-            .wrap(mock_auth())
+            .wrap(DummyAuth::new(id.clone()))
             .service(MarketService::bind_rest(market.into())),
     )
     .await;
 
-    (db, app)
-}
-
-fn mock_auth() -> DummyAuth {
-    DummyAuth::new(mock_id())
-}
-
-fn mock_id() -> Identity {
-    Identity {
-        identity: "0xbabe000000000000000000000000000000000000"
-            .parse::<NodeId>()
-            .unwrap(),
-        name: "".to_string(),
-        role: "".to_string(),
-    }
+    (db, id.identity, app)
 }
 
 pub async fn read_response_json<B: MessageBody, T: DeserializeOwned>(

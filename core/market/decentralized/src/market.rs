@@ -3,7 +3,10 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::db::models::SubscriptionId;
-use crate::matcher::{DemandError, Matcher, MatcherError, MatcherInitError, OfferError};
+use crate::matcher::error::{
+    DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
+};
+use crate::matcher::Matcher;
 use crate::negotiation::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 
@@ -23,7 +26,9 @@ pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
     #[error(transparent)]
-    OfferError(#[from] OfferError),
+    QueryOfferError(#[from] QueryOfferError),
+    #[error(transparent)]
+    QueryOffersError(#[from] QueryOffersError),
     #[error(transparent)]
     DemandError(#[from] DemandError),
     #[error(transparent)]
@@ -34,7 +39,7 @@ pub enum MarketError {
 
 #[derive(Error, Debug)]
 pub enum MarketInitError {
-    #[error("Failed to initialize Offers matcher. Error: {0}.")]
+    #[error("Failed to initialize Matcher. Error: {0}.")]
     Matcher(#[from] MatcherInitError),
     #[error("Failed to initialize negotiation engine. Error: {0}.")]
     Negotiation(#[from] NegotiationInitError),
@@ -45,8 +50,8 @@ pub enum MarketInitError {
 /// Structure connecting all market objects.
 pub struct MarketService {
     pub matcher: Matcher,
-    pub provider_engine: Arc<ProviderBroker>,
-    pub requestor_engine: Arc<RequestorBroker>,
+    pub provider_engine: ProviderBroker,
+    pub requestor_engine: RequestorBroker,
 }
 
 impl MarketService {
@@ -85,14 +90,13 @@ impl MarketService {
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
-        let market = match MARKET.get_or_init_market(&ctx.component()) {
-            Ok(market) => market,
+        match MARKET.get_or_init_market(&ctx.component()) {
+            Ok(market) => MarketService::bind_rest(market),
             Err(e) => {
                 log::error!("REST API initialization failed: {}", e);
                 panic!("Market Service initialization impossible: {}", e)
             }
-        };
-        MarketService::bind_rest(market)
+        }
     }
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
@@ -112,7 +116,7 @@ impl MarketService {
         offer: &Offer,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
-        let offer = self.matcher.subscribe_offer(id, offer).await?;
+        let offer = self.matcher.subscribe_offer(offer, id).await?;
         self.provider_engine.subscribe_offer(&offer).await?;
         Ok(offer.id)
     }
@@ -134,7 +138,7 @@ impl MarketService {
         demand: &Demand,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
-        let demand = self.matcher.subscribe_demand(id, demand).await?;
+        let demand = self.matcher.subscribe_demand(demand, id).await?;
         self.requestor_engine.subscribe_demand(&demand).await?;
         Ok(demand.id)
     }
