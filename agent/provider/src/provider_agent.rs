@@ -1,80 +1,74 @@
-use actix::prelude::*;
-use actix::utils::IntervalFunc;
-use anyhow::{anyhow, bail};
-use std::convert::TryFrom;
-use std::time::Duration;
-
-use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
-use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferBuilder, OfferDefinition, ServiceInfo};
-use ya_client::cli::ProviderApi;
-use ya_utils_actix::actix_handler::send_message;
-
-use crate::execution::{ExeUnitDesc, GetExeUnit, TaskRunner, UpdateActivity};
-use crate::market::{
-    provider_market::{OnShutdown, UpdateMarket},
-    CreateOffer, Preset, Presets, ProviderMarket,
-};
+use crate::events::Event;
+use crate::execution::{GetExeUnit, TaskRunner, UpdateActivity};
+use crate::hardware;
+use crate::market::presets::Coefficient;
+use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
+use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments};
 use crate::preset_cli::PresetUpdater;
 use crate::startup_config::{NodeConfig, PresetNoInteractive, ProviderConfig, RunConfig};
 use crate::task_manager::{InitializeTaskManager, TaskManager};
+use actix::prelude::*;
+use actix::utils::IntervalFunc;
+use anyhow::{anyhow, bail, Error};
+use futures::{FutureExt, StreamExt, TryFutureExt};
+use std::convert::TryFrom;
+use std::time::Duration;
+use ya_agreement_utils::*;
+use ya_client::cli::ProviderApi;
+use ya_utils_actix::actix_handler::send_message;
 
 pub struct ProviderAgent {
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
     task_manager: Addr<TaskManager>,
     node_info: NodeInfo,
+    presets: PresetManager,
+    hardware: hardware::Manager,
 }
 
 impl ProviderAgent {
     pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let api = ProviderApi::try_from(&args.api)?;
-
         let registry = config.registry()?;
         registry.validate()?;
 
-        let market = ProviderMarket::new(api.market, "LimitAgreements").start();
-        let runner =
-            TaskRunner::new(api.activity.clone(), args.runner_config.clone(), registry)?.start();
-        let payments = Payments::new(api.activity, api.payment).start();
-        let task_manager =
-            TaskManager::new(market.clone(), runner.clone(), payments.clone())?.start();
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
+        presets.spawn_monitor(&config.presets_file)?;
+        let mut hardware = hardware::Manager::try_new(&config.hardware_file)?;
+        hardware.spawn_monitor(&config.hardware_file)?;
 
+        let market = ProviderMarket::new(api.market, "LimitAgreements").start();
+        let payments = Payments::new(api.activity.clone(), api.payment).start();
+        let runner = TaskRunner::new(api.activity, args.runner_config.clone(), registry)?.start();
+        let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
         let node_info = ProviderAgent::create_node_info(&args.node).await;
 
-        let mut provider = ProviderAgent {
+        Ok(ProviderAgent {
             market,
             runner,
             task_manager,
             node_info,
-        };
-        provider.initialize(args, config).await?;
-
-        Ok(provider)
-    }
-
-    pub async fn initialize(
-        &mut self,
-        args: RunConfig,
-        config: ProviderConfig,
-    ) -> anyhow::Result<()> {
-        self.task_manager.send(InitializeTaskManager {}).await??;
-        Ok(self.create_offers(args.presets, config).await?)
+            presets,
+            hardware,
+        })
     }
 
     async fn create_offers(
-        &self,
-        presets_names: Vec<String>,
-        config: ProviderConfig,
+        presets: Vec<Preset>,
+        node_info: NodeInfo,
+        inf_node_info: InfNodeInfo,
+        runner: Addr<TaskRunner>,
+        market: Addr<ProviderMarket>,
     ) -> anyhow::Result<()> {
-        log::debug!("Presets names: {:?}", presets_names);
-
-        if presets_names.is_empty() {
+        if presets.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
         }
 
-        let presets = Presets::from_file(&config.presets_file)?.list_matching(&presets_names)?;
-        for preset in presets.into_iter() {
+        let preset_names = presets.iter().map(|p| &p.name).collect::<Vec<_>>();
+        log::debug!("Preset names: {:?}", preset_names);
+
+        for preset in presets {
             let com_info = match preset.pricing_model.as_str() {
                 "linear" => LinearPricingOffer::from_preset(&preset)?
                     .interval(6.0)
@@ -90,7 +84,7 @@ impl ProviderAgent {
             let msg = GetExeUnit {
                 name: preset.exeunit_name.clone(),
             };
-            let exeunit_desc = self.runner.send(msg).await?.map_err(|error| {
+            let exeunit_desc = runner.send(msg).await?.map_err(|error| {
                 anyhow!(
                     "Failed to create offer for preset [{}]. Error: {}",
                     preset.name,
@@ -99,28 +93,23 @@ impl ProviderAgent {
             })?;
 
             // Create simple offer on market.
-            let cnts = self.build_constraints()?;
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
-                    node_info: self.node_info.clone(),
-                    service: Self::create_service_info(&exeunit_desc),
+                    node_info: node_info.clone(),
+                    service: ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build()),
                     com_info,
-                    constraints: cnts,
+                    constraints: Self::build_constraints(node_info.subnet.clone())?,
                 },
             };
-            self.market.send(create_offer_message).await??
+            market.send(create_offer_message).await??;
         }
         Ok(())
     }
 
-    fn build_constraints(&self) -> anyhow::Result<String> {
-        // Provider requires expiration property from Requestor.
-
-        // If user set subnet name, we should add constraint for filtering
-        // nodes that didn't set the same name in properties.
+    fn build_constraints(subnet: Option<String>) -> anyhow::Result<String> {
         let mut cnts = constraints!["golem.srv.comp.expiration" > 0,];
-        if let Some(subnet) = self.node_info.subnet.clone() {
+        if let Some(subnet) = subnet {
             cnts = cnts.and(constraints!["golem.node.debug.subnet" == subnet,]);
         }
         Ok(cnts.to_string())
@@ -142,28 +131,10 @@ impl ProviderAgent {
         }
         node_info
     }
+}
 
-    fn create_service_info(exeunit_desc: &ExeUnitDesc) -> ServiceInfo {
-        let inf = InfNodeInfo::new().with_mem(1.0).with_storage(10.0);
-
-        ServiceInfo::new(inf, exeunit_desc.build())
-    }
-
-    pub async fn wait_for_ctrl_c(self) -> anyhow::Result<()> {
-        let market = self.market.clone();
-
-        self.start();
-
-        let _ = tokio::signal::ctrl_c().await;
-        println!();
-        log::info!(
-            "SIGINT received, Shutting down {}...",
-            structopt::clap::crate_name!()
-        );
-
-        market.send(OnShutdown {}).await?
-    }
-
+// CLI
+impl ProviderAgent {
     pub fn list_exeunits(config: ProviderConfig) -> anyhow::Result<()> {
         let registry = config.registry()?;
         if let Err(errors) = registry.validate() {
@@ -180,7 +151,7 @@ impl ProviderAgent {
     }
 
     pub fn list_presets(config: ProviderConfig) -> anyhow::Result<()> {
-        let presets = Presets::from_file(&config.presets_file)?;
+        let presets = PresetManager::load_or_create(&config.presets_file)?;
         println!("Available Presets:");
 
         for preset in presets.list().iter() {
@@ -190,12 +161,10 @@ impl ProviderAgent {
     }
 
     pub fn list_metrics(_: ProviderConfig) -> anyhow::Result<()> {
-        let preset = Preset::default();
-        let metrics_names = preset.list_readable_metrics();
-        let metrics = preset.list_usage_metrics();
-
-        for (metric, name) in metrics.iter().zip(metrics_names.iter()) {
-            println!("{:15}{}", name, metric);
+        for entry in Coefficient::variants() {
+            if let Some(property) = entry.to_property() {
+                println!("{:15}{}", entry, property);
+            }
         }
         Ok(())
     }
@@ -204,7 +173,7 @@ impl ProviderAgent {
         config: ProviderConfig,
         params: PresetNoInteractive,
     ) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let mut preset = Preset::default();
@@ -215,7 +184,9 @@ impl ProviderAgent {
         preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
 
         for (name, price) in params.price.iter() {
-            preset.update_price(name, *price)?;
+            preset
+                .usage_coeffs
+                .insert(Coefficient::try_from(name.as_str())?, *price);
         }
 
         // Validate ExeUnit existence and pricing model.
@@ -234,7 +205,7 @@ impl ProviderAgent {
     }
 
     pub fn create_preset_interactive(config: ProviderConfig) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let exeunits = registry
@@ -256,14 +227,33 @@ impl ProviderAgent {
     }
 
     pub fn remove_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&config.presets_file)?;
-
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.remove_preset(&name)?;
         presets.save_to_file(&config.presets_file)
     }
 
+    pub fn active_presets(config: ProviderConfig) -> anyhow::Result<()> {
+        let presets = PresetManager::load_or_create(&config.presets_file)?;
+        for preset in presets.active() {
+            println!("\n{}", preset);
+        }
+        Ok(())
+    }
+
+    pub fn activate_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
+        presets.activate(&name)?;
+        presets.save_to_file(&config.presets_file)
+    }
+
+    pub fn deactivate_preset(config: ProviderConfig, name: String) -> anyhow::Result<()> {
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
+        presets.deactivate(&name)?;
+        presets.save_to_file(&config.presets_file)
+    }
+
     pub fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let exeunits = registry
@@ -291,7 +281,7 @@ impl ProviderAgent {
         name: String,
         params: PresetNoInteractive,
     ) -> anyhow::Result<()> {
-        let mut presets = Presets::from_file(&config.presets_file)?;
+        let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         let registry = config.registry()?;
 
         let mut preset = presets.get(&name)?;
@@ -302,7 +292,9 @@ impl ProviderAgent {
         preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
 
         for (name, price) in params.price.iter() {
-            preset.update_price(name, *price)?;
+            preset
+                .usage_coeffs
+                .insert(Coefficient::try_from(name.as_str())?, *price);
         }
 
         // Validate ExeUnit existence and pricing model.
@@ -331,3 +323,125 @@ impl Actor for ProviderAgent {
             .spawn(context);
     }
 }
+
+impl Handler<Initialize> for ProviderAgent {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, _: Initialize, ctx: &mut Context<Self>) -> Self::Result {
+        let market = self.market.clone();
+        let agent = ctx.address().clone();
+        let preset_state = self.presets.state.clone();
+        let rx = futures::stream::select_all(vec![
+            self.hardware.event_receiver(),
+            self.presets.event_receiver(),
+        ]);
+
+        Arbiter::spawn(async move {
+            rx.for_each_concurrent(1, |e| async {
+                match e {
+                    Event::HardwareChanged => {
+                        let _ = market
+                            .send(Unsubscribe(OfferKind::Any))
+                            .map_err(|e| log::error!("Cannot unsubscribe offers: {}", e))
+                            .await;
+                        let _ = agent
+                            .send(CreateOffers(OfferKind::Any))
+                            .map_err(|e| log::error!("Cannot create offers: {}", e))
+                            .await;
+                    }
+                    Event::PresetsChanged {
+                        presets,
+                        updated,
+                        removed,
+                    } => {
+                        let mut new_names = presets.active.clone();
+                        {
+                            let mut state = preset_state.lock().unwrap();
+                            new_names.retain(|n| {
+                                if state.active.contains(n) {
+                                    if !updated.contains(n) {
+                                        return false;
+                                    }
+                                }
+                                true
+                            });
+                            *state = presets;
+                        }
+
+                        let mut to_unsub = updated;
+                        to_unsub.extend(removed);
+
+                        if !to_unsub.is_empty() {
+                            let _ = market
+                                .send(Unsubscribe(OfferKind::WithPresets(to_unsub)))
+                                .map_err(|e| log::error!("Cannot unsubscribe offers: {}", e))
+                                .await;
+                        }
+                        if !new_names.is_empty() {
+                            let _ = agent
+                                .send(CreateOffers(OfferKind::WithPresets(new_names)))
+                                .map_err(|e| log::error!("Cannot create offers: {}", e))
+                                .await;
+                        }
+                    }
+                    _ => (),
+                }
+            })
+            .await;
+        });
+
+        let agent = ctx.address();
+        let task_manager = self.task_manager.clone();
+        async move {
+            task_manager.send(InitializeTaskManager {}).await??;
+            agent.send(CreateOffers(OfferKind::Any)).await??;
+            Ok(())
+        }
+        .boxed_local()
+    }
+}
+
+impl Handler<Shutdown> for ProviderAgent {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, _: Shutdown, _: &mut Context<Self>) -> Self::Result {
+        let market = self.market.clone();
+        async move {
+            market.send(Unsubscribe(OfferKind::Any)).await??;
+            Ok(())
+        }
+        .boxed_local()
+    }
+}
+
+impl Handler<CreateOffers> for ProviderAgent {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    #[inline]
+    fn handle(&mut self, msg: CreateOffers, _: &mut Context<Self>) -> Self::Result {
+        let runner = self.runner.clone();
+        let market = self.market.clone();
+        let node_info = self.node_info.clone();
+        let inf_node_info = InfNodeInfo::from(self.hardware.capped());
+        let preset_names = match msg.0 {
+            OfferKind::Any => self.presets.active(),
+            OfferKind::WithPresets(names) => names,
+        };
+
+        let presets = self.presets.list_matching(&preset_names);
+        async move { Self::create_offers(presets?, node_info, inf_node_info, runner, market).await }
+            .boxed_local()
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), Error>")]
+pub struct Initialize;
+
+#[derive(Message)]
+#[rtype(result = "Result<(), Error>")]
+pub struct Shutdown;
+
+#[derive(Message)]
+#[rtype(result = "Result<(), Error>")]
+struct CreateOffers(pub OfferKind);

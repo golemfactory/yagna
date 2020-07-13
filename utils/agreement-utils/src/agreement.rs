@@ -44,12 +44,14 @@ impl AgreementView {
 
         let mut map = Map::new();
         properties(String::new(), &mut map, value.clone());
-        map.into_iter()
-            .map(|(k, v)| match <T as Deserialize>::deserialize(v) {
-                Ok(v) => Ok((k, v)),
-                Err(e) => Err(Error::UnexpectedType(pointer.to_string(), e)),
+        let map = map
+            .into_iter()
+            .filter_map(|(k, v)| match <T as Deserialize>::deserialize(v) {
+                Ok(v) => Some((k, v)),
+                Err(_) => None,
             })
-            .collect()
+            .collect();
+        Ok(map)
     }
 }
 
