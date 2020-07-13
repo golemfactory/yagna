@@ -2,9 +2,13 @@ use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{error::PathError, http::StatusCode, test, App};
 
+use crate::utils::mock_node::{wait_for_bcast, MarketStore};
+use crate::utils::MarketsNetwork;
 use actix_web::body::MessageBody;
 use actix_web::dev::ServiceResponse;
 use serde::de::DeserializeOwned;
+use serde_json::json;
+use ya_client::model::market::Offer;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_core_model::market;
 use ya_market_decentralized::testing::{
@@ -15,6 +19,60 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
 mod utils;
+
+//#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_rest_get_offers")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let market_local = network.get_market("Node-1");
+    // Not really remote, but in this scenario will treat it as remote
+    let market_remote = network.get_market("Node-2");
+    let identity_local = network.get_default_id("Node-1");
+    let identity_remote = network.get_default_id("Node-2");
+
+    let offer_local = Offer::new(json!({}), "()".to_string());
+    let offer_local_unsubscribed = Offer::new(json!({}), "()".to_string());
+    let offer_remote = Offer::new(json!({}), "()".to_string());
+    let subscription_id_local = market_local
+        .subscribe_offer(&offer_local, &identity_local)
+        .await?;
+    let subscription_id_local_unsubscribed = market_local
+        .subscribe_offer(&offer_local_unsubscribed, &identity_local)
+        .await?;
+    market_local
+        .unsubscribe_offer(&subscription_id_local_unsubscribed, &identity_local)
+        .await?;
+    let subscription_id_remote = market_remote
+        .subscribe_offer(&offer_remote, &identity_remote)
+        .await?;
+    let offer_local = market_local.get_offer(&subscription_id_local).await?;
+    let _offer_remote = market_remote.get_offer(&subscription_id_remote).await?;
+
+    wait_for_bcast(1000, &market_remote, &subscription_id_local, true).await;
+
+    let mut app = test::init_service(
+        App::new()
+            .wrap(DummyAuth::new(identity_local))
+            .service(MarketService::bind_rest(market_local)),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/market-api/v1/offers")
+        .to_request();
+    let resp = test::call_service(&mut app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let result: Vec<Offer> = read_response_json(resp).await;
+    assert_eq!(vec![offer_local.into_client_offer()?], result);
+    Ok(())
+}
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]

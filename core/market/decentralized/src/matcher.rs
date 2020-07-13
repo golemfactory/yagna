@@ -177,12 +177,17 @@ pub(crate) async fn on_offer_received(
             // Below errors are not possible to get from checked_store_offer
             OfferError::NotFound(_)
             | OfferError::UnsubscribeError(_, _)
+            | OfferError::GetMany(_)
             | OfferError::RemoveError(_, _)
             | OfferError::UnexpectedError(_) => {
                 log::error!("Unexpected error handling offer reception: {}.", e);
                 panic!("Should not happened: {}.", e)
             }
-            _ => Ok(Propagate::No(Reason::Error(format!("{}", e)))),
+            OfferError::SaveError(_, _)
+            | OfferError::GetError(_, _)
+            | OfferError::SubscriptionValidation(_) => {
+                Ok(Propagate::No(Reason::Error(format!("{}", e))))
+            }
         })
 }
 
@@ -208,6 +213,7 @@ pub(crate) async fn on_offer_unsubscribed(
             OfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
             OfferError::SaveError(_, _)
             | OfferError::GetError(_, _)
+            | OfferError::GetMany(_)
             | OfferError::SubscriptionValidation(_) => {
                 log::error!("Unexpected error handling offer unsubscription: {}.", e);
                 panic!("Should not happened: {}.", e)
