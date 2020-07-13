@@ -36,26 +36,22 @@ impl ProviderBroker {
         store: SubscriptionStore,
     ) -> Result<Arc<ProviderBroker>, NegotiationInitError> {
         let notifier = EventNotifier::new();
+        let broker = CommonBroker {
+            store,
+            db,
+            notifier,
+        };
 
-        let db1 = db.clone();
-        let notifier1 = notifier.clone();
-        let store1 = store.clone();
-
+        let broker1 = broker.clone();
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
-                on_initial_proposal(db1.clone(), store1.clone(), notifier1.clone(), caller, msg)
+                on_initial_proposal(broker1.clone(), caller, msg)
             },
             move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
             move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
         );
-
-        let broker = CommonBroker {
-            store,
-            db,
-            notifier,
-        };
 
         Ok(Arc::new(ProviderBroker {
             api,
@@ -135,12 +131,14 @@ impl ProviderBroker {
 }
 
 async fn on_initial_proposal(
-    db: DbExecutor,
-    store: SubscriptionStore,
-    notifier: EventNotifier,
+    broker: CommonBroker,
     caller: String,
     msg: InitialProposalReceived,
 ) -> Result<(), CounterProposalError> {
+    let db = broker.db;
+    let store = broker.store;
+    let notifier = broker.notifier;
+
     // Check subscription.
     let offer = match store.get_offer(&msg.offer_id).await {
         Err(e) => match e {

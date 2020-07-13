@@ -146,19 +146,23 @@ impl ProposalContent {
             creation_ts: proposal.creation_ts,
         }
     }
+
+    pub fn into(self, owner: NodeId, demand_id: SubscriptionId) -> Demand {
+        Demand {
+            id: demand_id,
+            properties: self.properties,
+            constraints: self.constraints,
+            node_id: owner,
+            creation_ts: self.creation_ts,
+            insertion_ts: None,
+            expiration_ts: self.expiration_ts,
+        }
+    }
 }
 
 impl InitialProposalReceived {
     pub fn into_demand(self, owner: NodeId) -> Demand {
-        Demand {
-            id: self.demand_id,
-            properties: self.proposal.properties,
-            constraints: self.proposal.constraints,
-            node_id: owner,
-            creation_ts: self.proposal.creation_ts,
-            insertion_ts: None,
-            expiration_ts: self.proposal.expiration_ts,
-        }
+        self.proposal.into(owner, self.demand_id)
     }
 }
 impl ProposalReceived {
