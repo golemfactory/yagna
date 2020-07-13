@@ -13,7 +13,7 @@ mod rest_api;
 pub mod protocol;
 pub mod testing;
 
-pub use db::models::{Demand, Offer, SubscriptionId};
+pub use db::models::{Demand, Offer, ProposalId, SubscriptionId};
 pub use market::MarketService;
 
 pub use ya_client::model::market::MARKET_API_PATH;

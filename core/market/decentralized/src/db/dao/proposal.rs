@@ -7,6 +7,7 @@ use crate::db::models::{Negotiation, Proposal};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
 use crate::db::DbResult;
+use crate::ProposalId;
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,
@@ -44,7 +45,7 @@ impl<'c> ProposalDao<'c> {
         .await
     }
 
-    pub async fn get_proposal(&self, proposal_id: &str) -> DbResult<Option<Proposal>> {
+    pub async fn get_proposal(&self, proposal_id: &ProposalId) -> DbResult<Option<Proposal>> {
         let proposal_id = proposal_id.to_string();
         readonly_transaction(self.pool, move |conn| {
             let proposal: Option<DbProposal> = dsl::market_proposal
@@ -69,7 +70,7 @@ impl<'c> ProposalDao<'c> {
         .await
     }
 
-    pub async fn has_counter_proposal(&self, proposal_id: &str) -> DbResult<bool> {
+    pub async fn has_counter_proposal(&self, proposal_id: &ProposalId) -> DbResult<bool> {
         let proposal_id = proposal_id.to_string();
         readonly_transaction(self.pool, move |conn| {
             let proposal: Option<DbProposal> = dsl::market_proposal

@@ -1,3 +1,4 @@
+mod common;
 // TODO: move to ../<mod_name>.rs
 mod errors; // TODO: remove plural form
 mod notifier;
@@ -8,4 +9,6 @@ pub use notifier::EventNotifier;
 pub use provider::ProviderBroker;
 pub use requestor::RequestorBroker;
 
-pub use errors::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError};
+pub use errors::{
+    AgreementError, NegotiationError, NegotiationInitError, ProposalError, QueryEventsError,
+};

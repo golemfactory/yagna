@@ -12,6 +12,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use crate::SubscriptionId;
+use ya_client::model::ErrorMessage;
 
 #[derive(Display, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum OwnerType {
@@ -32,10 +33,10 @@ pub enum ProposalIdParseError {
 #[derive(
     Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq, Serialize, Deserialize,
 )]
-#[display(fmt = "{}-{}", owner, proposal_id)]
+#[display(fmt = "{}-{}", owner, id)]
 #[sql_type = "Text"]
 pub struct ProposalId {
-    proposal_id: String,
+    id: String,
     owner: OwnerType,
 }
 
@@ -48,7 +49,7 @@ impl ProposalId {
     ) -> ProposalId {
         ProposalId {
             owner,
-            proposal_id: hash_proposal(&offer_id, &demand_id, &creation_ts),
+            id: hash_proposal(&offer_id, &demand_id, &creation_ts),
         }
     }
 
@@ -98,8 +99,14 @@ impl FromStr for ProposalId {
 
         Ok(ProposalId {
             owner,
-            proposal_id: elements[1].to_string(),
+            id: elements[1].to_string(),
         })
+    }
+}
+
+impl From<ProposalIdParseError> for ErrorMessage {
+    fn from(e: ProposalIdParseError) -> Self {
+        ErrorMessage::new(e.to_string())
     }
 }
 

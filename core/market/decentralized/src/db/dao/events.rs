@@ -1,3 +1,4 @@
+use chrono::Utc;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use thiserror::Error;
 
@@ -11,7 +12,6 @@ use crate::db::models::MarketEvent;
 use crate::db::models::{OwnerType, Proposal, SubscriptionId};
 use crate::db::schema::market_event::dsl;
 use crate::db::DbResult;
-use chrono::Utc;
 
 #[derive(Error, Debug)]
 pub enum TakeEventsError {

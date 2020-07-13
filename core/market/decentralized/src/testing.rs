@@ -2,7 +2,7 @@
 
 pub use super::db::dao::{DemandDao, OfferDao, TakeEventsError};
 pub use super::db::models::{
-    Demand, Offer, OwnerType, ProposalId, SubscriptionId, SubscriptionParseError,
+    AgreementId, Demand, Offer, OwnerType, ProposalId, SubscriptionId, SubscriptionParseError,
 };
 pub use super::matcher::{
     DemandError, MatcherError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,

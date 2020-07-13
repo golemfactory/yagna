@@ -3,6 +3,7 @@ use serde::Deserialize;
 
 use ya_client::model::ErrorMessage;
 
+use crate::ProposalId;
 use crate::SubscriptionId;
 
 mod error;
@@ -35,7 +36,7 @@ pub struct PathSubscription {
 #[derive(Deserialize)]
 pub struct PathSubscriptionProposal {
     pub subscription_id: SubscriptionId,
-    pub proposal_id: String,
+    pub proposal_id: ProposalId,
 }
 
 #[derive(Deserialize)]

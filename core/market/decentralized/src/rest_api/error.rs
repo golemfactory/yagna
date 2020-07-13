@@ -4,7 +4,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
 use crate::matcher::error::{QueryOffersError, SaveOfferError};
-use crate::negotiation::ProposalError;
+use crate::negotiation::{AgreementError, ProposalError};
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
@@ -126,6 +126,20 @@ impl ResponseError for ProposalError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for AgreementError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            AgreementError::NoNegotiations(_)
+            | AgreementError::ProposalNotFound(..)
+            | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
+            AgreementError::FailedGetProposal(..) | AgreementError::FailedSaveAgreement(..) => {
+                HttpResponse::InternalServerError().json(msg)
+            }
         }
     }
 }

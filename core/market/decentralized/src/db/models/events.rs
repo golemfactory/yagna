@@ -17,6 +17,8 @@ use super::SubscriptionId;
 use crate::db::dao::ProposalDao;
 use crate::db::models::{OwnerType, Proposal};
 use crate::db::schema::market_event;
+use crate::ProposalId;
+use std::str::FromStr;
 
 #[derive(Error, Debug)]
 pub enum EventError {
@@ -89,7 +91,10 @@ impl MarketEvent {
     async fn into_client_proposal(self, db: DbExecutor) -> Result<ClientProposal, EventError> {
         let prop = db
             .as_dao::<ProposalDao>()
-            .get_proposal(&self.artifact_id)
+            .get_proposal(
+                &ProposalId::from_str(&self.artifact_id)
+                    .map_err(|e| ErrorMessage::from(e.to_string()))?,
+            )
             .await
             .map_err(|error| EventError::FailedGetProposal(error))?
             .ok_or(EventError::ProposalNotFound(self.artifact_id.clone()))?;

@@ -2,6 +2,7 @@ use futures::stream::StreamExt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+use ya_client::model::market::event::ProviderEvent;
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 
@@ -18,7 +19,6 @@ use crate::protocol::negotiation::messages::{
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
 use crate::{db::models::Offer as ModelOffer, SubscriptionId};
-use ya_client::model::market::event::ProviderEvent;
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
