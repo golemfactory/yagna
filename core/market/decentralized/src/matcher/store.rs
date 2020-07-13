@@ -136,9 +136,11 @@ impl SubscriptionStore {
         local_caller: bool,
         caller_id: Option<NodeId>,
     ) -> Result<(), ModifyOfferError> {
-        let offer = self.get_offer(offer_id).await?;
-        if caller_id != Some(offer.node_id) {
-            return Err(ModifyOfferError::NotFound(offer_id.clone()));
+        if let Ok(offer) = self.get_offer(offer_id).await {
+            if caller_id != Some(offer.node_id) {
+                // TODO: unauthorized?
+                return Err(ModifyOfferError::NotFound(offer_id.clone()));
+            }
         }
 
         // If this fn was called before, we won't remove our Offer below,
