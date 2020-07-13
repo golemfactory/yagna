@@ -8,7 +8,8 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use thiserror::Error;
 
-use ya_client::model::market::event::RequestorEvent;
+use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
+use ya_client::model::market::Proposal as ClientProposal;
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::{DbExecutor, Error as DbError};
 
@@ -64,7 +65,7 @@ impl MarketEvent {
                 OwnerType::Requestor => EventType::RequestorProposal,
                 OwnerType::Provider => EventType::ProviderProposal,
             },
-            artifact_id: proposal.body.id.clone(),
+            artifact_id: proposal.body.id.to_string(),
         }
     }
 
@@ -73,15 +74,19 @@ impl MarketEvent {
         db: &DbExecutor,
     ) -> Result<RequestorEvent, EventError> {
         match self.event_type {
-            EventType::RequestorProposal => self.into_requestor_proposal(db.clone()).await,
+            EventType::RequestorProposal => Ok(RequestorEvent::ProposalEvent {
+                event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
+                proposal: self.into_client_proposal(db.clone()).await?,
+            }),
             EventType::RequestorPropertyQuery => unimplemented!(),
             _ => Err(ErrorMessage::new(format!(
-                "Wrong MarketEvent type. Provider event in Requestor table."
+                "Wrong MarketEvent type [id={}]. Requestor event in Provider subscription.",
+                self.id
             )))?,
         }
     }
 
-    async fn into_requestor_proposal(self, db: DbExecutor) -> Result<RequestorEvent, EventError> {
+    async fn into_client_proposal(self, db: DbExecutor) -> Result<ClientProposal, EventError> {
         let prop = db
             .as_dao::<ProposalDao>()
             .get_proposal(&self.artifact_id)
@@ -89,10 +94,25 @@ impl MarketEvent {
             .map_err(|error| EventError::FailedGetProposal(error))?
             .ok_or(EventError::ProposalNotFound(self.artifact_id.clone()))?;
 
-        Ok(RequestorEvent::ProposalEvent {
-            event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
-            proposal: prop.into_client()?,
-        })
+        Ok(prop.into_client()?)
+    }
+
+    pub async fn into_client_provider_event(
+        self,
+        db: &DbExecutor,
+    ) -> Result<ProviderEvent, EventError> {
+        match self.event_type {
+            EventType::ProviderProposal => Ok(ProviderEvent::ProposalEvent {
+                event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
+                proposal: self.into_client_proposal(db.clone()).await?,
+            }),
+            EventType::ProviderAgreement => unimplemented!(),
+            EventType::ProviderPropertyQuery => unimplemented!(),
+            _ => Err(ErrorMessage::new(format!(
+                "Wrong MarketEvent type [id={}]. Requestor event in Provider subscription.",
+                self.id
+            )))?,
+        }
     }
 }
 
