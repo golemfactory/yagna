@@ -25,13 +25,16 @@ pub struct ExeUnitDesc {
     #[serde(default = "default_version")]
     pub version: Version,
     pub supervisor_path: PathBuf,
-    pub runtime_path: PathBuf,
-
-    // ExeUnit defined properties, that will be appended to offer.
+    /// Additional arguments passed to supervisor.
+    #[serde(default)]
+    pub extra_args: Vec<String>,
+    /// Optional runtime.
+    #[serde(default)]
+    pub runtime_path: Option<PathBuf>,
+    /// ExeUnit defined properties, that will be appended to offer.
     #[serde(default)]
     pub properties: serde_json::Map<String, Value>,
-
-    // Here other capabilities and exe units metadata.
+    /// Here other capabilities and exe units metadata.
     #[serde(default = "default_description")]
     pub description: String,
 }
@@ -42,8 +45,10 @@ impl ExeUnitDesc {
         if desc.supervisor_path.is_relative() {
             desc.supervisor_path = base_path.join(&desc.supervisor_path);
         }
-        if desc.runtime_path.is_relative() {
-            desc.runtime_path = base_path.join(&desc.runtime_path);
+        if let Some(ref mut runtime_path) = &mut desc.runtime_path {
+            if runtime_path.is_relative() {
+                *runtime_path = base_path.join(runtime_path.as_path());
+            }
         }
         Ok(desc)
     }
@@ -88,23 +93,21 @@ impl ExeUnitsRegistry {
         // Add to arguments path to runtime, which should be spawned
         // by supervisor as subprocess.
 
-        // TODO: I'm not sure, if we should do it. Supervisor don't have to use
-        //       runtime path at all. This path can be invalid and execution could
-        //       be still correct. But as long as there's only one runtime, better
-        //       handle this here.
-        let runtime_path = exeunit_desc
-            .runtime_path
-            .to_str()
-            .ok_or(anyhow!(
+        let mut extended_args = Vec::new();
+
+        if let Some(runtime_path) = &exeunit_desc.runtime_path {
+            let runtime_path = runtime_path
+                .to_str()
+                .ok_or(anyhow!(
                 "ExeUnit runtime path [{}] contains invalid characters.",
-                &exeunit_desc.runtime_path.display()
-            ))?
-            .to_string();
-
-        let mut extended_args = vec!["-b".to_owned(), runtime_path];
-
+                runtime_path.display()
+            ))?;
+            extended_args.push("-b".to_owned());
+            extended_args.push(runtime_path.to_owned());
+        }
         // Add arguments from front. ExeUnit api requires positional
         // arguments, so ExeUnit can add only non-positional args.
+        extended_args.extend(exeunit_desc.extra_args.iter().cloned());
         extended_args.extend(args);
 
         ExeUnitInstance::new(
@@ -117,13 +120,18 @@ impl ExeUnitsRegistry {
 
     pub fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
         desc.supervisor_path = normalize_path(&desc.supervisor_path)?;
-        desc.runtime_path = normalize_path(&desc.runtime_path)?;
+        desc.runtime_path = if let Some(runtime_path) = &desc.runtime_path {
+            Some(normalize_path(runtime_path)?)
+        }
+        else {
+            None
+        };
 
         log::info!(
-            "Added [{}] ExeUnit to registry. Supervisor path: [{}], Runtime path: [{}].",
+            "Added [{}] ExeUnit to registry. Supervisor path: [{}], Runtime path: [{:?}].",
             desc.name,
             desc.supervisor_path.display(),
-            desc.runtime_path.display()
+            desc.runtime_path
         );
         self.descriptors.insert(desc.name.clone(), desc);
         Ok(())
@@ -211,7 +219,7 @@ impl fmt::Display for RegistryError {
 pub enum ExeUnitValidation {
     #[error("ExeUnit [{}] Supervisor binary [{}] doesn't exist.", .desc.name, .desc.supervisor_path.display())]
     SupervisorNotFound { desc: ExeUnitDesc },
-    #[error("ExeUnit [{}] Runtime binary [{}] doesn't exist.", .desc.name, .desc.runtime_path.display())]
+    #[error("ExeUnit [{}] Runtime binary [{:?}] doesn't exist.", .desc.name, .desc.runtime_path)]
     RuntimeNotFound { desc: ExeUnitDesc },
 }
 
@@ -221,7 +229,7 @@ impl ExeUnitDesc {
             return Err(ExeUnitValidation::SupervisorNotFound { desc: self.clone() });
         }
         // I'm not sure we should force it's existence.
-        if !self.runtime_path.exists() {
+        if self.runtime_path.as_ref().map(|p| !p.exists()).unwrap_or(false) {
             return Err(ExeUnitValidation::RuntimeNotFound { desc: self.clone() });
         }
         Ok(())
@@ -266,13 +274,15 @@ impl fmt::Display for ExeUnitDesc {
             self.supervisor_path.display(),
             width = align
         )?;
-        write!(
-            f,
-            "{:width$}{}\n",
-            "Runtime:",
-            self.runtime_path.display(),
-            width = align
-        )?;
+        if let Some(rt) = &self.runtime_path {
+            write!(
+                f,
+                "{:width$}{}\n",
+                "Runtime:",
+                rt.display(),
+                width = align
+            )?;
+        }
         write!(
             f,
             "{:width$}{}\n",

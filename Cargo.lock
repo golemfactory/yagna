@@ -5126,9 +5126,11 @@ dependencies = [
 name = "ya-agreement-utils"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempdir",
  "thiserror",
  "ya-client-model",
 ]

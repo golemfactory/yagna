@@ -25,7 +25,7 @@ impl RuntimeArgs {
         let mut cpu_cores = None;
         let mut mem_gib = None;
         let mut storage_gib = None;
-
+        eprintln!("\n\ninf: {:?}\n\n", agreement.infrastructure);
         if with_inf {
             cpu_cores = agreement.infrastructure.get("cpu.cores").cloned();
             mem_gib = agreement.infrastructure.get("mem.gib").cloned();
@@ -42,6 +42,7 @@ impl RuntimeArgs {
     }
 
     pub fn to_command_line(&self, package_path: &PathBuf) -> Vec<OsString> {
+        log::info!("CALL to_command_line on  {:?}", self);
         let mut args = vec![
             OsString::from("--workdir"),
             self.workdir.clone().into_os_string(),
