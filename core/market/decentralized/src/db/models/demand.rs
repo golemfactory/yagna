@@ -7,7 +7,7 @@ use ya_service_api_web::middleware::Identity;
 use super::SubscriptionId;
 use crate::db::schema::market_demand;
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable, PartialEq)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_demand"]
 pub struct Demand {
     pub id: SubscriptionId,
@@ -67,5 +67,17 @@ impl Demand {
                 )
             })?,
         })
+    }
+}
+
+/// PartialEq implementation that ignores insertion_ts.
+impl PartialEq for Demand {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.constraints == other.constraints
+            && self.creation_ts == other.creation_ts
+            && self.expiration_ts == other.expiration_ts
+            && self.properties == other.properties
+            && self.node_id == other.node_id
     }
 }

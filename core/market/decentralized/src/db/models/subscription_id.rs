@@ -1,5 +1,4 @@
 use chrono::NaiveDateTime;
-use derive_more::Display;
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
@@ -9,7 +8,6 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
 use std::io::Write;
 use std::str::FromStr;
-use thiserror::Error;
 use uuid::Uuid;
 
 use ya_client::model::{ErrorMessage, NodeId};
@@ -17,7 +15,7 @@ use ya_client::model::{ErrorMessage, NodeId};
 const RANDOM_PREFIX_LEN: usize = 32;
 const HASH_SUFFIX_LEN: usize = 64;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum SubscriptionParseError {
     #[error("Subscription id [{0}] has invalid format.")]
     InvalidFormat(String),
@@ -31,11 +29,11 @@ pub enum SubscriptionParseError {
     InvalidLength(String),
 }
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 #[error("Subscription id [{0}] doesn't match content hash [{1}].")]
 pub struct SubscriptionValidationError(SubscriptionId, String);
 
-#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
+#[derive(derive_more::Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", random_id, hash)]
 #[sql_type = "Text"]
 pub struct SubscriptionId {
