@@ -1,5 +1,3 @@
-#![allow(unused)]
-use crate::error::PaymentDriverError;
 use ethereum_types::{Address, H256, U256};
 use futures3::compat::*;
 use lazy_static::lazy_static;
@@ -7,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::env;
 
+use crate::GNTDriverError;
 use std::time::Duration;
 use web3::confirm::{wait_for_confirmations, TransactionReceiptBlockNumberCheck};
 use web3::contract::Contract;
@@ -47,12 +46,12 @@ impl Default for Chain {
 }
 
 impl Chain {
-    pub fn from_env() -> Result<Chain, PaymentDriverError> {
+    pub fn from_env() -> Result<Chain, GNTDriverError> {
         if let Some(chain_name) = env::var(CHAIN_ENV_VAR).ok() {
             match chain_name.as_str() {
                 MAINNET_NAME => Ok(Chain::Mainnet),
                 RINKEBY_NAME => Ok(Chain::Rinkeby),
-                _chain => Err(PaymentDriverError::UnknownChain(_chain.into())),
+                _chain => Err(GNTDriverError::UnknownChain(_chain.into())),
             }
         } else {
             Ok(Default::default())
@@ -67,7 +66,7 @@ impl Chain {
     }
 }
 
-type EthereumClientResult<T> = Result<T, PaymentDriverError>;
+type EthereumClientResult<T> = Result<T, GNTDriverError>;
 
 pub struct EthereumClientBuilder {
     geth_address: Cow<'static, str>,
@@ -120,7 +119,7 @@ impl EthereumClient {
         json_abi: &[u8],
     ) -> EthereumClientResult<Contract<Http>> {
         Contract::from_json(self.web3.eth(), address, json_abi).map_or_else(
-            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
+            |e| Err(GNTDriverError::LibraryError(format!("{:?}", e))),
             |contract| Ok(contract),
         )
     }
@@ -177,7 +176,6 @@ impl EthereumClient {
         &self,
     ) -> EthereumClientResult<impl futures3::stream::Stream<Item = EthereumClientResult<H256>>>
     {
-        use futures3::compat::Stream01CompatExt;
         use futures3::prelude::*;
         let f = self
             .web3
@@ -280,7 +278,7 @@ mod tests {
         assert!(ethereum_client
             .get_contract(
                 utils::str_to_addr(GNT2_CONTRACT_ADDRESS)?,
-                include_bytes!("./contracts/gnt2.json")
+                include_bytes!("../contracts/gnt2.json")
             )
             .is_ok());
 

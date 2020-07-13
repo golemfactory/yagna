@@ -28,8 +28,8 @@ ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = "0.1"
-ya-payment-driver = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
+ya-gnt-driver = { version = "0.1" }
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
@@ -79,8 +79,8 @@ members = [
     "core/model",
     "core/net",
     "core/payment",
-    "core/payment-driver",
     "core/payment-driver/dummy",
+    "core/payment-driver/gnt",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/cache",
@@ -112,7 +112,7 @@ ya-market-forwarding = { path = "core/market/forwarding" }
 ya-market-resolver = { path = "core/market/resolver" }
 ya-activity = { path = "core/activity" }
 ya-payment = { path = "core/payment" }
-ya-payment-driver = { path = "core/payment-driver" }
+ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 
 

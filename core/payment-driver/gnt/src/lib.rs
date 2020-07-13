@@ -1,59 +1,65 @@
-mod common;
+#[macro_use]
+extern crate diesel;
 
-use actix::prelude::*;
-use chrono::{DateTime, Utc};
-use ethereum_types::{Address, H256};
+pub mod migrations {
+    #[derive(diesel_migrations::EmbedMigrations)]
+    struct _Dummy;
+}
 
-use web3::contract::Contract;
-use web3::transports::Http;
+mod dao;
+mod error;
+mod gnt;
+mod models;
+mod processor;
+mod schema;
+mod service;
+mod utils;
 
-use ya_persistence::executor::DbExecutor;
+pub use error::GNTDriverError;
 
 use crate::dao::payment::PaymentDao;
-
-use crate::error::PaymentDriverError;
-use crate::ethereum::{Chain, EthereumClient, EthereumClientBuilder};
+use crate::gnt::ethereum::{Chain, EthereumClient, EthereumClientBuilder};
+use crate::gnt::sender::{AccountLocked, AccountUnlocked};
+use crate::gnt::{common, config, faucet, sender};
 use crate::models::{PaymentEntity, TxType};
-use crate::{PaymentDriver, PaymentDriverResult};
+use crate::utils::PAYMENT_STATUS_NOT_YET;
+use actix::Addr;
+use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
 
+use crate::processor::GNTDriverProcessor;
+use ethereum_types::{Address, H256};
 use futures3::prelude::*;
-
-use crate::utils;
-
 use std::future::Future;
 use std::pin::Pin;
-
-use crate::gnt::sender::{AccountLocked, AccountUnlocked};
-
-use crate::utils::payment_status_to_i32;
-use std::sync::Arc;
-use ya_client_model::NodeId;
-use ya_core_model::driver::{
-    AccountBalance, AccountMode, Balance, Currency, PaymentAmount, PaymentConfirmation,
-    PaymentDetails, PaymentStatus,
-};
-
 use std::str::FromStr;
+use std::sync::Arc;
+use uuid::Uuid;
+use web3::contract::Contract;
+use web3::transports::Http;
+use ya_client_model::NodeId;
+use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 use ya_core_model::identity;
+use ya_persistence::executor::DbExecutor;
+use ya_service_api_interfaces::Provider;
 use ya_service_bus::typed as bus;
 
-mod config;
-mod faucet;
-mod sender;
+pub type GNTDriverResult<T> = Result<T, GNTDriverError>;
 
 const GNT_FAUCET_GAS: u32 = 90000;
 const CREATE_FAUCET_FUNCTION: &str = "create";
 
-async fn load_active_accounts(
-    tx_sender: Addr<sender::TransactionSender>,
-) -> PaymentDriverResult<()> {
+pub const PLATFORM_NAME: &'static str = "GNT";
+pub const DRIVER_NAME: &'static str = "gnt";
+
+async fn load_active_accounts(tx_sender: Addr<sender::TransactionSender>) -> GNTDriverResult<()> {
     log::info!("Load active accounts on driver start");
     match bus::service(identity::BUS_ID).call(identity::List {}).await {
-        Err(e) => Err(PaymentDriverError::LibraryError(format!(
+        Err(e) => Err(GNTDriverError::LibraryError(format!(
             "Failed to list identities: {:?}",
             e
         ))),
-        Ok(Err(e)) => Err(PaymentDriverError::LibraryError(format!(
+        Ok(Err(e)) => Err(GNTDriverError::LibraryError(format!(
             "Failed to list identities: {:?}",
             e
         ))),
@@ -80,6 +86,19 @@ async fn load_active_accounts(
     }
 }
 
+pub struct PaymentDriverService;
+
+impl PaymentDriverService {
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
+        let db: DbExecutor = context.component();
+        let driver = GntDriver::new(db.clone()).await?;
+        let processor = GNTDriverProcessor::new(driver);
+        self::service::bind_service(&db, processor);
+        self::service::subscribe_to_identity_events().await;
+        Ok(())
+    }
+}
+
 pub struct GntDriver {
     db: DbExecutor,
     ethereum_client: Arc<EthereumClient>,
@@ -90,10 +109,10 @@ pub struct GntDriver {
 
 impl GntDriver {
     /// Creates new driver
-    pub async fn new(db: DbExecutor) -> PaymentDriverResult<GntDriver> {
+    pub async fn new(db: DbExecutor) -> GNTDriverResult<GntDriver> {
         crate::dao::init(&db)
             .await
-            .map_err(PaymentDriverError::library_err_msg)?;
+            .map_err(GNTDriverError::library_err_msg)?;
         let chain = Chain::from_env()?;
         let ethereum_client = Arc::new(EthereumClientBuilder::from_env()?.build()?);
         let env = config::EnvConfiguration::from_env(chain)?;
@@ -122,7 +141,7 @@ impl GntDriver {
     fn request_gnt_from_faucet<'a>(
         &self,
         address: Address,
-    ) -> impl Future<Output = PaymentDriverResult<()>> + 'a {
+    ) -> impl Future<Output = GNTDriverResult<()>> + 'a {
         let max_testnet_balance = utils::str_to_big_dec(config::MAX_TESTNET_BALANCE).unwrap();
         // cannot have more than "10000000000000" Gnt
         // blocked by Faucet contract
@@ -132,7 +151,7 @@ impl GntDriver {
         let faucet_contract = self.faucet_contract.clone().unwrap();
         async move {
             let balance = common::get_gnt_balance(&contract, address).await?;
-            if balance.amount < max_testnet_balance {
+            if balance < max_testnet_balance {
                 log::info!("Requesting Gnt from Faucet...");
                 let gas_price = client.get_gas_price().await?;
                 let mut b = sender::Builder::new(address, gas_price, client.chain_id())
@@ -155,14 +174,25 @@ impl GntDriver {
             Ok(())
         }
     }
-}
 
-impl PaymentDriver for GntDriver {
+    /// Returns sum of transactions from given address
+    fn get_transaction_balance(
+        &self,
+        _payer: &str,
+        _payee: &str,
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<BigDecimal>> + 'static>> {
+        // TODO: Get real transaction balance
+        Box::pin(future::ready(Ok(utils::str_to_big_dec(
+            "1000000000000000000000000",
+        )
+        .unwrap())))
+    }
+
     fn init<'a>(
         &self,
         mode: AccountMode,
         address: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<()>> + 'a>> {
         use futures3::prelude::*;
 
         Box::pin(
@@ -190,7 +220,7 @@ impl PaymentDriver for GntDriver {
     fn account_locked<'a>(
         &self,
         identity: NodeId,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<()>> + 'a>> {
         let tx_sender = self.tx_sender.clone();
         Box::pin(async move { tx_sender.send(AccountLocked { identity }).await? })
     }
@@ -199,7 +229,7 @@ impl PaymentDriver for GntDriver {
     fn account_unlocked<'a>(
         &self,
         identity: NodeId,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<()>> + 'a>> {
         let tx_sender = self.tx_sender.clone();
         Box::pin(async move { tx_sender.send(AccountUnlocked { identity }).await? })
     }
@@ -208,35 +238,28 @@ impl PaymentDriver for GntDriver {
     fn get_account_balance(
         &self,
         address: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<AccountBalance>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<BigDecimal>> + 'static>> {
         let address: String = address.into();
-        let ethereum_client = self.ethereum_client.clone();
         let gnt_contract = self.gnt_contract.clone();
         Box::pin(async move {
             let address = utils::str_to_addr(address.as_str())?;
-            let (eth_balance, gnt_balance) = future::try_join(
-                common::get_eth_balance(&ethereum_client, address),
-                common::get_gnt_balance(&gnt_contract, address),
-            )
-            .await?;
-            Ok(AccountBalance::new(gnt_balance, Some(eth_balance)))
+            Ok(common::get_gnt_balance(&gnt_contract, address).await?)
         })
     }
 
     /// Schedules payment
     fn schedule_payment<'a>(
         &self,
-        invoice_id: &str,
-        amount: PaymentAmount,
+        amount: BigDecimal,
         sender: &str,
         recipient: &str,
         due_date: DateTime<Utc>,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<()>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<String>> + 'a>> {
         let db = self.db.clone();
-        let invoice_id = invoice_id.to_owned();
+        let invoice_id: String = format!("{}", Uuid::new_v4());
         let sender = sender.to_owned();
         let recipient = recipient.to_owned();
-        let gnt_amount = utils::big_dec_to_u256(amount.base_currency_amount).unwrap();
+        let gnt_amount = utils::big_dec_to_u256(amount).unwrap();
         let gas_amount = Default::default();
 
         let payment = PaymentEntity {
@@ -246,33 +269,12 @@ impl PaymentDriver for GntDriver {
             payment_due_date: due_date.naive_utc(),
             sender: sender.clone(),
             recipient: recipient.clone(),
-            status: payment_status_to_i32(&PaymentStatus::NotYet {}),
+            status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,
         };
         async move {
             db.as_dao::<PaymentDao>().insert(payment).await?;
-            Ok(())
-        }
-        .boxed_local()
-    }
-
-    /// Returns payment status
-    fn get_payment_status(
-        &self,
-        invoice_id: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentStatus>> + 'static>> {
-        let invoice_id = invoice_id.to_owned();
-        let db = self.db.clone();
-        async move {
-            if let Some(status) = db
-                .as_dao::<PaymentDao>()
-                .get_payment_status(invoice_id.clone())
-                .await?
-            {
-                Ok(status)
-            } else {
-                Err(PaymentDriverError::UnknownPayment(invoice_id))
-            }
+            Ok(invoice_id)
         }
         .boxed_local()
     }
@@ -281,13 +283,13 @@ impl PaymentDriver for GntDriver {
     fn verify_payment(
         &self,
         confirmation: &PaymentConfirmation,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<PaymentDetails>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<PaymentDetails>> + 'static>> {
         let tx_hash: H256 = H256::from_slice(&confirmation.confirmation);
         let ethereum_client = self.ethereum_client.clone();
         let gnt_contract = self.gnt_contract.clone();
         Box::pin(async move {
             match ethereum_client.get_transaction_receipt(tx_hash).await? {
-                None => Err(PaymentDriverError::UnknownTransaction),
+                None => Err(GNTDriverError::UnknownTransaction),
                 Some(receipt) => {
                     common::verify_gnt_tx(&receipt, &gnt_contract)?;
                     common::build_payment_details(&receipt)
@@ -295,26 +297,14 @@ impl PaymentDriver for GntDriver {
             }
         })
     }
-
-    /// Returns sum of transactions from given address
-    fn get_transaction_balance(
-        &self,
-        _payer: &str,
-        _payee: &str,
-    ) -> Pin<Box<dyn Future<Output = PaymentDriverResult<Balance>> + 'static>> {
-        // TODO: Get real transaction balance
-        Box::pin(future::ready(Ok(Balance {
-            currency: Currency::Gnt,
-            amount: utils::str_to_big_dec("1000000000000000000000000").unwrap(),
-        })))
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gnt::ethereum::*;
     use crate::utils;
-    use ya_core_model::driver::Currency;
+    use ya_persistence::executor::DbExecutor;
 
     const ETH_ADDRESS: &str = "2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 
@@ -335,8 +325,7 @@ mod tests {
         let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
         let eth_balance =
             common::get_eth_balance(&ethereum_client, utils::str_to_addr(ETH_ADDRESS)?).await?;
-        assert_eq!(eth_balance.currency, Currency::Eth {});
-        assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
+        assert!(eth_balance >= utils::str_to_big_dec("0")?);
         Ok(())
     }
 
@@ -346,8 +335,7 @@ mod tests {
         let gnt_contract = common::prepare_gnt_contract(&ethereum_client, &config::CFG_TESTNET)?;
         let gnt_balance =
             common::get_gnt_balance(&gnt_contract, utils::str_to_addr(ETH_ADDRESS)?).await?;
-        assert_eq!(gnt_balance.currency, Currency::Gnt {});
-        assert!(gnt_balance.amount >= utils::str_to_big_dec("0")?);
+        assert!(gnt_balance >= utils::str_to_big_dec("0")?);
         Ok(())
     }
 
@@ -355,19 +343,8 @@ mod tests {
     #[actix_rt::test]
     async fn test_get_account_balance() -> anyhow::Result<()> {
         let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
-
-        let balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
-
-        let gnt_balance = balance.base_currency;
-        assert_eq!(gnt_balance.currency, Currency::Gnt {});
-        assert!(gnt_balance.amount >= utils::str_to_big_dec("0")?);
-
-        let some_eth_balance = balance.gas;
-        assert!(some_eth_balance.is_some());
-
-        let eth_balance = some_eth_balance.unwrap();
-        assert_eq!(eth_balance.currency, Currency::Eth {});
-        assert!(eth_balance.amount >= utils::str_to_big_dec("0")?);
+        let gnt_balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
+        assert!(gnt_balance >= utils::str_to_big_dec("0")?);
         Ok(())
     }
 

@@ -1,14 +1,14 @@
 use crate::dao::transaction::TransactionDao;
-use crate::ethereum::EthereumClient;
+use crate::gnt::ethereum::EthereumClient;
 use crate::models::{PaymentEntity, TransactionStatus, TxType};
 use crate::utils::{
     u256_from_big_endian_hex, PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
     PAYMENT_STATUS_NOT_ENOUGH_GAS,
 };
-use crate::{utils, PaymentDriverError, PaymentDriverResult, SignTx};
+use crate::{utils, GNTDriverError, GNTDriverResult};
 
 use crate::dao::payment::PaymentDao;
-use crate::gnt::common;
+use crate::gnt::{common, SignTx};
 use actix::prelude::*;
 use chrono::Utc;
 use ethereum_tx_sign::RawTransaction;
@@ -80,7 +80,7 @@ pub struct TxReq {
 }
 
 impl Message for TxReq {
-    type Result = Result<Reservation, PaymentDriverError>;
+    type Result = Result<Reservation, GNTDriverError>;
 }
 
 pub struct TxSave {
@@ -106,7 +106,7 @@ impl TxSave {
 }
 
 impl Message for TxSave {
-    type Result = Result<Vec<String>, PaymentDriverError>;
+    type Result = Result<Vec<String>, GNTDriverError>;
 }
 
 pub struct Retry {
@@ -114,7 +114,7 @@ pub struct Retry {
 }
 
 impl Message for Retry {
-    type Result = Result<bool, PaymentDriverError>;
+    type Result = Result<bool, GNTDriverError>;
 }
 
 pub struct WaitForTx {
@@ -122,7 +122,7 @@ pub struct WaitForTx {
 }
 
 impl Message for WaitForTx {
-    type Result = Result<TransactionReceipt, PaymentDriverError>;
+    type Result = Result<TransactionReceipt, GNTDriverError>;
 }
 
 pub struct TransactionSender {
@@ -182,14 +182,14 @@ impl TransactionSender {
     fn read_init_nonce(
         &self,
         address: Address,
-    ) -> impl Future<Output = Result<U256, PaymentDriverError>> + 'static {
+    ) -> impl Future<Output = Result<U256, GNTDriverError>> + 'static {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
         let address_str = crate::utils::addr_to_str(&address);
 
         future::try_join(
             async move {
-                Ok::<_, PaymentDriverError>(
+                Ok::<_, GNTDriverError>(
                     db.as_dao::<TransactionDao>()
                         .get_used_nonces(address_str)
                         .await?
@@ -201,7 +201,7 @@ impl TransactionSender {
             async move {
                 client
                     .get_next_nonce(address)
-                    .map_err(PaymentDriverError::from)
+                    .map_err(GNTDriverError::from)
                     .await
             },
         )
@@ -222,7 +222,7 @@ impl TransactionSender {
     fn nonce(
         &self,
         address: Address,
-    ) -> impl ActorFuture<Actor = Self, Output = Result<U256, PaymentDriverError>> + 'static {
+    ) -> impl ActorFuture<Actor = Self, Output = Result<U256, GNTDriverError>> + 'static {
         if let Some(n) = self.nonces.get(&address) {
             fut::Either::Left(fut::ok(n.clone()))
         } else {
@@ -294,7 +294,7 @@ impl TransactionSender {
 }
 
 impl Handler<TxReq> for TransactionSender {
-    type Result = ActorResponse<Self, Reservation, PaymentDriverError>;
+    type Result = ActorResponse<Self, Reservation, GNTDriverError>;
 
     fn handle(&mut self, msg: TxReq, _ctx: &mut Self::Context) -> Self::Result {
         let address = msg.address.clone();
@@ -308,9 +308,7 @@ impl Handler<TxReq> for TransactionSender {
                 act.pending_reservations.push((msg, tx));
                 return fut::Either::Left(
                     async move {
-                        let result = rx
-                            .await
-                            .map_err(|_| PaymentDriverError::FailedTransaction)?;
+                        let result = rx.await.map_err(|_| GNTDriverError::FailedTransaction)?;
                         Ok(result)
                     }
                     .into_actor(act),
@@ -325,14 +323,14 @@ impl Handler<TxReq> for TransactionSender {
 }
 
 impl Handler<TxSave> for TransactionSender {
-    type Result = ActorResponse<Self, Vec<String>, PaymentDriverError>;
+    type Result = ActorResponse<Self, Vec<String>, GNTDriverError>;
 
     fn handle(&mut self, msg: TxSave, _ctx: &mut Self::Context) -> Self::Result {
         fn transaction_error(
             msg: &str,
-        ) -> ActorResponse<TransactionSender, Vec<String>, PaymentDriverError> {
+        ) -> ActorResponse<TransactionSender, Vec<String>, GNTDriverError> {
             log::error!("tx-save fail: {}", msg);
-            ActorResponse::reply(Err(PaymentDriverError::LibraryError(msg.to_owned())))
+            ActorResponse::reply(Err(GNTDriverError::LibraryError(msg.to_owned())))
         }
 
         log::trace!(
@@ -393,7 +391,7 @@ impl Handler<TxSave> for TransactionSender {
                 db.as_dao::<TransactionDao>()
                     .insert_transactions(db_transactions.clone())
                     .await?;
-                Ok::<_, PaymentDriverError>(db_transactions)
+                Ok::<_, GNTDriverError>(db_transactions)
             }
         }
         .into_actor(self)
@@ -443,7 +441,7 @@ impl Handler<TxSave> for TransactionSender {
 }
 
 impl Handler<Retry> for TransactionSender {
-    type Result = ActorResponse<Self, bool, PaymentDriverError>;
+    type Result = ActorResponse<Self, bool, GNTDriverError>;
 
     fn handle(&mut self, msg: Retry, _ctx: &mut Self::Context) -> Self::Result {
         let db = self.db.clone();
@@ -460,7 +458,7 @@ impl Handler<Retry> for TransactionSender {
                 log::info!("resend transaction: {} tx={:?}", tx_id, hash);
                 Ok(true)
             } else {
-                Err(PaymentDriverError::UnknownTransaction)
+                Err(GNTDriverError::UnknownTransaction)
             }
         }
         .into_actor(self);
@@ -520,7 +518,7 @@ impl Builder {
         self,
         sender: Addr<TransactionSender>,
         sign_tx: SignTx<'a>,
-    ) -> impl Future<Output = Result<Vec<String>, PaymentDriverError>> + 'a {
+    ) -> impl Future<Output = Result<Vec<String>, GNTDriverError>> + 'a {
         let me = self;
         async move {
             let r = sender
@@ -640,7 +638,7 @@ impl TransactionSender {
                         }
                     }
                 }
-                Ok::<_, PaymentDriverError>(resolved)
+                Ok::<_, GNTDriverError>(resolved)
             }
             .into_actor(act)
             .then(move |r, act, ctx| {
@@ -719,7 +717,7 @@ impl TransactionSender {
 }
 
 impl Handler<WaitForTx> for TransactionSender {
-    type Result = ActorResponse<Self, TransactionReceipt, PaymentDriverError>;
+    type Result = ActorResponse<Self, TransactionReceipt, GNTDriverError>;
 
     fn handle(&mut self, msg: WaitForTx, _ctx: &mut Self::Context) -> Self::Result {
         if self
@@ -729,11 +727,11 @@ impl Handler<WaitForTx> for TransactionSender {
         {
             let (tx, rx) = oneshot::channel();
             self.receipt_queue.insert(msg.tx_id, tx);
-            let fut = async move { Ok(rx.await.map_err(PaymentDriverError::library_err_msg)?) };
+            let fut = async move { Ok(rx.await.map_err(GNTDriverError::library_err_msg)?) };
             return ActorResponse::r#async(fut.into_actor(self));
         }
         // TODO: recover from db
-        ActorResponse::reply(Err(PaymentDriverError::UnknownTransaction))
+        ActorResponse::reply(Err(GNTDriverError::UnknownTransaction))
     }
 }
 
@@ -770,11 +768,11 @@ pub struct AccountLocked {
 }
 
 impl Message for AccountLocked {
-    type Result = Result<(), PaymentDriverError>;
+    type Result = Result<(), GNTDriverError>;
 }
 
 impl Handler<AccountLocked> for TransactionSender {
-    type Result = ActorResponse<Self, (), PaymentDriverError>;
+    type Result = ActorResponse<Self, (), GNTDriverError>;
 
     fn handle(&mut self, msg: AccountLocked, _ctx: &mut Self::Context) -> Self::Result {
         self.active_accounts
@@ -790,11 +788,11 @@ pub struct AccountUnlocked {
 }
 
 impl Message for AccountUnlocked {
-    type Result = Result<(), PaymentDriverError>;
+    type Result = Result<(), GNTDriverError>;
 }
 
 impl Handler<AccountUnlocked> for TransactionSender {
-    type Result = ActorResponse<Self, (), PaymentDriverError>;
+    type Result = ActorResponse<Self, (), GNTDriverError>;
 
     fn handle(&mut self, msg: AccountUnlocked, _ctx: &mut Self::Context) -> Self::Result {
         self.active_accounts.borrow_mut().add_account(msg.identity);
@@ -848,7 +846,7 @@ async fn process_payment(
     tx_sender: Addr<TransactionSender>,
     db: DbExecutor,
     sign_tx: SignTx<'_>,
-) -> PaymentDriverResult<()> {
+) -> GNTDriverResult<()> {
     log::info!("Processing payment: {:?}", payment);
     let gas_price = client.get_gas_price().await?;
     let chain_id = client.chain_id();
@@ -874,8 +872,8 @@ async fn process_payment(
                 .update_status(
                     payment.invoice_id,
                     match e {
-                        PaymentDriverError::InsufficientFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
-                        PaymentDriverError::InsufficientGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
+                        GNTDriverError::InsufficientFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
+                        GNTDriverError::InsufficientGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
                         _ => PAYMENT_STATUS_FAILED,
                     },
                 )
@@ -896,15 +894,12 @@ async fn transfer_gnt(
     sign_tx: SignTx<'_>,
     gas_price: U256,
     chain_id: u64,
-) -> PaymentDriverResult<String> {
-    let gnt_balance = utils::big_dec_to_u256(
-        common::get_gnt_balance(&gnt_contract, address)
-            .await?
-            .amount,
-    )?;
+) -> GNTDriverResult<String> {
+    let gnt_balance =
+        utils::big_dec_to_u256(common::get_gnt_balance(&gnt_contract, address).await?)?;
 
     if gnt_amount > gnt_balance {
-        return Err(PaymentDriverError::InsufficientFunds);
+        return Err(GNTDriverError::InsufficientFunds);
     }
 
     let mut batch = Builder::new(address, gas_price, chain_id);

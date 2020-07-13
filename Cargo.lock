@@ -5255,6 +5255,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-gnt-driver"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-rt",
+ "anyhow",
+ "awc",
+ "bigdecimal",
+ "bitflags 1.2.1",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "dotenv 0.15.0",
+ "env_logger 0.7.1",
+ "ethereum-tx-sign",
+ "ethereum-types",
+ "ethkey",
+ "futures 0.3.5",
+ "hex",
+ "lazy_static",
+ "libsqlite3-sys",
+ "log 0.4.8",
+ "num-bigint",
+ "r2d2",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror",
+ "tokio 0.2.21",
+ "uint",
+ "ureq",
+ "uuid 0.8.1",
+ "web3",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-identity"
 version = "0.2.0"
 dependencies = [
@@ -5448,48 +5490,6 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus",
-]
-
-[[package]]
-name = "ya-payment-driver"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-rt",
- "anyhow",
- "awc",
- "bigdecimal",
- "bitflags 1.2.1",
- "chrono",
- "diesel",
- "diesel_migrations",
- "dotenv 0.15.0",
- "env_logger 0.7.1",
- "ethereum-tx-sign",
- "ethereum-types",
- "ethkey",
- "futures 0.3.5",
- "hex",
- "lazy_static",
- "libsqlite3-sys",
- "log 0.4.8",
- "num-bigint",
- "r2d2",
- "secp256k1",
- "serde",
- "serde_json",
- "sha3",
- "thiserror",
- "tokio 0.2.21",
- "uint",
- "ureq",
- "uuid 0.8.1",
- "web3",
- "ya-client-model",
- "ya-core-model",
- "ya-persistence",
- "ya-service-api-interfaces",
  "ya-service-bus",
 ]
 
@@ -5845,12 +5845,12 @@ dependencies = [
  "ya-activity",
  "ya-compile-time-utils",
  "ya-dummy-driver",
+ "ya-gnt-driver",
  "ya-identity",
  "ya-market-decentralized",
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
- "ya-payment-driver",
  "ya-persistence",
  "ya-sb-proto",
  "ya-sb-router",

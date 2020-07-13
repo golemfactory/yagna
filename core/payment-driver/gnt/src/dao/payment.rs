@@ -1,14 +1,16 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use crate::error::{DbError, DbResult};
 use crate::models::{PaymentEntity, TransactionEntity, TX_CONFIRMED};
 use crate::schema::gnt_driver_payment::dsl;
 
 use crate::schema::gnt_driver_transaction::dsl as tx_dsl;
 
-use crate::utils::{PAYMENT_STATUS_OK};
-use ya_core_model::driver::{PaymentConfirmation};
+use crate::utils::PAYMENT_STATUS_OK;
+use ya_core_model::driver::PaymentConfirmation;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+
+use crate::dao::DbResult;
+use crate::error::DbError;
 
 #[allow(unused)]
 pub struct PaymentDao<'c> {

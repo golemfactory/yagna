@@ -1,9 +1,9 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use crate::error::DbResult;
 use crate::models::{TransactionEntity, TransactionStatus, TxType};
 use crate::schema::gnt_driver_transaction::dsl;
 
+use crate::dao::DbResult;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 #[allow(unused)]
