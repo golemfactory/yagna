@@ -43,11 +43,16 @@ impl ProviderBroker {
         };
 
         let broker1 = broker.clone();
+        let broker2 = broker.clone();
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
                 on_initial_proposal(broker1.clone(), caller, msg)
             },
-            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
+            move |caller: String, msg: ProposalReceived| {
+                broker2
+                    .clone()
+                    .on_proposal_received(caller, msg, OwnerType::Provider)
+            },
             move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
