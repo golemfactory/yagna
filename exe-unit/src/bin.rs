@@ -2,8 +2,7 @@ use actix::{Actor, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
-use std::ffi::OsString;
-use std::path::{Component, PathBuf, Prefix};
+use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -15,6 +14,7 @@ use ya_exe_unit::service::signal::SignalMonitor;
 use ya_exe_unit::service::transfer::TransferService;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
 use ya_service_bus::RpcEnvelope;
+use ya_utils_path::normalize_path;
 
 #[derive(structopt::StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
@@ -50,27 +50,6 @@ pub enum Command {
     },
 }
 
-// canonicalize on Windows adds `\\?` (or `%3f` when url-encoded) prefix
-fn sanitize_path(path: PathBuf) -> PathBuf {
-    if !cfg!(windows) {
-        return path;
-    }
-
-    let mut components = path.components();
-    match components.next() {
-        Some(Component::Prefix(prefix)) => match prefix.kind() {
-            Prefix::Disk(_) => path,
-            Prefix::VerbatimDisk(disk) => {
-                let mut p = OsString::from(format!("{}:", disk as char));
-                p.push(components.as_path());
-                PathBuf::from(p)
-            }
-            _ => panic!("Invalid path: {:?}", path),
-        },
-        _ => path,
-    }
-}
-
 fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     if let Err(error) = std::fs::create_dir_all(path) {
         match &error.kind() {
@@ -78,7 +57,7 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
             _ => bail!("Can't create directory: {}, {}", path.display(), error),
         }
     }
-    Ok(sanitize_path(path.canonicalize()?))
+    Ok(normalize_path(path)?)
 }
 
 fn run() -> anyhow::Result<()> {
@@ -166,21 +145,4 @@ fn main() -> anyhow::Result<()> {
     }
 
     Ok(result?)
-}
-
-#[cfg(windows)]
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::path::{Path, PathBuf};
-
-    #[test]
-    fn test_remove_verbatim_prefix() {
-        let path = Path::new(r"c:\windows\System32")
-            .to_path_buf()
-            .canonicalize()
-            .expect("should canonicalize: c:\\");
-
-        assert_eq!(PathBuf::from(r"C:\Windows\System32"), sanitize_path(path));
-    }
 }

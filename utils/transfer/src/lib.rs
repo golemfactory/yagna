@@ -1,9 +1,12 @@
+mod archive;
 pub mod error;
 mod file;
 mod gftp;
 mod http;
+mod traverse;
 
 use crate::error::{ChannelError, Error};
+use actix_rt::Arbiter;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
@@ -14,11 +17,13 @@ use sha3::digest::DynDigest;
 use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use std::pin::Pin;
 use url::Url;
+use ya_client_model::activity::TransferArgs;
 
-pub use crate::file::FileTransferProvider;
+pub use crate::archive::{archive, extract, ArchiveFormat};
+pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
-use actix_rt::Arbiter;
+pub use crate::traverse::PathTraverse;
 
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
@@ -37,15 +42,17 @@ pub enum TransferData {
     Bytes(Bytes),
 }
 
-impl TransferData {
-    pub fn to_bytes(&self) -> &Bytes {
+impl AsRef<Bytes> for TransferData {
+    fn as_ref(&self) -> &Bytes {
         match &self {
             TransferData::Bytes(b) => b,
         }
     }
+}
 
-    pub fn into_bytes(self) -> Bytes {
-        match self {
+impl From<TransferData> for Bytes {
+    fn from(d: TransferData) -> Self {
+        match d {
             TransferData::Bytes(b) => b,
         }
     }
@@ -60,8 +67,8 @@ impl From<Bytes> for TransferData {
 pub trait TransferProvider<T, E> {
     fn schemes(&self) -> Vec<&'static str>;
 
-    fn source(&self, url: &Url) -> TransferStream<T, E>;
-    fn destination(&self, url: &Url) -> TransferSink<T, E>;
+    fn source(&self, url: &Url, ctx: &TransferArgs) -> TransferStream<T, E>;
+    fn destination(&self, url: &Url, ctx: &TransferArgs) -> TransferSink<T, E>;
 }
 
 pub struct TransferStream<T, E> {
@@ -215,7 +222,7 @@ where
             match opt {
                 Some(item) => {
                     if let Ok(data) = item {
-                        self.hasher.input(data.to_bytes());
+                        self.hasher.input(data.as_ref());
                     }
                 }
                 None => {

@@ -1,14 +1,15 @@
 use crate::error::{Error, HttpError};
-use crate::{
-    abortable_sink, abortable_stream, TransferData, TransferProvider, TransferSink, TransferStream,
-};
+use crate::{abortable_sink, abortable_stream};
+use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
 use actix_http::http::Method;
 use actix_rt::System;
 use awc::SendClientRequest;
+use bytes::Bytes;
 use futures::future::ready;
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use std::thread;
 use url::Url;
+use ya_client_model::activity::TransferArgs;
 
 enum HttpAuth<'s> {
     None,
@@ -58,7 +59,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         vec!["http", "https"]
     }
 
-    fn source(&self, url: &Url) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &Url, _: &TransferArgs) -> TransferStream<TransferData, Error> {
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
         let url = url.clone();
@@ -84,7 +85,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         stream
     }
 
-    fn destination(&self, url: &Url) -> TransferSink<TransferData, Error> {
+    fn destination(&self, url: &Url, _: &TransferArgs) -> TransferSink<TransferData, Error> {
         let method = self.upload_method.clone();
         let url = url.clone();
 
@@ -92,8 +93,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
 
         thread::spawn(move || {
             let fut = async move {
-                match request(method, url).send_stream(rx.map(|d| d.map(TransferData::into_bytes)))
-                {
+                match request(method, url).send_stream(rx.map(|d| d.map(Bytes::from))) {
                     SendClientRequest::Fut(fut, _, _) => {
                         fut.await.map_err(Error::from)?;
                         Ok(())
