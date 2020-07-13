@@ -6,7 +6,6 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 
-use super::errors::{NegotiationError, NegotiationInitError};
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{OwnerType, Proposal};
 use crate::matcher::{QueryOfferError, SubscriptionStore};
@@ -20,6 +19,8 @@ use crate::protocol::negotiation::messages::{
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
 use crate::{db::models::Offer as ModelOffer, ProposalId, SubscriptionId};
+
+use super::errors::{NegotiationError, NegotiationInitError};
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -41,11 +42,16 @@ impl ProviderBroker {
         };
 
         let broker1 = broker.clone();
+        let broker2 = broker.clone();
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
                 on_initial_proposal(broker1.clone(), caller, msg)
             },
-            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
+            move |caller: String, msg: ProposalReceived| {
+                broker2
+                    .clone()
+                    .on_proposal_received(caller, msg, OwnerType::Provider)
+            },
             move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
