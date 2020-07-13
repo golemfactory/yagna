@@ -149,6 +149,24 @@ impl Proposal {
         }
     }
 
+    pub fn from_counter(&self, proposal_id: ProposalId, demand: ModelDemand) -> Proposal {
+        let proposal = DbProposal {
+            id: proposal_id,
+            prev_proposal_id: Some(self.body.id.clone()),
+            negotiation_id: self.negotiation.id.clone(),
+            properties: demand.properties,
+            constraints: demand.constraints,
+            state: ProposalState::Draft,
+            creation_ts: demand.creation_ts,
+            expiration_ts: demand.expiration_ts,
+        };
+
+        Proposal {
+            body: proposal,
+            negotiation: self.negotiation.clone(),
+        }
+    }
+
     pub fn counter_with(mut self, proposal: &ClientProposal) -> Proposal {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();

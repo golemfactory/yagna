@@ -29,6 +29,8 @@ pub enum RemoteProposalError {
     Unsubscribed(SubscriptionId),
     #[error("Offer/Demand [{0}] expired.")]
     Expired(SubscriptionId),
+    #[error("Trying to counter not existing Proposal [{0}].")]
+    ProposalNotFound(ProposalId),
     #[error("Error: {0}.")]
     Unexpected(String),
 }

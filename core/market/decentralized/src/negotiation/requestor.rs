@@ -38,19 +38,24 @@ impl RequestorBroker {
         store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
-        let api = NegotiationApi::new(
-            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
-            move |_caller: String, msg: ProposalRejected| async move { unimplemented!() },
-            move |caller: String, msg: AgreementApproved| async move { unimplemented!() },
-            move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
-        );
-
         let notifier = EventNotifier::new();
         let broker = CommonBroker {
             store,
             db: db.clone(),
             notifier: notifier.clone(),
         };
+
+        let broker1 = broker.clone();
+        let api = NegotiationApi::new(
+            move |caller: String, msg: ProposalReceived| {
+                broker1
+                    .clone()
+                    .on_proposal_received(caller, msg, OwnerType::Requestor)
+            },
+            move |_caller: String, msg: ProposalRejected| async move { unimplemented!() },
+            move |caller: String, msg: AgreementApproved| async move { unimplemented!() },
+            move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
+        );
 
         let engine = RequestorBroker {
             api,

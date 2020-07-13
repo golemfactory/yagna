@@ -2,15 +2,19 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
+use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{MarketEvent, OwnerType, Proposal};
-use crate::matcher::SubscriptionStore;
+use crate::matcher::{QueryOfferError, SubscriptionStore};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{EventNotifier, ProposalError, QueryEventsError};
+use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
+use crate::protocol::negotiation::messages::ProposalReceived;
 use crate::{ProposalId, SubscriptionId};
+use std::str::FromStr;
 
 type IsInitial = bool;
 
@@ -118,6 +122,60 @@ impl CommonBroker {
             .await
             .map_err(|e| GetProposalError::FailedGetProposal(proposal_id.clone(), e))?
             .ok_or_else(|| GetProposalError::ProposalNotFound(proposal_id.clone()))?)
+    }
+
+    pub async fn on_proposal_received(
+        self,
+        caller: String,
+        msg: ProposalReceived,
+        owner: OwnerType,
+    ) -> Result<(), CounterProposalError> {
+        // Check if countered Proposal exists.
+        let prev_proposal = self
+            .get_proposal(&msg.prev_proposal_id)
+            .await
+            .map_err(|e| RemoteProposalError::ProposalNotFound(msg.prev_proposal_id.clone()))?;
+
+        // Check subscription.
+        let offer = match self
+            .store
+            .get_offer(&prev_proposal.negotiation.offer_id)
+            .await
+        {
+            Err(e) => match e {
+                QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
+                QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
+                _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
+            },
+            Ok(offer) => offer,
+        };
+
+        let owner_id = NodeId::from_str(&caller)
+            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
+
+        let proposal_id = msg.proposal.proposal_id.clone();
+        let demand = msg
+            .proposal
+            .into(owner_id, prev_proposal.negotiation.demand_id.clone());
+        let proposal = prev_proposal.from_counter(proposal_id, demand);
+
+        self.db
+            .as_dao::<ProposalDao>()
+            .save_proposal(&proposal)
+            .await
+            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
+
+        // Create Proposal Event and add it to queue (database).
+        let subscription_id = proposal.negotiation.subscription_id.clone();
+        self.db
+            .as_dao::<EventsDao>()
+            .add_proposal_event(proposal, owner)
+            .await
+            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
+
+        // Send channel message to wake all query_events waiting for proposals.
+        self.notifier.notify(&subscription_id).await;
+        Ok(())
     }
 }
 
