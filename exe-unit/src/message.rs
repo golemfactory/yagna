@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::runtime::RuntimeMode;
 use crate::Result;
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::{
     CommandResult, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
+use ya_runtime_api::server::proto;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
@@ -100,25 +102,56 @@ impl From<StatePair> for SetState {
 }
 
 #[derive(Clone, Debug, PartialEq, Message)]
-#[rtype(result = "Result<ExecCmdResult>")]
-pub struct ExecCmd(pub ExeScriptCommand);
+#[rtype(result = "Result<RuntimeCommandResult>")]
+pub struct RuntimeCommand(pub ExeScriptCommand);
 
 #[derive(Clone, Debug)]
-pub struct ExecCmdResult {
+pub struct RuntimeCommandResult {
     pub result: CommandResult,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
 }
 
-impl ExecCmdResult {
+impl RuntimeCommandResult {
+    pub fn ok() -> Self {
+        RuntimeCommandResult {
+            result: CommandResult::Ok,
+            stdout: None,
+            stderr: None,
+        }
+    }
+
     pub fn error(err: impl ToString) -> Self {
-        ExecCmdResult {
+        RuntimeCommandResult {
             result: CommandResult::Error,
             stdout: None,
             stderr: Some(err.to_string()),
         }
     }
 }
+
+impl From<proto::response::Error> for RuntimeCommandResult {
+    fn from(err_resp: proto::response::Error) -> Self {
+        let result = match err_resp.code {
+            0 => CommandResult::Ok,
+            _ => CommandResult::Error,
+        };
+        let mut stderr = err_resp.message;
+        for (key, value) in err_resp.context {
+            stderr = format!("{}\n{} = {}", stderr, key, value);
+        }
+
+        RuntimeCommandResult {
+            result,
+            stdout: None,
+            stderr: Some(stderr),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct SetRuntimeMode(pub RuntimeMode);
 
 #[derive(Clone, Debug, PartialEq, Message)]
 #[rtype(result = "()")]

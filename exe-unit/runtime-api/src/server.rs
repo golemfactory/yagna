@@ -15,6 +15,8 @@ pub mod proto {
 }
 mod codec;
 
+#[cfg(feature = "codec")]
+pub use codec::Codec;
 pub use proto::request::{KillProcess, RunProcess};
 pub use proto::response::Error as ErrorResponse;
 pub use proto::response::RunProcess as RunProcessResp;
