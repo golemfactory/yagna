@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{db::models::Offer as ModelOffer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 
@@ -17,7 +15,7 @@ pub struct ProviderBroker {
 }
 
 impl ProviderBroker {
-    pub fn new(db: DbExecutor) -> Result<Arc<ProviderBroker>, NegotiationInitError> {
+    pub fn new(db: DbExecutor) -> Result<ProviderBroker, NegotiationInitError> {
         let api = NegotiationApi::new(
             move |_caller: String, msg: InitialProposalReceived| async move { unimplemented!() },
             move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
@@ -26,7 +24,7 @@ impl ProviderBroker {
             move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
         );
 
-        Ok(Arc::new(ProviderBroker { api, db }))
+        Ok(ProviderBroker { api, db })
     }
 
     pub async fn bind_gsb(
