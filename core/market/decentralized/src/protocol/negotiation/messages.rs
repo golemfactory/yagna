@@ -1,8 +1,13 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 use super::super::callbacks::CallbackMessage;
-use super::errors::{AgreementError, ProposalError};
+use super::errors::{AgreementError, CounterProposalError, ProposalError};
+use crate::db::models::Demand;
+use crate::db::models::{DbProposal, OwnerType, ProposalId};
+use crate::SubscriptionId;
 
+use ya_client::model::NodeId;
 use ya_service_bus::RpcMessage;
 
 pub mod provider {
@@ -26,35 +31,47 @@ pub mod requestor {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ProposalContent {
+    pub proposal_id: ProposalId,
+    pub properties: String,
+    pub constraints: String,
+
+    pub creation_ts: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalReceived {
-    pub proposal_id: String,
-    // TODO: We should send Demand part of the proposal.
+    pub prev_proposal_id: ProposalId,
+    pub proposal: ProposalContent,
 }
 
 impl RpcMessage for ProposalReceived {
     const ID: &'static str = "ProposalReceived";
     type Item = ();
-    type Error = ProposalError;
+    type Error = CounterProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitialProposalReceived {
-    pub proposal_id: String,
-    // TODO: We should send Requestor Demand and proposal id.
+    pub proposal: ProposalContent,
+
+    pub offer_id: SubscriptionId,
+    pub demand_id: SubscriptionId,
 }
 
 impl RpcMessage for InitialProposalReceived {
     const ID: &'static str = "InitialProposalReceived";
     type Item = ();
-    type Error = ProposalError;
+    type Error = CounterProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalRejected {
-    pub proposal_id: String,
+    pub proposal_id: ProposalId,
 }
 
 impl RpcMessage for ProposalRejected {
@@ -117,4 +134,51 @@ impl RpcMessage for AgreementCancelled {
 impl<Message: RpcMessage> CallbackMessage for Message {
     type Item = <Message as RpcMessage>::Item;
     type Error = <Message as RpcMessage>::Error;
+}
+
+impl ProposalContent {
+    pub fn from(proposal: DbProposal) -> ProposalContent {
+        ProposalContent {
+            proposal_id: proposal.id,
+            properties: proposal.properties,
+            constraints: proposal.constraints,
+            expiration_ts: proposal.expiration_ts,
+            creation_ts: proposal.creation_ts,
+        }
+    }
+}
+
+impl InitialProposalReceived {
+    pub fn into_demand(self, owner: NodeId) -> Demand {
+        Demand {
+            id: self.demand_id,
+            properties: self.proposal.properties,
+            constraints: self.proposal.constraints,
+            node_id: owner,
+            creation_ts: self.proposal.creation_ts,
+            insertion_ts: None,
+            expiration_ts: self.proposal.expiration_ts,
+        }
+    }
+}
+impl ProposalReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());
+        self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl InitialProposalReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl ProposalRejected {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.proposal_id = self.proposal_id.translate(owner);
+        self
+    }
 }

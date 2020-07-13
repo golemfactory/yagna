@@ -4,15 +4,14 @@ use diesel::deserialize;
 use diesel::serialize::Output;
 use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
-use digest::Digest;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use sha3::Sha3_256;
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
 use ya_client::model::{ErrorMessage, NodeId};
 
 use super::{generate_random_id, SubscriptionId};
+use super::{OwnerType, ProposalId};
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
@@ -32,11 +31,6 @@ pub enum ProposalState {
     Accepted = 3,
     /// Not accepted nor rejected before validity period
     Expired = 4,
-}
-
-pub enum OwnerType {
-    Provider,
-    Requestor,
 }
 
 /// Represents negotiation between Requestor and Provider related
@@ -83,8 +77,8 @@ pub struct Negotiation {
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_proposal"]
 pub struct DbProposal {
-    pub id: String,
-    pub prev_proposal_id: Option<String>,
+    pub id: ProposalId,
+    pub prev_proposal_id: Option<ProposalId>,
 
     pub negotiation_id: String,
 
@@ -102,27 +96,14 @@ pub struct Proposal {
     pub body: DbProposal,
 }
 
-pub fn hash_proposal(
-    offer_id: &SubscriptionId,
-    demand_id: &SubscriptionId,
-    creation_ts: &NaiveDateTime,
-) -> String {
-    let mut hasher = Sha3_256::new();
-
-    hasher.input(offer_id.to_string());
-    hasher.input(demand_id.to_string());
-    hasher.input(creation_ts.format("%Y-%m-%d %H:%M:%f").to_string());
-
-    format!("{:x}", hasher.result())
-}
-
 impl Proposal {
     pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> Proposal {
         let negotiation = Negotiation::new(&demand, &offer, OwnerType::Requestor);
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
         let expiration_ts = creation_ts + Duration::minutes(10);
-        let proposal_id = hash_proposal(&offer.id, &demand.id, &creation_ts);
+        let proposal_id =
+            ProposalId::generate_id(&offer.id, &demand.id, &creation_ts, OwnerType::Requestor);
 
         let proposal = DbProposal {
             id: proposal_id,
@@ -141,6 +122,56 @@ impl Proposal {
         }
     }
 
+    pub fn new_provider_initial(demand: ModelDemand, offer: ModelOffer) -> Proposal {
+        let negotiation = Negotiation::new(&demand, &offer, OwnerType::Provider);
+        let proposal_id = ProposalId::generate_id(
+            &offer.id,
+            &demand.id,
+            &demand.creation_ts,
+            OwnerType::Provider,
+        );
+
+        let proposal = DbProposal {
+            id: proposal_id,
+            prev_proposal_id: None,
+            negotiation_id: negotiation.id.clone(),
+            properties: demand.properties,
+            constraints: demand.constraints,
+            state: ProposalState::Draft,
+            creation_ts: demand.creation_ts,
+            expiration_ts: demand.expiration_ts,
+        };
+
+        Proposal {
+            body: proposal,
+            negotiation,
+        }
+    }
+
+    pub fn counter_with(mut self, proposal: &ClientProposal) -> Proposal {
+        let owner = self.body.id.owner();
+        let creation_ts = Utc::now().naive_utc();
+        // TODO: How to set expiration? Config?
+        let expiration_ts = creation_ts + Duration::minutes(10);
+        let proposal_id = ProposalId::generate_id(
+            &self.negotiation.offer_id,
+            &self.negotiation.demand_id,
+            &creation_ts,
+            owner,
+        );
+
+        self.body.prev_proposal_id = Some(self.body.id.clone());
+        self.body.id = proposal_id;
+        self.body.properties = proposal.properties.to_string();
+        self.body.constraints = proposal.constraints.clone();
+        self.body.creation_ts = creation_ts;
+        self.body.expiration_ts = expiration_ts;
+        self.body.state = ProposalState::Draft;
+        // We leave negotiation id the same.
+
+        self
+    }
+
     pub fn into_client(self) -> Result<ClientProposal, ErrorMessage> {
         let properties = serde_json::from_str(&self.body.properties).map_err(|error| {
             format!(
@@ -152,10 +183,10 @@ impl Proposal {
         Ok(ClientProposal {
             properties,
             constraints: self.body.constraints,
-            proposal_id: Some(self.body.id),
+            proposal_id: Some(self.body.id.to_string()),
             issuer_id: Some(self.negotiation.provider_id.to_string()),
             state: Some(State::from(self.body.state)),
-            prev_proposal_id: self.body.prev_proposal_id,
+            prev_proposal_id: self.body.prev_proposal_id.map(|id| id.to_string()),
         })
     }
 }

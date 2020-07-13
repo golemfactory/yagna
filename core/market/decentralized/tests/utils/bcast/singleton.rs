@@ -1,15 +1,12 @@
-// Broadcast support service
+//! Broadcast singleton support service
+// Singleton version of BCast module in hope to solve problems with running
+// multithreaded integration tests with singleton GSB router
 
-// Note: This file is copied from core/net module. It serves only as mock
-// so we don't have to keep it compatible.
-// It was moved here, because this file is not expected to be public in net module.
-
-use std::cell::RefCell;
 use std::collections::btree_map::Entry::{Occupied, Vacant};
 use std::collections::BTreeMap;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use super::BCast;
 use ya_client::model::NodeId;
 use ya_core_model::net::local as local_net;
 
@@ -22,7 +19,6 @@ pub struct BCastService {
 struct BCastServiceInner {
     topics_endpoints: BTreeMap<String, Vec<Arc<str>>>,
     node_subnet: BTreeMap<String, String>,
-    initialized: bool,
 }
 
 lazy_static::lazy_static! {
@@ -33,26 +29,18 @@ lazy_static::lazy_static! {
 
 impl Default for BCastService {
     fn default() -> Self {
+        log::debug!("getting singleton mock BCast");
         (*BCAST).clone()
     }
 }
 
-impl BCastService {
-    pub fn initialize(&self) {
+impl BCast for BCastService {
+    fn register(&self, node_id: &NodeId, subnet: &str) {
         let mut me = self.inner.lock().unwrap();
-        me.initialized = true;
-    }
-
-    pub fn is_initialized(&self) -> bool {
-        let me = self.inner.lock().unwrap();
-        me.initialized
-    }
-
-    pub fn register(&self, node_id: &NodeId, subnet: &str) {
-        let mut me = self.inner.lock().unwrap();
+        log::info!("registering node {} within subnet: {}", node_id, subnet);
 
         match me.node_subnet.entry(node_id.to_string()) {
-            Occupied(entry) => panic!(
+            Occupied(_) => panic!(
                 "node {} already registered in BCast subnet: {}",
                 node_id, subnet
             ),
@@ -60,7 +48,7 @@ impl BCastService {
         };
     }
 
-    pub fn add(&self, subscribe: local_net::Subscribe) {
+    fn add(&self, subscribe: local_net::Subscribe) {
         let mut me = self.inner.lock().unwrap();
         me.topics_endpoints
             .entry(subscribe.topic().to_owned())
@@ -68,7 +56,7 @@ impl BCastService {
             .push(subscribe.endpoint().into());
     }
 
-    pub fn resolve(&self, node_id: &str, topic: &str) -> Vec<Arc<str>> {
+    fn resolve(&self, node_id: &str, topic: &str) -> Vec<Arc<str>> {
         let me = self.inner.lock().unwrap();
         let subnet = match me.node_subnet.get(node_id) {
             Some(subnet) => format!("/{}/", subnet),
