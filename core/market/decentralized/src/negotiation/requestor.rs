@@ -1,19 +1,29 @@
+use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client::model::market::event::RequestorEvent;
-use ya_persistence::executor::DbExecutor;
-
+use super::common::get_proposal;
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
+use crate::db::dao::AgreementDao;
 use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::{Demand as ModelDemand, SubscriptionId};
+use crate::db::models::{
+    Agreement, AgreementId, Demand as ModelDemand, Proposal, ProposalId, SubscriptionId,
+};
 use crate::db::models::{EventError, OwnerType};
 use crate::db::DbResult;
+use crate::matcher::SubscriptionStore;
+
+use ya_client::model::market::event::RequestorEvent;
+use ya_client::model::market::proposal::Proposal as ClientProposal;
+use ya_persistence::executor::DbExecutor;
+use ya_service_api_web::middleware::Identity;
 
 use crate::matcher::RawProposal;
+use crate::negotiation::errors::AgreementError;
 use crate::negotiation::notifier::NotifierError;
+use crate::negotiation::ProposalError;
 use crate::protocol::negotiation::messages::{
     AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected,
 };
@@ -23,12 +33,14 @@ use crate::protocol::negotiation::requestor::NegotiationApi;
 pub struct RequestorBroker {
     api: NegotiationApi,
     db: DbExecutor,
+    store: SubscriptionStore,
     pub notifier: EventNotifier,
 }
 
 impl RequestorBroker {
     pub fn new(
         db: DbExecutor,
+        store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
         let api = NegotiationApi::new(
@@ -42,6 +54,7 @@ impl RequestorBroker {
         let engine = RequestorBroker {
             api,
             db: db.clone(),
+            store,
             notifier: notifier.clone(),
         };
 
@@ -74,7 +87,7 @@ impl RequestorBroker {
         let _ = self
             .db
             .as_dao::<EventsDao>()
-            .remove_requestor_events(subscription_id)
+            .remove_events(subscription_id)
             .await
             .map_err(|e| {
                 log::warn!(
@@ -84,6 +97,47 @@ impl RequestorBroker {
             });
         // TODO: We could remove all resources related to Proposals.
         Ok(())
+    }
+
+    pub async fn counter_proposal(
+        &self,
+        subscription_id: &SubscriptionId,
+        prev_proposal_id: &ProposalId,
+        proposal: &ClientProposal,
+    ) -> Result<ProposalId, ProposalError> {
+        // TODO: Everything should happen under transaction.
+        // TODO: Check if subscription is active
+        // TODO: Check if this proposal wasn't already countered.
+        let prev_proposal = get_proposal(&self.db, prev_proposal_id)
+            .await
+            .map_err(|e| ProposalError::from(&subscription_id, e))?;
+
+        if &prev_proposal.negotiation.subscription_id != subscription_id {
+            Err(ProposalError::ProposalNotFound(
+                prev_proposal_id.clone(),
+                subscription_id.clone(),
+            ))?
+        }
+
+        let is_initial = prev_proposal.body.prev_proposal_id.is_none();
+        let new_proposal = prev_proposal.counter_with(proposal);
+        let proposal_id = new_proposal.body.id.clone();
+        self.db
+            .as_dao::<ProposalDao>()
+            .save_proposal(&new_proposal)
+            .await
+            .map_err(|e| ProposalError::FailedSaveProposal(prev_proposal_id.clone(), e))?;
+
+        // Send Proposal to Provider. Note that it can be either our first communication with
+        // Provider or we negotiated with him already, so we need to send different message in each
+        // of these cases.
+        match is_initial {
+            true => self.api.initial_proposal(new_proposal).await,
+            false => self.api.counter_proposal(new_proposal).await,
+        }
+        .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.clone(), e))?;
+
+        Ok(proposal_id)
     }
 
     pub async fn query_events(
@@ -132,6 +186,42 @@ impl RequestorBroker {
             // that list won't be empty, because other query_events calls can wait for the same event.
         }
     }
+
+    pub async fn create_agreement(
+        &self,
+        id: Identity,
+        proposal_id: &ProposalId,
+        valid_to: DateTime<Utc>,
+    ) -> Result<AgreementId, AgreementError> {
+        // TODO: Check if we are owner of Proposal
+        let offer_proposal_id = proposal_id;
+        let offer_proposal = get_proposal(&self.db, offer_proposal_id)
+            .await
+            .map_err(|e| AgreementError::from(proposal_id, e))?;
+
+        let demand_proposal_id = offer_proposal
+            .body
+            .prev_proposal_id
+            .clone()
+            .ok_or_else(|| AgreementError::NoNegotiations(offer_proposal_id.clone()))?;
+        let demand_proposal = get_proposal(&self.db, &demand_proposal_id)
+            .await
+            .map_err(|e| AgreementError::from(proposal_id, e))?;
+
+        let agreement = Agreement::new(
+            demand_proposal,
+            offer_proposal,
+            valid_to.naive_utc(),
+            OwnerType::Requestor,
+        );
+        let id = agreement.id.clone();
+        self.db
+            .as_dao::<AgreementDao>()
+            .save(agreement)
+            .await
+            .map_err(|e| AgreementError::FailedSaveAgreement(proposal_id.clone(), e))?;
+        Ok(id)
+    }
 }
 
 async fn get_events_from_db(
@@ -141,7 +231,7 @@ async fn get_events_from_db(
 ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
     let events = db
         .as_dao::<EventsDao>()
-        .take_requestor_events(subscription_id, max_events)
+        .take_events(subscription_id, max_events, OwnerType::Requestor)
         .await?;
 
     // Map model events to client RequestorEvent.
@@ -174,9 +264,10 @@ pub async fn proposal_receiver_thread(
             log::info!("Received proposal from matcher. Adding to events queue.");
 
             // Add proposal to database together with Negotiation record.
+            let proposal = Proposal::new_initial(proposal.demand, proposal.offer);
             let proposal = db
                 .as_dao::<ProposalDao>()
-                .new_initial_proposal(proposal.demand, proposal.offer)
+                .save_initial_proposal(proposal)
                 .await?;
 
             // Create Proposal Event and add it to queue (database).

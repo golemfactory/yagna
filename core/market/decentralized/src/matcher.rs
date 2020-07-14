@@ -1,7 +1,6 @@
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::models::{Demand, Offer};
@@ -42,8 +41,7 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(db: &DbExecutor) -> Result<(Matcher, EventsListeners), MatcherInitError> {
-        let store = SubscriptionStore::new(db.clone());
+    pub fn new(store: SubscriptionStore) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         let (proposal_sender, proposal_receiver) = unbounded_channel::<RawProposal>();
         let resolver = Resolver::new(store.clone(), proposal_sender);
 

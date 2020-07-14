@@ -15,7 +15,7 @@ use ya_market_decentralized::testing::negotiation::messages::{
 };
 use ya_market_decentralized::testing::negotiation::{provider, requestor};
 use ya_market_decentralized::testing::{
-    DemandError, EventsListeners, Matcher, QueryEventsError, QueryOfferError,
+    DemandError, EventsListeners, Matcher, QueryEventsError, QueryOfferError, SubscriptionStore,
 };
 use ya_market_decentralized::{migrations, Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
@@ -129,7 +129,9 @@ impl MarketsNetwork {
     pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
         db.apply_migration(migrations::run_with_output)?;
-        let (matcher, listeners) = Matcher::new(&db)?;
+
+        let store = SubscriptionStore::new(db.clone());
+        let (matcher, listeners) = Matcher::new(store)?;
         self.add_node(name, MockNodeKind::Matcher { matcher, listeners })
             .await
     }
@@ -397,7 +399,9 @@ pub mod default {
     use ya_market_decentralized::protocol::{
         DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
     };
-    use ya_market_decentralized::testing::negotiation::errors::{AgreementError, ProposalError};
+    use ya_market_decentralized::testing::negotiation::errors::{
+        AgreementError, CounterProposalError, ProposalError,
+    };
     use ya_market_decentralized::testing::negotiation::messages::{
         AgreementApproved, AgreementReceived, AgreementRejected, InitialProposalReceived,
         ProposalReceived, ProposalRejected,
@@ -428,14 +432,14 @@ pub mod default {
     pub async fn empty_on_initial_proposal(
         _caller: String,
         _msg: InitialProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         Ok(())
     }
 
     pub async fn empty_on_proposal_received(
         _caller: String,
         _msg: ProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         Ok(())
     }
 

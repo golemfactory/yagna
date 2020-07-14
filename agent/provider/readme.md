@@ -244,7 +244,7 @@ If you don't specify any of price values, it will be defaulted to `0.0`.
 
 ### Updating presets
 
-Note: updating a preset will cancel all related offer subscriptions. 
+Note: updating a preset will cancel (unsubscribe) all related offer subscriptions. 
 
 Updating in interactive mode:
 
@@ -266,7 +266,7 @@ You can omit some parameters and the will be filled with previous values.
 
 ### Removing presets
 
-Note: removing a preset will cancel all related offer subscriptions.
+Note: removing a preset will cancel (unsubscribe) all related offer subscriptions.
 
 ```bash
 cargo run -p ya-provider preset remove new-preset
@@ -274,7 +274,7 @@ cargo run -p ya-provider preset remove new-preset
 
 ### Activating and deactivating presets
 
-When you activate a preset, a new offer will be published to the marketplace.
+When you activate a preset, a new offer will be published (subscribed) to the marketplace.
 
 ```bash
 cargo run -p ya-provider preset activate new-preset
@@ -306,7 +306,7 @@ Provider Agent **does not allow you to allocate all of your system resources**. 
 logical CPU cores, memory and storage will be utilized by the background applications,
 the operating system and Provider Agent itself.
 
-Note: updating or activating another hardware profile will cancel all current offer subscriptions.
+Note: updating or activating another hardware profile will cancel (unsubscribe) all current offer subscriptions.
 
 The available sub-commands for `profile` are:
 

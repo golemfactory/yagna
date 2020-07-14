@@ -7,6 +7,8 @@ use super::{
 };
 use crate::market::MarketService;
 
+use crate::ProposalId;
+use std::str::FromStr;
 use ya_client::model::market::{AgreementProposal, Demand, Proposal};
 use ya_service_api_web::middleware::Identity;
 
@@ -84,8 +86,17 @@ async fn counter_proposal(
     path: Path<PathSubscriptionProposal>,
     body: Json<Proposal>,
     id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+) -> impl Responder {
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+    let proposal = body.into_inner();
+    market
+        .requestor_engine
+        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .await
+        .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
 #[actix_web::get("/demands/{subscription_id}/proposals/{proposal_id}")]
@@ -111,8 +122,14 @@ async fn create_agreement(
     market: Data<Arc<MarketService>>,
     body: Json<AgreementProposal>,
     id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+) -> impl Responder {
+    let proposal_id = ProposalId::from_str(&body.proposal_id)?;
+    let valid_to = body.valid_to;
+    market
+        .requestor_engine
+        .create_agreement(id, &proposal_id, valid_to)
+        .await
+        .map(|agreement_id| HttpResponse::Ok().json(agreement_id))
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
