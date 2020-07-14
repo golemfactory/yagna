@@ -5309,6 +5309,7 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client",
  "ya-core-model",
+ "ya-market-decentralized",
  "ya-market-resolver",
  "ya-net",
  "ya-persistence",

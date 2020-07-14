@@ -7,26 +7,23 @@ use serde_json::json;
 
 use ya_client::model::{market::Offer, ErrorMessage, NodeId};
 use ya_core_model::market;
+#[cfg(feature = "bcast-singleton")]
+use ya_market_decentralized::testing::bcast::singleton::BCastService;
+#[cfg(not(feature = "bcast-singleton"))]
+use ya_market_decentralized::testing::bcast::BCastService;
 use ya_market_decentralized::testing::{
-    DemandError, ModifyOfferError, SubscriptionParseError, SubscriptionStore,
+    bcast::BCast,
+    client::{sample_demand, sample_offer},
+    generate_identity,
+    mock_net::MockNet,
+    mock_node::{prepare_test_dir, wait_for_bcast, MarketServiceExt},
+    DemandError, MarketsNetwork, ModifyOfferError, SubscriptionParseError, SubscriptionStore,
 };
-use ya_market_decentralized::{MarketService, SubscriptionId};
+use ya_market_decentralized::{testing::SubscriptionId, MarketService};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 
-mod utils;
-
-use utils::client::{sample_demand, sample_offer};
-use utils::mock_node::{wait_for_bcast, MarketServiceExt};
-use utils::MarketsNetwork;
-
-#[cfg(feature = "bcast-singleton")]
-use utils::bcast::singleton::BCastService;
-#[cfg(not(feature = "bcast-singleton"))]
-use utils::bcast::BCastService;
-use utils::{bcast::BCast, mock_net::MockNet};
-
-//#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_rest_get_offers")
@@ -83,8 +80,6 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_rest_invalid_subscription_id_should_return_400() {
-    // env_logger::init();
-
     // given
     let (_db, _node_id, mut app) = init_db_app("test_rest_non_existent").await;
 
@@ -110,8 +105,6 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_rest_subscribe_unsubscribe_offer() {
-    // env_logger::init();
-
     // given
     let (db, node_id, mut app) = init_db_app("test_rest_subscribe_offer").await;
 
@@ -171,8 +164,6 @@ async fn test_rest_subscribe_unsubscribe_offer() {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_rest_subscribe_unsubscribe_demand() {
-    // env_logger::init();
-
     // given
     let (db, node_id, mut app) = init_db_app("test_rest_subscribe_demand").await;
 
@@ -240,11 +231,11 @@ async fn init_db_app(
         Error = actix_http::error::Error,
     >,
 ) {
-    let id = utils::generate_identity(test_name);
+    let id = generate_identity(test_name);
     BCastService::default().register(&id.identity, test_name);
     MockNet::default().bind_gsb();
 
-    let test_dir = utils::mock_node::prepare_test_dir(test_name).unwrap();
+    let test_dir = prepare_test_dir(test_name).unwrap();
     let db = DbExecutor::from_data_dir(&test_dir, "yagna").unwrap();
 
     let market = MarketService::new(&db).unwrap();

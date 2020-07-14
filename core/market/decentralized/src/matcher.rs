@@ -50,13 +50,11 @@ impl Matcher {
             .data(resolver.clone())
             .add_data_handler(on_offer_received)
             .add_data_handler(on_offer_unsubscribed)
-            .add_handler(move |caller: String, msg: RetrieveOffers| async move {
+            .add_handler(move |caller: String, _msg: RetrieveOffers| async move {
                 log::info!("Offers request received from: {}. Unimplemented.", caller);
                 Ok(vec![])
             })
             .build();
-
-        let (emitter, receiver) = unbounded_channel::<RawProposal>();
 
         let matcher = Matcher {
             store,
@@ -105,11 +103,11 @@ impl Matcher {
 
     pub async fn unsubscribe_offer(
         &self,
+        offer_id: &SubscriptionId,
         id: &Identity,
-        subscription_id: &SubscriptionId,
     ) -> Result<(), MatcherError> {
         self.store
-            .unsubscribe_offer(subscription_id, true, Some(id.identity))
+            .unsubscribe_offer(offer_id, true, Some(id.identity))
             .await?;
 
         // Broadcast only, if no Error occurred in previous step.
@@ -118,13 +116,13 @@ impl Matcher {
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .broadcast_unsubscribe(id.identity.to_string(), subscription_id.clone())
+            .broadcast_unsubscribe(id.identity.to_string(), offer_id.clone())
             .await
             .map_err(|e| {
                 log::warn!(
                     "Failed to broadcast unsubscribe offer [{1}]. Error: {0}.",
                     e,
-                    subscription_id
+                    offer_id
                 );
             });
         Ok(())
@@ -143,10 +141,10 @@ impl Matcher {
 
     pub async fn unsubscribe_demand(
         &self,
+        demand_id: &SubscriptionId,
         id: &Identity,
-        subscription_id: &SubscriptionId,
     ) -> Result<(), MatcherError> {
-        Ok(self.store.remove_demand(subscription_id, id).await?)
+        Ok(self.store.remove_demand(demand_id, id).await?)
     }
 }
 
@@ -169,7 +167,7 @@ pub(crate) async fn on_offer_received(
         })
         .or_else(|e| match e {
             // Stop propagation for existing, unsubscribed and expired Offers to avoid infinite broadcast.
-            SaveOfferError::Exists(id) => Ok(Propagate::No(Reason::AlreadyExists)),
+            SaveOfferError::Exists(_) => Ok(Propagate::No(Reason::AlreadyExists)),
             SaveOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
             SaveOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
             // Below errors are not possible to get from checked_store_offer
@@ -187,7 +185,7 @@ pub(crate) async fn on_offer_unsubscribed(
     msg: OfferUnsubscribed,
 ) -> Result<Propagate, ()> {
     store
-        .unsubscribe_offer(&msg.subscription_id, false, caller.parse().ok())
+        .unsubscribe_offer(&msg.offer_id, false, caller.parse().ok())
         .await
         .map(|_| Propagate::Yes)
         .or_else(|e| match e {

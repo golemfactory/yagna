@@ -6,19 +6,20 @@ use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use std::str::FromStr;
 use thiserror::Error;
 
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::Proposal as ClientProposal;
 use ya_client::model::ErrorMessage;
-use ya_persistence::executor::{DbExecutor, Error as DbError};
+use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::ProposalDao;
 use crate::db::models::{OwnerType, Proposal};
 use crate::db::schema::market_event;
+use crate::db::DbError;
 use crate::ProposalId;
-use std::str::FromStr;
 
 #[derive(Error, Debug)]
 pub enum EventError {

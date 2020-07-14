@@ -2,16 +2,15 @@ use chrono::Utc;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use thiserror::Error;
 
+use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
-use ya_persistence::executor::{ConnType, Error as DbError};
 
 use crate::db::dao::demand::{demand_status, DemandState};
-use crate::db::dao::offer::query_state;
-use crate::db::dao::OfferState;
+use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::models::MarketEvent;
 use crate::db::models::{OwnerType, Proposal, SubscriptionId};
 use crate::db::schema::market_event::dsl;
-use crate::db::DbResult;
+use crate::db::{DbError, DbResult};
 
 #[derive(Error, Debug)]
 pub enum TakeEventsError {
