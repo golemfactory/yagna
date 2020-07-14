@@ -52,7 +52,6 @@ impl RuntimeArgs {
         let mut cpu_cores = None;
         let mut mem_gib = None;
         let mut storage_gib = None;
-
         if with_inf {
             cpu_cores = agreement.infrastructure.get("cpu.cores").cloned();
             mem_gib = agreement.infrastructure.get("mem.gib").cloned();
