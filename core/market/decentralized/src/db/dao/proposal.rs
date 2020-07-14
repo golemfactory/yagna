@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};

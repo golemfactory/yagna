@@ -9,7 +9,7 @@ pub(crate) mod protocol;
 #[cfg(feature = "testing")]
 pub mod testing;
 
-pub(crate) use db::models::{Demand, Offer, ProposalId, SubscriptionId};
+pub(crate) use db::models::{ProposalId, SubscriptionId};
 pub use market::MarketService;
 
 pub use ya_client::model::market::MARKET_API_PATH;
