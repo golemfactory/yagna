@@ -52,7 +52,7 @@ pub struct Discovery {
 pub struct DiscoveryImpl {
     offer_received: HandlerSlot<OfferReceived>,
     offer_unsubscribed: HandlerSlot<OfferUnsubscribed>,
-    retrieve_offers: HandlerSlot<RetrieveOffers>,
+    _retrieve_offers: HandlerSlot<RetrieveOffers>,
 }
 
 impl Discovery {
@@ -73,11 +73,11 @@ impl Discovery {
     pub async fn broadcast_unsubscribe(
         &self,
         caller: String,
-        subscription_id: SubscriptionId,
+        offer_id: SubscriptionId,
     ) -> Result<(), DiscoveryError> {
-        log::info!("Broadcasting unsubscribe offer [{}].", &subscription_id);
+        log::info!("Broadcasting unsubscribe offer [{}].", &offer_id);
 
-        let msg = OfferUnsubscribed { subscription_id };
+        let msg = OfferUnsubscribed { offer_id };
         let bcast_msg = SendBroadcastMessage::new(msg);
 
         let _ = bus::service(net::local::BUS_ID)
@@ -92,7 +92,7 @@ impl Discovery {
 
     pub async fn bind_gsb(
         &self,
-        public_prefix: &str,
+        _public_prefix: &str,
         private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
@@ -165,29 +165,23 @@ impl Discovery {
 
     async fn on_offer_unsubscribed(self, caller: String, msg: OfferUnsubscribed) -> Result<(), ()> {
         let callback = self.inner.offer_unsubscribed.clone();
-        let subscription_id = msg.subscription_id.clone();
+        let offer_id = msg.offer_id.clone();
 
         log::info!(
             "Received broadcasted unsubscribe Offer [{}]. Sender: [{}].",
-            subscription_id,
+            offer_id,
             &caller,
         );
 
         match callback.call(caller.clone(), msg).await? {
             Propagate::Yes => {
-                log::info!(
-                    "Propagating further unsubscribe Offer [{}].",
-                    &subscription_id,
-                );
+                log::info!("Propagating further unsubscribe Offer [{}].", &offer_id,);
 
                 // TODO: Should we retry in case of fail?
-                if let Err(error) = self
-                    .broadcast_unsubscribe(caller, subscription_id.clone())
-                    .await
-                {
+                if let Err(error) = self.broadcast_unsubscribe(caller, offer_id.clone()).await {
                     log::error!(
                         "Error propagating unsubscribe Offer [{}] further. Error: {}",
-                        subscription_id,
+                        offer_id,
                         error,
                     );
                 }
@@ -195,7 +189,7 @@ impl Discovery {
             Propagate::No(reason) => {
                 log::info!(
                     "Not propagating unsubscribe Offer [{}] because: {}.",
-                    subscription_id,
+                    offer_id,
                     reason
                 );
             }
@@ -246,7 +240,7 @@ impl BroadcastMessage for OfferReceived {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OfferUnsubscribed {
-    pub subscription_id: SubscriptionId,
+    pub offer_id: SubscriptionId,
 }
 
 impl CallbackMessage for OfferUnsubscribed {

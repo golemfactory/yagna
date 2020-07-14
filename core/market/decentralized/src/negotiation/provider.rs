@@ -1,12 +1,14 @@
 use futures::stream::StreamExt;
 use std::str::FromStr;
 
-use ya_client::model::market::event::ProviderEvent;
-use ya_client::model::market::proposal::Proposal as ClientProposal;
-use ya_client::model::NodeId;
+use ya_client::model::{
+    market::{event::ProviderEvent, Proposal as ClientProposal},
+    NodeId,
+};
 use ya_persistence::executor::DbExecutor;
 
 use crate::db::dao::{EventsDao, ProposalDao};
+use crate::db::models::{Offer as ModelOffer, ProposalId, SubscriptionId};
 use crate::db::models::{OwnerType, Proposal};
 use crate::matcher::{QueryOfferError, SubscriptionStore};
 use crate::negotiation::common::CommonBroker;
@@ -18,7 +20,6 @@ use crate::protocol::negotiation::messages::{
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
-use crate::{db::models::Offer as ModelOffer, ProposalId, SubscriptionId};
 
 use super::errors::{NegotiationError, NegotiationInitError};
 
@@ -52,9 +53,9 @@ impl ProviderBroker {
                     .clone()
                     .on_proposal_received(caller, msg, OwnerType::Provider)
             },
-            move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
-            move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
-            move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementReceived| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
         );
 
         Ok(ProviderBroker {
@@ -71,16 +72,16 @@ impl ProviderBroker {
         Ok(self.api.bind_gsb(public_prefix, private_prefix).await?)
     }
 
-    pub async fn subscribe_offer(&self, offer: &ModelOffer) -> Result<(), NegotiationError> {
+    pub async fn subscribe_offer(&self, _offer: &ModelOffer) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }
 
     pub async fn unsubscribe_offer(
         &self,
-        subscription_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.common.notifier.stop_notifying(subscription_id).await;
+        self.common.notifier.stop_notifying(offer_id).await;
         Ok(())
     }
 
@@ -106,13 +107,13 @@ impl ProviderBroker {
 
     pub async fn query_events(
         &self,
-        subscription_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<ProviderEvent>, QueryEventsError> {
         let events = self
             .common
-            .query_events(subscription_id, timeout, max_events, OwnerType::Provider)
+            .query_events(offer_id, timeout, max_events, OwnerType::Provider)
             .await?;
 
         // Map model events to client RequestorEvent.

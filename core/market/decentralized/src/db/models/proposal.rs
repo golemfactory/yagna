@@ -240,11 +240,6 @@ impl Negotiation {
             OwnerType::Requestor => demand.id.clone(),
         };
 
-        let identity_id = match role {
-            OwnerType::Provider => offer.node_id.clone(),
-            OwnerType::Requestor => demand.node_id.clone(),
-        };
-
         Negotiation {
             id: generate_random_id(),
             subscription_id,

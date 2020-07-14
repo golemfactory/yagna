@@ -60,7 +60,7 @@ impl CommonBroker {
             .as_dao::<ProposalDao>()
             .save_proposal(&new_proposal)
             .await
-            .map_err(|e| ProposalError::FailedSaveProposal(prev_proposal_id.clone(), e))?;
+            .map_err(|e| ProposalError::FailedSaveProposal(proposal_id.clone(), e))?;
         Ok((new_proposal, is_initial))
     }
 
@@ -140,20 +140,19 @@ impl CommonBroker {
         let prev_proposal = self
             .get_proposal(&msg.prev_proposal_id)
             .await
-            .map_err(|e| RemoteProposalError::ProposalNotFound(msg.prev_proposal_id.clone()))?;
+            .map_err(|_e| RemoteProposalError::ProposalNotFound(msg.prev_proposal_id.clone()))?;
 
         // Check subscription.
-        let offer = match self
+        if let Err(e) = self
             .store
             .get_offer(&prev_proposal.negotiation.offer_id)
             .await
         {
-            Err(e) => match e {
+            match e {
                 QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
                 QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
                 _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
-            },
-            Ok(offer) => offer,
+            }
         };
 
         let owner_id = NodeId::from_str(&caller)

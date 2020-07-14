@@ -125,14 +125,12 @@ impl MarketService {
 
     pub async fn unsubscribe_offer(
         &self,
-        subscription_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
         id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
-        self.provider_engine
-            .unsubscribe_offer(subscription_id)
-            .await?;
-        Ok(self.matcher.unsubscribe_offer(id, subscription_id).await?)
+        self.provider_engine.unsubscribe_offer(offer_id).await?;
+        Ok(self.matcher.unsubscribe_offer(offer_id, id).await?)
     }
 
     pub async fn subscribe_demand(
@@ -147,16 +145,14 @@ impl MarketService {
 
     pub async fn unsubscribe_demand(
         &self,
-        subscription_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
         id: &Identity,
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
 
-        self.requestor_engine
-            .unsubscribe_demand(subscription_id)
-            .await?;
+        self.requestor_engine.unsubscribe_demand(demand_id).await?;
         // TODO: shouldn't remove precede negotiation unsubscribe?
-        Ok(self.matcher.unsubscribe_demand(id, subscription_id).await?)
+        Ok(self.matcher.unsubscribe_demand(demand_id, id).await?)
     }
 }
 

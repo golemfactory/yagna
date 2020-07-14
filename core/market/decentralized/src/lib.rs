@@ -1,19 +1,15 @@
-// TODO: This is only temporary as long there's only market structure.
-//       Remove as soon as possible.
-#![allow(dead_code)]
-#![allow(unused_variables)]
-// #![allow(unused_imports)]
-
 mod db;
 mod market;
 mod matcher;
 mod negotiation;
 mod rest_api;
 
-pub mod protocol;
+pub(crate) mod protocol;
+
+#[cfg(feature = "testing")]
 pub mod testing;
 
-pub use db::models::{Demand, Offer, ProposalId, SubscriptionId};
+pub(crate) use db::models::{Demand, Offer, ProposalId, SubscriptionId};
 pub use market::MarketService;
 
 pub use ya_client::model::market::MARKET_API_PATH;
@@ -21,7 +17,7 @@ pub use ya_client::model::market::MARKET_API_PATH;
 #[macro_use]
 extern crate diesel;
 
-pub mod migrations {
+pub(crate) mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
     struct _Dummy;
 }

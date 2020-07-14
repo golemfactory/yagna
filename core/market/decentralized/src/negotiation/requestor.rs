@@ -7,21 +7,22 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::dao::AgreementDao;
-use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::OwnerType;
-use crate::db::models::{
-    Agreement, AgreementId, Demand as ModelDemand, Proposal, ProposalId, SubscriptionId,
+use crate::db::{
+    dao::{AgreementDao, EventsDao, ProposalDao},
+    models::{
+        Agreement, AgreementId, Demand as ModelDemand, OwnerType, Proposal, ProposalId,
+        SubscriptionId,
+    },
+    DbResult,
 };
-use crate::db::DbResult;
 use crate::matcher::{RawProposal, SubscriptionStore};
 use crate::negotiation::common::CommonBroker;
 use crate::negotiation::errors::AgreementError;
 use crate::negotiation::ProposalError;
-use crate::protocol::negotiation::messages::{
-    AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected,
+use crate::protocol::negotiation::{
+    messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
+    requestor::NegotiationApi,
 };
-use crate::protocol::negotiation::requestor::NegotiationApi;
 
 use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
@@ -52,9 +53,9 @@ impl RequestorBroker {
                     .clone()
                     .on_proposal_received(caller, msg, OwnerType::Requestor)
             },
-            move |_caller: String, msg: ProposalRejected| async move { unimplemented!() },
-            move |caller: String, msg: AgreementApproved| async move { unimplemented!() },
-            move |caller: String, msg: AgreementRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementApproved| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
         );
 
         let engine = RequestorBroker {
@@ -75,28 +76,29 @@ impl RequestorBroker {
         Ok(())
     }
 
-    pub async fn subscribe_demand(&self, demand: &ModelDemand) -> Result<(), NegotiationError> {
+    pub async fn subscribe_demand(&self, _demand: &ModelDemand) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }
 
     pub async fn unsubscribe_demand(
         &self,
-        subscription_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.common.notifier.stop_notifying(subscription_id).await;
+        self.common.notifier.stop_notifying(demand_id).await;
 
         // We can ignore error, if removing events failed, because they will be never
         // queried again and don't collide with other subscriptions.
         let _ = self
             .db()
             .as_dao::<EventsDao>()
-            .remove_events(subscription_id)
+            .remove_events(demand_id)
             .await
             .map_err(|e| {
                 log::warn!(
-                    "Failed to remove events related to subscription [{}].",
-                    subscription_id
+                    "Failed to remove events related to subscription [{}]. Error: {}.",
+                    demand_id,
+                    e
                 )
             });
         // TODO: We could remove all resources related to Proposals.
@@ -105,13 +107,13 @@ impl RequestorBroker {
 
     pub async fn counter_proposal(
         &self,
-        subscription_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, is_initial) = self
             .common
-            .counter_proposal(subscription_id, prev_proposal_id, proposal)
+            .counter_proposal(demand_id, prev_proposal_id, proposal)
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
@@ -129,13 +131,13 @@ impl RequestorBroker {
 
     pub async fn query_events(
         &self,
-        subscription_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
         let events = self
             .common
-            .query_events(subscription_id, timeout, max_events, OwnerType::Requestor)
+            .query_events(demand_id, timeout, max_events, OwnerType::Requestor)
             .await?;
 
         // Map model events to client RequestorEvent.
@@ -154,7 +156,7 @@ impl RequestorBroker {
 
     pub async fn create_agreement(
         &self,
-        id: Identity,
+        _id: Identity,
         proposal_id: &ProposalId,
         valid_to: DateTime<Utc>,
     ) -> Result<AgreementId, AgreementError> {

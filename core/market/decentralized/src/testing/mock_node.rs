@@ -1,33 +1,25 @@
 use anyhow::{anyhow, Context, Result};
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
-use ya_market_decentralized::protocol::{
-    CallbackHandler, Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, RetrieveOffers,
-};
-use ya_market_decentralized::testing::mock_offer::generate_identity;
-use ya_market_decentralized::testing::negotiation::messages::{
-    AgreementApproved, AgreementCancelled, AgreementReceived, AgreementRejected,
-    InitialProposalReceived, ProposalReceived, ProposalRejected,
-};
-use ya_market_decentralized::testing::negotiation::{provider, requestor};
-use ya_market_decentralized::testing::{
-    DemandError, EventsListeners, Matcher, QueryEventsError, QueryOfferError, SubscriptionStore,
-};
-use ya_market_decentralized::{migrations, Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use super::{bcast::BCast, mock_net::MockNet};
+use crate::{migrations, Demand, MarketService, Offer, SubscriptionId};
 
 #[cfg(feature = "bcast-singleton")]
 use super::bcast::singleton::BCastService;
+use super::bcast::BCast;
 #[cfg(not(feature = "bcast-singleton"))]
 use super::bcast::BCastService;
-use crate::utils::mock_net::gsb_prefixes;
+use super::mock_net::{gsb_prefixes, MockNet};
+use super::mock_offer::generate_identity;
+use super::negotiation::{provider, requestor};
+use super::{Matcher, SubscriptionStore};
+use crate::matcher::{DemandError, EventsListeners, QueryOfferError};
+use crate::negotiation::QueryEventsError;
+use crate::protocol::negotiation::messages::*;
+use crate::protocol::*;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -395,18 +387,12 @@ impl MarketServiceExt for MarketService {
 }
 
 pub mod default {
-    use ya_market_decentralized::protocol::negotiation::messages::AgreementCancelled;
-    use ya_market_decentralized::protocol::{
-        DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
-    };
-    use ya_market_decentralized::testing::negotiation::errors::{
+    use crate::protocol::negotiation::errors::{
         AgreementError, CounterProposalError, ProposalError,
     };
-    use ya_market_decentralized::testing::negotiation::messages::{
-        AgreementApproved, AgreementReceived, AgreementRejected, InitialProposalReceived,
-        ProposalReceived, ProposalRejected,
-    };
-    use ya_market_decentralized::testing::Offer;
+    use crate::protocol::negotiation::messages::*;
+    use crate::protocol::*;
+    use crate::Offer;
 
     pub async fn empty_on_offer_received(
         _caller: String,
