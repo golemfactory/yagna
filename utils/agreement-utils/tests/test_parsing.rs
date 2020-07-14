@@ -11,6 +11,6 @@ fn test_parsing() -> anyhow::Result<()> {
     fs::write(&file, agrement_json)?;
     eprintln!("file = {}", file.display());
 
-    let view = AgreementView::try_from(&file)?;
+    let _view = AgreementView::try_from(&file)?;
     Ok(())
 }
