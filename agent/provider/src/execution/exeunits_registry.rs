@@ -89,16 +89,13 @@ impl ExeUnitsRegistry {
         working_dir: &Path,
     ) -> Result<ExeUnitInstance> {
         let exeunit_desc = self.find_exeunit(name)?;
-
         // Add to arguments path to runtime, which should be spawned
         // by supervisor as subprocess.
 
         let mut extended_args = Vec::new();
 
         if let Some(runtime_path) = &exeunit_desc.runtime_path {
-            let runtime_path = runtime_path
-                .to_str()
-                .ok_or(anyhow!(
+            let runtime_path = runtime_path.to_str().ok_or(anyhow!(
                 "ExeUnit runtime path [{}] contains invalid characters.",
                 runtime_path.display()
             ))?;
@@ -122,8 +119,7 @@ impl ExeUnitsRegistry {
         desc.supervisor_path = normalize_path(&desc.supervisor_path)?;
         desc.runtime_path = if let Some(runtime_path) = &desc.runtime_path {
             Some(normalize_path(runtime_path)?)
-        }
-        else {
+        } else {
             None
         };
 
@@ -229,7 +225,12 @@ impl ExeUnitDesc {
             return Err(ExeUnitValidation::SupervisorNotFound { desc: self.clone() });
         }
         // I'm not sure we should force it's existence.
-        if self.runtime_path.as_ref().map(|p| !p.exists()).unwrap_or(false) {
+        if self
+            .runtime_path
+            .as_ref()
+            .map(|p| !p.exists())
+            .unwrap_or(false)
+        {
             return Err(ExeUnitValidation::RuntimeNotFound { desc: self.clone() });
         }
         Ok(())
@@ -275,13 +276,7 @@ impl fmt::Display for ExeUnitDesc {
             width = align
         )?;
         if let Some(rt) = &self.runtime_path {
-            write!(
-                f,
-                "{:width$}{}\n",
-                "Runtime:",
-                rt.display(),
-                width = align
-            )?;
+            write!(f, "{:width$}{}\n", "Runtime:", rt.display(), width = align)?;
         }
         write!(
             f,

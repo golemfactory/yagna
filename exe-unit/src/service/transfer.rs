@@ -12,7 +12,7 @@ use std::convert::TryFrom;
 use std::io;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::{

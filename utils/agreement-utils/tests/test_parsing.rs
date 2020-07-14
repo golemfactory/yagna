@@ -1,7 +1,7 @@
-use tempdir::TempDir;
-use std::fs;
-use ya_agreement_utils::AgreementView;
 use std::convert::TryFrom;
+use std::fs;
+use tempdir::TempDir;
+use ya_agreement_utils::AgreementView;
 
 #[test]
 fn test_parsing() -> anyhow::Result<()> {
@@ -10,7 +10,6 @@ fn test_parsing() -> anyhow::Result<()> {
     let file = dir.path().join("agreement-9ce65424.json");
     fs::write(&file, agrement_json)?;
     eprintln!("file = {}", file.display());
-
 
     let view = AgreementView::try_from(&file)?;
     Ok(())
