@@ -81,7 +81,7 @@ CREATE TABLE market_negotiation(
 CREATE TABLE market_proposal(
     id VARCHAR(100) NOT NULL PRIMARY KEY,
     prev_proposal_id VARCHAR(100),
-    issuer INTEFER NOT NULL,
+    issuer INTEGER NOT NULL,
     negotiation_id VARCHAR(100) NOT NULL,
 
     properties TEXT NOT NULL,
@@ -133,4 +133,3 @@ values
        (4, 'Approved'),
        (5, 'Expired'),
        (6, 'Terminated');
-
