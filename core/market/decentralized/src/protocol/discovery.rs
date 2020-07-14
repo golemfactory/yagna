@@ -1,5 +1,4 @@
 use chrono::prelude::*;
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -9,8 +8,10 @@ use ya_core_model::net;
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-use super::callbacks::{CallbackHandler, CallbackMessage, HandlerSlot};
 use crate::db::models::{Offer as ModelOffer, SubscriptionId};
+use crate::protocol::{CallbackMessage, HandlerSlot};
+
+pub mod builder;
 
 // =========================================== //
 // Errors
@@ -31,8 +32,6 @@ pub enum DiscoveryRemoteError {}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum DiscoveryInitError {
-    #[error("Uninitialized callback '{0}'.")]
-    UninitializedCallback(String),
     #[error("Failed to bind broadcast `{0}` to gsb. Error: {1}.")]
     BindingGsbFailed(String, String),
     #[error("Failed to subscribe to broadcast `{0}`. Error: {1}.")]
@@ -57,19 +56,6 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
-    pub fn new(
-        offer_received: impl CallbackHandler<OfferReceived>,
-        offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
-        retrieve_offers: impl CallbackHandler<RetrieveOffers>,
-    ) -> Result<Discovery, DiscoveryInitError> {
-        let inner = Arc::new(DiscoveryImpl {
-            offer_received: HandlerSlot::new(offer_received),
-            offer_unsubscribed: HandlerSlot::new(offer_unsubscribed),
-            retrieve_offers: HandlerSlot::new(retrieve_offers),
-        });
-        Ok(Discovery { inner })
-    }
-
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in `offer_received`.
     pub async fn broadcast_offer(&self, offer: ModelOffer) -> Result<(), DiscoveryError> {
@@ -79,7 +65,7 @@ impl Discovery {
         let bcast_msg = SendBroadcastMessage::new(OfferReceived { offer });
 
         let _ = bus::service(net::local::BUS_ID)
-            .send_as(original_sender, bcast_msg)
+            .send_as(original_sender, bcast_msg) // TODO: should we send as our (default) identity?
             .await?;
         Ok(())
     }
@@ -222,7 +208,7 @@ impl Discovery {
 // Discovery messages
 // =========================================== //
 
-#[derive(Serialize, Deserialize, Display)]
+#[derive(Serialize, Deserialize, derive_more::Display)]
 pub enum Reason {
     #[display(fmt = "Offer already exists in database")]
     AlreadyExists,
@@ -288,7 +274,7 @@ impl CallbackMessage for RetrieveOffers {
 // =========================================== //
 
 impl DiscoveryInitError {
-    fn from_pair(addr: String, e: net::local::BindBroadcastError) -> Self {
+    fn from_pair(addr: String, e: BindBroadcastError) -> Self {
         match e {
             BindBroadcastError::GsbError(e) => {
                 DiscoveryInitError::BindingGsbFailed(addr, e.to_string())
