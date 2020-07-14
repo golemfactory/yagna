@@ -7,7 +7,7 @@ use crate::db::model::{Agreement, AgreementId};
 use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
 
 use super::super::callback::CallbackMessage;
-use super::error::{AgreementError, CounterProposalError, ProposalError};
+use super::error::{AgreementError, ApproveAgreementError, CounterProposalError, ProposalError};
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -101,7 +101,7 @@ pub struct AgreementApproved {
 impl RpcMessage for AgreementApproved {
     const ID: &'static str = "AgreementApproved";
     type Item = ();
-    type Error = AgreementError;
+    type Error = ApproveAgreementError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -164,6 +164,13 @@ impl InitialProposalReceived {
 impl ProposalRejected {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.proposal_id = self.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementApproved {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner.clone());
         self
     }
 }

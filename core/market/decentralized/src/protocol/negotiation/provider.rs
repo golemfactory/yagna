@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
 use ya_client::model::NodeId;
@@ -8,7 +7,7 @@ use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::RpcEndpoint;
 
 use crate::db::model::{AgreementId, OwnerType, Proposal, ProposalId};
-use crate::protocol::negotiation::error::CounterProposalError;
+use crate::protocol::negotiation::error::{ApproveAgreementError, CounterProposalError};
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{AgreementError, NegotiationApiInitError, ProposalError};
@@ -84,11 +83,11 @@ impl NegotiationApi {
     pub async fn reject_proposal(
         &self,
         id: NodeId,
-        proposal_id: &str,
+        proposal_id: &ProposalId,
         owner: NodeId,
     ) -> Result<(), ProposalError> {
         let msg = ProposalRejected {
-            proposal_id: ProposalId::from_str(&proposal_id).unwrap(),
+            proposal_id: proposal_id.clone(),
         };
         net::from(id)
             .to(owner)
@@ -104,7 +103,7 @@ impl NegotiationApi {
         id: NodeId,
         agreement_id: AgreementId,
         owner: NodeId,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ApproveAgreementError> {
         let msg = AgreementApproved { agreement_id };
         net::from(id)
             .to(owner)
