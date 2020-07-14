@@ -126,9 +126,8 @@ impl ProviderBroker {
             .await?;
 
         // Map model events to client RequestorEvent.
-        let db = self.db();
         Ok(futures::stream::iter(events)
-            .then(|event| event.into_client_provider_event(&db))
+            .then(|event| event.into_client_provider_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
                     log::warn!("Error converting event to client type: {}", error);
@@ -137,10 +136,6 @@ impl ProviderBroker {
             .filter_map(|event| async move { event.ok() })
             .collect::<Vec<ProviderEvent>>()
             .await)
-    }
-
-    fn db(&self) -> DbExecutor {
-        self.common.db.clone()
     }
 }
 
