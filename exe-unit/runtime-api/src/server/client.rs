@@ -44,17 +44,16 @@ where
             let id = inner.ids;
             param.id = id;
             let _ = inner.response_callbacks.insert(id, tx);
-            log::debug!("sending request");
+            log::debug!("sending request: {:?}", param);
             SinkExt::send(&mut inner.output, param).await.unwrap();
         }
         log::debug!("waiting for response");
         let response = rx.await.unwrap();
-        log::debug!("got response");
+        log::debug!("got response: {:?}", response);
         response
     }
 
     async fn handle_response(&self, resp: proto::Response) {
-        log::debug!("recv response={:?}", resp);
         if resp.event {
             todo!()
         }

@@ -42,7 +42,6 @@ async fn handle(service: &impl RuntimeService, request: proto::Request) -> proto
     } else {
         proto::response::Command::Error(ErrorResponse::msg("unknown command"))
     });
-    eprintln!("response={:?}", resp);
     resp
 }
 
@@ -95,7 +94,9 @@ where
                         let service = service.clone();
                         let output = output.clone();
                         let _ = tokio::task::spawn_local(async move {
+                            log::debug!("received request: {:?}", request);
                             let resp = handle(service.as_ref(), request).await;
+                            log::debug!("response to send: {:?}", resp);
                             let mut output = output.lock().await;
                             log::debug!("sending");
                             let r = SinkExt::send(&mut *output, resp).await;
