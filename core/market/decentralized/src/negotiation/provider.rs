@@ -2,13 +2,12 @@ use futures::stream::StreamExt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use ya_client::model::market::event::ProviderEvent;
-use ya_client::model::NodeId;
+use ya_client::model::{market::event::ProviderEvent, NodeId};
 use ya_persistence::executor::DbExecutor;
 
-use super::errors::{NegotiationError, NegotiationInitError};
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::models::{EventError, OwnerType, Proposal};
+use crate::db::models::{Offer as ModelOffer, SubscriptionId};
 use crate::matcher::{QueryOfferError, SubscriptionStore};
 use crate::negotiation::notifier::{EventNotifier, NotifierError};
 use crate::negotiation::QueryEventsError;
@@ -18,7 +17,8 @@ use crate::protocol::negotiation::messages::{
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
-use crate::{db::models::Offer as ModelOffer, SubscriptionId};
+
+use super::errors::{NegotiationError, NegotiationInitError};
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -44,10 +44,10 @@ impl ProviderBroker {
             move |caller: String, msg: InitialProposalReceived| {
                 on_initial_proposal(db1.clone(), store1.clone(), notifier1.clone(), caller, msg)
             },
-            move |_caller: String, msg: ProposalReceived| async move { unimplemented!() },
-            move |caller: String, msg: ProposalRejected| async move { unimplemented!() },
-            move |caller: String, msg: AgreementReceived| async move { unimplemented!() },
-            move |caller: String, msg: AgreementCancelled| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalReceived| async move { unimplemented!() },
+            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementReceived| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
         );
 
         Ok(ProviderBroker {
@@ -66,22 +66,22 @@ impl ProviderBroker {
         Ok(self.api.bind_gsb(public_prefix, private_prefix).await?)
     }
 
-    pub async fn subscribe_offer(&self, offer: &ModelOffer) -> Result<(), NegotiationError> {
+    pub async fn subscribe_offer(&self, _offer: &ModelOffer) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }
 
     pub async fn unsubscribe_offer(
         &self,
-        subscription_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.notifier.stop_notifying(subscription_id).await;
+        self.notifier.stop_notifying(offer_id).await;
         Ok(())
     }
 
     pub async fn query_events(
         &self,
-        subscription_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<ProviderEvent>, QueryEventsError> {
@@ -96,7 +96,7 @@ impl ProviderBroker {
         }
 
         loop {
-            let events = get_events_from_db(&self.db, subscription_id, max_events).await?;
+            let events = get_events_from_db(&self.db, offer_id, max_events).await?;
             if events.len() > 0 {
                 return Ok(events);
             }
@@ -109,7 +109,7 @@ impl ProviderBroker {
 
             if let Err(error) = self
                 .notifier
-                .wait_for_event_with_timeout(subscription_id, timeout)
+                .wait_for_event_with_timeout(offer_id, timeout)
                 .await
             {
                 return match error {
@@ -129,12 +129,12 @@ impl ProviderBroker {
 
 async fn get_events_from_db(
     db: &DbExecutor,
-    subscription_id: &SubscriptionId,
+    offer_id: &SubscriptionId,
     max_events: i32,
 ) -> Result<Vec<ProviderEvent>, QueryEventsError> {
     let events = db
         .as_dao::<EventsDao>()
-        .take_events(subscription_id, max_events, OwnerType::Provider)
+        .take_events(offer_id, max_events, OwnerType::Provider)
         .await?;
 
     // Map model events to client RequestorEvent.

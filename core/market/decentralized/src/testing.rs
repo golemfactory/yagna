@@ -1,15 +1,17 @@
-//! These exports are expected to be used only in tests.
+//! This module is to be used only in tests.
+#![allow(dead_code)]
+#![allow(unused_macros)]
 
-pub use super::db::dao::{DemandDao, OfferDao, TakeEventsError};
-pub use super::db::models::{
-    AgreementId, Demand, Offer, OwnerType, ProposalId, SubscriptionId, SubscriptionParseError,
-};
-pub use super::matcher::{
-    DemandError, MatcherError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
-};
-pub use super::matcher::{EventsListeners, Matcher, RawProposal, SubscriptionStore};
-pub use super::negotiation::QueryEventsError;
-pub use super::negotiation::{ProviderBroker, RequestorBroker};
-pub use super::protocol::negotiation;
+pub use super::db::dao::*;
+pub use super::db::models::*;
+pub use super::matcher::*;
+pub use super::negotiation::*;
+pub use super::protocol::*;
 
+pub mod bcast;
+pub mod mock_net;
+pub mod mock_node;
 pub mod mock_offer;
+
+pub use mock_node::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
+pub use mock_offer::{client, generate_identity, sample_demand, sample_offer};

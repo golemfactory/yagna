@@ -4,10 +4,8 @@ use crate::protocol::negotiation::errors::{
 use thiserror::Error;
 
 use super::common::GetProposalError;
-use crate::db::dao::TakeEventsError;
 use crate::db::models::{ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError};
-
-use ya_persistence::executor::Error as DbError;
+use crate::db::{dao::TakeEventsError, DbError};
 
 #[derive(Error, Debug)]
 pub enum NegotiationError {}
