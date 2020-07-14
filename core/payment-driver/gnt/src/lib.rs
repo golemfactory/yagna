@@ -281,7 +281,7 @@ impl GntDriver {
         due_date: DateTime<Utc>,
     ) -> Pin<Box<dyn Future<Output = GNTDriverResult<String>> + 'a>> {
         let db = self.db.clone();
-        let invoice_id: String = format!("{}", Uuid::new_v4());
+        let order_id: String = format!("{}", Uuid::new_v4());
         let sender = sender.to_owned();
         let recipient = recipient.to_owned();
         let gnt_amount = utils::big_dec_to_u256(amount).unwrap();
@@ -290,7 +290,7 @@ impl GntDriver {
         let payment = PaymentEntity {
             amount: utils::u256_to_big_endian_hex(gnt_amount),
             gas: utils::u256_to_big_endian_hex(gas_amount),
-            invoice_id: invoice_id.clone(),
+            order_id: order_id.clone(),
             payment_due_date: due_date.naive_utc(),
             sender: sender.clone(),
             recipient: recipient.clone(),
@@ -299,7 +299,7 @@ impl GntDriver {
         };
         async move {
             db.as_dao::<PaymentDao>().insert(payment).await?;
-            Ok(invoice_id)
+            Ok(order_id)
         }
         .boxed_local()
     }

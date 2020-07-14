@@ -71,10 +71,10 @@ pub struct TransactionEntity {
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
-#[primary_key(invoice_id)]
+#[primary_key(order_id)]
 #[table_name = "gnt_driver_payment"]
 pub struct PaymentEntity {
-    pub invoice_id: String,
+    pub order_id: String,
     pub amount: String,
     pub gas: String,
     pub sender: String,

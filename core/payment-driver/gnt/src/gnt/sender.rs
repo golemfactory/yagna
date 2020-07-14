@@ -864,13 +864,13 @@ async fn process_payment(
     {
         Ok(tx_id) => {
             db.as_dao::<PaymentDao>()
-                .update_tx_id(payment.invoice_id, tx_id)
+                .update_tx_id(payment.order_id, tx_id)
                 .await?;
         }
         Err(e) => {
             db.as_dao::<PaymentDao>()
                 .update_status(
-                    payment.invoice_id,
+                    payment.order_id,
                     match e {
                         GNTDriverError::InsufficientFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
                         GNTDriverError::InsufficientGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
