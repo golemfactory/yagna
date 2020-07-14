@@ -3,12 +3,10 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
-use crate::db::models::DbProposal;
-use crate::db::models::{Negotiation, Proposal};
+use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
 use crate::db::DbResult;
-use crate::ProposalId;
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,

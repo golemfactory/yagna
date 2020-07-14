@@ -3,7 +3,7 @@ use std::collections::*;
 use chrono::*;
 use decimal::*;
 
-use ya_market_resolver::resolver::errors::ParseError;
+use ya_market_resolver::resolver::error::ParseError;
 use ya_market_resolver::resolver::properties::*;
 
 // #region from_value()

@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use super::super::callbacks::{CallbackHandler, HandlerSlot};
-use super::errors::{AgreementError, NegotiationApiInitError, ProposalError};
+use super::super::callback::{CallbackHandler, HandlerSlot};
+use super::error::{AgreementError, NegotiationApiInitError, ProposalError};
 use super::messages::*;
 use super::messages::{
     AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
     ProposalReceived, ProposalRejected,
 };
 
-use crate::db::models::{OwnerType, Proposal, ProposalId};
-use crate::protocol::negotiation::errors::CounterProposalError;
+use crate::db::model::{OwnerType, Proposal, ProposalId};
+use crate::protocol::negotiation::error::CounterProposalError;
 
 use std::str::FromStr;
 use ya_client::model::NodeId;

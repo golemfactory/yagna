@@ -16,10 +16,9 @@ use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::ProposalDao;
-use crate::db::models::{OwnerType, Proposal};
+use crate::db::model::{OwnerType, Proposal, ProposalId};
 use crate::db::schema::market_event;
 use crate::db::DbError;
-use crate::ProposalId;
 
 #[derive(Error, Debug)]
 pub enum EventError {

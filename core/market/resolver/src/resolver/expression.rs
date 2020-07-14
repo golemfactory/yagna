@@ -2,7 +2,7 @@ use std::str;
 
 use asnom::structures::{ExplicitTag, OctetString, Tag};
 
-use super::errors::{ExpressionError, ResolveError};
+use super::error::{ExpressionError, ResolveError};
 use super::ldap_parser;
 use super::properties::{parse_prop_ref, Property, PropertyRef, PropertySet, PropertyValue};
 

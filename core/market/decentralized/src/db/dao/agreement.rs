@@ -2,7 +2,7 @@ use diesel::prelude::*;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
-use crate::db::models::Agreement;
+use crate::db::model::Agreement;
 use crate::db::schema::market_agreement::dsl;
 use crate::db::DbResult;
 

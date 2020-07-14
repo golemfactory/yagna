@@ -5,7 +5,7 @@ use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use crate::{migrations, Demand, MarketService, Offer, SubscriptionId};
+use crate::MarketService;
 
 #[cfg(feature = "bcast-singleton")]
 use super::bcast::singleton::BCastService;
@@ -15,11 +15,14 @@ use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
 use super::mock_offer::generate_identity;
 use super::negotiation::{provider, requestor};
-use super::{Matcher, SubscriptionStore};
-use crate::matcher::{DemandError, EventsListeners, QueryOfferError};
-use crate::negotiation::QueryEventsError;
+use super::{store::SubscriptionStore, Matcher};
+use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::matcher::error::{DemandError, QueryOfferError};
+use crate::matcher::EventsListeners;
+use crate::negotiation::error::QueryEventsError;
+use crate::protocol::callback::*;
+use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
 use crate::protocol::negotiation::messages::*;
-use crate::protocol::*;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -120,7 +123,7 @@ impl MarketsNetwork {
 
     pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
         let (matcher, listeners) = Matcher::new(store)?;
@@ -387,12 +390,10 @@ impl MarketServiceExt for MarketService {
 }
 
 pub mod default {
-    use crate::protocol::negotiation::errors::{
+    use super::*;
+    use crate::protocol::negotiation::error::{
         AgreementError, CounterProposalError, ProposalError,
     };
-    use crate::protocol::negotiation::messages::*;
-    use crate::protocol::*;
-    use crate::Offer;
 
     pub async fn empty_on_offer_received(
         _caller: String,

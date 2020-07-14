@@ -11,8 +11,9 @@ use std::io::Write;
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::SubscriptionId;
 use ya_client::model::ErrorMessage;
+
+use crate::db::model::SubscriptionId;
 
 #[derive(Display, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum OwnerType {

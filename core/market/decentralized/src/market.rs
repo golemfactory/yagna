@@ -2,15 +2,14 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::db::models::SubscriptionId;
+use crate::db::model::SubscriptionId;
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
-use crate::matcher::{Matcher, SubscriptionStore};
-use crate::negotiation::{NegotiationError, NegotiationInitError};
+use crate::matcher::{store::SubscriptionStore, Matcher};
+use crate::negotiation::error::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 
-use crate::migrations;
 use crate::rest_api;
 
 use ya_client::model::market::{Demand, Offer};
@@ -56,7 +55,7 @@ pub struct MarketService {
 
 impl MarketService {
     pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
         let (matcher, listeners) = Matcher::new(store.clone())?;
@@ -102,7 +101,7 @@ impl MarketService {
     }
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
-        actix_web::web::scope(crate::MARKET_API_PATH)
+        actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
             .data(myself)
             .app_data(rest_api::path_config())
             .extend(rest_api::provider::register_endpoints)

@@ -1,7 +1,7 @@
 use crate::db::DbError;
 
-use crate::db::models::{SubscriptionId, SubscriptionValidationError};
-use crate::protocol::DiscoveryInitError;
+use crate::db::model::{SubscriptionId, SubscriptionValidationError};
+use crate::protocol::discovery::DiscoveryInitError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DemandError {

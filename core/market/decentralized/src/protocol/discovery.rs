@@ -9,8 +9,9 @@ use ya_core_model::net;
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-use crate::db::models::{Offer as ModelOffer, SubscriptionId};
-use crate::protocol::{CallbackMessage, HandlerSlot};
+use crate::db::model::{Offer as ModelOffer, SubscriptionId};
+
+use super::callback::{CallbackMessage, HandlerSlot};
 
 pub mod builder;
 

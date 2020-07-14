@@ -12,9 +12,9 @@ use ya_client::model::{ErrorMessage, NodeId};
 
 use super::{generate_random_id, SubscriptionId};
 use super::{OwnerType, ProposalId};
-use crate::db::models::agreement::AgreementId;
-use crate::db::models::Demand as ModelDemand;
-use crate::db::models::Offer as ModelOffer;
+use crate::db::model::agreement::AgreementId;
+use crate::db::model::Demand as ModelDemand;
+use crate::db::model::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
 
 /// TODO: Could we avoid having separate enum type for database

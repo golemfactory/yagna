@@ -9,9 +9,8 @@ use num_traits::FromPrimitive;
 
 use ya_client::model::NodeId;
 
-use crate::db::models::{OwnerType, Proposal};
+use crate::db::model::{OwnerType, Proposal, ProposalId};
 use crate::db::schema::market_agreement;
-use crate::ProposalId;
 
 pub type AgreementId = ProposalId;
 

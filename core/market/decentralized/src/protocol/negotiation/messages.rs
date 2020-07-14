@@ -1,11 +1,9 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-use super::super::callbacks::CallbackMessage;
-use super::errors::{AgreementError, CounterProposalError, ProposalError};
-use crate::db::models::Demand;
-use crate::db::models::{DbProposal, OwnerType, ProposalId};
-use crate::SubscriptionId;
+use super::super::callback::CallbackMessage;
+use super::error::{AgreementError, CounterProposalError, ProposalError};
+use crate::db::model::{DbProposal, Demand, OwnerType, ProposalId, SubscriptionId};
 
 use ya_client::model::NodeId;
 use ya_service_bus::RpcMessage;
