@@ -34,6 +34,13 @@ pub enum ProposalState {
     Expired = 4,
 }
 
+#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[sql_type = "Integer"]
+pub enum IssuerType {
+    Us = 0,
+    Them = 1,
+}
+
 /// Represents negotiation between Requestor and Provider related
 /// to single Demand/Offer pair. Note that still there can be multiple
 /// Negotiation objects related to single Demand/Offer pair, because after
@@ -55,9 +62,6 @@ pub struct Negotiation {
     pub offer_id: SubscriptionId,
     pub demand_id: SubscriptionId,
 
-    /// TODO: Use NodeId in all identity_id, requestor_id, provider_id.
-    /// Owner of this Negotiation record on local yagna daemon.
-    pub identity_id: NodeId,
     /// Ids of negotiating nodes (identities).
     pub requestor_id: NodeId,
     pub provider_id: NodeId,
@@ -81,6 +85,7 @@ pub struct DbProposal {
     pub id: ProposalId,
     pub prev_proposal_id: Option<ProposalId>,
 
+    pub issuer: IssuerType,
     pub negotiation_id: String,
 
     pub properties: String,
@@ -109,6 +114,7 @@ impl Proposal {
         let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: None,
+            issuer: IssuerType::Them,
             negotiation_id: negotiation.id.clone(),
             properties: offer.properties,
             constraints: offer.constraints,
@@ -123,7 +129,7 @@ impl Proposal {
         }
     }
 
-    pub fn new_provider_initial(demand: ModelDemand, offer: ModelOffer) -> Proposal {
+    pub fn new_provider(demand: ModelDemand, offer: ModelOffer) -> Proposal {
         let negotiation = Negotiation::new(&demand, &offer, OwnerType::Provider);
         let proposal_id = ProposalId::generate_id(
             &offer.id,
@@ -135,6 +141,7 @@ impl Proposal {
         let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: None,
+            issuer: IssuerType::Them,
             negotiation_id: negotiation.id.clone(),
             properties: demand.properties,
             constraints: demand.constraints,
@@ -152,6 +159,7 @@ impl Proposal {
     pub fn from_counter(&self, proposal_id: ProposalId, demand: ModelDemand) -> Proposal {
         let proposal = DbProposal {
             id: proposal_id,
+            issuer: IssuerType::Them,
             prev_proposal_id: Some(self.body.id.clone()),
             negotiation_id: self.negotiation.id.clone(),
             properties: demand.properties,
@@ -181,6 +189,7 @@ impl Proposal {
 
         self.body.prev_proposal_id = Some(self.body.id.clone());
         self.body.id = proposal_id;
+        self.body.issuer = IssuerType::Us;
         self.body.properties = proposal.properties.to_string();
         self.body.constraints = proposal.constraints.clone();
         self.body.creation_ts = creation_ts;
@@ -199,14 +208,28 @@ impl Proposal {
             )
         })?;
 
+        let issuer = self.issuer();
         Ok(ClientProposal {
             properties,
             constraints: self.body.constraints,
             proposal_id: Some(self.body.id.to_string()),
-            issuer_id: Some(self.negotiation.provider_id.to_string()),
+            issuer_id: Some(issuer.to_string()),
             state: Some(State::from(self.body.state)),
             prev_proposal_id: self.body.prev_proposal_id.map(|id| id.to_string()),
         })
+    }
+
+    pub fn issuer(&self) -> NodeId {
+        match self.body.issuer {
+            IssuerType::Us => match self.body.id.owner() {
+                OwnerType::Requestor => self.negotiation.requestor_id.clone(),
+                OwnerType::Provider => self.negotiation.provider_id.clone(),
+            },
+            IssuerType::Them => match self.body.id.owner() {
+                OwnerType::Requestor => self.negotiation.provider_id.clone(),
+                OwnerType::Provider => self.negotiation.requestor_id.clone(),
+            },
+        }
     }
 }
 
@@ -227,7 +250,6 @@ impl Negotiation {
             subscription_id,
             offer_id: offer.id.clone(),
             demand_id: demand.id.clone(),
-            identity_id,
             requestor_id: demand.node_id.clone(),
             provider_id: offer.node_id.clone(),
             agreement_id: None,
@@ -265,6 +287,29 @@ where
         let enum_value = i32::from_sql(bytes)?;
         Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
             "Invalid conversion from {} (i32) to Proposal State.",
+            enum_value
+        ))?)
+    }
+}
+
+impl<DB: Backend> ToSql<Integer, DB> for IssuerType
+where
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
+        (*self as i32).to_sql(out)
+    }
+}
+
+impl<DB> FromSql<Integer, DB> for IssuerType
+where
+    i32: FromSql<Integer, DB>,
+    DB: Backend,
+{
+    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
+        let enum_value = i32::from_sql(bytes)?;
+        Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
+            "Invalid conversion from {} (i32) to IssuerType.",
             enum_value
         ))?)
     }

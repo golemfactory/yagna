@@ -126,8 +126,8 @@ impl CommonBroker {
             .as_dao::<ProposalDao>()
             .get_proposal(&proposal_id)
             .await
-            .map_err(|e| GetProposalError::FailedGetProposal(proposal_id.clone(), e))?
-            .ok_or_else(|| GetProposalError::ProposalNotFound(proposal_id.clone()))?)
+            .map_err(|e| GetProposalError::FailedGetFromDb(proposal_id.clone(), e))?
+            .ok_or_else(|| GetProposalError::NotFound(proposal_id.clone()))?)
     }
 
     pub async fn on_proposal_received(
@@ -188,7 +188,7 @@ impl CommonBroker {
 #[derive(Error, Debug)]
 pub enum GetProposalError {
     #[error("Proposal [{0}] not found.")]
-    ProposalNotFound(ProposalId),
+    NotFound(ProposalId),
     #[error("Failed to get Proposal [{0}]. Error: [{1}]")]
-    FailedGetProposal(ProposalId, DbError),
+    FailedGetFromDb(ProposalId, DbError),
 }

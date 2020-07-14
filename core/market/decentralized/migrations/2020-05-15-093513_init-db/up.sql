@@ -72,7 +72,6 @@ CREATE TABLE market_negotiation(
     offer_id VARCHAR(97) NOT NULL,
     demand_id VARCHAR(97) NOT NULL,
 
-    identity_id VARCHAR(20) NOT NULL,
     requestor_id VARCHAR(20) NOT NULL,
     provider_id VARCHAR(20) NOT NULL,
 
@@ -82,6 +81,7 @@ CREATE TABLE market_negotiation(
 CREATE TABLE market_proposal(
     id VARCHAR(100) NOT NULL PRIMARY KEY,
     prev_proposal_id VARCHAR(100),
+    issuer INTEFER NOT NULL,
     negotiation_id VARCHAR(100) NOT NULL,
 
     properties TEXT NOT NULL,

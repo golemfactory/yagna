@@ -58,8 +58,10 @@ mod tests {
         assert_eq!(proposal1_req.constraints, proposal1_prov.constraints);
         assert_eq!(proposal1_req.properties, proposal1_prov.properties);
         assert_eq!(proposal1_prov.state, Some(State::Draft));
-        // TODO: This should works
-        //assert_eq!(Some(identity1.identity.to_string()), proposal1_prov.issuer_id);
+        assert_eq!(
+            Some(identity1.identity.to_string()),
+            proposal1_prov.issuer_id
+        );
         assert_eq!(proposal1_prov_id, proposal1_prov.get_proposal_id()?);
 
         // Provider counters proposal.
@@ -80,8 +82,10 @@ mod tests {
         assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
         assert_eq!(proposal2_req.properties, proposal2_prov.properties);
         assert_eq!(proposal2_req.state, Some(State::Draft));
-        // TODO: This should works
-        //assert_eq!(Some(identity2.identity.to_string()), proposal2_req.issuer_id);
+        assert_eq!(
+            Some(identity2.identity.to_string()),
+            proposal2_req.issuer_id
+        );
         assert_eq!(proposal2_req_id, proposal2_req.get_proposal_id()?);
 
         // Requestor counters draft proposal.
@@ -102,8 +106,10 @@ mod tests {
         assert_eq!(proposal3_req.constraints, proposal3_prov.constraints);
         assert_eq!(proposal3_req.properties, proposal3_prov.properties);
         assert_eq!(proposal3_prov.state, Some(State::Draft));
-        // TODO: This should works
-        //assert_eq!(Some(identity1.identity.to_string()), proposal1_prov.issuer_id);
+        assert_eq!(
+            Some(identity1.identity.to_string()),
+            proposal3_prov.issuer_id
+        );
         assert_eq!(proposal3_prov_id, proposal3_prov.get_proposal_id()?);
 
         Ok(())

@@ -157,7 +157,7 @@ async fn on_initial_proposal(
     let owner_id =
         NodeId::from_str(&caller).map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
     let demand = msg.into_demand(owner_id);
-    let proposal = Proposal::new_provider_initial(demand, offer);
+    let proposal = Proposal::new_provider(demand, offer);
     let proposal = db
         .as_dao::<ProposalDao>()
         .save_initial_proposal(proposal)
