@@ -1,9 +1,12 @@
+use actix_http::{body::Body, Request};
+use actix_service::Service as ActixService;
+use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
 use crate::MarketService;
 
@@ -305,6 +308,25 @@ impl MarketsNetwork {
             .find(|node| &node.name == node_name)
             .map(|node| node.id.clone())
             .unwrap()
+    }
+
+    pub async fn get_rest_app(
+        &self,
+        node_name: &str,
+    ) -> impl ActixService<
+        Request = Request,
+        Response = ServiceResponse<Body>,
+        Error = actix_http::error::Error,
+    > {
+        let market = self.get_market(node_name);
+        let identity = self.get_default_id(node_name);
+
+        test::init_service(
+            App::new()
+                .wrap(DummyAuth::new(identity))
+                .service(MarketService::bind_rest(market)),
+        )
+        .await
     }
 
     fn init_database(&self, name: &str) -> Result<DbExecutor> {
