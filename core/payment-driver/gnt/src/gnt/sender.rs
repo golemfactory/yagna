@@ -1,6 +1,6 @@
 use crate::dao::transaction::TransactionDao;
 use crate::gnt::ethereum::EthereumClient;
-use crate::models::{PaymentEntity, TransactionStatus, TxType};
+use crate::models::{PaymentEntity, TransactionStatus, TxType, TRANSFER_TX};
 use crate::utils::{
     u256_from_big_endian_hex, PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
     PAYMENT_STATUS_NOT_ENOUGH_GAS,
@@ -8,8 +8,9 @@ use crate::utils::{
 use crate::{utils, GNTDriverError, GNTDriverResult};
 
 use crate::dao::payment::PaymentDao;
-use crate::gnt::{common, SignTx};
+use crate::gnt::{common, notify_payment, SignTx};
 use actix::prelude::*;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::Utc;
 use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H256, U256};
@@ -18,7 +19,7 @@ use futures3::prelude::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::mem;
-use std::ops::Range;
+use std::ops::{Add, Range};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,6 +29,7 @@ use web3::transports::Http;
 use web3::types::TransactionReceipt;
 use web3::Transport;
 use ya_client_model::NodeId;
+use ya_core_model::driver::PaymentConfirmation;
 use ya_persistence::executor::DbExecutor;
 
 const NONCE_EXPIRE: Duration = Duration::from_secs(12);
@@ -697,6 +699,11 @@ impl TransactionSender {
                 )
                 .await
                 .unwrap();
+
+            let _ = notify_tx_confirmed(db, pending_confirmation.tx_id.clone())
+                .await
+                .map_err(|e| log::error!("Error while notifying about tx: {:?}", e));
+
             Some((pending_confirmation.tx_id, confirmation))
         }
         .into_actor(self)
@@ -911,4 +918,41 @@ async fn transfer_gnt(
     );
     let r = batch.send_to(tx_sender, sign_tx).await?;
     Ok(r.into_iter().next().unwrap())
+}
+
+async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<()> {
+    let tx = db
+        .as_dao::<TransactionDao>()
+        .get(tx_id.clone())
+        .await?
+        .unwrap();
+
+    if tx.tx_type != TRANSFER_TX {
+        return Ok(());
+    }
+
+    let payments = db.as_dao::<PaymentDao>().get_by_tx_id(tx_id).await?;
+    assert_ne!(payments.len(), 0);
+
+    let mut amount = BigDecimal::zero();
+    for payment in payments.iter() {
+        amount = amount.add(
+            utils::u256_to_big_dec(utils::u256_from_big_endian_hex(payment.amount.clone()))
+                .unwrap(),
+        );
+    }
+
+    let sender: String = payments[0].sender.clone();
+    let recipient: String = payments[0].recipient.clone();
+
+    let order_ids: Vec<String> = payments
+        .into_iter()
+        .map(|payment| payment.order_id)
+        .collect();
+
+    let confirmation = PaymentConfirmation {
+        confirmation: hex::decode(tx.tx_hash.unwrap()).unwrap(),
+    };
+
+    notify_payment(amount, sender, recipient, order_ids, confirmation).await
 }

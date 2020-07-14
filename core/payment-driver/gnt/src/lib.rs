@@ -40,10 +40,9 @@ use web3::transports::Http;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 use ya_core_model::identity;
-use ya_core_model::payment::local as payment;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::typed as bus;
 
 pub type GNTDriverResult<T> = Result<T, GNTDriverError>;
 
@@ -52,22 +51,6 @@ const CREATE_FAUCET_FUNCTION: &str = "create";
 
 pub const PLATFORM_NAME: &'static str = "GNT";
 pub const DRIVER_NAME: &'static str = "gnt";
-
-async fn register_account(address: String, mode: AccountMode) -> GNTDriverResult<()> {
-    log::info!("Register account: {}, mode: {:?}", address, mode);
-    let msg = payment::RegisterAccount {
-        platform: PLATFORM_NAME.to_string(),
-        address,
-        driver: DRIVER_NAME.to_string(),
-        mode,
-    };
-    let _ = bus::service(payment::BUS_ID)
-        .send(msg)
-        .await
-        .unwrap()
-        .unwrap();
-    Ok(())
-}
 
 async fn load_active_accounts(tx_sender: Addr<sender::TransactionSender>) -> GNTDriverResult<()> {
     log::info!("Load active accounts on driver start");
@@ -226,14 +209,14 @@ impl GntDriver {
                         .await?;
                     req.await?;
 
-                    register_account(addr, mode).await?;
+                    gnt::register_account(addr, mode).await?;
                     Ok(())
                 };
 
                 fut.left_future()
             } else {
                 let fut = async move {
-                    register_account(addr, mode).await?;
+                    gnt::register_account(addr, mode).await?;
                     Ok(())
                 };
                 fut.right_future()

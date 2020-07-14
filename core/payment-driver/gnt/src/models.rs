@@ -7,7 +7,7 @@ const TX_SENT: i32 = 2;
 pub const TX_CONFIRMED: i32 = 3;
 pub const TX_FAILED: i32 = 0;
 
-const TRANSFER_TX: i32 = 1;
+pub const TRANSFER_TX: i32 = 1;
 const FAUCET_TX: i32 = 0;
 
 #[derive(Clone, Copy)]

@@ -32,7 +32,6 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-
     pub async fn insert(&self, payment: PaymentEntity) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::gnt_driver_payment)
@@ -59,6 +58,16 @@ impl<'c> PaymentDao<'c> {
                 .set((dsl::tx_id.eq(tx_id), dsl::status.eq(PAYMENT_STATUS_OK)))
                 .execute(conn)?;
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn get_by_tx_id(&self, tx_id: String) -> DbResult<Vec<PaymentEntity>> {
+        do_with_transaction(self.pool, move |conn| {
+            let payments: Vec<PaymentEntity> = dsl::gnt_driver_payment
+                .filter(dsl::tx_id.eq(tx_id))
+                .load(conn)?;
+            Ok(payments)
         })
         .await
     }
