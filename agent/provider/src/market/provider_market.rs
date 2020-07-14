@@ -480,7 +480,11 @@ impl Handler<ReSubscribe> for ProviderMarket {
                             act.offer_subscriptions.remove(&old_subscription_id)
                         {
                             offer_subscription.subscription_id = new_subscription_id.clone();
-                            log::info!("offer [{}] resubscribed as [{}]", old_subscription_id, new_subscription_id);
+                            log::info!(
+                                "offer [{}] resubscribed as [{}]",
+                                old_subscription_id,
+                                new_subscription_id
+                            );
                             let _ = act
                                 .offer_subscriptions
                                 .insert(new_subscription_id, offer_subscription);
