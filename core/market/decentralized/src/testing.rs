@@ -1,4 +1,5 @@
 //! These exports are expected to be used only in tests.
+pub mod events_helper;
 
 pub use super::db::dao::{DemandDao, OfferDao, TakeEventsError};
 pub use super::db::models::{

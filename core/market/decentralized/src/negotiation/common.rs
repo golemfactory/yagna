@@ -35,11 +35,17 @@ impl CommonBroker {
         // TODO: Everything should happen under transaction.
         // TODO: Check if subscription is active
         // TODO: Check if this proposal wasn't already countered.
+        log::debug!("Fetching proposal [{}].", &prev_proposal_id);
         let prev_proposal = self
             .get_proposal(prev_proposal_id)
             .await
             .map_err(|e| ProposalError::from(&subscription_id, e))?;
 
+        log::debug!(
+            "Expected subscription id [{}], but found [{}].",
+            subscription_id,
+            prev_proposal.negotiation.subscription_id
+        );
         if &prev_proposal.negotiation.subscription_id != subscription_id {
             Err(ProposalError::ProposalNotFound(
                 prev_proposal_id.clone(),
