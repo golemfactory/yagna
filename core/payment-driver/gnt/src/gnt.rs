@@ -4,7 +4,7 @@ pub mod ethereum;
 pub mod faucet;
 pub mod sender;
 
-use crate::{GNTDriverResult, DRIVER_NAME, PLATFORM_NAME};
+use crate::{GNTDriverError, GNTDriverResult, DRIVER_NAME, PLATFORM_NAME};
 use bigdecimal::BigDecimal;
 use std::future::Future;
 use std::pin::Pin;
@@ -31,12 +31,11 @@ pub(crate) async fn notify_payment(
     };
 
     log::info!("Notify payment: {:?}", msg);
-    let _ = bus::service(payment::BUS_ID)
+    bus::service(payment::BUS_ID)
         .send(msg)
         .await
-        .unwrap()
-        .unwrap();
-    Ok(())
+        .map_err(|e| GNTDriverError::GSBError(e.to_string()))?
+        .map_err(|e| GNTDriverError::LibraryError(e.to_string()))
 }
 
 pub(crate) async fn register_account(address: String, mode: AccountMode) -> GNTDriverResult<()> {
@@ -47,10 +46,9 @@ pub(crate) async fn register_account(address: String, mode: AccountMode) -> GNTD
         driver: DRIVER_NAME.to_string(),
         mode,
     };
-    let _ = bus::service(payment::BUS_ID)
+    bus::service(payment::BUS_ID)
         .send(msg)
         .await
-        .unwrap()
-        .unwrap();
-    Ok(())
+        .map_err(|e| GNTDriverError::GSBError(e.to_string()))?
+        .map_err(|e| GNTDriverError::LibraryError(e.to_string()))
 }

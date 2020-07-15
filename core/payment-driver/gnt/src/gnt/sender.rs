@@ -921,23 +921,30 @@ async fn transfer_gnt(
 }
 
 async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<()> {
-    let tx = db
-        .as_dao::<TransactionDao>()
-        .get(tx_id.clone())
-        .await?
-        .unwrap();
+    let tx = match db.as_dao::<TransactionDao>().get(tx_id.clone()).await? {
+        Some(tx) => {
+            if tx.tx_type != TRANSFER_TX {
+                return Ok(());
+            }
+            tx
+        }
+        None => {
+            return Err(GNTDriverError::LibraryError(format!(
+                "Unknown transaction: {:?}",
+                tx_id
+            )));
+        }
+    };
 
-    if tx.tx_type != TRANSFER_TX {
-        return Ok(());
-    }
-
-    let payments = db.as_dao::<PaymentDao>().get_by_tx_id(tx_id).await?;
+    let payments = db
+        .as_dao::<PaymentDao>()
+        .get_by_tx_id(tx_id.clone())
+        .await?;
     assert_ne!(payments.len(), 0);
 
     let mut amount = BigDecimal::zero();
     for payment in payments.iter() {
-        amount += utils::u256_to_big_dec(utils::u256_from_big_endian_hex(payment.amount.clone()))
-            .unwrap();
+        amount += utils::u256_to_big_dec(utils::u256_from_big_endian_hex(payment.amount.clone()))?;
     }
 
     let sender: String = payments[0].sender.clone();
@@ -948,8 +955,16 @@ async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<(
         .map(|payment| payment.order_id)
         .collect();
 
-    let confirmation = PaymentConfirmation {
-        confirmation: hex::decode(tx.tx_hash.unwrap()).unwrap(),
+    let confirmation = match tx.tx_hash {
+        Some(tx_hash) => PaymentConfirmation {
+            confirmation: hex::decode(tx_hash)?,
+        },
+        None => {
+            return Err(GNTDriverError::LibraryError(format!(
+                "Invalid tx state, tx_id: {:?}",
+                tx_id
+            )));
+        }
     };
 
     notify_payment(amount, sender, recipient, order_ids, confirmation).await

@@ -74,6 +74,12 @@ impl From<uint::FromDecStrErr> for GNTDriverError {
     }
 }
 
+impl From<hex::FromHexError> for GNTDriverError {
+    fn from(e: hex::FromHexError) -> Self {
+        Self::Conversion(format!("{:?}", e))
+    }
+}
+
 impl From<bigdecimal::ParseBigDecimalError> for GNTDriverError {
     fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
         Self::Conversion(e.to_string())
