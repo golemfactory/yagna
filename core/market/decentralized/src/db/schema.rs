@@ -101,6 +101,9 @@ table! {
         demand_properties -> Text,
         demand_constraints -> Text,
 
+        offer_id -> Text,
+        demand_id -> Text,
+
         provider_id -> Text,
         requestor_id -> Text,
 

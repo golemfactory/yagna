@@ -50,6 +50,9 @@ pub struct Agreement {
     pub demand_properties: String,
     pub demand_constraints: String,
 
+    pub offer_id: SubscriptionId,
+    pub demand_id: SubscriptionId,
+
     pub provider_id: NodeId,
     pub requestor_id: NodeId,
 
@@ -87,7 +90,9 @@ impl Agreement {
             offer_constraints: offer_proposal.body.constraints,
             demand_properties: demand_proposal.body.properties,
             demand_constraints: demand_proposal.body.constraints,
-            provider_id: demand_proposal.negotiation.provider_id,
+            offer_id: offer_proposal.negotiation.offer_id,
+            demand_id: demand_proposal.negotiation.demand_id,
+            provider_id: offer_proposal.negotiation.provider_id, // TODO: should be == demand_proposal.negotiation.provider_id
             requestor_id: demand_proposal.negotiation.requestor_id,
             creation_ts,
             valid_to,

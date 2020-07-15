@@ -104,6 +104,9 @@ CREATE TABLE market_agreement(
 	offer_properties TEXT NOT NULL,
 	offer_constraints TEXT NOT NULL,
 
+    offer_id VARCHAR(97) NOT NULL,
+    demand_id VARCHAR(97) NOT NULL,
+
 	provider_id VARCHAR(20) NOT NULL,
 	requestor_id VARCHAR(20) NOT NULL,
 
