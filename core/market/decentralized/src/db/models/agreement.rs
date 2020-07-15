@@ -12,7 +12,7 @@ use ya_client::model::NodeId;
 
 use crate::db::models::{OwnerType, Proposal};
 use crate::db::schema::market_agreement;
-use crate::ProposalId;
+use crate::{ProposalId, SubscriptionId};
 
 pub type AgreementId = ProposalId;
 

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::db::models::ProposalId;
+use crate::db::models::{AgreementId, ProposalId};
 use crate::SubscriptionId;
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -37,6 +37,8 @@ pub enum RemoteProposalError {
 pub enum AgreementError {
     #[error("Failed to broadcast caused by gsb error: {0}.")]
     GsbError(String),
+    #[error("Saving Agreement [{1}] error: {0}.")]
+    Saving(String, AgreementId),
 }
 
 impl From<ya_service_bus::error::Error> for ProposalError {

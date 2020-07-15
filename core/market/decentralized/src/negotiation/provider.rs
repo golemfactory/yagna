@@ -8,13 +8,15 @@ use std::time::{Duration, Instant};
 use ya_client::model::{market::event::ProviderEvent, NodeId};
 use ya_persistence::executor::DbExecutor;
 
-use crate::db::dao::{EventsDao, ProposalDao};
+use crate::db::dao::{AgreementDao, EventsDao, ProposalDao};
 use crate::db::models::{EventError, OwnerType, Proposal};
 use crate::db::models::{Offer as ModelOffer, SubscriptionId};
 use crate::matcher::{QueryOfferError, SubscriptionStore};
 use crate::negotiation::notifier::{EventNotifier, NotifierError};
 use crate::negotiation::QueryEventsError;
-use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
+use crate::protocol::negotiation::errors::{
+    AgreementError, CounterProposalError, RemoteProposalError,
+};
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
@@ -43,13 +45,18 @@ impl ProviderBroker {
         let notifier1 = notifier.clone();
         let store1 = store.clone();
 
+        let db2 = db.clone();
+        let notifier2 = notifier.clone();
+
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
                 on_initial_proposal(db1.clone(), store1.clone(), notifier1.clone(), caller, msg)
             },
             move |_caller: String, _msg: ProposalReceived| async move { unimplemented!() },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
-            move |_caller: String, _msg: AgreementReceived| async move { unimplemented!() },
+            move |caller: String, msg: AgreementReceived| {
+                on_agreement_received(db2.clone(), notifier2.clone(), caller, msg)
+            },
             move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
         );
 
@@ -195,5 +202,29 @@ async fn on_initial_proposal(
 
     // Send channel message to wake all query_events waiting for proposals.
     notifier.notify(&subscription_id).await;
+    Ok(())
+}
+
+async fn on_agreement_received(
+    db: DbExecutor,
+    notifier: EventNotifier,
+    _caller: String,
+    msg: AgreementReceived,
+) -> Result<(), AgreementError> {
+    let id = msg.agreement.id.clone();
+    let subscription_id = msg.agreement.offer_id.clone();
+    db.as_dao::<AgreementDao>()
+        .save(msg.agreement.clone())
+        .await
+        .map_err(|e| AgreementError::Saving(e.to_string(), id.clone()))?;
+
+    db.as_dao::<EventsDao>()
+        .add_agreement_event(msg.agreement)
+        .await
+        .map_err(|e| AgreementError::GsbError(e.to_string()))?;
+
+    // Send channel message to wake all query_events waiting for proposals.
+    notifier.notify(&subscription_id).await;
+
     Ok(())
 }
