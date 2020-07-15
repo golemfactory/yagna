@@ -5,7 +5,7 @@ use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
 use std::io::Write;
 use std::str::FromStr;
@@ -31,9 +31,7 @@ pub enum ProposalIdParseError {
     InvalidOwnerType(String),
 }
 
-#[derive(
-    Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq, Serialize, Deserialize,
-)]
+#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", owner, id)]
 #[sql_type = "Text"]
 pub struct ProposalId {
@@ -128,5 +126,23 @@ where
 {
     fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
         Ok(String::from_sql(bytes)?.parse()?)
+    }
+}
+
+impl Serialize for ProposalId {
+    fn serialize<S: Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ProposalId {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, <D as Deserializer<'de>>::Error> {
+        let s = String::deserialize(deserializer)?;
+        FromStr::from_str(&s).map_err(de::Error::custom)
     }
 }
