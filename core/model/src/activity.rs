@@ -134,6 +134,41 @@ impl RpcMessage for GetRunningCommand {
     type Item = ExeScriptCommandState;
     type Error = RpcMessageError;
 }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeEvent {
+    pub batch_id: String,
+    pub index: usize,
+    pub timestamp: u64,
+    pub kind: RuntimeEventKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum RuntimeEventKind {
+    Started {
+        command: ExeScriptCommand
+    },
+    Finished {
+        return_code: i32,
+        message: Option<String>,
+    },
+    StdOut(String),
+    StdErr(String),
+}
+
+/// Receive runtime event from Supervisor.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiveRuntimeEvent {
+    pub activity_id: String,
+    pub event: RuntimeEvent,
+    //pub command_index: Option<usize>,
+}
+
+impl RpcMessage for ReceiveRuntimeEvent {
+    const ID: &'static str = "ReceiveRuntimeEvent";
+    type Item = ();
+    type Error = RpcMessageError;
+}
 
 /// Local activity bus API (used by ExeUnit).
 ///

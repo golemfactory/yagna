@@ -2,6 +2,7 @@ mod activity;
 mod activity_state;
 mod activity_usage;
 mod event;
+mod runtime_event;
 
 pub use activity::ActivityDao;
 pub use activity_state::ActivityStateDao;

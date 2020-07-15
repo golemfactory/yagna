@@ -1,7 +1,7 @@
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 
-use crate::{api, db::migrations, provider};
+use crate::{api, db::migrations, provider, requestor};
 
 pub struct Activity;
 
@@ -14,6 +14,7 @@ impl Activity {
         let db: DbExecutor = ctx.component();
         db.apply_migration(migrations::run_with_output)?;
         provider::service::bind_gsb(&db);
+        requestor::service::bind_gsb(&db);
         Ok(())
     }
 
