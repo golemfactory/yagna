@@ -3,9 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use super::super::callback::CallbackMessage;
 use super::error::{AgreementError, CounterProposalError, ProposalError};
-use crate::db::model::{DbProposal, Demand, OwnerType, ProposalId, SubscriptionId};
+use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
 
-use ya_client::model::NodeId;
 use ya_service_bus::RpcMessage;
 
 pub mod provider {
@@ -146,19 +145,6 @@ impl ProposalContent {
     }
 }
 
-impl InitialProposalReceived {
-    pub fn into_demand(self, owner: NodeId) -> Demand {
-        Demand {
-            id: self.demand_id,
-            properties: self.proposal.properties,
-            constraints: self.proposal.constraints,
-            node_id: owner,
-            creation_ts: self.proposal.creation_ts,
-            insertion_ts: None,
-            expiration_ts: self.proposal.expiration_ts,
-        }
-    }
-}
 impl ProposalReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());

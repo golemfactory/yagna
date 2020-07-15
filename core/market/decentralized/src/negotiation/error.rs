@@ -63,10 +63,10 @@ pub enum ProposalError {
 impl AgreementError {
     pub fn from(promoted_proposal: &ProposalId, e: GetProposalError) -> AgreementError {
         match e {
-            GetProposalError::ProposalNotFound(id) => {
+            GetProposalError::NotFound(id) => {
                 AgreementError::ProposalNotFound(promoted_proposal.clone(), id)
             }
-            GetProposalError::FailedGetProposal(id, db_error) => {
+            GetProposalError::FailedGetFromDb(id, db_error) => {
                 AgreementError::FailedGetProposal(promoted_proposal.clone(), id, db_error)
             }
         }
@@ -76,10 +76,10 @@ impl AgreementError {
 impl ProposalError {
     pub fn from(subscription_id: &SubscriptionId, e: GetProposalError) -> ProposalError {
         match e {
-            GetProposalError::ProposalNotFound(id) => {
+            GetProposalError::NotFound(id) => {
                 ProposalError::ProposalNotFound(id, subscription_id.clone())
             }
-            GetProposalError::FailedGetProposal(id, db_error) => {
+            GetProposalError::FailedGetFromDb(id, db_error) => {
                 ProposalError::FailedGetProposal(id, subscription_id.clone(), db_error)
             }
         }
