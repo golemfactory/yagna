@@ -78,31 +78,40 @@ where
     let emiter = EventEmiter { tx };
     let service = Rc::new(factory(emiter).await);
 
-    tokio::task::LocalSet::new()
-        .run_until(async {
-            let _event_sender = {
-                let output = output.clone();
-                async move {
-                    while let Some(event) = rx.next().await {
-                        let mut output = output.lock().await;
-                        let _r = SinkExt::send(&mut *output, event).await;
-                    }
-                }
-            };
+    let local = tokio::task::LocalSet::new();
 
+    local.spawn_local({
+        let output = output.clone();
+        async move {
+            while let Some(event) = rx.next().await {
+                log::debug!("event: {:?}", event);
+                tokio::task::spawn_local({
+                    let output = output.clone();
+                    async move {
+                        let mut output = output.lock().await;
+                        let r = SinkExt::send(&mut *output, event).await;
+                        log::debug!("sending event done: {:?}", r);
+                    }
+                });
+            }
+        }
+    });
+
+    local
+        .run_until(async {
             while let Some(it) = input.next().await {
                 match it {
                     Ok(request) => {
                         let service = service.clone();
                         let output = output.clone();
-                        let _ = tokio::task::spawn_local(async move {
+                        tokio::task::spawn_local(async move {
                             log::debug!("received request: {:?}", request);
                             let resp = handle(service.as_ref(), request).await;
                             log::debug!("response to send: {:?}", resp);
                             let mut output = output.lock().await;
                             log::debug!("sending");
                             let r = SinkExt::send(&mut *output, resp).await;
-                            log::debug!("sending done: {:?}", r.is_ok());
+                            log::debug!("sending done: {:?}", r);
                         });
                     }
                     Err(e) => {
