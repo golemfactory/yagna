@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::db::models::ProposalId;
-use crate::SubscriptionId;
+use crate::db::model::{ProposalId, SubscriptionId};
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum NegotiationApiInitError {}

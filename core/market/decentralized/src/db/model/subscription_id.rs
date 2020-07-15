@@ -176,7 +176,7 @@ impl From<SubscriptionParseError> for ErrorMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::models::subscription_id::SubscriptionParseError::{
+    use crate::db::model::subscription_id::SubscriptionParseError::{
         InvalidFormat, InvalidLength, NotHexadecimal,
     };
     use chrono::NaiveDate;

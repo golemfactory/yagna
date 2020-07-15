@@ -1,10 +1,10 @@
-use crate::protocol::negotiation::errors::{
+use crate::protocol::negotiation::error::{
     CounterProposalError as ApiProposalError, NegotiationApiInitError,
 };
 use thiserror::Error;
 
 use super::common::GetProposalError;
-use crate::db::models::{ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError};
+use crate::db::model::{ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError};
 use crate::db::{dao::TakeEventsError, DbError};
 
 #[derive(Error, Debug)]

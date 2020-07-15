@@ -4,12 +4,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use ya_market_decentralized::testing::discovery::*;
 use ya_market_decentralized::testing::mock_node::default::*;
 use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
-use ya_market_decentralized::testing::QueryOfferError;
-use ya_market_decentralized::testing::SubscriptionId;
 use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
-use ya_market_decentralized::testing::{Discovery, OfferReceived, Propagate, Reason};
+use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
 
 macro_rules! assert_err_eq {
     ($expected:expr, $actual:expr $(,)*) => {

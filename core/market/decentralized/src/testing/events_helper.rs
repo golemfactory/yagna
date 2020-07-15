@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
-use crate::ProposalId;
 use ya_client::model::market::Proposal;
+
+use crate::db::model::ProposalId;
 
 pub mod requestor {
     use ya_client::model::market::event::RequestorEvent;

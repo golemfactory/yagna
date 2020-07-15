@@ -6,7 +6,7 @@ use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
-use crate::db::models::subscription_id::SubscriptionValidationError;
+use crate::db::model::subscription_id::SubscriptionValidationError;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]

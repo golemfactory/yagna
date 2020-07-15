@@ -2,6 +2,7 @@ use actix::Actor;
 use std::env;
 use structopt::{clap, StructOpt};
 
+mod cli;
 mod events;
 mod execution;
 mod hardware;
@@ -45,33 +46,33 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::Preset(presets_cmd) => match presets_cmd {
-            PresetsConfig::List => ProviderAgent::list_presets(config),
-            PresetsConfig::Active => ProviderAgent::active_presets(config),
+            PresetsConfig::List => cli::list_presets(config),
+            PresetsConfig::Active => cli::active_presets(config),
             PresetsConfig::Create {
                 no_interactive,
                 params,
             } => {
                 if no_interactive {
-                    ProviderAgent::create_preset(config, params)
+                    cli::create_preset(config, params)
                 } else {
-                    ProviderAgent::create_preset_interactive(config)
+                    cli::create_preset_interactive(config)
                 }
             }
-            PresetsConfig::Remove { name } => ProviderAgent::remove_preset(config, name),
+            PresetsConfig::Remove { name } => cli::remove_preset(config, name),
             PresetsConfig::Update {
                 no_interactive,
                 params,
                 name,
             } => {
                 if no_interactive {
-                    ProviderAgent::update_preset(config, name, params)
+                    cli::update_preset(config, name, params)
                 } else {
-                    ProviderAgent::update_preset_interactive(config, name)
+                    cli::update_preset_interactive(config, name)
                 }
             }
-            PresetsConfig::Activate { name } => ProviderAgent::activate_preset(config, name),
-            PresetsConfig::Deactivate { name } => ProviderAgent::deactivate_preset(config, name),
-            PresetsConfig::ListMetrics => ProviderAgent::list_metrics(config),
+            PresetsConfig::Activate { name } => cli::activate_preset(config, name),
+            PresetsConfig::Deactivate { name } => cli::deactivate_preset(config, name),
+            PresetsConfig::ListMetrics => cli::list_metrics(config),
         },
         Commands::Profile(profile_cmd) => {
             let path = config.hardware_file;
@@ -114,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Commands::ExeUnit(exeunit_cmd) => match exeunit_cmd {
-            ExeUnitsConfig::List => ProviderAgent::list_exeunits(config),
+            ExeUnitsConfig::List => cli::list_exeunits(config),
         },
     }
 }

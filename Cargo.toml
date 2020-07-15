@@ -56,6 +56,7 @@ assets = [
     ["target/release/yagna", "usr/bin/", "755"],
     ["target/release/ya-requestor", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
+    ["target/release/gftp", "usr/bin/", "755"],
     ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
     ["README.md", "usr/share/doc/yagna/", "644"],
     ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],

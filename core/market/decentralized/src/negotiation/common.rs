@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
@@ -7,14 +8,16 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
 use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::{MarketEvent, OwnerType, Proposal};
-use crate::matcher::{QueryOfferError, SubscriptionStore};
+use crate::db::model::{MarketEvent, OwnerType, Proposal};
+use crate::db::model::{ProposalId, SubscriptionId};
+use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
 use crate::negotiation::notifier::NotifierError;
-use crate::negotiation::{EventNotifier, ProposalError, QueryEventsError};
-use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
+use crate::negotiation::{
+    error::{ProposalError, QueryEventsError},
+    EventNotifier,
+};
+use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::ProposalReceived;
-use crate::{ProposalId, SubscriptionId};
-use std::str::FromStr;
 
 type IsInitial = bool;
 
@@ -155,7 +158,8 @@ impl CommonBroker {
             }
         };
 
-        let owner_id = NodeId::from_str(&caller)
+        // TODO: do auth
+        let _owner_id = NodeId::from_str(&caller)
             .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
 
         let proposal = prev_proposal.from_draft(msg.proposal);

@@ -1,4 +1,4 @@
-pub mod errors;
+pub mod error;
 pub mod expression;
 pub mod ldap_parser;
 pub mod matching;

@@ -9,22 +9,21 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
     dao::{AgreementDao, EventsDao, ProposalDao},
-    models::{
+    model::{
         Agreement, AgreementId, Demand as ModelDemand, OwnerType, Proposal, ProposalId,
         SubscriptionId,
     },
     DbResult,
 };
-use crate::matcher::{RawProposal, SubscriptionStore};
+use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::negotiation::common::CommonBroker;
-use crate::negotiation::errors::AgreementError;
-use crate::negotiation::ProposalError;
+use crate::negotiation::error::{AgreementError, ProposalError};
 use crate::protocol::negotiation::{
     messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
     requestor::NegotiationApi,
 };
 
-use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
+use super::error::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
 
 /// Requestor part of negotiation logic.

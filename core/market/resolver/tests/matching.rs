@@ -1,4 +1,4 @@
-use ya_market_resolver::resolver::errors::*;
+use ya_market_resolver::resolver::error::*;
 use ya_market_resolver::resolver::matching::*;
 use ya_market_resolver::resolver::properties::*;
 use ya_market_resolver::resolver::*;

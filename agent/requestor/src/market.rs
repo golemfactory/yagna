@@ -24,7 +24,7 @@ pub(crate) fn build_demand(
     let mut properties = serde_json::json!({
         "golem": {
             "node.id.name": node_name,
-            "srv.comp.wasm.task_package": task_package,
+            "srv.comp.task_package": task_package,
             "srv.comp.expiration": expiration.timestamp_millis(),
         },
     });
