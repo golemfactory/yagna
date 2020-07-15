@@ -24,8 +24,10 @@ async fn handle_command(
             service.kill_process(kill).await?;
             proto::response::Command::Kill(Default::default())
         }
-
-        _ => return Err(ErrorResponse::msg("unknown command")),
+        proto::request::Command::Shutdown(_) => {
+            service.shutdown().await?;
+            proto::response::Command::Shutdown(Default::default())
+        }
     })
 }
 
