@@ -1,16 +1,17 @@
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
+use std::str::FromStr;
 use std::sync::Arc;
 
-use super::{
-    PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
-};
-use crate::market::MarketService;
-
-use crate::ProposalId;
-use std::str::FromStr;
 use ya_client::model::market::{AgreementProposal, Demand, Proposal};
 use ya_service_api_web::middleware::Identity;
+
+use crate::market::MarketService;
+
+use super::{
+    PathAgreement, PathSubscription, PathSubscriptionProposal, ProposalId, QueryTimeout,
+    QueryTimeoutMaxEvents,
+};
 
 // This file contains market REST endpoints. Responsibility of these functions
 // is calling respective functions in market modules and mapping return values

@@ -2,9 +2,10 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::protocol::callbacks::{CallbackFuture, OutputFuture};
-use crate::protocol::discovery::DiscoveryImpl;
-use crate::protocol::{CallbackHandler, CallbackMessage, Discovery, HandlerSlot};
+use crate::protocol::callback::{CallbackFuture, OutputFuture};
+use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
+
+use super::{Discovery, DiscoveryImpl};
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {
@@ -80,9 +81,9 @@ impl<
 mod test {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-    use crate::protocol::{OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers};
     use crate::testing::mock_offer::sample_offer_received;
 
+    use super::super::*;
     use super::*;
 
     #[test]

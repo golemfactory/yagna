@@ -6,19 +6,19 @@ use ya_client::model::{market::event::ProviderEvent, NodeId};
 use ya_persistence::executor::DbExecutor;
 
 use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::models::{EventError, OwnerType, Proposal};
-use crate::db::models::{Offer as ModelOffer, SubscriptionId};
-use crate::matcher::{QueryOfferError, SubscriptionStore};
+use crate::db::model::{EventError, OwnerType, Proposal};
+use crate::db::model::{Offer as ModelOffer, SubscriptionId};
+use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
+use crate::negotiation::error::QueryEventsError;
 use crate::negotiation::notifier::{EventNotifier, NotifierError};
-use crate::negotiation::QueryEventsError;
-use crate::protocol::negotiation::errors::{CounterProposalError, RemoteProposalError};
+use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
 
-use super::errors::{NegotiationError, NegotiationInitError};
+use super::error::{NegotiationError, NegotiationInitError};
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]

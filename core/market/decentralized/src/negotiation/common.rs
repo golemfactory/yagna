@@ -4,8 +4,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
 use crate::db::dao::ProposalDao;
-use crate::db::models::Proposal;
-use crate::ProposalId;
+use crate::db::model::{Proposal, ProposalId};
 
 #[derive(Error, Debug)]
 pub enum GetProposalError {
