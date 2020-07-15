@@ -12,10 +12,10 @@ awc = "1.0.1"
 bigdecimal = "0.1.0"
 bitflags = "1.2"
 chrono = { version = "0.4", features = ["serde"] }
-ethereum-tx-sign = { git = "https://github.com/bidzyyys/ethereum-tx-sign" }
-ethereum-types = "0.6.0"
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
+ethereum-tx-sign = { git = "https://github.com/bidzyyys/ethereum-tx-sign" }
+ethereum-types = "0.6.0"
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 hex = "0.4"
 lazy_static = "1.4.0"
@@ -29,8 +29,8 @@ sha3 = "0.8"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["macros"] }
 uint = "0.7"
-uuid = { version = "0.8", features = ["v4"] }
 ureq = { version = "0.11.0", features = ["charset"] }
+uuid = { version = "0.8", features = ["v4"] }
 web3 = { git = "https://github.com/bidzyyys/rust-web3" }
 
 

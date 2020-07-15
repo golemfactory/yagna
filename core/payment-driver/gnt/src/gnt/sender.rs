@@ -19,7 +19,7 @@ use futures3::prelude::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::mem;
-use std::ops::{Add, Range};
+use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -936,10 +936,8 @@ async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<(
 
     let mut amount = BigDecimal::zero();
     for payment in payments.iter() {
-        amount = amount.add(
-            utils::u256_to_big_dec(utils::u256_from_big_endian_hex(payment.amount.clone()))
-                .unwrap(),
-        );
+        amount += utils::u256_to_big_dec(utils::u256_from_big_endian_hex(payment.amount.clone()))
+            .unwrap();
     }
 
     let sender: String = payments[0].sender.clone();

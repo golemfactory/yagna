@@ -4,7 +4,7 @@ use crate::models::PaymentEntity;
 use crate::schema::gnt_driver_payment::dsl;
 
 use crate::utils::PAYMENT_STATUS_OK;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::dao::DbResult;
 
@@ -21,7 +21,7 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
 
 impl<'c> PaymentDao<'c> {
     pub async fn get_pending_payments(&self, address: String) -> DbResult<Vec<PaymentEntity>> {
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             let payments: Vec<PaymentEntity> = dsl::gnt_driver_payment
                 .filter(dsl::sender.eq(address))
                 .filter(dsl::status.eq(crate::utils::PAYMENT_STATUS_NOT_YET))
@@ -63,7 +63,7 @@ impl<'c> PaymentDao<'c> {
     }
 
     pub async fn get_by_tx_id(&self, tx_id: String) -> DbResult<Vec<PaymentEntity>> {
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             let payments: Vec<PaymentEntity> = dsl::gnt_driver_payment
                 .filter(dsl::tx_id.eq(tx_id))
                 .load(conn)?;
