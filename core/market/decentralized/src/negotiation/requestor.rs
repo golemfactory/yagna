@@ -211,7 +211,7 @@ pub async fn proposal_receiver_thread(
             log::info!("Received proposal from matcher. Adding to events queue.");
 
             // Add proposal to database together with Negotiation record.
-            let proposal = Proposal::new_initial(proposal.demand, proposal.offer);
+            let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
             let proposal = db
                 .as_dao::<ProposalDao>()
                 .save_initial_proposal(proposal)

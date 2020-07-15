@@ -146,25 +146,8 @@ impl ProposalContent {
             creation_ts: proposal.creation_ts,
         }
     }
-
-    pub fn into(self, owner: NodeId, demand_id: SubscriptionId) -> Demand {
-        Demand {
-            id: demand_id,
-            properties: self.properties,
-            constraints: self.constraints,
-            node_id: owner,
-            creation_ts: self.creation_ts,
-            insertion_ts: None,
-            expiration_ts: self.expiration_ts,
-        }
-    }
 }
 
-impl InitialProposalReceived {
-    pub fn into_demand(self, owner: NodeId) -> Demand {
-        self.proposal.into(owner, self.demand_id)
-    }
-}
 impl ProposalReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());

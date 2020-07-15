@@ -54,7 +54,7 @@ impl CommonBroker {
         }
 
         let is_initial = prev_proposal.body.prev_proposal_id.is_none();
-        let new_proposal = prev_proposal.counter_with(proposal);
+        let new_proposal = prev_proposal.from_client(proposal);
         let proposal_id = new_proposal.body.id.clone();
         self.db
             .as_dao::<ProposalDao>()
@@ -158,11 +158,7 @@ impl CommonBroker {
         let owner_id = NodeId::from_str(&caller)
             .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
 
-        let proposal_id = msg.proposal.proposal_id.clone();
-        let demand = msg
-            .proposal
-            .into(owner_id, prev_proposal.negotiation.demand_id.clone());
-        let proposal = prev_proposal.from_counter(proposal_id, demand);
+        let proposal = prev_proposal.from_draft(msg.proposal);
 
         self.db
             .as_dao::<ProposalDao>()

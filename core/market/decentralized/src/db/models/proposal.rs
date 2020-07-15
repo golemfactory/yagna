@@ -16,6 +16,7 @@ use crate::db::models::agreement::AgreementId;
 use crate::db::models::Demand as ModelDemand;
 use crate::db::models::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
+use crate::protocol::negotiation::messages::ProposalContent;
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
@@ -103,8 +104,8 @@ pub struct Proposal {
 }
 
 impl Proposal {
-    pub fn new_initial(demand: ModelDemand, offer: ModelOffer) -> Proposal {
-        let negotiation = Negotiation::new(&demand, &offer, OwnerType::Requestor);
+    pub fn new_requestor(demand: ModelDemand, offer: ModelOffer) -> Proposal {
+        let negotiation = Negotiation::from_subscriptions(&demand, &offer, OwnerType::Requestor);
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
         let expiration_ts = creation_ts + Duration::minutes(10);
@@ -129,25 +130,37 @@ impl Proposal {
         }
     }
 
-    pub fn new_provider(demand: ModelDemand, offer: ModelOffer) -> Proposal {
-        let negotiation = Negotiation::new(&demand, &offer, OwnerType::Provider);
-        let proposal_id = ProposalId::generate_id(
+    pub fn new_provider(
+        demand_id: &SubscriptionId,
+        requestor_id: NodeId,
+        demand_proposal: ProposalContent,
+        offer: ModelOffer,
+    ) -> Proposal {
+        let negotiation = Negotiation::new(
+            demand_id,
+            requestor_id,
             &offer.id,
-            &demand.id,
-            &demand.creation_ts,
+            offer.node_id,
             OwnerType::Provider,
         );
+        let proposal_id = ProposalId::generate_id(
+            &offer.id,
+            &demand_id,
+            &demand_proposal.creation_ts,
+            OwnerType::Provider,
+        );
+        // TODO validate demand_proposal.proposal_id with newly generated proposal_id
 
         let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: None,
             issuer: IssuerType::Them,
             negotiation_id: negotiation.id.clone(),
-            properties: demand.properties,
-            constraints: demand.constraints,
+            properties: demand_proposal.properties,
+            constraints: demand_proposal.constraints,
             state: ProposalState::Draft,
-            creation_ts: demand.creation_ts,
-            expiration_ts: demand.expiration_ts,
+            creation_ts: demand_proposal.creation_ts,
+            expiration_ts: demand_proposal.expiration_ts,
         };
 
         Proposal {
@@ -156,17 +169,17 @@ impl Proposal {
         }
     }
 
-    pub fn from_counter(&self, proposal_id: ProposalId, demand: ModelDemand) -> Proposal {
+    pub fn from_draft(&self, proposal: ProposalContent) -> Proposal {
         let proposal = DbProposal {
-            id: proposal_id,
+            id: proposal.proposal_id,
             issuer: IssuerType::Them,
             prev_proposal_id: Some(self.body.id.clone()),
             negotiation_id: self.negotiation.id.clone(),
-            properties: demand.properties,
-            constraints: demand.constraints,
+            properties: proposal.properties,
+            constraints: proposal.constraints,
             state: ProposalState::Draft,
-            creation_ts: demand.creation_ts,
-            expiration_ts: demand.expiration_ts,
+            creation_ts: proposal.creation_ts,
+            expiration_ts: proposal.expiration_ts,
         };
 
         Proposal {
@@ -175,7 +188,7 @@ impl Proposal {
         }
     }
 
-    pub fn counter_with(mut self, proposal: &ClientProposal) -> Proposal {
+    pub fn from_client(&self, proposal: &ClientProposal) -> Proposal {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
@@ -187,17 +200,22 @@ impl Proposal {
             owner,
         );
 
-        self.body.prev_proposal_id = Some(self.body.id.clone());
-        self.body.id = proposal_id;
-        self.body.issuer = IssuerType::Us;
-        self.body.properties = proposal.properties.to_string();
-        self.body.constraints = proposal.constraints.clone();
-        self.body.creation_ts = creation_ts;
-        self.body.expiration_ts = expiration_ts;
-        self.body.state = ProposalState::Draft;
-        // We leave negotiation id the same.
+        let proposal = DbProposal {
+            id: proposal_id,
+            prev_proposal_id: Some(self.body.id.clone()),
+            issuer: IssuerType::Us,
+            negotiation_id: self.negotiation.id.clone(),
+            properties: proposal.properties.to_string(),
+            constraints: proposal.constraints.clone(),
+            state: ProposalState::Draft,
+            creation_ts,
+            expiration_ts,
+        };
 
-        self
+        Proposal {
+            body: proposal,
+            negotiation: self.negotiation.clone(),
+        }
     }
 
     pub fn into_client(self) -> Result<ClientProposal, ErrorMessage> {
@@ -234,19 +252,33 @@ impl Proposal {
 }
 
 impl Negotiation {
-    fn new(demand: &ModelDemand, offer: &ModelOffer, role: OwnerType) -> Negotiation {
+    fn from_subscriptions(
+        demand: &ModelDemand,
+        offer: &ModelOffer,
+        role: OwnerType,
+    ) -> Negotiation {
+        Negotiation::new(&demand.id, demand.node_id, &offer.id, offer.node_id, role)
+    }
+
+    fn new(
+        demand_id: &SubscriptionId,
+        requestor_id: NodeId,
+        offer_id: &SubscriptionId,
+        provider_id: NodeId,
+        role: OwnerType,
+    ) -> Negotiation {
         let subscription_id = match role {
-            OwnerType::Provider => offer.id.clone(),
-            OwnerType::Requestor => demand.id.clone(),
+            OwnerType::Provider => offer_id.clone(),
+            OwnerType::Requestor => demand_id.clone(),
         };
 
         Negotiation {
             id: generate_random_id(),
             subscription_id,
-            offer_id: offer.id.clone(),
-            demand_id: demand.id.clone(),
-            requestor_id: demand.node_id.clone(),
-            provider_id: offer.node_id.clone(),
+            offer_id: offer_id.clone(),
+            demand_id: demand_id.clone(),
+            requestor_id,
+            provider_id,
             agreement_id: None,
         }
     }
