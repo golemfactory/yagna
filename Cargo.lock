@@ -5484,6 +5484,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
+ "ya-gnt-driver",
  "ya-net",
  "ya-persistence",
  "ya-sb-router",

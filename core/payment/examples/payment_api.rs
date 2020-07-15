@@ -1,14 +1,21 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
+use futures::Future;
+use std::convert::TryInto;
+use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
+use ya_client_model::NodeId;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
+use ya_core_model::identity;
 use ya_dummy_driver::{
     PaymentDriverService as DummyDriverService, DRIVER_NAME as DUMMY_DRIVER_NAME,
 };
+use ya_gnt_driver::{PaymentDriverService as GntDriverService, DRIVER_NAME as GNT_DRIVER_NAME};
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
@@ -65,87 +72,70 @@ pub async fn start_dummy_driver() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "gnt-driver")]
-mod driver {
-    use super::{DbExecutor, EthAccount};
-    use futures::Future;
-    use std::convert::TryInto;
-    use std::pin::Pin;
-    use std::sync::Arc;
-    use ya_client_model::NodeId;
-    use ya_core_model::identity;
-    use ya_payment_driver::PaymentDriverService;
+pub async fn start_gnt_driver(
+    db: &DbExecutor,
+    requestor_account: Box<EthAccount>,
+) -> anyhow::Result<()> {
+    let requestor = NodeId::from(requestor_account.address().as_ref());
+    fake_list_identities(vec![requestor]);
+    fake_subscribe_to_events();
 
-    pub async fn start(
-        db: &DbExecutor,
-        provider_account: Box<EthAccount>,
-        requestor_account: Box<EthAccount>,
-    ) -> anyhow::Result<()> {
-        let requestor = NodeId::from(requestor_account.address().as_ref());
-        fake_list_identities(vec![requestor]);
-        fake_subscribe_to_events();
+    GntDriverService::gsb(db).await?;
 
-        let provider_sign_tx = get_sign_tx(provider_account);
-        let requestor_sign_tx = get_sign_tx(requestor_account);
+    let requestor_sign_tx = get_sign_tx(requestor_account);
+    fake_sign_tx(Box::new(requestor_sign_tx));
+    Ok(())
+}
 
-        PaymentDriverService::gsb(db).await?;
-
-        fake_sign_tx(Box::new(provider_sign_tx));
-        fake_sign_tx(Box::new(requestor_sign_tx));
-        Ok(())
-    }
-
-    fn fake_list_identities(identities: Vec<NodeId>) {
-        bus::bind(identity::BUS_ID, move |_msg: identity::List| {
-            let ids = identities.clone();
-            let mut accounts: Vec<identity::IdentityInfo> = vec![];
-            for id in ids {
-                accounts.push(identity::IdentityInfo {
-                    alias: None,
-                    node_id: id,
-                    is_default: false,
-                    is_locked: false,
-                });
-            }
-            async move { Ok(accounts) }
-        });
-    }
-
-    fn fake_subscribe_to_events() {
-        bus::bind(
-            identity::BUS_ID,
-            move |_msg: identity::Subscribe| async move { Ok(identity::Ack {}) },
-        );
-    }
-
-    fn get_sign_tx(
-        account: Box<EthAccount>,
-    ) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-        let account: Arc<EthAccount> = account.into();
-        move |msg| {
-            let account = account.clone();
-            let fut = async move {
-                let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
-                let signature = account.sign(&msg).unwrap();
-                let mut v = Vec::with_capacity(65);
-                v.push(signature.v);
-                v.extend_from_slice(&signature.r);
-                v.extend_from_slice(&signature.s);
-                v
-            };
-            Box::pin(fut)
+fn fake_list_identities(identities: Vec<NodeId>) {
+    bus::bind(identity::BUS_ID, move |_msg: identity::List| {
+        let ids = identities.clone();
+        let mut accounts: Vec<identity::IdentityInfo> = vec![];
+        for id in ids {
+            accounts.push(identity::IdentityInfo {
+                alias: None,
+                node_id: id,
+                is_default: false,
+                is_locked: false,
+            });
         }
-    }
+        async move { Ok(accounts) }
+    });
+}
 
-    fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
-        let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> =
-            sign_tx.into();
-        bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
-            let sign_tx = sign_tx.clone();
-            let msg = msg.payload;
-            async move { Ok(sign_tx(msg).await) }
-        });
+fn fake_subscribe_to_events() {
+    bus::bind(
+        identity::BUS_ID,
+        move |_msg: identity::Subscribe| async move { Ok(identity::Ack {}) },
+    );
+}
+
+fn get_sign_tx(
+    account: Box<EthAccount>,
+) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+    let account: Arc<EthAccount> = account.into();
+    move |msg| {
+        let account = account.clone();
+        let fut = async move {
+            let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
+            let signature = account.sign(&msg).unwrap();
+            let mut v = Vec::with_capacity(65);
+            v.push(signature.v);
+            v.extend_from_slice(&signature.r);
+            v.extend_from_slice(&signature.s);
+            v
+        };
+        Box::pin(fut)
     }
+}
+
+fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
+    let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> = sign_tx.into();
+    bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
+        let sign_tx = sign_tx.clone();
+        let msg = msg.payload;
+        async move { Ok(sign_tx(msg).await) }
+    });
 }
 
 #[actix_rt::main]
@@ -182,7 +172,10 @@ async fn main() -> anyhow::Result<()> {
             start_dummy_driver().await?;
             DUMMY_DRIVER_NAME
         }
-        Driver::Gnt => unimplemented!(),
+        Driver::Gnt => {
+            start_gnt_driver(&db, requestor_account).await?;
+            GNT_DRIVER_NAME
+        }
     };
 
     let processor = PaymentProcessor::new(db.clone());
