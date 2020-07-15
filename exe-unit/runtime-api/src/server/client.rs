@@ -156,7 +156,6 @@ pub async fn spawn(
     mut command: process::Command,
     event_handler: impl RuntimeEvent + Send + 'static,
 ) -> Result<impl RuntimeService + Clone + ProcessControl, anyhow::Error> {
-    let (_tx, _rx) = futures::channel::mpsc::unbounded::<proto::Response>();
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn()?;
