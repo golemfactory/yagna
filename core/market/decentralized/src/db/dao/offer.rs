@@ -1,16 +1,16 @@
 use chrono::NaiveDateTime;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_client::model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
-use crate::db::models::SubscriptionId;
-use crate::db::models::{Offer, OfferUnsubscribed};
+use crate::db::model::SubscriptionId;
+use crate::db::model::{Offer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl;
 use crate::db::schema::market_offer_unsubscribed::dsl as dsl_unsubscribed;
 use crate::db::DbResult;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 pub struct OfferDao<'c> {
     pool: &'c PoolType,
@@ -43,12 +43,12 @@ pub enum OfferState {
 impl<'c> OfferDao<'c> {
     pub async fn select(
         &self,
-        subscription_id: &SubscriptionId,
+        id: &SubscriptionId,
         validation_ts: NaiveDateTime,
     ) -> DbResult<OfferState> {
-        let subscription_id = subscription_id.clone();
+        let id = id.clone();
         readonly_transaction(self.pool, move |conn| {
-            query_state(conn, &subscription_id, &validation_ts)
+            query_state(conn, &id, &validation_ts)
         })
         .await
     }
@@ -130,12 +130,12 @@ impl<'c> OfferDao<'c> {
     /// Returns state as before operation. `Active` means unsubscribe has succeeded.
     pub async fn mark_unsubscribed(
         &self,
-        subscription_id: &SubscriptionId,
+        id: &SubscriptionId,
         validation_ts: NaiveDateTime,
     ) -> DbResult<OfferState> {
-        let subscription_id = subscription_id.clone();
+        let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            query_state(conn, &subscription_id, &validation_ts).map(|state| match state {
+            query_state(conn, &id, &validation_ts).map(|state| match state {
                 OfferState::Active(offer) => {
                     diesel::insert_into(dsl_unsubscribed::market_offer_unsubscribed)
                         .values(offer.clone().into_unsubscribe())
@@ -149,12 +149,12 @@ impl<'c> OfferDao<'c> {
         .await?
     }
 
-    pub async fn delete(&self, subscription_id: &SubscriptionId) -> DbResult<bool> {
-        let subscription_id = subscription_id.clone();
+    pub async fn delete(&self, id: &SubscriptionId) -> DbResult<bool> {
+        let id = id.clone();
 
         do_with_transaction(self.pool, move |conn| {
-            let num_deleted = diesel::delete(dsl::market_offer.filter(dsl::id.eq(subscription_id)))
-                .execute(conn)?;
+            let num_deleted =
+                diesel::delete(dsl::market_offer.filter(dsl::id.eq(id))).execute(conn)?;
             Ok(num_deleted > 0)
         })
         .await
@@ -163,12 +163,12 @@ impl<'c> OfferDao<'c> {
 
 pub(super) fn query_state(
     conn: &ConnType,
-    subscription_id: &SubscriptionId,
+    id: &SubscriptionId,
     validation_ts: &NaiveDateTime,
 ) -> DbResult<OfferState> {
-    let offer: Option<Offer> = query_offer(conn, &subscription_id)?;
+    let offer: Option<Offer> = query_offer(conn, &id)?;
 
-    if is_unsubscribed(conn, subscription_id)? {
+    if is_unsubscribed(conn, id)? {
         return Ok(OfferState::Unsubscribed(offer));
     }
 
@@ -185,16 +185,16 @@ fn is_expired(offer: Offer, validation_ts: &NaiveDateTime) -> OfferState {
     }
 }
 
-fn query_offer(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<Option<Offer>> {
+fn query_offer(conn: &ConnType, id: &SubscriptionId) -> DbResult<Option<Offer>> {
     Ok(dsl::market_offer
-        .filter(dsl::id.eq(&subscription_id))
+        .filter(dsl::id.eq(&id))
         .first(conn)
         .optional()?)
 }
 
-pub(super) fn is_unsubscribed(conn: &ConnType, subscription_id: &SubscriptionId) -> DbResult<bool> {
+pub(super) fn is_unsubscribed(conn: &ConnType, id: &SubscriptionId) -> DbResult<bool> {
     Ok(dsl_unsubscribed::market_offer_unsubscribed
-        .filter(dsl_unsubscribed::id.eq(&subscription_id))
+        .filter(dsl_unsubscribed::id.eq(&id))
         .first::<OfferUnsubscribed>(conn)
         .optional()?
         .is_some())

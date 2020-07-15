@@ -1,13 +1,12 @@
 use chrono::{NaiveDateTime, Utc};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
-use crate::db::models::Demand;
-use crate::db::models::SubscriptionId;
+use crate::db::model::{Demand, SubscriptionId};
 use crate::db::schema::market_demand::dsl;
 use crate::db::DbResult;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 #[allow(unused)]
 pub struct DemandDao<'c> {
@@ -28,13 +27,13 @@ pub enum DemandState {
 }
 
 impl<'c> DemandDao<'c> {
-    pub async fn select(&self, subscription_id: &SubscriptionId) -> DbResult<Option<Demand>> {
-        let subscription_id = subscription_id.clone();
+    pub async fn select(&self, id: &SubscriptionId) -> DbResult<Option<Demand>> {
+        let id = id.clone();
         let now = Utc::now().naive_utc();
 
         readonly_transaction(self.pool, move |conn| {
             Ok(dsl::market_demand
-                .filter(dsl::id.eq(&subscription_id))
+                .filter(dsl::id.eq(&id))
                 .filter(dsl::expiration_ts.ge(now))
                 .first(conn)
                 .optional()?)
@@ -47,7 +46,6 @@ impl<'c> DemandDao<'c> {
         insertion_ts: NaiveDateTime,
         validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<Demand>> {
-        let now = Utc::now().naive_utc();
         readonly_transaction(self.pool, move |conn| {
             Ok(dsl::market_demand
                 // we querying less then here and less equal in Offers
@@ -71,25 +69,21 @@ impl<'c> DemandDao<'c> {
         .await
     }
 
-    pub async fn delete(&self, subscription_id: &SubscriptionId) -> DbResult<bool> {
-        let subscription_id = subscription_id.clone();
+    pub async fn delete(&self, id: &SubscriptionId) -> DbResult<bool> {
+        let id = id.clone();
 
         do_with_transaction(self.pool, move |conn| {
             let num_deleted =
-                diesel::delete(dsl::market_demand.filter(dsl::id.eq(subscription_id)))
-                    .execute(conn)?;
+                diesel::delete(dsl::market_demand.filter(dsl::id.eq(id))).execute(conn)?;
             Ok(num_deleted > 0)
         })
         .await
     }
 }
 
-pub(super) fn demand_status(
-    conn: &ConnType,
-    subscription_id: &SubscriptionId,
-) -> DbResult<DemandState> {
+pub(super) fn demand_status(conn: &ConnType, id: &SubscriptionId) -> DbResult<DemandState> {
     let demand: Option<Demand> = dsl::market_demand
-        .filter(dsl::id.eq(&subscription_id))
+        .filter(dsl::id.eq(&id))
         .first(conn)
         .optional()?;
 

@@ -1,33 +1,31 @@
+use actix_http::{body::Body, Request};
+use actix_service::Service as ActixService;
+use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
-use ya_market_decentralized::protocol::{
-    CallbackHandler, Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, RetrieveOffers,
-};
-use ya_market_decentralized::testing::mock_offer::generate_identity;
-use ya_market_decentralized::testing::negotiation::messages::{
-    AgreementApproved, AgreementCancelled, AgreementReceived, AgreementRejected,
-    InitialProposalReceived, ProposalReceived, ProposalRejected,
-};
-use ya_market_decentralized::testing::negotiation::{provider, requestor};
-use ya_market_decentralized::testing::{
-    DemandError, EventsListeners, Matcher, QueryEventsError, QueryOfferError,
-};
-use ya_market_decentralized::{migrations, Demand, MarketService, Offer, SubscriptionId};
 use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
-use super::{bcast::BCast, mock_net::MockNet};
+use crate::MarketService;
 
 #[cfg(feature = "bcast-singleton")]
 use super::bcast::singleton::BCastService;
+use super::bcast::BCast;
 #[cfg(not(feature = "bcast-singleton"))]
 use super::bcast::BCastService;
-use crate::utils::mock_net::gsb_prefixes;
+use super::mock_net::{gsb_prefixes, MockNet};
+use super::mock_offer::generate_identity;
+use super::negotiation::{provider, requestor};
+use super::{store::SubscriptionStore, Matcher};
+use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::matcher::error::{DemandError, QueryOfferError};
+use crate::matcher::EventsListeners;
+use crate::negotiation::error::QueryEventsError;
+use crate::protocol::callback::*;
+use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
+use crate::protocol::negotiation::messages::*;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -128,8 +126,10 @@ impl MarketsNetwork {
 
     pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
-        db.apply_migration(migrations::run_with_output)?;
-        let (matcher, listeners) = Matcher::new(&db)?;
+        db.apply_migration(crate::db::migrations::run_with_output)?;
+
+        let store = SubscriptionStore::new(db.clone());
+        let (matcher, listeners) = Matcher::new(store)?;
         self.add_node(name, MockNodeKind::Matcher { matcher, listeners })
             .await
     }
@@ -310,6 +310,25 @@ impl MarketsNetwork {
             .unwrap()
     }
 
+    pub async fn get_rest_app(
+        &self,
+        node_name: &str,
+    ) -> impl ActixService<
+        Request = Request,
+        Response = ServiceResponse<Body>,
+        Error = actix_http::error::Error,
+    > {
+        let market = self.get_market(node_name);
+        let identity = self.get_default_id(node_name);
+
+        test::init_service(
+            App::new()
+                .wrap(DummyAuth::new(identity))
+                .service(MarketService::bind_rest(market)),
+        )
+        .await
+    }
+
     fn init_database(&self, name: &str) -> Result<DbExecutor> {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
@@ -393,16 +412,10 @@ impl MarketServiceExt for MarketService {
 }
 
 pub mod default {
-    use ya_market_decentralized::protocol::negotiation::messages::AgreementCancelled;
-    use ya_market_decentralized::protocol::{
-        DiscoveryRemoteError, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
+    use super::*;
+    use crate::protocol::negotiation::error::{
+        AgreementError, CounterProposalError, ProposalError,
     };
-    use ya_market_decentralized::testing::negotiation::errors::{AgreementError, ProposalError};
-    use ya_market_decentralized::testing::negotiation::messages::{
-        AgreementApproved, AgreementReceived, AgreementRejected, InitialProposalReceived,
-        ProposalReceived, ProposalRejected,
-    };
-    use ya_market_decentralized::testing::Offer;
 
     pub async fn empty_on_offer_received(
         _caller: String,
@@ -428,14 +441,14 @@ pub mod default {
     pub async fn empty_on_initial_proposal(
         _caller: String,
         _msg: InitialProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         Ok(())
     }
 
     pub async fn empty_on_proposal_received(
         _caller: String,
         _msg: ProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         Ok(())
     }
 

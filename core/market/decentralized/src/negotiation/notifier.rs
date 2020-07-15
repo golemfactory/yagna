@@ -2,7 +2,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::broadcast::{channel, Sender};
 
-use crate::db::models::SubscriptionId;
+use crate::db::model::SubscriptionId;
 
 #[derive(Error, Debug)]
 pub enum NotifierError {

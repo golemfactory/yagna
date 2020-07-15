@@ -6,7 +6,7 @@ use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
-use crate::db::models::subscription_id::SubscriptionValidationError;
+use crate::db::model::subscription_id::SubscriptionValidationError;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
@@ -157,11 +157,11 @@ mod tests {
 
     #[test]
     fn test_offer_validation_good_hash() {
-        let subscription_id = "c76161077d0343ab85ac986eb5f6ea38-85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55";
+        let offer_id = "c76161077d0343ab85ac986eb5f6ea38-85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55";
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {
-            id: SubscriptionId::from_str(&subscription_id).unwrap(),
+            id: SubscriptionId::from_str(&offer_id).unwrap(),
             properties: "{}".to_string(),
             constraints: "()".to_string(),
             node_id: NodeId::from_str(node_id).unwrap(),

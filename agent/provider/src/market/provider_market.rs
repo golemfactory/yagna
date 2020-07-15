@@ -1,8 +1,7 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use derive_more::Display;
-use futures::future::join_all;
-use futures_util::TryFutureExt;
+use futures::prelude::*;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -44,7 +43,12 @@ pub struct UpdateMarket;
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
-pub struct OnShutdown;
+pub struct Unsubscribe(pub OfferKind);
+
+pub enum OfferKind {
+    Any,
+    WithPresets(Vec<String>),
+}
 
 /// Async code emits this event to ProviderMarket, which reacts to it
 /// and broadcasts same event to external world.
@@ -60,8 +64,8 @@ pub struct AgreementApproved {
 
 /// Send when subscribing to market will be finished.
 #[rtype(result = "Result<()>")]
-#[derive(Clone, Message)]
-pub struct OfferSubscription {
+#[derive(Debug, Clone, Message)]
+struct OfferSubscription {
     subscription_id: String,
     preset: Preset,
     offer: Offer,
@@ -69,21 +73,21 @@ pub struct OfferSubscription {
 
 #[derive(Message)]
 #[rtype(result = "Result<ProposalResponse>")]
-pub struct GotProposal {
+struct GotProposal {
     subscription: OfferSubscription,
     proposal: Proposal,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<AgreementResponse>")]
-pub struct GotAgreement {
+struct GotAgreement {
     subscription: OfferSubscription,
     agreement: AgreementView,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
-pub struct AgreementFinalized {
+struct AgreementFinalized {
     agreement_id: String,
     result: AgreementResult,
 }
@@ -152,50 +156,16 @@ impl ProviderMarket {
         Ok(())
     }
 
-    async fn on_shutdown(
+    async fn unsubscribe(
         market_api: Arc<MarketProviderApi>,
         subscriptions: Vec<String>,
     ) -> Result<()> {
-        log::info!("Unsubscribing all active offers");
-
         for subscription in subscriptions.iter() {
             log::info!("Unsubscribing: {}", subscription);
             market_api.unsubscribe(&subscription).await?;
         }
-        log::info!("All Offers unsubscribed successfully.");
         Ok(())
     }
-
-    // =========================================== //
-    // Public api for running single market step
-    // =========================================== //
-
-    pub async fn run_step(
-        addr: Addr<ProviderMarket>,
-        market_api: Arc<MarketProviderApi>,
-        subscriptions: HashMap<String, OfferSubscription>,
-    ) -> Result<()> {
-        for (id, subscription) in subscriptions {
-            match market_api.collect(&id, Some(2.0), Some(2)).await {
-                Err(error) => log::error!("Can't query market events. Error: {}", error),
-                Ok(events) => {
-                    ProviderMarket::dispatch_events(
-                        events,
-                        addr.clone(),
-                        market_api.clone(),
-                        subscription,
-                    )
-                    .await
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    // =========================================== //
-    // Market internals - events processing
-    // =========================================== //
 
     async fn dispatch_events(
         events: Vec<ProviderEvent>,
@@ -232,7 +202,7 @@ impl ProviderMarket {
             })
             .collect::<Vec<_>>();
 
-        let _ = join_all(dispatch_futures).await;
+        let _ = future::join_all(dispatch_futures).await;
     }
 
     async fn dispatch_event(
@@ -439,12 +409,103 @@ impl ProviderMarket {
         self.agreement_signed_signal.on_subscribe(msg);
         Ok(())
     }
+}
 
-    pub fn list_subscriptions(&self) -> Vec<String> {
-        self.offer_subscriptions
-            .keys()
-            .map(|id| id.clone())
-            .collect()
+// Called time-to-time to read events.
+async fn run_step(
+    addr: Addr<ProviderMarket>,
+    market_api: Arc<MarketProviderApi>,
+    subscriptions: HashMap<String, OfferSubscription>,
+) -> Result<()> {
+    let _ = future::join_all(subscriptions.into_iter().map(move |(id, subscription)| {
+        let market_api = market_api.clone();
+        let addr = addr.clone();
+        async move {
+            match market_api.collect(&id, Some(2.0), Some(2)).await {
+                Err(error) => {
+                    log::error!("Can't query market events. Error: {}", error);
+                    match error {
+                        ya_client::error::Error::HttpStatusCode { code, .. } => {
+                            if code.as_u16() == 404 {
+                                let _ = addr.send(ReSubscribe(id.clone())).await;
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                Ok(events) => {
+                    ProviderMarket::dispatch_events(
+                        events,
+                        addr.clone(),
+                        market_api.clone(),
+                        subscription,
+                    )
+                    .await
+                }
+            }
+        }
+    }))
+    .await;
+    Ok(())
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct ReSubscribe(String);
+
+impl Handler<ReSubscribe> for ProviderMarket {
+    type Result = ();
+
+    fn handle(&mut self, msg: ReSubscribe, ctx: &mut Self::Context) -> Self::Result {
+        let subscription_id = msg.0;
+        if let Some(offer_subscription) = self.offer_subscriptions.get(&subscription_id) {
+            let offer = offer_subscription.offer.clone();
+            let market_api = self.market_api.clone();
+            let _ = ctx.spawn(
+                async move {
+                    match market_api.subscribe(&offer).await {
+                        Ok(new_subscription_id) => Some((subscription_id, new_subscription_id)),
+                        Err(e) => {
+                            log::error!("unable to resubscribe {}: {}", subscription_id, e);
+                            None
+                        }
+                    }
+                }
+                .into_actor(self)
+                .then(|r, act, _ctx| {
+                    let market_api = act.market_api.clone();
+                    let to_unsubscribe = if let Some((old_subscription_id, new_subscription_id)) = r
+                    {
+                        if let Some(mut offer_subscription) =
+                            act.offer_subscriptions.remove(&old_subscription_id)
+                        {
+                            offer_subscription.subscription_id = new_subscription_id.clone();
+                            log::info!(
+                                "offer [{}] resubscribed as [{}]",
+                                old_subscription_id,
+                                new_subscription_id
+                            );
+                            let _ = act
+                                .offer_subscriptions
+                                .insert(new_subscription_id, offer_subscription);
+                            None
+                        } else {
+                            Some(new_subscription_id)
+                        }
+                    } else {
+                        None
+                    };
+                    async move {
+                        if let Some(new_subscription_id) = to_unsubscribe {
+                            if let Err(e) = market_api.unsubscribe(&new_subscription_id).await {
+                                log::warn!("fail to unsubscribe: {}: {}", new_subscription_id, e);
+                            }
+                        }
+                    }
+                    .into_actor(act)
+                }),
+            );
+        }
     }
 }
 
@@ -463,7 +524,7 @@ impl Handler<UpdateMarket> for ProviderMarket {
         let client = self.market_api.clone();
         let myself = ctx.address();
 
-        let fut = ProviderMarket::run_step(myself, client, self.offer_subscriptions.clone());
+        let fut = run_step(myself, client, self.offer_subscriptions.clone());
         ActorResponse::r#async(fut.into_actor(self))
     }
 }
@@ -560,14 +621,37 @@ impl Handler<AgreementBroken> for ProviderMarket {
     }
 }
 
-impl Handler<OnShutdown> for ProviderMarket {
+impl Handler<Unsubscribe> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, _msg: OnShutdown, _ctx: &mut Context<Self>) -> Self::Result {
-        let subscriptions = self.list_subscriptions();
-        let client = self.market_api.clone();
+    fn handle(&mut self, msg: Unsubscribe, _ctx: &mut Context<Self>) -> Self::Result {
+        let subscriptions = match msg.0 {
+            OfferKind::Any => {
+                log::info!("Unsubscribing all active offers");
+                std::mem::replace(&mut self.offer_subscriptions, HashMap::new())
+                    .into_iter()
+                    .map(|(k, _)| k)
+                    .collect::<Vec<_>>()
+            }
+            OfferKind::WithPresets(preset_names) => {
+                let subs = self
+                    .offer_subscriptions
+                    .iter()
+                    .filter_map(|(n, sub)| match preset_names.contains(&sub.preset.name) {
+                        true => Some(n.clone()),
+                        false => None,
+                    })
+                    .collect::<Vec<_>>();
+                subs.iter().for_each(|s| {
+                    self.offer_subscriptions.remove(s);
+                });
 
-        ActorResponse::r#async(ProviderMarket::on_shutdown(client, subscriptions).into_actor(self))
+                log::info!("Unsubscribing {} active offer(s)", subs.len());
+                subs
+            }
+        };
+        let client = self.market_api.clone();
+        ActorResponse::r#async(ProviderMarket::unsubscribe(client, subscriptions).into_actor(self))
     }
 }
 

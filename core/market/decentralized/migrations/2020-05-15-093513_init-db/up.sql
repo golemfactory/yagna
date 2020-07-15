@@ -95,4 +95,42 @@ CREATE TABLE market_proposal(
     FOREIGN KEY(negotiation_id) REFERENCES market_negotiation (id)
 );
 
+CREATE TABLE market_agreement(
+	id VARCHAR(100) NOT NULL PRIMARY KEY,
+
+	demand_properties TEXT NOT NULL,
+	demand_constraints TEXT NOT NULL,
+
+	offer_properties TEXT NOT NULL,
+	offer_constraints TEXT NOT NULL,
+
+	provider_id VARCHAR(20) NOT NULL,
+	requestor_id VARCHAR(20) NOT NULL,
+
+    creation_ts DATETIME NOT NULL,
+    valid_to DATETIME NOT NULL,
+	state INTEGER NOT NULL,
+	approved_date DATETIME,
+
+	proposed_signature TEXT,
+	approved_signature TEXT,
+	committed_signature TEXT,
+    FOREIGN KEY(state) REFERENCES agreement_state (id)
+);
+
+
+CREATE TABLE agreement_state(
+	id INTEGER NOT NULL PRIMARY KEY,
+	name VARCHAR(50) NOT NULL
+);
+
+INSERT INTO agreement_state(id, name)
+values
+       (0, 'Proposal'),
+       (1, 'Pending'),
+       (2, 'Cancelled'),
+       (3, 'Rejected'),
+       (4, 'Approved'),
+       (5, 'Expired'),
+       (6, 'Terminated');
 

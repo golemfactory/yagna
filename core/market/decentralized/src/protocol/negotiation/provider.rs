@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
-use super::super::callbacks::{CallbackHandler, HandlerSlot};
-use super::errors::{AgreementError, NegotiationApiInitError, ProposalError};
+use super::super::callback::{CallbackHandler, HandlerSlot};
+use super::error::{AgreementError, NegotiationApiInitError, ProposalError};
 use super::messages::*;
 use super::messages::{
     AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
     ProposalReceived, ProposalRejected,
 };
 
+use crate::db::model::{OwnerType, Proposal, ProposalId};
+use crate::protocol::negotiation::error::CounterProposalError;
+
+use std::str::FromStr;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
@@ -49,17 +53,27 @@ impl NegotiationApi {
         }
     }
 
-    pub async fn counter_proposal(
-        &self,
-        id: NodeId,
-        proposal_id: &str,
-        owner: NodeId,
-    ) -> Result<(), ProposalError> {
+    pub async fn counter_proposal(&self, proposal: Proposal) -> Result<(), CounterProposalError> {
+        log::debug!(
+            "Counter proposal [{}] sent by [{}].",
+            proposal.body.id.clone(),
+            proposal.negotiation.requestor_id
+        );
+
+        let prev_proposal_id = proposal.body.prev_proposal_id.clone();
+        if prev_proposal_id.is_none() {
+            Err(CounterProposalError::NoPreviousProposal(
+                proposal.body.id.clone(),
+            ))?
+        }
+
+        let content = ProposalContent::from(proposal.body);
         let msg = ProposalReceived {
-            proposal_id: proposal_id.to_string(),
+            proposal: content,
+            prev_proposal_id: prev_proposal_id.unwrap(),
         };
-        net::from(id)
-            .to(owner)
+        net::from(proposal.negotiation.provider_id)
+            .to(proposal.negotiation.requestor_id)
             .service(&requestor::proposal_addr(BUS_ID))
             .send(msg)
             .await??;
@@ -74,7 +88,7 @@ impl NegotiationApi {
         owner: NodeId,
     ) -> Result<(), ProposalError> {
         let msg = ProposalRejected {
-            proposal_id: proposal_id.to_string(),
+            proposal_id: ProposalId::from_str(&proposal_id).unwrap(),
         };
         net::from(id)
             .to(owner)
@@ -123,26 +137,41 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: InitialProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
+        let proposal_id = &msg.proposal.proposal_id.clone();
         log::debug!(
             "Negotiation API: Received initial proposal [{}] from [{}].",
-            &msg.proposal_id,
+            &proposal_id,
             &caller
         );
-        self.inner.initial_proposal_received.call(caller, msg).await
+        self.inner
+            .initial_proposal_received
+            .call(caller, msg.translate(OwnerType::Provider))
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "Negotiation API: initial proposal [{}] rejected. Error: {}",
+                    proposal_id,
+                    &e
+                );
+                e
+            })
     }
 
     async fn on_proposal_received(
         self,
         caller: String,
         msg: ProposalReceived,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), CounterProposalError> {
         log::debug!(
             "Negotiation API: Received proposal [{}] from [{}].",
-            &msg.proposal_id,
+            &msg.proposal.proposal_id,
             &caller
         );
-        self.inner.proposal_received.call(caller, msg).await
+        self.inner
+            .proposal_received
+            .call(caller, msg.translate(OwnerType::Provider))
+            .await
     }
 
     async fn on_proposal_rejected(
@@ -155,7 +184,10 @@ impl NegotiationApi {
             &msg.proposal_id,
             &caller
         );
-        self.inner.proposal_rejected.call(caller, msg).await
+        self.inner
+            .proposal_rejected
+            .call(caller, msg.translate(OwnerType::Provider))
+            .await
     }
 
     async fn on_agreement_received(
@@ -187,7 +219,7 @@ impl NegotiationApi {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        _private_prefix: &str,
     ) -> Result<(), NegotiationApiInitError> {
         ServiceBinder::new(&provider::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(

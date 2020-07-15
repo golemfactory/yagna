@@ -4,10 +4,11 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
 use crate::matcher::error::{QueryOffersError, SaveOfferError};
+use crate::negotiation::error::{AgreementError, ProposalError};
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
-    negotiation::{NegotiationError, QueryEventsError},
+    negotiation::error::{NegotiationError, QueryEventsError},
 };
 
 impl From<MarketError> for actix_web::HttpResponse {
@@ -54,7 +55,7 @@ impl ResponseError for ResolverError {
 impl ResponseError for DemandError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            DemandError::NotFound(e) => {
+            DemandError::NotFound(_) => {
                 HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
             }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
@@ -72,7 +73,7 @@ impl ResponseError for QueryOfferError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            QueryOfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
+            QueryOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
     }
@@ -94,7 +95,7 @@ impl ResponseError for ModifyOfferError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            ModifyOfferError::NotFound(e) => HttpResponse::NotFound().json(msg),
+            ModifyOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
             ModifyOfferError::Unsubscribed(_) | ModifyOfferError::Expired(_) => {
                 HttpResponse::Gone().json(msg)
             }
@@ -116,6 +117,29 @@ impl ResponseError for QueryEventsError {
                 HttpResponse::BadRequest().json(msg)
             }
             _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for ProposalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for AgreementError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            AgreementError::NoNegotiations(_)
+            | AgreementError::ProposalNotFound(..)
+            | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
+            AgreementError::FailedGetProposal(..) | AgreementError::FailedSaveAgreement(..) => {
+                HttpResponse::InternalServerError().json(msg)
+            }
         }
     }
 }
