@@ -1,10 +1,10 @@
-use crate::protocol::negotiation::errors::{
+use crate::protocol::negotiation::error::{
     CounterProposalError as ApiProposalError, NegotiationApiInitError,
 };
 use thiserror::Error;
 
 use super::common::GetProposalError;
-use crate::db::models::{
+use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
 use crate::db::{dao::TakeEventsError, DbError};
@@ -49,7 +49,7 @@ pub enum AgreementError {
     #[error("Invalid proposal id. {0}")]
     InvalidSubscriptionId(#[from] ProposalIdParseError),
     #[error("Invalid proposal id. {0}")]
-    Protocol(#[from] crate::protocol::negotiation::errors::AgreementError),
+    Protocol(#[from] crate::protocol::negotiation::error::AgreementError),
 }
 
 #[derive(Error, Debug)]
@@ -85,10 +85,10 @@ pub enum ProposalError {
 impl AgreementError {
     pub fn from(promoted_proposal: &ProposalId, e: GetProposalError) -> AgreementError {
         match e {
-            GetProposalError::ProposalNotFound(id) => {
+            GetProposalError::NotFound(id) => {
                 AgreementError::ProposalNotFound(promoted_proposal.clone(), id)
             }
-            GetProposalError::FailedGetProposal(id, db_error) => {
+            GetProposalError::FailedGetFromDb(id, db_error) => {
                 AgreementError::GetProposal(promoted_proposal.clone(), id, db_error)
             }
         }
@@ -98,10 +98,10 @@ impl AgreementError {
 impl ProposalError {
     pub fn from(subscription_id: &SubscriptionId, e: GetProposalError) -> ProposalError {
         match e {
-            GetProposalError::ProposalNotFound(id) => {
+            GetProposalError::NotFound(id) => {
                 ProposalError::ProposalNotFound(id, subscription_id.clone())
             }
-            GetProposalError::FailedGetProposal(id, db_error) => {
+            GetProposalError::FailedGetFromDb(id, db_error) => {
                 ProposalError::FailedGetProposal(id, subscription_id.clone(), db_error)
             }
         }

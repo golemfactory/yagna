@@ -1,22 +1,22 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
-use super::super::callbacks::{CallbackHandler, HandlerSlot};
-use super::errors::{AgreementError, NegotiationApiInitError, ProposalError};
-use super::messages::*;
-use super::messages::{
-    AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
-    ProposalReceived, ProposalRejected,
-};
-
-use crate::db::models::{AgreementId, OwnerType, Proposal, ProposalId};
-use crate::protocol::negotiation::errors::CounterProposalError;
-
-use std::str::FromStr;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::RpcEndpoint;
+
+use crate::db::model::{AgreementId, OwnerType, Proposal, ProposalId};
+use crate::protocol::negotiation::error::CounterProposalError;
+
+use super::super::callback::{CallbackHandler, HandlerSlot};
+use super::error::{AgreementError, NegotiationApiInitError, ProposalError};
+use super::messages::*;
+use super::messages::{
+    AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
+    ProposalReceived, ProposalRejected,
+};
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.

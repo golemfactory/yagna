@@ -7,8 +7,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
-use crate::db::models::MarketEvent;
-use crate::db::models::{Agreement, OwnerType, Proposal, SubscriptionId};
+use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, SubscriptionId};
 use crate::db::schema::market_event::dsl;
 use crate::db::{DbError, DbResult};
 

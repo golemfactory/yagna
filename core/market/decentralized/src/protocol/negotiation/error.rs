@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::db::models::{AgreementId, ProposalId};
-use crate::SubscriptionId;
+use crate::db::model::{AgreementId, ProposalId, SubscriptionId};
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum NegotiationApiInitError {}
@@ -29,6 +28,8 @@ pub enum RemoteProposalError {
     Unsubscribed(SubscriptionId),
     #[error("Offer/Demand [{0}] expired.")]
     Expired(SubscriptionId),
+    #[error("Trying to counter not existing Proposal [{0}].")]
+    ProposalNotFound(ProposalId),
     #[error("Error: {0}.")]
     Unexpected(String),
 }

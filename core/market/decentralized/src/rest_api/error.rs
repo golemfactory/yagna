@@ -4,11 +4,11 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
 use crate::matcher::error::{QueryOffersError, SaveOfferError};
-use crate::negotiation::{AgreementError, ProposalError};
+use crate::negotiation::error::{AgreementError, ProposalError};
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
-    negotiation::{NegotiationError, QueryEventsError},
+    negotiation::error::{NegotiationError, QueryEventsError},
 };
 
 impl From<MarketError> for actix_web::HttpResponse {

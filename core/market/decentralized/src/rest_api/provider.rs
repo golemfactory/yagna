@@ -2,13 +2,14 @@ use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
+use ya_client::model::market::{Offer, Proposal};
+use ya_service_api_web::middleware::Identity;
+
+use crate::market::MarketService;
+
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
 };
-use crate::market::MarketService;
-
-use ya_client::model::market::{Offer, Proposal};
-use ya_service_api_web::middleware::Identity;
 
 // This file contains market REST endpoints. Responsibility of these functions
 // is calling respective functions in market modules and mapping return values
@@ -80,12 +81,21 @@ async fn collect(
 
 #[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}")]
 async fn counter_proposal(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathSubscriptionProposal>,
-    _body: Json<Proposal>,
+    market: Data<Arc<MarketService>>,
+    path: Path<PathSubscriptionProposal>,
+    body: Json<Proposal>,
     _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+) -> impl Responder {
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+    let proposal = body.into_inner();
+    market
+        .provider_engine
+        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .await
+        .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
 #[actix_web::get("/offers/{subscription_id}/proposals/{proposal_id}")]

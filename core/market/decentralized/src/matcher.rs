@@ -3,23 +3,19 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::models::{Demand, Offer};
-use crate::protocol::{
-    Discovery, DiscoveryBuilder, OfferReceived, OfferUnsubscribed, Propagate, Reason,
-    RetrieveOffers,
+use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::protocol::discovery::builder::DiscoveryBuilder;
+use crate::protocol::discovery::{
+    Discovery, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
 };
-use crate::SubscriptionId;
 
 pub mod error;
-pub mod resolver;
-pub mod store;
+pub(crate) mod resolver;
+pub(crate) mod store;
 
-pub use error::{
-    DemandError, MatcherError, MatcherInitError, ModifyOfferError, QueryOfferError,
-    QueryOffersError, SaveOfferError,
-};
+use error::{MatcherError, MatcherInitError, ModifyOfferError, SaveOfferError};
 use resolver::Resolver;
-pub use store::SubscriptionStore;
+use store::SubscriptionStore;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]

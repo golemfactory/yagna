@@ -10,9 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use ya_client::model::NodeId;
 
-use crate::db::models::{OwnerType, Proposal};
+use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
-use crate::{ProposalId, SubscriptionId};
 
 pub type AgreementId = ProposalId;
 

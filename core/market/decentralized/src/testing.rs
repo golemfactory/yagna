@@ -3,12 +3,13 @@
 #![allow(unused_macros)]
 
 pub use super::db::dao::*;
-pub use super::db::models::*;
-pub use super::matcher::*;
-pub use super::negotiation::*;
+pub use super::db::model::*;
+pub use super::matcher::{error::*, *};
+pub use super::negotiation::{error::*, *};
 pub use super::protocol::*;
 
 pub mod bcast;
+pub mod events_helper;
 pub mod mock_net;
 pub mod mock_node;
 pub mod mock_offer;

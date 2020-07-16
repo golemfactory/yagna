@@ -1,14 +1,13 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-use super::super::callbacks::CallbackMessage;
-use super::errors::{AgreementError, CounterProposalError, ProposalError};
-use crate::db::models::{Agreement, AgreementId, Demand};
-use crate::db::models::{DbProposal, OwnerType, ProposalId};
-use crate::SubscriptionId;
-
-use ya_client::model::NodeId;
 use ya_service_bus::RpcMessage;
+
+use crate::db::model::{Agreement, AgreementId};
+use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
+
+use super::super::callback::CallbackMessage;
+use super::error::{AgreementError, CounterProposalError, ProposalError};
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -147,19 +146,6 @@ impl ProposalContent {
     }
 }
 
-impl InitialProposalReceived {
-    pub fn into_demand(self, owner: NodeId) -> Demand {
-        Demand {
-            id: self.demand_id,
-            properties: self.proposal.properties,
-            constraints: self.proposal.constraints,
-            node_id: owner,
-            creation_ts: self.proposal.creation_ts,
-            insertion_ts: None,
-            expiration_ts: self.proposal.expiration_ts,
-        }
-    }
-}
 impl ProposalReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());

@@ -4,7 +4,7 @@ use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
-use crate::db::models::{Agreement, AgreementId, AgreementState};
+use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
 use crate::db::DbResult;
 use chrono::NaiveDateTime;

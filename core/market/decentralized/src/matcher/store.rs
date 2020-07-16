@@ -7,7 +7,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::dao::*;
-use crate::db::models::{Demand, Offer, SubscriptionId};
+use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
 };

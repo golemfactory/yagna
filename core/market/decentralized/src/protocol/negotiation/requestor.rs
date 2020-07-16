@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use super::super::callbacks::{CallbackHandler, HandlerSlot};
-use super::errors::{AgreementError, CounterProposalError, NegotiationApiInitError, ProposalError};
+use super::super::callback::{CallbackHandler, HandlerSlot};
+use super::error::{AgreementError, CounterProposalError, NegotiationApiInitError, ProposalError};
 use super::messages::*;
 use super::messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected};
 
-use crate::db::models::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
+use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
 
 use std::str::FromStr;
 use ya_client::model::NodeId;

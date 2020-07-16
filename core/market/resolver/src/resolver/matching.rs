@@ -1,4 +1,4 @@
-use super::errors::MatchError;
+use super::error::MatchError;
 use super::expression::{Expression, ResolveResult};
 use super::prepare::{PreparedDemand, PreparedOffer};
 use super::properties::PropertyRef;

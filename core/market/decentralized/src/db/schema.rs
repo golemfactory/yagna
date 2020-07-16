@@ -64,6 +64,7 @@ table! {
         id -> Text,
         prev_proposal_id -> Nullable<Text>,
 
+        issuer -> Integer,
         negotiation_id -> Text,
 
         properties -> Text,
@@ -83,7 +84,6 @@ table! {
         offer_id -> Text,
         demand_id -> Text,
 
-        identity_id -> Text,
         requestor_id -> Text,
         provider_id -> Text,
 
