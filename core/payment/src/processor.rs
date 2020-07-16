@@ -202,7 +202,15 @@ impl PaymentProcessor {
             )
             .await?;
 
-        let payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
+        let mut payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
+        // Allocation IDs are requestor's private matter and should not be sent to provider
+        for agreement_payment in payment.agreement_payments.iter_mut() {
+            agreement_payment.allocation_id = None;
+        }
+        for activity_payment in payment.activity_payments.iter_mut() {
+            activity_payment.allocation_id = None;
+        }
+
         let msg = SendPayment(payment);
         ya_net::from(payer_id)
             .to(payee_id)
