@@ -1,8 +1,6 @@
 use diesel::prelude::*;
 
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
+use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
 use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
@@ -26,7 +24,7 @@ impl<'c> AgreementDao<'c> {
         validation_ts: NaiveDateTime,
     ) -> DbResult<Option<Agreement>> {
         let id = id.clone();
-        readonly_transaction(self.pool, move |conn| {
+        do_with_transaction(self.pool, move |conn| {
             let mut agreement = match dsl::market_agreement
                 .filter(dsl::id.eq(&id))
                 .first::<Agreement>(conn)

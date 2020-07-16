@@ -117,7 +117,6 @@ impl NegotiationApi {
     }
 
     /// Sent to provider, when Requestor will call confirm Agreement.
-    /// TODO: send Agreement content
     pub async fn propose_agreement(&self, agreement: Agreement) -> Result<(), AgreementError> {
         let requestor_id = agreement.requestor_id.clone();
         let provider_id = agreement.provider_id.clone();

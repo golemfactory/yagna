@@ -204,7 +204,7 @@ async fn on_agreement_received(
         .as_dao::<EventsDao>()
         .add_agreement_event(msg.agreement)
         .await
-        .map_err(|e| AgreementError::GsbError(e.to_string()))?;
+        .map_err(|e| AgreementError::Saving(e.to_string(), id.clone()))?;
 
     // Send channel message to wake all query_events waiting for proposals.
     broker.notifier.notify(&subscription_id).await;
