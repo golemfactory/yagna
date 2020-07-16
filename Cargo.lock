@@ -5512,6 +5512,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-util",
  "humantime 2.0.1",
+ "lazy_static",
  "libc",
  "log 0.4.8",
  "log-derive",

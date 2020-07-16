@@ -75,14 +75,14 @@ async fn main() -> anyhow::Result<()> {
             PresetsConfig::ListMetrics => cli::list_metrics(config),
         },
         Commands::Profile(profile_cmd) => {
-            let path = config.hardware_file;
+            let path = config.hardware_file.as_path();
             match profile_cmd {
                 ProfileConfig::List => {
-                    let profiles = Profiles::load_or_create(&path)?.list();
+                    let profiles = Profiles::load_or_create(&config)?.list();
                     println!("{}", serde_json::to_string_pretty(&profiles)?);
                 }
                 ProfileConfig::Create { name, resources } => {
-                    let mut profiles = Profiles::load_or_create(&path)?;
+                    let mut profiles = Profiles::load_or_create(&config)?;
                     if let Some(_) = profiles.get(&name) {
                         return Err(hardware::ProfileError::AlreadyExists(name).into());
                     }
@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
                     profiles.save(path)?;
                 }
                 ProfileConfig::Update { name, resources } => {
-                    let mut profiles = Profiles::load_or_create(&path)?;
+                    let mut profiles = Profiles::load_or_create(&config)?;
                     match profiles.get_mut(&name) {
                         Some(profile) => *profile = resources,
                         _ => return Err(hardware::ProfileError::Unknown(name).into()),
@@ -98,17 +98,17 @@ async fn main() -> anyhow::Result<()> {
                     profiles.save(path)?;
                 }
                 ProfileConfig::Remove { name } => {
-                    let mut profiles = Profiles::load_or_create(&path)?;
+                    let mut profiles = Profiles::load_or_create(&config)?;
                     profiles.remove(name)?;
                     profiles.save(path)?;
                 }
                 ProfileConfig::Activate { name } => {
-                    let mut profiles = Profiles::load_or_create(&path)?;
+                    let mut profiles = Profiles::load_or_create(&config)?;
                     profiles.set_active(name)?;
                     profiles.save(path)?;
                 }
                 ProfileConfig::Active => {
-                    let profiles = Profiles::load_or_create(&path)?;
+                    let profiles = Profiles::load_or_create(&config)?;
                     println!("{}", serde_json::to_string_pretty(profiles.active())?);
                 }
             }

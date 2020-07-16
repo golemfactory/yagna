@@ -1,11 +1,11 @@
 use crate::events::Event;
-use crate::startup_config::FileMonitor;
+use crate::startup_config::{FileMonitor, ProviderConfig};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io;
 use std::ops::{Add, Not, Sub};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 use tokio::sync::watch;
@@ -65,7 +65,28 @@ pub struct Resources {
 }
 
 impl Resources {
-    pub fn new_empty() -> Self {
+    pub fn try_with_config(work_dir: &Path, config: &ProviderConfig) -> Result<Self, Error> {
+        if config.rt_cores.is_some() || config.rt_mem.is_some() || config.rt_storage.is_some() {
+            let max_caps = Self::max_caps(work_dir)?;
+            let mut user_caps = max_caps.clone();
+
+            if let Some(cores) = config.rt_cores {
+                user_caps.cpu_threads = cores as i32;
+            }
+            if let Some(mem) = config.rt_mem {
+                user_caps.mem_gib = mem;
+            }
+            if let Some(storage) = config.rt_storage {
+                user_caps.storage_gib = storage;
+            }
+
+            return Ok(user_caps.cap(&max_caps));
+        }
+
+        Ok(Self::default_caps(work_dir)?)
+    }
+
+    fn new_empty() -> Self {
         Resources {
             cpu_threads: 0,
             mem_gib: 0.,
@@ -73,7 +94,7 @@ impl Resources {
         }
     }
 
-    pub fn try_new(work_dir: &Path) -> Result<Self, Error> {
+    fn max_caps(work_dir: &Path) -> Result<Self, Error> {
         Ok(Resources {
             cpu_threads: num_cpus::get() as i32,
             mem_gib: 1000. * sys_info::mem_info()?.total as f64 / (1024. * 1024. * 1024.),
@@ -81,8 +102,8 @@ impl Resources {
         })
     }
 
-    pub fn try_default(work_dir: &Path) -> Result<Self, Error> {
-        let res = Self::try_new(work_dir)?;
+    fn default_caps(work_dir: &Path) -> Result<Self, Error> {
+        let res = Self::max_caps(work_dir)?;
         Ok(Resources {
             cpu_threads: 1.max(res.cpu_threads - CPU_THREADS_RESERVED),
             mem_gib: 0.7 * res.mem_gib,
@@ -177,13 +198,13 @@ pub struct Profiles {
 }
 
 impl Profiles {
-    pub fn load_or_create<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let path = path.as_ref();
+    pub fn load_or_create(config: &ProviderConfig) -> Result<Self, Error> {
+        let path = config.hardware_file.as_path();
         match path.exists() {
             true => Self::load(path),
             false => {
-                let current_dir = std::env::current_dir()?;
-                let profiles = Self::try_default(&current_dir)?;
+                let current_dir = current_env_dir()?;
+                let profiles = Self::try_with_config(&current_dir, &config)?;
                 profiles.save(path)?;
                 Ok(profiles)
             }
@@ -205,8 +226,11 @@ impl Profiles {
         Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
     }
 
-    fn try_default<P: AsRef<Path>>(work_dir: P) -> Result<Self, Error> {
-        let resources = Resources::try_default(work_dir.as_ref())?;
+    fn try_with_config<P: AsRef<Path>>(
+        work_dir: P,
+        config: &ProviderConfig,
+    ) -> Result<Self, Error> {
+        let resources = Resources::try_with_config(work_dir.as_ref(), &config)?;
         let active = DEFAULT_PROFILE_NAME.to_string();
         let profiles = vec![(active.clone(), resources)].into_iter().collect();
         Ok(Profiles { active, profiles })
@@ -314,12 +338,13 @@ impl ManagerState {
 }
 
 impl Manager {
-    pub fn try_new<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let current_dir = std::env::current_dir()?;
-        let profiles = Profiles::load_or_create(&path)?;
+    pub fn try_new(conf: &ProviderConfig) -> Result<Self, Error> {
+        let current_dir = current_env_dir()?;
+        let profiles = Profiles::load_or_create(&conf)?;
+
         let mut state = ManagerState {
             profiles,
-            res_available: Resources::try_new(&current_dir)?,
+            res_available: Resources::try_with_config(&current_dir, &conf)?,
             res_cap: Resources::new_empty(),
             res_remaining: Resources::new_empty(),
             res_alloc: HashMap::new(),
@@ -429,6 +454,11 @@ fn partition_space(path: &Path) -> Result<u64, Error> {
             statvfs(path.as_os_str()).map_err(|e| sys_info::Error::General(e.to_string()))?;
         Ok(stat.blocks_available() as u64 * stat.fragment_size())
     }
+}
+
+#[inline]
+fn current_env_dir() -> Result<PathBuf, Error> {
+    std::env::current_dir().map_err(Error::from)
 }
 
 #[cfg(test)]
