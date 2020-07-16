@@ -1,7 +1,19 @@
 use thiserror::Error;
 
+#[derive(thiserror::Error, Debug)]
+pub enum DbError {
+    #[error("Database connection error: {0}")]
+    Connection(#[from] r2d2::Error),
+    #[error("Database query error: {0}")]
+    Query(#[from] diesel::result::Error),
+    #[error("Runtime error: {0}")]
+    Runtime(#[from] tokio::task::JoinError),
+    #[error("{0}")]
+    InvalidData(String),
+}
+
 #[derive(Debug, Clone, Error)]
-pub enum PaymentDriverError {
+pub enum GNTDriverError {
     #[error("Insufficient gas")]
     InsufficientGas,
     #[error("Insufficient funds")]
@@ -38,52 +50,44 @@ pub enum PaymentDriverError {
     GSBError(String),
 }
 
-impl PaymentDriverError {
+impl GNTDriverError {
     pub fn library_err_msg<D: std::fmt::Display>(msg: D) -> Self {
-        PaymentDriverError::LibraryError(msg.to_string())
+        GNTDriverError::LibraryError(msg.to_string())
     }
 }
 
-impl From<secp256k1::Error> for PaymentDriverError {
+impl From<secp256k1::Error> for GNTDriverError {
     fn from(e: secp256k1::Error) -> Self {
-        PaymentDriverError::LibraryError(e.to_string())
+        GNTDriverError::LibraryError(e.to_string())
     }
 }
 
-impl From<DbError> for PaymentDriverError {
+impl From<DbError> for GNTDriverError {
     fn from(e: DbError) -> Self {
-        PaymentDriverError::DatabaseError(e.to_string())
+        GNTDriverError::DatabaseError(e.to_string())
     }
 }
 
-impl From<uint::FromDecStrErr> for PaymentDriverError {
+impl From<uint::FromDecStrErr> for GNTDriverError {
     fn from(e: uint::FromDecStrErr) -> Self {
         Self::Conversion(format!("{:?}", e))
     }
 }
 
-impl From<bigdecimal::ParseBigDecimalError> for PaymentDriverError {
+impl From<hex::FromHexError> for GNTDriverError {
+    fn from(e: hex::FromHexError) -> Self {
+        Self::Conversion(format!("{:?}", e))
+    }
+}
+
+impl From<bigdecimal::ParseBigDecimalError> for GNTDriverError {
     fn from(e: bigdecimal::ParseBigDecimalError) -> Self {
         Self::Conversion(e.to_string())
     }
 }
 
-impl From<actix::MailboxError> for PaymentDriverError {
+impl From<actix::MailboxError> for GNTDriverError {
     fn from(e: actix::MailboxError) -> Self {
-        PaymentDriverError::LibraryError(e.to_string())
+        GNTDriverError::LibraryError(e.to_string())
     }
 }
-
-#[derive(thiserror::Error, Debug)]
-pub enum DbError {
-    #[error("Database connection error: {0}")]
-    Connection(#[from] r2d2::Error),
-    #[error("Database query error: {0}")]
-    Query(#[from] diesel::result::Error),
-    #[error("Runtime error: {0}")]
-    Runtime(#[from] tokio::task::JoinError),
-    #[error("{0}")]
-    InvalidData(String),
-}
-
-pub type DbResult<T> = Result<T, DbError>;

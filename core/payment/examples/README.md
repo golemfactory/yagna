@@ -6,9 +6,9 @@ To start the API server (both provider & requestor) run the following commands:
 ```shell script
 cd core/payment
 cp ../../.env-template .env
-cargo run --features=dummy-driver --example payment_api
+cargo run --example payment_api
 ```
-To use GNT instead of dummy driver use `--features=gnt-driver` instead of `--features=dummy-driver`.
+To use GNT instead of dummy driver us `cargo run --example payment_api -- --driver=gnt` instead.
 
 ### Debit note flow
 
@@ -16,7 +16,7 @@ To test the whole flow start the API server (see above) and run the debit_note_f
 example in another terminal:
 ```shell script
 cd core/payment
-cargo run --features=dummy-driver --example debit_note_flow
+cargo run --example debit_note_flow
 ```
 (**NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
@@ -69,7 +69,7 @@ Payload:
 To test the whole flow start the API server (see above) and run the invoice_flow
 example in another terminal:
 ```shell script
-cargo run --features=dummy-driver --example invoice_flow
+cargo run --example invoice_flow
 ```
 (**NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
