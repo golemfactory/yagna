@@ -56,10 +56,6 @@ impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
     }
 }
 
-async fn runtime_factory<E: RuntimeEvent>(event_emitter: E) -> RuntimeMock<E> {
-    RuntimeMock { event_emitter }
-}
-
 // client
 
 // holds last received status
@@ -95,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
     }
     env_logger::init();
     if env::var("X_SERVER").is_ok() {
-        server::run(runtime_factory).await
+        server::run(|event_emitter| RuntimeMock { event_emitter }).await
     } else {
         use tokio::process::Command;
         let exe = env::current_exe().unwrap();
