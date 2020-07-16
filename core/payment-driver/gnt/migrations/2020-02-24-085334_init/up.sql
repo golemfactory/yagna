@@ -72,7 +72,7 @@ CREATE TABLE gnt_driver_transaction
 
 CREATE TABLE gnt_driver_payment
 (
-	invoice_id VARCHAR(50) NOT NULL PRIMARY KEY,
+	order_id VARCHAR(50) NOT NULL PRIMARY KEY,
 	-- U256 in big endian hex
 	amount VARCHAR(64) NOT NULL,
 	-- U256 in big endian hex

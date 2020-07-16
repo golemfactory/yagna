@@ -23,13 +23,13 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
+ya-dummy-driver = { version = "0.1", optional = true }
+ya-gnt-driver = { version = "0.1" }
 ya-identity = "0.2"
 ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = "0.1"
-ya-payment-driver = "0.1"
-ya-dummy-driver = { version = "0.1", optional = true }
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
@@ -79,8 +79,8 @@ members = [
     "core/model",
     "core/net",
     "core/payment",
-    "core/payment-driver",
     "core/payment-driver/dummy",
+    "core/payment-driver/gnt",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/cache",
@@ -105,15 +105,15 @@ members = [
 
 [patch.crates-io]
 ## SERVICES
+ya-activity = { path = "core/activity" }
+ya-dummy-driver = { path = "core/payment-driver/dummy" }
+ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-identity = { path = "core/identity" }
-ya-net = { path = "core/net" }
 ya-market-decentralized = { path = "core/market/decentralized" }
 ya-market-forwarding = { path = "core/market/forwarding" }
 ya-market-resolver = { path = "core/market/resolver" }
-ya-activity = { path = "core/activity" }
+ya-net = { path = "core/net" }
 ya-payment = { path = "core/payment" }
-ya-payment-driver = { path = "core/payment-driver" }
-ya-dummy-driver = { path = "core/payment-driver/dummy" }
 
 
 ## CORE UTILS

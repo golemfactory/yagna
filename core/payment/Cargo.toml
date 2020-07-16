@@ -58,4 +58,5 @@ ya-client = "0.3"
 ya-net = { version = "0.1", features = ["service"] }
 ya-sb-router = "0.1"
 ya-dummy-driver = "0.1"
+ya-gnt-driver = "0.1"
 actix-rt = "1.0"

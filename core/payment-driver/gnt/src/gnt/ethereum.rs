@@ -1,22 +1,16 @@
-#![allow(unused)]
-use crate::error::PaymentDriverError;
 use ethereum_types::{Address, H256, U256};
 use futures3::compat::*;
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::env;
 
+use crate::GNTDriverError;
 use std::time::Duration;
-use web3::confirm::{wait_for_confirmations, TransactionReceiptBlockNumberCheck};
 use web3::contract::Contract;
 use web3::transports::EventLoopHandle;
 use web3::transports::Http;
-use web3::types::{BlockNumber, Bytes, TransactionId, TransactionReceipt};
+use web3::types::{Bytes, TransactionId, TransactionReceipt};
 use web3::Web3;
-
-const POLL_INTERVAL_SECS: u64 = 1;
-const POLL_INTERVAL_NANOS: u32 = 0;
 
 const MAINNET_ID: u64 = 1;
 const RINKEBY_ID: u64 = 4;
@@ -47,12 +41,12 @@ impl Default for Chain {
 }
 
 impl Chain {
-    pub fn from_env() -> Result<Chain, PaymentDriverError> {
+    pub fn from_env() -> Result<Chain, GNTDriverError> {
         if let Some(chain_name) = env::var(CHAIN_ENV_VAR).ok() {
             match chain_name.as_str() {
                 MAINNET_NAME => Ok(Chain::Mainnet),
                 RINKEBY_NAME => Ok(Chain::Rinkeby),
-                _chain => Err(PaymentDriverError::UnknownChain(_chain.into())),
+                _chain => Err(GNTDriverError::UnknownChain(_chain.into())),
             }
         } else {
             Ok(Default::default())
@@ -67,11 +61,10 @@ impl Chain {
     }
 }
 
-type EthereumClientResult<T> = Result<T, PaymentDriverError>;
+type EthereumClientResult<T> = Result<T, GNTDriverError>;
 
 pub struct EthereumClientBuilder {
     geth_address: Cow<'static, str>,
-    chain: Chain,
 }
 
 impl EthereumClientBuilder {
@@ -85,16 +78,7 @@ impl EthereumClientBuilder {
             .ok()
             .map(Cow::Owned)
             .unwrap_or_else(|| Cow::Borrowed(default_geth_address(chain)));
-        Ok(Self {
-            chain,
-            geth_address,
-        })
-    }
-
-    #[inline]
-    pub fn with_geth_address(mut self, geth_address: Cow<'static, str>) -> Self {
-        self.geth_address = geth_address;
-        self
+        Ok(Self { geth_address })
     }
 
     pub fn build(self) -> EthereumClientResult<EthereumClient> {
@@ -120,23 +104,9 @@ impl EthereumClient {
         json_abi: &[u8],
     ) -> EthereumClientResult<Contract<Http>> {
         Contract::from_json(self.web3.eth(), address, json_abi).map_or_else(
-            |e| Err(PaymentDriverError::LibraryError(format!("{:?}", e))),
+            |e| Err(GNTDriverError::LibraryError(format!("{:?}", e))),
             |contract| Ok(contract),
         )
-    }
-
-    pub async fn get_eth_balance(
-        &self,
-        address: Address,
-        block_number: Option<BlockNumber>,
-    ) -> EthereumClientResult<U256> {
-        let balance = self
-            .web3
-            .eth()
-            .balance(address, block_number)
-            .compat()
-            .await?;
-        Ok(balance)
     }
 
     pub async fn get_gas_price(&self) -> EthereumClientResult<U256> {
@@ -154,30 +124,10 @@ impl EthereumClient {
         Ok(tx_hash)
     }
 
-    pub async fn wait_for_confirmations(
-        &self,
-        tx_hash: H256,
-        confirmations: usize,
-    ) -> EthereumClientResult<()> {
-        let eth_filter = self.web3.eth_filter();
-        let check = TransactionReceiptBlockNumberCheck::new(self.web3.eth(), tx_hash);
-        wait_for_confirmations(
-            self.web3.eth(),
-            eth_filter,
-            Duration::new(POLL_INTERVAL_SECS, POLL_INTERVAL_NANOS),
-            confirmations,
-            check,
-        )
-        .compat()
-        .await?;
-        Ok(())
-    }
-
     pub async fn blocks(
         &self,
     ) -> EthereumClientResult<impl futures3::stream::Stream<Item = EthereumClientResult<H256>>>
     {
-        use futures3::compat::Stream01CompatExt;
         use futures3::prelude::*;
         let f = self
             .web3
@@ -258,15 +208,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_eth_balance() -> anyhow::Result<()> {
-        let ethereum_client = eth_client()?;
-        let address = utils::str_to_addr(ETH_ADDRESS)?;
-        let balance: U256 = ethereum_client.get_eth_balance(address, None).await?;
-        assert!(balance >= U256::from(0));
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_gas_price() -> anyhow::Result<()> {
         let ethereum_client = eth_client()?;
         let gas_price: U256 = ethereum_client.get_gas_price().await?;
@@ -280,7 +221,7 @@ mod tests {
         assert!(ethereum_client
             .get_contract(
                 utils::str_to_addr(GNT2_CONTRACT_ADDRESS)?,
-                include_bytes!("./contracts/gnt2.json")
+                include_bytes!("../contracts/gnt2.json")
             )
             .is_ok());
 

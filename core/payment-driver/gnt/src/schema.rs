@@ -1,6 +1,6 @@
 table! {
-    gnt_driver_payment (invoice_id) {
-        invoice_id -> Text,
+    gnt_driver_payment (order_id) {
+        order_id -> Text,
         amount -> Text,
         gas -> Text,
         sender -> Text,
