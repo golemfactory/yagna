@@ -62,9 +62,9 @@ impl RuntimeEvent for EventEmitter {
     }
 }
 
-pub async fn run<Factory, FutureRuntime, Runtime>(factory: Factory)
+pub async fn run_async<Factory, FutureRuntime, Runtime>(factory: Factory)
 where
-    Factory: FnOnce(EventEmitter) -> FutureRuntime,
+    Factory: Fn(EventEmitter) -> FutureRuntime,
     FutureRuntime: Future<Output = Runtime>,
     Runtime: RuntimeService + 'static,
 {
@@ -124,4 +124,12 @@ where
         .await;
 
     log::debug!("server stopped");
+}
+
+pub async fn run<Factory, Runtime>(factory: Factory)
+where
+    Factory: Fn(EventEmitter) -> Runtime,
+    Runtime: RuntimeService + 'static,
+{
+    run_async(|e| async { factory(e) }).await
 }
