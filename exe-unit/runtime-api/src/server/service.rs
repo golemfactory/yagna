@@ -47,11 +47,11 @@ async fn handle(service: &impl RuntimeService, request: proto::Request) -> proto
     resp
 }
 
-pub struct EventEmiter {
+pub struct EventEmitter {
     tx: futures::channel::mpsc::UnboundedSender<proto::Response>,
 }
 
-impl RuntimeEvent for EventEmiter {
+impl RuntimeEvent for EventEmitter {
     fn on_process_status(&self, status: proto::response::ProcessStatus) {
         let mut response = proto::Response::default();
         response.event = true;
@@ -64,7 +64,7 @@ impl RuntimeEvent for EventEmiter {
 
 pub async fn run<Factory, FutureRuntime, Runtime>(factory: Factory)
 where
-    Factory: FnOnce(EventEmiter) -> FutureRuntime,
+    Factory: FnOnce(EventEmitter) -> FutureRuntime,
     FutureRuntime: Future<Output = Runtime>,
     Runtime: RuntimeService + 'static,
 {
@@ -75,8 +75,8 @@ where
     let mut input = codec::Codec::<proto::Request>::stream(stdin);
     let output = Rc::new(Mutex::new(codec::Codec::<proto::Response>::sink(stdout)));
     let (tx, mut rx) = futures::channel::mpsc::unbounded::<proto::Response>();
-    let emiter = EventEmiter { tx };
-    let service = Rc::new(factory(emiter).await);
+    let emitter = EventEmitter { tx };
+    let service = Rc::new(factory(emitter).await);
 
     let local = tokio::task::LocalSet::new();
 

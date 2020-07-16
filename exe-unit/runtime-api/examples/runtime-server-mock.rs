@@ -14,7 +14,7 @@ struct RuntimeMock<E>
 where
     E: RuntimeEvent,
 {
-    event_emiter: E,
+    event_emitter: E,
 }
 
 impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
@@ -33,7 +33,7 @@ impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
             log::debug!("before delay_for");
             tokio::time::delay_for(Duration::from_secs(3)).await;
             log::debug!("after delay_for");
-            self.event_emiter.on_process_status(ProcessStatus {
+            self.event_emitter.on_process_status(ProcessStatus {
                 pid: resp.pid,
                 running: true,
                 return_code: 0,
@@ -56,8 +56,8 @@ impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
     }
 }
 
-async fn runtime_factory<E: RuntimeEvent>(event_emiter: E) -> RuntimeMock<E> {
-    RuntimeMock { event_emiter }
+async fn runtime_factory<E: RuntimeEvent>(event_emitter: E) -> RuntimeMock<E> {
+    RuntimeMock { event_emitter }
 }
 
 // client
