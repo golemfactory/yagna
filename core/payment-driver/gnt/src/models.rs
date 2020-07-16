@@ -7,7 +7,7 @@ const TX_SENT: i32 = 2;
 pub const TX_CONFIRMED: i32 = 3;
 pub const TX_FAILED: i32 = 0;
 
-const TRANSFER_TX: i32 = 1;
+pub const TRANSFER_TX: i32 = 1;
 const FAUCET_TX: i32 = 0;
 
 #[derive(Clone, Copy)]
@@ -71,10 +71,10 @@ pub struct TransactionEntity {
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
-#[primary_key(invoice_id)]
+#[primary_key(order_id)]
 #[table_name = "gnt_driver_payment"]
 pub struct PaymentEntity {
-    pub invoice_id: String,
+    pub order_id: String,
     pub amount: String,
     pub gas: String,
     pub sender: String,

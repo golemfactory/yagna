@@ -190,29 +190,46 @@ impl<'a> AgreementDao<'a> {
         .await
     }
 
-    /// Get total requested/accepted/paid amount of incoming and outgoing transactions
-    pub async fn status_report(&self, node_id: NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
+    /// Get total requested/accepted/paid amount of incoming transactions
+    pub async fn incoming_transaction_summary(
+        &self,
+        platform: String,
+        payee_addr: String,
+    ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
-                .filter(dsl::owner_id.eq(node_id))
+                .filter(dsl::payment_platform.eq(platform))
+                .filter(dsl::payee_addr.eq(payee_addr))
                 .get_results(conn)?;
-            let (incoming, outgoing) = agreements.into_iter().fold(
-                (StatusNotes::default(), StatusNotes::default()),
-                |(incoming, outgoing), agreement| {
-                    let status_notes = StatusNotes {
-                        requested: agreement.total_amount_due.into(),
-                        accepted: agreement.total_amount_accepted.into(),
-                        confirmed: agreement.total_amount_paid.into(),
-                        rejected: Default::default(), // TODO: Support rejected amount (?)
-                    };
-                    match agreement.role {
-                        Role::Provider => (incoming + status_notes, outgoing),
-                        Role::Requestor => (incoming, outgoing + status_notes),
-                    }
-                },
-            );
-            Ok((incoming, outgoing))
+            Ok(make_summary(agreements))
         })
         .await
     }
+
+    /// Get total requested/accepted/paid amount of outgoing transactions
+    pub async fn outgoing_transaction_summary(
+        &self,
+        platform: String,
+        payer_addr: String,
+    ) -> DbResult<StatusNotes> {
+        readonly_transaction(self.pool, move |conn| {
+            let agreements: Vec<ReadObj> = dsl::pay_agreement
+                .filter(dsl::payment_platform.eq(platform))
+                .filter(dsl::payer_addr.eq(payer_addr))
+                .get_results(conn)?;
+            Ok(make_summary(agreements))
+        })
+        .await
+    }
+}
+
+fn make_summary(agreements: Vec<ReadObj>) -> StatusNotes {
+    agreements
+        .into_iter()
+        .map(|agreement| StatusNotes {
+            requested: agreement.total_amount_due.into(),
+            accepted: agreement.total_amount_accepted.into(),
+            confirmed: agreement.total_amount_paid.into(),
+        })
+        .sum()
 }
