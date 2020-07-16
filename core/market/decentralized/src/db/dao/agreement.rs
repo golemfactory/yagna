@@ -19,8 +19,12 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum StateError {
-    #[error("Can't update Agreement [{0}] state from {1} to {2}.")]
-    InvalidTransition(AgreementId, AgreementState, AgreementState),
+    #[error("Can't update Agreement [{id}] state from {from} to {to}.")]
+    InvalidTransition {
+        id: AgreementId,
+        from: AgreementState,
+        to: AgreementState,
+    },
     #[error("Failed to update state. Error: {0}")]
     DbError(DbError),
 }
@@ -74,11 +78,11 @@ impl<'c> AgreementDao<'c> {
             let agreement: Agreement = dsl::market_agreement.filter(dsl::id.eq(&id)).first(conn)?;
 
             if agreement.state != AgreementState::Pending {
-                Err(StateError::InvalidTransition(
-                    id.clone(),
-                    agreement.state,
-                    AgreementState::Approved,
-                ))?
+                Err(StateError::InvalidTransition {
+                    id: id.clone(),
+                    from: agreement.state,
+                    to: AgreementState::Approved,
+                })?
             }
 
             diesel::update(dsl::market_agreement.filter(dsl::id.eq(&id)))

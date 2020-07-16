@@ -20,9 +20,9 @@ use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::negotiation::common::CommonBroker;
 use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalError};
 use crate::protocol::negotiation::{
+    error::{ApproveAgreementError, RemoteAgreementError},
     messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
     requestor::NegotiationApi,
-    error::{ApproveAgreementError, RemoteAgreementError}
 };
 
 use super::error::{NegotiationError, NegotiationInitError, QueryEventsError};
@@ -234,10 +234,7 @@ impl RequestorBroker {
     ) -> Result<ApprovalStatus, WaitForApprovalError> {
         // TODO: Check if we are owner of Proposal
         // TODO: What to do with 2 simultaneous calls to wait_for_approval??
-        //  should we reject one? And if so, how to discover, that to calls were made?
-        // TODO: Do we have race conditions here, between checking Agreement state and
-        //  waiting for notifications? Event could come, before we start waiting and
-        //  it will be lost.
+        //  should we reject one? And if so, how to discover, that two calls were made?
         let timeout = Duration::from_secs_f32(timeout.max(0.0));
         let mut notifier = self.agreement_notifier.listen(id);
 
@@ -258,12 +255,14 @@ impl RequestorBroker {
                 AgreementState::Approved => return Ok(ApprovalStatus::Ok),
                 AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
                 AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
-                AgreementState::Expired => Err(WaitForApprovalError::AgreementExpired(id.clone()))?,
+                AgreementState::Expired => {
+                    return Err(WaitForApprovalError::AgreementExpired(id.clone()))
+                }
                 AgreementState::Proposal => {
-                    Err(WaitForApprovalError::AgreementNotConfirmed(id.clone()))?
+                    return Err(WaitForApprovalError::AgreementNotConfirmed(id.clone()))
                 }
                 AgreementState::Terminated => {
-                    Err(WaitForApprovalError::AgreementTerminated(id.clone()))?
+                    return Err(WaitForApprovalError::AgreementTerminated(id.clone()))
                 }
                 AgreementState::Pending => (), // Still waiting for approval.
             };
@@ -347,12 +346,12 @@ async fn on_agreement_approved(
         .approve(&msg.agreement_id)
         .await
         .map_err(|e| match e {
-            StateError::InvalidTransition(id, state, _) => {
-                match state {
+            StateError::InvalidTransition { id, from, .. } => {
+                match from {
                     // Expired Agreement could be InvalidState either, but we want to explicit
                     // say to provider, that Agreement has expired.
                     AgreementState::Expired => RemoteAgreementError::Expired(id),
-                    _ => RemoteAgreementError::InvalidState(id, state),
+                    _ => RemoteAgreementError::InvalidState(id, from),
                 }
             }
             StateError::DbError(e) => {

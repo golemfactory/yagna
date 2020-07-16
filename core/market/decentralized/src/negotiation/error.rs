@@ -1,13 +1,13 @@
 use thiserror::Error;
 
-use crate::protocol::negotiation::error::{
-    CounterProposalError as ApiProposalError, NegotiationApiInitError,
-};
 use super::common::GetProposalError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
 use crate::db::{dao::TakeEventsError, DbError};
+use crate::protocol::negotiation::error::{
+    CounterProposalError as ApiProposalError, NegotiationApiInitError,
+};
 
 #[derive(Error, Debug)]
 pub enum NegotiationError {}
