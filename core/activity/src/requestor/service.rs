@@ -1,11 +1,12 @@
-use ya_core_model::activity::{self, RuntimeEvent, RuntimeEventKind};
+use ya_core_model::activity;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::{timeout::*, typed::ServiceBinder};
+use ya_service_bus::typed::ServiceBinder;
 
 use crate::common::{
     authorize_activity_initiator, RpcMessageResult,
 };
-use crate::db::models::RuntimeEventType;
+use crate::dao::*;
+use crate::error::Error;
 
 pub fn bind_gsb(db: &DbExecutor) {
     ServiceBinder::new(activity::BUS_ID, db, ())
@@ -19,6 +20,10 @@ async fn receive_runtime_event_gsb(
 ) -> RpcMessageResult<activity::ReceiveRuntimeEvent> {
     authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
 
-    // TODO
+    db.as_dao::<RuntimeEventDao>()
+        .create(&msg.activity_id, msg.event)
+        .await
+        .map_err(Error::from)?;
+
     Ok(())
 }

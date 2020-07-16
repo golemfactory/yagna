@@ -3,6 +3,7 @@
 //! Top level objects constitutes public activity API.
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
+use chrono::NaiveDateTime;
 
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
@@ -138,7 +139,7 @@ impl RpcMessage for GetRunningCommand {
 pub struct RuntimeEvent {
     pub batch_id: String,
     pub index: usize,
-    pub timestamp: u64,
+    pub timestamp: NaiveDateTime,
     pub kind: RuntimeEventKind,
 }
 
