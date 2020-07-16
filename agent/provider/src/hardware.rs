@@ -73,11 +73,11 @@ impl Resources {
         }
     }
 
-    pub fn try_new(work_dir: &Path) -> Result<Self, Error> {
+    pub fn try_new(path: &Path) -> Result<Self, Error> {
         Ok(Resources {
             cpu_threads: num_cpus::get() as i32,
             mem_gib: 1000. * sys_info::mem_info()?.total as f64 / (1024. * 1024. * 1024.),
-            storage_gib: partition_space(work_dir)? as f64 / (1024. * 1024. * 1024.),
+            storage_gib: partition_space(path)? as f64 / (1024. * 1024. * 1024.),
         })
     }
 
@@ -182,8 +182,11 @@ impl Profiles {
         match path.exists() {
             true => Self::load(path),
             false => {
-                let current_dir = std::env::current_dir()?;
-                let profiles = Self::try_default(&current_dir)?;
+                if let Some(p) = path.parent() {
+                    std::fs::create_dir_all(p)?;
+                }
+                std::fs::File::create(&path)?;
+                let profiles = Self::try_default(&path)?;
                 profiles.save(path)?;
                 Ok(profiles)
             }
@@ -205,8 +208,8 @@ impl Profiles {
         Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
     }
 
-    fn try_default<P: AsRef<Path>>(work_dir: P) -> Result<Self, Error> {
-        let resources = Resources::try_default(work_dir.as_ref())?;
+    fn try_default<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let resources = Resources::try_default(path.as_ref())?;
         let active = DEFAULT_PROFILE_NAME.to_string();
         let profiles = vec![(active.clone(), resources)].into_iter().collect();
         Ok(Profiles { active, profiles })
@@ -315,11 +318,10 @@ impl ManagerState {
 
 impl Manager {
     pub fn try_new<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let current_dir = std::env::current_dir()?;
         let profiles = Profiles::load_or_create(&path)?;
         let mut state = ManagerState {
             profiles,
-            res_available: Resources::try_new(&current_dir)?,
+            res_available: Resources::try_new(path.as_ref())?,
             res_cap: Resources::new_empty(),
             res_remaining: Resources::new_empty(),
             res_alloc: HashMap::new(),
