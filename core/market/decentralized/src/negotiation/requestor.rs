@@ -297,19 +297,17 @@ impl RequestorBroker {
             Some(agreement) => agreement,
         };
 
-        // TODO : possible race condition here ISSUE#430
-        // 1. this state check should be also `db.update_state`
-        // 2. `db.update_state` must be invoked after successful propose_agreement
-        if agreement.state == AgreementState::Proposal {
-            self.api.propose_agreement(agreement).await?;
-            dao.update_state(agreement_id, AgreementState::Pending)
-                .await
-                .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
-            return Ok(());
-        }
-
         Err(match agreement.state {
-            AgreementState::Proposal => panic!("should not happen"),
+            AgreementState::Proposal => {
+                // TODO : possible race condition here ISSUE#430
+                // 1. this state check should be also `db.update_state`
+                // 2. `db.update_state` must be invoked after successful propose_agreement
+                self.api.propose_agreement(agreement).await?;
+                dao.update_state(agreement_id, AgreementState::Pending)
+                    .await
+                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+                return Ok(());
+            }
             AgreementState::Pending => AgreementError::Confirmed(agreement.id),
             AgreementState::Cancelled => AgreementError::Cancelled(agreement.id),
             AgreementState::Rejected => AgreementError::Rejected(agreement.id),

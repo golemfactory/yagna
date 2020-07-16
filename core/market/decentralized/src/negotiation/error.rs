@@ -34,6 +34,8 @@ pub enum AgreementError {
     Update(AgreementId, DbError),
     #[error("Agreement [{0}] not found.")]
     NotFound(AgreementId),
+    #[error("Agreement [{0}] proposed.")]
+    Proposal(AgreementId),
     #[error("Agreement [{0}] already confirmed.")]
     Confirmed(AgreementId),
     #[error("Agreement [{0}] cancelled.")]

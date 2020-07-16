@@ -6,8 +6,10 @@ use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::RpcEndpoint;
 
-use crate::db::model::{AgreementId, OwnerType, Proposal, ProposalId};
-use crate::protocol::negotiation::error::{ApproveAgreementError, CounterProposalError};
+use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
+use crate::protocol::negotiation::error::{
+    ApproveAgreementError, ConfirmAgreementError, CounterProposalError,
+};
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{AgreementError, NegotiationApiInitError, ProposalError};
@@ -100,13 +102,13 @@ impl NegotiationApi {
     /// TODO: pass agreement signature.
     pub async fn approve_agreement(
         &self,
-        id: NodeId,
-        agreement_id: AgreementId,
-        owner: NodeId,
+        agreement: Agreement,
     ) -> Result<(), ApproveAgreementError> {
-        let msg = AgreementApproved { agreement_id };
-        net::from(id)
-            .to(owner)
+        let msg = AgreementApproved {
+            agreement_id: agreement.id,
+        };
+        net::from(agreement.provider_id)
+            .to(agreement.requestor_id)
             .service(&requestor::agreement_addr(BUS_ID))
             .send(msg)
             .await??;
@@ -189,7 +191,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementReceived,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ConfirmAgreementError> {
         log::debug!(
             "Negotiation API: Agreement proposal [{}] sent by [{}].",
             &msg.agreement.id,

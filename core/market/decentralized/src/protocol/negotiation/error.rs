@@ -43,6 +43,14 @@ pub enum AgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+pub enum ConfirmAgreementError {
+    #[error("Failed to broadcast caused by gsb error: {0}.")]
+    GsbError(String),
+    #[error("Saving Agreement [{1}] error: {0}.")]
+    Saving(String, AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum ApproveAgreementError {
     #[error("Failed to broadcast caused by gsb error: {0}.")]
     GsbError(String),
