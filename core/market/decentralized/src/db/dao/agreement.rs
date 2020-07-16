@@ -46,6 +46,7 @@ impl<'c> AgreementDao<'c> {
 
     pub async fn update_state(&self, id: &AgreementId, state: AgreementState) -> DbResult<bool> {
         let id = id.clone();
+        // TODO: sanity check state before changing it
         do_with_transaction(self.pool, move |conn| update_state(conn, &id, &state)).await
     }
 

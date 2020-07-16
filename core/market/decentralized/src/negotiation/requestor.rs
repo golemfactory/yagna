@@ -216,6 +216,7 @@ impl RequestorBroker {
         agreement_id: &AgreementId,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
+
         let agreement = match dao
             .select(agreement_id, Utc::now().naive_utc())
             .await
@@ -225,6 +226,9 @@ impl RequestorBroker {
             Some(agreement) => agreement,
         };
 
+        // TODO : possible race condition here ISSUE#430
+        // 1. this state check should be also `db.update_state`
+        // 2. `db.update_state` must be invoked after successful propose_agreement
         if agreement.state == AgreementState::Proposal {
             self.api.propose_agreement(agreement).await?;
             dao.update_state(agreement_id, AgreementState::Pending)
