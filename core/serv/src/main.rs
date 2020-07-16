@@ -48,6 +48,7 @@ use data_dir::DataDir;
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 struct CliArgs {
     /// Service data dir
     #[structopt(

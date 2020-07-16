@@ -44,12 +44,14 @@ impl AgreementView {
 
         let mut map = Map::new();
         properties(String::new(), &mut map, value.clone());
-        map.into_iter()
-            .map(|(k, v)| match <T as Deserialize>::deserialize(v) {
-                Ok(v) => Ok((k, v)),
-                Err(e) => Err(Error::UnexpectedType(pointer.to_string(), e)),
+        let map = map
+            .into_iter()
+            .filter_map(|(k, v)| match <T as Deserialize>::deserialize(v) {
+                Ok(v) => Some((k, v)),
+                Err(_) => None,
             })
-            .collect()
+            .collect();
+        Ok(map)
     }
 }
 
@@ -150,6 +152,7 @@ pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
         None => DEFAULT_FORMAT,
     };
 
+    eprintln!("Parsing agreement at {}", path.display());
     match ext.to_lowercase().as_str() {
         "json" => try_from_json(&contents),
         "yaml" => try_from_yaml(&contents),

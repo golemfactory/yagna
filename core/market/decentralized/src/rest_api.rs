@@ -3,17 +3,17 @@ use serde::Deserialize;
 
 use ya_client::model::ErrorMessage;
 
-use crate::SubscriptionId;
+use crate::db::model::{ProposalId, SubscriptionId};
 
 mod error;
 pub mod provider;
 pub mod requestor;
 
-pub const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
-pub const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
+const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
+const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
 
 pub fn path_config() -> PathConfig {
-    PathConfig::default().error_handler(|err, req| {
+    PathConfig::default().error_handler(|err, _req| {
         InternalError::new(
             serde_json::to_string(&ErrorMessage::new(err.to_string())).unwrap(),
             StatusCode::BAD_REQUEST,
@@ -35,13 +35,13 @@ pub struct PathSubscription {
 #[derive(Deserialize)]
 pub struct PathSubscriptionProposal {
     pub subscription_id: SubscriptionId,
-    pub proposal_id: String,
+    pub proposal_id: ProposalId,
 }
 
 #[derive(Deserialize)]
 pub struct QueryTimeout {
     #[serde(rename = "timeout", default = "default_query_timeout")]
-    pub timeout: Option<f32>,
+    pub timeout: f32,
 }
 
 #[derive(Deserialize)]
@@ -54,20 +54,20 @@ pub struct QueryTimeoutCommandIndex {
 
 #[derive(Deserialize, Debug)]
 pub struct QueryTimeoutMaxEvents {
-    /// number of milliseconds to wait
+    /// number of seconds to wait
     #[serde(rename = "timeout", default = "default_event_timeout")]
-    pub timeout: Option<f32>,
+    pub timeout: f32,
     /// maximum count of events to return
-    #[serde(rename = "maxEvents", default)]
+    #[serde(rename = "maxEvents")]
     pub max_events: Option<i32>,
 }
 
 #[inline(always)]
-pub(crate) fn default_query_timeout() -> Option<f32> {
-    Some(DEFAULT_QUERY_TIMEOUT)
+pub(crate) fn default_query_timeout() -> f32 {
+    DEFAULT_QUERY_TIMEOUT
 }
 
 #[inline(always)]
-pub(crate) fn default_event_timeout() -> Option<f32> {
-    Some(DEFAULT_EVENT_TIMEOUT)
+pub(crate) fn default_event_timeout() -> f32 {
+    DEFAULT_EVENT_TIMEOUT
 }

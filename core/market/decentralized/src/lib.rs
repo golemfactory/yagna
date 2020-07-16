@@ -1,32 +1,14 @@
-// TODO: This is only temporary as long there's only market structure.
-//       Remove as soon as possible.
-#![allow(dead_code)]
-#![allow(unused_variables)]
-// #![allow(unused_imports)]
+#[macro_use]
+extern crate diesel;
 
 mod db;
 mod market;
 mod matcher;
 mod negotiation;
+mod protocol;
 mod rest_api;
 
-pub mod protocol;
-pub use db::models::{Demand, Offer, SubscriptionId};
+#[cfg(feature = "testing")]
+pub mod testing;
+
 pub use market::MarketService;
-
-pub use ya_client::model::market::MARKET_API_PATH;
-
-#[macro_use]
-extern crate diesel;
-
-pub mod migrations {
-    #[derive(diesel_migrations::EmbedMigrations)]
-    struct _Dummy;
-}
-
-/// These exports are expected to be used only in tests.
-pub mod testing {
-    pub use super::db::models::SubscriptionParseError;
-    pub use super::matcher::SubscriptionStore;
-    pub use super::matcher::{DemandError, MatcherError, OfferError};
-}
