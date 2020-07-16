@@ -2,15 +2,12 @@ use ya_core_model::activity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
-use crate::common::{
-    authorize_activity_initiator, RpcMessageResult,
-};
+use crate::common::{authorize_activity_initiator, RpcMessageResult};
 use crate::dao::*;
 use crate::error::Error;
 
 pub fn bind_gsb(db: &DbExecutor) {
-    ServiceBinder::new(activity::BUS_ID, db, ())
-        .bind(receive_runtime_event_gsb);
+    ServiceBinder::new(activity::BUS_ID, db, ()).bind(receive_runtime_event_gsb);
 }
 
 async fn receive_runtime_event_gsb(
