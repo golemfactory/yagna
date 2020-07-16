@@ -1,4 +1,14 @@
+use std::str::FromStr;
 use std::sync::Arc;
+
+use ya_client::model::NodeId;
+use ya_core_model::market::BUS_ID;
+use ya_net::{self as net, RemoteEndpoint};
+use ya_service_bus::typed::ServiceBinder;
+use ya_service_bus::RpcEndpoint;
+
+use crate::db::model::{AgreementId, OwnerType, Proposal, ProposalId};
+use crate::protocol::negotiation::error::CounterProposalError;
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{AgreementError, NegotiationApiInitError, ProposalError};
@@ -7,16 +17,6 @@ use super::messages::{
     AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
     ProposalReceived, ProposalRejected,
 };
-
-use crate::db::model::{OwnerType, Proposal, ProposalId};
-use crate::protocol::negotiation::error::CounterProposalError;
-
-use std::str::FromStr;
-use ya_client::model::NodeId;
-use ya_core_model::market::BUS_ID;
-use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::RpcEndpoint;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -102,12 +102,10 @@ impl NegotiationApi {
     pub async fn approve_agreement(
         &self,
         id: NodeId,
-        agreement_id: &str,
+        agreement_id: AgreementId,
         owner: NodeId,
     ) -> Result<(), AgreementError> {
-        let msg = AgreementApproved {
-            agreement_id: agreement_id.to_string(),
-        };
+        let msg = AgreementApproved { agreement_id };
         net::from(id)
             .to(owner)
             .service(&requestor::agreement_addr(BUS_ID))
@@ -119,12 +117,10 @@ impl NegotiationApi {
     pub async fn reject_agreement(
         &self,
         id: NodeId,
-        agreement_id: &str,
+        agreement_id: AgreementId,
         owner: NodeId,
     ) -> Result<(), AgreementError> {
-        let msg = AgreementRejected {
-            agreement_id: agreement_id.to_string(),
-        };
+        let msg = AgreementRejected { agreement_id };
         net::from(id)
             .to(owner)
             .service(&requestor::agreement_addr(BUS_ID))
@@ -197,7 +193,7 @@ impl NegotiationApi {
     ) -> Result<(), AgreementError> {
         log::debug!(
             "Negotiation API: Agreement proposal [{}] sent by [{}].",
-            &msg.agreement_id,
+            &msg.agreement.id,
             &caller
         );
         self.inner.agreement_received.call(caller, msg).await

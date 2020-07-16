@@ -134,12 +134,21 @@ impl ResponseError for AgreementError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
+            AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            AgreementError::Confirmed(_)
+            | AgreementError::Cancelled(_)
+            | AgreementError::Approved(_) => HttpResponse::Conflict().json(msg),
+            AgreementError::Rejected(_)
+            | AgreementError::Expired(_)
+            | AgreementError::Terminated(_) => HttpResponse::Gone().json(msg),
             AgreementError::NoNegotiations(_)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
-            AgreementError::FailedGetProposal(..) | AgreementError::FailedSaveAgreement(..) => {
-                HttpResponse::InternalServerError().json(msg)
-            }
+            AgreementError::GetProposal(..)
+            | AgreementError::Save(..)
+            | AgreementError::Get(..)
+            | AgreementError::Update(..)
+            | AgreementError::Protocol(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

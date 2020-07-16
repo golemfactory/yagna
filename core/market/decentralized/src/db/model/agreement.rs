@@ -6,17 +6,20 @@ use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use serde::{Deserialize, Serialize};
 
 use ya_client::model::NodeId;
 
-use crate::db::model::{OwnerType, Proposal, ProposalId};
+use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
 
 pub type AgreementId = ProposalId;
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
-#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[derive(
+    FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, Serialize, Deserialize,
+)]
 #[sql_type = "Integer"]
 pub enum AgreementState {
     /// Newly created by a Requestor (based on Proposal)
@@ -35,7 +38,7 @@ pub enum AgreementState {
     Terminated = 6,
 }
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
 #[table_name = "market_agreement"]
 pub struct Agreement {
     pub id: AgreementId,
@@ -45,6 +48,9 @@ pub struct Agreement {
 
     pub demand_properties: String,
     pub demand_constraints: String,
+
+    pub offer_id: SubscriptionId,
+    pub demand_id: SubscriptionId,
 
     pub provider_id: NodeId,
     pub requestor_id: NodeId,
@@ -83,7 +89,9 @@ impl Agreement {
             offer_constraints: offer_proposal.body.constraints,
             demand_properties: demand_proposal.body.properties,
             demand_constraints: demand_proposal.body.constraints,
-            provider_id: demand_proposal.negotiation.provider_id,
+            offer_id: offer_proposal.negotiation.offer_id,
+            demand_id: demand_proposal.negotiation.demand_id,
+            provider_id: offer_proposal.negotiation.provider_id, // TODO: should be == demand_proposal.negotiation.provider_id
             requestor_id: demand_proposal.negotiation.requestor_id,
             creation_ts,
             valid_to,

@@ -16,7 +16,7 @@ use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::ProposalDao;
-use crate::db::model::{OwnerType, Proposal, ProposalId};
+use crate::db::model::{Agreement, OwnerType, Proposal, ProposalId};
 use crate::db::schema::market_event;
 use crate::db::DbError;
 
@@ -56,18 +56,26 @@ pub struct MarketEvent {
 pub struct NewMarketEvent {
     pub subscription_id: SubscriptionId,
     pub event_type: EventType,
-    pub artifact_id: String,
+    pub artifact_id: String, // TODO: typed
 }
 
 impl MarketEvent {
-    pub fn from_proposal(proposal: &Proposal, role: OwnerType) -> NewMarketEvent {
+    pub fn from_proposal(proposal: Proposal, role: OwnerType) -> NewMarketEvent {
         NewMarketEvent {
-            subscription_id: proposal.negotiation.subscription_id.clone(),
+            subscription_id: proposal.negotiation.subscription_id,
             event_type: match role {
                 OwnerType::Requestor => EventType::RequestorProposal,
                 OwnerType::Provider => EventType::ProviderProposal,
             },
             artifact_id: proposal.body.id.to_string(),
+        }
+    }
+
+    pub fn from_agreement(agreement: Agreement) -> NewMarketEvent {
+        NewMarketEvent {
+            subscription_id: agreement.offer_id,
+            event_type: EventType::ProviderAgreement,
+            artifact_id: agreement.id.to_string(),
         }
     }
 
