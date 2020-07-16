@@ -3,10 +3,10 @@
 //! Top level objects constitutes public activity API.
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
-use chrono::NaiveDateTime;
 
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
+    RuntimeEvent,
 };
 use ya_service_bus::RpcMessage;
 
@@ -135,27 +135,6 @@ impl RpcMessage for GetRunningCommand {
     type Item = ExeScriptCommandState;
     type Error = RpcMessageError;
 }
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RuntimeEvent {
-    pub batch_id: String,
-    pub index: usize,
-    pub timestamp: NaiveDateTime,
-    pub kind: RuntimeEventKind,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum RuntimeEventKind {
-    Started {
-        command: ExeScriptCommand
-    },
-    Finished {
-        return_code: i32,
-        message: Option<String>,
-    },
-    StdOut(String),
-    StdErr(String),
-}
-
 /// Receive runtime event from Supervisor.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
