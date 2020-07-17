@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
-use super::error::{AgreementError, CounterProposalError, NegotiationApiInitError, ProposalError};
+use super::error::{
+    AgreementError, ApproveAgreementError, CounterProposalError, NegotiationApiInitError,
+    ProposalError,
+};
 use super::messages::*;
 use super::messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected};
-
 use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
 
-use std::str::FromStr;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
@@ -102,11 +103,11 @@ impl NegotiationApi {
     pub async fn reject_proposal(
         &self,
         id: NodeId,
-        proposal_id: &str,
+        proposal_id: &ProposalId,
         owner: NodeId,
     ) -> Result<(), ProposalError> {
         let msg = ProposalRejected {
-            proposal_id: ProposalId::from_str(proposal_id).unwrap(),
+            proposal_id: proposal_id.clone(),
         };
         net::from(id)
             .to(owner)
@@ -183,7 +184,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementApproved,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ApproveAgreementError> {
         log::debug!(
             "Negotiation API: Agreement [{}] approved by [{}].",
             &msg.agreement_id,

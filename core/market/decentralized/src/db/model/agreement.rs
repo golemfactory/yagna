@@ -23,7 +23,16 @@ pub type AgreementId = ProposalId;
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
 #[derive(
-    FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, Serialize, Deserialize,
+    FromPrimitive,
+    AsExpression,
+    FromSqlRow,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
+    derive_more::Display,
+    Serialize,
+    Deserialize,
 )]
 #[sql_type = "Integer"]
 pub enum AgreementState {

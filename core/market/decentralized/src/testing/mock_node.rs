@@ -418,7 +418,7 @@ impl MarketServiceExt for MarketService {
 pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
-        AgreementError, CounterProposalError, ProposalError,
+        AgreementError, ApproveAgreementError, CounterProposalError, ProposalError,
     };
 
     pub async fn empty_on_offer_received(
@@ -473,7 +473,7 @@ pub mod default {
     pub async fn empty_on_agreement_approved(
         _caller: String,
         _msg: AgreementApproved,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ApproveAgreementError> {
         Ok(())
     }
 
