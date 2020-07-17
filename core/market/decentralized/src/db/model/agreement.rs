@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
@@ -9,6 +9,9 @@ use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
 use ya_client::model::NodeId;
+use ya_client::model::market::agreement::{Agreement as ClientAgreement, State as ClientAgreementState};
+use ya_client::model::market::demand::{Demand as ClientDemand};
+use ya_client::model::market::offer::{Offer as ClientOffer};
 
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
@@ -102,6 +105,42 @@ impl Agreement {
             committed_signature: None,
         }
     }
+
+    pub fn into_client(self) -> Result<ClientAgreement, String> {
+        let demand = ClientDemand {
+            properties: serde_json::from_str(&self.demand_properties).map_err(|e| {
+                format!(
+                    "Can't serialize Demand properties from database. Error: {}",
+                    e
+                )
+            })?,
+            constraints: self.demand_constraints,
+            requestor_id: Some(self.requestor_id.to_string()),
+            demand_id: None, // Using self.demand_id would be misleading because properties and constraints were taken from latest proposal.
+        };
+        let offer = ClientOffer {
+            properties: serde_json::from_str(&self.offer_properties).map_err(|e| {
+                format!(
+                    "Can't serialize Offer properties from database. Error: {}",
+                    e
+                )
+            })?,
+            constraints: self.offer_constraints,
+            provider_id: Some(self.provider_id.to_string()),
+            offer_id: None, // Using self.offer_id would be misleading because properties and constraints were taken from latest proposal.
+        };
+        Ok(ClientAgreement {
+            agreement_id: self.id.to_string(),
+            demand,
+            offer,
+            valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),
+            approved_date: self.approved_date.map(|d| {DateTime::<Utc>::from_utc(d, Utc)}),
+            state: self.state.into(),
+            proposed_signature: self.proposed_signature,
+            approved_signature: self.approved_signature,
+            committed_signature: self.committed_signature,
+        })
+    }
 }
 
 impl<DB: Backend> ToSql<Integer, DB> for AgreementState
@@ -124,5 +163,19 @@ where
             "Invalid conversion from {} (i32) to Proposal State.",
             enum_value
         ))?)
+    }
+}
+
+impl From<AgreementState> for ClientAgreementState {
+    fn from(agreement_state: AgreementState) -> Self {
+        match agreement_state {
+            AgreementState::Proposal => ClientAgreementState::Proposal,
+            AgreementState::Pending => ClientAgreementState::Pending,
+            AgreementState::Cancelled => ClientAgreementState::Cancelled,
+            AgreementState::Rejected => ClientAgreementState::Rejected,
+            AgreementState::Approved => ClientAgreementState::Approved,
+            AgreementState::Expired => ClientAgreementState::Expired,
+            AgreementState::Terminated => ClientAgreementState::Terminated,
+        }
     }
 }
