@@ -5,7 +5,7 @@ use futures::future::join_all;
 use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
-use std::fs::{create_dir_all, File};
+use std::fs::{canonicalize, create_dir_all, File};
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -145,8 +145,8 @@ impl TaskRunner {
         data_dir: P,
     ) -> Result<TaskRunner> {
         let data_dir = data_dir.as_ref();
-        let tasks_dir = data_dir.join("exe-unit").join("work");
-        let cache_dir = data_dir.join("exe-unit").join("cache");
+        let tasks_dir = canonicalize(data_dir.join("exe-unit").join("work"))?;
+        let cache_dir = canonicalize(data_dir.join("exe-unit").join("cache"))?;
 
         log::debug!("TaskRunner config: {:?}", config);
 
@@ -376,8 +376,8 @@ impl TaskRunner {
 
         let mut args = vec![];
         args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
+        args.extend(["-w", "."].iter());
+        args.extend(["-a", "../agreement.json"].iter());
 
         args.push("service-bus");
         args.push(activity_id);
