@@ -2,6 +2,7 @@ use actix::{Actor, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
+use std::env;
 use std::ffi::OsString;
 use std::path::{Component, PathBuf, Prefix};
 use structopt::{clap, StructOpt};
@@ -83,12 +84,36 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
 
 fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-
     let cli: Cli = Cli::from_args();
 
-    let work_dir = create_path(&cli.work_dir)?;
-    let cache_dir = create_path(&cli.cache_dir)?;
-    let agreement = Agreement::try_from(&cli.agreement)?;
+    if !cli.agreement.exists() {
+        bail!("Agreement file does not exist: {}", cli.agreement.display());
+    }
+    if !cli.binary.exists() {
+        bail!("Runtime binary does not exist: {}", cli.binary.display());
+    }
+
+    let work_dir = create_path(&cli.work_dir).map_err(|e| {
+        anyhow::anyhow!(
+            "Cannot create the working directory {}: {}",
+            cli.work_dir.display(),
+            e
+        )
+    })?;
+    let cache_dir = create_path(&cli.cache_dir).map_err(|e| {
+        anyhow::anyhow!(
+            "Cannot create the cache directory {}: {}",
+            cli.work_dir.display(),
+            e
+        )
+    })?;
+    let agreement = Agreement::try_from(&cli.agreement).map_err(|e| {
+        anyhow::anyhow!(
+            "Error parsing the agreement from {}: {}",
+            cli.agreement.display(),
+            e
+        )
+    })?;
     let runtime_args = RuntimeArgs::new(&work_dir, &agreement, !cli.supervise_caps);
 
     let mut commands = None;
@@ -106,8 +131,17 @@ fn run() -> anyhow::Result<()> {
 
     match cli.command {
         Command::FromFile { input } => {
-            let contents = std::fs::read_to_string(&input)?;
-            commands = Some(serde_json::from_str(&contents)?);
+            let contents = std::fs::read_to_string(&input).map_err(|e| {
+                anyhow::anyhow!("Cannot read commands from file {}: {}", input.display(), e)
+            })?;
+            let contents = serde_json::from_str(&contents).map_err(|e| {
+                anyhow::anyhow!(
+                    "Cannot deserialize commands from file {}: {}",
+                    input.display(),
+                    e
+                )
+            })?;
+            commands = Some(contents);
         }
         Command::ServiceBus {
             service_id,
@@ -150,22 +184,27 @@ pub fn colored_stderr_exeunit_prefixed_format(
     flexi_logger::colored_opt_format(w, now, record)
 }
 
-fn main() -> anyhow::Result<()> {
-    flexi_logger::Logger::with_env()
+fn main() {
+    if let Err(_) = flexi_logger::Logger::with_env()
         .log_to_file()
         .directory("logs")
         .format(flexi_logger::colored_opt_format)
         .duplicate_to_stderr(flexi_logger::Duplicate::Debug)
         .format_for_stderr(colored_stderr_exeunit_prefixed_format)
-        .start()?;
-
-    let result = run();
-    if let Err(error) = result {
-        log::error!("Exiting with error: {}", error);
-        return Err(error);
+        .start()
+    {
+        env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
+        env_logger::init();
+        log::warn!("Switched to fallback logging method");
     }
 
-    Ok(result?)
+    std::process::exit(match run() {
+        Ok(_) => 0,
+        Err(error) => {
+            log::error!("{}", error);
+            1
+        }
+    })
 }
 
 #[cfg(windows)]
