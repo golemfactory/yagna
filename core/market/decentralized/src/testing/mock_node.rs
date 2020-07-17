@@ -341,6 +341,10 @@ impl MarketsNetwork {
         fs::create_dir_all(&dir).unwrap();
         dir
     }
+
+    pub fn node_gsb_prefixes(&self, node_name: &str) -> (String, String) {
+        gsb_prefixes(&self.test_name, node_name)
+    }
 }
 
 fn test_data_dir() -> PathBuf {
