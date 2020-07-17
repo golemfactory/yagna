@@ -137,7 +137,8 @@ impl ResponseError for AgreementError {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
             AgreementError::Confirmed(_)
             | AgreementError::Cancelled(_)
-            | AgreementError::Approved(_) => HttpResponse::Conflict().json(msg),
+            | AgreementError::Approved(_)
+            | AgreementError::Proposed(_) => HttpResponse::Conflict().json(msg),
             AgreementError::Rejected(_)
             | AgreementError::Expired(_)
             | AgreementError::Terminated(_) => HttpResponse::Gone().json(msg),
@@ -148,7 +149,8 @@ impl ResponseError for AgreementError {
             | AgreementError::Save(..)
             | AgreementError::Get(..)
             | AgreementError::Update(..)
-            | AgreementError::Protocol(_) => HttpResponse::InternalServerError().json(msg),
+            | AgreementError::Protocol(_)
+            | AgreementError::ProtocolApprove(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

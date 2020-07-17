@@ -13,7 +13,7 @@ use ya_client::model::market::agreement::{
 };
 use ya_client::model::market::demand::Demand as ClientDemand;
 use ya_client::model::market::offer::Offer as ClientOffer;
-use ya_client::model::NodeId;
+use ya_client::model::{ErrorMessage, NodeId};
 
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
@@ -117,25 +117,20 @@ impl Agreement {
         }
     }
 
-    pub fn into_client(self) -> Result<ClientAgreement, String> {
+    pub fn into_client(self) -> Result<ClientAgreement, ErrorMessage> {
+        let demand_properties = serde_json::from_str(&self.demand_properties)
+            .map_err(|e| format!("Can't serialize Demand properties. Error: {}", e))?;
+        let offer_properties = serde_json::from_str(&self.offer_properties)
+            .map_err(|e| format!("Can't serialize Offer properties. Error: {}", e))?;
+
         let demand = ClientDemand {
-            properties: serde_json::from_str(&self.demand_properties).map_err(|e| {
-                format!(
-                    "Can't serialize Demand properties from database. Error: {}",
-                    e
-                )
-            })?,
+            properties: demand_properties,
             constraints: self.demand_constraints,
             requestor_id: Some(self.requestor_id.to_string()),
             demand_id: None, // Using self.demand_id would be misleading because properties and constraints were taken from latest proposal.
         };
         let offer = ClientOffer {
-            properties: serde_json::from_str(&self.offer_properties).map_err(|e| {
-                format!(
-                    "Can't serialize Offer properties from database. Error: {}",
-                    e
-                )
-            })?,
+            properties: offer_properties,
             constraints: self.offer_constraints,
             provider_id: Some(self.provider_id.to_string()),
             offer_id: None, // Using self.offer_id would be misleading because properties and constraints were taken from latest proposal.
