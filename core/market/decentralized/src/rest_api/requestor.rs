@@ -158,12 +158,18 @@ async fn confirm_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/wait")]
 async fn wait_for_approval(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _query: Query<QueryTimeout>,
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    query: Query<QueryTimeout>,
     _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+) -> impl Responder {
+    let agreement_id = path.into_inner().agreement_id;
+    let timeout = query.timeout;
+    market
+        .requestor_engine
+        .wait_for_approval(&agreement_id, timeout)
+        .await
+        .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
 #[actix_web::delete("/agreements/{agreement_id}")]

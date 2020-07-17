@@ -1,11 +1,11 @@
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
 use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
-use crate::db::DbResult;
-use chrono::NaiveDateTime;
+use crate::db::{DbError, DbResult};
 
 pub struct AgreementDao<'c> {
     pool: &'c PoolType,
@@ -15,6 +15,18 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
     fn as_dao(pool: &'a PoolType) -> Self {
         Self { pool }
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum StateError {
+    #[error("Can't update Agreement [{id}] state from {from} to {to}.")]
+    InvalidTransition {
+        id: AgreementId,
+        from: AgreementState,
+        to: AgreementState,
+    },
+    #[error("Failed to update state. Error: {0}")]
+    DbError(DbError),
 }
 
 impl<'c> AgreementDao<'c> {
@@ -58,6 +70,33 @@ impl<'c> AgreementDao<'c> {
             Ok(())
         })
         .await
+    }
+
+    pub async fn approve(&self, id: &AgreementId) -> Result<(), StateError> {
+        let id = id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            let agreement: Agreement = dsl::market_agreement.filter(dsl::id.eq(&id)).first(conn)?;
+
+            if agreement.state != AgreementState::Pending {
+                Err(StateError::InvalidTransition {
+                    id: id.clone(),
+                    from: agreement.state,
+                    to: AgreementState::Approved,
+                })?
+            }
+
+            diesel::update(dsl::market_agreement.filter(dsl::id.eq(&id)))
+                .set(dsl::state.eq(AgreementState::Approved))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+}
+
+impl<ErrorType: Into<DbError>> From<ErrorType> for StateError {
+    fn from(err: ErrorType) -> Self {
+        StateError::DbError(err.into())
     }
 }
 

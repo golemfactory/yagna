@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
+use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use ya_client::model::market::event::RequestorEvent;
@@ -8,29 +9,41 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao},
+    dao::{AgreementDao, EventsDao, ProposalDao, StateError},
     model::{
-        Agreement, AgreementId, Demand as ModelDemand, OwnerType, Proposal, ProposalId,
-        SubscriptionId,
+        Agreement, AgreementId, AgreementState, Demand as ModelDemand, OwnerType, Proposal,
+        ProposalId, SubscriptionId,
     },
     DbResult,
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::negotiation::common::CommonBroker;
-use crate::negotiation::error::{AgreementError, ProposalError};
+use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalError};
 use crate::protocol::negotiation::{
+    error::{ApproveAgreementError, RemoteAgreementError},
     messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
     requestor::NegotiationApi,
 };
 
 use super::error::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
-use crate::db::model::AgreementState;
+use crate::negotiation::notifier::NotifierError;
+
+#[derive(Clone, derive_more::Display)]
+pub enum ApprovalStatus {
+    #[display(fmt = "Ok")]
+    Ok,
+    #[display(fmt = "Cancelled")]
+    Cancelled,
+    #[display(fmt = "Rejected")]
+    Rejected,
+}
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
     common: CommonBroker,
     api: NegotiationApi,
+    agreement_notifier: EventNotifier<AgreementId>,
 }
 
 impl RequestorBroker {
@@ -39,6 +52,7 @@ impl RequestorBroker {
         store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
+        let agreement_notifier = EventNotifier::new();
         let notifier = EventNotifier::new();
         let broker = CommonBroker {
             store,
@@ -47,6 +61,8 @@ impl RequestorBroker {
         };
 
         let broker1 = broker.clone();
+        let broker2 = broker.clone();
+        let agreement_notifier2 = agreement_notifier.clone();
         let api = NegotiationApi::new(
             move |caller: String, msg: ProposalReceived| {
                 broker1
@@ -54,13 +70,16 @@ impl RequestorBroker {
                     .on_proposal_received(caller, msg, OwnerType::Requestor)
             },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
-            move |_caller: String, _msg: AgreementApproved| async move { unimplemented!() },
+            move |caller: String, msg: AgreementApproved| {
+                on_agreement_approved(broker2.clone(), caller, msg, agreement_notifier2.clone())
+            },
             move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
         );
 
         let engine = RequestorBroker {
             api,
             common: broker,
+            agreement_notifier,
         };
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
@@ -208,6 +227,58 @@ impl RequestorBroker {
         Ok(id)
     }
 
+    pub async fn wait_for_approval(
+        &self,
+        id: &AgreementId,
+        timeout: f32,
+    ) -> Result<ApprovalStatus, WaitForApprovalError> {
+        // TODO: Check if we are owner of Proposal
+        // TODO: What to do with 2 simultaneous calls to wait_for_approval??
+        //  should we reject one? And if so, how to discover, that two calls were made?
+        let timeout = Duration::from_secs_f32(timeout.max(0.0));
+        let mut notifier = self.agreement_notifier.listen(id);
+
+        // Loop will wait for events notifications only one time. It doesn't have to be loop at all,
+        // but it spares us doubled getting agreement and mapping statuses to return results.
+        // So I think this simplification is worth confusion, that it cause.
+        loop {
+            let agreement = self
+                .common
+                .db
+                .as_dao::<AgreementDao>()
+                .select(id, Utc::now().naive_utc())
+                .await
+                .map_err(|e| WaitForApprovalError::FailedGetFromDb(id.clone(), e))?
+                .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
+
+            match agreement.state {
+                AgreementState::Approved => return Ok(ApprovalStatus::Ok),
+                AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
+                AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
+                AgreementState::Expired => {
+                    return Err(WaitForApprovalError::AgreementExpired(id.clone()))
+                }
+                AgreementState::Proposal => {
+                    return Err(WaitForApprovalError::AgreementNotConfirmed(id.clone()))
+                }
+                AgreementState::Terminated => {
+                    return Err(WaitForApprovalError::AgreementTerminated(id.clone()))
+                }
+                AgreementState::Pending => (), // Still waiting for approval.
+            };
+
+            if let Err(error) = notifier.wait_for_event_with_timeout(timeout).await {
+                return match error {
+                    NotifierError::Timeout(_) => Err(WaitForApprovalError::Timeout(id.clone())),
+                    NotifierError::ChannelClosed(_) => {
+                        Err(WaitForApprovalError::InternalError(error.to_string()))
+                    }
+                    NotifierError::Unsubscribed(_) => Ok(ApprovalStatus::Cancelled),
+                };
+            }
+        }
+    }
+
     /// Signs (not yet) Agreement self-created via `create_agreement`
     /// and sends it to the Provider.
     pub async fn confirm_agreement(
@@ -249,10 +320,58 @@ impl RequestorBroker {
     }
 }
 
+async fn on_agreement_approved(
+    broker: CommonBroker,
+    caller: String,
+    msg: AgreementApproved,
+    notifier: EventNotifier<AgreementId>,
+) -> Result<(), ApproveAgreementError> {
+    let agreement = broker
+        .db
+        .as_dao::<AgreementDao>()
+        .select(&msg.agreement_id, Utc::now().naive_utc())
+        .await
+        .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+        .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+
+    if agreement.provider_id.to_string() != caller {
+        // Don't reveal, that we know this Agreement id.
+        Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+    }
+
+    // TODO: Validate agreement signature.
+    broker
+        .db
+        .as_dao::<AgreementDao>()
+        .approve(&msg.agreement_id)
+        .await
+        .map_err(|e| match e {
+            StateError::InvalidTransition { id, from, .. } => {
+                match from {
+                    // Expired Agreement could be InvalidState either, but we want to explicit
+                    // say to provider, that Agreement has expired.
+                    AgreementState::Expired => RemoteAgreementError::Expired(id),
+                    _ => RemoteAgreementError::InvalidState(id, from),
+                }
+            }
+            StateError::DbError(e) => {
+                // Log our internal error, but don't reveal error message to Provider.
+                log::warn!(
+                    "Internal error while updating Agreement state. Error: {}",
+                    e
+                );
+                RemoteAgreementError::InternalError(msg.agreement_id.clone())
+            }
+        })?;
+
+    notifier.notify(&msg.agreement_id).await;
+    Ok(())
+}
+
 pub async fn proposal_receiver_thread(
     db: DbExecutor,
     mut proposal_receiver: UnboundedReceiver<RawProposal>,
-    notifier: EventNotifier,
+    notifier: EventNotifier<SubscriptionId>,
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {
         let db = db.clone();
