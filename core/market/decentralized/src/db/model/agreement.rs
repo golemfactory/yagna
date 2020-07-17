@@ -8,8 +8,11 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
-use ya_client::model::market::agreement::{Agreement as ClientAgreement, State as ClientState};
-use ya_client::model::market::{Demand, Offer};
+use ya_client::model::market::agreement::{
+    Agreement as ClientAgreement, State as ClientAgreementState,
+};
+use ya_client::model::market::demand::Demand as ClientDemand;
+use ya_client::model::market::offer::Offer as ClientOffer;
 use ya_client::model::{ErrorMessage, NodeId};
 
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
@@ -120,17 +123,17 @@ impl Agreement {
         let offer_properties = serde_json::from_str(&self.offer_properties)
             .map_err(|e| format!("Can't serialize Offer properties. Error: {}", e))?;
 
-        let demand = Demand {
+        let demand = ClientDemand {
             properties: demand_properties,
             constraints: self.demand_constraints,
-            demand_id: Some(self.demand_id.to_string()),
             requestor_id: Some(self.requestor_id.to_string()),
+            demand_id: None, // Using self.demand_id would be misleading because properties and constraints were taken from latest proposal.
         };
-        let offer = Offer {
+        let offer = ClientOffer {
             properties: offer_properties,
             constraints: self.offer_constraints,
-            offer_id: Some(self.offer_id.to_string()),
             provider_id: Some(self.provider_id.to_string()),
+            offer_id: None, // Using self.offer_id would be misleading because properties and constraints were taken from latest proposal.
         };
         Ok(ClientAgreement {
             agreement_id: self.id.to_string(),
@@ -145,20 +148,6 @@ impl Agreement {
             approved_signature: self.approved_signature,
             committed_signature: self.committed_signature,
         })
-    }
-}
-
-impl From<AgreementState> for ClientState {
-    fn from(state: AgreementState) -> Self {
-        match state {
-            AgreementState::Pending => ClientState::Pending,
-            AgreementState::Proposal => ClientState::Proposal,
-            AgreementState::Cancelled => ClientState::Cancelled,
-            AgreementState::Rejected => ClientState::Rejected,
-            AgreementState::Approved => ClientState::Approved,
-            AgreementState::Expired => ClientState::Expired,
-            AgreementState::Terminated => ClientState::Terminated,
-        }
     }
 }
 
@@ -182,5 +171,19 @@ where
             "Invalid conversion from {} (i32) to Proposal State.",
             enum_value
         ))?)
+    }
+}
+
+impl From<AgreementState> for ClientAgreementState {
+    fn from(agreement_state: AgreementState) -> Self {
+        match agreement_state {
+            AgreementState::Proposal => ClientAgreementState::Proposal,
+            AgreementState::Pending => ClientAgreementState::Pending,
+            AgreementState::Cancelled => ClientAgreementState::Cancelled,
+            AgreementState::Rejected => ClientAgreementState::Rejected,
+            AgreementState::Approved => ClientAgreementState::Approved,
+            AgreementState::Expired => ClientAgreementState::Expired,
+            AgreementState::Terminated => ClientAgreementState::Terminated,
+        }
     }
 }

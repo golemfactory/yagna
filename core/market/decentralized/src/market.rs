@@ -20,6 +20,8 @@ use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
 
+pub mod agreement;
+
 #[derive(Error, Debug)]
 pub enum MarketError {
     #[error(transparent)]
@@ -48,6 +50,7 @@ pub enum MarketInitError {
 
 /// Structure connecting all market objects.
 pub struct MarketService {
+    pub db: DbExecutor,
     pub matcher: Matcher,
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
@@ -64,6 +67,7 @@ impl MarketService {
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
+            db: db.clone(),
             matcher,
             provider_engine,
             requestor_engine,
@@ -82,6 +86,7 @@ impl MarketService {
         self.requestor_engine
             .bind_gsb(public_prefix, private_prefix)
             .await?;
+        agreement::bind_gsb(self.db.clone(), public_prefix, private_prefix).await;
         Ok(())
     }
 
