@@ -138,14 +138,15 @@ pub struct TaskRunner {
 }
 
 impl TaskRunner {
-    pub fn new(
+    pub fn new<P: AsRef<Path>>(
         client: ActivityProviderApi,
         config: TaskRunnerConfig,
         registry: ExeUnitsRegistry,
+        data_dir: P,
     ) -> Result<TaskRunner> {
-        let current_dir = std::env::current_dir()?;
-        let tasks_dir = current_dir.join("exe-unit").join("work");
-        let cache_dir = current_dir.join("exe-unit").join("cache");
+        let data_dir = data_dir.as_ref();
+        let tasks_dir = data_dir.join("exe-unit").join("work");
+        let cache_dir = data_dir.join("exe-unit").join("cache");
 
         log::debug!("TaskRunner config: {:?}", config);
 
@@ -167,9 +168,9 @@ impl TaskRunner {
 
         // Try convert to str to check if won't fail. If not we can than
         // unwrap() all paths that we created relative to current_dir.
-        current_dir.to_str().ok_or(anyhow!(
+        data_dir.to_str().ok_or(anyhow!(
             "Current dir [{}] contains invalid characters.",
-            current_dir.display()
+            data_dir.display()
         ))?;
 
         Ok(TaskRunner {
