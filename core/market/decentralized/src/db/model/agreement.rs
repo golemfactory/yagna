@@ -8,10 +8,12 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
+use ya_client::model::market::agreement::{
+    Agreement as ClientAgreement, State as ClientAgreementState,
+};
+use ya_client::model::market::demand::Demand as ClientDemand;
+use ya_client::model::market::offer::Offer as ClientOffer;
 use ya_client::model::NodeId;
-use ya_client::model::market::agreement::{Agreement as ClientAgreement, State as ClientAgreementState};
-use ya_client::model::market::demand::{Demand as ClientDemand};
-use ya_client::model::market::offer::{Offer as ClientOffer};
 
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
@@ -134,7 +136,9 @@ impl Agreement {
             demand,
             offer,
             valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),
-            approved_date: self.approved_date.map(|d| {DateTime::<Utc>::from_utc(d, Utc)}),
+            approved_date: self
+                .approved_date
+                .map(|d| DateTime::<Utc>::from_utc(d, Utc)),
             state: self.state.into(),
             proposed_signature: self.proposed_signature,
             approved_signature: self.approved_signature,
