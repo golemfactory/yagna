@@ -48,6 +48,14 @@ pub enum ApproveAgreementError {
     GsbError(String),
     #[error("Can't approve Agreement due to remote node error: {0}")]
     Remote(#[from] RemoteAgreementError),
+    #[error("Can't parse {caller} for {id} : {e}")]
+    CallerParseError {
+        e: String,
+        caller: String,
+        id: AgreementId,
+    },
+    #[error("Timeout while sending approval of [{0}]")]
+    Timeout(AgreementId),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

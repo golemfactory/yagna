@@ -1,19 +1,22 @@
 use std::sync::Arc;
 
+use ya_client::model::NodeId;
+use ya_core_model::market::BUS_ID;
+use ya_net::{self as net, RemoteEndpoint};
+use ya_service_bus::{typed::ServiceBinder, RpcEndpoint};
+
+use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
+
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{
     AgreementError, ApproveAgreementError, CounterProposalError, NegotiationApiInitError,
     ProposalError,
 };
-use super::messages::*;
-use super::messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected};
-use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
-
-use ya_client::model::NodeId;
-use ya_core_model::market::BUS_ID;
-use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::RpcEndpoint;
+use super::messages::{
+    provider, requestor, AgreementApproved, AgreementCancelled, AgreementReceived,
+    AgreementRejected, InitialProposalReceived, ProposalContent, ProposalReceived,
+    ProposalRejected,
+};
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.

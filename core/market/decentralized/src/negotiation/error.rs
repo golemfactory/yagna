@@ -6,7 +6,8 @@ use crate::db::model::{
 };
 use crate::db::{dao::TakeEventsError, DbError};
 use crate::protocol::negotiation::error::{
-    CounterProposalError as ApiProposalError, NegotiationApiInitError,
+    AgreementError as ProtocolAgreementError, ApproveAgreementError,
+    CounterProposalError as ProtocolProposalError, NegotiationApiInitError,
 };
 
 #[derive(Error, Debug)]
@@ -34,6 +35,8 @@ pub enum AgreementError {
     Update(AgreementId, DbError),
     #[error("Agreement [{0}] not found.")]
     NotFound(AgreementId),
+    #[error("Agreement [{0}] proposed.")]
+    Proposed(AgreementId),
     #[error("Agreement [{0}] already confirmed.")]
     Confirmed(AgreementId),
     #[error("Agreement [{0}] cancelled.")]
@@ -48,8 +51,10 @@ pub enum AgreementError {
     Terminated(AgreementId),
     #[error("Invalid proposal id. {0}")]
     InvalidSubscriptionId(#[from] ProposalIdParseError),
-    #[error("Invalid proposal id. {0}")]
-    Protocol(#[from] crate::protocol::negotiation::error::AgreementError),
+    #[error("General protocol error: {0}")]
+    Protocol(#[from] ProtocolAgreementError),
+    #[error("Approve protocol error: {0}")]
+    ProtocolApprove(#[from] ApproveAgreementError),
 }
 
 #[derive(Error, Debug)]
@@ -97,7 +102,7 @@ pub enum ProposalError {
     #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]
     FailedSaveProposal(ProposalId, DbError),
     #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
-    FailedSendProposal(ProposalId, ApiProposalError),
+    FailedSendProposal(ProposalId, ProtocolProposalError),
 }
 
 impl AgreementError {

@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
@@ -8,7 +8,9 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
-use ya_client::model::NodeId;
+use ya_client::model::market::agreement::{Agreement as ClientAgreement, State as ClientState};
+use ya_client::model::market::{Demand, Offer};
+use ya_client::model::{ErrorMessage, NodeId};
 
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
@@ -109,6 +111,53 @@ impl Agreement {
             proposed_signature: None,
             approved_signature: None,
             committed_signature: None,
+        }
+    }
+
+    pub fn into_client(self) -> Result<ClientAgreement, ErrorMessage> {
+        let demand_properties = serde_json::from_str(&self.demand_properties)
+            .map_err(|e| format!("Can't serialize Demand properties. Error: {}", e))?;
+        let offer_properties = serde_json::from_str(&self.offer_properties)
+            .map_err(|e| format!("Can't serialize Offer properties. Error: {}", e))?;
+
+        let demand = Demand {
+            properties: demand_properties,
+            constraints: self.demand_constraints,
+            demand_id: Some(self.demand_id.to_string()),
+            requestor_id: Some(self.requestor_id.to_string()),
+        };
+        let offer = Offer {
+            properties: offer_properties,
+            constraints: self.offer_constraints,
+            offer_id: Some(self.offer_id.to_string()),
+            provider_id: Some(self.provider_id.to_string()),
+        };
+        Ok(ClientAgreement {
+            agreement_id: self.id.to_string(),
+            demand,
+            offer,
+            valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),
+            approved_date: self
+                .approved_date
+                .map(|d| DateTime::<Utc>::from_utc(d, Utc)),
+            state: self.state.into(),
+            proposed_signature: self.proposed_signature,
+            approved_signature: self.approved_signature,
+            committed_signature: self.committed_signature,
+        })
+    }
+}
+
+impl From<AgreementState> for ClientState {
+    fn from(state: AgreementState) -> Self {
+        match state {
+            AgreementState::Pending => ClientState::Pending,
+            AgreementState::Proposal => ClientState::Proposal,
+            AgreementState::Cancelled => ClientState::Cancelled,
+            AgreementState::Rejected => ClientState::Rejected,
+            AgreementState::Approved => ClientState::Approved,
+            AgreementState::Expired => ClientState::Expired,
+            AgreementState::Terminated => ClientState::Terminated,
         }
     }
 }
