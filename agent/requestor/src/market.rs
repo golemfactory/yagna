@@ -181,7 +181,7 @@ async fn negotiate_offer(
         .await?;
 
     match &result[..] {
-        "Approved" => {
+        "Ok" => {
             log::info!("\n\n AGREEMENT APPROVED: {} !", new_agreement_id);
             Ok(ProcessOfferResult::AgreementId(new_agreement_id))
         }
@@ -189,6 +189,10 @@ async fn negotiate_offer(
             log::info!("\n\n AGREEMENT REJECTED: {} !", new_agreement_id);
             anyhow::bail!("Agreement rejected by provider: {} !", new_agreement_id)
         }
-        _ => anyhow::bail!("Unknown response for agreement: {} !", new_agreement_id),
+        r => anyhow::bail!(
+            "Unknown response: '{}' for agreement: {} !",
+            r,
+            new_agreement_id
+        ),
     }
 }

@@ -101,9 +101,8 @@ where
         &mut self,
         timeout: Duration,
     ) -> Result<(), NotifierError<Type>> {
-        match tokio::time::timeout(timeout, self.wait_for_event()).await {
-            Err(_) => Err(NotifierError::Timeout(self.subscription_id.clone())),
-            Ok(wait_result) => wait_result,
-        }
+        tokio::time::timeout(timeout, self.wait_for_event())
+            .await
+            .map_err(|_| NotifierError::Timeout(self.subscription_id.clone()))?
     }
 }
