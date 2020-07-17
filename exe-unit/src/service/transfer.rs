@@ -17,7 +17,7 @@ use url::Url;
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::{
     transfer, FileTransferProvider, GftpTransferProvider, HashStream, HttpTransferProvider,
-    TransferData, TransferProvider, TransferSink, TransferStream,
+    TransferData, TransferProvider, TransferSink, TransferStream, UrlExt,
 };
 
 #[derive(Clone, Debug, Message)]
@@ -119,7 +119,7 @@ impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider
     }
 
     fn source(&self, url: &Url) -> TransferStream<TransferData, TransferError> {
-        let file_url = match self.resolve_url(url.path()) {
+        let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferStream::err(e),
         };
@@ -127,7 +127,7 @@ impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider
     }
 
     fn destination(&self, url: &Url) -> TransferSink<TransferData, TransferError> {
-        let file_url = match self.resolve_url(url.path()) {
+        let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferSink::err(e),
         };
@@ -369,7 +369,7 @@ impl Cache {
             None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
         };
 
-        let name = transfer_url.file_name();
+        let name = transfer_url.file_name()?;
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
