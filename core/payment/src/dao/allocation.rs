@@ -95,11 +95,16 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
-    pub async fn total_remaining_allocation(&self, identity: NodeId) -> DbResult<BigDecimal> {
+    pub async fn total_remaining_allocation(
+        &self,
+        platform: String,
+        address: String,
+    ) -> DbResult<BigDecimal> {
         readonly_transaction(self.pool, move |conn| {
             let total_remaining_amount = dsl::pay_allocation
                 .select(dsl::remaining_amount)
-                .filter(dsl::owner_id.eq(identity))
+                .filter(dsl::payment_platform.eq(platform))
+                .filter(dsl::address.eq(address))
                 .get_results::<BigDecimalField>(conn)?
                 .sum();
 

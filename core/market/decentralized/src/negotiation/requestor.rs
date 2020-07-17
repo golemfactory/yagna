@@ -25,6 +25,7 @@ use crate::protocol::negotiation::{
 
 use super::error::{NegotiationError, NegotiationInitError, QueryEventsError};
 use super::EventNotifier;
+use crate::db::model::AgreementState;
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
@@ -89,7 +90,8 @@ impl RequestorBroker {
         // We can ignore error, if removing events failed, because they will be never
         // queried again and don't collide with other subscriptions.
         let _ = self
-            .db()
+            .common
+            .db
             .as_dao::<EventsDao>()
             .remove_events(demand_id)
             .await
@@ -140,9 +142,8 @@ impl RequestorBroker {
             .await?;
 
         // Map model events to client RequestorEvent.
-        let db = self.db();
         Ok(futures::stream::iter(events)
-            .then(|event| event.into_client_requestor_event(&db))
+            .then(|event| event.into_client_requestor_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
                     log::warn!("Error converting event to client type: {}", error);
@@ -153,6 +154,19 @@ impl RequestorBroker {
             .await)
     }
 
+    /// Initiates the Agreement handshake phase.
+    ///
+    /// Formulates an Agreement artifact from the Proposal indicated by the
+    /// received Proposal Id.
+    ///
+    /// The Approval Expiry Date is added to Agreement artifact and implies
+    /// the effective timeout on the whole Agreement Confirmation sequence.
+    ///
+    /// A successful call to `create_agreement` shall immediately be followed
+    /// by a `confirm_agreement` and `wait_for_approval` call in order to listen
+    /// for responses from the Provider.
+    ///
+    /// TODO: **Note**: Moves given Proposal to `Approved` state.
     pub async fn create_agreement(
         &self,
         _id: Identity,
@@ -185,16 +199,53 @@ impl RequestorBroker {
             OwnerType::Requestor,
         );
         let id = agreement.id.clone();
-        self.db()
+        self.common
+            .db
             .as_dao::<AgreementDao>()
             .save(agreement)
             .await
-            .map_err(|e| AgreementError::FailedSaveAgreement(proposal_id.clone(), e))?;
+            .map_err(|e| AgreementError::Save(proposal_id.clone(), e))?;
         Ok(id)
     }
 
-    fn db(&self) -> DbExecutor {
-        self.common.db.clone()
+    /// Signs (not yet) Agreement self-created via `create_agreement`
+    /// and sends it to the Provider.
+    pub async fn confirm_agreement(
+        &self,
+        _id: Identity,
+        agreement_id: &AgreementId,
+    ) -> Result<(), AgreementError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+
+        let agreement = match dao
+            .select(agreement_id, Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            Some(agreement) => agreement,
+        };
+
+        // TODO : possible race condition here ISSUE#430
+        // 1. this state check should be also `db.update_state`
+        // 2. `db.update_state` must be invoked after successful propose_agreement
+        if agreement.state == AgreementState::Proposal {
+            self.api.propose_agreement(agreement).await?;
+            dao.update_state(agreement_id, AgreementState::Pending)
+                .await
+                .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+            return Ok(());
+        }
+
+        Err(match agreement.state {
+            AgreementState::Proposal => panic!("should not happen"),
+            AgreementState::Pending => AgreementError::Confirmed(agreement.id),
+            AgreementState::Cancelled => AgreementError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementError::Rejected(agreement.id),
+            AgreementState::Approved => AgreementError::Approved(agreement.id),
+            AgreementState::Expired => AgreementError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementError::Terminated(agreement.id),
+        })
     }
 }
 

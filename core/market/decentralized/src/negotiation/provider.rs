@@ -1,3 +1,6 @@
+// TODO: This is only temporary
+#![allow(dead_code)]
+
 use futures::stream::StreamExt;
 use std::str::FromStr;
 
@@ -7,13 +10,16 @@ use ya_client::model::{
 };
 use ya_persistence::executor::DbExecutor;
 
-use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::model::{Offer as ModelOffer, OwnerType, Proposal, ProposalId, SubscriptionId};
+use crate::db::dao::{AgreementDao, EventsDao, ProposalDao};
+use crate::db::model::{Offer as ModelOffer, SubscriptionId};
+use crate::db::model::{OwnerType, Proposal, ProposalId};
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
 use crate::negotiation::common::CommonBroker;
 use crate::negotiation::error::{ProposalError, QueryEventsError};
 use crate::negotiation::notifier::EventNotifier;
-use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
+use crate::protocol::negotiation::error::{
+    AgreementError, CounterProposalError, RemoteProposalError,
+};
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
@@ -43,6 +49,8 @@ impl ProviderBroker {
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
+        let broker3 = broker.clone();
+
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
                 on_initial_proposal(broker1.clone(), caller, msg)
@@ -53,7 +61,9 @@ impl ProviderBroker {
                     .on_proposal_received(caller, msg, OwnerType::Provider)
             },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
-            move |_caller: String, _msg: AgreementReceived| async move { unimplemented!() },
+            move |caller: String, msg: AgreementReceived| {
+                on_agreement_received(broker3.clone(), caller, msg)
+            },
             move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
         );
 
@@ -116,9 +126,8 @@ impl ProviderBroker {
             .await?;
 
         // Map model events to client RequestorEvent.
-        let db = self.db();
         Ok(futures::stream::iter(events)
-            .then(|event| event.into_client_provider_event(&db))
+            .then(|event| event.into_client_provider_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
                     log::warn!("Error converting event to client type: {}", error);
@@ -127,10 +136,6 @@ impl ProviderBroker {
             .filter_map(|event| async move { event.ok() })
             .collect::<Vec<ProviderEvent>>()
             .await)
-    }
-
-    fn db(&self) -> DbExecutor {
-        self.common.db.clone()
     }
 }
 
@@ -172,5 +177,32 @@ async fn on_initial_proposal(
 
     // Send channel message to wake all query_events waiting for proposals.
     notifier.notify(&subscription_id).await;
+    Ok(())
+}
+
+async fn on_agreement_received(
+    broker: CommonBroker,
+    _caller: String,
+    msg: AgreementReceived,
+) -> Result<(), AgreementError> {
+    let id = msg.agreement.id.clone();
+    let subscription_id = msg.agreement.offer_id.clone();
+    broker
+        .db
+        .as_dao::<AgreementDao>()
+        .save(msg.agreement.clone())
+        .await
+        .map_err(|e| AgreementError::Saving(e.to_string(), id.clone()))?;
+
+    broker
+        .db
+        .as_dao::<EventsDao>()
+        .add_agreement_event(msg.agreement)
+        .await
+        .map_err(|e| AgreementError::Saving(e.to_string(), id.clone()))?;
+
+    // Send channel message to wake all query_events waiting for proposals.
+    broker.notifier.notify(&subscription_id).await;
+
     Ok(())
 }

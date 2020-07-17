@@ -1,7 +1,7 @@
-use crate::error::PaymentDriverError;
-use crate::PaymentDriverResult;
+use crate::error::GNTDriverError;
+use crate::GNTDriverResult;
 
-use crate::models::{PaymentEntity, TransactionEntity, TransactionStatus, TxType};
+use crate::models::{TransactionEntity, TransactionStatus, TxType};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
@@ -12,23 +12,21 @@ use sha3::{Digest, Sha3_512};
 use std::pin::Pin;
 use std::str::FromStr;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{PaymentConfirmation, PaymentStatus};
 use ya_core_model::identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const PRECISION: u64 = 1_000_000_000_000_000_000;
 
-pub const PAYMENT_STATUS_UNKNOWN: i32 = 0;
 pub const PAYMENT_STATUS_NOT_YET: i32 = 1;
 pub const PAYMENT_STATUS_OK: i32 = 2;
 pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
 pub const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
 pub const PAYMENT_STATUS_FAILED: i32 = 5;
 
-pub fn str_to_addr(addr: &str) -> PaymentDriverResult<Address> {
+pub fn str_to_addr(addr: &str) -> GNTDriverResult<Address> {
     match addr.trim_start_matches("0x").parse() {
         Ok(addr) => Ok(addr),
-        Err(_e) => Err(PaymentDriverError::Address(addr.to_string())),
+        Err(_e) => Err(GNTDriverError::Address(addr.to_string())),
     }
 }
 
@@ -36,19 +34,19 @@ pub fn addr_to_str(addr: impl std::borrow::Borrow<Address>) -> String {
     format!("0x{}", hex::encode(addr.borrow()))
 }
 
-pub fn big_dec_to_u256(v: BigDecimal) -> PaymentDriverResult<U256> {
+pub fn big_dec_to_u256(v: BigDecimal) -> GNTDriverResult<U256> {
     let v = v * Into::<BigDecimal>::into(PRECISION);
     let v = v.to_bigint().unwrap();
     let v = &v.to_string();
     Ok(U256::from_dec_str(v)?)
 }
 
-pub fn u256_to_big_dec(v: U256) -> PaymentDriverResult<BigDecimal> {
+pub fn u256_to_big_dec(v: U256) -> GNTDriverResult<BigDecimal> {
     let v: BigDecimal = v.to_string().parse()?;
     Ok(v / Into::<BigDecimal>::into(PRECISION))
 }
 
-pub fn str_to_big_dec(v: &str) -> PaymentDriverResult<BigDecimal> {
+pub fn str_to_big_dec(v: &str) -> GNTDriverResult<BigDecimal> {
     let v: BigDecimal = BigDecimal::from_str(v)?;
     Ok(v)
 }
@@ -106,31 +104,6 @@ pub fn prepare_tx_id(raw_tx: &RawTransaction, chain_id: u64, sender: Address) ->
     let mut address = sender.as_bytes().to_vec();
     bytes.append(&mut address);
     format!("{:x}", Sha3_512::digest(&bytes))
-}
-
-pub fn payment_status_to_i32(status: &PaymentStatus) -> i32 {
-    match status {
-        PaymentStatus::NotYet => PAYMENT_STATUS_NOT_YET,
-        PaymentStatus::Ok(_confirmation) => PAYMENT_STATUS_OK,
-        PaymentStatus::NotEnoughFunds => PAYMENT_STATUS_NOT_ENOUGH_FUNDS,
-        PaymentStatus::NotEnoughGas => PAYMENT_STATUS_NOT_ENOUGH_GAS,
-        PaymentStatus::Unknown => PAYMENT_STATUS_UNKNOWN,
-        PaymentStatus::Failed => PAYMENT_STATUS_FAILED,
-    }
-}
-
-pub fn payment_entity_to_status(payment: &PaymentEntity) -> PaymentStatus {
-    match payment.status {
-        PAYMENT_STATUS_OK => {
-            let confirmation: Vec<u8> = Vec::new();
-            PaymentStatus::Ok(PaymentConfirmation { confirmation })
-        }
-        PAYMENT_STATUS_NOT_YET => PaymentStatus::NotYet,
-        PAYMENT_STATUS_NOT_ENOUGH_FUNDS => PaymentStatus::NotEnoughFunds,
-        PAYMENT_STATUS_NOT_ENOUGH_GAS => PaymentStatus::NotEnoughGas,
-        PAYMENT_STATUS_FAILED => PaymentStatus::Failed,
-        _ => PaymentStatus::Unknown,
-    }
 }
 
 pub fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {

@@ -47,6 +47,7 @@ macro_rules! query {
                 agreement_dsl::peer_id,
                 agreement_dsl::payee_addr,
                 agreement_dsl::payer_addr,
+                agreement_dsl::payment_platform,
             ))
     };
 }

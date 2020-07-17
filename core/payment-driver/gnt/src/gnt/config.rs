@@ -1,5 +1,5 @@
-use crate::ethereum::Chain;
-use crate::{utils, PaymentDriverError, PaymentDriverResult};
+use crate::gnt::ethereum::Chain;
+use crate::{utils, GNTDriverError, GNTDriverResult};
 use ethereum_types::{Address, H160};
 
 use std::env;
@@ -46,7 +46,7 @@ pub const CFG_MAINNET: EnvConfiguration = EnvConfiguration {
 };
 
 impl EnvConfiguration {
-    pub fn from_env(chain: Chain) -> PaymentDriverResult<Self> {
+    pub fn from_env(chain: Chain) -> GNTDriverResult<Self> {
         let mut base = match chain {
             Chain::Rinkeby => CFG_TESTNET,
             Chain::Mainnet => CFG_MAINNET,
@@ -59,7 +59,7 @@ impl EnvConfiguration {
         }
         if let Some(required_confirmations) = env::var(REQUIRED_CONFIRMATIONS_ENV_VAR).ok() {
             base.required_confirmations = required_confirmations.parse().map_err(|_| {
-                PaymentDriverError::library_err_msg(format!(
+                GNTDriverError::library_err_msg(format!(
                     "invalid {} value: {}",
                     REQUIRED_CONFIRMATIONS_ENV_VAR, required_confirmations
                 ))

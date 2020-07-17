@@ -145,13 +145,10 @@ async fn negotiate_offer(
         return Ok(ProcessOfferResult::ProposalId(new_proposal_id));
     }
 
-    let new_agreement_id = proposal_id;
-    let new_agreement = AgreementProposal::new(
-        new_agreement_id.clone(),
-        Utc::now() + chrono::Duration::hours(2),
-    );
-    log::info!("\n\n creating new AGREEMENT: {}", new_agreement_id);
-    let _ack = api.market.create_agreement(&new_agreement).await?;
+    let new_agreement =
+        AgreementProposal::new(proposal_id.clone(), Utc::now() + chrono::Duration::hours(2));
+    log::info!("\n\n creating new AGREEMENT");
+    let new_agreement_id = api.market.create_agreement(&new_agreement).await?;
 
     log::info!("\n\n allocating funds for agreement: {}", new_agreement_id);
     match allocate_funds(&api.payment, allocation_size).await {

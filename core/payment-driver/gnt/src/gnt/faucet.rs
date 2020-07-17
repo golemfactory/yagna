@@ -1,5 +1,5 @@
 use crate::utils;
-use crate::{PaymentDriverError, PaymentDriverResult};
+use crate::{GNTDriverError, GNTDriverResult};
 use ethereum_types::Address;
 use std::{env, time};
 
@@ -13,37 +13,36 @@ pub struct EthFaucetConfig {
 }
 
 impl EthFaucetConfig {
-    pub fn from_env() -> PaymentDriverResult<Self> {
-        let faucet_address_str = env::var(ETH_FAUCET_ADDRESS_ENV_VAR).map_err(|_| {
-            PaymentDriverError::MissingEnvironmentVariable(ETH_FAUCET_ADDRESS_ENV_VAR)
-        })?;
-        let faucet_address = faucet_address_str.parse().map_err(|e| {
-            PaymentDriverError::LibraryError(format!("invalid faucet address: {}", e))
-        })?;
+    pub fn from_env() -> GNTDriverResult<Self> {
+        let faucet_address_str = env::var(ETH_FAUCET_ADDRESS_ENV_VAR)
+            .map_err(|_| GNTDriverError::MissingEnvironmentVariable(ETH_FAUCET_ADDRESS_ENV_VAR))?;
+        let faucet_address = faucet_address_str
+            .parse()
+            .map_err(|e| GNTDriverError::LibraryError(format!("invalid faucet address: {}", e)))?;
         Ok(EthFaucetConfig { faucet_address })
     }
 
-    pub async fn request_eth(&self, address: Address) -> PaymentDriverResult<()> {
+    pub async fn request_eth(&self, address: Address) -> GNTDriverResult<()> {
         log::debug!("request eth");
         let client = awc::Client::new();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
 
-        async fn try_request_eth(client: &awc::Client, url: &str) -> PaymentDriverResult<()> {
+        async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {
             let body = client
                 .get(url)
                 .send()
                 .await
-                .map_err(|e| PaymentDriverError::LibraryError(e.to_string()))?
+                .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?
                 .body()
                 .await
-                .map_err(|e| PaymentDriverError::LibraryError(e.to_string()))?;
+                .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?;
             let resp = std::string::String::from_utf8_lossy(body.as_ref());
             if resp.contains("sufficient funds") || resp.contains("txhash") {
                 log::debug!("resp: {}", resp);
                 return Ok(());
             }
 
-            Err(PaymentDriverError::LibraryError(resp.into_owned()))
+            Err(GNTDriverError::LibraryError(resp.into_owned()))
         }
 
         for _ in 0..MAX_ETH_FAUCET_REQUESTS {
@@ -55,7 +54,7 @@ impl EthFaucetConfig {
                 return Ok(());
             }
         }
-        Err(PaymentDriverError::LibraryError(format!(
+        Err(GNTDriverError::LibraryError(format!(
             "Cannot request Eth from Faucet"
         )))
     }

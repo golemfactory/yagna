@@ -5,7 +5,7 @@ use super::error::{AgreementError, CounterProposalError, NegotiationApiInitError
 use super::messages::*;
 use super::messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected};
 
-use crate::db::model::{OwnerType, Proposal, ProposalId};
+use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
 
 use std::str::FromStr;
 use ya_client::model::NodeId;
@@ -117,18 +117,12 @@ impl NegotiationApi {
     }
 
     /// Sent to provider, when Requestor will call confirm Agreement.
-    /// TODO: send Agreement content
-    pub async fn propose_agreement(
-        &self,
-        id: NodeId,
-        agreement_id: &str,
-        owner: NodeId,
-    ) -> Result<(), AgreementError> {
-        let msg = AgreementReceived {
-            agreement_id: agreement_id.to_string(),
-        };
-        net::from(id)
-            .to(owner)
+    pub async fn propose_agreement(&self, agreement: Agreement) -> Result<(), AgreementError> {
+        let requestor_id = agreement.requestor_id.clone();
+        let provider_id = agreement.provider_id.clone();
+        let msg = AgreementReceived { agreement };
+        net::from(requestor_id)
+            .to(provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .await??;
@@ -141,12 +135,10 @@ impl NegotiationApi {
     pub async fn cancel_agreement(
         &self,
         id: NodeId,
-        agreement_id: &str,
+        agreement_id: AgreementId,
         owner: NodeId,
     ) -> Result<(), AgreementError> {
-        let msg = AgreementCancelled {
-            agreement_id: agreement_id.to_string(),
-        };
+        let msg = AgreementCancelled { agreement_id };
         net::from(id)
             .to(owner)
             .service(&provider::agreement_addr(BUS_ID))

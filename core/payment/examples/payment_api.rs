@@ -1,19 +1,60 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
+use futures::Future;
+use std::convert::TryInto;
+use std::pin::Pin;
+use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
-
+use ya_client_model::NodeId;
+use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
+use ya_core_model::identity;
+use ya_dummy_driver::{
+    PaymentDriverService as DummyDriverService, DRIVER_NAME as DUMMY_DRIVER_NAME,
+};
+use ya_gnt_driver::{PaymentDriverService as GntDriverService, DRIVER_NAME as GNT_DRIVER_NAME};
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
+use ya_service_bus::typed as bus;
+
+#[derive(Clone, Debug, StructOpt)]
+enum Driver {
+    Dummy,
+    Gnt,
+}
+
+impl FromStr for Driver {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        match s.to_lowercase().as_str() {
+            "dummy" => Ok(Driver::Dummy),
+            "gnt" => Ok(Driver::Gnt),
+            s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
+        }
+    }
+}
+
+impl std::fmt::Display for Driver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Driver::Dummy => write!(f, "dummy"),
+            Driver::Gnt => write!(f, "gnt"),
+        }
+    }
+}
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
+    #[structopt(long, default_value = "dummy")]
+    driver: Driver,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
     #[structopt(long, default_value = "")]
@@ -26,103 +67,75 @@ struct Args {
     agreement_id: String,
 }
 
-#[cfg(feature = "dummy-driver")]
-mod driver {
-    use super::{DbExecutor, EthAccount};
-    use ya_payment_driver::PaymentDriverService;
+pub async fn start_dummy_driver() -> anyhow::Result<()> {
+    DummyDriverService::gsb(&()).await?;
+    Ok(())
+}
 
-    pub async fn start(
-        db: &DbExecutor,
-        _provider_account: Box<EthAccount>,
-        _requestor_account: Box<EthAccount>,
-    ) -> anyhow::Result<()> {
-        PaymentDriverService::gsb(db).await?;
-        Ok(())
+pub async fn start_gnt_driver(
+    db: &DbExecutor,
+    requestor_account: Box<EthAccount>,
+) -> anyhow::Result<()> {
+    let requestor = NodeId::from(requestor_account.address().as_ref());
+    fake_list_identities(vec![requestor]);
+    fake_subscribe_to_events();
+
+    GntDriverService::gsb(db).await?;
+
+    let requestor_sign_tx = get_sign_tx(requestor_account);
+    fake_sign_tx(Box::new(requestor_sign_tx));
+    Ok(())
+}
+
+fn fake_list_identities(identities: Vec<NodeId>) {
+    bus::bind(identity::BUS_ID, move |_msg: identity::List| {
+        let ids = identities.clone();
+        let mut accounts: Vec<identity::IdentityInfo> = vec![];
+        for id in ids {
+            accounts.push(identity::IdentityInfo {
+                alias: None,
+                node_id: id,
+                is_default: false,
+                is_locked: false,
+            });
+        }
+        async move { Ok(accounts) }
+    });
+}
+
+fn fake_subscribe_to_events() {
+    bus::bind(
+        identity::BUS_ID,
+        move |_msg: identity::Subscribe| async move { Ok(identity::Ack {}) },
+    );
+}
+
+fn get_sign_tx(
+    account: Box<EthAccount>,
+) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+    let account: Arc<EthAccount> = account.into();
+    move |msg| {
+        let account = account.clone();
+        let fut = async move {
+            let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
+            let signature = account.sign(&msg).unwrap();
+            let mut v = Vec::with_capacity(65);
+            v.push(signature.v);
+            v.extend_from_slice(&signature.r);
+            v.extend_from_slice(&signature.s);
+            v
+        };
+        Box::pin(fut)
     }
 }
 
-#[cfg(feature = "gnt-driver")]
-mod driver {
-    use super::{DbExecutor, EthAccount};
-    use futures::Future;
-    use std::convert::TryInto;
-    use std::pin::Pin;
-    use std::sync::Arc;
-    use ya_client_model::NodeId;
-    use ya_core_model::identity;
-    use ya_payment_driver::PaymentDriverService;
-    use ya_service_bus::typed as bus;
-
-    pub async fn start(
-        db: &DbExecutor,
-        provider_account: Box<EthAccount>,
-        requestor_account: Box<EthAccount>,
-    ) -> anyhow::Result<()> {
-        let requestor = NodeId::from(requestor_account.address().as_ref());
-        fake_list_identities(vec![requestor]);
-        fake_subscribe_to_events();
-
-        let provider_sign_tx = get_sign_tx(provider_account);
-        let requestor_sign_tx = get_sign_tx(requestor_account);
-
-        PaymentDriverService::gsb(db).await?;
-
-        fake_sign_tx(Box::new(provider_sign_tx));
-        fake_sign_tx(Box::new(requestor_sign_tx));
-        Ok(())
-    }
-
-    fn fake_list_identities(identities: Vec<NodeId>) {
-        bus::bind(identity::BUS_ID, move |_msg: identity::List| {
-            let ids = identities.clone();
-            let mut accounts: Vec<identity::IdentityInfo> = vec![];
-            for id in ids {
-                accounts.push(identity::IdentityInfo {
-                    alias: None,
-                    node_id: id,
-                    is_default: false,
-                    is_locked: false,
-                });
-            }
-            async move { Ok(accounts) }
-        });
-    }
-
-    fn fake_subscribe_to_events() {
-        bus::bind(
-            identity::BUS_ID,
-            move |_msg: identity::Subscribe| async move { Ok(identity::Ack {}) },
-        );
-    }
-
-    fn get_sign_tx(
-        account: Box<EthAccount>,
-    ) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-        let account: Arc<EthAccount> = account.into();
-        move |msg| {
-            let account = account.clone();
-            let fut = async move {
-                let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
-                let signature = account.sign(&msg).unwrap();
-                let mut v = Vec::with_capacity(65);
-                v.push(signature.v);
-                v.extend_from_slice(&signature.r);
-                v.extend_from_slice(&signature.s);
-                v
-            };
-            Box::pin(fut)
-        }
-    }
-
-    fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
-        let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> =
-            sign_tx.into();
-        bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
-            let sign_tx = sign_tx.clone();
-            let msg = msg.payload;
-            async move { Ok(sign_tx(msg).await) }
-        });
-    }
+fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
+    let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> = sign_tx.into();
+    bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
+        let sign_tx = sign_tx.clone();
+        let msg = msg.payload;
+        async move { Ok(sign_tx(msg).await) }
+    });
 }
 
 #[actix_rt::main]
@@ -153,9 +166,27 @@ async fn main() -> anyhow::Result<()> {
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
-    driver::start(&db, provider_account, requestor_account).await?;
+
+    let driver_name = match args.driver {
+        Driver::Dummy => {
+            start_dummy_driver().await?;
+            DUMMY_DRIVER_NAME
+        }
+        Driver::Gnt => {
+            start_gnt_driver(&db, requestor_account).await?;
+            GNT_DRIVER_NAME
+        }
+    };
+
     let processor = PaymentProcessor::new(db.clone());
     ya_payment::service::bind_service(&db, processor);
+
+    bus::service(driver_bus_id(driver_name))
+        .call(Init::new(provider_id.clone(), AccountMode::RECV))
+        .await??;
+    bus::service(driver_bus_id(driver_name))
+        .call(Init::new(requestor_id.clone(), AccountMode::SEND))
+        .await??;
 
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
