@@ -3,31 +3,31 @@ use futures::stream::StreamExt;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client::model::market::event::RequestorEvent;
-use ya_client::model::market::proposal::Proposal as ClientProposal;
+use ya_client::model::market::{event::RequestorEvent, proposal::Proposal as ClientProposal};
+use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
     dao::{AgreementDao, EventsDao, ProposalDao, StateError},
-    model::{
-        Agreement, AgreementId, AgreementState, Demand as ModelDemand, OwnerType, Proposal,
-        ProposalId, SubscriptionId,
-    },
+    model::{Agreement, AgreementId, AgreementState, OwnerType},
+    model::{Demand as ModelDemand, Proposal, ProposalId, SubscriptionId},
     DbResult,
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
-use crate::negotiation::common::CommonBroker;
-use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalError};
 use crate::protocol::negotiation::{
     error::{ApproveAgreementError, RemoteAgreementError},
     messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
     requestor::NegotiationApi,
 };
 
-use super::error::{NegotiationError, NegotiationInitError, QueryEventsError};
-use super::EventNotifier;
-use crate::negotiation::notifier::NotifierError;
+use super::{
+    common::CommonBroker,
+    error::{AgreementError, WaitForApprovalError},
+    error::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError},
+    notifier::NotifierError,
+    EventNotifier,
+};
 
 #[derive(Clone, derive_more::Display)]
 pub enum ApprovalStatus {
@@ -288,7 +288,7 @@ impl RequestorBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
-        let agreement = match dao
+        let mut agreement = match dao
             .select(agreement_id, Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
@@ -302,6 +302,7 @@ impl RequestorBroker {
                 // TODO : possible race condition here ISSUE#430
                 // 1. this state check should be also `db.update_state`
                 // 2. `db.update_state` must be invoked after successful propose_agreement
+                agreement.state = AgreementState::Pending;
                 self.api.propose_agreement(agreement).await?;
                 dao.update_state(agreement_id, AgreementState::Pending)
                     .await
@@ -332,7 +333,15 @@ async fn on_agreement_approved(
         .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
         .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
-    if agreement.provider_id.to_string() != caller {
+    let caller_node_id: NodeId =
+        caller
+            .parse()
+            .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
+                e: e.to_string(),
+                caller,
+                id: agreement.id.clone(),
+            })?;
+    if agreement.provider_id != caller_node_id {
         // Don't reveal, that we know this Agreement id.
         Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
     }

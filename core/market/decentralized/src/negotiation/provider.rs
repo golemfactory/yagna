@@ -19,13 +19,14 @@ use crate::negotiation::common::CommonBroker;
 use crate::negotiation::error::{AgreementError, ProposalError, QueryEventsError};
 use crate::negotiation::notifier::EventNotifier;
 use crate::protocol::negotiation::error::{
-    ConfirmAgreementError, CounterProposalError, RemoteProposalError,
+    AgreementError as ProtocolAgreementError, CounterProposalError, RemoteProposalError,
 };
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
+use ya_service_api_web::middleware::Identity;
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -139,6 +140,7 @@ impl ProviderBroker {
 
     pub async fn approve_agreement(
         &self,
+        _id: Identity,
         agreement_id: &AgreementId,
         timeout: f32,
     ) -> Result<(), AgreementError> {
@@ -154,12 +156,12 @@ impl ProviderBroker {
         };
 
         Err(match agreement.state {
-            AgreementState::Proposal => AgreementError::Proposal(agreement.id),
+            AgreementState::Proposal => AgreementError::Proposed(agreement.id),
             AgreementState::Pending => {
                 // TODO : possible race condition here ISSUE#430
                 // 1. this state check should be also `db.update_state`
                 // 2. `db.update_state` must be invoked after successful propose_agreement
-                self.api.approve_agreement(agreement).await?;
+                self.api.approve_agreement(agreement, timeout).await?;
                 dao.update_state(agreement_id, AgreementState::Approved)
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
@@ -219,25 +221,26 @@ async fn on_agreement_received(
     broker: CommonBroker,
     _caller: String,
     mut msg: AgreementReceived,
-) -> Result<(), ConfirmAgreementError> {
+) -> Result<(), ProtocolAgreementError> {
     let id = msg.agreement.id.clone();
     let subscription_id = msg.agreement.offer_id.clone();
-    broker
-        .db
-        .as_dao::<AgreementDao>()
-        .save(msg.agreement.clone())
-        .await
-        .map_err(|e| ConfirmAgreementError::Saving(e.to_string(), id.clone()))?;
 
     // TODO: we should build new agreement here from local Proposal and signatures
     msg.agreement.state = AgreementState::Pending;
 
     broker
         .db
+        .as_dao::<AgreementDao>()
+        .save(msg.agreement.clone())
+        .await
+        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
+
+    broker
+        .db
         .as_dao::<EventsDao>()
         .add_agreement_event(msg.agreement)
         .await
-        .map_err(|e| ConfirmAgreementError::Saving(e.to_string(), id.clone()))?;
+        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
 
     // Send channel message to wake all query_events waiting for proposals.
     broker.notifier.notify(&subscription_id).await;

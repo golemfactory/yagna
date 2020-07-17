@@ -5,7 +5,6 @@ use ya_service_bus::RpcMessage;
 
 use crate::db::model::{Agreement, AgreementId};
 use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
-use crate::protocol::negotiation::error::ConfirmAgreementError;
 
 use super::super::callback::CallbackMessage;
 use super::error::{AgreementError, ApproveAgreementError, CounterProposalError, ProposalError};
@@ -89,7 +88,7 @@ pub struct AgreementReceived {
 impl RpcMessage for AgreementReceived {
     const ID: &'static str = "AgreementReceived";
     type Item = ();
-    type Error = ConfirmAgreementError;
+    type Error = AgreementError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
