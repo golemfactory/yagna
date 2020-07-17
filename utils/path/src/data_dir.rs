@@ -48,8 +48,7 @@ impl DataDir {
         if self.0.exists().not() {
             log::info!("creating data dir: {}", self);
             std::fs::create_dir_all(&self.0)
-                .context(format!("data dir {} creation error", self))
-                .map(|_| self.0.to_owned())?;
+                .context(format!("data dir {} creation error", self))?;
         }
         Ok(normalize_path(&self.0)?)
     }
