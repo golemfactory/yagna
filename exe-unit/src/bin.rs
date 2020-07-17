@@ -184,17 +184,22 @@ pub fn colored_stderr_exeunit_prefixed_format(
     flexi_logger::colored_opt_format(w, now, record)
 }
 
-fn main() {
-    if let Err(_) = flexi_logger::Logger::with_env()
-        .log_to_file()
-        .directory("logs")
+fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
+    logger
         .format(flexi_logger::colored_opt_format)
         .duplicate_to_stderr(flexi_logger::Duplicate::Debug)
         .format_for_stderr(colored_stderr_exeunit_prefixed_format)
+}
+
+fn main() {
+    if let Err(_) = configure_logger(flexi_logger::Logger::with_env())
+        .log_to_file()
+        .directory("logs")
         .start()
     {
-        env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
-        env_logger::init();
+        configure_logger(flexi_logger::Logger::with_env())
+            .start()
+            .expect("Failed to initialize logging");
         log::warn!("Switched to fallback logging method");
     }
 
