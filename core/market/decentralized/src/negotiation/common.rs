@@ -10,7 +10,10 @@ use ya_persistence::executor::Error as DbError;
 use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
 use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
 use crate::db::model::{ProposalId, SubscriptionId};
-use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
+use crate::matcher::{
+    error::{DemandError, QueryOfferError},
+    store::SubscriptionStore,
+};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
     error::{ProposalError, QueryEventsError},
@@ -34,10 +37,35 @@ impl CommonBroker {
         subscription_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
+        owner: OwnerType,
     ) -> Result<(Proposal, IsInitial), ProposalError> {
-        // TODO: Everything should happen under transaction.
-        // TODO: Check if subscription is active
-        // TODO: Check if this proposal wasn't already countered.
+        // Check if subscription is still active.
+        // Note that subscription can be unsubscribed, before we get to saving
+        // Proposal to database. This seems like race conditions, but there's no
+        // danger of data inconsistency. If we won't reject countering Proposal here,
+        // it will be sent to Provider and his counter Proposal will be rejected later.
+        if owner == OwnerType::Provider {
+            self.store
+                .get_offer(&subscription_id)
+                .await
+                .map_err(|e| match e {
+                    QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
+                    QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
+                    QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
+                    QueryOfferError::Get(..) => {
+                        ProposalError::InternalError(prev_proposal_id.clone(), e.to_string())
+                    }
+                })?;
+        } else {
+            self.store
+                .get_demand(&subscription_id)
+                .await
+                .map_err(|e| match e {
+                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
+                    _ => ProposalError::InternalError(prev_proposal_id.clone(), e.to_string()),
+                })?;
+        }
+
         let prev_proposal = self
             .get_proposal(prev_proposal_id)
             .await

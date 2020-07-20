@@ -23,6 +23,7 @@ pub mod provider {
     use ya_client::model::market::Proposal;
 
     pub fn expect_proposal(events: Vec<ProviderEvent>) -> anyhow::Result<Proposal> {
+        assert_ne!(events.len(), 0, "Expected one event. Found 0.");
         assert_eq!(events.len(), 1, "Expected only one event.");
 
         Ok(match events[0].clone() {

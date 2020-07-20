@@ -133,7 +133,7 @@ impl RequestorBroker {
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, is_initial) = self
             .common
-            .counter_proposal(demand_id, prev_proposal_id, proposal)
+            .counter_proposal(demand_id, prev_proposal_id, proposal, OwnerType::Requestor)
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();

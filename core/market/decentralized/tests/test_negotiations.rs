@@ -272,3 +272,104 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+/// Can't counter Proposal, for which Demand was unsubscribed.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_counter_unsubscribed")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+
+    let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.get_default_id("Node-2");
+
+    let demand_id = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await?;
+    market2.subscribe_offer(&sample_offer(), &identity2).await?;
+
+    let events = market1
+        .requestor_engine
+        .query_events(&demand_id, 1.2, Some(5))
+        .await?;
+    let proposal0 = requestor::expect_proposal(events)?;
+    market1.unsubscribe_demand(&demand_id, &identity1).await?;
+
+    let proposal1 = proposal0.counter_demand(sample_demand())?;
+    let result = market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0.get_proposal_id()?, &proposal1)
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::NoSubscription(id) => assert_eq!(id, demand_id),
+        _ => panic!("Expected ProposalError::Unsubscribed."),
+    }
+
+    Ok(())
+}
+
+/// Can't counter Proposal, for which Offer was unsubscribed.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_counter_unsubscribed_offer")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+
+    let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.get_default_id("Node-2");
+
+    let demand_id = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await?;
+    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+
+    let events = market1
+        .requestor_engine
+        .query_events(&demand_id, 1.2, Some(5))
+        .await?;
+    let proposal0 = requestor::expect_proposal(events)?;
+
+    let proposal1 = proposal0.counter_demand(sample_demand())?;
+    market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0.get_proposal_id()?, &proposal1)
+        .await?;
+
+    // PROVIDER side
+    let events = market2
+        .provider_engine
+        .query_events(&offer_id, 1.2, Some(5))
+        .await?;
+    market2.unsubscribe_offer(&offer_id, &identity2).await?;
+
+    let proposal0 = provider::expect_proposal(events)?;
+    let proposal1 = proposal0.counter_offer(sample_offer())?;
+    let result = market2
+        .provider_engine
+        .counter_proposal(&offer_id, &proposal0.get_proposal_id()?, &proposal1)
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::Unsubscribed(id) => assert_eq!(id, offer_id),
+        _ => panic!("Expected ProposalError::Unsubscribed."),
+    }
+
+    Ok(())
+}

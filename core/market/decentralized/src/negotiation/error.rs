@@ -91,6 +91,8 @@ pub enum QueryEventsError {
 
 #[derive(Error, Debug)]
 pub enum ProposalError {
+    #[error("Subscription [{0}] wasn't found.")]
+    NoSubscription(SubscriptionId),
     #[error("Subscription [{0}] was already unsubscribed.")]
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
@@ -107,6 +109,8 @@ pub enum ProposalError {
     FailedSaveProposal(ProposalId, SaveProposalError),
     #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
     FailedSendProposal(ProposalId, ProtocolProposalError),
+    #[error("Can't counter Proposal [{0}]. Error: {1}.")]
+    InternalError(ProposalId, String),
 }
 
 impl AgreementError {

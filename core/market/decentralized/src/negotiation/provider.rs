@@ -102,7 +102,12 @@ impl ProviderBroker {
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
             .common
-            .counter_proposal(subscription_id, prev_proposal_id, proposal)
+            .counter_proposal(
+                subscription_id,
+                prev_proposal_id,
+                proposal,
+                OwnerType::Provider,
+            )
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
