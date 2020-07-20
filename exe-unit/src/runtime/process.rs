@@ -1,15 +1,14 @@
 use crate::error::Error;
-use crate::message::{
-    RuntimeCommand, RuntimeCommandResult, SetRuntimeMode, SetTaskPackagePath, Shutdown,
-};
+use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
 use crate::process::{ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
 use crate::ExeUnitContext;
 use actix::prelude::*;
+use futures::channel::mpsc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
-use futures::FutureExt;
+use futures::{FutureExt, SinkExt, TryFutureExt};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
@@ -17,7 +16,9 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
-use ya_client_model::activity::{CommandResult, ExeScriptCommand};
+use tokio_util::codec::{BytesCodec, FramedRead};
+use ya_client_model::activity::ExeScriptCommand;
+use ya_core_model::activity::RuntimeEvent;
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
@@ -121,10 +122,13 @@ impl RuntimeProcess {
 impl RuntimeProcess {
     fn handle_process_command<'f>(
         &self,
-        command: ExeScriptCommand,
+        cmd: ExecuteCommand,
         address: Addr<Self>,
-    ) -> LocalBoxFuture<'f, Result<RuntimeCommandResult, Error>> {
-        let cmd_args = match command {
+    ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        let idx = cmd.idx;
+        let evt_tx = cmd.tx.clone();
+
+        let cmd_args = match cmd.command {
             ExeScriptCommand::Deploy {} => {
                 let cmd_args = vec![OsString::from("deploy")];
                 cmd_args
@@ -143,59 +147,57 @@ impl RuntimeProcess {
                 cmd_args.extend(args.into_iter().map(OsString::from));
                 cmd_args
             }
-            _ => return futures::future::ok(RuntimeCommandResult::ok()).boxed_local(),
+            _ => return futures::future::ok(0).boxed_local(),
         };
-
         let binary = self.binary.clone();
         let args = self.args(cmd_args);
-        let current_path = std::env::current_dir();
+
         log::info!(
             "Executing {:?} with {:?} from path {:?}",
             binary,
             args,
-            current_path
+            std::env::current_dir()
         );
 
+        let batch_id = cmd.batch_id.clone();
         async move {
-            let child = Command::new(binary)
+            let mut child = Command::new(binary)
                 .kill_on_drop(true)
                 .args(args?)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()?;
 
+            let id = batch_id.clone();
+            forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
+                RuntimeEvent::stdout(id.clone(), idx, out)
+            });
+            let id = batch_id.clone();
+            forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
+                RuntimeEvent::stderr(id.clone(), idx, out)
+            });
+
             let tree =
                 ProcessTree::try_new(child.id()).map_err(|e| Error::RuntimeError(e.to_string()))?;
 
             address.do_send(AddChildProcess::from(tree.clone()));
-            let result = child.wait_with_output().await;
+            let result = child.await;
             address.do_send(RemoveChildProcess::from(tree));
-            let output = result?;
 
-            Ok(RuntimeCommandResult {
-                result: match output.status.success() {
-                    true => CommandResult::Ok,
-                    _ => CommandResult::Error,
-                },
-                stdout: vec_to_string(output.stdout),
-                stderr: vec_to_string(output.stderr),
-            })
+            Ok(result?.code().unwrap_or(-1))
         }
         .boxed_local()
     }
 
     fn handle_service_command<'f>(
         &mut self,
-        command: ExeScriptCommand,
-        addr: Addr<Self>,
-    ) -> LocalBoxFuture<'f, Result<RuntimeCommandResult, Error>> {
+        cmd: ExecuteCommand,
+        address: Addr<Self>,
+    ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let binary = self.binary.clone();
-        match command {
+        match cmd.command {
             ExeScriptCommand::Start { args } => {
-                let monitor = self
-                    .monitor
-                    .get_or_insert_with(|| EventMonitor::default())
-                    .clone();
+                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
 
                 async move {
                     let mut cmd_args = vec![String::from("start")];
@@ -210,9 +212,10 @@ impl RuntimeProcess {
                         .hello(SERVICE_PROTOCOL_VERSION)
                         .map_err(|e| Error::RuntimeError(format!("{:?}", e)))
                         .await?;
-                    addr.send(SetProcessService(ProcessService::new(service)))
+                    address
+                        .send(SetProcessService(ProcessService::new(service)))
                         .await?;
-                    Ok(RuntimeCommandResult::ok())
+                    Ok(0)
                 }
                 .boxed_local()
             }
@@ -230,6 +233,9 @@ impl RuntimeProcess {
 
                 let service = self.service.as_ref().unwrap().service.clone();
                 let mut monitor = self.monitor.as_ref().unwrap().clone();
+                let batch_id = cmd.batch_id.clone();
+                let idx = cmd.idx;
+                let mut tx = cmd.tx.clone();
 
                 async move {
                     let process = match service.run_process(run_process).await {
@@ -238,39 +244,48 @@ impl RuntimeProcess {
                     };
                     let mut events = match monitor.events(process.pid) {
                         Some(events) => events,
-                        _ => return Err(Error::RuntimeError("Process handled elsewhere".into())),
+                        _ => return Err(Error::RuntimeError("Process already monitored".into())),
                     };
-
-                    let mut stdout = Vec::<u8>::new();
-                    let mut stderr = Vec::<u8>::new();
-                    let result = loop {
-                        let status = match events.rx.next().await {
-                            Some(status) => status,
-                            _ => continue,
-                        };
-
-                        stdout.extend(status.stdout);
-                        stderr.extend(status.stderr);
-                        if status.running {
-                            continue;
+                    while let Some(status) = events.rx.next().await {
+                        if let Some(out) = vec_to_string(status.stdout) {
+                            let batch_id = batch_id.clone();
+                            let _ = tx.send(RuntimeEvent::stdout(batch_id, idx, out)).await;
                         }
-
-                        break RuntimeCommandResult {
-                            result: match status.return_code {
-                                0 => CommandResult::Ok,
-                                _ => CommandResult::Error,
-                            },
-                            stdout: vec_to_string(stdout),
-                            stderr: vec_to_string(stderr),
-                        };
-                    };
-                    Ok(result)
+                        if let Some(out) = vec_to_string(status.stderr) {
+                            let batch_id = batch_id.clone();
+                            let _ = tx.send(RuntimeEvent::stderr(batch_id, idx, out)).await;
+                        }
+                        if !status.running {
+                            return Ok(status.return_code);
+                        }
+                    }
+                    Ok(0)
                 }
                 .boxed_local()
             }
-            _ => futures::future::ok(RuntimeCommandResult::ok()).boxed_local(),
+            _ => futures::future::ok(0).boxed_local(),
         }
     }
+}
+
+fn forward_output<F, R>(read: R, tx: &mpsc::Sender<RuntimeEvent>, f: F)
+where
+    F: Fn(String) -> RuntimeEvent + 'static,
+    R: tokio::io::AsyncRead + 'static,
+{
+    let tx = tx.clone();
+    let stream = FramedRead::new(read, BytesCodec::new())
+        .filter_map(|result| async { result.ok() })
+        .filter_map(|bytes| async move { bytes_to_string(bytes) })
+        .ready_chunks(16)
+        .map(|v| v.join("\n"))
+        .map(f)
+        .map(|evt| Ok(evt));
+    Arbiter::spawn(async move {
+        if let Err(e) = stream.forward(tx).await {
+            log::error!("Error forwarding output: {:?}", e);
+        }
+    });
 }
 
 impl Runtime for RuntimeProcess {}
@@ -287,18 +302,20 @@ impl Actor for RuntimeProcess {
     }
 }
 
-impl Handler<RuntimeCommand> for RuntimeProcess {
-    type Result = ResponseFuture<<RuntimeCommand as Message>::Result>;
+impl Handler<ExecuteCommand> for RuntimeProcess {
+    type Result = ResponseFuture<<ExecuteCommand as Message>::Result>;
 
-    fn handle(&mut self, msg: RuntimeCommand, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, cmd: ExecuteCommand, ctx: &mut Self::Context) -> Self::Result {
         let address = ctx.address();
-        match &msg.0 {
-            ExeScriptCommand::Deploy {} => self.handle_process_command(msg.0, address),
+        match &cmd.command {
+            ExeScriptCommand::Deploy {} => self.handle_process_command(cmd, address),
             _ => match &self.mode {
-                RuntimeMode::ProcessPerCommand => self.handle_process_command(msg.0, address),
-                RuntimeMode::Service => self.handle_service_command(msg.0, address),
+                RuntimeMode::ProcessPerCommand => self.handle_process_command(cmd, address),
+                RuntimeMode::Service => self.handle_service_command(cmd, address),
             },
         }
+        .map(|code| Ok(code.unwrap_or(0)))
+        .boxed_local()
     }
 }
 
@@ -359,6 +376,15 @@ impl Handler<Shutdown> for RuntimeProcess {
             .map(|_| Ok(()))
             .boxed_local()
     }
+}
+
+fn bytes_to_string<B: AsRef<[u8]>>(bytes: B) -> Option<String> {
+    let bytes = bytes.as_ref();
+    let string = String::from_utf8_lossy(bytes);
+    if string.is_empty() {
+        return None;
+    }
+    Some(string.to_string())
 }
 
 fn vec_to_string(vec: Vec<u8>) -> Option<String> {

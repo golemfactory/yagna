@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use futures::prelude::*;
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -6,7 +7,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 use tokio::process::Command;
 use ya_client_model::activity::{ExeScriptCommand, State};
-use ya_core_model::activity::{self, Exec, GetExecBatchResults, GetState};
+use ya_core_model::activity::{self, Exec, GetExecBatchResults, GetState, StreamExecBatchProgress};
 use ya_service_bus::actix_rpc;
 
 const ACTIVITY_BUS_ID: &str = "activity";
@@ -61,6 +62,9 @@ pub struct Cli {
     /// Hand off resource limiting from Supervisor to Runtime
     #[structopt(long)]
     pub cap_handoff: bool,
+    /// Stream output during execution
+    #[structopt(long)]
+    pub stream_output: bool,
 }
 
 mod mock_activity {
@@ -157,6 +161,21 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
 
     let _ = exe_unit_service.send(exec.clone()).await?;
 
+    if args.stream_output {
+        let svc = actix_rpc::service(&exe_unit_url);
+        Arbiter::spawn(async move {
+            let msg = StreamExecBatchProgress {
+                activity_id: ACTIVITY_ID.to_string(),
+                batch_id: BATCH_ID.to_string(),
+            };
+            svc.call_stream(msg)
+                .for_each(|r| async move {
+                    log::info!("[STREAM] {:?}", r);
+                })
+                .await;
+        });
+    }
+
     let mut msg = GetExecBatchResults {
         activity_id: ACTIVITY_ID.to_string(),
         batch_id: BATCH_ID.to_string(),
@@ -174,15 +193,25 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
             )
         }
         let results = exe_unit_service.send(msg).await?;
-        log::warn!("Exe script results: {:#?}", results);
+
+        if args.stream_output {
+            log::warn!("Exe script results ({})", results?.len());
+        } else {
+            log::warn!("Exe script results: {:#?}", results);
+        }
         return Ok(());
     }
 
     for i in 0..exe_script.len() {
         msg.command_index = Some(i);
         log::warn!("waiting at most {:?}s for {}. command", msg.timeout, i);
-        let results = exe_unit_service.send(msg.clone()).await?;
-        log::warn!("Command {} result: {:#?}", i, results);
+        let result = exe_unit_service.send(msg.clone()).await?;
+
+        if args.stream_output {
+            log::warn!("Exe script results ({})", result?.len());
+        } else {
+            log::warn!("Exe script results: {:#?}", result);
+        }
 
         if args.terminate {
             let response = exe_unit_service
@@ -216,7 +245,12 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
             msg.command_index = Some(i);
             log::warn!("waiting at most {:?}s for {}. command", msg.timeout, i);
             let results = exe_unit_service.send(msg.clone()).await?;
-            log::warn!("Command {} result: {:#?}", i, results);
+
+            if args.stream_output {
+                log::warn!("Exe script results ({})", results?.len());
+            } else {
+                log::warn!("Exe script results: {:#?}", results);
+            }
         }
     }
 

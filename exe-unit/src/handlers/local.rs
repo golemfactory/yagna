@@ -8,6 +8,38 @@ use actix::prelude::*;
 use futures::FutureExt;
 use ya_client_model::activity::ActivityState;
 use ya_core_model::activity::local::SetState as SetActivityState;
+use ya_core_model::activity::{RuntimeEvent, RuntimeEventKind};
+
+impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
+    fn handle(&mut self, update: RuntimeEvent, _: &mut Context<Self>) {
+        let batch = match self.state.batches.get_mut(&update.batch_id) {
+            Some(batch) => batch,
+            _ => return log::warn!("Batch event error: unknown batch {}", update.batch_id),
+        };
+
+        self.state.last_batch = Some(update.batch_id.clone());
+
+        if let Err(err) = match &update.kind {
+            RuntimeEventKind::Started { command: _ } => batch.started(update.index),
+            RuntimeEventKind::StdOut(out) => batch.push_stdout(update.index, out.clone()),
+            RuntimeEventKind::StdErr(out) => batch.push_stderr(update.index, out.clone()),
+            RuntimeEventKind::Finished { code, message } => {
+                batch.finished(update.index, *code, message.clone())
+            }
+        } {
+            log::error!("Batch {} event error: {}", update.batch_id, err);
+        }
+
+        if batch.stream.initialized() {
+            if let Err(err) = batch.stream.sender().send(update) {
+                log::warn!(
+                    "Batch {} event stream interrupted: the receiver is gone",
+                    err.0.batch_id
+                );
+            }
+        }
+    }
+}
 
 impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
     type Result = <GetState as Message>::Result;
@@ -20,39 +52,43 @@ impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
 impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
     type Result = <SetState as Message>::Result;
 
-    fn handle(&mut self, msg: SetState, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(update) = msg.running_command {
-            self.state.running_command = update.cmd;
+    fn handle(&mut self, update: SetState, ctx: &mut Context<Self>) -> Self::Result {
+        if self.state.inner == update.state {
+            return;
         }
 
-        if let Some(update) = msg.batch_result {
-            self.state.push_batch_result(update.batch_id, update.result);
+        log::debug!("Entering state: {:?}", update.state);
+        log::debug!("Report: {}", self.state.report());
+        self.state.inner = update.state.clone();
+
+        if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
+            return;
         }
+        let fut = report(
+            self.ctx.report_url.clone().unwrap(),
+            SetActivityState {
+                activity_id: self.ctx.activity_id.clone().unwrap(),
+                state: ActivityState {
+                    state: update.state,
+                    reason: update.reason,
+                    error_message: None,
+                },
+                timeout: None,
+            },
+        );
+        ctx.spawn(fut.into_actor(self));
+    }
+}
 
-        if let Some(update) = msg.state {
-            if self.state.inner != update.state {
-                log::debug!("Entering state: {:?}", update.state);
-                log::debug!("Report: {}", self.state.report());
+impl<R: Runtime> Handler<GetStdOut> for ExeUnit<R> {
+    type Result = <GetStdOut as Message>::Result;
 
-                self.state.inner = update.state.clone();
-
-                if let Some(id) = &self.ctx.activity_id {
-                    let fut = report(
-                        self.ctx.report_url.clone().unwrap(),
-                        SetActivityState {
-                            activity_id: id.clone(),
-                            state: ActivityState {
-                                state: update.state,
-                                reason: update.reason,
-                                error_message: None,
-                            },
-                            timeout: None,
-                        },
-                    );
-                    ctx.spawn(fut.into_actor(self));
-                }
-            }
-        }
+    fn handle(&mut self, msg: GetStdOut, _: &mut Context<Self>) -> Self::Result {
+        self.state
+            .batches
+            .get(&msg.batch_id)
+            .map(|b| b.results.get(msg.idx).map(|r| r.stdout.clone()).flatten())
+            .flatten()
     }
 }
 
@@ -60,7 +96,14 @@ impl<R: Runtime> Handler<GetBatchResults> for ExeUnit<R> {
     type Result = <GetBatchResults as Message>::Result;
 
     fn handle(&mut self, msg: GetBatchResults, _: &mut Context<Self>) -> Self::Result {
-        GetBatchResultsResponse(self.state.batch_results(&msg.0))
+        let results = match self.state.batches.get(&msg.0) {
+            Some(batch) => batch.results(),
+            _ => {
+                log::warn!("Batch results error: unknown batch {}", msg.0);
+                Vec::new()
+            }
+        };
+        GetBatchResultsResponse(results)
     }
 }
 
@@ -80,14 +123,13 @@ impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: Stop, _: &mut Context<Self>) -> Self::Result {
-        self.state.batch_control.retain(|id, tx| {
+        self.state.batches.iter_mut().for_each(|(id, batch)| {
             if msg.exclude_batches.contains(id) {
-                return true;
+                return;
             }
-            if let Some(tx) = tx.take() {
+            if let Some(tx) = batch.control.take() {
                 let _ = tx.send(());
             }
-            false
         });
 
         let fut = Self::stop_runtime(self.runtime.clone(), ShutdownReason::Interrupted(0))
@@ -118,7 +160,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
                 service.stop().await;
             }
 
-            let set_state = SetState::default().state_reason(State::Terminated.into(), reason);
+            let set_state = SetState::new(State::Terminated.into(), reason);
             let _ = address.send(set_state).await;
 
             System::current().stop();
