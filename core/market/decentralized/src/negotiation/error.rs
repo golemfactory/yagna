@@ -99,6 +99,8 @@ pub enum ProposalError {
     ProposalNotFound(ProposalId, SubscriptionId),
     #[error("Proposal [{0}] was already countered. Can't counter for the second time.")]
     AlreadyCountered(ProposalId),
+    #[error("Can't counter own Proposal [{0}].")]
+    OwnProposal(ProposalId),
     #[error("Failed to get Proposal [{0}] for subscription [{1}]. Error: [{2}]")]
     FailedGetProposal(ProposalId, SubscriptionId, DbError),
     #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]

@@ -8,7 +8,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
 use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
-use crate::db::model::{MarketEvent, OwnerType, Proposal};
+use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
 use crate::negotiation::notifier::NotifierError;
@@ -48,6 +48,10 @@ impl CommonBroker {
                 prev_proposal_id.clone(),
                 subscription_id.clone(),
             ))?
+        }
+
+        if prev_proposal.body.issuer == IssuerType::Us {
+            return Err(ProposalError::OwnProposal(prev_proposal_id.clone()));
         }
 
         let is_initial = prev_proposal.body.prev_proposal_id.is_none();
