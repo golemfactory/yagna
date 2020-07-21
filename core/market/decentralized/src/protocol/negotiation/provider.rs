@@ -1,21 +1,22 @@
-use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::RpcEndpoint;
+use ya_service_bus::{typed::ServiceBinder, RpcEndpoint};
 
-use crate::db::model::{AgreementId, OwnerType, Proposal, ProposalId};
-use crate::protocol::negotiation::error::CounterProposalError;
+use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
-use super::error::{AgreementError, NegotiationApiInitError, ProposalError};
-use super::messages::*;
+use super::error::{
+    AgreementError, ApproveAgreementError, CounterProposalError, NegotiationApiInitError,
+    ProposalError,
+};
 use super::messages::{
-    AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
-    ProposalReceived, ProposalRejected,
+    provider, requestor, AgreementApproved, AgreementCancelled, AgreementReceived,
+    AgreementRejected, InitialProposalReceived, ProposalContent, ProposalReceived,
+    ProposalRejected,
 };
 
 /// Responsible for communication with markets on other nodes
@@ -84,11 +85,11 @@ impl NegotiationApi {
     pub async fn reject_proposal(
         &self,
         id: NodeId,
-        proposal_id: &str,
+        proposal_id: &ProposalId,
         owner: NodeId,
     ) -> Result<(), ProposalError> {
         let msg = ProposalRejected {
-            proposal_id: ProposalId::from_str(&proposal_id).unwrap(),
+            proposal_id: proposal_id.clone(),
         };
         net::from(id)
             .to(owner)
@@ -101,16 +102,20 @@ impl NegotiationApi {
     /// TODO: pass agreement signature.
     pub async fn approve_agreement(
         &self,
-        id: NodeId,
-        agreement_id: AgreementId,
-        owner: NodeId,
-    ) -> Result<(), AgreementError> {
-        let msg = AgreementApproved { agreement_id };
-        net::from(id)
-            .to(owner)
+        agreement: Agreement,
+        timeout: f32,
+    ) -> Result<(), ApproveAgreementError> {
+        let timeout = Duration::from_secs_f32(timeout.max(0.0));
+        let msg = AgreementApproved {
+            agreement_id: agreement.id.clone(),
+        };
+        let net_send_fut = net::from(agreement.provider_id)
+            .to(agreement.requestor_id)
             .service(&requestor::agreement_addr(BUS_ID))
-            .send(msg)
-            .await??;
+            .send(msg);
+        tokio::time::timeout(timeout, net_send_fut)
+            .await
+            .map_err(|_| ApproveAgreementError::Timeout(agreement.id))???;
         Ok(())
     }
 
