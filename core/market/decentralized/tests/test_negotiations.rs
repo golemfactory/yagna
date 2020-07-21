@@ -415,3 +415,49 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Er
 
     Ok(())
 }
+
+/// Provider tries to counter draft Proposal, for which Demand was unsubscribed on remote Node.
+/// Negotiation attempt should be rejected by Requestor Node.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_counter_draft_unsubscribed_remote_demand")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let NegotiationHelper {
+        proposal_id: proposal0_id,
+        proposal: proposal0,
+        offer_id,
+        demand_id,
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+    let identity1 = network.get_default_id("Node-1");
+
+    let proposal1 = proposal0.counter_demand(sample_demand())?;
+    market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0_id, &proposal1)
+        .await?;
+
+    let proposal2 = provider::query_proposal(&market2, &offer_id).await?;
+    market1.unsubscribe_demand(&demand_id, &identity1).await?;
+
+    let proposal3 = proposal2.counter_offer(sample_offer())?;
+    let result = market2
+        .provider_engine
+        .counter_proposal(&offer_id, &proposal2.get_proposal_id()?, &proposal3)
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::FailedSendProposal(..) => (),
+        _ => panic!("Expected ProposalError::FailedSendProposal."),
+    }
+    Ok(())
+}

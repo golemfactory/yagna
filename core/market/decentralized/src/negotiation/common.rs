@@ -184,6 +184,14 @@ impl CommonBroker {
             }
         };
 
+        if let Err(e) = self
+            .store
+            .get_demand(&prev_proposal.negotiation.demand_id)
+            .await
+        {
+            match e {}
+        }
+
         // TODO: do auth
         let _owner_id = NodeId::from_str(&caller)
             .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
