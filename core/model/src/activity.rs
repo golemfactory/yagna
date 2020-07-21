@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
+    RuntimeEvent,
 };
 use ya_service_bus::{RpcMessage, RpcStreamMessage};
 
@@ -191,6 +192,20 @@ pub struct GetRunningCommand {
 impl RpcMessage for GetRunningCommand {
     const ID: &'static str = "GetRunningCommand";
     type Item = ExeScriptCommandState;
+    type Error = RpcMessageError;
+}
+/// Receive runtime event from Supervisor.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceiveRuntimeEvent {
+    pub activity_id: String,
+    pub event: RuntimeEvent,
+    //pub command_index: Option<usize>,
+}
+
+impl RpcMessage for ReceiveRuntimeEvent {
+    const ID: &'static str = "ReceiveRuntimeEvent";
+    type Item = ();
     type Error = RpcMessageError;
 }
 
