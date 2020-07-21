@@ -1,17 +1,26 @@
 use std::str::FromStr;
 
-use crate::db::model::ProposalId;
+use ya_client::model::market::Proposal;
+
+use crate::db::model::{ProposalId, SubscriptionId};
 use crate::testing::events_helper::ClientProposalHelper;
 use crate::testing::events_helper::{provider, requestor};
 use crate::testing::mock_offer::client::{sample_demand, sample_offer};
 use crate::testing::MarketsNetwork;
 use crate::testing::OwnerType;
 
+pub struct NegotiationHelper {
+    pub demand_id: SubscriptionId,
+    pub offer_id: SubscriptionId,
+    pub proposal_id: ProposalId,
+    pub proposal: Proposal,
+}
+
 pub async fn exchange_draft_proposals(
     network: &MarketsNetwork,
     node_id1: &str,
     node_id2: &str,
-) -> Result<ProposalId, anyhow::Error> {
+) -> Result<NegotiationHelper, anyhow::Error> {
     let market1 = network.get_market(node_id1);
     let market2 = network.get_market(node_id2);
 
@@ -24,11 +33,7 @@ pub async fn exchange_draft_proposals(
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // Expect events generated on requestor market.
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
     let proposal1_req = proposal0.counter_demand(sample_demand())?;
@@ -38,11 +43,7 @@ pub async fn exchange_draft_proposals(
         .await?;
 
     // Provider receives Proposal
-    let events = market2
-        .provider_engine
-        .query_events(&offer_id, 1.2, Some(5))
-        .await?;
-    let proposal1_prov = provider::expect_proposal(events)?;
+    let proposal1_prov = provider::query_proposal(&market2, &offer_id).await?;
     let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
 
     // Provider counters proposal.
@@ -53,10 +54,11 @@ pub async fn exchange_draft_proposals(
         .await?;
 
     // Requestor receives proposal.
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal2_req = requestor::expect_proposal(events)?;
-    Ok(ProposalId::from_str(&proposal2_req.proposal_id.unwrap())?)
+    let proposal2_req = requestor::query_proposal(&market1, &demand_id).await?;
+    Ok(NegotiationHelper {
+        proposal_id: ProposalId::from_str(&proposal2_req.proposal_id.clone().unwrap())?,
+        proposal: proposal2_req,
+        offer_id,
+        demand_id,
+    })
 }

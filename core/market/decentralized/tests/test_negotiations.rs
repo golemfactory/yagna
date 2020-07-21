@@ -1,5 +1,8 @@
 use ya_market_decentralized::testing::events_helper::{provider, requestor, ClientProposalHelper};
 use ya_market_decentralized::testing::mock_offer::client::{sample_demand, sample_offer};
+use ya_market_decentralized::testing::proposal_util::{
+    exchange_draft_proposals, NegotiationHelper,
+};
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::OwnerType;
 use ya_market_decentralized::testing::ProposalError;
@@ -29,11 +32,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // Expect events generated on requestor market.
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
     let proposal1_req = proposal0.counter_demand(sample_demand())?;
@@ -43,11 +42,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .await?;
 
     // Provider receives Proposal
-    let events = market2
-        .provider_engine
-        .query_events(&offer_id, 1.2, Some(5))
-        .await?;
-    let proposal1_prov = provider::expect_proposal(events)?;
+    let proposal1_prov = provider::query_proposal(&market2, &offer_id).await?;
     let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal1_req.constraints, proposal1_prov.constraints);
@@ -67,11 +62,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .await?;
 
     // Requestor receives proposal.
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal2_req = requestor::expect_proposal(events)?;
+    let proposal2_req = requestor::query_proposal(&market1, &demand_id).await?;
     let proposal2_req_id = proposal2_id.clone().translate(OwnerType::Requestor);
 
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
@@ -91,11 +82,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .await?;
 
     // Provider receives Proposal
-    let events = market2
-        .provider_engine
-        .query_events(&offer_id, 1.2, Some(5))
-        .await?;
-    let proposal3_prov = provider::expect_proposal(events)?;
+    let proposal3_prov = provider::query_proposal(&market2, &offer_id).await?;
     let proposal3_prov_id = proposal3_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal3_req.constraints, proposal3_prov.constraints);
@@ -134,11 +121,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // REQUESTOR side.
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
     let proposal0_id = proposal0.get_proposal_id()?;
 
     // Counter proposal for the first time.
@@ -162,11 +145,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
     }
 
     // PROVIDER side
-    let events = market2
-        .provider_engine
-        .query_events(&offer_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = provider::expect_proposal(events)?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id).await?;
     let proposal0_id = proposal0.get_proposal_id()?;
 
     // Counter proposal for the first time.
@@ -215,11 +194,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // REQUESTOR side.
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
 
     let proposal1 = proposal0.counter_demand(sample_demand())?;
     let proposal1_id = market1
@@ -243,11 +218,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
     }
 
     // PROVIDER side
-    let events = market2
-        .provider_engine
-        .query_events(&offer_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = provider::expect_proposal(events)?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id).await?;
 
     let proposal1 = proposal0.counter_offer(sample_offer())?;
     let proposal1_id = market2
@@ -295,11 +266,7 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
         .await?;
     market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
     market1.unsubscribe_demand(&demand_id, &identity1).await?;
 
     let proposal1 = proposal0.counter_demand(sample_demand())?;
@@ -339,12 +306,7 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
         .await?;
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
-    let events = market1
-        .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
-        .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
-
+    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
     let proposal1 = proposal0.counter_demand(sample_demand())?;
     market1
         .requestor_engine
@@ -352,13 +314,9 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
         .await?;
 
     // PROVIDER side
-    let events = market2
-        .provider_engine
-        .query_events(&offer_id, 1.2, Some(5))
-        .await?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id).await?;
     market2.unsubscribe_offer(&offer_id, &identity2).await?;
 
-    let proposal0 = provider::expect_proposal(events)?;
     let proposal1 = proposal0.counter_offer(sample_offer())?;
     let result = market2
         .provider_engine
@@ -369,6 +327,90 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
     match result.err().unwrap() {
         ProposalError::Unsubscribed(id) => assert_eq!(id, offer_id),
         _ => panic!("Expected ProposalError::Unsubscribed."),
+    }
+
+    Ok(())
+}
+
+/// Requestor tries to counter initial Proposal, for which Offer was unsubscribed on remote Node.
+/// Negotiation attempt should be rejected by Provider Node.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_counter_initial_unsubscribed_remote_offer")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+
+    let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.get_default_id("Node-2");
+
+    let demand_id = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await?;
+    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+
+    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
+
+    // When we will counter this Proposal, Provider will have it already unsubscribed.
+    market2.unsubscribe_offer(&offer_id, &identity2).await?;
+
+    let proposal1 = proposal0.counter_demand(sample_demand())?;
+    let result = market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0.get_proposal_id()?, &proposal1)
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::FailedSendProposal(..) => (),
+        _ => panic!("Expected ProposalError::FailedSendProposal."),
+    }
+
+    Ok(())
+}
+
+/// Requestor tries to counter draft Proposal, for which Offer was unsubscribed on remote Node.
+/// Negotiation attempt should be rejected by Provider Node.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_counter_initial_unsubscribed_remote_offer")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let NegotiationHelper {
+        proposal_id: proposal0_id,
+        proposal: proposal0,
+        offer_id,
+        demand_id,
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+    let identity2 = network.get_default_id("Node-2");
+
+    // When we will counter this Proposal, Provider will have it already unsubscribed.
+    market2.unsubscribe_offer(&offer_id, &identity2).await?;
+
+    let proposal1 = proposal0.counter_demand(sample_demand())?;
+    let result = market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0_id, &proposal1)
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::FailedSendProposal(..) => (),
+        _ => panic!("Expected ProposalError::FailedSendProposal."),
     }
 
     Ok(())

@@ -18,7 +18,9 @@ async fn test_gsb_get_agreement() -> Result<(), anyhow::Error> {
         .add_market_instance(node_id2)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, node_id1, node_id2).await?;
+    let proposal_id = exchange_draft_proposals(&network, node_id1, node_id2)
+        .await?
+        .proposal_id;
     let market = network.get_market(node_id1);
     let identity1 = network.get_default_id(node_id1);
     let identity2 = network.get_default_id(node_id2);
