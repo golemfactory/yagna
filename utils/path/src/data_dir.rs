@@ -1,3 +1,4 @@
+use crate::normalize_path;
 use anyhow::Context;
 use std::{
     fmt::{Display, Error, Formatter},
@@ -45,16 +46,10 @@ impl Display for DataDir {
 impl DataDir {
     pub fn get_or_create(&self) -> anyhow::Result<PathBuf> {
         if self.0.exists().not() {
-            if self != &Self::default() {
-                anyhow::bail!(format!("given data dir {} does not exist", self))
-            } else {
-                log::info!("creating default data dir: {}", self);
-                Ok(std::fs::create_dir_all(&self.0)
-                    .context(format!("default data dir {} creation error", self))
-                    .map(|_| self.0.to_owned())?)
-            }
-        } else {
-            Ok(self.0.to_owned())
+            log::info!("creating data dir: {}", self);
+            std::fs::create_dir_all(&self.0)
+                .context(format!("data dir {} creation error", self))?;
         }
+        Ok(normalize_path(&self.0)?)
     }
 }
