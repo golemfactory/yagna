@@ -17,7 +17,7 @@ use url::Url;
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::{
     transfer, FileTransferProvider, GftpTransferProvider, HashStream, HttpTransferProvider,
-    TransferData, TransferProvider, TransferSink, TransferStream,
+    TransferData, TransferProvider, TransferSink, TransferStream, UrlExt,
 };
 
 #[derive(Clone, Debug, Message)]
@@ -100,10 +100,10 @@ impl ContainerTransferProvider {
             }
             Ok(vol_base.join(path))
         } else {
-            log::warn!("not found!!");
+            log::warn!("path not found in container: {}", container_path);
             Err(TransferError::IoError(io::Error::new(
                 io::ErrorKind::NotFound,
-                anyhow::anyhow!("path {} not found in container", container_path),
+                anyhow::anyhow!("path not found in container: {}", container_path),
             )))
         }
     }
@@ -119,7 +119,7 @@ impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider
     }
 
     fn source(&self, url: &Url) -> TransferStream<TransferData, TransferError> {
-        let file_url = match self.resolve_url(url.path()) {
+        let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferStream::err(e),
         };
@@ -127,7 +127,7 @@ impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider
     }
 
     fn destination(&self, url: &Url) -> TransferSink<TransferData, TransferError> {
-        let file_url = match self.resolve_url(url.path()) {
+        let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferSink::err(e),
         };
@@ -306,7 +306,6 @@ impl Handler<TransferResource> for TransferService {
                     .await
                     .map_err(TransferError::from)??;
                 address.send(RemoveAbortHandle(abort)).await?;
-
                 log::info!("Transfer of {:?} to {:?} finished", from.url, to.url);
                 Ok(())
             }
@@ -370,7 +369,7 @@ impl Cache {
             None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
         };
 
-        let name = transfer_url.file_name();
+        let name = transfer_url.file_name()?;
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -501,6 +500,41 @@ mod test {
         check_resolve("/out/b/x.png", "/tmp/vol-3/b/x.png");
         check_resolve("/out/bin/bash", "/tmp/vol-4/bash");
         check_resolve("/out/lib/libc.so", "/tmp/vol-5/libc.so");
+    }
+
+    // [ContainerVolume { name: "", path: "" }, ContainerVolume { name: "", path: "" }, ContainerVo
+    //        │ lume { name: "", path: "" }]
+    #[test]
+    fn test_resolve_3() {
+        let c = ContainerTransferProvider::new(
+            "/tmp".into(),
+            vec![
+                ContainerVolume {
+                    name: "vol-bd959639-9148-4d7c-8ba2-05a654e84476".into(),
+                    path: "/golem/output".into(),
+                },
+                ContainerVolume {
+                    name: "vol-4d59d1d6-2571-4ab8-a86a-b6199a9a1f4b".into(),
+                    path: "/golem/resource".into(),
+                },
+                ContainerVolume {
+                    name: "vol-b51194da-2fce-45b7-bff8-37e4ef8f7535".into(),
+                    path: "/golem/work".into(),
+                },
+            ],
+        );
+
+        let check_resolve = |container_path, expected_result| {
+            assert_eq!(
+                c.resolve_path(container_path).unwrap(),
+                Path::new(expected_result)
+            )
+        };
+
+        check_resolve(
+            "/golem/resource/scene.blend",
+            "/tmp/vol-4d59d1d6-2571-4ab8-a86a-b6199a9a1f4b/scene.blend",
+        );
     }
 
     #[test]

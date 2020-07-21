@@ -2,7 +2,7 @@ use ya_agreement_utils::agreement;
 use ya_core_model::activity::RpcMessageError as RpcError;
 pub use ya_transfer::error::Error as TransferError;
 
-use crate::message::ExecCmdResult;
+use crate::message::RuntimeCommandResult;
 use crate::metrics::error::MetricError;
 use crate::state::StateError;
 
@@ -46,8 +46,8 @@ pub enum Error {
     JsonError(#[from] serde_json::Error),
     #[error("Gsb error: {0}")]
     GsbError(String),
-    #[error("Exe script command error: {0:?}")]
-    CommandError(ExecCmdResult),
+    #[error("ExeScript command error: {0:?}")]
+    CommandError(RuntimeCommandResult),
     #[error("Local service error: {0}")]
     LocalServiceError(#[from] LocalServiceError),
     #[error("Remote service error: {0}")]

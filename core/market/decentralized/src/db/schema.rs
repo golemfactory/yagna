@@ -64,6 +64,7 @@ table! {
         id -> Text,
         prev_proposal_id -> Nullable<Text>,
 
+        issuer -> Integer,
         negotiation_id -> Text,
 
         properties -> Text,
@@ -83,11 +84,37 @@ table! {
         offer_id -> Text,
         demand_id -> Text,
 
-        identity_id -> Text,
         requestor_id -> Text,
         provider_id -> Text,
 
         agreement_id -> Nullable<Text>,
+    }
+}
+
+table! {
+    market_agreement (id) {
+        id -> Text,
+
+        offer_properties -> Text,
+        offer_constraints -> Text,
+
+        demand_properties -> Text,
+        demand_constraints -> Text,
+
+        offer_id -> Text,
+        demand_id -> Text,
+
+        provider_id -> Text,
+        requestor_id -> Text,
+
+        creation_ts -> Timestamp,
+        valid_to -> Timestamp,
+        approved_date -> Nullable<Timestamp>,
+        state -> Integer,
+
+        proposed_signature -> Nullable<Text>,
+        approved_signature -> Nullable<Text>,
+        committed_signature -> Nullable<Text>,
     }
 }
 

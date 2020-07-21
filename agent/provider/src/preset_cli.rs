@@ -1,6 +1,7 @@
 use anyhow::Result;
 use dialoguer::{Input, Select};
 
+use crate::market::presets::Coefficient;
 use crate::market::Preset;
 
 pub struct PresetUpdater {
@@ -55,27 +56,20 @@ impl PresetUpdater {
     }
 
     pub fn update_metrics(&mut self) -> Result<()> {
-        let metrics = self.preset.list_readable_metrics();
-        let usage_len = metrics.len() + 1;
-        self.preset.usage_coeffs.resize(usage_len, 0.0);
-
-        for (idx, metric) in metrics.iter().enumerate() {
-            let prev_price = self.preset.usage_coeffs[idx];
+        for coefficient in Coefficient::variants() {
+            let prev_price = self
+                .preset
+                .usage_coeffs
+                .get(&coefficient)
+                .cloned()
+                .unwrap_or(0.);
             let price = Input::<f64>::new()
-                .with_prompt(&format!("{} (GNT)", &metric))
+                .with_prompt(&format!("{} (GNT)", coefficient.to_readable()))
                 .default(prev_price)
                 .show_default(true)
                 .interact()?;
-            self.preset.usage_coeffs[idx] = price;
+            self.preset.usage_coeffs.insert(coefficient, price);
         }
-
-        let prev_price = self.preset.usage_coeffs[usage_len - 1];
-        let price = Input::<f64>::new()
-            .with_prompt(&format!("{} (GNT)", "Init price"))
-            .default(prev_price)
-            .show_default(true)
-            .interact()?;
-        self.preset.usage_coeffs[usage_len - 1] = price;
         Ok(())
     }
 

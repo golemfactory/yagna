@@ -14,6 +14,8 @@ pub(crate) async fn allocate_funds(
     allocation_size: i64,
 ) -> anyhow::Result<payment::Allocation> {
     let new_allocation = payment::NewAllocation {
+        address: None,
+        payment_platform: None,
         total_amount: allocation_size.into(),
         timeout: None,
         make_deposit: false,

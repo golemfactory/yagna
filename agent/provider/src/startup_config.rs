@@ -1,12 +1,18 @@
+use notify::*;
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use structopt::{clap, StructOpt};
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
+use crate::hardware::Resources;
+use futures::channel::oneshot;
+use std::sync::mpsc;
+use std::time::Duration;
 use ya_client::cli::ApiOpts;
+use ya_utils_path::data_dir::DataDir;
 
 /// Common configuration for all Provider commands.
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 pub struct ProviderConfig {
     /// Descriptor file (JSON) for available ExeUnits
     #[structopt(
@@ -17,8 +23,19 @@ pub struct ProviderConfig {
         hide_env_values = true,
     )]
     pub exe_unit_path: PathBuf,
+    /// Agent data directory
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "DATA_DIR",
+        default_value,
+    )]
+    pub data_dir: DataDir,
+    // FIXME: workspace configuration
     #[structopt(skip = "presets.json")]
     pub presets_file: PathBuf,
+    #[structopt(skip = "hardware.json")]
+    pub hardware_file: PathBuf,
 }
 
 impl ProviderConfig {
@@ -48,8 +65,6 @@ pub struct RunConfig {
     pub node: NodeConfig,
     #[structopt(flatten)]
     pub runner_config: TaskRunnerConfig,
-    /// Offer presets, that will be sent to market.
-    pub presets: Vec<String>,
 }
 
 #[derive(StructOpt)]
@@ -67,16 +82,20 @@ pub struct PresetNoInteractive {
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 pub enum PresetsConfig {
+    /// List available presets
     List,
+    /// List active presets
+    Active,
+    /// Create a preset
     Create {
         #[structopt(long)]
         no_interactive: bool,
         #[structopt(flatten)]
         params: PresetNoInteractive,
     },
-    Remove {
-        name: String,
-    },
+    /// Remove a preset
+    Remove { name: String },
+    /// Update a preset
     Update {
         name: String,
         #[structopt(long)]
@@ -84,7 +103,37 @@ pub enum PresetsConfig {
         #[structopt(flatten)]
         params: PresetNoInteractive,
     },
+    /// Activate a preset
+    Activate { name: String },
+    /// Deactivate a preset
+    Deactivate { name: String },
+    /// List available metrics
     ListMetrics,
+}
+
+#[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+pub enum ProfileConfig {
+    /// List available profiles
+    List,
+    /// Show the name of an active profile
+    Active,
+    /// Create a new profile
+    Create {
+        name: String,
+        #[structopt(flatten)]
+        resources: Resources,
+    },
+    /// Update a profile
+    Update {
+        name: String,
+        #[structopt(flatten)]
+        resources: Resources,
+    },
+    /// Remove an existing profile
+    Remove { name: String },
+    /// Activate a profile
+    Activate { name: String },
 }
 
 #[derive(StructOpt)]
@@ -110,9 +159,82 @@ pub struct StartupConfig {
 
 #[derive(StructOpt)]
 pub enum Commands {
+    /// Run provider agent
     Run(RunConfig),
+    /// Manage offer presets
     Preset(PresetsConfig),
+    /// Manage hardware profiles
+    Profile(ProfileConfig),
+    /// Manage ExeUnits
     ExeUnit(ExeUnitsConfig),
+}
+
+#[derive(Debug)]
+pub struct FileMonitor {
+    pub(crate) path: PathBuf,
+    pub(crate) thread_ctl: Option<oneshot::Sender<()>>,
+}
+
+impl FileMonitor {
+    pub fn spawn<P, H>(path: P, handler: H) -> std::result::Result<Self, notify::Error>
+    where
+        P: AsRef<Path>,
+        H: Fn(DebouncedEvent) -> () + Send + 'static,
+    {
+        let path = path.as_ref().to_path_buf();
+        let path_th = path.clone();
+        let (tx, rx) = mpsc::channel();
+        let (tx_ctl, mut rx_ctl) = oneshot::channel();
+
+        let watch_delay = Duration::from_secs(2);
+        let sleep_delay = Duration::from_secs_f32(0.5);
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)?;
+
+        std::thread::spawn(move || {
+            if let Err(e) = watcher.watch(&path_th, RecursiveMode::NonRecursive) {
+                log::error!("Unable to monitor path '{:?}': {}", path_th, e);
+                return;
+            }
+            loop {
+                if let Ok(event) = rx.try_recv() {
+                    handler(event);
+                }
+                if let Ok(Some(_)) = rx_ctl.try_recv() {
+                    break;
+                }
+                std::thread::sleep(sleep_delay);
+            }
+            log::debug!("Stopping file monitor: {:?}", path_th);
+        });
+
+        Ok(Self {
+            path,
+            thread_ctl: Some(tx_ctl),
+        })
+    }
+
+    pub fn on_modified<F>(f: F) -> impl Fn(DebouncedEvent) -> ()
+    where
+        F: Fn(PathBuf) -> () + Send + 'static,
+    {
+        move |e| match e {
+            DebouncedEvent::Write(p)
+            | DebouncedEvent::Chmod(p)
+            | DebouncedEvent::Create(p)
+            | DebouncedEvent::Rename(_, p) => {
+                f(p);
+            }
+            _ => (),
+        }
+    }
+}
+
+impl Drop for FileMonitor {
+    fn drop(&mut self) {
+        self.thread_ctl.take().map(|sender| {
+            let _ = sender.send(());
+        });
+    }
 }
 
 /// Structopt key-value example:
