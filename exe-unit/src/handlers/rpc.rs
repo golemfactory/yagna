@@ -160,12 +160,12 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
     }
 }
 
-impl<R: Runtime> Handler<RpcStreamCall<StreamExecBatchProgress>> for ExeUnit<R> {
+impl<R: Runtime> Handler<RpcStreamCall<StreamExecBatchResults>> for ExeUnit<R> {
     type Result = ActorResponse<Self, (), RpcError>;
 
     fn handle(
         &mut self,
-        msg: RpcStreamCall<StreamExecBatchProgress>,
+        msg: RpcStreamCall<StreamExecBatchResults>,
         _: &mut Self::Context,
     ) -> Self::Result {
         if let Err(e) = self.ctx.verify_activity_id(&msg.body.activity_id) {

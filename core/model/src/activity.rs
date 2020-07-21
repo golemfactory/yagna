@@ -8,10 +8,8 @@ use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
     RuntimeEvent,
 };
-use ya_service_bus::{RpcMessage, RpcStreamMessage};
-
-use chrono::Utc;
 use ya_client_model::NodeId;
+use ya_service_bus::{RpcMessage, RpcStreamMessage};
 
 /// Public Activity bus address.
 ///
@@ -26,49 +24,6 @@ pub mod exeunit {
     pub fn bus_id(activity_id: &str) -> String {
         format!("/public/exeunit/{}", activity_id)
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RuntimeEvent {
-    pub batch_id: String,
-    pub index: usize,
-    pub kind: RuntimeEventKind,
-    pub timestamp: u64,
-}
-
-impl RuntimeEvent {
-    pub fn new(batch_id: String, index: usize, kind: RuntimeEventKind) -> Self {
-        RuntimeEvent {
-            batch_id,
-            index,
-            kind,
-            timestamp: Utc::now().timestamp() as u64,
-        }
-    }
-
-    pub fn started(batch_id: String, idx: usize, command: ExeScriptCommand) -> Self {
-        Self::new(batch_id, idx, RuntimeEventKind::Started { command })
-    }
-
-    pub fn finished(batch_id: String, idx: usize, code: i32, message: Option<String>) -> Self {
-        Self::new(batch_id, idx, RuntimeEventKind::Finished { code, message })
-    }
-
-    pub fn stdout(batch_id: String, idx: usize, out: String) -> Self {
-        Self::new(batch_id, idx, RuntimeEventKind::StdOut(out))
-    }
-
-    pub fn stderr(batch_id: String, idx: usize, out: String) -> Self {
-        Self::new(batch_id, idx, RuntimeEventKind::StdErr(out))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum RuntimeEventKind {
-    Started { command: ExeScriptCommand },
-    Finished { code: i32, message: Option<String> },
-    StdOut(String),
-    StdErr(String),
 }
 
 // --------
@@ -170,12 +125,12 @@ impl RpcMessage for GetExecBatchResults {
 
 /// Stream script execution events.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct StreamExecBatchProgress {
+pub struct StreamExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
 }
 
-impl RpcStreamMessage for StreamExecBatchProgress {
+impl RpcStreamMessage for StreamExecBatchResults {
     const ID: &'static str = "StreamExecBatchResults";
     type Item = RuntimeEvent;
     type Error = RpcMessageError;
@@ -192,20 +147,6 @@ pub struct GetRunningCommand {
 impl RpcMessage for GetRunningCommand {
     const ID: &'static str = "GetRunningCommand";
     type Item = ExeScriptCommandState;
-    type Error = RpcMessageError;
-}
-/// Receive runtime event from Supervisor.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReceiveRuntimeEvent {
-    pub activity_id: String,
-    pub event: RuntimeEvent,
-    //pub command_index: Option<usize>,
-}
-
-impl RpcMessage for ReceiveRuntimeEvent {
-    const ID: &'static str = "ReceiveRuntimeEvent";
-    type Item = ();
     type Error = RpcMessageError;
 }
 

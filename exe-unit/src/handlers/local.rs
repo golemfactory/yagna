@@ -6,9 +6,8 @@ use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
 use futures::FutureExt;
-use ya_client_model::activity::ActivityState;
+use ya_client_model::activity::{ActivityState, RuntimeEvent, RuntimeEventKind};
 use ya_core_model::activity::local::SetState as SetActivityState;
-use ya_core_model::activity::{RuntimeEvent, RuntimeEventKind};
 
 impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
     fn handle(&mut self, update: RuntimeEvent, _: &mut Context<Self>) {
@@ -23,9 +22,10 @@ impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
             RuntimeEventKind::Started { command: _ } => batch.started(update.index),
             RuntimeEventKind::StdOut(out) => batch.push_stdout(update.index, out.clone()),
             RuntimeEventKind::StdErr(out) => batch.push_stderr(update.index, out.clone()),
-            RuntimeEventKind::Finished { code, message } => {
-                batch.finished(update.index, *code, message.clone())
-            }
+            RuntimeEventKind::Finished {
+                return_code,
+                message,
+            } => batch.finished(update.index, *return_code, message.clone()),
         } {
             log::error!("Batch {} event error: {}", update.batch_id, err);
         }

@@ -7,7 +7,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 use tokio::process::Command;
 use ya_client_model::activity::{ExeScriptCommand, State};
-use ya_core_model::activity::{self, Exec, GetExecBatchResults, GetState, StreamExecBatchProgress};
+use ya_core_model::activity::{self, Exec, GetExecBatchResults, GetState, StreamExecBatchResults};
 use ya_service_bus::actix_rpc;
 
 const ACTIVITY_BUS_ID: &str = "activity";
@@ -164,7 +164,7 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
     if args.stream_output {
         let svc = actix_rpc::service(&exe_unit_url);
         Arbiter::spawn(async move {
-            let msg = StreamExecBatchProgress {
+            let msg = StreamExecBatchResults {
                 activity_id: ACTIVITY_ID.to_string(),
                 batch_id: BATCH_ID.to_string(),
             };

@@ -8,8 +8,10 @@ use std::collections::HashMap;
 use thiserror::Error;
 use tokio::sync::broadcast;
 pub use ya_client_model::activity::activity_state::{State, StatePair};
-use ya_client_model::activity::{CommandResult, ExeScriptCommandResult, ExeScriptCommandState};
-use ya_core_model::activity::{Exec, RuntimeEvent};
+use ya_client_model::activity::{
+    CommandResult, ExeScriptCommandResult, ExeScriptCommandState, RuntimeEvent,
+};
+use ya_core_model::activity::Exec;
 
 #[derive(Error, Debug, Serialize)]
 pub enum StateError {

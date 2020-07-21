@@ -6,8 +6,7 @@ use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use ya_client_model::activity::activity_state::{State, StatePair};
-use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult};
-use ya_core_model::activity::RuntimeEvent;
+use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult, RuntimeEvent};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]

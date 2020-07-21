@@ -17,8 +17,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
 use tokio_util::codec::{BytesCodec, FramedRead};
-use ya_client_model::activity::ExeScriptCommand;
-use ya_core_model::activity::RuntimeEvent;
+use ya_client_model::activity::{ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";

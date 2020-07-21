@@ -5095,6 +5095,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
+ "bytes 0.5.5",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -5103,6 +5104,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",
+ "mime 0.3.16",
  "r2d2",
  "serde",
  "serde_json",
@@ -5138,7 +5140,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=404ff9a9e5a0dda4590213a473debf18249a86a9#404ff9a9e5a0dda4590213a473debf18249a86a9"
 dependencies = [
  "awc",
  "backtrace",
@@ -5148,6 +5150,7 @@ dependencies = [
  "failure",
  "futures 0.3.5",
  "log 0.4.8",
+ "mime 0.3.16",
  "serde",
  "serde_json",
  "structopt",
@@ -5159,7 +5162,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=404ff9a9e5a0dda4590213a473debf18249a86a9#404ff9a9e5a0dda4590213a473debf18249a86a9"
 dependencies = [
  "bigdecimal",
  "chrono",

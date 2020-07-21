@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_client_model::activity::activity_state::StatePair;
-use ya_client_model::activity::{ActivityUsage, ExeScriptCommand, State};
+use ya_client_model::activity::{ActivityUsage, ExeScriptCommand, RuntimeEvent, State};
 use ya_core_model::activity;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
@@ -19,7 +19,6 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
-use ya_core_model::activity::RuntimeEvent;
 
 pub mod agreement;
 pub mod error;
@@ -290,10 +289,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
 
-            actix_rpc::binds::<activity::StreamExecBatchProgress>(
-                &srv_id,
-                addr.clone().recipient(),
-            );
+            actix_rpc::binds::<activity::StreamExecBatchResults>(&srv_id, addr.clone().recipient());
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
