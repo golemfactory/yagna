@@ -24,6 +24,8 @@ impl ExeUnitInstance {
         args: &Vec<String>,
     ) -> Result<ExeUnitInstance> {
         log::info!("Spawning exeunit instance: {}", name);
+        log::debug!("Spawning args: {:?}", args);
+        log::debug!("Spawning in: {:?}", working_dir);
 
         let binary_path = binary_path
             .canonicalize()
@@ -49,11 +51,6 @@ impl ExeUnitInstance {
             process_handle: child,
             working_dir: working_dir.to_path_buf(),
         };
-        log::info!(
-            "Exeunit instance [{}] spawned in workdir {}",
-            &instance.name,
-            &instance.working_dir.display()
-        );
 
         Ok(instance)
     }
