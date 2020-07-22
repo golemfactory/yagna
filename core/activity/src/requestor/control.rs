@@ -192,7 +192,7 @@ fn stream_results(
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .call_streaming(msg)
         .inspect(move |entry| match entry {
-            Ok(Ok(evt)) => persist_event(db.clone(), path.activity_id.clone(), evt.clone()),
+            Ok(Ok(evt)) => persist_event(&db, &path.activity_id, &evt),
             _ => (),
         })
         .map(|item| match item {
@@ -211,10 +211,14 @@ fn stream_results(
         .streaming(stream))
 }
 
-fn persist_event(db: DbExecutor, activity_id: String, event: RuntimeEvent) {
+fn persist_event(db: &DbExecutor, activity_id: &String, event: &RuntimeEvent) {
     match &event.kind {
         RuntimeEventKind::StdOut(_) | RuntimeEventKind::StdErr(_) => (),
         _ => {
+            let db = db.clone();
+            let activity_id = activity_id.clone();
+            let event = event.clone();
+
             let fut = async move {
                 db.as_dao::<RuntimeEventDao>()
                     .create(&activity_id, event)
