@@ -9,54 +9,56 @@ use crate::testing::OwnerType;
 
 pub async fn exchange_draft_proposals(
     network: &MarketsNetwork,
-    node_id1: &str,
-    node_id2: &str,
+    req_name: &str,
+    prov_name: &str,
 ) -> Result<ProposalId, anyhow::Error> {
-    let market1 = network.get_market(node_id1);
-    let market2 = network.get_market(node_id2);
+    let req_mkt = network.get_market(req_name);
+    let prov_mkt = network.get_market(prov_name);
 
-    let identity1 = network.get_default_id(node_id1);
-    let identity2 = network.get_default_id(node_id2);
+    let req_id = network.get_default_id(req_name);
+    let prov_id = network.get_default_id(prov_name);
 
-    let demand_id = market1
-        .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
-    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+    let demand_id = req_mkt.subscribe_demand(&sample_demand(), &req_id).await?;
+    let offer_id = prov_mkt.subscribe_offer(&sample_offer(), &prov_id).await?;
 
     // Expect events generated on requestor market.
-    let events = market1
+    let req_events = req_mkt
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
+    let offer_proposal1 = requestor::expect_proposal(req_events)?;
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
-    let proposal1_req = proposal0.counter_demand(sample_demand())?;
-    let proposal1_req_id = market1
+    let demand_proposal1 = offer_proposal1.counter_demand(sample_demand())?;
+    let demand_proposal1_id = req_mkt
         .requestor_engine
-        .counter_proposal(&demand_id, &proposal0.get_proposal_id()?, &proposal1_req)
+        .counter_proposal(
+            &demand_id,
+            &offer_proposal1.get_proposal_id()?,
+            &demand_proposal1,
+        )
         .await?;
 
     // Provider receives Proposal
-    let events = market2
+    let prov_events = prov_mkt
         .provider_engine
         .query_events(&offer_id, 1.2, Some(5))
         .await?;
-    let proposal1_prov = provider::expect_proposal(events)?;
-    let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
+    let demand_proposal2 = provider::expect_proposal(prov_events)?;
+    let demand_proposal2_id = demand_proposal1_id.clone().translate(OwnerType::Provider);
 
     // Provider counters proposal.
-    let proposal2_prov = proposal1_prov.counter_offer(sample_offer())?;
-    let _proposal2_id = market2
+    let offer_proposal2 = demand_proposal2.counter_offer(sample_offer())?;
+    let _offer_proposal_id = prov_mkt
         .provider_engine
-        .counter_proposal(&offer_id, &proposal1_prov_id, &proposal2_prov)
+        .counter_proposal(&offer_id, &demand_proposal2_id, &offer_proposal2)
         .await?;
 
     // Requestor receives proposal.
-    let events = market1
+    let req_events = req_mkt
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let proposal2_req = requestor::expect_proposal(events)?;
-    Ok(ProposalId::from_str(&proposal2_req.proposal_id.unwrap())?)
+    let offer_proposal3 = requestor::expect_proposal(req_events)?;
+    Ok(ProposalId::from_str(&offer_proposal3.proposal_id.unwrap())?)
 }
