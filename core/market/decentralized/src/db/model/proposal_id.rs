@@ -15,7 +15,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::model::SubscriptionId;
 
-#[derive(Display, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Display, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum OwnerType {
     #[display(fmt = "P")]
     Provider,

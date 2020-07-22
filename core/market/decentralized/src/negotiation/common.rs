@@ -118,7 +118,7 @@ impl CommonBroker {
             let events = self
                 .db
                 .as_dao::<EventsDao>()
-                .take_events(subscription_id, max_events, owner.clone())
+                .take_events(subscription_id, max_events, owner)
                 .await?;
 
             if events.len() > 0 {
@@ -170,27 +170,7 @@ impl CommonBroker {
             .get_proposal(&msg.prev_proposal_id)
             .await
             .map_err(|_e| RemoteProposalError::ProposalNotFound(msg.prev_proposal_id.clone()))?;
-
-        // Check subscription.
-        if let Err(e) = self
-            .store
-            .get_offer(&prev_proposal.negotiation.offer_id)
-            .await
-        {
-            match e {
-                QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-                QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
-                _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
-            }
-        };
-
-        if let Err(e) = self
-            .store
-            .get_demand(&prev_proposal.negotiation.demand_id)
-            .await
-        {
-            match e {}
-        }
+        self.validate_subscription(&prev_proposal, owner).await?;
 
         // TODO: do auth
         let _owner_id = NodeId::from_str(&caller)
@@ -214,6 +194,31 @@ impl CommonBroker {
 
         // Send channel message to wake all query_events waiting for proposals.
         self.notifier.notify(&subscription_id).await;
+        Ok(())
+    }
+
+    pub async fn validate_subscription(
+        &self,
+        proposal: &Proposal,
+        owner: OwnerType,
+    ) -> Result<(), RemoteProposalError> {
+        if let Err(e) = self.store.get_offer(&proposal.negotiation.offer_id).await {
+            match e {
+                QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
+                QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
+                _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
+            }
+        };
+
+        // On Requestor side we have both Offer and Demand, but Provider has only Offers.
+        if owner == OwnerType::Requestor {
+            if let Err(e) = self.store.get_demand(&proposal.negotiation.demand_id).await {
+                match e {
+                    DemandError::NotFound(id) => Err(RemoteProposalError::Unsubscribed(id))?,
+                    _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
+                }
+            };
+        }
         Ok(())
     }
 }
