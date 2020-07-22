@@ -233,7 +233,7 @@ mod tests {
                 },
                 _ => Some(SetEntry::Multiple(vec![glob])),
             };
-            mem::replace(set, includes);
+            let _ = mem::replace(set, includes);
         }
     }
 

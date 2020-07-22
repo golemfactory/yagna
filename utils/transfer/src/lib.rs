@@ -4,6 +4,7 @@ mod file;
 mod gftp;
 mod http;
 mod traverse;
+mod util;
 
 use crate::error::{ChannelError, Error};
 use actix_rt::Arbiter;
@@ -24,6 +25,7 @@ pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
 pub use crate::traverse::PathTraverse;
+pub use crate::util::UrlExt;
 
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where

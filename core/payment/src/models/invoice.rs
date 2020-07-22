@@ -58,9 +58,10 @@ pub struct ReadObj {
     pub amount: BigDecimalField,
     pub payment_due_date: NaiveDateTime,
 
-    pub peer_id: NodeId,    // From Agreement
-    pub payee_addr: String, // From agreement
-    pub payer_addr: String, // From agreement
+    pub peer_id: NodeId,          // From agreement
+    pub payee_addr: String,       // From agreement
+    pub payer_addr: String,       // From agreement
+    pub payment_platform: String, // From agreement
 }
 
 impl ReadObj {
@@ -85,6 +86,7 @@ impl ReadObj {
             invoice_id: self.id,
             payee_addr: self.payee_addr,
             payer_addr: self.payer_addr,
+            payment_platform: self.payment_platform,
             timestamp: Utc.from_utc_datetime(&self.timestamp),
             agreement_id: self.agreement_id,
             activity_ids,

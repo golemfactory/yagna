@@ -94,20 +94,20 @@ impl<R: Runtime> ExeUnit<R> {
 }
 
 #[derive(Clone, Debug)]
-struct ExecCtx {
+struct ExeCtx {
     batch_id: String,
     batch_size: usize,
     idx: usize,
     cmd: ExeScriptCommand,
 }
 
-impl ExecCtx {
-    pub fn cmd_result(&self, exec_result: ExecCmdResult) -> ExeScriptCommandResult {
-        let stdout = exec_result
+impl ExeCtx {
+    pub fn convert_runtime_result(&self, result: RuntimeCommandResult) -> ExeScriptCommandResult {
+        let stdout = result
             .stdout
             .filter(|s| !s.is_empty())
             .map(|s| format!("stdout: {}", s));
-        let stderr = exec_result
+        let stderr = result
             .stderr
             .filter(|s| !s.is_empty())
             .map(|s| format!("stderr: {}", s));
@@ -117,11 +117,10 @@ impl ExecCtx {
             (None, Some(stderr)) => Some(stderr),
             (Some(stdout), Some(stderr)) => Some(format!("{}\n{}", stdout, stderr)),
         };
-        let finished =
-            self.idx == self.batch_size - 1 || exec_result.result == CommandResult::Error;
+        let finished = self.idx == self.batch_size - 1 || result.result == CommandResult::Error;
         ExeScriptCommandResult {
             index: self.idx as u32,
-            result: exec_result.result,
+            result: result.result,
             is_batch_finished: finished,
             message,
         }
@@ -145,7 +144,7 @@ impl<R: Runtime> ExeUnit<R> {
         };
 
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
-            let ctx = ExecCtx {
+            let ctx = ExeCtx {
                 batch_id: exec.batch_id.clone(),
                 batch_size,
                 idx,
@@ -153,7 +152,8 @@ impl<R: Runtime> ExeUnit<R> {
             };
 
             if let Ok(Some(_)) = control.try_recv() {
-                let cmd_result = ctx.cmd_result(ExecCmdResult::error("interrupted"));
+                let cmd_result =
+                    ctx.convert_runtime_result(RuntimeCommandResult::error("interrupted"));
                 on_error(ctx.batch_id, cmd_result).await;
                 break;
             }
@@ -167,7 +167,7 @@ impl<R: Runtime> ExeUnit<R> {
             .await
             {
                 log::warn!("Command interrupted: {}", error.to_string());
-                let cmd_result = ctx.cmd_result(ExecCmdResult::error(&error));
+                let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::error(&error));
                 on_error(ctx.batch_id, cmd_result).await;
                 break;
             }
@@ -178,7 +178,7 @@ impl<R: Runtime> ExeUnit<R> {
         addr: Addr<Self>,
         runtime: Addr<R>,
         transfer_service: Addr<TransferService>,
-        ctx: ExecCtx,
+        ctx: ExeCtx,
     ) -> Result<()> {
         if let ExeScriptCommand::Terminate {} = &ctx.cmd {
             log::warn!("Terminating running ExeScripts");
@@ -245,25 +245,29 @@ impl<R: Runtime> ExeUnit<R> {
             _ => (),
         }
 
-        let exec_result = runtime.send(ExecCmd(ctx.cmd.clone())).await??;
+        let runtime_result = runtime.send(RuntimeCommand(ctx.cmd.clone())).await??;
+
         if let ExeScriptCommand::Deploy { .. } = &ctx.cmd {
-            if let Some(output) = &exec_result.stdout {
-                let deploy_desc = match deploy::DeployResult::from_bytes(output) {
+            let mut runtime_mode = RuntimeMode::ProcessPerCommand;
+            if let Some(output) = &runtime_result.stdout {
+                let deployment = match deploy::DeployResult::from_bytes(output) {
                     Ok(v) => v,
                     Err(e) => {
-                        log::error!("deploy failed: {}", e);
-                        return Err(Error::CommandError(exec_result));
+                        log::error!("Deploy failed: {}", e);
+                        return Err(Error::CommandError(runtime_result));
                     }
                 };
-                log::info!("adding vols: {:?}", deploy_desc.vols);
+                log::info!("Adding volumes: {:?}", deployment.vols);
                 transfer_service
-                    .send(AddVolumes::new(deploy_desc.vols))
+                    .send(AddVolumes::new(deployment.vols))
                     .await??;
+                runtime_mode = deployment.start_mode.into();
             }
+            runtime.send(SetRuntimeMode(runtime_mode)).await??;
         }
 
-        if let CommandResult::Error = exec_result.result {
-            return Err(Error::CommandError(exec_result));
+        if let CommandResult::Error = runtime_result.result {
+            return Err(Error::CommandError(runtime_result));
         }
 
         let state_cur = addr.send(GetState {}).await?.0;
@@ -275,7 +279,7 @@ impl<R: Runtime> ExeUnit<R> {
             .into());
         }
 
-        let cmd_result = ctx.cmd_result(exec_result);
+        let cmd_result = ctx.convert_runtime_result(runtime_result);
         let state_post = SetState::default()
             .state(state_pre.1.unwrap().into())
             .cmd(None)

@@ -1,38 +1,86 @@
-use actix_http::{body::Body, Request};
-use actix_service::Service as ActixService;
-use actix_web::{error::PathError, http::StatusCode, test, App};
-
-use actix_web::body::MessageBody;
-use actix_web::dev::ServiceResponse;
-use serde::de::DeserializeOwned;
-use ya_client::model::{ErrorMessage, NodeId};
-use ya_core_model::market;
-use ya_market_decentralized::testing::{
-    DemandError, OfferError, SubscriptionParseError, SubscriptionStore,
+use actix_web::{
+    body::MessageBody, dev::ServiceResponse, error::PathError, http::StatusCode, test,
 };
-use ya_market_decentralized::{MarketService, SubscriptionId};
-use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
+use serde::de::DeserializeOwned;
+use serde_json::json;
 
-mod utils;
+use ya_client::model::{market::Offer, ErrorMessage};
+use ya_market_decentralized::testing::{
+    client::{sample_demand, sample_offer},
+    mock_node::{wait_for_bcast, MarketServiceExt},
+    DemandError, MarketsNetwork, ModifyOfferError, SubscriptionId, SubscriptionParseError,
+};
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn test_rest_invalid_subscription_id_should_return_400() {
-    // env_logger::init();
+async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_rest_get_offers")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
 
+    let market_local = network.get_market("Node-1");
+    // Not really remote, but in this scenario will treat it as remote
+    let market_remote = network.get_market("Node-2");
+    let identity_local = network.get_default_id("Node-1");
+    let identity_remote = network.get_default_id("Node-2");
+
+    let offer_local = Offer::new(json!({}), "()".to_string());
+    let offer_local_unsubscribed = Offer::new(json!({}), "()".to_string());
+    let offer_remote = Offer::new(json!({}), "()".to_string());
+    let subscription_id_local = market_local
+        .subscribe_offer(&offer_local, &identity_local)
+        .await?;
+    let subscription_id_local_unsubscribed = market_local
+        .subscribe_offer(&offer_local_unsubscribed, &identity_local)
+        .await?;
+    market_local
+        .unsubscribe_offer(&subscription_id_local_unsubscribed, &identity_local)
+        .await?;
+    let subscription_id_remote = market_remote
+        .subscribe_offer(&offer_remote, &identity_remote)
+        .await?;
+    let offer_local = market_local.get_offer(&subscription_id_local).await?;
+    let _offer_remote = market_remote.get_offer(&subscription_id_remote).await?;
+
+    wait_for_bcast(1000, &market_remote, &subscription_id_local, true).await;
+
+    let mut app = network.get_rest_app("Node-1").await;
+
+    let req = test::TestRequest::get()
+        .uri("/market-api/v1/offers")
+        .to_request();
+    let resp = test::call_service(&mut app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let result: Vec<Offer> = read_response_json(resp).await;
+    assert_eq!(vec![offer_local.into_client_offer()?], result);
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result<()> {
     // given
-    let (_db, mut app) = init_db_app("test_rest_non_existent").await;
+    let network = MarketsNetwork::new("test_rest_invalid_subscription_id_should_return_400")
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+    let mut app = network.get_rest_app("Node-1").await;
 
-    // when
     let req = test::TestRequest::delete()
         .uri("/market-api/v1/offers/invalid-id")
         .to_request();
+
     // when
     let resp = test::call_service(&mut app, req).await;
+
     // then
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let result: ErrorMessage = read_response_json(resp).await;
+
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
         PathError::Deserialize(serde::de::Error::custom(
@@ -41,17 +89,20 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
         .to_string(),
         result.message.unwrap()
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn test_rest_subscribe_unsubscribe_offer() {
-    // env_logger::init();
-
+async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
     // given
-    let (db, mut app) = init_db_app("test_rest_subscribe_offer").await;
+    let network = MarketsNetwork::new("test_rest_subscribe_unsubscribe_offer")
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+    let mut app = network.get_rest_app("Node-1").await;
 
-    let mut client_offer = utils::example_offer();
+    let mut client_offer = sample_offer();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/offers")
@@ -67,13 +118,12 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     log::debug!("subscription_id: {}", subscription_id);
 
     // given
+    let id = network.get_default_id("Node-1");
     client_offer.offer_id = Some(subscription_id.to_string());
-    client_offer.provider_id = Some(mock_id().identity.to_string());
+    client_offer.provider_id = Some(id.identity.to_string());
+    let market = network.get_market("Node-1");
     // when get from subscription store
-    let offer = SubscriptionStore::new(db)
-        .get_offer(&subscription_id)
-        .await
-        .unwrap();
+    let offer = market.get_offer(&subscription_id).await.unwrap();
     // then
     assert_eq!(offer.into_client_offer(), Ok(client_offer));
 
@@ -99,20 +149,23 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     let result: ErrorMessage = read_response_json(resp).await;
     // let result = String::from_utf8(test::read_body(resp).await.to_vec()).unwrap();
     assert_eq!(
-        OfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
+        ModifyOfferError::Unsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
+    Ok(())
 }
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn test_rest_subscribe_unsubscribe_demand() {
-    // env_logger::init();
-
+async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
     // given
-    let (db, mut app) = init_db_app("test_rest_subscribe_demand").await;
+    let network = MarketsNetwork::new("test_rest_subscribe_unsubscribe_offer")
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+    let mut app = network.get_rest_app("Node-1").await;
 
-    let mut client_demand = utils::example_demand();
+    let mut client_demand = sample_demand();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/demands")
@@ -128,13 +181,12 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     log::debug!("subscription_id: {}", subscription_id);
 
     // given
+    let id = network.get_default_id("Node-1");
     client_demand.demand_id = Some(subscription_id.to_string());
-    client_demand.requestor_id = Some(mock_id().identity.to_string());
+    client_demand.requestor_id = Some(id.identity.to_string());
+    let market = network.get_market("Node-1");
     // when
-    let demand = SubscriptionStore::new(db)
-        .get_demand(&subscription_id)
-        .await
-        .unwrap();
+    let demand = market.get_demand(&subscription_id).await.unwrap();
     // then
     assert_eq!(demand.into_client_demand(), Ok(client_demand));
 
@@ -163,52 +215,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
         DemandError::NotFound(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
-}
-
-async fn init_db_app(
-    test_name: &str,
-) -> (
-    DbExecutor,
-    impl ActixService<
-        Request = Request,
-        Response = ServiceResponse<Body>,
-        Error = actix_http::error::Error,
-    >,
-) {
-    utils::mock_net::MockNet::new().unwrap();
-
-    let test_dir = utils::mock_node::prepare_test_dir(test_name).unwrap();
-    let db = DbExecutor::from_data_dir(&test_dir, "yagna").unwrap();
-
-    let market = MarketService::new(&db).unwrap();
-
-    market
-        .bind_gsb(market::BUS_ID, market::private::BUS_ID)
-        .await
-        .unwrap();
-
-    let app = test::init_service(
-        App::new()
-            .wrap(mock_auth())
-            .service(MarketService::bind_rest(market.into())),
-    )
-    .await;
-
-    (db, app)
-}
-
-fn mock_auth() -> DummyAuth {
-    DummyAuth::new(mock_id())
-}
-
-fn mock_id() -> Identity {
-    Identity {
-        identity: "0xbabe000000000000000000000000000000000000"
-            .parse::<NodeId>()
-            .unwrap(),
-        name: "".to_string(),
-        role: "".to_string(),
-    }
+    Ok(())
 }
 
 pub async fn read_response_json<B: MessageBody, T: DeserializeOwned>(

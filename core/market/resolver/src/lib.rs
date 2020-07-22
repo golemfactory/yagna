@@ -4,10 +4,10 @@ extern crate nom;
 pub mod flatten;
 pub mod resolver;
 
-use resolver::errors::MatchError as InternalMatchErorr;
+use resolver::error::MatchError as InternalMatchErorr;
 
 use flatten::{flatten_properties, FlattenError};
-use resolver::errors::PrepareError;
+use resolver::error::PrepareError;
 pub use resolver::matching::{match_weak, MatchResult};
 pub use resolver::prepare::{PreparedDemand, PreparedOffer};
 

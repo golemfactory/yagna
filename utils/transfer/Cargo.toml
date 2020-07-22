@@ -23,7 +23,9 @@ globset = "0.4.5"
 hex = "0.4.2"
 lazy_static = "1.4.0"
 log = "0.4.8"
+percent-encoding = "2.1"
 rand = "0.7.3"
+serde = "1.0.104"
 sha3 = "0.8.2"
 tempdir = "0.3.7"
 thiserror = "1.0.11"
@@ -37,7 +39,7 @@ walkdir = "2.3.1"
 [dependencies.zip]
 version = "0.5.6"
 features = ["tokio-02"]
-git = "https://github.com/mfranciszkiewicz/zip-rs.git" 
+git = "https://github.com/mfranciszkiewicz/zip-rs.git"
 branch = "feature/tokio"
 
 [dev-dependencies]

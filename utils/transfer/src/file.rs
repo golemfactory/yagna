@@ -31,15 +31,14 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     }
 
     fn source(&self, url: &Url, _: &TransferArgs) -> TransferStream<TransferData, Error> {
-        let url = extract_file_url(url);
-        log::debug!("Transfer source file: {}", url);
-
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
+        let url = url.clone();
 
         tokio::task::spawn_local(async move {
             let fut = async move {
-                let file = File::open(url).await?;
+                let path = extract_file_url(&url);
+                let file = File::open(&path).await?;
                 FramedRead::new(file, BytesCodec::new())
                     .map_ok(BytesMut::freeze)
                     .map_err(Error::from)
@@ -59,17 +58,18 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     }
 
     fn destination(&self, url: &Url, _: &TransferArgs) -> TransferSink<TransferData, Error> {
-        let url = extract_file_url(url);
-        log::debug!("Transfer destination file: {}", url);
-
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
+        let url = url.clone();
+        let url_f = url.clone();
 
         tokio::task::spawn_local(async move {
-            let path = Path::new(url.as_str());
+            let url_path = extract_file_url(&url_f);
+            let path = Path::new(url_path.as_str());
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
 
+            log::debug!("Transfer destination file: {}", path.display());
             let fut = async move {
                 let mut file = File::create(&path).await?;
                 while let Some(result) = rx.next().await {
@@ -180,6 +180,7 @@ pub(crate) fn extract_file_url(url: &Url) -> String {
     }
     #[cfg(not(windows))]
     {
-        url.path().to_owned()
+        use crate::util::UrlExt;
+        url.path_decoded()
     }
 }

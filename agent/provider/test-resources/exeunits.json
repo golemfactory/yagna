@@ -1,0 +1,8 @@
+[
+  {
+    "name": "wasmtime",
+    "version": "0.1.0",
+    "supervisor-path": "../../../target/debug/exe-unit",
+    "runtime-path": "../../../../ya-runtime-wasi/target/debug/ya-runtime-wasi"
+  }
+]

@@ -1,9 +1,13 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-use super::super::callbacks::CallbackMessage;
-use super::errors::{AgreementError, ProposalError};
-
 use ya_service_bus::RpcMessage;
+
+use crate::db::model::{Agreement, AgreementId};
+use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
+
+use super::super::callback::CallbackMessage;
+use super::error::{AgreementError, ApproveAgreementError, CounterProposalError, ProposalError};
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -26,35 +30,47 @@ pub mod requestor {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct ProposalContent {
+    pub proposal_id: ProposalId,
+    pub properties: String,
+    pub constraints: String,
+
+    pub creation_ts: NaiveDateTime,
+    pub expiration_ts: NaiveDateTime,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalReceived {
-    pub proposal_id: String,
-    // TODO: We should send Demand part of the proposal.
+    pub prev_proposal_id: ProposalId,
+    pub proposal: ProposalContent,
 }
 
 impl RpcMessage for ProposalReceived {
     const ID: &'static str = "ProposalReceived";
     type Item = ();
-    type Error = ProposalError;
+    type Error = CounterProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitialProposalReceived {
-    pub proposal_id: String,
-    // TODO: We should send Requestor Demand and proposal id.
+    pub proposal: ProposalContent,
+
+    pub offer_id: SubscriptionId,
+    pub demand_id: SubscriptionId,
 }
 
 impl RpcMessage for InitialProposalReceived {
     const ID: &'static str = "InitialProposalReceived";
     type Item = ();
-    type Error = ProposalError;
+    type Error = CounterProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalRejected {
-    pub proposal_id: String,
+    pub proposal_id: ProposalId,
 }
 
 impl RpcMessage for ProposalRejected {
@@ -66,8 +82,7 @@ impl RpcMessage for ProposalRejected {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementReceived {
-    pub agreement_id: String,
-    // TODO: Send agreement content.
+    pub agreement: Agreement,
 }
 
 impl RpcMessage for AgreementReceived {
@@ -79,20 +94,20 @@ impl RpcMessage for AgreementReceived {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementApproved {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
     // TODO: We should send here signature.
 }
 
 impl RpcMessage for AgreementApproved {
     const ID: &'static str = "AgreementApproved";
     type Item = ();
-    type Error = AgreementError;
+    type Error = ApproveAgreementError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementRejected {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 impl RpcMessage for AgreementRejected {
@@ -104,7 +119,7 @@ impl RpcMessage for AgreementRejected {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementCancelled {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 impl RpcMessage for AgreementCancelled {
@@ -117,4 +132,45 @@ impl RpcMessage for AgreementCancelled {
 impl<Message: RpcMessage> CallbackMessage for Message {
     type Item = <Message as RpcMessage>::Item;
     type Error = <Message as RpcMessage>::Error;
+}
+
+impl ProposalContent {
+    pub fn from(proposal: DbProposal) -> ProposalContent {
+        ProposalContent {
+            proposal_id: proposal.id,
+            properties: proposal.properties,
+            constraints: proposal.constraints,
+            expiration_ts: proposal.expiration_ts,
+            creation_ts: proposal.creation_ts,
+        }
+    }
+}
+
+impl ProposalReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());
+        self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl InitialProposalReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl ProposalRejected {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.proposal_id = self.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementApproved {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner.clone());
+        self
+    }
 }

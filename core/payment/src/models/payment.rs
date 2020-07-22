@@ -14,8 +14,8 @@ pub struct WriteObj {
     pub peer_id: NodeId,
     pub payee_addr: String,
     pub payer_addr: String,
+    pub payment_platform: String,
     pub role: Role,
-    pub allocation_id: Option<String>,
     pub amount: BigDecimalField,
     pub details: Vec<u8>,
 }
@@ -26,7 +26,7 @@ impl WriteObj {
         payee_id: NodeId,
         payer_addr: String,
         payee_addr: String,
-        allocation_id: String,
+        payment_platform: String,
         amount: BigDecimal,
         details: Vec<u8>,
     ) -> Self {
@@ -36,8 +36,8 @@ impl WriteObj {
             peer_id: payee_id,
             payer_addr,
             payee_addr,
+            payment_platform,
             role: Role::Requestor,
-            allocation_id: Some(allocation_id),
             amount: amount.into(),
             details,
         }
@@ -50,8 +50,8 @@ impl WriteObj {
             peer_id: payment.payer_id,
             payer_addr: payment.payer_addr,
             payee_addr: payment.payee_addr,
+            payment_platform: payment.payment_platform,
             role: Role::Provider,
-            allocation_id: None,
             amount: payment.amount.into(),
             details: base64::decode(&payment.details).unwrap(), // FIXME: unwrap
         }
@@ -67,8 +67,8 @@ pub struct ReadObj {
     pub peer_id: NodeId,
     pub payee_addr: String,
     pub payer_addr: String,
+    pub payment_platform: String,
     pub role: Role,
-    pub allocation_id: Option<String>,
     pub amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub details: Vec<u8>,
@@ -100,9 +100,9 @@ impl ReadObj {
             payment_id: self.id,
             payer_addr: self.payer_addr,
             payee_addr: self.payee_addr,
+            payment_platform: self.payment_platform,
             amount: self.amount.into(),
             timestamp: Utc.from_utc_datetime(&self.timestamp),
-            allocation_id: self.allocation_id,
             activity_payments: activity_payments.into_iter().map(Into::into).collect(),
             agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
             details: base64::encode(&self.details),
@@ -118,6 +118,7 @@ pub struct ActivityPayment {
     pub activity_id: String,
     pub owner_id: NodeId,
     pub amount: BigDecimalField,
+    pub allocation_id: Option<String>,
 }
 
 impl Into<api_model::ActivityPayment> for ActivityPayment {
@@ -125,6 +126,7 @@ impl Into<api_model::ActivityPayment> for ActivityPayment {
         api_model::ActivityPayment {
             activity_id: self.activity_id,
             amount: self.amount.0,
+            allocation_id: self.allocation_id,
         }
     }
 }
@@ -137,6 +139,7 @@ pub struct AgreementPayment {
     pub agreement_id: String,
     pub owner_id: NodeId,
     pub amount: BigDecimalField,
+    pub allocation_id: Option<String>,
 }
 
 impl Into<api_model::AgreementPayment> for AgreementPayment {
@@ -144,6 +147,7 @@ impl Into<api_model::AgreementPayment> for AgreementPayment {
         api_model::AgreementPayment {
             agreement_id: self.agreement_id,
             amount: self.amount.0,
+            allocation_id: self.allocation_id,
         }
     }
 }

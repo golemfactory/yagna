@@ -1,6 +1,8 @@
 use crate::error::TransferError;
 use regex::Regex;
+use std::path::PathBuf;
 use url::{ParseError, Url};
+use ya_transfer::UrlExt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransferHash {
@@ -17,17 +19,11 @@ pub struct TransferUrl {
 unsafe impl Send for TransferUrl {}
 
 impl TransferUrl {
-    pub fn file_name(&self) -> &str {
-        let path = self.url.path();
-        match path.rfind("/") {
-            Some(idx) => {
-                if idx + 1 < path.len() - 1 {
-                    &path[idx + 1..]
-                } else {
-                    path
-                }
-            }
-            None => path,
+    pub fn file_name(&self) -> Result<String, TransferError> {
+        let path = PathBuf::from(self.url.path_decoded());
+        match path.file_name() {
+            Some(name) => Ok(name.to_string_lossy().to_string()),
+            None => Err(TransferError::InvalidUrlError(self.url.to_string())),
         }
     }
 
@@ -78,7 +74,7 @@ impl TransferUrl {
     where
         F: FnOnce(&str, &str) -> Result<String, TransferError>,
     {
-        let new_path = f(self.url.scheme(), self.url.path())?;
+        let new_path = f(self.url.scheme(), self.url.path_decoded().as_str())?;
         self.url.set_path(&new_path);
         Ok(self)
     }

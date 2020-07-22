@@ -14,6 +14,7 @@ default=['market-forwarding']
 static-openssl=["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized']
+dummy-driver = ['ya-dummy-driver']
 
 [[bin]]
 name = "yagna"
@@ -22,12 +23,13 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
+ya-dummy-driver = { version = "0.1", optional = true }
+ya-gnt-driver = { version = "0.1" }
 ya-identity = "0.2"
 ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
 ya-net = { version = "0.1", features = ["service"] }
-ya-payment = { version = "0.1", features = ["gnt-driver"] }
-ya-payment-driver = { version = "0.1", features = ["gnt-driver"] }
+ya-payment = "0.1"
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
@@ -56,6 +58,7 @@ assets = [
     ["target/release/yagna", "usr/bin/", "755"],
     ["target/release/ya-requestor", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
+    ["target/release/gftp", "usr/bin/", "755"],
     ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
     ["README.md", "usr/share/doc/yagna/", "644"],
     ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
@@ -67,6 +70,7 @@ features=["static-openssl"]
 members = [
     "agent/provider",
     "agent/requestor",
+    "agent/requestor-sdk",
     "core/activity",
     "core/gftp",
     "core/identity",
@@ -76,7 +80,8 @@ members = [
     "core/model",
     "core/net",
     "core/payment",
-    "core/payment-driver",
+    "core/payment-driver/dummy",
+    "core/payment-driver/gnt",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/cache",
@@ -101,14 +106,15 @@ members = [
 
 [patch.crates-io]
 ## SERVICES
+ya-activity = { path = "core/activity" }
+ya-dummy-driver = { path = "core/payment-driver/dummy" }
+ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-identity = { path = "core/identity" }
-ya-net = { path = "core/net" }
 ya-market-decentralized = { path = "core/market/decentralized" }
 ya-market-forwarding = { path = "core/market/forwarding" }
 ya-market-resolver = { path = "core/market/resolver" }
-ya-activity = { path = "core/activity" }
+ya-net = { path = "core/net" }
 ya-payment = { path = "core/payment" }
-ya-payment-driver = { path = "core/payment-driver" }
 
 
 ## CORE UTILS
@@ -127,8 +133,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "c94093f5ed3df3d75f446e298f611d6b196734d2"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "c94093f5ed3df3d75f446e298f611d6b196734d2"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "9aeaaab4cf94d78b026bf69cf46e98a5f536f0d5"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "9aeaaab4cf94d78b026bf69cf46e98a5f536f0d5"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }

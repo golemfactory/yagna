@@ -1,6 +1,11 @@
-pub mod dao;
-pub mod error;
-pub mod models;
-pub mod schema;
+pub(crate) mod dao;
+pub(crate) mod model;
+pub(crate) mod schema;
 
-pub use error::DbResult;
+pub(crate) mod migrations {
+    #[derive(diesel_migrations::EmbedMigrations)]
+    struct _Dummy;
+}
+
+pub(crate) use ya_persistence::executor::Error as DbError;
+pub(crate) type DbResult<T> = Result<T, DbError>;
