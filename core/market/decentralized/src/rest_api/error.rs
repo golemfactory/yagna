@@ -4,7 +4,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
 use crate::matcher::error::{QueryOffersError, SaveOfferError};
-use crate::negotiation::error::{AgreementError, ProposalError};
+use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalError};
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
@@ -137,7 +137,8 @@ impl ResponseError for AgreementError {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
             AgreementError::Confirmed(_)
             | AgreementError::Cancelled(_)
-            | AgreementError::Approved(_) => HttpResponse::Conflict().json(msg),
+            | AgreementError::Approved(_)
+            | AgreementError::Proposed(_) => HttpResponse::Conflict().json(msg),
             AgreementError::Rejected(_)
             | AgreementError::Expired(_)
             | AgreementError::Terminated(_) => HttpResponse::Gone().json(msg),
@@ -148,7 +149,26 @@ impl ResponseError for AgreementError {
             | AgreementError::Save(..)
             | AgreementError::Get(..)
             | AgreementError::Update(..)
-            | AgreementError::Protocol(_) => HttpResponse::InternalServerError().json(msg),
+            | AgreementError::Protocol(_)
+            | AgreementError::ProtocolApprove(_) => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for WaitForApprovalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            WaitForApprovalError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            WaitForApprovalError::AgreementExpired(_) => HttpResponse::Gone().json(msg),
+            WaitForApprovalError::AgreementTerminated(_)
+            | WaitForApprovalError::AgreementNotConfirmed(_) => {
+                HttpResponse::BadRequest().json(msg)
+            }
+            WaitForApprovalError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
+            WaitForApprovalError::InternalError(_) | WaitForApprovalError::FailedGetFromDb(..) => {
+                HttpResponse::InternalServerError().json(msg)
+            }
         }
     }
 }

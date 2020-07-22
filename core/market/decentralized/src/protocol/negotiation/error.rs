@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::db::model::{AgreementId, ProposalId, SubscriptionId};
+use crate::db::model::{AgreementId, AgreementState, ProposalId, SubscriptionId};
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum NegotiationApiInitError {}
@@ -42,6 +42,34 @@ pub enum AgreementError {
     Saving(String, AgreementId),
 }
 
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum ApproveAgreementError {
+    #[error("Failed to broadcast caused by gsb error: {0}.")]
+    GsbError(String),
+    #[error("Can't approve Agreement due to remote node error: {0}")]
+    Remote(#[from] RemoteAgreementError),
+    #[error("Can't parse {caller} for {id} : {e}")]
+    CallerParseError {
+        e: String,
+        caller: String,
+        id: AgreementId,
+    },
+    #[error("Timeout while sending approval of [{0}]")]
+    Timeout(AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum RemoteAgreementError {
+    #[error("Agreement {0} not found.")]
+    NotFound(AgreementId),
+    #[error("Agreement {0} expired.")]
+    Expired(AgreementId),
+    #[error("Agreement {0} in state {1}, can't be approved.")]
+    InvalidState(AgreementId, AgreementState),
+    #[error("Can't approve Agreement {0} due to internal error.")]
+    InternalError(AgreementId),
+}
+
 impl From<ya_service_bus::error::Error> for ProposalError {
     fn from(e: ya_service_bus::error::Error) -> Self {
         ProposalError::GsbError(e.to_string())
@@ -57,5 +85,11 @@ impl From<ya_service_bus::error::Error> for CounterProposalError {
 impl From<ya_service_bus::error::Error> for AgreementError {
     fn from(e: ya_service_bus::error::Error) -> Self {
         AgreementError::GsbError(e.to_string())
+    }
+}
+
+impl From<ya_service_bus::error::Error> for ApproveAgreementError {
+    fn from(e: ya_service_bus::error::Error) -> Self {
+        ApproveAgreementError::GsbError(e.to_string())
     }
 }

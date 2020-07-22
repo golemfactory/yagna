@@ -1,6 +1,3 @@
-use crate::protocol::negotiation::error::{
-    CounterProposalError as ApiProposalError, NegotiationApiInitError,
-};
 use thiserror::Error;
 
 use super::common::GetProposalError;
@@ -8,6 +5,10 @@ use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
 use crate::db::{dao::TakeEventsError, DbError};
+use crate::protocol::negotiation::error::{
+    AgreementError as ProtocolAgreementError, ApproveAgreementError,
+    CounterProposalError as ProtocolProposalError, NegotiationApiInitError,
+};
 
 #[derive(Error, Debug)]
 pub enum NegotiationError {}
@@ -34,6 +35,8 @@ pub enum AgreementError {
     Update(AgreementId, DbError),
     #[error("Agreement [{0}] not found.")]
     NotFound(AgreementId),
+    #[error("Agreement [{0}] proposed.")]
+    Proposed(AgreementId),
     #[error("Agreement [{0}] already confirmed.")]
     Confirmed(AgreementId),
     #[error("Agreement [{0}] cancelled.")]
@@ -48,8 +51,28 @@ pub enum AgreementError {
     Terminated(AgreementId),
     #[error("Invalid proposal id. {0}")]
     InvalidSubscriptionId(#[from] ProposalIdParseError),
-    #[error("Invalid proposal id. {0}")]
-    Protocol(#[from] crate::protocol::negotiation::error::AgreementError),
+    #[error("General protocol error: {0}")]
+    Protocol(#[from] ProtocolAgreementError),
+    #[error("Approve protocol error: {0}")]
+    ProtocolApprove(#[from] ApproveAgreementError),
+}
+
+#[derive(Error, Debug)]
+pub enum WaitForApprovalError {
+    #[error("Agreement [{0}] not found.")]
+    NotFound(AgreementId),
+    #[error("Agreement [{0}] expired.")]
+    AgreementExpired(AgreementId),
+    #[error("Agreement [{0}] should be confirmed, before waiting for approval.")]
+    AgreementNotConfirmed(AgreementId),
+    #[error("Agreement [{0}] terminated.")]
+    AgreementTerminated(AgreementId),
+    #[error("Timeout while waiting for Agreement [{0}] approval.")]
+    Timeout(AgreementId),
+    #[error("Failed to get Agreement [{0}]. Error: {1}")]
+    FailedGetFromDb(AgreementId, DbError),
+    #[error("Waiting for approval failed. Error: {0}.")]
+    InternalError(String),
 }
 
 #[derive(Error, Debug)]
@@ -79,7 +102,7 @@ pub enum ProposalError {
     #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]
     FailedSaveProposal(ProposalId, DbError),
     #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
-    FailedSendProposal(ProposalId, ApiProposalError),
+    FailedSendProposal(ProposalId, ProtocolProposalError),
 }
 
 impl AgreementError {
