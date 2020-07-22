@@ -170,7 +170,7 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     discovery3.broadcast_offer(offer).await?;
 
     // Wait for broadcast.
-    rx.next().await;
+    tokio::time::timeout(Duration::from_millis(150), rx.next()).await?;
 
     assert_eq!(
         offers_counter.load(Ordering::SeqCst),

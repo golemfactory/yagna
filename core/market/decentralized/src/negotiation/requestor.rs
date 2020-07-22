@@ -29,7 +29,7 @@ use super::{
     EventNotifier,
 };
 
-#[derive(Clone, derive_more::Display)]
+#[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
     #[display(fmt = "Approved")]
     Approved,
