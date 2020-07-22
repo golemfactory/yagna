@@ -31,8 +31,8 @@ use super::{
 
 #[derive(Clone, derive_more::Display)]
 pub enum ApprovalStatus {
-    #[display(fmt = "Ok")]
-    Ok,
+    #[display(fmt = "Approved")]
+    Approved,
     #[display(fmt = "Cancelled")]
     Cancelled,
     #[display(fmt = "Rejected")]
@@ -252,7 +252,7 @@ impl RequestorBroker {
                 .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
-                AgreementState::Approved => return Ok(ApprovalStatus::Ok),
+                AgreementState::Approved => return Ok(ApprovalStatus::Approved),
                 AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
                 AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
                 AgreementState::Expired => {
