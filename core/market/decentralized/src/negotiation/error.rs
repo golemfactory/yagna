@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::common::GetProposalError;
@@ -17,6 +18,18 @@ pub enum NegotiationError {}
 pub enum NegotiationInitError {
     #[error("Failed to initialize Negotiation interface. Error: {0}.")]
     ApiInitError(#[from] NegotiationApiInitError),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum MatchValidationError {
+    #[error("Proposal [{new}] doesn't match previous Proposal [{prev}].")]
+    NotMatching { new: ProposalId, prev: ProposalId },
+    #[error("Can't match Proposal [{new}] with previous Proposal [{prev}]. Error: {error}")]
+    MatchingFailed {
+        new: ProposalId,
+        prev: ProposalId,
+        error: String,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -103,6 +116,8 @@ pub enum ProposalError {
     AlreadyCountered(ProposalId),
     #[error("Can't counter own Proposal [{0}].")]
     OwnProposal(ProposalId),
+    #[error(transparent)]
+    NotMatching(#[from] MatchValidationError),
     #[error("Failed to get Proposal [{0}] for subscription [{1}]. Error: [{2}]")]
     FailedGetProposal(ProposalId, SubscriptionId, DbError),
     #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]

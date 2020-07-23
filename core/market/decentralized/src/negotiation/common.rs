@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
+use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::executor::Error as DbError;
 
@@ -16,7 +17,7 @@ use crate::matcher::{
 };
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
-    error::{ProposalError, QueryEventsError},
+    error::{MatchValidationError, ProposalError, QueryEventsError},
     EventNotifier,
 };
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
@@ -85,6 +86,9 @@ impl CommonBroker {
         let is_initial = prev_proposal.body.prev_proposal_id.is_none();
         let new_proposal = prev_proposal.from_client(proposal);
         let proposal_id = new_proposal.body.id.clone();
+
+        validate_match(&new_proposal, &prev_proposal)?;
+
         self.db
             .as_dao::<ProposalDao>()
             .save_proposal(&new_proposal)
@@ -178,6 +182,8 @@ impl CommonBroker {
 
         let proposal = prev_proposal.from_draft(msg.proposal);
 
+        validate_match(&proposal, &prev_proposal).map_err(RemoteProposalError::NotMatching)?;
+
         self.db
             .as_dao::<ProposalDao>()
             .save_proposal(&proposal)
@@ -220,6 +226,31 @@ impl CommonBroker {
             };
         }
         Ok(())
+    }
+}
+
+pub fn validate_match(
+    new_proposal: &Proposal,
+    prev_proposal: &Proposal,
+) -> Result<(), MatchValidationError> {
+    match match_demand_offer(
+        &new_proposal.body.properties,
+        &new_proposal.body.constraints,
+        &prev_proposal.body.properties,
+        &prev_proposal.body.constraints,
+    )
+    .map_err(|e| MatchValidationError::MatchingFailed {
+        new: new_proposal.body.id.clone(),
+        prev: prev_proposal.body.id.clone(),
+        error: e.to_string(),
+    })? {
+        Match::Yes => Ok(()),
+        _ => {
+            return Err(MatchValidationError::NotMatching {
+                new: new_proposal.body.id.clone(),
+                prev: prev_proposal.body.id.clone(),
+            })
+        }
     }
 }
 

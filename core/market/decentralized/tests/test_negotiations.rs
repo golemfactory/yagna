@@ -1,5 +1,7 @@
 use ya_market_decentralized::testing::events_helper::{provider, requestor, ClientProposalHelper};
-use ya_market_decentralized::testing::mock_offer::client::{sample_demand, sample_offer};
+use ya_market_decentralized::testing::mock_offer::client::{
+    not_matching_demand, not_matching_offer, sample_demand, sample_offer,
+};
 use ya_market_decentralized::testing::proposal_util::{
     exchange_draft_proposals, NegotiationHelper,
 };
@@ -459,5 +461,84 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
         ProposalError::FailedSendProposal(..) => (),
         _ => panic!("Expected ProposalError::FailedSendProposal."),
     }
+    Ok(())
+}
+
+/// Try to send not matching counter Proposal to Provider. Our market
+/// should reject such Proposal. Error should occur on Requestor side.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_not_matching_counter_demand")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let NegotiationHelper {
+        proposal_id: proposal0_id,
+        proposal: proposal0,
+        demand_id,
+        ..
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+
+    let market1 = network.get_market("Node-1");
+    let proposal1 = proposal0.counter_demand(not_matching_demand())?;
+    let result = market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0_id, &proposal1)
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::NotMatching(..) => (),
+        _ => panic!("Expected ProposalError::NotMatching."),
+    }
+
+    Ok(())
+}
+
+/// Try to send not matching counter Proposal to Requestor. Our market
+/// should reject such Proposal. Error should occur on Provider side.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_not_matching_counter_offer")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let NegotiationHelper {
+        proposal_id: proposal0_id,
+        proposal: proposal0,
+        demand_id,
+        offer_id,
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+
+    let proposal1 = proposal0.counter_demand(sample_demand())?;
+    market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0_id, &proposal1)
+        .await?;
+
+    let proposal2 = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal3 = proposal2.counter_offer(not_matching_offer())?;
+    let result = market2
+        .provider_engine
+        .counter_proposal(&offer_id, &proposal2.get_proposal_id()?, &proposal3)
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::NotMatching(..) => (),
+        _ => panic!("Expected ProposalError::NotMatching."),
+    }
+
     Ok(())
 }
