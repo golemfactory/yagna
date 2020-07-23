@@ -1,6 +1,7 @@
 use crate::dao::{invoice, invoice_event};
 use crate::error::DbResult;
 use crate::models::agreement::{ReadObj, WriteObj};
+use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::{BigDecimal, Zero};
@@ -41,6 +42,27 @@ pub fn set_amount_due(
         .find((agreement_id, owner_id))
         .first(conn)?;
     assert!(total_amount_due >= &agreement.total_amount_due); // TODO: Remove when payment service is production-ready.
+    diesel::update(&agreement)
+        .set(dsl::total_amount_due.eq(total_amount_due))
+        .execute(conn)?;
+    Ok(())
+}
+
+/// Compute and set amount due based on activities
+pub fn compute_amount_due(
+    agreement_id: &String,
+    owner_id: &NodeId,
+    conn: &ConnType,
+) -> DbResult<()> {
+    let agreement: ReadObj = dsl::pay_agreement
+        .find((agreement_id, owner_id))
+        .first(conn)?;
+    let activity_amounts: Vec<BigDecimalField> = activity_dsl::pay_activity
+        .filter(activity_dsl::owner_id.eq(owner_id))
+        .filter(activity_dsl::agreement_id.eq(agreement_id))
+        .select(activity_dsl::total_amount_due)
+        .load(conn)?;
+    let total_amount_due: BigDecimalField = activity_amounts.sum().into();
     diesel::update(&agreement)
         .set(dsl::total_amount_due.eq(total_amount_due))
         .execute(conn)?;
@@ -198,6 +220,7 @@ impl<'a> AgreementDao<'a> {
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
+                .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payee_addr.eq(payee_addr))
                 .get_results(conn)?;
@@ -214,6 +237,7 @@ impl<'a> AgreementDao<'a> {
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
+                .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payer_addr.eq(payer_addr))
                 .get_results(conn)?;

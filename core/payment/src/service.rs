@@ -405,10 +405,36 @@ mod public {
 
     async fn cancel_invoice(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: CancelInvoice,
     ) -> Result<Ack, CancelError> {
-        unimplemented!() // TODO
+        let invoice_id = msg.invoice_id;
+
+        let dao: InvoiceDao = db.as_dao();
+        let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {
+            Ok(Some(invoice)) => invoice.into(),
+            Ok(None) => return Err(CancelError::ObjectNotFound),
+            Err(e) => return Err(CancelError::ServiceError(e.to_string())),
+        };
+
+        if sender_id != invoice.issuer_id.to_string() {
+            return Err(CancelError::Forbidden);
+        }
+
+        match invoice.status {
+            DocumentStatus::Issued => (),
+            DocumentStatus::Received => (),
+            DocumentStatus::Rejected => (),
+            DocumentStatus::Cancelled => return Ok(Ack {}),
+            DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
+                return Err(CancelError::Conflict)
+            }
+        }
+
+        match dao.cancel(invoice_id, invoice.recipient_id).await {
+            Ok(_) => Ok(Ack {}),
+            Err(e) => Err(CancelError::ServiceError(e.to_string())),
+        }
     }
 
     // *************************** PAYMENT ****************************
