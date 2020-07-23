@@ -1,3 +1,4 @@
+use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
@@ -12,7 +13,7 @@ const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn test_gsb_get_agreement() -> anyhow::Result<()> {
+async fn test_gsb_get_agreement() -> Result<()> {
     let network = MarketsNetwork::new("test_gsb_get_agreement")
         .await
         .add_market_instance(REQ_NAME)
@@ -48,7 +49,7 @@ async fn test_gsb_get_agreement() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
+async fn full_market_interaction_aka_happy_path() -> Result<()> {
     let network = MarketsNetwork::new("full_market_interaction_aka_happy_path")
         .await
         .add_market_instance(REQ_NAME)
@@ -60,7 +61,6 @@ async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
 
     // Requestor creates agreement with 1h expiration
     let agreement_id = req_engine
@@ -95,7 +95,7 @@ async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
     network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(network.get_default_id(PROV_NAME), &agreement_id, 0.1)
         .await?;
 
     // Protect from eternal waiting.
@@ -109,7 +109,7 @@ async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
 //#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[ignore]
 #[actix_rt::test]
-async fn second_creation_should_fail() -> anyhow::Result<()> {
+async fn second_creation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_creation_should_fail")
         .await
         .add_market_instance(REQ_NAME)
@@ -141,7 +141,7 @@ async fn second_creation_should_fail() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn second_confirmation_should_fail() -> anyhow::Result<()> {
+async fn second_confirmation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_confirmation_should_fail")
         .await
         .add_market_instance(REQ_NAME)
@@ -182,7 +182,7 @@ async fn second_confirmation_should_fail() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn agreement_expired_before_confirmation() -> anyhow::Result<()> {
+async fn agreement_expired_before_confirmation() -> Result<()> {
     let network = MarketsNetwork::new("agreement_expired_before_confirmation")
         .await
         .add_market_instance(REQ_NAME)
@@ -216,7 +216,7 @@ async fn agreement_expired_before_confirmation() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn agreement_expired_before_approval() -> anyhow::Result<()> {
+async fn agreement_expired_before_approval() -> Result<()> {
     let network = MarketsNetwork::new("agreement_expired_before_approval")
         .await
         .add_market_instance(REQ_NAME)
@@ -259,7 +259,7 @@ async fn agreement_expired_before_approval() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn waiting_wo_confirmation_should_fail() -> anyhow::Result<()> {
+async fn waiting_wo_confirmation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("waiting_wo_confirmation_should_fail")
         .await
         .add_market_instance(REQ_NAME)
@@ -294,7 +294,7 @@ async fn waiting_wo_confirmation_should_fail() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn approval_before_confirmation_should_fail() -> anyhow::Result<()> {
+async fn approval_before_confirmation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("approval_before_confirmation_should_fail")
         .await
         .add_market_instance(REQ_NAME)
@@ -336,7 +336,7 @@ async fn approval_before_confirmation_should_fail() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn approval_without_waiting_should_pass() -> anyhow::Result<()> {
+async fn approval_without_waiting_should_pass() -> Result<()> {
     let network = MarketsNetwork::new("approval_without_waiting_should_pass")
         .await
         .add_market_instance(REQ_NAME)
@@ -377,7 +377,7 @@ async fn approval_without_waiting_should_pass() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn waiting_after_approval_should_pass() -> anyhow::Result<()> {
+async fn waiting_after_approval_should_pass() -> Result<()> {
     let network = MarketsNetwork::new("waiting_after_approval_should_pass")
         .await
         .add_market_instance(REQ_NAME)
@@ -424,7 +424,7 @@ async fn waiting_after_approval_should_pass() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn second_approval_should_fail() -> anyhow::Result<()> {
+async fn second_approval_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_approval_should_fail")
         .await
         .add_market_instance(REQ_NAME)
@@ -475,7 +475,7 @@ async fn second_approval_should_fail() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn second_waiting_should_pass() -> anyhow::Result<()> {
+async fn second_waiting_should_pass() -> Result<()> {
     let network = MarketsNetwork::new("waiting_for_agreement_after_approval_should_pass")
         .await
         .add_market_instance(REQ_NAME)
@@ -523,6 +523,93 @@ async fn second_waiting_should_pass() -> anyhow::Result<()> {
         approval_status.to_string(),
         ApprovalStatus::Approved.to_string()
     );
+
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn net_err_while_confirming() -> Result<()> {
+    let network = MarketsNetwork::new("net_err_while_confirming")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    // Requestor creates agreement with 1h expiration
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await?;
+
+    // when
+    network.break_networking_for(PROV_NAME)?;
+
+    // then confirm should
+    let result = req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id)
+        .await;
+    match result.unwrap_err() {
+        AgreementError::Protocol(_) => (),
+        e => panic!("expected protocol error, but got: {}", e),
+    };
+
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn net_err_while_approving() -> Result<()> {
+    let network = MarketsNetwork::new("net_err_while_approving")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    // Requestor creates agreement with 1h expiration
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await?;
+
+    // Confirms it immediately
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id)
+        .await?;
+
+    // when
+    network.break_networking_for(REQ_NAME)?;
+
+    // then approve should fail
+    let prov_id = network.get_default_id(PROV_NAME);
+    let result = network
+        .get_market(PROV_NAME)
+        .provider_engine
+        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .await;
+
+    match result.unwrap_err() {
+        AgreementError::ProtocolApprove(_) => (),
+        e => panic!("expected protocol error, but got: {}", e),
+    };
 
     Ok(())
 }

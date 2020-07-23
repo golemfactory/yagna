@@ -136,6 +136,18 @@ impl CommonBroker {
         msg: ProposalReceived,
         owner: OwnerType,
     ) -> Result<(), CounterProposalError> {
+        let proposal_id = msg.proposal.proposal_id.clone();
+        self.proposal_received(caller, msg, owner)
+            .await
+            .map_err(|e| CounterProposalError::Remote(e, proposal_id))
+    }
+
+    pub async fn proposal_received(
+        self,
+        caller: String,
+        msg: ProposalReceived,
+        owner: OwnerType,
+    ) -> Result<(), RemoteProposalError> {
         // Check if countered Proposal exists.
         let prev_proposal = self
             .get_proposal(&msg.prev_proposal_id)
