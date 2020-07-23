@@ -174,3 +174,10 @@ impl AgreementApproved {
         self
     }
 }
+
+impl AgreementReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement.id = self.agreement.id.translate(owner);
+        self
+    }
+}
