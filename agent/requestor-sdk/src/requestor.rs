@@ -32,6 +32,22 @@ pub enum Image {
     GVMKit,
 }
 
+impl Image {
+    pub fn runtime_name(&self) -> &'static str {
+        match self {
+            Image::WebAssembly(_) => "wasmtime",
+            Image::GVMKit => "vm",
+        }
+    }
+
+    pub fn runtime_version(&self) -> semver::Version {
+        match self {
+            Image::WebAssembly(version) => version.clone(),
+            Image::GVMKit => semver::Version::new(0, 1, 0),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Requestor {
     name: String,
@@ -64,7 +80,7 @@ impl Requestor {
     /// Adds `Constraints` for the specified tasks.
     pub fn with_constraints(self, constraints: Constraints) -> Self {
         Self {
-            constraints: constraints.clone().and(constraints),
+            constraints: self.constraints.and(constraints),
             ..self
         }
     }
@@ -277,6 +293,10 @@ impl Requestor {
         // "golem.node.debug.subnet" == "mysubnet", TODO
         let (digest, url) = self.task_package.publish().await?;
         let url_with_hash = format!("hash:sha3:{}:{}", digest, url);
+        let constraints = self.constraints.clone().and(constraints![
+            "golem.runtime.name" == self.image_type.runtime_name(),
+            "golem.runtime.version" == self.image_type.runtime_version().to_string(),
+        ]);
 
         log::debug!("srv.comp.task_package: {}", url_with_hash);
 
@@ -289,7 +309,7 @@ impl Requestor {
                         (chrono::Utc::now() + chrono::Duration::minutes(10)).timestamp_millis(), // TODO
                 },
             }),
-            self.constraints.to_string(),
+            constraints.to_string(),
         );
 
         Ok(demand)
@@ -346,18 +366,25 @@ impl Requestor {
             };
 
             if !state.alive() {
+                log::warn!("activity {} died", activity_id);
                 break;
             }
 
-            let mut res = activity_api
+            all_res = activity_api
                 .control()
-                .get_exec_batch_results(&activity_id, &batch_id, None, None)
+                .get_exec_batch_results(
+                    &activity_id,
+                    &batch_id,
+                    None,
+                    Some(exe_script.num_cmds - 1),
+                )
                 .await?;
-            log::debug!("batch_results: {}", res.len());
-            all_res.append(&mut res);
+            log::debug!("batch_results: {}", all_res.len());
 
-            if all_res.len() >= exe_script.num_cmds {
-                break;
+            if let Some(last) = all_res.last() {
+                if last.is_batch_finished {
+                    break;
+                }
             }
 
             let delay = time::Instant::now() + Duration::from_secs(3);
