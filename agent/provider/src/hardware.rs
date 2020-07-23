@@ -66,8 +66,8 @@ pub struct Resources {
 
 impl Resources {
     pub fn try_with_config(work_dir: &Path, config: &ProviderConfig) -> Result<Self, Error> {
+        let max_caps = Self::max_caps(work_dir)?;
         if config.rt_cores.is_some() || config.rt_mem.is_some() || config.rt_storage.is_some() {
-            let max_caps = Self::max_caps(work_dir)?;
             let mut user_caps = max_caps.clone();
 
             if let Some(cores) = config.rt_cores {
@@ -82,8 +82,7 @@ impl Resources {
 
             return Ok(user_caps.cap(&max_caps));
         }
-
-        Ok(Self::default_caps(work_dir)?)
+        Ok(max_caps)
     }
 
     fn new_empty() -> Self {
@@ -204,7 +203,11 @@ impl Profiles {
             true => Self::load(path),
             false => {
                 let current_dir = current_env_dir()?;
-                let profiles = Self::try_with_config(&current_dir, &config)?;
+                let mut profiles = Self::try_with_config(&current_dir, &config)?;
+                let default_caps = Resources::default_caps(&current_dir)?;
+                for profile in profiles.profiles.values_mut() {
+                    profile.cap(&default_caps);
+                }
                 profiles.save(path)?;
                 Ok(profiles)
             }
