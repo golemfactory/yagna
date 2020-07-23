@@ -92,6 +92,22 @@ impl<'c> AgreementDao<'c> {
         })
         .await
     }
+
+    pub async fn clean(&self) -> DbResult<()> {
+        // FIXME use grace time from config file
+        log::debug!("Clean market agreements: start");
+        let num_deleted = do_with_transaction(self.pool, move |conn| {
+            // let nd = diesel::delete(dsl::market_agreement.filter(dsl::valid_to.lt(sql_now - 90 days))).execute(conn)?;
+            let nd = 0;
+            Result::<usize, DbError>::Ok(nd)
+        })
+        .await?;
+        if num_deleted > 0 {
+            log::info!("Clean market agreements: {} cleaned", num_deleted);
+        }
+        log::debug!("Clean market agreements: done");
+        Ok(())
+    }
 }
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for StateError {

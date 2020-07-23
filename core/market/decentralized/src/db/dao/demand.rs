@@ -1,4 +1,5 @@
 use chrono::{NaiveDateTime, Utc};
+use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_persistence::executor::ConnType;
@@ -6,7 +7,7 @@ use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao,
 
 use crate::db::model::{Demand, SubscriptionId};
 use crate::db::schema::market_demand::dsl;
-use crate::db::DbResult;
+use crate::db::{DbError, DbResult};
 
 #[allow(unused)]
 pub struct DemandDao<'c> {
@@ -79,6 +80,22 @@ impl<'c> DemandDao<'c> {
             Ok(num_deleted > 0)
         })
         .await
+    }
+
+    pub async fn clean(&self) -> DbResult<()> {
+        // FIXME clean negotiations also
+        log::debug!("Clean market demands: start");
+        let num_deleted = do_with_transaction(self.pool, move |conn| {
+            let nd = diesel::delete(dsl::market_demand.filter(dsl::expiration_ts.lt(sql_now)))
+                .execute(conn)?;
+            Result::<usize, DbError>::Ok(nd)
+        })
+        .await?;
+        if num_deleted > 0 {
+            log::info!("Clean market demands: {} cleaned", num_deleted);
+        }
+        log::debug!("Clean market demands: done");
+        Ok(())
     }
 }
 

@@ -1,4 +1,5 @@
 use chrono::NaiveDateTime;
+use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_client::model::NodeId;
@@ -10,7 +11,7 @@ use crate::db::model::SubscriptionId;
 use crate::db::model::{Offer, OfferUnsubscribed};
 use crate::db::schema::market_offer::dsl;
 use crate::db::schema::market_offer_unsubscribed::dsl as dsl_unsubscribed;
-use crate::db::DbResult;
+use crate::db::{DbError, DbResult};
 
 pub struct OfferDao<'c> {
     pool: &'c PoolType,
@@ -158,6 +159,22 @@ impl<'c> OfferDao<'c> {
             Ok(num_deleted > 0)
         })
         .await
+    }
+
+    pub async fn clean(&self) -> DbResult<()> {
+        // FIXME clean negotiations also
+        log::debug!("Clean market offers: start");
+        let num_deleted = do_with_transaction(self.pool, move |conn| {
+            let nd = diesel::delete(dsl::market_offer.filter(dsl::expiration_ts.lt(sql_now)))
+                .execute(conn)?;
+            Result::<usize, DbError>::Ok(nd)
+        })
+        .await?;
+        if num_deleted > 0 {
+            log::info!("Clean market offers: {} cleaned", num_deleted);
+        }
+        log::debug!("Clean market offers: done");
+        Ok(())
     }
 }
 

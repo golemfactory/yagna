@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -6,7 +7,7 @@ use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao,
 use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
-use crate::db::DbResult;
+use crate::db::{DbError, DbResult};
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,
@@ -79,5 +80,21 @@ impl<'c> ProposalDao<'c> {
             Ok(proposal.is_some())
         })
         .await
+    }
+
+    pub async fn clean(&self) -> DbResult<()> {
+        // FIXME clean negotiations also
+        log::debug!("Clean market proposals: start");
+        let num_deleted = do_with_transaction(self.pool, move |conn| {
+            let nd = diesel::delete(dsl::market_proposal.filter(dsl::expiration_ts.lt(sql_now)))
+                .execute(conn)?;
+            Result::<usize, DbError>::Ok(nd)
+        })
+        .await?;
+        if num_deleted > 0 {
+            log::info!("Clean market proposals: {} cleaned", num_deleted);
+        }
+        log::debug!("Clean market proposals: done");
+        Ok(())
     }
 }
