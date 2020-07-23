@@ -78,7 +78,7 @@ pub mod client {
                     "node.id.name": "its-test-requestor",
                     "node.debug.subnet": "blaa",
                     "srv.comp.expiration": 3,
-                    "srv.comp.wasm.task_package": "test-package",
+                    "srv.comp.task_package": "test-package",
                 },
             }),
             constraints![
