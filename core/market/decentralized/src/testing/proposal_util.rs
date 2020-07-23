@@ -26,16 +26,16 @@ pub async fn exchange_draft_proposals(
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let offer_proposal1 = requestor::expect_proposal(req_events)?;
+    let req_offer_proposal1 = requestor::expect_proposal(req_events)?;
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
-    let demand_proposal1 = offer_proposal1.counter_demand(sample_demand())?;
-    let demand_proposal1_id = req_mkt
+    let req_demand_proposal1 = req_offer_proposal1.counter_demand(sample_demand())?;
+    let req_demand_proposal1_id = req_mkt
         .requestor_engine
         .counter_proposal(
             &demand_id,
-            &offer_proposal1.get_proposal_id()?,
-            &demand_proposal1,
+            &req_offer_proposal1.get_proposal_id()?,
+            &req_demand_proposal1,
         )
         .await?;
 
@@ -44,14 +44,16 @@ pub async fn exchange_draft_proposals(
         .provider_engine
         .query_events(&offer_id, 1.2, Some(5))
         .await?;
-    let demand_proposal2 = provider::expect_proposal(prov_events)?;
-    let demand_proposal2_id = demand_proposal1_id.clone().translate(OwnerType::Provider);
+    let prov_demand_proposal1 = provider::expect_proposal(prov_events)?;
+    let prov_demand_proposal1_id = req_demand_proposal1_id
+        .clone()
+        .translate(OwnerType::Provider);
 
     // Provider counters proposal.
-    let offer_proposal2 = demand_proposal2.counter_offer(sample_offer())?;
+    let offer_proposal2 = prov_demand_proposal1.counter_offer(sample_offer())?;
     let _offer_proposal_id = prov_mkt
         .provider_engine
-        .counter_proposal(&offer_id, &demand_proposal2_id, &offer_proposal2)
+        .counter_proposal(&offer_id, &prov_demand_proposal1_id, &offer_proposal2)
         .await?;
 
     // Requestor receives proposal.
@@ -59,6 +61,8 @@ pub async fn exchange_draft_proposals(
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let offer_proposal3 = requestor::expect_proposal(req_events)?;
-    Ok(ProposalId::from_str(&offer_proposal3.proposal_id.unwrap())?)
+    let req_offer_proposal2 = requestor::expect_proposal(req_events)?;
+    Ok(ProposalId::from_str(
+        &req_offer_proposal2.proposal_id.unwrap(),
+    )?)
 }

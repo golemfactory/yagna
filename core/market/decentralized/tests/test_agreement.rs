@@ -106,7 +106,7 @@ async fn full_market_interaction_aka_happy_path() -> anyhow::Result<()> {
 
 // TODO: It is allowed in general, but probably after rejection or expiration??
 // TODO: but we don't know even how we should handle this case
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+//#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[ignore]
 #[actix_rt::test]
 async fn second_creation_should_fail() -> anyhow::Result<()> {
