@@ -36,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
 
             let app_name = clap::crate_name!();
             log::info!("Starting {}...", app_name);
+            log::info!("Data directory: {}", data_dir.display());
 
             let agent = ProviderAgent::new(args, config).await?.start();
             agent.send(Initialize).await??;

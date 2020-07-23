@@ -11,6 +11,10 @@ use std::time::Duration;
 use ya_client::cli::ApiOpts;
 use ya_utils_path::data_dir::DataDir;
 
+lazy_static::lazy_static! {
+    static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
+}
+
 /// Common configuration for all Provider commands.
 #[derive(StructOpt, Clone)]
 pub struct ProviderConfig {
@@ -28,10 +32,9 @@ pub struct ProviderConfig {
         long,
         set = clap::ArgSettings::Global,
         env = "DATA_DIR",
-        default_value,
+        default_value = &*DEFAULT_DATA_DIR,
     )]
     pub data_dir: DataDir,
-    // FIXME: workspace configuration
     #[structopt(skip = "presets.json")]
     pub presets_file: PathBuf,
     #[structopt(skip = "hardware.json")]
