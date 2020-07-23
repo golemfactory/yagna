@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io;
 use std::ops::{Add, Not, Sub};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 use tokio::sync::watch;
@@ -65,8 +65,11 @@ pub struct Resources {
 }
 
 impl Resources {
-    pub fn try_with_config(work_dir: &Path, config: &ProviderConfig) -> Result<Self, Error> {
-        let max_caps = Self::max_caps(work_dir)?;
+    pub fn try_with_config<P: AsRef<Path>>(
+        path: P,
+        config: &ProviderConfig,
+    ) -> Result<Self, Error> {
+        let max_caps = Self::max_caps(path)?;
         if config.rt_cores.is_some() || config.rt_mem.is_some() || config.rt_storage.is_some() {
             let mut user_caps = max_caps.clone();
 
@@ -93,16 +96,16 @@ impl Resources {
         }
     }
 
-    fn max_caps(work_dir: &Path) -> Result<Self, Error> {
+    fn max_caps<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         Ok(Resources {
             cpu_threads: num_cpus::get() as i32,
             mem_gib: 1000. * sys_info::mem_info()?.total as f64 / (1024. * 1024. * 1024.),
-            storage_gib: partition_space(work_dir)? as f64 / (1024. * 1024. * 1024.),
+            storage_gib: partition_space(path)? as f64 / (1024. * 1024. * 1024.),
         })
     }
 
-    fn default_caps(work_dir: &Path) -> Result<Self, Error> {
-        let res = Self::max_caps(work_dir)?;
+    fn default_caps<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let res = Self::max_caps(path)?;
         Ok(Resources {
             cpu_threads: 1.max(res.cpu_threads - CPU_THREADS_RESERVED),
             mem_gib: 0.7 * res.mem_gib,
@@ -202,11 +205,15 @@ impl Profiles {
         match path.exists() {
             true => Self::load(path),
             false => {
-                let current_dir = current_env_dir()?;
-                let mut profiles = Self::try_with_config(&current_dir, &config)?;
-                let default_caps = Resources::default_caps(&current_dir)?;
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::File::create(&path)?;
+
+                let mut profiles = Self::try_with_config(&path, &config)?;
+                let default_caps = Resources::default_caps(&path)?;
                 for profile in profiles.profiles.values_mut() {
-                    profile.cap(&default_caps);
+                    *profile = profile.cap(&default_caps);
                 }
                 profiles.save(path)?;
                 Ok(profiles)
@@ -229,11 +236,8 @@ impl Profiles {
         Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
     }
 
-    fn try_with_config<P: AsRef<Path>>(
-        work_dir: P,
-        config: &ProviderConfig,
-    ) -> Result<Self, Error> {
-        let resources = Resources::try_with_config(work_dir.as_ref(), &config)?;
+    fn try_with_config<P: AsRef<Path>>(path: P, config: &ProviderConfig) -> Result<Self, Error> {
+        let resources = Resources::try_with_config(path.as_ref(), &config)?;
         let active = DEFAULT_PROFILE_NAME.to_string();
         let profiles = vec![(active.clone(), resources)].into_iter().collect();
         Ok(Profiles { active, profiles })
@@ -342,12 +346,11 @@ impl ManagerState {
 
 impl Manager {
     pub fn try_new(conf: &ProviderConfig) -> Result<Self, Error> {
-        let current_dir = current_env_dir()?;
         let profiles = Profiles::load_or_create(&conf)?;
 
         let mut state = ManagerState {
             profiles,
-            res_available: Resources::try_with_config(&current_dir, &conf)?,
+            res_available: Resources::try_with_config(conf.hardware_file.as_path(), &conf)?,
             res_cap: Resources::new_empty(),
             res_remaining: Resources::new_empty(),
             res_alloc: HashMap::new(),
@@ -424,7 +427,8 @@ impl Manager {
 }
 
 /// Return free space on a partition with a given path
-fn partition_space(path: &Path) -> Result<u64, Error> {
+fn partition_space<P: AsRef<Path>>(path: P) -> Result<u64, Error> {
+    let path = path.as_ref();
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;
@@ -457,11 +461,6 @@ fn partition_space(path: &Path) -> Result<u64, Error> {
             statvfs(path.as_os_str()).map_err(|e| sys_info::Error::General(e.to_string()))?;
         Ok(stat.blocks_available() as u64 * stat.fragment_size())
     }
-}
-
-#[inline]
-fn current_env_dir() -> Result<PathBuf, Error> {
-    std::env::current_dir().map_err(Error::from)
 }
 
 #[cfg(test)]

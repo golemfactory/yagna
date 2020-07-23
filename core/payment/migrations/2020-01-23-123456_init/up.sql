@@ -5,7 +5,7 @@ CREATE TABLE pay_agreement(
     peer_id VARCHAR(50) NOT NULL,
     payee_addr VARCHAR(50) NOT NULL,
     payer_addr VARCHAR(50) NOT NULL,
-    payment_platform VARCHAR(50) NULL,
+    payment_platform VARCHAR(50) NOT NULL,
     total_amount_due VARCHAR(32) NOT NULL,
     total_amount_accepted VARCHAR(32) NOT NULL,
     total_amount_paid VARCHAR(32) NOT NULL,
@@ -84,6 +84,8 @@ CREATE TABLE pay_invoice_x_activity(
 CREATE TABLE pay_allocation(
     id VARCHAR(50) NOT NULL PRIMARY KEY,
     owner_id VARCHAR(50) NOT NULL,
+    payment_platform VARCHAR(50) NOT NULL,
+    address VARCHAR(50) NOT NULL,
     total_amount VARCHAR(32) NOT NULL,
     spent_amount VARCHAR(32) NOT NULL,
     remaining_amount VARCHAR(32) NOT NULL,
@@ -97,14 +99,13 @@ CREATE TABLE pay_payment(
     peer_id VARCHAR(50) NOT NULL,
     payee_addr VARCHAR(50) NOT NULL,
     payer_addr VARCHAR(50) NOT NULL,
+    payment_platform VARCHAR(50) NOT NULL,
     role CHAR(1) NOT NULL CHECK (role in ('R', 'P')),
-    allocation_id VARCHAR(50) NULL,
     amount VARCHAR(32) NOT NULL,
     timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     details BLOB NOT NULL,
     PRIMARY KEY(owner_id, id),
-    UNIQUE (id, role),
-    FOREIGN KEY(allocation_id) REFERENCES pay_allocation(id) ON DELETE SET NULL
+    UNIQUE (id, role)
 );
 
 CREATE TABLE pay_activity_payment(
@@ -112,9 +113,11 @@ CREATE TABLE pay_activity_payment(
     activity_id VARCHAR(50) NOT NULL,
     owner_id VARCHAR(50) NOT NULL,
     amount VARCHAR(32) NOT NULL,
+    allocation_id VARCHAR(50) NULL,
     PRIMARY KEY(owner_id, payment_id, activity_id),
     FOREIGN KEY(owner_id, payment_id) REFERENCES pay_payment(owner_id, id),
-    FOREIGN KEY(owner_id, activity_id) REFERENCES pay_activity(owner_id, id)
+    FOREIGN KEY(owner_id, activity_id) REFERENCES pay_activity(owner_id, id),
+    FOREIGN KEY(allocation_id) REFERENCES pay_allocation(id) ON DELETE SET NULL
 );
 
 CREATE TABLE pay_agreement_payment(
@@ -122,9 +125,11 @@ CREATE TABLE pay_agreement_payment(
     agreement_id VARCHAR(50) NOT NULL,
     owner_id VARCHAR(50) NOT NULL,
     amount VARCHAR(32) NOT NULL,
+    allocation_id VARCHAR(50) NULL,
     PRIMARY KEY(owner_id, payment_id, agreement_id),
     FOREIGN KEY(owner_id, payment_id) REFERENCES pay_payment(owner_id, id),
-    FOREIGN KEY(owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id)
+    FOREIGN KEY(owner_id, agreement_id) REFERENCES pay_agreement(owner_id, id),
+    FOREIGN KEY(allocation_id) REFERENCES pay_allocation(id) ON DELETE SET NULL
 );
 
 CREATE TABLE pay_event_type(
@@ -158,4 +163,24 @@ CREATE TABLE pay_invoice_event(
     PRIMARY KEY(invoice_id, event_type),
     FOREIGN KEY(owner_id, invoice_id) REFERENCES pay_invoice (owner_id, id),
     FOREIGN KEY(event_type) REFERENCES pay_event_type (event_type)
+);
+
+CREATE TABLE pay_order(
+    id VARCHAR(50) NOT NULL,
+    driver VARCHAR(50) NOT NULL,
+    amount VARCHAR(32) NOT NULL,
+    payee_id VARCHAR(50) NOT NULL,
+    payer_id VARCHAR(50) NOT NULL,
+    payee_addr VARCHAR(50) NOT NULL,
+    payer_addr VARCHAR(50) NOT NULL,
+    payment_platform VARCHAR(50) NOT NULL,
+    invoice_id VARCHAR(50) NULL UNIQUE,
+    debit_note_id VARCHAR(50) NULL UNIQUE,
+    allocation_id VARCHAR(50) NOT NULL,
+    is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY(id, driver),
+    FOREIGN KEY(payer_id, invoice_id) REFERENCES pay_invoice (owner_id, id),
+    FOREIGN KEY(payer_id, debit_note_id) REFERENCES pay_debit_note (owner_id, id),
+    FOREIGN KEY(allocation_id) REFERENCES pay_allocation (id),
+    CHECK ((invoice_id IS NULL) <> (debit_note_id IS NULL))
 );

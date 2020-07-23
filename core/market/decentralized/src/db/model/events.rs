@@ -6,24 +6,25 @@ use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use std::str::FromStr;
 use thiserror::Error;
 
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
-use ya_client::model::market::Proposal as ClientProposal;
+use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal};
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
-use crate::db::dao::ProposalDao;
-use crate::db::model::{OwnerType, Proposal, ProposalId};
+use crate::db::dao::{AgreementDao, ProposalDao};
+use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
 use crate::db::schema::market_event;
 use crate::db::DbError;
 
 #[derive(Error, Debug)]
 pub enum EventError {
     #[error("Proposal [{0}] not found.")]
-    ProposalNotFound(String),
+    ProposalNotFound(ProposalId),
+    #[error("Proposal [{0}] not found.")]
+    AgreementNotFound(AgreementId),
     #[error("Failed get proposal from database. Error: {0}.")]
     FailedGetProposal(DbError),
     #[error("Unexpected error: {0}.")]
@@ -48,7 +49,7 @@ pub struct MarketEvent {
     pub event_type: EventType,
     /// It can be Proposal, Agreement or structure,
     /// that will represent PropertyQuery.
-    pub artifact_id: String,
+    pub artifact_id: ProposalId,
 }
 
 #[derive(Clone, Debug, Insertable)]
@@ -56,18 +57,26 @@ pub struct MarketEvent {
 pub struct NewMarketEvent {
     pub subscription_id: SubscriptionId,
     pub event_type: EventType,
-    pub artifact_id: String,
+    pub artifact_id: ProposalId, // TODO: typed
 }
 
 impl MarketEvent {
-    pub fn from_proposal(proposal: &Proposal, role: OwnerType) -> NewMarketEvent {
+    pub fn from_proposal(proposal: Proposal, role: OwnerType) -> NewMarketEvent {
         NewMarketEvent {
-            subscription_id: proposal.negotiation.subscription_id.clone(),
+            subscription_id: proposal.negotiation.subscription_id,
             event_type: match role {
                 OwnerType::Requestor => EventType::RequestorProposal,
                 OwnerType::Provider => EventType::ProviderProposal,
             },
-            artifact_id: proposal.body.id.to_string(),
+            artifact_id: proposal.body.id,
+        }
+    }
+
+    pub fn from_agreement(agreement: Agreement) -> NewMarketEvent {
+        NewMarketEvent {
+            subscription_id: agreement.offer_id,
+            event_type: EventType::ProviderAgreement,
+            artifact_id: agreement.id,
         }
     }
 
@@ -91,13 +100,21 @@ impl MarketEvent {
     async fn into_client_proposal(self, db: DbExecutor) -> Result<ClientProposal, EventError> {
         let prop = db
             .as_dao::<ProposalDao>()
-            .get_proposal(
-                &ProposalId::from_str(&self.artifact_id)
-                    .map_err(|e| ErrorMessage::from(e.to_string()))?,
-            )
+            .get_proposal(&self.artifact_id)
             .await
             .map_err(|error| EventError::FailedGetProposal(error))?
             .ok_or(EventError::ProposalNotFound(self.artifact_id.clone()))?;
+
+        Ok(prop.into_client()?)
+    }
+
+    async fn into_client_agreement(self, db: DbExecutor) -> Result<ClientAgreement, EventError> {
+        let prop = db
+            .as_dao::<AgreementDao>()
+            .select(&self.artifact_id, Utc::now().naive_utc())
+            .await
+            .map_err(|error| EventError::FailedGetProposal(error))?
+            .ok_or(EventError::AgreementNotFound(self.artifact_id.clone()))?;
 
         Ok(prop.into_client()?)
     }
@@ -111,7 +128,10 @@ impl MarketEvent {
                 event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
                 proposal: self.into_client_proposal(db.clone()).await?,
             }),
-            EventType::ProviderAgreement => unimplemented!(),
+            EventType::ProviderAgreement => Ok(ProviderEvent::AgreementEvent {
+                event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
+                agreement: self.into_client_agreement(db.clone()).await?,
+            }),
             EventType::ProviderPropertyQuery => unimplemented!(),
             _ => Err(ErrorMessage::new(format!(
                 "Wrong MarketEvent type [id={}]. Requestor event in Provider subscription.",

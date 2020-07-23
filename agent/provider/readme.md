@@ -321,8 +321,8 @@ activate    Activate a profile
 
 ### Listing profiles
 
-```bash 
-cargo run -- profile list
+```bash
+cargo run -p ya-provider profile list
 ```
 
 will print an output similar to:
@@ -339,8 +339,8 @@ will print an output similar to:
 
 ### Display the active profile
 
-```bash 
-cargo run -- profile active
+```bash
+cargo run -p ya-provider profile active
 ```
 
 will print:
@@ -399,6 +399,12 @@ ya-provider profile activate some_other_profile
 While the yagna service is still running (and you are in the `ya-prov` directory)
 you can now start Provider Agent.
 
+At first, you need to register provider's payment account:
+```bash
+cargo run payment init gnt -p
+```
+
+Then start the Provider Agent:
 ```bash
 cargo run -p ya-provider run
 ```
@@ -443,7 +449,7 @@ sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
 1. We need to acquire funds from faucet on testnet (rinkeby).
 This can last a little bit long. Retry if not succeed at first.
 ```bash
-cargo run payment init -r
+cargo run payment init gnt -r
 ```
 2. Check if you got credit on your account:
 ```bash

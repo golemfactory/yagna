@@ -118,12 +118,18 @@ async fn reject_proposal(
 
 #[actix_web::post("/agreements/{agreement_id}/approve")]
 async fn approve_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _query: Query<QueryTimeout>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    query: Query<QueryTimeout>,
+    id: Identity,
+) -> impl Responder {
+    let agreement_id = path.into_inner().agreement_id;
+    let timeout = query.timeout;
+    market
+        .provider_engine
+        .approve_agreement(id, &agreement_id, timeout)
+        .await
+        .map(|_| HttpResponse::NoContent().finish())
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]

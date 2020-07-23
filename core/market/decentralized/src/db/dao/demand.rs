@@ -27,6 +27,7 @@ pub enum DemandState {
 }
 
 impl<'c> DemandDao<'c> {
+    // TODO: return DemandState
     pub async fn select(&self, id: &SubscriptionId) -> DbResult<Option<Demand>> {
         let id = id.clone();
         let now = Utc::now().naive_utc();

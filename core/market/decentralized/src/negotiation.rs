@@ -1,5 +1,4 @@
 mod common;
-// TODO: move to ../<mod_name>.rs
 pub mod error;
 mod notifier;
 mod provider;

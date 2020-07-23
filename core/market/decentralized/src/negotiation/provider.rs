@@ -1,3 +1,6 @@
+// TODO: This is only temporary
+#![allow(dead_code)]
+use chrono::Utc;
 use futures::stream::StreamExt;
 use std::str::FromStr;
 
@@ -7,20 +10,23 @@ use ya_client::model::{
 };
 use ya_persistence::executor::DbExecutor;
 
-use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::model::{Offer as ModelOffer, OwnerType, Proposal, ProposalId, SubscriptionId};
+use super::error::{NegotiationError, NegotiationInitError};
+use crate::db::dao::{AgreementDao, EventsDao, ProposalDao};
+use crate::db::model::{AgreementId, AgreementState, Offer as ModelOffer, SubscriptionId};
+use crate::db::model::{OwnerType, Proposal, ProposalId};
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
 use crate::negotiation::common::CommonBroker;
-use crate::negotiation::error::{ProposalError, QueryEventsError};
+use crate::negotiation::error::{AgreementError, ProposalError, QueryEventsError};
 use crate::negotiation::notifier::EventNotifier;
-use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
+use crate::protocol::negotiation::error::{
+    AgreementError as ProtocolAgreementError, CounterProposalError, RemoteProposalError,
+};
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
 };
 use crate::protocol::negotiation::provider::NegotiationApi;
-
-use super::error::{NegotiationError, NegotiationInitError};
+use ya_service_api_web::middleware::Identity;
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -43,6 +49,8 @@ impl ProviderBroker {
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
+        let broker3 = broker.clone();
+
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
                 on_initial_proposal(broker1.clone(), caller, msg)
@@ -53,7 +61,9 @@ impl ProviderBroker {
                     .on_proposal_received(caller, msg, OwnerType::Provider)
             },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
-            move |_caller: String, _msg: AgreementReceived| async move { unimplemented!() },
+            move |caller: String, msg: AgreementReceived| {
+                on_agreement_received(broker3.clone(), caller, msg)
+            },
             move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
         );
 
@@ -116,9 +126,8 @@ impl ProviderBroker {
             .await?;
 
         // Map model events to client RequestorEvent.
-        let db = self.db();
         Ok(futures::stream::iter(events)
-            .then(|event| event.into_client_provider_event(&db))
+            .then(|event| event.into_client_provider_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
                     log::warn!("Error converting event to client type: {}", error);
@@ -129,8 +138,41 @@ impl ProviderBroker {
             .await)
     }
 
-    fn db(&self) -> DbExecutor {
-        self.common.db.clone()
+    pub async fn approve_agreement(
+        &self,
+        _id: Identity,
+        agreement_id: &AgreementId,
+        timeout: f32,
+    ) -> Result<(), AgreementError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+
+        let agreement = match dao
+            .select(agreement_id, Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            Some(agreement) => agreement,
+        };
+
+        Err(match agreement.state {
+            AgreementState::Proposal => AgreementError::Proposed(agreement.id),
+            AgreementState::Pending => {
+                // TODO : possible race condition here ISSUE#430
+                // 1. this state check should be also `db.update_state`
+                // 2. `db.update_state` must be invoked after successful propose_agreement
+                self.api.approve_agreement(agreement, timeout).await?;
+                dao.update_state(agreement_id, AgreementState::Approved)
+                    .await
+                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+                return Ok(());
+            }
+            AgreementState::Cancelled => AgreementError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementError::Rejected(agreement.id),
+            AgreementState::Approved => AgreementError::Approved(agreement.id),
+            AgreementState::Expired => AgreementError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementError::Terminated(agreement.id),
+        })
     }
 }
 
@@ -172,5 +214,36 @@ async fn on_initial_proposal(
 
     // Send channel message to wake all query_events waiting for proposals.
     notifier.notify(&subscription_id).await;
+    Ok(())
+}
+
+async fn on_agreement_received(
+    broker: CommonBroker,
+    _caller: String,
+    mut msg: AgreementReceived,
+) -> Result<(), ProtocolAgreementError> {
+    let id = msg.agreement.id.clone();
+    let subscription_id = msg.agreement.offer_id.clone();
+
+    // TODO: we should build new agreement here from local Proposal and signatures
+    msg.agreement.state = AgreementState::Pending;
+
+    broker
+        .db
+        .as_dao::<AgreementDao>()
+        .save(msg.agreement.clone())
+        .await
+        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
+
+    broker
+        .db
+        .as_dao::<EventsDao>()
+        .add_agreement_event(msg.agreement)
+        .await
+        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
+
+    // Send channel message to wake all query_events waiting for proposals.
+    broker.notifier.notify(&subscription_id).await;
+
     Ok(())
 }

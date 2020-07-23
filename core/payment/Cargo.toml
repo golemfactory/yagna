@@ -6,8 +6,6 @@ edition = "2018"
 
 [features]
 default = []
-gnt-driver = ["ya-payment-driver/gnt-driver"]
-dummy-driver = ["ya-payment-driver/dummy-driver"]
 
 [dependencies]
 ya-core-model = { version = "0.1", features = [
@@ -18,7 +16,6 @@ ya-core-model = { version = "0.1", features = [
     "payment",
 ] }
 ya-client-model = { version = "0.1", features = ["with-diesel"] }
-ya-payment-driver = "0.1"
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-web = "0.1"
@@ -60,4 +57,6 @@ structopt = "0.3"
 ya-client = "0.3"
 ya-net = { version = "0.1", features = ["service"] }
 ya-sb-router = "0.1"
+ya-dummy-driver = "0.1"
+ya-gnt-driver = "0.1"
 actix-rt = "1.0"

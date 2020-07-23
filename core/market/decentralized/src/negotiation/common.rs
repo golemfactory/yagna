@@ -25,7 +25,7 @@ type IsInitial = bool;
 pub struct CommonBroker {
     pub(super) db: DbExecutor,
     pub(super) store: SubscriptionStore,
-    pub(super) notifier: EventNotifier,
+    pub(super) notifier: EventNotifier<SubscriptionId>,
 }
 
 impl CommonBroker {
@@ -84,6 +84,7 @@ impl CommonBroker {
             return Ok(vec![]);
         }
 
+        let mut notifier = self.notifier.listen(subscription_id);
         loop {
             let events = self
                 .db
@@ -101,15 +102,11 @@ impl CommonBroker {
             }
             timeout = stop_time - Instant::now();
 
-            if let Err(error) = self
-                .notifier
-                .wait_for_event_with_timeout(subscription_id, timeout)
-                .await
-            {
+            if let Err(error) = notifier.wait_for_event_with_timeout(timeout).await {
                 return match error {
                     NotifierError::Timeout(_) => Ok(vec![]),
                     NotifierError::ChannelClosed(_) => {
-                        Err(QueryEventsError::InternalError(format!("{}", error)))
+                        Err(QueryEventsError::InternalError(error.to_string()))
                     }
                     NotifierError::Unsubscribed(id) => Err(QueryEventsError::Unsubscribed(id)),
                 };
