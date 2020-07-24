@@ -24,7 +24,7 @@ pub async fn exchange_draft_proposals(
     // Expect events generated on requestor market.
     let req_events = req_mkt
         .requestor_engine
-        .query_events(&demand_id, 1.2, Some(5))
+        .query_events(&demand_id, 3.14, Some(5))
         .await?;
     let req_offer_proposal1 = requestor::expect_proposal(req_events, 1)?;
 
@@ -42,7 +42,7 @@ pub async fn exchange_draft_proposals(
     // Provider receives Proposal
     let prov_events = prov_mkt
         .provider_engine
-        .query_events(&offer_id, 1.2, Some(5))
+        .query_events(&offer_id, 3.14, Some(5))
         .await?;
     let prov_demand_proposal1 = provider::expect_proposal(prov_events, 2)?;
     let prov_demand_proposal1_id = req_demand_proposal1_id
