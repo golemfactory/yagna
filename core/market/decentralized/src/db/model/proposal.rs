@@ -16,6 +16,7 @@ use ya_client::model::{ErrorMessage, NodeId};
 use super::{generate_random_id, SubscriptionId};
 use super::{OwnerType, ProposalId};
 use crate::db::model::agreement::AgreementId;
+use crate::db::model::proposal_id::ProposalIdValidationError;
 use crate::db::model::Demand as ModelDemand;
 use crate::db::model::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
@@ -252,6 +253,14 @@ impl Proposal {
                 OwnerType::Provider => self.negotiation.requestor_id.clone(),
             },
         }
+    }
+
+    pub fn validate_id(&self) -> Result<(), ProposalIdValidationError> {
+        Ok(self.body.id.validate(
+            &self.negotiation.offer_id,
+            &self.negotiation.demand_id,
+            &self.body.creation_ts,
+        )?)
     }
 }
 

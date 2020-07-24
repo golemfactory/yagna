@@ -176,6 +176,7 @@ impl CommonBroker {
             .await
             .map_err(|_e| RemoteProposalError::ProposalNotFound(msg.prev_proposal_id.clone()))?;
         let proposal = prev_proposal.from_draft(msg.proposal);
+        proposal.validate_id().map_err(RemoteProposalError::from)?;
 
         // TODO: do auth
         let _owner_id = NodeId::from_str(&caller)
