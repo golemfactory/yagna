@@ -90,20 +90,19 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
     market1.subscribe_offer(&offer, &identity1).await?;
 
     // We expect that 3 proposal will be available as requestor event.
-    let mut events_cnt = 0;
+    let mut events = vec![];
     for _ in 0..3 {
-        let events = market1.query_events(&demand_id, 1.0, Some(5)).await?;
-        events_cnt += events.len();
+        events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
     }
-    assert_eq!(events_cnt, 3);
+    assert_eq!(events.len(), 3);
 
-    for proposal in events {
-        match proposal {
+    for event in events {
+        match event {
             RequestorEvent::ProposalEvent { proposal, .. } => {
                 assert_eq!(proposal.prev_proposal_id, None);
                 assert_eq!(proposal.state()?, &State::Initial);
             }
-            _ => panic!("Invalid event Type. ProposalEvent expected"),
+            _ => panic!("ProposalEvent expected, but got {:?}", event),
         };
     }
 
