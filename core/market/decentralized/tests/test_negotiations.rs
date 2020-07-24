@@ -31,10 +31,17 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
         .await?;
-    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+    let offer = sample_offer();
+    let offer_id = market2.subscribe_offer(&offer, &identity2).await?;
 
     // Expect events generated on requestor market.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
+    assert_eq!(proposal0.properties, offer.properties);
+    assert_eq!(proposal0.constraints, offer.constraints);
+    assert!(proposal0.proposal_id.is_some());
+    assert_eq!(proposal0.issuer_id, Some(identity2.identity.to_string()));
+    assert_eq!(proposal0.state, Some(State::Initial));
+    assert_eq!(proposal0.prev_proposal_id, None);
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
     let proposal1_req = proposal0.counter_demand(sample_demand())?;
@@ -42,19 +49,25 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .requestor_engine
         .counter_proposal(&demand_id, &proposal0.get_proposal_id()?, &proposal1_req)
         .await?;
+    assert_eq!(proposal1_req.prev_proposal_id, proposal0.proposal_id);
 
     // Provider receives Proposal
-    let proposal1_prov = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal1_prov = provider::query_proposal(&market2, &offer_id, 2).await?;
     let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
 
-    assert_eq!(proposal1_req.constraints, proposal1_prov.constraints);
-    assert_eq!(proposal1_req.properties, proposal1_prov.properties);
-    assert_eq!(proposal1_prov.state, Some(State::Draft));
+    assert_eq!(proposal1_prov.constraints, proposal1_req.constraints);
+    assert_eq!(proposal1_prov.properties, proposal1_req.properties);
     assert_eq!(
-        Some(identity1.identity.to_string()),
-        proposal1_prov.issuer_id
+        proposal1_prov.proposal_id,
+        Some(proposal1_prov_id.to_string()),
     );
-    assert_eq!(proposal1_prov_id, proposal1_prov.get_proposal_id()?);
+    assert_eq!(
+        proposal1_prov.issuer_id,
+        Some(identity1.identity.to_string()),
+    );
+    assert_eq!(proposal1_prov.state, Some(State::Draft));
+    // Requestor and Provider have different initial Proposals IDs
+    assert!(proposal1_prov.prev_proposal_id.is_some());
 
     // Provider counters proposal.
     let proposal2_prov = proposal1_prov.counter_offer(sample_offer())?;
@@ -62,19 +75,31 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .provider_engine
         .counter_proposal(&offer_id, &proposal1_prov_id, &proposal2_prov)
         .await?;
+    assert_eq!(proposal2_prov.prev_proposal_id, proposal1_prov.proposal_id);
 
     // Requestor receives proposal.
-    let proposal2_req = requestor::query_proposal(&market1, &demand_id).await?;
+    let proposal2_req = requestor::query_proposal(&market1, &demand_id, 3).await?;
     let proposal2_req_id = proposal2_id.clone().translate(OwnerType::Requestor);
 
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
     assert_eq!(proposal2_req.properties, proposal2_prov.properties);
+    assert_eq!(
+        proposal2_req.proposal_id,
+        Some(proposal2_req_id.to_string()),
+    );
+    assert_eq!(
+        proposal2_req.issuer_id,
+        Some(identity2.identity.to_string()),
+    );
     assert_eq!(proposal2_req.state, Some(State::Draft));
     assert_eq!(
-        Some(identity2.identity.to_string()),
-        proposal2_req.issuer_id
+        proposal2_req.prev_proposal_id,
+        Some(
+            proposal1_prov_id
+                .translate(OwnerType::Requestor)
+                .to_string()
+        ),
     );
-    assert_eq!(proposal2_req_id, proposal2_req.get_proposal_id()?);
 
     // Requestor counters draft proposal.
     let proposal3_req = proposal2_req.counter_demand(sample_demand())?;
@@ -82,19 +107,27 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .requestor_engine
         .counter_proposal(&demand_id, &proposal2_req_id, &proposal3_req)
         .await?;
+    assert_eq!(proposal3_req.prev_proposal_id, proposal2_req.proposal_id);
 
     // Provider receives Proposal
-    let proposal3_prov = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal3_prov = provider::query_proposal(&market2, &offer_id, 4).await?;
     let proposal3_prov_id = proposal3_req_id.clone().translate(OwnerType::Provider);
 
-    assert_eq!(proposal3_req.constraints, proposal3_prov.constraints);
-    assert_eq!(proposal3_req.properties, proposal3_prov.properties);
+    assert_eq!(proposal3_prov.constraints, proposal3_req.constraints);
+    assert_eq!(proposal3_prov.properties, proposal3_req.properties);
+    assert_eq!(
+        proposal3_prov.proposal_id,
+        Some(proposal3_prov_id.to_string()),
+    );
+    assert_eq!(
+        proposal3_prov.issuer_id,
+        Some(identity1.identity.to_string()),
+    );
     assert_eq!(proposal3_prov.state, Some(State::Draft));
     assert_eq!(
-        Some(identity1.identity.to_string()),
-        proposal3_prov.issuer_id
+        proposal3_prov.prev_proposal_id,
+        Some(proposal2_req_id.translate(OwnerType::Provider).to_string()),
     );
-    assert_eq!(proposal3_prov_id, proposal3_prov.get_proposal_id()?);
 
     Ok(())
 }
@@ -123,7 +156,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // REQUESTOR side.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
     let proposal0_id = proposal0.get_proposal_id()?;
 
     // Counter proposal for the first time.
@@ -147,7 +180,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
     }
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id, 2).await?;
     let proposal0_id = proposal0.get_proposal_id()?;
 
     // Counter proposal for the first time.
@@ -196,7 +229,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // REQUESTOR side.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
 
     let proposal1 = proposal0.counter_demand(sample_demand())?;
     let proposal1_id = market1
@@ -220,7 +253,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
     }
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id, 2).await?;
 
     let proposal1 = proposal0.counter_offer(sample_offer())?;
     let proposal1_id = market2
@@ -268,7 +301,7 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
         .await?;
     market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
     market1.unsubscribe_demand(&demand_id, &identity1).await?;
 
     let proposal1 = proposal0.counter_demand(sample_demand())?;
@@ -308,7 +341,7 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
         .await?;
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
     let proposal1 = proposal0.counter_demand(sample_demand())?;
     market1
         .requestor_engine
@@ -316,7 +349,7 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
         .await?;
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id, 2).await?;
     market2.unsubscribe_offer(&offer_id, &identity2).await?;
 
     let proposal1 = proposal0.counter_offer(sample_offer())?;
@@ -357,7 +390,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::
         .await?;
     let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
 
     // When we will counter this Proposal, Provider will have it already unsubscribed.
     market2.unsubscribe_offer(&offer_id, &identity2).await?;
@@ -447,7 +480,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
         .counter_proposal(&demand_id, &proposal0_id, &proposal1)
         .await?;
 
-    let proposal2 = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal2 = provider::query_proposal(&market2, &offer_id, 1).await?;
     market1.unsubscribe_demand(&demand_id, &identity1).await?;
 
     let proposal3 = proposal2.counter_offer(sample_offer())?;
@@ -527,7 +560,7 @@ async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
         .counter_proposal(&demand_id, &proposal0_id, &proposal1)
         .await?;
 
-    let proposal2 = provider::query_proposal(&market2, &offer_id).await?;
+    let proposal2 = provider::query_proposal(&market2, &offer_id, 1).await?;
     let proposal3 = proposal2.counter_offer(not_matching_offer())?;
     let result = market2
         .provider_engine

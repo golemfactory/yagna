@@ -29,10 +29,10 @@ use super::{
     EventNotifier,
 };
 
-#[derive(Clone, derive_more::Display)]
+#[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
-    #[display(fmt = "Ok")]
-    Ok,
+    #[display(fmt = "Approved")]
+    Approved,
     #[display(fmt = "Cancelled")]
     Cancelled,
     #[display(fmt = "Rejected")]
@@ -252,7 +252,7 @@ impl RequestorBroker {
                 .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
-                AgreementState::Approved => return Ok(ApprovalStatus::Ok),
+                AgreementState::Approved => return Ok(ApprovalStatus::Approved),
                 AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
                 AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
                 AgreementState::Expired => {
@@ -325,6 +325,26 @@ async fn on_agreement_approved(
     msg: AgreementApproved,
     notifier: EventNotifier<AgreementId>,
 ) -> Result<(), ApproveAgreementError> {
+    let agreement_id = msg.agreement_id.clone();
+    let caller: NodeId =
+        caller
+            .parse()
+            .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
+                e: e.to_string(),
+                caller,
+                id: agreement_id.clone(),
+            })?;
+    agreement_approved(broker, caller, msg, notifier)
+        .await
+        .map_err(|e| ApproveAgreementError::Remote(e, agreement_id))
+}
+
+async fn agreement_approved(
+    broker: CommonBroker,
+    caller: NodeId,
+    msg: AgreementApproved,
+    notifier: EventNotifier<AgreementId>,
+) -> Result<(), RemoteAgreementError> {
     let agreement = broker
         .db
         .as_dao::<AgreementDao>()
@@ -333,15 +353,7 @@ async fn on_agreement_approved(
         .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
         .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
-    let caller_node_id: NodeId =
-        caller
-            .parse()
-            .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
-                e: e.to_string(),
-                caller,
-                id: agreement.id.clone(),
-            })?;
-    if agreement.provider_id != caller_node_id {
+    if agreement.provider_id != caller {
         // Don't reveal, that we know this Agreement id.
         Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
     }

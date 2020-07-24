@@ -181,11 +181,25 @@ impl ProviderBroker {
     }
 }
 
+// TODO: We need more elegant solution than this. This function still returns
+//  CounterProposalError, which should be hidden in negotiation API and implementations
+//  of handlers should return RemoteProposalError.
 async fn on_initial_proposal(
     broker: CommonBroker,
     caller: String,
     msg: InitialProposalReceived,
 ) -> Result<(), CounterProposalError> {
+    let proposal_id = msg.proposal.proposal_id.clone();
+    initial_proposal(broker, caller, msg)
+        .await
+        .map_err(|e| CounterProposalError::Remote(e, proposal_id))
+}
+
+async fn initial_proposal(
+    broker: CommonBroker,
+    caller: String,
+    msg: InitialProposalReceived,
+) -> Result<(), RemoteProposalError> {
     let db = broker.db.clone();
     let store = broker.store.clone();
 
@@ -220,7 +234,7 @@ async fn on_initial_proposal(
         proposal: msg.proposal,
     };
     broker
-        .on_proposal_received(caller, received_msg, OwnerType::Provider)
+        .proposal_received(caller, received_msg, OwnerType::Provider)
         .await
 }
 

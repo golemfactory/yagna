@@ -11,18 +11,18 @@ pub enum NegotiationApiInitError {}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum ProposalError {
-    #[error("Failed to broadcast caused by gsb error: {0}.")]
-    GsbError(String),
+    #[error("Proposal [{1}] GSB error: {0}.")]
+    GsbError(String, ProposalId),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum CounterProposalError {
-    #[error("Failed to broadcast caused by gsb error: {0}.")]
-    GsbError(String),
-    #[error("Trying to counter Proposal [{0}] without previous Proposal id set.")]
+    #[error("Countering Proposal [{1}] GSB error: {0}.")]
+    GsbError(String, ProposalId),
+    #[error("Countering Proposal [{0}] without previous Proposal id set.")]
     NoPreviousProposal(ProposalId),
-    #[error("Can't counter proposal due to remote node error: {0}")]
-    Remote(#[from] RemoteProposalError),
+    #[error("Countering Proposal [{1}] remote error: {0}")]
+    Remote(RemoteProposalError, ProposalId),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -43,60 +43,36 @@ pub enum RemoteProposalError {
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum AgreementError {
-    #[error("Failed to broadcast caused by gsb error: {0}.")]
-    GsbError(String),
+    #[error("Agreement [{1}] GSB error: {0}.")]
+    GsbError(String, AgreementId),
     #[error("Saving Agreement [{1}] error: {0}.")]
     Saving(String, AgreementId),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum ApproveAgreementError {
-    #[error("Failed to broadcast caused by gsb error: {0}.")]
-    GsbError(String),
-    #[error("Can't approve Agreement due to remote node error: {0}")]
-    Remote(#[from] RemoteAgreementError),
-    #[error("Can't parse {caller} for {id} : {e}")]
+    #[error("Approving Agreement [{1}] GSB error: {0}.")]
+    GsbError(String, AgreementId),
+    #[error("Approving Agreement [{1}] remote error: {0}")]
+    Remote(RemoteAgreementError, AgreementId),
+    #[error("Can't parse {caller} for Agreement [{id}]: {e}")]
     CallerParseError {
         e: String,
         caller: String,
         id: AgreementId,
     },
-    #[error("Timeout while sending approval of [{0}]")]
+    #[error("Timeout while sending approval of Agreement [{0}]")]
     Timeout(AgreementId),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum RemoteAgreementError {
-    #[error("Agreement {0} not found.")]
+    #[error("Agreement [{0}] not found.")]
     NotFound(AgreementId),
-    #[error("Agreement {0} expired.")]
+    #[error("Agreement [{0}] expired.")]
     Expired(AgreementId),
-    #[error("Agreement {0} in state {1}, can't be approved.")]
+    #[error("Agreement [{0}] in state {1}, can't be approved.")]
     InvalidState(AgreementId, AgreementState),
-    #[error("Can't approve Agreement {0} due to internal error.")]
+    #[error("Can't approve Agreement [{0}] due to internal error.")]
     InternalError(AgreementId),
-}
-
-impl From<ya_service_bus::error::Error> for ProposalError {
-    fn from(e: ya_service_bus::error::Error) -> Self {
-        ProposalError::GsbError(e.to_string())
-    }
-}
-
-impl From<ya_service_bus::error::Error> for CounterProposalError {
-    fn from(e: ya_service_bus::error::Error) -> Self {
-        CounterProposalError::GsbError(e.to_string())
-    }
-}
-
-impl From<ya_service_bus::error::Error> for AgreementError {
-    fn from(e: ya_service_bus::error::Error) -> Self {
-        AgreementError::GsbError(e.to_string())
-    }
-}
-
-impl From<ya_service_bus::error::Error> for ApproveAgreementError {
-    fn from(e: ya_service_bus::error::Error) -> Self {
-        ApproveAgreementError::GsbError(e.to_string())
-    }
 }

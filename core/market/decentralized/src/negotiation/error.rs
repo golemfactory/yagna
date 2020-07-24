@@ -64,9 +64,9 @@ pub enum AgreementError {
     Terminated(AgreementId),
     #[error("Invalid proposal id. {0}")]
     InvalidSubscriptionId(#[from] ProposalIdParseError),
-    #[error("General protocol error: {0}")]
+    #[error("Protocol error: {0}")]
     Protocol(#[from] ProtocolAgreementError),
-    #[error("Approve protocol error: {0}")]
+    #[error("Protocol error while approving: {0}")]
     ProtocolApprove(#[from] ApproveAgreementError),
 }
 
