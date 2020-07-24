@@ -136,7 +136,6 @@ impl Proposal {
     pub fn new_provider(
         demand_id: &SubscriptionId,
         requestor_id: NodeId,
-        demand_proposal: ProposalContent,
         offer: ModelOffer,
     ) -> Proposal {
         let negotiation = Negotiation::new(
@@ -146,24 +145,25 @@ impl Proposal {
             offer.node_id,
             OwnerType::Provider,
         );
+
+        // TODO: Initial proposal id will differ on Requestor and Provider!!
         let proposal_id = ProposalId::generate_id(
             &offer.id,
             &demand_id,
-            &demand_proposal.creation_ts,
+            &Utc::now().naive_utc(),
             OwnerType::Provider,
         );
-        // TODO validate demand_proposal.proposal_id with newly generated proposal_id
 
         let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: None,
-            issuer: IssuerType::Them,
+            issuer: IssuerType::Us, // Requestor market generated this Offer originally, but it's like we are issuer.
             negotiation_id: negotiation.id.clone(),
-            properties: demand_proposal.properties,
-            constraints: demand_proposal.constraints,
-            state: ProposalState::Draft,
-            creation_ts: demand_proposal.creation_ts,
-            expiration_ts: demand_proposal.expiration_ts,
+            properties: offer.properties,
+            constraints: offer.constraints,
+            state: ProposalState::Initial,
+            creation_ts: offer.creation_ts,
+            expiration_ts: offer.expiration_ts,
         };
 
         Proposal {
@@ -173,6 +173,7 @@ impl Proposal {
     }
 
     pub fn from_draft(&self, proposal: ProposalContent) -> Proposal {
+        // TODO: validate demand_proposal.proposal_id with newly generated proposal_id
         let proposal = DbProposal {
             id: proposal.proposal_id,
             issuer: IssuerType::Them,

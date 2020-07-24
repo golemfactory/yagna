@@ -45,6 +45,7 @@ impl CommonBroker {
         // Proposal to database. This seems like race conditions, but there's no
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
+        // TODO: We should use validate_subscription function to do this stuff.
         if owner == OwnerType::Provider {
             self.store
                 .get_offer(&subscription_id)
@@ -174,14 +175,13 @@ impl CommonBroker {
             .get_proposal(&msg.prev_proposal_id)
             .await
             .map_err(|_e| RemoteProposalError::ProposalNotFound(msg.prev_proposal_id.clone()))?;
-        self.validate_subscription(&prev_proposal, owner).await?;
+        let proposal = prev_proposal.from_draft(msg.proposal);
 
         // TODO: do auth
         let _owner_id = NodeId::from_str(&caller)
             .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
 
-        let proposal = prev_proposal.from_draft(msg.proposal);
-
+        self.validate_subscription(&prev_proposal, owner).await?;
         validate_match(&proposal, &prev_proposal).map_err(RemoteProposalError::NotMatching)?;
 
         self.db

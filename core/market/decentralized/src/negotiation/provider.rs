@@ -186,9 +186,8 @@ async fn on_initial_proposal(
     caller: String,
     msg: InitialProposalReceived,
 ) -> Result<(), CounterProposalError> {
-    let db = broker.db;
-    let store = broker.store;
-    let notifier = broker.notifier;
+    let db = broker.db.clone();
+    let store = broker.store.clone();
 
     // Check subscription.
     let offer = match store.get_offer(&msg.offer_id).await {
@@ -200,26 +199,29 @@ async fn on_initial_proposal(
         Ok(offer) => offer,
     };
 
-    // Add proposal to database together with Negotiation record.
+    // In this step we add Proposal, that was generated on Requestor by market.
+    // This way we have the same state on Provider as on Requestor and we can use
+    // the same function to handle this, as in normal counter_proposal flow.
+    // TODO: Initial proposal id will differ on Requestor and Provider!! It isn't problem as long
+    //  we don't log ids somewhere and try to compare between nodes.
     let owner_id =
         NodeId::from_str(&caller).map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-    let proposal = Proposal::new_provider(&msg.demand_id, owner_id, msg.proposal, offer);
+    let proposal = Proposal::new_provider(&msg.demand_id, owner_id, offer);
     let proposal = db
         .as_dao::<ProposalDao>()
         .save_initial_proposal(proposal)
         .await
         .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
 
-    // Create Proposal Event and add it to queue (database).
-    let subscription_id = proposal.negotiation.subscription_id.clone();
-    db.as_dao::<EventsDao>()
-        .add_proposal_event(proposal, OwnerType::Provider)
+    // Now, since we have previous event in database, we can pretend that someone sent us
+    // normal counter proposal.
+    let received_msg = ProposalReceived {
+        prev_proposal_id: proposal.body.id,
+        proposal: msg.proposal,
+    };
+    broker
+        .on_proposal_received(caller, received_msg, OwnerType::Provider)
         .await
-        .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-
-    // Send channel message to wake all query_events waiting for proposals.
-    notifier.notify(&subscription_id).await;
-    Ok(())
 }
 
 async fn on_agreement_received(
