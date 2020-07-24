@@ -181,7 +181,7 @@ async fn negotiate_offer(
         .await?;
 
     match &result[..] {
-        "Ok" => {
+        "Approved" => {
             log::info!("\n\n AGREEMENT APPROVED: {} !", new_agreement_id);
             Ok(ProcessOfferResult::AgreementId(new_agreement_id))
         }

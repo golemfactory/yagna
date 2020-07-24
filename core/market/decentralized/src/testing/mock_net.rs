@@ -1,4 +1,5 @@
 use actix_rt::Arbiter;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -57,7 +58,16 @@ impl MockNet {
         inner.nodes.insert(node_id.clone(), prefix);
     }
 
-    async fn translate_address(&self, address: String) -> Result<(NodeId, String), anyhow::Error> {
+    pub fn unregister_node(&self, node_id: &NodeId) -> Result<()> {
+        let mut inner = self.inner.lock().unwrap();
+        inner
+            .nodes
+            .remove(node_id)
+            .map(|_| ())
+            .ok_or(anyhow::anyhow!("node not registered: {}", node_id))
+    }
+
+    async fn translate_address(&self, address: String) -> Result<(NodeId, String)> {
         let (from_node, to_addr) = match parse_from_addr(&address) {
             Ok(v) => v,
             Err(e) => Err(Error::GsbBadRequest(e.to_string()))?,
@@ -158,7 +168,7 @@ impl MockNetInner {
 }
 
 // Copied from core/net/api.rs
-pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
+pub(crate) fn parse_from_addr(from_addr: &str) -> Result<(NodeId, String)> {
     let mut it = from_addr.split("/").fuse();
     if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
         (it.next(), it.next(), it.next(), it.next(), it.next())

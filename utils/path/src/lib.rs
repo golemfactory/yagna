@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::io;
 use std::io::Write;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path, PathBuf, Prefix};
 
 pub mod data_dir;
 
@@ -51,6 +51,31 @@ where
 
         Ok(())
     }
+}
+
+/// Canonicalize and strip the path of prefix components (Windows)
+pub fn normalize_path<P: AsRef<Path>>(path: P) -> std::io::Result<PathBuf> {
+    let path = path.as_ref().canonicalize()?;
+    if !cfg!(windows) {
+        return Ok(path);
+    }
+
+    // canonicalize on Windows adds `\\?` (or `%3f` when url-encoded) prefix
+    let mut components = path.components();
+    let path = match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::Disk(_) => path,
+            Prefix::VerbatimDisk(disk) => {
+                let mut p = OsString::from(format!("{}:", disk as char));
+                p.push(components.as_path());
+                PathBuf::from(p)
+            }
+            _ => panic!("Invalid path: {:?}", path),
+        },
+        _ => path,
+    };
+
+    Ok(path)
 }
 
 fn remove_insecure_chars<PathRef: AsRef<Path>>(path: PathRef) -> PathBuf {

@@ -8,8 +8,8 @@ pub mod requestor {
     use ya_client::model::market::event::RequestorEvent;
     use ya_client::model::market::Proposal;
 
-    pub fn expect_proposal(events: Vec<RequestorEvent>) -> anyhow::Result<Proposal> {
-        assert_eq!(events.len(), 1, "Expected only one event.");
+    pub fn expect_proposal(events: Vec<RequestorEvent>, i: u8) -> anyhow::Result<Proposal> {
+        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
 
         Ok(match events[0].clone() {
             RequestorEvent::ProposalEvent { proposal, .. } => proposal,
@@ -22,8 +22,8 @@ pub mod provider {
     use ya_client::model::market::event::ProviderEvent;
     use ya_client::model::market::Proposal;
 
-    pub fn expect_proposal(events: Vec<ProviderEvent>) -> anyhow::Result<Proposal> {
-        assert_eq!(events.len(), 1, "Expected only one event.");
+    pub fn expect_proposal(events: Vec<ProviderEvent>, i: u8) -> anyhow::Result<Proposal> {
+        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
 
         Ok(match events[0].clone() {
             ProviderEvent::ProposalEvent { proposal, .. } => proposal,
