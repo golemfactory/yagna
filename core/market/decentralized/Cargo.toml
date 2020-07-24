@@ -21,7 +21,6 @@ ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 
-actix = "0.9"
 actix-web = "2.0"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }

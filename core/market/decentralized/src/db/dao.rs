@@ -1,5 +1,5 @@
 mod agreement;
-mod cleaner;
+pub mod cleaner;
 mod demand;
 mod events;
 mod offer;

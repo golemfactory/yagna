@@ -1,7 +1,7 @@
 use crate::db::dao::{AgreementDao, DemandDao, OfferDao, ProposalDao};
-use actix::prelude::*;
 use futures::join;
 use std::time::Duration;
+use tokio::time;
 use ya_persistence::executor::DbExecutor;
 
 async fn clean(db: DbExecutor) {
@@ -29,34 +29,13 @@ async fn clean(db: DbExecutor) {
     }
 }
 
-struct DatabaseCleaner {
-    db: DbExecutor,
-}
-
-impl DatabaseCleaner {
-    pub fn new(db: DbExecutor) -> Addr<Self> {
-        let dc = Self { db };
-        dc.start()
-    }
-}
-
-impl Actor for DatabaseCleaner {
-    type Context = Context<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        self.start_job(ctx);
-    }
-}
-
-impl DatabaseCleaner {
-    fn start_job(&mut self, ctx: &mut Context<Self>) {
-        let _ = ctx.run_interval(Duration::from_secs(3600), |act, _ctx| {
-            log::debug!("Market database cleaner job started");
-            let db = act.db.clone();
-            Arbiter::spawn(async move {
-                clean(db).await;
-            });
-            log::debug!("Market database cleaner job done");
-        });
+pub async fn clean_forever(db: DbExecutor) {
+    let mut interval = time::interval(Duration::from_secs(3600));
+    loop {
+        interval.tick().await;
+        log::debug!("Market database cleaner job started");
+        let db = db.clone();
+        clean(db).await;
+        log::debug!("Market database cleaner job done");
     }
 }

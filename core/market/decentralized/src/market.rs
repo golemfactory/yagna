@@ -65,6 +65,10 @@ impl MarketService {
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
+        let cleaner_db = db.clone();
+        tokio::spawn(async move {
+            crate::db::dao::cleaner::clean_forever(cleaner_db).await;
+        });
 
         Ok(MarketService {
             db: db.clone(),
