@@ -139,7 +139,7 @@ async fn get_batch_results(
     query: web::Query<QueryTimeoutCommandIndex>,
     id: Identity,
     request: HttpRequest,
-) -> Result<Either<impl Responder, impl Responder>, Error> {
+) -> Result<impl Responder, Error> {
     authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
     let agreement = get_activity_agreement(&db, &path.activity_id).await?;
 
@@ -237,12 +237,12 @@ fn map_event_result<T: Serialize>(
 ) -> Result<Bytes, actix_web::Error> {
     let json = serde_json::to_string(&result?).map_err(|e| Error::Service(e.to_string()))?;
     let mut bytes = BytesMut::with_capacity(128);
-    bytes.put_slice("event: runtime".as_bytes());
-    bytes.put_slice("\ndata: ".as_bytes());
+    bytes.put_slice(b"event: runtime");
+    bytes.put_slice(b"\ndata: ");
     bytes.put_slice(json.as_bytes());
-    bytes.put_slice("\nid: ".as_bytes());
+    bytes.put_slice(b"\nid: ");
     bytes.put_slice(id.to_string().as_bytes());
-    bytes.put_slice("\n\n".as_bytes());
+    bytes.put_slice(b"\n\n");
     Ok(bytes.freeze())
 }
 

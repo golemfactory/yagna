@@ -98,12 +98,13 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
         self.ctx.verify_activity_id(&msg.activity_id)?;
 
         // FIXME: use batch_id when added to GetRunningCommand
-        if let Some(recent) = self.state.last_batch.clone() {
-            if let Some(batch) = self.state.batches.get(&recent) {
-                if let Some(cmd) = batch.running_cmd() {
-                    return Ok(cmd);
-                }
-            }
+        if let Some(cmd) = (|| {
+            self.state
+                .batches
+                .get(self.state.last_batch.as_ref()?)?
+                .running_cmd()
+        })() {
+            return Ok(cmd);
         }
 
         Err(RpcMessageError::NotFound(format!(
