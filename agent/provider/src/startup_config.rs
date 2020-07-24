@@ -36,6 +36,27 @@ pub struct ProviderConfig {
     pub presets_file: PathBuf,
     #[structopt(skip = "hardware.json")]
     pub hardware_file: PathBuf,
+    /// Max number of available CPU cores
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "YA_RT_CORES")
+    ]
+    pub rt_cores: Option<usize>,
+    /// Max amount of available RAM (GiB)
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "YA_RT_MEM")
+    ]
+    pub rt_mem: Option<f64>,
+    /// Max amount of available storage (GiB)
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "YA_RT_STORAGE")
+    ]
+    pub rt_storage: Option<f64>,
 }
 
 impl ProviderConfig {
