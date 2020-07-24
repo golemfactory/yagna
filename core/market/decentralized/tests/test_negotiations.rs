@@ -33,7 +33,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let proposal0 = requestor::expect_proposal(events)?;
+    let proposal0 = requestor::expect_proposal(events, 1)?;
     assert_eq!(proposal0.properties, offer.properties);
     assert_eq!(proposal0.constraints, offer.constraints);
     assert!(proposal0.proposal_id.is_some());
@@ -54,7 +54,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .provider_engine
         .query_events(&offer_id, 1.2, Some(5))
         .await?;
-    let proposal1_prov = provider::expect_proposal(events)?;
+    let proposal1_prov = provider::expect_proposal(events, 2)?;
     let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal1_prov.constraints, proposal1_req.constraints);
@@ -83,7 +83,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let proposal2_req = requestor::expect_proposal(events)?;
+    let proposal2_req = requestor::expect_proposal(events, 3)?;
     let proposal2_req_id = proposal2_id.clone().translate(OwnerType::Requestor);
 
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
@@ -119,7 +119,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .provider_engine
         .query_events(&offer_id, 1.2, Some(5))
         .await?;
-    let proposal3_prov = provider::expect_proposal(events)?;
+    let proposal3_prov = provider::expect_proposal(events, 4)?;
     let proposal3_prov_id = proposal3_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal3_prov.constraints, proposal3_req.constraints);

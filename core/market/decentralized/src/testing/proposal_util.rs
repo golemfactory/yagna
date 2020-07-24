@@ -26,7 +26,7 @@ pub async fn exchange_draft_proposals(
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let req_offer_proposal1 = requestor::expect_proposal(req_events)?;
+    let req_offer_proposal1 = requestor::expect_proposal(req_events, 1)?;
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
     let req_demand_proposal1 = req_offer_proposal1.counter_demand(sample_demand())?;
@@ -44,7 +44,7 @@ pub async fn exchange_draft_proposals(
         .provider_engine
         .query_events(&offer_id, 1.2, Some(5))
         .await?;
-    let prov_demand_proposal1 = provider::expect_proposal(prov_events)?;
+    let prov_demand_proposal1 = provider::expect_proposal(prov_events, 2)?;
     let prov_demand_proposal1_id = req_demand_proposal1_id
         .clone()
         .translate(OwnerType::Provider);
@@ -61,7 +61,7 @@ pub async fn exchange_draft_proposals(
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await?;
-    let req_offer_proposal2 = requestor::expect_proposal(req_events)?;
+    let req_offer_proposal2 = requestor::expect_proposal(req_events, 3)?;
     Ok(ProposalId::from_str(
         &req_offer_proposal2.proposal_id.unwrap(),
     )?)

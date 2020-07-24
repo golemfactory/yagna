@@ -476,7 +476,7 @@ async fn second_approval_should_fail() -> Result<()> {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn second_waiting_should_pass() -> Result<()> {
-    let network = MarketsNetwork::new("waiting_for_agreement_after_approval_should_pass")
+    let network = MarketsNetwork::new("second_waiting_should_pass")
         .await
         .add_market_instance(REQ_NAME)
         .await?
