@@ -34,7 +34,7 @@ impl ProviderAgent {
 
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.spawn_monitor(&config.presets_file)?;
-        let mut hardware = hardware::Manager::try_new(&config.hardware_file)?;
+        let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
 
         let market = ProviderMarket::new(api.market, "LimitAgreements").start();

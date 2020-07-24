@@ -321,8 +321,8 @@ activate    Activate a profile
 
 ### Listing profiles
 
-```bash 
-cargo run -- profile list
+```bash
+cargo run -p ya-provider profile list
 ```
 
 will print an output similar to:
@@ -339,8 +339,8 @@ will print an output similar to:
 
 ### Display the active profile
 
-```bash 
-cargo run -- profile active
+```bash
+cargo run -p ya-provider profile active
 ```
 
 will print:
