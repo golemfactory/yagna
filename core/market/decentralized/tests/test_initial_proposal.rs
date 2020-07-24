@@ -357,7 +357,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_initial_proposal")
+    let network = MarketsNetwork::new("test_counter_initial_proposal")
         .await
         .add_market_instance("Node-1")
         .await?;
