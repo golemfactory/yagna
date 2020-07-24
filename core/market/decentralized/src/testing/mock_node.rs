@@ -355,7 +355,9 @@ impl MarketsNetwork {
 }
 
 fn test_data_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test-workdir")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-workdir")
 }
 
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
