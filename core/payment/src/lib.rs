@@ -7,6 +7,7 @@ use ya_service_api_interfaces::*;
 #[macro_use]
 extern crate diesel;
 
+pub mod accounts;
 pub mod api;
 mod cli;
 pub mod dao;
