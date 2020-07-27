@@ -363,7 +363,7 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct RejectInvoice {
-        pub debit_note_id: String,
+        pub invoice_id: String,
         pub rejection: Rejection,
     }
 
@@ -376,7 +376,8 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct CancelInvoice {
-        pub debit_note_id: String,
+        pub invoice_id: String,
+        pub recipient_id: NodeId,
     }
 
     impl RpcMessage for CancelInvoice {
