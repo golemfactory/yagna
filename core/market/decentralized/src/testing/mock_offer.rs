@@ -7,7 +7,7 @@ use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::model::{Demand, Offer};
-use crate::protocol::discovery::OfferReceived;
+use crate::protocol::discovery::{OfferIdsReceived, OffersReceived};
 
 pub fn generate_identity(name: &str) -> Identity {
     let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
@@ -20,9 +20,9 @@ pub fn generate_identity(name: &str) -> Identity {
 }
 
 #[allow(unused)]
-pub fn sample_offer_received() -> OfferReceived {
-    OfferReceived {
-        offer: sample_offer(),
+pub fn sample_offer_received() -> OfferIdsReceived {
+    OfferIdsReceived {
+        offers: vec![sample_offer().id],
     }
 }
 

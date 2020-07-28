@@ -6,13 +6,18 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use ya_client::model::ErrorMessage;
-use ya_core_model::net;
+use ya_client::model::NodeId;
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_core_model::{identity, net::local as broadcast};
+use ya_net::{self as net, RemoteEndpoint};
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 
 use super::callback::{CallbackMessage, HandlerSlot};
+use std::str::FromStr;
+use ya_core_model::market::BUS_ID;
+use ya_service_bus::typed::ServiceBinder;
 
 pub mod builder;
 
@@ -28,6 +33,8 @@ pub enum DiscoveryError {
     GsbError(String),
     #[error("Internal error: {0}.")]
     InternalError(String),
+    #[error("Can't get default identity: {0}.")]
+    Identity(String),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -53,24 +60,42 @@ pub struct Discovery {
 }
 
 pub struct DiscoveryImpl {
-    offer_received: HandlerSlot<OfferReceived>,
+    filter_unknown_offers: HandlerSlot<OfferIdsReceived>,
+    offers_received: HandlerSlot<OffersReceived>,
     offer_unsubscribed: HandlerSlot<OfferUnsubscribed>,
-    _retrieve_offers: HandlerSlot<RetrieveOffers>,
+    get_offers_request: HandlerSlot<GetOffers>,
 }
 
 impl Discovery {
     /// Broadcasts offer to other nodes in network. Connected nodes will
     /// get call to function bound in `offer_received`.
-    pub async fn broadcast_offer(&self, offer: ModelOffer) -> Result<(), DiscoveryError> {
-        log::info!("Broadcasting offer [{}].", &offer.id);
+    pub async fn broadcast_offers(
+        &self,
+        offers: Vec<SubscriptionId>,
+    ) -> Result<(), DiscoveryError> {
+        let default_id = default_identity().await?;
+        let bcast_msg = SendBroadcastMessage::new(OfferIdsReceived { offers });
 
-        let original_sender = offer.node_id.clone();
-        let bcast_msg = SendBroadcastMessage::new(OfferReceived { offer });
-
-        let _ = bus::service(net::local::BUS_ID)
-            .send_as(original_sender, bcast_msg) // TODO: should we send as our (default) identity?
+        let _ = bus::service(broadcast::BUS_ID)
+            .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
             .await?;
         Ok(())
+    }
+
+    /// Ask remote Node for specified Offers.
+    pub async fn get_offers(
+        &self,
+        from: String,
+        offers: Vec<SubscriptionId>,
+    ) -> Result<Vec<ModelOffer>, DiscoveryError> {
+        let target_node =
+            NodeId::from_str(&from).map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
+
+        Ok(net::from(default_identity().await?)
+            .to(target_node)
+            .service(&get_offers_addr(BUS_ID))
+            .send(GetOffers { offers })
+            .await??)
     }
 
     pub async fn broadcast_unsubscribe(
@@ -83,14 +108,10 @@ impl Discovery {
         let msg = OfferUnsubscribed { offer_id };
         let bcast_msg = SendBroadcastMessage::new(msg);
 
-        let _ = bus::service(net::local::BUS_ID)
+        let _ = bus::service(broadcast::BUS_ID)
             .send_as(caller, bcast_msg)
             .await?;
         Ok(())
-    }
-
-    pub async fn retrieve_offers(&self) -> Result<Vec<ModelOffer>, DiscoveryError> {
-        unimplemented!()
     }
 
     pub async fn bind_gsb(
@@ -100,12 +121,12 @@ impl Discovery {
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
         // /private/market/market-protocol-mk1-offer
-        let broadcast_address = format!("{}/{}", private_prefix, OfferReceived::TOPIC);
+        let broadcast_address = format!("{}/{}", private_prefix, OfferIdsReceived::TOPIC);
         ya_net::bind_broadcast_with_caller(
             &broadcast_address,
-            move |caller, msg: SendBroadcastMessage<OfferReceived>| {
+            move |caller, msg: SendBroadcastMessage<OfferIdsReceived>| {
                 let myself = myself.clone();
-                myself.on_offer_received(caller, msg.body().to_owned())
+                myself.on_offers_received(caller, msg.body().to_owned())
             },
         )
         .await
@@ -124,46 +145,49 @@ impl Discovery {
         .await
         .map_err(|e| DiscoveryInitError::from_pair(broadcast_address, e))?;
 
+        ServiceBinder::new(&get_offers_addr(BUS_ID), &(), self.clone()).bind_with_processor(
+            move |_, myself, caller: String, msg: GetOffers| {
+                let myself = myself.clone();
+                myself.on_get_offers(caller, msg)
+            },
+        );
+
         Ok(())
     }
 
-    async fn on_offer_received(self, caller: String, msg: OfferReceived) -> Result<(), ()> {
-        let callback = self.inner.offer_received.clone();
+    async fn on_offers_received(self, caller: String, msg: OfferIdsReceived) -> Result<(), ()> {
+        let filter_callback = self.inner.filter_unknown_offers.clone();
+        let offer_received_callback = self.inner.offers_received.clone();
 
-        let offer = msg.offer.clone();
-        let offer_id = offer.id.clone();
-        let provider_id = offer.node_id.clone();
+        // TODO: Do this under lock.
+        // We should do filtering and getting Offers in single transaction. Otherwise multiple
+        // broadcasts can overlap and we will ask other nodes for the same Offers more than once.
+        // Note that it wouldn't cause incorrect behavior, because we will add Offers only once.
+        // Other attempts to add them will end with error and we will filter all Offers, that already
+        // occurred and re-broadcast only new ones.
+        // But still it is worth to limit network traffic.
+        let unseen_subscriptions = filter_callback.call(caller.clone(), msg).await?;
+        let offers = self
+            .get_offers(caller.clone(), unseen_subscriptions)
+            .await
+            .map_err(|e| log::error!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
 
-        log::info!(
-            "Received broadcasted Offer [{}] from provider [{}]. Sender: [{}].",
-            offer_id,
-            provider_id,
-            &caller,
-        );
+        let new_ids = offer_received_callback
+            .call(caller.clone(), OffersReceived { offers })
+            .await?;
 
-        match callback.call(caller, msg).await? {
-            Propagate::Yes => {
-                log::info!("Propagating further Offer [{}].", offer_id,);
-
-                // TODO: Should we retry in case of fail?
-                if let Err(error) = self.broadcast_offer(offer).await {
-                    log::error!(
-                        "Error propagating Offer [{}] from provider [{}] further. Error: {}",
-                        offer_id,
-                        provider_id,
-                        error,
-                    );
-                }
-            }
-            Propagate::No(reason) => {
-                log::info!(
-                    "Not propagating Offer [{}] for reason: {}.",
-                    offer_id,
-                    reason
-                );
-            }
-        }
+        self.broadcast_offers(new_ids).await;
         Ok(())
+    }
+
+    async fn on_get_offers(
+        self,
+        caller: String,
+        msg: GetOffers,
+    ) -> Result<Vec<ModelOffer>, DiscoveryRemoteError> {
+        log::info!("[{}] tries to get Offers from us.", &caller);
+        let callback = self.inner.get_offers_request;
+        Ok(callback.call(caller, msg).await?)
     }
 
     async fn on_offer_unsubscribed(self, caller: String, msg: OfferUnsubscribed) -> Result<(), ()> {
@@ -201,6 +225,15 @@ impl Discovery {
     }
 }
 
+async fn default_identity() -> Result<NodeId, DiscoveryError> {
+    Ok(bus::service(identity::BUS_ID)
+        .send(identity::Get::ByDefault)
+        .await?
+        .map_err(|e| DiscoveryError::Identity(e.to_string()))?
+        .ok_or(DiscoveryError::Identity(format!("No default identity!!!")))?
+        .node_id)
+}
+
 // =========================================== //
 // Discovery messages
 // =========================================== //
@@ -227,17 +260,49 @@ pub enum Propagate {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OfferReceived {
-    pub offer: ModelOffer,
+pub struct OfferIdsReceived {
+    pub offers: Vec<SubscriptionId>,
 }
 
-impl CallbackMessage for OfferReceived {
-    type Item = Propagate;
+impl CallbackMessage for OfferIdsReceived {
+    type Item = Vec<SubscriptionId>;
     type Error = ();
 }
 
-impl BroadcastMessage for OfferReceived {
-    const TOPIC: &'static str = "market-protocol-mk1-offer";
+impl BroadcastMessage for OfferIdsReceived {
+    const TOPIC: &'static str = "market-protocol-mk1-offers";
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OffersReceived {
+    pub offers: Vec<ModelOffer>,
+}
+
+impl CallbackMessage for OffersReceived {
+    type Item = Vec<SubscriptionId>;
+    type Error = ();
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetOffers {
+    pub offers: Vec<SubscriptionId>,
+}
+
+impl CallbackMessage for GetOffers {
+    type Item = Vec<ModelOffer>;
+    type Error = DiscoveryRemoteError;
+}
+
+impl RpcMessage for GetOffers {
+    const ID: &'static str = "Get";
+    type Item = Vec<ModelOffer>;
+    type Error = DiscoveryRemoteError;
+}
+
+fn get_offers_addr(prefix: &str) -> String {
+    format!("{}/protocol/mk1/offers/", prefix)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -252,18 +317,7 @@ impl CallbackMessage for OfferUnsubscribed {
 }
 
 impl BroadcastMessage for OfferUnsubscribed {
-    const TOPIC: &'static str = "market-protocol-mk1-offer-unsubscribe";
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RetrieveOffers {
-    pub newer_than: chrono::DateTime<Utc>,
-}
-
-impl CallbackMessage for RetrieveOffers {
-    type Item = Vec<ModelOffer>;
-    type Error = DiscoveryRemoteError;
+    const TOPIC: &'static str = "market-protocol-mk1-offers-unsubscribe";
 }
 
 // =========================================== //

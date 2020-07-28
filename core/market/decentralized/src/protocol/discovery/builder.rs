@@ -23,13 +23,7 @@ impl DiscoveryBuilder {
         mut self,
         mut f: impl DataCallbackHandler<M, T>,
     ) -> Self {
-        let boxed = self
-            .data
-            .get(&TypeId::of::<T>())
-            .expect("data handler needs data");
-
-        let data: &T = (&**boxed as &(dyn Any + 'static)).downcast_ref().unwrap();
-        let data = data.clone();
+        let data = self.get_data::<T>();
         self.handlers.insert(
             TypeId::of::<M>(),
             Box::new(HandlerSlot::new(move |caller, msg| {
@@ -50,12 +44,23 @@ impl DiscoveryBuilder {
         *(boxed as Box<dyn Any + 'static>).downcast().unwrap()
     }
 
+    fn get_data<T: Clone + Send + Sync + 'static>(&mut self) -> T {
+        let boxed = self
+            .data
+            .get(&TypeId::of::<T>())
+            .expect("[DiscoveryBuilder] Can't find data of required type.");
+
+        let data: &T = (&**boxed as &(dyn Any + 'static)).downcast_ref().unwrap();
+        data.clone()
+    }
+
     pub fn build(mut self) -> Discovery {
         Discovery {
             inner: Arc::new(DiscoveryImpl {
-                offer_received: self.get(),
+                offers_received: self.get(),
                 offer_unsubscribed: self.get(),
-                _retrieve_offers: self.get(),
+                get_offers_request: self.get(),
+                filter_unknown_offers: self.get(),
             }),
         }
     }
@@ -96,15 +101,15 @@ mod test {
     #[should_panic]
     fn build_with_single_handler_should_fail() {
         DiscoveryBuilder::default()
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
+            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .build();
     }
 
     #[test]
-    #[should_panic(expected = "data handler needs data")]
+    #[should_panic(expected = "[DiscoveryBuilder] Can't find data of required type.")]
     fn setting_db_handler_wo_db_should_fail() {
         DiscoveryBuilder::default()
-            .add_data_handler(|_: u8, _, _: OfferReceived| async { Ok(Propagate::Yes) })
+            .add_data_handler(|_: u8, _, _: OffersReceived| async { Ok(vec![]) })
             .build();
     }
 
@@ -112,17 +117,18 @@ mod test {
     #[should_panic]
     fn build_from_with_missing_handler_should_fail() {
         DiscoveryBuilder::default()
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
+            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
             .build();
     }
 
     #[test]
-    fn build_from_with_three_handlers_should_pass() {
+    fn build_from_with_four_handlers_should_pass() {
         DiscoveryBuilder::default()
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
+            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
-            .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
+            .add_handler(|_, _: GetOffers| async { Ok(vec![]) })
             .build();
     }
 
@@ -130,9 +136,10 @@ mod test {
     fn build_from_with_mixed_handlers_should_pass() {
         DiscoveryBuilder::default()
             .data("mock data")
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
+            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
-            .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
+            .add_data_handler(|_: &str, _, _: GetOffers| async { Ok(vec![]) })
             .build();
     }
 
@@ -146,23 +153,24 @@ mod test {
         let discovery = DiscoveryBuilder::default()
             .data(7 as usize)
             .data("mock data")
-            .add_handler(|_, _: OfferReceived| async { panic!("should not be invoked") })
+            .add_handler(|_, _: OffersReceived| async { panic!("should not be invoked") })
+            .add_data_handler(|_: &str, _, _: GetOffers| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
-            .add_data_handler(move |data: usize, _, _: OfferReceived| {
+            .add_data_handler(move |data: usize, _, _: OffersReceived| {
                 let cnt = cnt.clone();
                 async move {
                     cnt.fetch_add(data, SeqCst);
-                    Ok(Propagate::No(Reason::AlreadyExists))
+                    Ok(vec![])
                 }
             })
-            .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
             .build();
 
         assert_eq!(0, counter.load(SeqCst));
 
         // when
         discovery
-            .on_offer_received("caller".into(), sample_offer_received())
+            .on_offers_received("caller".into(), sample_offer_received())
             .await
             .unwrap();
 

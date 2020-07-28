@@ -26,6 +26,9 @@ use crate::negotiation::error::QueryEventsError;
 use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
 use crate::protocol::negotiation::messages::*;
+use crate::testing::mock_node::default::{
+    empty_on_get_offers, empty_on_offer_received, empty_on_offer_unsubscribed,
+};
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -142,18 +145,19 @@ impl MarketsNetwork {
     pub async fn add_discovery_instance(
         self,
         name: &str,
-        offer_received: impl CallbackHandler<OfferReceived>,
-        offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
-        retrieve_offers: impl CallbackHandler<RetrieveOffers>,
+        builder: DiscoveryBuilder,
     ) -> Result<Self> {
-        let discovery = DiscoveryBuilder::default()
-            .add_handler(offer_received)
-            .add_handler(offer_unsubscribed)
-            .add_handler(retrieve_offers)
-            .build();
-
+        let discovery = builder.build();
         self.add_node(name, MockNodeKind::Discovery(discovery))
             .await
+    }
+
+    pub fn discovery_builder() -> DiscoveryBuilder {
+        DiscoveryBuilder::default()
+            .add_handler(empty_on_offer_received)
+            .add_handler(empty_on_get_offers)
+            .add_handler(empty_on_offer_unsubscribed)
+            .add_handler(empty_on_get_offers)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -428,9 +432,20 @@ pub mod default {
 
     pub async fn empty_on_offer_received(
         _caller: String,
-        _msg: OfferReceived,
-    ) -> Result<Propagate, ()> {
-        Ok(Propagate::No(Reason::AlreadyExists))
+        _msg: OffersReceived,
+    ) -> Result<Vec<SubscriptionId>, ()> {
+        Ok(vec![])
+    }
+
+    pub async fn empty_on_offers_ids_received(
+        _caller: String,
+        _msg: OffersReceived,
+    ) -> Result<Vec<SubscriptionId>, ()> {
+        Ok(vec![])
+    }
+
+    pub async fn empty_on_get_offers(_caller: String, _msg: GetOffers) -> Result<Vec<Offer>, ()> {
+        Ok(vec![])
     }
 
     pub async fn empty_on_offer_unsubscribed(
@@ -438,13 +453,6 @@ pub mod default {
         _msg: OfferUnsubscribed,
     ) -> Result<Propagate, ()> {
         Ok(Propagate::No(Reason::Unsubscribed))
-    }
-
-    pub async fn empty_on_retrieve_offers(
-        _caller: String,
-        _msg: RetrieveOffers,
-    ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
-        Ok(vec![])
     }
 
     pub async fn empty_on_initial_proposal(

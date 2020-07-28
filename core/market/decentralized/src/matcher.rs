@@ -5,9 +5,7 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::protocol::discovery::builder::DiscoveryBuilder;
-use crate::protocol::discovery::{
-    Discovery, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
-};
+use crate::protocol::discovery::{Discovery, GetOffers, OfferIdsReceived, OfferUnsubscribed, OffersReceived, Propagate, Reason, DiscoveryRemoteError};
 
 pub mod error;
 pub(crate) mod resolver;
@@ -44,12 +42,10 @@ impl Matcher {
         let discovery = DiscoveryBuilder::default()
             .data(store.clone())
             .data(resolver.clone())
-            .add_data_handler(on_offer_received)
+            .add_data_handler(on_offer_ids_received)
+            .add_data_handler(on_offers_received)
+            .add_data_handler(on_get_offers)
             .add_data_handler(on_offer_unsubscribed)
-            .add_handler(move |caller: String, _msg: RetrieveOffers| async move {
-                log::info!("Offers request received from: {}. Unimplemented.", caller);
-                Ok(vec![])
-            })
             .build();
 
         let matcher = Matcher {
@@ -89,7 +85,7 @@ impl Matcher {
 
         let _ = self
             .discovery
-            .broadcast_offer(offer.clone())
+            .broadcast_offers(vec![offer.id.clone()])
             .await
             .map_err(|e| {
                 log::warn!("Failed to broadcast offer [{}]. Error: {}.", offer.id, e,);
@@ -144,35 +140,35 @@ impl Matcher {
     }
 }
 
-pub(crate) async fn on_offer_received(
+pub(crate) async fn on_offer_ids_received(
     resolver: Resolver,
     _caller: String,
-    msg: OfferReceived,
-) -> Result<Propagate, ()> {
+    msg: OfferIdsReceived,
+) -> Result<Vec<SubscriptionId>, ()> {
     // We shouldn't propagate Offer, if we already have it in our database.
     // Note that when we broadcast our Offer, it will reach us too, so it concerns
     // not only Offers from other nodes.
-
-    resolver
+    Ok(resolver
         .store
-        .save_offer(msg.offer)
+        .filter_existing(msg.offers)
         .await
-        .map(|offer| {
-            resolver.receive(&offer);
-            Propagate::Yes
-        })
-        .or_else(|e| match e {
-            // Stop propagation for existing, unsubscribed and expired Offers to avoid infinite broadcast.
-            SaveOfferError::Exists(_) => Ok(Propagate::No(Reason::AlreadyExists)),
-            SaveOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
-            SaveOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
-            // Below errors are not possible to get from checked_store_offer
-            SaveOfferError::SaveError(_, _)
-            | SaveOfferError::SubscriptionValidation(_)
-            | SaveOfferError::WrongState { .. } => {
-                Ok(Propagate::No(Reason::Error(format!("{}", e))))
-            }
-        })
+        .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
+}
+
+pub(crate) async fn on_offers_received(
+    resolver: Resolver,
+    _caller: String,
+    msg: OffersReceived,
+) -> Result<Vec<SubscriptionId>, ()> {
+    unimplemented!()
+}
+
+pub(crate) async fn on_get_offers(
+    resolver: Resolver,
+    _caller: String,
+    msg: GetOffers,
+) -> Result<Vec<Offer>, DiscoveryRemoteError> {
+    unimplemented!()
 }
 
 pub(crate) async fn on_offer_unsubscribed(

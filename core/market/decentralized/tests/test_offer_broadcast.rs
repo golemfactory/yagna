@@ -70,12 +70,7 @@ async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
         .await
         .add_market_instance("Node-1")
         .await?
-        .add_discovery_instance(
-            "Node-2",
-            empty_on_offer_received,
-            empty_on_offer_unsubscribed,
-            empty_on_retrieve_offers,
-        )
+        .add_discovery_instance("Node-2", MarketsNetwork::discovery_builder())
         .await?;
 
     let market1 = network.get_market("Node-1");
@@ -87,7 +82,7 @@ async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
     offer.id = invalid_id.clone();
 
     // Offer should be propagated to market1, but he should reject it.
-    discovery2.broadcast_offer(offer).await?;
+    discovery2.broadcast_offers(vec![offer.id]).await?;
     tokio::time::delay_for(Duration::from_millis(50)).await;
 
     assert_err_eq!(
@@ -148,26 +143,25 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     let (tx, mut rx) = mpsc::channel::<()>(1);
     let offers_counter = Arc::new(AtomicUsize::new(0));
     let counter = offers_counter.clone();
+
+    let discovery_builder = MarketsNetwork::discovery_builder().add_handler(
+        move |_caller: String, _msg: OfferIdsReceived| {
+            let offers_counter = counter.clone();
+            let mut tx = tx.clone();
+            async move {
+                offers_counter.fetch_add(1, Ordering::SeqCst);
+                tx.send(()).await.unwrap();
+                Ok(vec![])
+            }
+        },
+    );
     let network = network
-        .add_discovery_instance(
-            "Node-3",
-            move |_caller: String, _msg: OfferReceived| {
-                let offers_counter = counter.clone();
-                let mut tx = tx.clone();
-                async move {
-                    offers_counter.fetch_add(1, Ordering::SeqCst);
-                    tx.send(()).await.unwrap();
-                    Ok(Propagate::No(Reason::AlreadyExists))
-                }
-            },
-            empty_on_offer_unsubscribed,
-            empty_on_retrieve_offers,
-        )
+        .add_discovery_instance("Node-3", discovery_builder)
         .await?;
 
     // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
     let discovery3: Discovery = network.get_discovery("Node-3");
-    discovery3.broadcast_offer(offer).await?;
+    discovery3.broadcast_offers(vec![offer.id]).await?;
 
     // Wait for broadcast.
     tokio::time::timeout(Duration::from_millis(150), rx.next()).await?;

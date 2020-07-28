@@ -218,4 +218,11 @@ impl SubscriptionStore {
             false => Err(DemandError::NotFound(demand_id.clone())),
         }
     }
+
+    pub async fn filter_existing(
+        &self,
+        offers: Vec<SubscriptionId>,
+    ) -> Result<Vec<SubscriptionId>, QueryOfferError> {
+        unimplemented!()
+    }
 }
