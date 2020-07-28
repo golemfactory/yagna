@@ -248,38 +248,57 @@ impl Handler<DeployImage> for TransferService {
             final_path.to_path_buf()
         );
 
-        let source = actor_try!(self.source(&source_url));
-        let dest = file_provider.destination(&temp_url);
+        #[cfg(not(feature = "sgx"))]
+        {
+            let source = actor_try!(self.source(&source_url));
+            let dest = file_provider.destination(&temp_url);
 
-        let address = ctx.address();
-        let (handle, reg) = AbortHandle::new_pair();
-        let abort = Abort::from(handle);
+            let address = ctx.address();
+            let (handle, reg) = AbortHandle::new_pair();
+            let abort = Abort::from(handle);
 
-        let fut = async move {
-            let final_path = final_path.to_path_buf();
-            let temp_path = temp_path.to_path_buf();
-            let cache_path = cache_path.to_path_buf();
+            let fut = async move {
+                let final_path = final_path.to_path_buf();
+                let temp_path = temp_path.to_path_buf();
+                let cache_path = cache_path.to_path_buf();
 
-            if cache_path.exists() {
-                log::info!("Deploying cached image: {:?}", cache_path);
+                if cache_path.exists() {
+                    log::info!("Deploying cached image: {:?}", cache_path);
+                    std::fs::copy(cache_path, &final_path)?;
+                    return Ok(final_path);
+                }
+
+                address.send(AddAbortHandle(abort.clone())).await?;
+                Abortable::new(transfer(source, dest), reg)
+                    .await
+                    .map_err(TransferError::from)??;
+                address.send(RemoveAbortHandle(abort)).await?;
+
+                std::fs::rename(temp_path, &cache_path)?;
                 std::fs::copy(cache_path, &final_path)?;
-                return Ok(final_path);
-            }
 
-            address.send(AddAbortHandle(abort.clone())).await?;
-            Abortable::new(transfer(source, dest), reg)
-                .await
-                .map_err(TransferError::from)??;
-            address.send(RemoveAbortHandle(abort)).await?;
+                log::info!("Deployment from {:?} finished", source_url.url);
+                Ok(final_path)
+            };
+            return ActorResponse::r#async(fut.into_actor(self));
+        }
 
-            std::fs::rename(temp_path, &cache_path)?;
-            std::fs::copy(cache_path, &final_path)?;
-
-            log::info!("Deployment from {:?} finished", source_url.url);
-            Ok(final_path)
-        };
-
-        return ActorResponse::r#async(fut.into_actor(self));
+        #[cfg(feature = "sgx")]
+        {
+            let fut = async move {
+                let final_path = final_path.to_path_buf();
+                let resp = reqwest::get(source_url.url)
+                    .await
+                    .map_err(|e| Error::Other(e.to_string()))?;
+                let bytes = resp
+                    .bytes()
+                    .await
+                    .map_err(|e| Error::Other(e.to_string()))?;
+                std::fs::write(&final_path, bytes)?;
+                Ok(final_path)
+            };
+            return ActorResponse::r#async(fut.into_actor(self));
+        }
     }
 }
 

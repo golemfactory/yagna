@@ -58,6 +58,8 @@ pub enum Error {
     UsageLimitExceeded(String),
     #[error("Agreement error: {0}")]
     AgreementError(#[from] agreement::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
 impl Error {
@@ -108,6 +110,7 @@ impl From<Error> for RpcError {
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
+            Error::Other(e) => RpcError::Service(e),
         }
     }
 }
