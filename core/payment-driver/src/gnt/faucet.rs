@@ -7,6 +7,7 @@ const MAX_ETH_FAUCET_REQUESTS: u32 = 6;
 const ETH_FAUCET_SLEEP: time::Duration = time::Duration::from_secs(2);
 const INIT_ETH_SLEEP: time::Duration = time::Duration::from_secs(15);
 const ETH_FAUCET_ADDRESS_ENV_VAR: &str = "ETH_FAUCET_ADDRESS";
+const DEFAULT_ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
 
 pub struct EthFaucetConfig {
     faucet_address: awc::http::Uri,
@@ -14,9 +15,9 @@ pub struct EthFaucetConfig {
 
 impl EthFaucetConfig {
     pub fn from_env() -> PaymentDriverResult<Self> {
-        let faucet_address_str = env::var(ETH_FAUCET_ADDRESS_ENV_VAR).map_err(|_| {
-            PaymentDriverError::MissingEnvironmentVariable(ETH_FAUCET_ADDRESS_ENV_VAR)
-        })?;
+        let faucet_address_str = env::var(ETH_FAUCET_ADDRESS_ENV_VAR)
+            .ok()
+            .unwrap_or_else(|| DEFAULT_ETH_FAUCET_ADDRESS.to_string());
         let faucet_address = faucet_address_str.parse().map_err(|e| {
             PaymentDriverError::LibraryError(format!("invalid faucet address: {}", e))
         })?;
