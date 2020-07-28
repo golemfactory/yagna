@@ -87,6 +87,7 @@ jobs:
         if: matrix.os == 'macos'
         run: |
           cargo build --release --features static-openssl
+          cargo build --bin gftp -p gftp --release
       - name: Build windows
         if: matrix.os == 'windows'
         run: |
@@ -94,10 +95,12 @@ jobs:
           vcpkg integrate install
 
           cargo build --release
+          cargo build --bin gftp -p gftp --release
       - name: Build linux
         if: matrix.os == 'ubuntu'
         run: |
           cargo build --release --features openssl/vendored --target x86_64-unknown-linux-musl
+          cargo build --bin gftp -p gftp --release --target x86_64-unknown-linux-musl
       - name: Pack
         id: pack
         shell: bash
@@ -116,11 +119,13 @@ jobs:
           TARGET_DIR=releases/golem-${OS_NAME}-${TAG_NAME}
           mkdir -p "$TARGET_DIR"
           if [ "$OS_NAME" = "windows" ]; then
-              cp target/release/yagna.exe "$TARGET_DIR/"
+              cp target/release/yagna.exe target/release/gftp.exe "$TARGET_DIR/"
               strip "$TARGET_DIR/yagna.exe"
+              strip "$TARGET_DIR/gftp.exe"
           else
-              cp target/${target}release/yagna "$TARGET_DIR/"
+              cp target/${target}release/yagna target/${target}release/gftp "$TARGET_DIR/"
               strip "$TARGET_DIR/yagna"
+              strip "$TARGET_DIR/gftp"
           fi
           ls -al "$TARGET_DIR"
           if [ "$OS_NAME" = "windows" ]; then
