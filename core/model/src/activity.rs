@@ -84,6 +84,39 @@ impl RpcMessage for GetUsage {
     type Error = RpcMessageError;
 }
 
+pub mod sgx {
+    use super::*;
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct CallEncryptedService {
+        pub activity_id: String,
+        pub sender: NodeId,
+        pub bytes: Vec<u8>,
+    }
+
+    impl RpcMessage for CallEncryptedService {
+        const ID: &'static str = "CallEncryptedService";
+        type Item = Vec<u8>;
+        type Error = RpcMessageError;
+    }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Request {
+        Exec(super::Exec),
+        GetExecBatchResults(super::GetExecBatchResults),
+    }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Response {
+        Exec(Result<String, RpcMessageError>),
+        GetExecBatchResults(Result<Vec<super::ExeScriptCommandResult>, RpcMessageError>),
+        Error(RpcMessageError),
+    }
+}
+
 /// Execute a script within the activity. Returns `batch_id`.
 ///
 /// Commands are executed sequentially.
@@ -151,12 +184,39 @@ pub mod local {
         pub activity_id: String,
         pub state: ActivityState,
         pub timeout: Option<f32>,
+        #[serde(default)]
+        pub credentials: Option<Box<Credentials>>,
+    }
+
+    impl SetState {
+        pub fn new(activity_id: String, state: ActivityState) -> Self {
+            SetState {
+                activity_id,
+                state,
+                timeout: Default::default(),
+                credentials: Default::default(),
+            }
+        }
     }
 
     impl RpcMessage for SetState {
         const ID: &'static str = "SetActivityState";
         type Item = ();
         type Error = RpcMessageError;
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Credentials {
+        Sgx {
+            requestor: NodeId,
+            enclave: NodeId,
+            // sha3-256
+            payload_sha3: [u8; 32],
+            enclave_hash: [u8; 32],
+            ias_report: String,
+            isa_sig: Vec<u8>,
+        },
     }
 
     /// Set usage counters for the activity.

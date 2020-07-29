@@ -1,13 +1,15 @@
 use crate::error::Error;
 use crate::message::{GetBatchResults, GetMetrics};
 use crate::runtime::Runtime;
-use crate::ExeUnit;
+use crate::{ExeUnit, RuntimeRef};
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::oneshot;
+use futures::prelude::*;
 use std::time::Duration;
 use tokio::time::timeout;
 use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
+use ya_core_model::activity::sgx::CallEncryptedService;
 use ya_core_model::activity::*;
 use ya_service_bus::RpcEnvelope;
 
@@ -27,14 +29,15 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
         self.state.batches.insert(batch_id.clone(), msg.clone());
         self.state.batch_control.insert(batch_id.clone(), Some(tx));
 
-        let fut = Self::exec(
-            ctx.address(),
-            self.runtime.clone(),
-            self.transfers.clone(),
-            msg.into_inner(),
-            rx,
-        );
-        ctx.spawn(fut.into_actor(self));
+        let fut = RuntimeRef::from_ctx(&ctx)
+            .exec(
+                self.runtime.clone(),
+                self.transfers.clone(),
+                msg.into_inner(),
+                rx,
+            )
+            .into_actor(self);
+        ctx.spawn(fut);
 
         Ok(batch_id)
     }
@@ -148,5 +151,56 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         };
 
         ActorResponse::r#async(fut.into_actor(self))
+    }
+}
+
+impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> {
+    type Result = ResponseFuture<Result<Vec<u8>, RpcMessageError>>;
+
+    fn handle(
+        &mut self,
+        msg: RpcEnvelope<CallEncryptedService>,
+        ctx: &mut Context<Self>,
+    ) -> Self::Result {
+        let me = ctx.address();
+
+        async move {
+            let bytes = msg.bytes.as_slice();
+            // TODO: Decrypt message
+            let body: sgx::Request = serde_json::from_slice(bytes)
+                .map_err(|e| RpcMessageError::BadRequest(e.to_string()))?;
+            Ok(match body {
+                sgx::Request::Exec(exec) => {
+                    sgx::Response::Exec(me.send(RpcEnvelope::local(exec)).await.map_err(|_| {
+                        RpcMessageError::Service("fatal: exe-unit disconnected".to_string())
+                    })?)
+                }
+                sgx::Request::GetExecBatchResults(get_exec_batch_results) => {
+                    sgx::Response::GetExecBatchResults(
+                        me.send(RpcEnvelope::local(get_exec_batch_results))
+                            .await
+                            .map_err(|_e| {
+                                RpcMessageError::Service("fatal: exe-unit disconnected".to_string())
+                            })?,
+                    )
+                }
+            })
+        }
+        .then(|v| {
+            let response = match v {
+                Err(e) => sgx::Response::Error(e),
+                Ok(v) => v,
+            };
+            let bytes = match serde_json::to_vec(&response) {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    return future::err(RpcMessageError::Service("unexpected error".to_string()))
+                }
+            };
+            // TODO encrypt bytes.
+
+            future::ok(bytes)
+        })
+        .boxed_local()
     }
 }

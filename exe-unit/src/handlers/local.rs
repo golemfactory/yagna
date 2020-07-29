@@ -39,15 +39,14 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 if let Some(id) = &self.ctx.activity_id {
                     let fut = report(
                         self.ctx.report_url.clone().unwrap(),
-                        SetActivityState {
-                            activity_id: id.clone(),
-                            state: ActivityState {
+                        SetActivityState::new(
+                            id.clone(),
+                            ActivityState {
                                 state: update.state,
                                 reason: update.reason,
                                 error_message: None,
                             },
-                            timeout: None,
-                        },
+                        ),
                     );
                     ctx.spawn(fut.into_actor(self));
                 }

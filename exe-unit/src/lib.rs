@@ -23,6 +23,7 @@ use chrono::Utc;
 
 pub mod agreement;
 use ya_runtime_api::deploy;
+
 pub mod error;
 mod handlers;
 pub mod message;
@@ -127,9 +128,26 @@ impl ExeCtx {
     }
 }
 
-impl<R: Runtime> ExeUnit<R> {
+#[derive(Clone)]
+struct RuntimeRef<R: Runtime>(Addr<ExeUnit<R>>);
+
+impl<R: Runtime> RuntimeRef<R> {
+    fn from_ctx(ctx: &Context<ExeUnit<R>>) -> Self {
+        RuntimeRef(ctx.address())
+    }
+}
+
+impl<R: Runtime> std::ops::Deref for RuntimeRef<R> {
+    type Target = Addr<ExeUnit<R>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<R: Runtime> RuntimeRef<R> {
     async fn exec(
-        addr: Addr<Self>,
+        self,
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
         exec: activity::Exec,
@@ -138,7 +156,7 @@ impl<R: Runtime> ExeUnit<R> {
         let batch_size = exec.exe_script.len();
         let on_error = |batch_id, result| async {
             let set_state = SetState::default().cmd(None).result(batch_id, result);
-            if let Err(error) = addr.send(set_state).await {
+            if let Err(error) = self.send(set_state).await {
                 log::error!("Cannot update state during exec: {:?}", error);
             }
         };
@@ -158,13 +176,9 @@ impl<R: Runtime> ExeUnit<R> {
                 break;
             }
 
-            if let Err(error) = Self::exec_cmd(
-                addr.clone(),
-                runtime.clone(),
-                transfers.clone(),
-                ctx.clone(),
-            )
-            .await
+            if let Err(error) = self
+                .exec_cmd(runtime.clone(), transfers.clone(), ctx.clone())
+                .await
             {
                 log::warn!("Command interrupted: {}", error.to_string());
                 let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::error(&error));
@@ -175,7 +189,7 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     async fn exec_cmd(
-        addr: Addr<Self>,
+        &self,
         runtime: Addr<R>,
         transfer_service: Addr<TransferService>,
         ctx: ExeCtx,
@@ -188,12 +202,12 @@ impl<R: Runtime> ExeUnit<R> {
                 .state(StatePair(State::Initialized, None))
                 .cmd(None);
 
-            addr.send(Stop { exclude_batches }).await??;
-            addr.send(set_state).await?;
+            self.send(Stop { exclude_batches }).await??;
+            self.send(set_state).await?;
             return Ok(());
         }
 
-        let state = addr.send(GetState {}).await?.0;
+        let state = self.send(GetState {}).await?.0;
         let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
@@ -221,7 +235,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         log::info!("Executing command: {:?}", ctx.cmd);
 
-        addr.send(
+        self.send(
             SetState::default()
                 .state(state_pre.clone())
                 .cmd(Some(ctx.cmd.clone())),
@@ -269,7 +283,7 @@ impl<R: Runtime> ExeUnit<R> {
             return Err(Error::CommandError(runtime_result));
         }
 
-        let state_cur = addr.send(GetState {}).await?.0;
+        let state_cur = self.send(GetState {}).await?.0;
         if state_cur != state_pre {
             return Err(StateError::UnexpectedState {
                 current: state_cur,
@@ -283,7 +297,7 @@ impl<R: Runtime> ExeUnit<R> {
             .state(state_pre.1.unwrap().into())
             .cmd(None)
             .result(ctx.batch_id, cmd_result);
-        addr.send(state_post).await?;
+        self.send(state_post).await?;
 
         Ok(())
     }
@@ -297,11 +311,19 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
         if let Some(activity_id) = &self.ctx.activity_id {
             let srv_id = activity::exeunit::bus_id(activity_id);
-            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
+
+            if cfg!(feature = "sgx") {
+                actix_rpc::bind::<activity::sgx::CallEncryptedService>(
+                    &srv_id,
+                    addr.clone().recipient(),
+                );
+            } else {
+                actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
+                actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
+            }
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
