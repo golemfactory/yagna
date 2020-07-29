@@ -1,11 +1,15 @@
+use futures::StreamExt;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::db::model::{Demand, DisplayVec, Offer, SubscriptionId};
 use crate::protocol::discovery::builder::DiscoveryBuilder;
-use crate::protocol::discovery::{Discovery, GetOffers, OfferIdsReceived, OfferUnsubscribed, OffersReceived, Propagate, Reason, DiscoveryRemoteError};
+use crate::protocol::discovery::{
+    Discovery, DiscoveryRemoteError, GetOffers, OfferIdsReceived, OfferUnsubscribed,
+    OffersReceived, Propagate, Reason,
+};
 
 pub mod error;
 pub(crate) mod resolver;
@@ -157,10 +161,38 @@ pub(crate) async fn on_offer_ids_received(
 
 pub(crate) async fn on_offers_received(
     resolver: Resolver,
-    _caller: String,
+    caller: String,
     msg: OffersReceived,
 ) -> Result<Vec<SubscriptionId>, ()> {
-    unimplemented!()
+    let added_offers_ids = futures::stream::iter(msg.offers.into_iter())
+        .filter_map(|offer| {
+            let resolver = resolver.clone();
+            let offer_id = offer.id.clone();
+            async move {
+                resolver
+                    .store
+                    .save_offer(offer)
+                    .await
+                    .map(|offer| {
+                        resolver.receive(&offer);
+                        offer.id
+                    })
+                    .map_err(|e| {
+                        log::warn!("Failed to save Offer [{}]. Error: {}", &offer_id, &e);
+                        e
+                    })
+                    .ok()
+            }
+        })
+        .collect::<Vec<SubscriptionId>>()
+        .await;
+
+    log::info!(
+        "Received new Offers from [{}]: \n{}",
+        caller,
+        DisplayVec(&added_offers_ids)
+    );
+    Ok(added_offers_ids)
 }
 
 pub(crate) async fn on_get_offers(
@@ -168,7 +200,14 @@ pub(crate) async fn on_get_offers(
     _caller: String,
     msg: GetOffers,
 ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
-    unimplemented!()
+    match resolver.store.get_offers_batch(msg.offers).await {
+        Ok(offers) => Ok(offers),
+        Err(e) => {
+            log::error!("Failed to get batch offers. Error: {}", e);
+            // TODO: Propagate error.
+            Ok(vec![])
+        }
+    }
 }
 
 pub(crate) async fn on_offer_unsubscribed(

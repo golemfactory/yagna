@@ -86,7 +86,7 @@ impl<
 mod test {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-    use crate::testing::mock_offer::sample_offer_received;
+    use crate::testing::mock_offer::{generate_identity, sample_get_offer_received};
 
     use super::super::*;
     use super::*;
@@ -153,10 +153,10 @@ mod test {
         let discovery = DiscoveryBuilder::default()
             .data(7 as usize)
             .data("mock data")
-            .add_handler(|_, _: OffersReceived| async { panic!("should not be invoked") })
-            .add_data_handler(|_: &str, _, _: GetOffers| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
+            .add_handler(|_, _: GetOffers| async { panic!("should not be invoked") })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
-            .add_data_handler(move |data: usize, _, _: OffersReceived| {
+            .add_data_handler(move |data: usize, _, _: GetOffers| {
                 let cnt = cnt.clone();
                 async move {
                     cnt.fetch_add(data, SeqCst);
@@ -169,8 +169,9 @@ mod test {
         assert_eq!(0, counter.load(SeqCst));
 
         // when
+        let node_id = generate_identity("caller").identity.to_string();
         discovery
-            .on_offers_received("caller".into(), sample_offer_received())
+            .on_get_offers(node_id, sample_get_offer_received())
             .await
             .unwrap();
 

@@ -14,5 +14,6 @@ pub use proposal::{DbProposal, Negotiation, Proposal};
 
 pub use proposal_id::{OwnerType, ProposalId, ProposalIdParseError};
 pub use subscription_id::{
-    generate_random_id, SubscriptionId, SubscriptionParseError, SubscriptionValidationError,
+    generate_random_id, DisplayVec, SubscriptionId, SubscriptionParseError,
+    SubscriptionValidationError,
 };

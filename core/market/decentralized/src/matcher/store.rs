@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDateTime, Utc};
+use futures::StreamExt;
 use lazy_static::lazy_static;
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
@@ -90,6 +91,18 @@ impl SubscriptionStore {
                 Ok(o) => Some(o),
             })
             .collect())
+    }
+
+    pub async fn get_offers_batch(
+        &self,
+        ids: Vec<SubscriptionId>,
+    ) -> Result<Vec<Offer>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .batch_select(ids, Utc::now().naive_utc())
+            .await
+            .map_err(|e| QueryOffersError(e))?)
     }
 
     pub async fn get_offers_before(
@@ -223,6 +236,31 @@ impl SubscriptionStore {
         &self,
         offers: Vec<SubscriptionId>,
     ) -> Result<Vec<SubscriptionId>, QueryOfferError> {
-        unimplemented!()
+        Ok(futures::stream::iter(offers.into_iter())
+            .filter_map(|offer_id| {
+                let db = self.db.clone();
+                async move {
+                    match db
+                        .as_dao::<OfferDao>()
+                        .select(&offer_id, Utc::now().naive_utc())
+                        .await
+                    {
+                        Ok(offer_state) => match offer_state {
+                            OfferState::NotFound => Some(offer_id),
+                            _ => None,
+                        },
+                        Err(e) => {
+                            log::error!(
+                                "Can't get Offer [{}] from database. Error: {}",
+                                &offer_id,
+                                e
+                            );
+                            None
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<SubscriptionId>>()
+            .await)
     }
 }

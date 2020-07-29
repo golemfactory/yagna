@@ -53,6 +53,23 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
+    pub async fn batch_select(
+        &self,
+        ids: Vec<SubscriptionId>,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Vec<Offer>> {
+        readonly_transaction(self.pool, move |conn| {
+            Ok(dsl::market_offer
+                .filter(dsl::id.eq_any(ids))
+                .filter(dsl::id.ne_all(
+                    dsl_unsubscribed::market_offer_unsubscribed.select(dsl_unsubscribed::id),
+                ))
+                .filter(dsl::expiration_ts.ge(validation_ts))
+                .load::<Offer>(conn)?)
+        })
+        .await
+    }
+
     pub async fn get_offers(
         &self,
         node_id: Option<NodeId>,

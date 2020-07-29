@@ -116,7 +116,7 @@ impl Discovery {
 
     pub async fn bind_gsb(
         &self,
-        _public_prefix: &str,
+        public_prefix: &str,
         private_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
@@ -145,7 +145,7 @@ impl Discovery {
         .await
         .map_err(|e| DiscoveryInitError::from_pair(broadcast_address, e))?;
 
-        ServiceBinder::new(&get_offers_addr(BUS_ID), &(), self.clone()).bind_with_processor(
+        ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
             move |_, myself, caller: String, msg: GetOffers| {
                 let myself = myself.clone();
                 myself.on_get_offers(caller, msg)
@@ -166,17 +166,31 @@ impl Discovery {
         // Other attempts to add them will end with error and we will filter all Offers, that already
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
+        let num_ids_received = msg.offers.len();
         let unseen_subscriptions = filter_callback.call(caller.clone(), msg).await?;
-        let offers = self
-            .get_offers(caller.clone(), unseen_subscriptions)
-            .await
-            .map_err(|e| log::error!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
 
-        let new_ids = offer_received_callback
-            .call(caller.clone(), OffersReceived { offers })
-            .await?;
+        if !unseen_subscriptions.is_empty() {
+            let offers = self
+                .get_offers(caller.clone(), unseen_subscriptions)
+                .await
+                .map_err(|e| log::error!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
 
-        self.broadcast_offers(new_ids).await;
+            // We still could fail to add some Offers to database. If we fail to add them, we don't
+            // want to propagate subscription further.
+            let new_ids = offer_received_callback
+                .call(caller.clone(), OffersReceived { offers })
+                .await?;
+
+            if !new_ids.is_empty() {
+                log::info!(
+                    "Propagating {} Offers from {} received from [{}].",
+                    new_ids.len(),
+                    num_ids_received,
+                    &caller
+                );
+                self.broadcast_offers(new_ids).await;
+            }
+        }
         Ok(())
     }
 
@@ -186,7 +200,7 @@ impl Discovery {
         msg: GetOffers,
     ) -> Result<Vec<ModelOffer>, DiscoveryRemoteError> {
         log::info!("[{}] tries to get Offers from us.", &caller);
-        let callback = self.inner.get_offers_request;
+        let callback = self.inner.get_offers_request.clone();
         Ok(callback.call(caller, msg).await?)
     }
 
@@ -270,7 +284,7 @@ impl CallbackMessage for OfferIdsReceived {
 }
 
 impl BroadcastMessage for OfferIdsReceived {
-    const TOPIC: &'static str = "market-protocol-mk1-offers";
+    const TOPIC: &'static str = "market-protocol-discovery-mk1-offers";
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -290,11 +304,6 @@ pub struct GetOffers {
     pub offers: Vec<SubscriptionId>,
 }
 
-impl CallbackMessage for GetOffers {
-    type Item = Vec<ModelOffer>;
-    type Error = DiscoveryRemoteError;
-}
-
 impl RpcMessage for GetOffers {
     const ID: &'static str = "Get";
     type Item = Vec<ModelOffer>;
@@ -302,7 +311,7 @@ impl RpcMessage for GetOffers {
 }
 
 fn get_offers_addr(prefix: &str) -> String {
-    format!("{}/protocol/mk1/offers/", prefix)
+    format!("{}/protocol/discovery/mk1/offers", prefix)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -317,7 +326,7 @@ impl CallbackMessage for OfferUnsubscribed {
 }
 
 impl BroadcastMessage for OfferUnsubscribed {
-    const TOPIC: &'static str = "market-protocol-mk1-offers-unsubscribe";
+    const TOPIC: &'static str = "market-protocol-discovery-mk1-offers-unsubscribe";
 }
 
 // =========================================== //

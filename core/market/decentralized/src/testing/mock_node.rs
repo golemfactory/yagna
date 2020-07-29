@@ -444,7 +444,10 @@ pub mod default {
         Ok(vec![])
     }
 
-    pub async fn empty_on_get_offers(_caller: String, _msg: GetOffers) -> Result<Vec<Offer>, ()> {
+    pub async fn empty_on_get_offers(
+        _caller: String,
+        _msg: GetOffers,
+    ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])
     }
 

@@ -10,6 +10,7 @@ use std::io::Write;
 use std::str::FromStr;
 use uuid::Uuid;
 
+use std::fmt::{Display, Error, Formatter};
 use ya_client::model::{ErrorMessage, NodeId};
 
 const RANDOM_PREFIX_LEN: usize = 32;
@@ -170,6 +171,22 @@ impl<'de> Deserialize<'de> for SubscriptionId {
 impl From<SubscriptionParseError> for ErrorMessage {
     fn from(e: SubscriptionParseError) -> Self {
         ErrorMessage::new(e.to_string())
+    }
+}
+
+pub struct DisplayVec<'a, T>(pub &'a Vec<T>);
+
+impl<'a, T> Display for DisplayVec<'a, T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "[\n")?;
+        for id in self.0.iter() {
+            write!(f, "    {}", id)?;
+        }
+        write!(f, "\n]")?;
+        Ok(())
     }
 }
 
