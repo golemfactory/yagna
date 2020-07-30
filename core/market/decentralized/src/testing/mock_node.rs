@@ -16,18 +16,20 @@ use super::bcast::BCast;
 #[cfg(not(feature = "bcast-singleton"))]
 use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
-use super::mock_offer::generate_identity;
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
 use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
 use crate::negotiation::error::QueryEventsError;
 use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
 use crate::protocol::negotiation::messages::*;
+use crate::testing::mock_identity::MockIdentity;
 use crate::testing::mock_node::default::{
-    empty_on_get_offers, empty_on_offer_received, empty_on_offer_unsubscribed,
+    empty_on_get_offers, empty_on_offer_unsubscribed, empty_on_offers_ids_received,
+    empty_on_offers_received,
 };
 
 /// Instantiates market test nodes inside one process.
@@ -40,7 +42,7 @@ pub struct MarketsNetwork {
 pub struct MockNode {
     pub name: String,
     /// For now only mock default Identity.
-    pub id: Identity,
+    pub mock_identity: Arc<MockIdentity>,
     pub kind: MockNodeKind,
 }
 
@@ -105,17 +107,23 @@ impl MarketsNetwork {
         }
     }
 
-    async fn add_node(mut self, name: &str, node_kind: MockNodeKind) -> Result<MarketsNetwork> {
+    async fn add_node(
+        mut self,
+        name: &str,
+        identity_api: Arc<MockIdentity>,
+        node_kind: MockNodeKind,
+    ) -> Result<MarketsNetwork> {
         let public_gsb_prefix = node_kind.bind_gsb(&self.test_name, name).await?;
 
         let node = MockNode {
             name: name.to_string(),
-            id: generate_identity(name),
+            mock_identity: identity_api,
             kind: node_kind,
         };
 
-        BCastService::default().register(&node.id.identity, &self.test_name);
-        MockNet::default().register_node(&node.id.identity, &public_gsb_prefix);
+        let node_id = node.mock_identity.default.clone().identity;
+        BCastService::default().register(&node_id, &self.test_name);
+        MockNet::default().register_node(&node_id, &public_gsb_prefix);
 
         self.nodes.push(node);
         Ok(self)
@@ -128,8 +136,13 @@ impl MarketsNetwork {
 
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
-        let market = Arc::new(MarketService::new(&db)?);
-        self.add_node(name, MockNodeKind::Market(market)).await
+        let identity_api = MockIdentity::new(name);
+        let market = Arc::new(MarketService::new(
+            &db,
+            identity_api.clone() as Arc<dyn IdentityApi>,
+        )?);
+        self.add_node(name, identity_api, MockNodeKind::Market(market))
+            .await
     }
 
     pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
@@ -137,9 +150,15 @@ impl MarketsNetwork {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(store)?;
-        self.add_node(name, MockNodeKind::Matcher { matcher, listeners })
-            .await
+        let identity_api = MockIdentity::new(name);
+
+        let (matcher, listeners) = Matcher::new(store, identity_api.clone())?;
+        self.add_node(
+            name,
+            identity_api,
+            MockNodeKind::Matcher { matcher, listeners },
+        )
+        .await
     }
 
     pub async fn add_discovery_instance(
@@ -147,15 +166,18 @@ impl MarketsNetwork {
         name: &str,
         builder: DiscoveryBuilder,
     ) -> Result<Self> {
-        let discovery = builder.build();
-        self.add_node(name, MockNodeKind::Discovery(discovery))
+        let identity_api = MockIdentity::new(name);
+        let discovery = builder
+            .data(identity_api.clone() as Arc<dyn IdentityApi>)
+            .build();
+        self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
             .await
     }
 
     pub fn discovery_builder() -> DiscoveryBuilder {
         DiscoveryBuilder::default()
-            .add_handler(empty_on_offer_received)
-            .add_handler(empty_on_get_offers)
+            .add_handler(empty_on_offers_received)
+            .add_handler(empty_on_offers_ids_received)
             .add_handler(empty_on_offer_unsubscribed)
             .add_handler(empty_on_get_offers)
     }
@@ -235,8 +257,11 @@ impl MarketsNetwork {
             req_agreement_rejected,
         );
 
+        let identity_api = MockIdentity::new(name);
+
         self.add_node(
             name,
+            identity_api,
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
@@ -315,8 +340,10 @@ impl MarketsNetwork {
         self.nodes
             .iter()
             .find(|node| &node.name == node_name)
-            .map(|node| node.id.clone())
+            .map(|node| node.mock_identity.clone())
             .unwrap()
+            .default
+            .clone()
     }
 
     pub async fn get_rest_app(
@@ -430,7 +457,7 @@ pub mod default {
         AgreementError, ApproveAgreementError, CounterProposalError, ProposalError,
     };
 
-    pub async fn empty_on_offer_received(
+    pub async fn empty_on_offers_received(
         _caller: String,
         _msg: OffersReceived,
     ) -> Result<Vec<SubscriptionId>, ()> {
@@ -439,7 +466,7 @@ pub mod default {
 
     pub async fn empty_on_offers_ids_received(
         _caller: String,
-        _msg: OffersReceived,
+        _msg: OfferIdsReceived,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }

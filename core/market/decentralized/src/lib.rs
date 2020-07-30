@@ -2,6 +2,7 @@
 extern crate diesel;
 
 mod db;
+mod identity;
 mod market;
 mod matcher;
 mod negotiation;

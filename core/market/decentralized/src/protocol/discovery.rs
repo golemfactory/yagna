@@ -1,18 +1,16 @@
-// TODO: This is only temporary
-#![allow(dead_code)]
-use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 
 use ya_client::model::ErrorMessage;
 use ya_client::model::NodeId;
+use ya_core_model::net::local as broadcast;
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
-use ya_core_model::{identity, net::local as broadcast};
 use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
+use crate::identity::{IdentityApi, IdentityError};
 
 use super::callback::{CallbackMessage, HandlerSlot};
 use std::str::FromStr;
@@ -33,8 +31,8 @@ pub enum DiscoveryError {
     GsbError(String),
     #[error("Internal error: {0}.")]
     InternalError(String),
-    #[error("Can't get default identity: {0}.")]
-    Identity(String),
+    #[error(transparent)]
+    Identity(#[from] IdentityError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -60,6 +58,8 @@ pub struct Discovery {
 }
 
 pub struct DiscoveryImpl {
+    identity: Arc<dyn IdentityApi>,
+
     filter_unknown_offers: HandlerSlot<OfferIdsReceived>,
     offers_received: HandlerSlot<OffersReceived>,
     offer_unsubscribed: HandlerSlot<OfferUnsubscribed>,
@@ -73,7 +73,7 @@ impl Discovery {
         &self,
         offers: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
-        let default_id = default_identity().await?;
+        let default_id = self.default_identity().await?;
         let bcast_msg = SendBroadcastMessage::new(OfferIdsReceived { offers });
 
         let _ = bus::service(broadcast::BUS_ID)
@@ -91,7 +91,7 @@ impl Discovery {
         let target_node =
             NodeId::from_str(&from).map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
 
-        Ok(net::from(default_identity().await?)
+        Ok(net::from(self.default_identity().await?)
             .to(target_node)
             .service(&get_offers_addr(BUS_ID))
             .send(GetOffers { offers })
@@ -188,7 +188,9 @@ impl Discovery {
                     num_ids_received,
                     &caller
                 );
-                self.broadcast_offers(new_ids).await;
+                self.broadcast_offers(new_ids)
+                    .await
+                    .map_err(|e| log::error!("Failed to broadcast. Error: {}", e))?;
             }
         }
         Ok(())
@@ -237,15 +239,10 @@ impl Discovery {
         }
         Ok(())
     }
-}
 
-async fn default_identity() -> Result<NodeId, DiscoveryError> {
-    Ok(bus::service(identity::BUS_ID)
-        .send(identity::Get::ByDefault)
-        .await?
-        .map_err(|e| DiscoveryError::Identity(e.to_string()))?
-        .ok_or(DiscoveryError::Identity(format!("No default identity!!!")))?
-        .node_id)
+    async fn default_identity(&self) -> Result<NodeId, IdentityError> {
+        Ok(self.inner.identity.default_identity().await?)
+    }
 }
 
 // =========================================== //

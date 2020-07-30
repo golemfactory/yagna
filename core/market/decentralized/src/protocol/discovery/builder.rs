@@ -57,6 +57,7 @@ impl DiscoveryBuilder {
     pub fn build(mut self) -> Discovery {
         Discovery {
             inner: Arc::new(DiscoveryImpl {
+                identity: self.get_data(),
                 offers_received: self.get(),
                 offer_unsubscribed: self.get(),
                 get_offers_request: self.get(),
@@ -86,7 +87,8 @@ impl<
 mod test {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-    use crate::testing::mock_offer::{generate_identity, sample_get_offer_received};
+    use crate::testing::mock_identity::{generate_identity, MockIdentity};
+    use crate::testing::mock_offer::sample_get_offer_received;
 
     use super::super::*;
     use super::*;
@@ -101,6 +103,7 @@ mod test {
     #[should_panic]
     fn build_with_single_handler_should_fail() {
         DiscoveryBuilder::default()
+            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .build();
     }
@@ -109,6 +112,7 @@ mod test {
     #[should_panic(expected = "[DiscoveryBuilder] Can't find data of required type.")]
     fn setting_db_handler_wo_db_should_fail() {
         DiscoveryBuilder::default()
+            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_data_handler(|_: u8, _, _: OffersReceived| async { Ok(vec![]) })
             .build();
     }
@@ -117,6 +121,7 @@ mod test {
     #[should_panic]
     fn build_from_with_missing_handler_should_fail() {
         DiscoveryBuilder::default()
+            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
             .build();
@@ -125,6 +130,7 @@ mod test {
     #[test]
     fn build_from_with_four_handlers_should_pass() {
         DiscoveryBuilder::default()
+            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
             .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
@@ -135,6 +141,7 @@ mod test {
     #[test]
     fn build_from_with_mixed_handlers_should_pass() {
         DiscoveryBuilder::default()
+            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .data("mock data")
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
@@ -151,6 +158,7 @@ mod test {
         let cnt = counter.clone();
 
         let discovery = DiscoveryBuilder::default()
+            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .data(7 as usize)
             .data("mock data")
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })

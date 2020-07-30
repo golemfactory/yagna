@@ -1,23 +1,8 @@
 use chrono::{Duration, Utc};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use std::string::ToString;
-
-use ya_client::model::NodeId;
-use ya_service_api_web::middleware::Identity;
 
 use crate::db::model::{Demand, Offer};
-use crate::protocol::discovery::{GetOffers, OfferIdsReceived, OffersReceived};
-
-pub fn generate_identity(name: &str) -> Identity {
-    let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
-
-    Identity {
-        name: name.to_string(),
-        role: "manager".to_string(),
-        identity: NodeId::from(random_node_id.as_bytes()),
-    }
-}
+use crate::protocol::discovery::GetOffers;
+use crate::testing::mock_identity::generate_identity;
 
 #[allow(unused)]
 pub fn sample_get_offer_received() -> GetOffers {

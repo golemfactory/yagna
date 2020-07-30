@@ -1,4 +1,5 @@
 use futures::StreamExt;
+use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
@@ -15,7 +16,8 @@ pub mod error;
 pub(crate) mod resolver;
 pub(crate) mod store;
 
-use error::{MatcherError, MatcherInitError, ModifyOfferError, SaveOfferError};
+use crate::identity::IdentityApi;
+use error::{MatcherError, MatcherInitError, ModifyOfferError};
 use resolver::Resolver;
 use store::SubscriptionStore;
 
@@ -39,11 +41,15 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn new(store: SubscriptionStore) -> Result<(Matcher, EventsListeners), MatcherInitError> {
+    pub fn new(
+        store: SubscriptionStore,
+        identity_api: Arc<dyn IdentityApi>,
+    ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         let (proposal_sender, proposal_receiver) = unbounded_channel::<RawProposal>();
         let resolver = Resolver::new(store.clone(), proposal_sender);
 
         let discovery = DiscoveryBuilder::default()
+            .data(identity_api)
             .data(store.clone())
             .data(resolver.clone())
             .add_data_handler(on_offer_ids_received)

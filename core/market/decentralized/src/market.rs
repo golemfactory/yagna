@@ -3,13 +3,13 @@ use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::db::model::SubscriptionId;
+use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
 use crate::negotiation::error::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
-
 use crate::rest_api;
 
 use ya_client::model::market::{Demand, Offer};
@@ -57,11 +57,14 @@ pub struct MarketService {
 }
 
 impl MarketService {
-    pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
+    pub fn new(
+        db: &DbExecutor,
+        identity_api: Arc<dyn IdentityApi>,
+    ) -> Result<Self, MarketInitError> {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(store.clone())?;
+        let (matcher, listeners) = Matcher::new(store.clone(), identity_api)?;
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
@@ -188,7 +191,8 @@ impl StaticMarket {
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let market = Arc::new(MarketService::new(db)?);
+            let identity_api = IdentityGSB::new();
+            let market = Arc::new(MarketService::new(db, identity_api)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }
