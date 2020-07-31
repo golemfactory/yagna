@@ -1,4 +1,6 @@
 use futures::StreamExt;
+use rand::seq::SliceRandom;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
@@ -20,6 +22,7 @@ use crate::config::Config;
 use crate::identity::IdentityApi;
 use error::{MatcherError, MatcherInitError, ModifyOfferError};
 use resolver::Resolver;
+use std::iter::FromIterator;
 use store::SubscriptionStore;
 
 /// Stores proposal generated from resolver.
@@ -40,6 +43,7 @@ pub struct Matcher {
     pub store: SubscriptionStore,
     pub resolver: Resolver,
     discovery: Discovery,
+    identity: Arc<dyn IdentityApi>,
     config: Arc<Config>,
 }
 
@@ -53,7 +57,7 @@ impl Matcher {
         let resolver = Resolver::new(store.clone(), proposal_sender);
 
         let discovery = DiscoveryBuilder::default()
-            .data(identity_api)
+            .data(identity_api.clone())
             .data(store.clone())
             .data(resolver.clone())
             .add_data_handler(on_offer_ids_received)
@@ -67,6 +71,7 @@ impl Matcher {
             resolver,
             discovery,
             config,
+            identity: identity_api,
         };
 
         let listeners = EventsListeners { proposal_receiver };
@@ -84,7 +89,7 @@ impl Matcher {
 
         // We can't spawn broadcasts, before gsb is bound.
         // That's why we don't spawn this in Matcher::new.
-        tokio::spawn(random_broadcast(self.clone()));
+        tokio::task::spawn_local(random_broadcast(self.clone()));
         Ok(())
     }
 
@@ -155,6 +160,19 @@ impl Matcher {
         id: &Identity,
     ) -> Result<(), MatcherError> {
         Ok(self.store.remove_demand(demand_id, id).await?)
+    }
+
+    // TODO: Remove anyhow replace with typed error.
+    pub async fn list_our_offers(&self) -> Result<Vec<Offer>, anyhow::Error> {
+        let identities = self.identity.list().await?;
+        let store = self.store.clone();
+
+        let mut our_offers = vec![];
+        for node_id in identities.into_iter() {
+            our_offers.append(&mut store.get_offers(Some(node_id)).await?)
+        }
+
+        Ok(our_offers)
     }
 }
 
@@ -250,11 +268,66 @@ pub(crate) async fn on_offer_unsubscribed(
 async fn random_broadcast(matcher: Matcher) {
     let broadcast_interval = matcher
         .config
+        .clone()
         .discovery
         .mean_random_broadcast_interval
         .to_std()
+        .map_err(|e| format!("Failed to initialize broadcast interval: {}", e))
         .unwrap();
     loop {
-        tokio::time::delay_for(broadcast_interval).await;
+        let matcher = matcher.clone();
+        match async move {
+            let random_interval = randomize_interval(broadcast_interval);
+            tokio::time::delay_for(random_interval).await;
+
+            // We always broadcast our own Offers.
+            let our_offers = matcher
+                .list_our_offers()
+                .await?
+                .into_iter()
+                .map(|offer| offer.id)
+                .collect::<Vec<SubscriptionId>>();
+
+            // Add some random subset of Offers to broadcast.
+            let num_to_broadcast =
+                (matcher.config.discovery.num_broadcasted_offers - our_offers.len() as u32).min(0);
+
+            let all_offers = matcher
+                .store
+                .get_offers(None)
+                .await?
+                .into_iter()
+                .map(|offer| offer.id)
+                .collect::<Vec<SubscriptionId>>();
+
+            // Filter our Offers from set.
+            let all_offers_wo_ours = all_offers
+                .into_iter()
+                .collect::<HashSet<SubscriptionId>>()
+                .difference(&HashSet::from_iter(our_offers.clone().into_iter()))
+                .cloned()
+                .collect::<Vec<SubscriptionId>>();
+            let mut random_offers = all_offers_wo_ours
+                .choose_multiple(&mut rand::thread_rng(), num_to_broadcast as usize)
+                .cloned()
+                .collect::<Vec<SubscriptionId>>();
+            random_offers.extend(our_offers);
+
+            matcher.discovery.broadcast_offers(random_offers).await?;
+            // TODO: Remove anyhow replace with typed error.
+            Result::<(), anyhow::Error>::Ok(())
+        }
+        .await
+        {
+            Err(e) => log::warn!(
+                "Failed to send random subscriptions broadcast. Error: {}",
+                e
+            ),
+            Ok(_) => (),
+        }
     }
+}
+
+fn randomize_interval(interval: std::time::Duration) -> std::time::Duration {
+    interval
 }

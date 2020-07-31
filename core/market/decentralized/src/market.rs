@@ -119,7 +119,11 @@ impl MarketService {
     }
 
     pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<Offer>, MarketError> {
-        Ok(self.matcher.store.get_offers(id).await?)
+        Ok(self
+            .matcher
+            .store
+            .get_client_offers(id.map(|identity| identity.identity))
+            .await?)
     }
 
     pub async fn subscribe_offer(

@@ -14,12 +14,15 @@ pub enum IdentityError {
     GsbError(String),
     #[error("No default identity!!! It shouldn't happen!!")]
     NoDefaultId,
+    #[error("Can't list identities. Error: {0}.")]
+    ListError(String),
 }
 
 /// Wraps calls to identity module. It is necessary to mock identity in tests.
 #[async_trait::async_trait(?Send)]
 pub trait IdentityApi: Send + Sync {
     async fn default_identity(&self) -> Result<NodeId, IdentityError>;
+    async fn list(&self) -> Result<Vec<NodeId>, IdentityError>;
 }
 
 pub struct IdentityGSB;
@@ -34,6 +37,17 @@ impl IdentityApi for IdentityGSB {
             .map_err(|e| IdentityError::GetDefaultIdError(e.to_string()))?
             .ok_or(IdentityError::NoDefaultId)?
             .node_id)
+    }
+
+    async fn list(&self) -> Result<Vec<NodeId>, IdentityError> {
+        Ok(bus::service(identity::BUS_ID)
+            .send(identity::List {})
+            .await
+            .map_err(|e| IdentityError::GsbError(e.to_string()))?
+            .map_err(|e| IdentityError::ListError(e.to_string()))?
+            .iter()
+            .map(|identity_info| identity_info.node_id)
+            .collect::<Vec<NodeId>>())
     }
 }
 

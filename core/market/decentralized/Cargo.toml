@@ -7,7 +7,7 @@ edition = "2018"
 [features]
 market-test-suite = []
 bcast-singleton = []
-testing = ["actix-http", "actix-rt", "actix-service", "async-trait", "env_logger"]
+testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
 
 [dependencies]
 ya-agreement-utils = "0.1"
@@ -22,7 +22,7 @@ ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 
 actix-web = "2.0"
-async-trait = { version = "0.1.33", optional = true }
+async-trait = { version = "0.1.33" }
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.5"

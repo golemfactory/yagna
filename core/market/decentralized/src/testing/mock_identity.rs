@@ -16,6 +16,10 @@ impl IdentityApi for MockIdentity {
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
         Ok(self.default.identity.clone())
     }
+
+    async fn list(&self) -> Result<Vec<NodeId>, IdentityError> {
+        Ok(vec![self.default.identity.clone()])
+    }
 }
 
 impl MockIdentity {

@@ -69,16 +69,22 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn get_offers(
-        &self,
-        id: Option<Identity>,
-    ) -> Result<Vec<ClientOffer>, QueryOffersError> {
+    pub async fn get_offers(&self, id: Option<NodeId>) -> Result<Vec<Offer>, QueryOffersError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers(id.map(|ident| ident.identity), Utc::now().naive_utc())
+            .get_offers(id, Utc::now().naive_utc())
             .await
-            .map_err(|e| QueryOffersError(e))?
+            .map_err(|e| QueryOffersError(e))?)
+    }
+
+    pub async fn get_client_offers(
+        &self,
+        id: Option<NodeId>,
+    ) -> Result<Vec<ClientOffer>, QueryOffersError> {
+        Ok(self
+            .get_offers(id)
+            .await?
             .into_iter()
             .filter_map(|o| match o.into_client_offer() {
                 Err(e) => {
