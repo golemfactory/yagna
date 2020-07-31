@@ -1,31 +1,28 @@
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{NaiveDateTime, Utc};
 use futures::StreamExt;
-use lazy_static::lazy_static;
+use std::sync::Arc;
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+use crate::config::Config;
 use crate::db::dao::*;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
 };
 
-lazy_static! {
-    // TODO: agents should set expiration.
-    static ref DEFAULT_TTL: Duration = Duration::hours(24);
-}
-
 #[derive(Clone)]
 pub struct SubscriptionStore {
     db: DbExecutor,
+    config: Arc<Config>,
 }
 
 impl SubscriptionStore {
-    pub fn new(db: DbExecutor) -> Self {
-        Self { db }
+    pub fn new(db: DbExecutor, config: Arc<Config>) -> Self {
+        Self { db, config }
     }
 
     /// returns newly created offer with insertion_ts
@@ -36,7 +33,7 @@ impl SubscriptionStore {
     ) -> Result<Offer, SaveOfferError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
-        let expiration_ts = creation_ts + *DEFAULT_TTL;
+        let expiration_ts = creation_ts + self.config.subscription.default_ttl;
         let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts);
         self.insert_offer(offer).await
     }
@@ -180,7 +177,7 @@ impl SubscriptionStore {
     ) -> Result<Demand, DemandError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.
-        let expiration_ts = creation_ts + *DEFAULT_TTL;
+        let expiration_ts = creation_ts + self.config.subscription.default_ttl;
         let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts);
         self.db
             .as_dao::<DemandDao>()

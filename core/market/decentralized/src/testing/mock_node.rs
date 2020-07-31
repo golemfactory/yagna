@@ -38,6 +38,7 @@ pub struct MarketsNetwork {
     nodes: Vec<MockNode>,
     test_dir: PathBuf,
     test_name: String,
+    config: Arc<Config>,
 }
 
 pub struct MockNode {
@@ -105,7 +106,14 @@ impl MarketsNetwork {
             nodes: vec![],
             test_dir,
             test_name: test_name.to_string(),
+            config: Arc::new(Config::default()),
         }
+    }
+
+    /// Config will be used to initialize all consecutive Nodes.
+    pub fn with_config(mut self, config: Arc<Config>) -> Self {
+        self.config = config;
+        self
     }
 
     async fn add_node(
@@ -138,11 +146,10 @@ impl MarketsNetwork {
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
         let identity_api = MockIdentity::new(name);
-        let config = Arc::new(Config::default());
         let market = Arc::new(MarketService::new(
             &db,
             identity_api.clone() as Arc<dyn IdentityApi>,
-            config,
+            self.config.clone(),
         )?);
         self.add_node(name, identity_api, MockNodeKind::Market(market))
             .await
@@ -152,11 +159,10 @@ impl MarketsNetwork {
         let db = self.init_database(name)?;
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
-        let store = SubscriptionStore::new(db.clone());
+        let store = SubscriptionStore::new(db.clone(), self.config.clone());
         let identity_api = MockIdentity::new(name);
-        let config = Arc::new(Config::default());
 
-        let (matcher, listeners) = Matcher::new(store, identity_api.clone(), config)?;
+        let (matcher, listeners) = Matcher::new(store, identity_api.clone(), self.config.clone())?;
         self.add_node(
             name,
             identity_api,

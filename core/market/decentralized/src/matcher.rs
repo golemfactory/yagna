@@ -248,8 +248,13 @@ pub(crate) async fn on_offer_unsubscribed(
 }
 
 async fn random_broadcast(matcher: Matcher) {
-    let config = matcher.config;
+    let broadcast_interval = matcher
+        .config
+        .discovery
+        .mean_random_broadcast_interval
+        .to_std()
+        .unwrap();
     loop {
-        tokio::time::delay_for(config.discovery.mean_random_broadcast_interval).await;
+        tokio::time::delay_for(broadcast_interval).await;
     }
 }

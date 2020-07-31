@@ -65,7 +65,7 @@ impl MarketService {
     ) -> Result<Self, MarketInitError> {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
-        let store = SubscriptionStore::new(db.clone());
+        let store = SubscriptionStore::new(db.clone(), config.clone());
         let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config)?;
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
