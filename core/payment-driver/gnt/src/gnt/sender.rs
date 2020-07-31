@@ -628,7 +628,7 @@ impl TransactionSender {
                     if let Some(tx_block_number) =
                         client.tx_block_number(pending_confirmation.tx_hash).await?
                     {
-                        if tx_block_number < block_number {
+                        if tx_block_number <= block_number {
                             let confirmations = block_number - tx_block_number + 1;
                             log::info!(
                                 "tx_id={:?}, confirmations={}",
