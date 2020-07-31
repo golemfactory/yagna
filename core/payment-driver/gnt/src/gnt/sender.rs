@@ -35,6 +35,7 @@ use ya_persistence::executor::DbExecutor;
 const NONCE_EXPIRE: Duration = Duration::from_secs(12);
 const GNT_TRANSFER_GAS: u32 = 55000;
 const TRANSFER_CONTRACT_FUNCTION: &str = "transfer";
+const CONFIRMATION_JOB_LAPSE: Duration = Duration::from_secs(10);
 
 struct Accounts {
     accounts: HashMap<String, NodeId>,
@@ -614,7 +615,7 @@ impl TransactionSender {
     }
 
     fn start_confirmation_job(&mut self, ctx: &mut Context<Self>) {
-        let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
+        let _ = ctx.run_interval(CONFIRMATION_JOB_LAPSE, |act, ctx| {
             if act.pending_confirmations.is_empty() {
                 return;
             }
