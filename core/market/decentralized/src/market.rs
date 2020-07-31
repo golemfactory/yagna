@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+use crate::config::Config;
 use crate::db::model::SubscriptionId;
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
@@ -60,11 +61,12 @@ impl MarketService {
     pub fn new(
         db: &DbExecutor,
         identity_api: Arc<dyn IdentityApi>,
+        config: Arc<Config>,
     ) -> Result<Self, MarketInitError> {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(store.clone(), identity_api)?;
+        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config)?;
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
@@ -192,7 +194,8 @@ impl StaticMarket {
             Ok(market.clone())
         } else {
             let identity_api = IdentityGSB::new();
-            let market = Arc::new(MarketService::new(db, identity_api)?);
+            let config = Arc::new(Config::default());
+            let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

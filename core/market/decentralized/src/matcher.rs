@@ -16,6 +16,7 @@ pub mod error;
 pub(crate) mod resolver;
 pub(crate) mod store;
 
+use crate::config::Config;
 use crate::identity::IdentityApi;
 use error::{MatcherError, MatcherInitError, ModifyOfferError};
 use resolver::Resolver;
@@ -34,16 +35,19 @@ pub struct EventsListeners {
 }
 
 /// Responsible for storing Offers and matching them with demands.
+#[derive(Clone)]
 pub struct Matcher {
     pub store: SubscriptionStore,
     pub resolver: Resolver,
     discovery: Discovery,
+    config: Arc<Config>,
 }
 
 impl Matcher {
     pub fn new(
         store: SubscriptionStore,
         identity_api: Arc<dyn IdentityApi>,
+        config: Arc<Config>,
     ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         let (proposal_sender, proposal_receiver) = unbounded_channel::<RawProposal>();
         let resolver = Resolver::new(store.clone(), proposal_sender);
@@ -62,10 +66,10 @@ impl Matcher {
             store,
             resolver,
             discovery,
+            config,
         };
 
         let listeners = EventsListeners { proposal_receiver };
-
         Ok((matcher, listeners))
     }
 
@@ -74,10 +78,14 @@ impl Matcher {
         public_prefix: &str,
         private_prefix: &str,
     ) -> Result<(), MatcherInitError> {
-        Ok(self
-            .discovery
+        self.discovery
             .bind_gsb(public_prefix, private_prefix)
-            .await?)
+            .await?;
+
+        // We can't spawn broadcasts, before gsb is bound.
+        // That's why we don't spawn this in Matcher::new.
+        tokio::spawn(random_broadcast(self.clone()));
+        Ok(())
     }
 
     // =========================================== //
@@ -237,4 +245,11 @@ pub(crate) async fn on_offer_unsubscribed(
             ModifyOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
             ModifyOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
         })
+}
+
+async fn random_broadcast(matcher: Matcher) {
+    let config = matcher.config;
+    loop {
+        tokio::time::delay_for(config.discovery.mean_random_broadcast_interval).await;
+    }
 }

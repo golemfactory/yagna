@@ -18,6 +18,7 @@ use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
+use crate::config::Config;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
@@ -137,9 +138,11 @@ impl MarketsNetwork {
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
         let identity_api = MockIdentity::new(name);
+        let config = Arc::new(Config::default());
         let market = Arc::new(MarketService::new(
             &db,
             identity_api.clone() as Arc<dyn IdentityApi>,
+            config,
         )?);
         self.add_node(name, identity_api, MockNodeKind::Market(market))
             .await
@@ -151,8 +154,9 @@ impl MarketsNetwork {
 
         let store = SubscriptionStore::new(db.clone());
         let identity_api = MockIdentity::new(name);
+        let config = Arc::new(Config::default());
 
-        let (matcher, listeners) = Matcher::new(store, identity_api.clone())?;
+        let (matcher, listeners) = Matcher::new(store, identity_api.clone(), config)?;
         self.add_node(
             name,
             identity_api,
