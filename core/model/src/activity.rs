@@ -33,6 +33,9 @@ pub struct Create {
     pub provider_id: NodeId,
     pub agreement_id: String,
     pub timeout: Option<f32>,
+    // secp256k1 - public key
+    #[serde(default)]
+    pub requestor_pub_key: Option<Vec<u8>>,
 }
 
 impl RpcMessage for Create {
@@ -209,13 +212,16 @@ pub mod local {
     #[serde(rename_all = "camelCase")]
     pub enum Credentials {
         Sgx {
-            requestor: NodeId,
-            enclave: NodeId,
+            requestor: Vec<u8>,
+            enclave: Vec<u8>,
             // sha3-256
             payload_sha3: [u8; 32],
             enclave_hash: [u8; 32],
             ias_report: String,
-            isa_sig: Vec<u8>,
+            ias_sig: Vec<u8>,
+            // Encrypted by requestorPubKey + signed by enclave
+            // aes-256 encyption key.
+            session_key: Vec<u8>,
         },
     }
 

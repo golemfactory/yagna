@@ -43,6 +43,7 @@ async fn create_activity(
         provider_id,
         agreement_id: agreement_id.clone(),
         timeout: query.timeout.clone(),
+        requestor_pub_key: None,
     };
 
     let activity_id = net::from(id.identity)
