@@ -124,6 +124,7 @@ impl GntDriver {
             ethereum_client.clone(),
             gnt_contract.clone(),
             db.clone(),
+            &env,
         );
 
         load_active_accounts(tx_sender.clone()).await?;
