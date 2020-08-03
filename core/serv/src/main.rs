@@ -45,6 +45,12 @@ use data_dir::DataDir;
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 #[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+/// Golem network server.
+///
+/// By running this software you declare that you have read,
+/// understood and hereby accept the disclaimer and
+/// privacy warning found at https://app.gitbook.com/@golem-network/s/golem-sdk-docs-test/terms
+///
 struct CliArgs {
     /// Service data dir
     #[structopt(
@@ -225,6 +231,10 @@ impl ServiceCommand {
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
                 let name = clap::crate_name!();
+                log::warn!(
+                    r#"By running this software you declare that you have read, understood and hereby accept the disclaimer
+ and privacy warning found at https://app.gitbook.com/@golem-network/s/golem-sdk-docs-test/terms"#
+                );
                 log::info!("Starting {} service!", name);
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
