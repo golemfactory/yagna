@@ -25,7 +25,8 @@ mod local {
             .bind_with_processor(register_account)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
-            .bind_with_processor(get_status);
+            .bind_with_processor(get_status)
+            .bind_with_processor(get_accounts);
         log::debug!("Successfully bound payment private service to service bus");
     }
 
@@ -55,6 +56,15 @@ mod local {
         msg: UnregisterAccount,
     ) -> Result<(), UnregisterAccountError> {
         processor.unregister_account(msg).await
+    }
+
+    async fn get_accounts(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: GetAccounts,
+    ) -> Result<Vec<Account>, GenericError> {
+        Ok(processor.get_accounts().await)
     }
 
     async fn notify_payment(
