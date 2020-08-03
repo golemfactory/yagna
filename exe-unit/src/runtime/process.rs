@@ -13,7 +13,7 @@ use futures::FutureExt;
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -192,17 +192,17 @@ impl RuntimeProcess {
         let binary = self.binary.clone();
         match command {
             ExeScriptCommand::Start { args } => {
-                let monitor = self
-                    .monitor
-                    .get_or_insert_with(|| EventMonitor::default())
-                    .clone();
+                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
+                let mut cmd_args = vec![OsString::from("start")];
+                cmd_args.extend(args.into_iter().map(OsString::from));
+                let args = self.args(cmd_args).unwrap_or_else(|_| Vec::new());
+
+                log::info!("Executing {:?} with {:?}", binary, args);
+
+                let mut command = Command::new(binary);
+                command.args(args);
 
                 async move {
-                    let mut cmd_args = vec![String::from("start")];
-                    cmd_args.extend(args);
-                    let mut command = Command::new(binary);
-                    command.args(cmd_args);
-
                     let service = spawn(command, monitor)
                         .map_err(|e| Error::RuntimeError(e.to_string()))
                         .await?;
@@ -216,22 +216,25 @@ impl RuntimeProcess {
                 }
                 .boxed_local()
             }
-            ExeScriptCommand::Run { entry_point, args } => {
-                let mut cmd_args = vec![
-                    String::from("run"),
-                    String::from("--entrypoint"),
-                    String::from(entry_point),
-                ];
-                cmd_args.extend(args);
-
-                let mut run_process = RunProcess::default();
-                run_process.bin = binary.display().to_string();
-                run_process.args = cmd_args;
+            ExeScriptCommand::Run {
+                entry_point,
+                mut args,
+            } => {
+                log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
 
                 let service = self.service.as_ref().unwrap().service.clone();
                 let mut monitor = self.monitor.as_ref().unwrap().clone();
 
                 async move {
+                    let name = Path::new(&entry_point)
+                        .file_name()
+                        .ok_or_else(|| Error::RuntimeError("Invalid binary name".into()))?;
+                    args.insert(0, name.to_string_lossy().to_string());
+
+                    let mut run_process = RunProcess::default();
+                    run_process.bin = entry_point;
+                    run_process.args = args;
+
                     let process = match service.run_process(run_process).await {
                         Ok(result) => result,
                         Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),

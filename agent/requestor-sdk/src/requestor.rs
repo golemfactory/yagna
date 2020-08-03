@@ -17,6 +17,7 @@ use ya_client::{
     market::MarketRequestorApi,
     model::{
         self,
+        activity::CommandResult,
         market::{
             proposal::{Proposal, State},
             AgreementProposal, Demand, RequestorEvent,
@@ -366,7 +367,6 @@ impl Requestor {
             };
 
             if !state.alive() {
-                log::warn!("activity {} died", activity_id);
                 break;
             }
 
@@ -391,7 +391,16 @@ impl Requestor {
             time::delay_until(delay).await;
         }
 
-        log::info!("activity finished: {}", activity_id);
+        if all_res.len() == exe_script.num_cmds
+            && all_res
+                .last()
+                .map(|l| l.result == CommandResult::Ok)
+                .unwrap_or(false)
+        {
+            log::info!("activity finished: {}", activity_id);
+        } else {
+            log::warn!("activity interrupted: {}", activity_id);
+        }
 
         let only_stdout = |txt: String| {
             if txt.starts_with("stdout: ") {

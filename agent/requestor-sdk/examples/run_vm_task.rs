@@ -45,10 +45,10 @@ async fn main() -> Result<()> {
         ])
         .with_tasks(vec!["1"].into_iter().map(move |i| {
             commands! {
-                upload(args.input.clone(), "/workdir/scene.blend");
-                run("blender", "-b","/workdir/scene.blend", "-o", "/workdir/out##.png", "-E", "CYCLES", "-s", i, "-e", i, "-a", "-F", "PNG");
-                run("mv", "/workdir/out*.png", "/workdir/output.png");
-                download("/workdir/output.png", format!("output-{}.png", i))
+                upload(args.input.clone(), "/workdir/input");
+                run("/bin/ls", "-la", "/workdir/input");
+                run("/bin/cp", "/workdir/input", "/workdir/output");
+                download("/workdir/output", format!("output-{}", i))
             }
         }))
         .on_completed(|outputs: HashMap<String, String>| {
