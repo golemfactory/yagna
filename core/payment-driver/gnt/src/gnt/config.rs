@@ -20,7 +20,7 @@ pub(crate) const REQUIRED_CONFIRMATIONS_ENV_VAR: &str = "REQUIRED_CONFIRMATIONS"
 pub struct EnvConfiguration {
     pub gnt_contract_address: Address,
     pub gnt_faucet_address: Option<Address>,
-    pub required_confirmations: usize,
+    pub required_confirmations: u64,
 }
 
 pub const CFG_TESTNET: EnvConfiguration = EnvConfiguration {
