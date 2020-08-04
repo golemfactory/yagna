@@ -23,7 +23,7 @@ pub mod migrations {
     struct _Dummy;
 }
 
-pub const DEFAULT_PAYMENT_PLATFORM: &str = "GNT";
+pub const DEFAULT_PAYMENT_PLATFORM: &str = "NGNT";
 
 pub struct PaymentService;
 

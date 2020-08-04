@@ -7,7 +7,7 @@ use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
 use ya_core_model::identity;
 use ya_service_bus::typed as bus;
 
-pub const DEFAULT_PAYMENT_DRIVER: &str = "gnt";
+pub const DEFAULT_PAYMENT_DRIVER: &str = "ngnt";
 
 lazy_static! {
     pub static ref ACCOUNT_LIST_PATH: String =

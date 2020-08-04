@@ -13,8 +13,8 @@ pub(crate) const TX_LOG_TOPICS_LENGTH: usize = 3;
 pub(crate) const TRANSFER_CANONICAL_SIGNATURE: &str =
     "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-pub(crate) const GNT2_CONTRACT_ADDRESS_ENV_VAR: &str = "GNT2_CONTRACT_ADDRESS";
-pub(crate) const GNT2_FAUCET_CONTRACT_ADDRESS_ENV_VAR: &str = "GNT2_FAUCET_CONTRACT_ADDRESS";
+pub(crate) const NGNT_CONTRACT_ADDRESS_ENV_VAR: &str = "NGNT_CONTRACT_ADDRESS";
+pub(crate) const NGNT_FAUCET_CONTRACT_ADDRESS_ENV_VAR: &str = "NGNT_FAUCET_CONTRACT_ADDRESS";
 pub(crate) const REQUIRED_CONFIRMATIONS_ENV_VAR: &str = "REQUIRED_CONFIRMATIONS";
 
 pub struct EnvConfiguration {
@@ -51,10 +51,10 @@ impl EnvConfiguration {
             Chain::Rinkeby => CFG_TESTNET,
             Chain::Mainnet => CFG_MAINNET,
         };
-        if let Some(gnt_contract_address) = env::var(GNT2_CONTRACT_ADDRESS_ENV_VAR).ok() {
+        if let Some(gnt_contract_address) = env::var(NGNT_CONTRACT_ADDRESS_ENV_VAR).ok() {
             base.gnt_contract_address = utils::str_to_addr(&gnt_contract_address)?;
         }
-        if let Some(gnt_faucet_address) = env::var(GNT2_FAUCET_CONTRACT_ADDRESS_ENV_VAR).ok() {
+        if let Some(gnt_faucet_address) = env::var(NGNT_FAUCET_CONTRACT_ADDRESS_ENV_VAR).ok() {
             base.gnt_faucet_address = Some(utils::str_to_addr(&gnt_faucet_address)?);
         }
         if let Some(required_confirmations) = env::var(REQUIRED_CONFIRMATIONS_ENV_VAR).ok() {
