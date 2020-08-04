@@ -894,7 +894,7 @@ async fn process_payment(
                     },
                 )
                 .await?;
-            log::error!("GNT transfer failed: {}", e);
+            log::error!("NGNT transfer failed: {}", e);
             return Err(e);
         }
     }
