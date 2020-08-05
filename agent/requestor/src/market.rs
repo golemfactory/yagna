@@ -162,7 +162,7 @@ async fn negotiate_offer(
         }
         Err(err) => {
             log::error!(
-                "unable to allocate {} GNT: {:?};\n\n cancelling agreement...",
+                "unable to allocate {} NGNT: {:?};\n\n cancelling agreement...",
                 allocation_size,
                 err
             );
@@ -170,7 +170,7 @@ async fn negotiate_offer(
                 Ok(_) => log::warn!("\n\n agreement {} CANCELLED", new_agreement_id),
                 Err(e) => log::error!("unable to cancel agreement {}: {}", new_agreement_id, e),
             }
-            anyhow::bail!("unable to allocate {} GNT: {:?}", allocation_size, err);
+            anyhow::bail!("unable to allocate {} NGNT: {:?}", allocation_size, err);
         }
     }
 
@@ -181,7 +181,7 @@ async fn negotiate_offer(
         .await?;
 
     match &result[..] {
-        "Ok" => {
+        "Approved" => {
             log::info!("\n\n AGREEMENT APPROVED: {} !", new_agreement_id);
             Ok(ProcessOfferResult::AgreementId(new_agreement_id))
         }

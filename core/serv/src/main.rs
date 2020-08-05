@@ -23,7 +23,7 @@ compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\"
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
-use ya_payment::PaymentService;
+use ya_payment::{accounts as payment_accounts, PaymentService};
 
 #[cfg(feature = "dummy-driver")]
 use ya_dummy_driver::PaymentDriverService;
@@ -149,6 +149,7 @@ impl ServiceContext {
             Self::make_entry::<MarketService>(path, "market")?,
             Self::make_entry::<ActivityService>(path, "activity")?,
             Self::make_entry::<PaymentService>(path, "payment")?,
+            Self::make_entry::<PaymentDriverService>(path, "gnt-driver")?,
         ]
         .iter()
         .cloned()
@@ -237,6 +238,15 @@ impl ServiceCommand {
 
                 let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
                 Services::gsb(&context).await?;
+
+                payment_accounts::save_default_account()
+                    .await
+                    .unwrap_or_else(|e| {
+                        log::error!("Saving default payment account failed: {}", e)
+                    });
+                payment_accounts::init_accounts()
+                    .await
+                    .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 HttpServer::new(move || {

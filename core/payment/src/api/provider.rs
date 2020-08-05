@@ -7,7 +7,9 @@ use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
-use ya_core_model::payment::public::{SendDebitNote, SendError, SendInvoice, BUS_ID};
+use ya_core_model::payment::public::{
+    CancelError, CancelInvoice, SendDebitNote, SendError, SendInvoice, BUS_ID,
+};
 use ya_core_model::payment::RpcMessageError;
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
@@ -326,8 +328,50 @@ async fn cancel_invoice(
     db: Data<DbExecutor>,
     path: Path<InvoiceId>,
     query: Query<Timeout>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let invoice_id = path.invoice_id.clone();
+    let node_id = id.identity;
+    let dao: InvoiceDao = db.as_dao();
+    let invoice = match dao.get(invoice_id.clone(), node_id).await {
+        Ok(Some(invoice)) => invoice,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    match invoice.status {
+        DocumentStatus::Issued => (),
+        DocumentStatus::Received => (),
+        DocumentStatus::Rejected => (),
+        DocumentStatus::Cancelled => return response::ok(Null),
+        DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
+            return response::conflict(&"Invoice already accepted by requestor")
+        }
+    }
+
+    with_timeout(query.timeout, async move {
+        match async move {
+            ya_net::from(node_id)
+                .to(invoice.recipient_id)
+                .service(BUS_ID)
+                .call(CancelInvoice {
+                    invoice_id: invoice_id.clone(),
+                    recipient_id: invoice.recipient_id,
+                })
+                .await??;
+            dao.cancel(invoice_id, node_id).await?;
+            Ok(())
+        }
+        .await
+        {
+            Ok(_) => response::ok(Null),
+            Err(Error::Rpc(RpcMessageError::Cancel(CancelError::Conflict))) => {
+                response::conflict(&"Invoice already accepted by requestor")
+            }
+            Err(e) => response::server_error(&e),
+        }
+    })
+    .await
 }
 
 async fn get_invoice_events(

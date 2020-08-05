@@ -224,6 +224,24 @@ pub mod local {
             iter.fold(Default::default(), |acc, item| acc + item)
         }
     }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetAccounts {}
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct Account {
+        pub platform: String,
+        pub address: String,
+        pub driver: String,
+        pub send: bool,
+        pub receive: bool,
+    }
+
+    impl RpcMessage for GetAccounts {
+        const ID: &'static str = "GetAccounts";
+        type Item = Vec<Account>;
+        type Error = GenericError;
+    }
 }
 
 pub mod public {
@@ -363,7 +381,7 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct RejectInvoice {
-        pub debit_note_id: String,
+        pub invoice_id: String,
         pub rejection: Rejection,
     }
 
@@ -376,7 +394,8 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct CancelInvoice {
-        pub debit_note_id: String,
+        pub invoice_id: String,
+        pub recipient_id: NodeId,
     }
 
     impl RpcMessage for CancelInvoice {
