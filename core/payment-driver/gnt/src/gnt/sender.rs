@@ -8,6 +8,7 @@ use crate::utils::{
 use crate::{utils, GNTDriverError, GNTDriverResult};
 
 use crate::dao::payment::PaymentDao;
+use crate::gnt::config::EnvConfiguration;
 use crate::gnt::{common, notify_payment, SignTx};
 use actix::prelude::*;
 use bigdecimal::{BigDecimal, Zero};
@@ -35,6 +36,7 @@ use ya_persistence::executor::DbExecutor;
 const NONCE_EXPIRE: Duration = Duration::from_secs(12);
 const GNT_TRANSFER_GAS: u32 = 55000;
 const TRANSFER_CONTRACT_FUNCTION: &str = "transfer";
+const CONFIRMATION_JOB_LAPSE: Duration = Duration::from_secs(10);
 
 struct Accounts {
     accounts: HashMap<String, NodeId>,
@@ -138,6 +140,7 @@ pub struct TransactionSender {
     receipt_queue: HashMap<String, oneshot::Sender<TransactionReceipt>>,
     reservation: Option<Reservation>,
     db: DbExecutor,
+    required_confirmations: u64,
 }
 
 impl TransactionSender {
@@ -145,6 +148,7 @@ impl TransactionSender {
         ethereum_client: Arc<EthereumClient>,
         gnt_contract: Arc<Contract<Http>>,
         db: DbExecutor,
+        env: &EnvConfiguration,
     ) -> Addr<Self> {
         let active_accounts = Rc::new(RefCell::new(Accounts {
             accounts: Default::default(),
@@ -160,6 +164,7 @@ impl TransactionSender {
             pending_confirmations: Default::default(),
             receipt_queue: Default::default(),
             reservation: None,
+            required_confirmations: env.required_confirmations,
         };
 
         me.start()
@@ -407,6 +412,7 @@ impl Handler<TxSave> for TransactionSender {
             act.wake_pending_reservation(ctx);
             let client = act.ethereum_client.clone();
             let me = ctx.address();
+            let required_confirmations = act.required_confirmations;
             let fut = async move {
                 let mut result = Vec::new();
                 for (tx_id, tx_data) in encoded_transactions {
@@ -421,7 +427,7 @@ impl Handler<TxSave> for TransactionSender {
                             me.do_send(PendingConfirmation {
                                 tx_id,
                                 tx_hash,
-                                confirmations: 5,
+                                confirmations: required_confirmations,
                             });
                         }
                         Err(_e) => {
@@ -614,7 +620,7 @@ impl TransactionSender {
     }
 
     fn start_confirmation_job(&mut self, ctx: &mut Context<Self>) {
-        let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
+        let _ = ctx.run_interval(CONFIRMATION_JOB_LAPSE, |act, ctx| {
             if act.pending_confirmations.is_empty() {
                 return;
             }
@@ -627,7 +633,9 @@ impl TransactionSender {
                     if let Some(tx_block_number) =
                         client.tx_block_number(pending_confirmation.tx_hash).await?
                     {
-                        if tx_block_number < block_number {
+                        if tx_block_number <= block_number {
+                            // When any transaction is first broadcast to the blockchain it starts with zero confirmations.
+                            // This number then increases as the information is added to the first block.
                             let confirmations = block_number - tx_block_number + 1;
                             log::info!(
                                 "tx_id={:?}, confirmations={}",
@@ -747,6 +755,7 @@ impl TransactionSender {
     fn load_txs(&self, ctx: &mut Context<Self>) {
         let db = self.db.clone();
         let me = ctx.address();
+        let required_confirmations = self.required_confirmations;
         let job = async move {
             let txs = db
                 .as_dao::<TransactionDao>()
@@ -759,7 +768,7 @@ impl TransactionSender {
                 me.send(PendingConfirmation {
                     tx_id,
                     tx_hash,
-                    confirmations: 5,
+                    confirmations: required_confirmations,
                 })
                 .await
                 .unwrap();
@@ -885,7 +894,7 @@ async fn process_payment(
                     },
                 )
                 .await?;
-            log::error!("GNT transfer failed: {}", e);
+            log::error!("NGNT transfer failed: {}", e);
             return Err(e);
         }
     }

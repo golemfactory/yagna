@@ -25,7 +25,8 @@ mod local {
             .bind_with_processor(register_account)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
-            .bind_with_processor(get_status);
+            .bind_with_processor(get_status)
+            .bind_with_processor(get_accounts);
         log::debug!("Successfully bound payment private service to service bus");
     }
 
@@ -55,6 +56,15 @@ mod local {
         msg: UnregisterAccount,
     ) -> Result<(), UnregisterAccountError> {
         processor.unregister_account(msg).await
+    }
+
+    async fn get_accounts(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: GetAccounts,
+    ) -> Result<Vec<Account>, GenericError> {
+        Ok(processor.get_accounts().await)
     }
 
     async fn notify_payment(
@@ -405,10 +415,36 @@ mod public {
 
     async fn cancel_invoice(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: CancelInvoice,
     ) -> Result<Ack, CancelError> {
-        unimplemented!() // TODO
+        let invoice_id = msg.invoice_id;
+
+        let dao: InvoiceDao = db.as_dao();
+        let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {
+            Ok(Some(invoice)) => invoice.into(),
+            Ok(None) => return Err(CancelError::ObjectNotFound),
+            Err(e) => return Err(CancelError::ServiceError(e.to_string())),
+        };
+
+        if sender_id != invoice.issuer_id.to_string() {
+            return Err(CancelError::Forbidden);
+        }
+
+        match invoice.status {
+            DocumentStatus::Issued => (),
+            DocumentStatus::Received => (),
+            DocumentStatus::Rejected => (),
+            DocumentStatus::Cancelled => return Ok(Ack {}),
+            DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
+                return Err(CancelError::Conflict)
+            }
+        }
+
+        match dao.cancel(invoice_id, invoice.recipient_id).await {
+            Ok(_) => Ok(Ack {}),
+            Err(e) => Err(CancelError::ServiceError(e.to_string())),
+        }
     }
 
     // *************************** PAYMENT ****************************

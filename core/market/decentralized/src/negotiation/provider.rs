@@ -181,6 +181,17 @@ async fn on_initial_proposal(
     caller: String,
     msg: InitialProposalReceived,
 ) -> Result<(), CounterProposalError> {
+    let proposal_id = msg.proposal.proposal_id.clone();
+    initial_proposal(broker, caller, msg)
+        .await
+        .map_err(|e| CounterProposalError::Remote(e, proposal_id))
+}
+
+async fn initial_proposal(
+    broker: CommonBroker,
+    caller: String,
+    msg: InitialProposalReceived,
+) -> Result<(), RemoteProposalError> {
     let db = broker.db;
     let store = broker.store;
     let notifier = broker.notifier;

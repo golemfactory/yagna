@@ -49,8 +49,8 @@ pub type GNTDriverResult<T> = Result<T, GNTDriverError>;
 const GNT_FAUCET_GAS: u32 = 90000;
 const CREATE_FAUCET_FUNCTION: &str = "create";
 
-pub const PLATFORM_NAME: &'static str = "GNT";
-pub const DRIVER_NAME: &'static str = "gnt";
+pub const PLATFORM_NAME: &'static str = "NGNT";
+pub const DRIVER_NAME: &'static str = "ngnt";
 
 async fn load_active_accounts(tx_sender: Addr<sender::TransactionSender>) -> GNTDriverResult<()> {
     log::info!("Load active accounts on driver start");
@@ -124,6 +124,7 @@ impl GntDriver {
             ethereum_client.clone(),
             gnt_contract.clone(),
             db.clone(),
+            &env,
         );
 
         load_active_accounts(tx_sender.clone()).await?;
@@ -152,7 +153,7 @@ impl GntDriver {
         async move {
             let balance = common::get_gnt_balance(&contract, address).await?;
             if balance < max_testnet_balance {
-                log::info!("Requesting Gnt from Faucet...");
+                log::info!("Requesting NGNT from Faucet...");
                 let gas_price = client.get_gas_price().await?;
                 let mut b = sender::Builder::new(address, gas_price, client.chain_id())
                     .with_tx_type(TxType::Faucet);

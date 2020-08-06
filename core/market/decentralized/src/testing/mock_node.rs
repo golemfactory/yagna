@@ -118,6 +118,11 @@ impl MarketsNetwork {
         Ok(self)
     }
 
+    pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
+        let id = self.get_default_id(node_name);
+        MockNet::default().unregister_node(&id.identity)
+    }
+
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
         let market = Arc::new(MarketService::new(&db)?);

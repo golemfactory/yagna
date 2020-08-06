@@ -27,7 +27,7 @@ use ya_service_bus::typed as bus;
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
-    Gnt,
+    Ngnt,
 }
 
 impl FromStr for Driver {
@@ -36,7 +36,7 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "gnt" => Ok(Driver::Gnt),
+            "ngnt" => Ok(Driver::Ngnt),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -46,7 +46,7 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Gnt => write!(f, "gnt"),
+            Driver::Ngnt => write!(f, "ngnt"),
         }
     }
 }
@@ -172,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
             start_dummy_driver().await?;
             DUMMY_DRIVER_NAME
         }
-        Driver::Gnt => {
+        Driver::Ngnt => {
             start_gnt_driver(&db, requestor_account).await?;
             GNT_DRIVER_NAME
         }

@@ -19,7 +19,7 @@ It is rather straightforward and minimal:
   * requires `golem.srv.comp.expiration` to be set
   * if provided (via env or CLI) sets also `golem.node.debug.subnet`
 *  properties:
-  * linear pricing (see sample below: 0.01 GNT/sec + 1.2 GNT/CPUsec + 1.5 GNT const)
+  * linear pricing (see sample below: 0.01 NGNT/sec + 1.2 NGNT/CPUsec + 1.5 NGNT const)
   * hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
   * node name set via env or CLI
   * runtime (sample below: wasmtime)
@@ -198,9 +198,9 @@ Name:               default
 ExeUnit:            wasmtime
 Pricing model:      linear
 Coefficients:
-    Duration        0.1 GNT
-    CPU             0.2 GNT
-    Init price      1 GNT
+    Duration        0.1 NGNT
+    CPU             0.2 NGNT
+    Init price        1 NGNT
 
 ```
 
@@ -401,7 +401,7 @@ you can now start Provider Agent.
 
 At first, you need to register provider's payment account:
 ```bash
-cargo run payment init gnt -p
+cargo run payment init ngnt -p
 ```
 
 Then start the Provider Agent:
@@ -445,11 +445,11 @@ APP_KEY=`cargo run app-key create 'requestor-agent'`
 sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
 ```
 
-#### 3. Get some ETH and GNT
+#### 3. Get some ETH and NGNT
 1. We need to acquire funds from faucet on testnet (rinkeby).
 This can last a little bit long. Retry if not succeed at first.
 ```bash
-cargo run payment init gnt -r
+cargo run payment init ngnt -r
 ```
 2. Check if you got credit on your account:
 ```bash
