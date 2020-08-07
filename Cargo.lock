@@ -5519,6 +5519,7 @@ dependencies = [
  "notify",
  "num_cpus",
  "path-clean",
+ "rand 0.7.3",
  "semver",
  "serde",
  "serde_json",
@@ -5809,7 +5810,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "actix-rt",
  "actix-service",

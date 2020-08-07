@@ -82,10 +82,10 @@ impl Negotiator for LimitAgreementsNegotiator {
             Ok(ProposalResponse::AcceptProposal)
         } else {
             log::info!(
-                "Negotiator: Reject proposal [{:?}] due to limit.",
+                "Negotiator: Postpone proposal [{:?}] due to limit.",
                 demand.proposal_id
             );
-            Ok(ProposalResponse::RejectProposal)
+            Ok(ProposalResponse::PostponeProposal)
         }
     }
 

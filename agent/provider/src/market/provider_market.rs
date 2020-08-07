@@ -1,7 +1,9 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
+use chrono::{Duration, NaiveDateTime};
 use derive_more::Display;
 use futures::prelude::*;
+use rand::seq::IteratorRandom;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -72,6 +74,10 @@ struct OfferSubscription {
 }
 
 #[derive(Message)]
+#[rtype(result = "()")]
+struct ReSubscribe(String);
+
+#[derive(Message)]
 #[rtype(result = "Result<ProposalResponse>")]
 struct GotProposal {
     subscription: OfferSubscription,
@@ -92,9 +98,22 @@ struct AgreementFinalized {
     result: AgreementResult,
 }
 
+#[derive(Message)]
+#[rtype(result = "()")]
+struct PostponeNegotiation {
+    subscription_id: String,
+    proposal: Proposal,
+}
+
+#[derive(Message)]
+#[rtype(result = "bool")]
+struct IsNegotiationPostponed(String);
+
 // =========================================== //
 // ProviderMarket declaration
 // =========================================== //
+
+const POSTPONED_NEGOTIATION_TIMEOUT_S: i64 = 3600 * 24;
 
 /// Manages market api communication and forwards proposal to implementation of market strategy.
 // Outputing empty string for logfn macro purposes
@@ -104,6 +123,7 @@ pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
     market_api: Arc<MarketProviderApi>,
     offer_subscriptions: HashMap<String, OfferSubscription>,
+    postponed_negotiations: HashMap<String, (Proposal, NaiveDateTime)>,
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<AgreementApproved>,
@@ -119,6 +139,7 @@ impl ProviderMarket {
             market_api: Arc::new(market_api),
             negotiator: create_negotiator(negotiator_type),
             offer_subscriptions: HashMap::new(),
+            postponed_negotiations: HashMap::new(),
             agreement_signed_signal: SignalSlot::<AgreementApproved>::new(),
         };
     }
@@ -230,17 +251,37 @@ impl ProviderMarket {
     ) -> Result<()> {
         let proposal_id = demand.proposal_id()?;
         let subscription_id = subscription.subscription_id.clone();
+        let issuer_id = demand.issuer_id()?;
         let offer = subscription.offer.clone();
 
         log::info!(
             "Got proposal [{}] from Requestor [{}] for subscription [{}].",
             proposal_id,
-            demand.issuer_id()?,
+            issuer_id,
             subscription.preset.name,
         );
 
+        if myself
+            .send(IsNegotiationPostponed(subscription_id.clone()))
+            .await?
+        {
+            log::info!(
+                "Negotiation for Requestor [{}] and subscription [{}] is postponed.",
+                issuer_id,
+                subscription.preset.name,
+            );
+            // update a postponed negotiation with the latest proposal
+            myself
+                .send(PostponeNegotiation {
+                    subscription_id: subscription_id.clone(),
+                    proposal: demand.clone(),
+                })
+                .await?;
+            return Ok(());
+        }
+
         match myself
-            .send(GotProposal::new(subscription, demand.clone()))
+            .send(GotProposal::new(subscription.clone(), demand.clone()))
             .await?
         {
             Ok(action) => match action {
@@ -253,6 +294,14 @@ impl ProviderMarket {
                     let offer = demand.counter_offer(offer)?;
                     market_api
                         .counter_proposal(&offer, &subscription_id)
+                        .await?;
+                }
+                ProposalResponse::PostponeProposal => {
+                    myself
+                        .send(PostponeNegotiation {
+                            subscription_id,
+                            proposal: demand.clone(),
+                        })
                         .await?;
                 }
                 ProposalResponse::IgnoreProposal => {
@@ -449,10 +498,6 @@ async fn run_step(
     Ok(())
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
-struct ReSubscribe(String);
-
 impl Handler<ReSubscribe> for ProviderMarket {
     type Result = ();
 
@@ -506,6 +551,25 @@ impl Handler<ReSubscribe> for ProviderMarket {
                 }),
             );
         }
+    }
+}
+
+impl Handler<PostponeNegotiation> for ProviderMarket {
+    type Result = ();
+
+    fn handle(&mut self, msg: PostponeNegotiation, _: &mut Self::Context) -> Self::Result {
+        self.postponed_negotiations.insert(
+            msg.subscription_id,
+            (msg.proposal, chrono::Utc::now().naive_utc()),
+        );
+    }
+}
+
+impl Handler<IsNegotiationPostponed> for ProviderMarket {
+    type Result = bool;
+
+    fn handle(&mut self, msg: IsNegotiationPostponed, _: &mut Self::Context) -> Self::Result {
+        self.postponed_negotiations.contains_key(&msg.0)
     }
 }
 
@@ -583,7 +647,7 @@ impl Handler<CreateOffer> for ProviderMarket {
 impl Handler<AgreementFinalized> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: AgreementFinalized, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: AgreementFinalized, ctx: &mut Context<Self>) -> Self::Result {
         if let Err(error) = self
             .negotiator
             .agreement_finalized(&msg.agreement_id, msg.result)
@@ -594,6 +658,55 @@ impl Handler<AgreementFinalized> for ProviderMarket {
                 error,
             );
         }
+
+        let myself = ctx.address();
+        let market_api = self.market_api.clone();
+        let subscriptions = self.offer_subscriptions.clone();
+        let negotiations = std::mem::replace(&mut self.postponed_negotiations, HashMap::new());
+
+        let fut = async move {
+            let dt = Duration::seconds(POSTPONED_NEGOTIATION_TIMEOUT_S);
+            let iter = negotiations.into_iter().choose(&mut rand::thread_rng());
+
+            for (subscription_id, (proposal, date_time)) in iter {
+                let now = chrono::Utc::now().naive_utc();
+                if now - date_time > dt {
+                    log::info!(
+                        "Postponed negotiation for subscription [{}] timed out.",
+                        subscription_id
+                    );
+                    continue;
+                }
+
+                let subscription = match subscriptions.get(&subscription_id) {
+                    Some(sub) => sub.clone(),
+                    None => {
+                        log::info!(
+                            "Ignoring postponed negotiation: subscription [{}] no longer exists.",
+                            subscription_id
+                        );
+                        continue;
+                    }
+                };
+
+                if let Err(error) = Self::process_proposal(
+                    myself.clone(),
+                    market_api.clone(),
+                    subscription,
+                    &proposal,
+                )
+                .await
+                {
+                    log::error!(
+                        "Error processing postponed negotiation for subscription [{}]: {:?}",
+                        subscription_id,
+                        error
+                    )
+                }
+            }
+        };
+        ctx.spawn(fut.into_actor(self));
+
         // Don't forward error.
         ActorResponse::reply(Ok(()))
     }

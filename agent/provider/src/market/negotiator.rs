@@ -17,7 +17,8 @@ pub enum ProposalResponse {
     },
     AcceptProposal,
     RejectProposal,
-    ///< Don't send any message to requestor. Could be useful to wait for other offers.
+    PostponeProposal,
+    /// Stop sending messages to the requestor. Could be useful to wait for other offers.
     IgnoreProposal,
 }
 
