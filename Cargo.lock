@@ -1906,6 +1906,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
+name = "graphene_api"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/graphene-rust.git?rev=25e178d9ac6525470d9b089031a9ce88df347895#25e178d9ac6525470d9b089031a9ce88df347895"
+dependencies = [
+ "anyhow",
+ "base64 0.11.0",
+ "byteorder",
+ "hex",
+ "http 0.2.1",
+ "hyper 0.13.7",
+ "hyper-tls 0.4.3",
+ "serde",
+ "serde_json",
+ "sgx_types",
+ "thiserror",
+ "tokio 0.2.21",
+]
+
+[[package]]
 name = "h2"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4064,6 +4083,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sgx_types"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d124789bcc688f5e17f1267dee6ca3d2c871839240cde20dda0134417458245c"
+
+[[package]]
 name = "sha1"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6155,6 +6180,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-sgx"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "graphene_api",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-transfer"
 version = "0.1.0"
 dependencies = [
@@ -6260,6 +6296,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-sgx",
  "ya-utils-path",
 ]
 
