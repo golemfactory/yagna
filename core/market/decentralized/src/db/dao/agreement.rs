@@ -7,6 +7,12 @@ use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
 use crate::db::{DbError, DbResult};
 
+const AGREEMENT_CLEANUP_GRACE_TIME_ENV_VAR: &str = "YAGNA_MARKET_AGREEMENT_GRACE_TIME";
+const AGREEMENT_CLEANUP_GRACE_TIME_DEFAULT: u64 = 90; // days
+const AGREEMENT_CLEANUP_GRACE_TIME_MIN: u64 = 30; // days
+
+diesel::sql_function!(fn datetime(timestring:diesel::sql_types::Text, modifier:diesel::sql_types::Text) -> diesel::sql_types::Timestamp);
+
 pub struct AgreementDao<'c> {
     pool: &'c PoolType,
 }
@@ -94,11 +100,18 @@ impl<'c> AgreementDao<'c> {
     }
 
     pub async fn clean(&self) -> DbResult<()> {
-        // FIXME use grace time from config file
+        // FIXME use grace time from config file when #460 is merged
         log::debug!("Clean market agreements: start");
+        let interval_days = std::env::var(AGREEMENT_CLEANUP_GRACE_TIME_ENV_VAR)
+            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
+            .unwrap_or(AGREEMENT_CLEANUP_GRACE_TIME_DEFAULT)
+            .max(AGREEMENT_CLEANUP_GRACE_TIME_MIN);
         let num_deleted = do_with_transaction(self.pool, move |conn| {
-            // let nd = diesel::delete(dsl::market_agreement.filter(dsl::valid_to.lt(sql_now - 90 days))).execute(conn)?;
-            let nd = 0;
+            let nd = diesel::delete(
+                dsl::market_agreement
+                    .filter(dsl::valid_to.lt(datetime("NOW", format!("-{} days", interval_days)))),
+            )
+            .execute(conn)?;
             Result::<usize, DbError>::Ok(nd)
         })
         .await?;
