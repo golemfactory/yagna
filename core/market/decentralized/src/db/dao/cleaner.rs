@@ -30,7 +30,8 @@ async fn clean(db: DbExecutor) {
 }
 
 pub async fn clean_forever(db: DbExecutor) {
-    let mut interval = time::interval(Duration::from_secs(3600));
+    // TODO: Use value from market config once #460 is merged
+    let mut interval = time::interval(Duration::from_secs(3600 * 24));
     loop {
         interval.tick().await;
         log::debug!("Market database cleaner job started");
