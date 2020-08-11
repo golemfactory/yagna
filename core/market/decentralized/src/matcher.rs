@@ -66,12 +66,9 @@ impl Matcher {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), MatcherInitError> {
-        Ok(self
-            .discovery
-            .bind_gsb(public_prefix, private_prefix)
-            .await?)
+        Ok(self.discovery.bind_gsb(public_prefix, local_prefix).await?)
     }
 
     // =========================================== //
