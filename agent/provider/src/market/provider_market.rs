@@ -3,7 +3,7 @@ use anyhow::{anyhow, Error, Result};
 use chrono::{Duration, NaiveDateTime};
 use derive_more::Display;
 use futures::prelude::*;
-use rand::seq::IteratorRandom;
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -113,7 +113,7 @@ struct IsNegotiationPostponed(String);
 // ProviderMarket declaration
 // =========================================== //
 
-const POSTPONED_NEGOTIATION_TIMEOUT_S: i64 = 3600 * 24;
+const NEGOTIATION_TTL_S: i64 = 3600 * 24;
 
 /// Manages market api communication and forwards proposal to implementation of market strategy.
 // Outputing empty string for logfn macro purposes
@@ -251,13 +251,13 @@ impl ProviderMarket {
     ) -> Result<()> {
         let proposal_id = demand.proposal_id()?;
         let subscription_id = subscription.subscription_id.clone();
-        let issuer_id = demand.issuer_id()?;
+        let requestor_id = demand.issuer_id()?;
         let offer = subscription.offer.clone();
 
         log::info!(
-            "Got proposal [{}] from Requestor [{}] for subscription [{}].",
+            "Processing proposal [{}] from Requestor [{}] for subscription [{}].",
             proposal_id,
-            issuer_id,
+            requestor_id,
             subscription.preset.name,
         );
 
@@ -266,8 +266,8 @@ impl ProviderMarket {
             .await?
         {
             log::info!(
-                "Negotiation for Requestor [{}] and subscription [{}] is postponed.",
-                issuer_id,
+                "Negotiation with Requestor [{}] for subscription [{}] was postponed.",
+                requestor_id,
                 subscription.preset.name,
             );
             // update a postponed negotiation with the latest proposal
@@ -659,35 +659,43 @@ impl Handler<AgreementFinalized> for ProviderMarket {
             );
         }
 
-        let myself = ctx.address();
-        let market_api = self.market_api.clone();
-        let subscriptions = self.offer_subscriptions.clone();
-        let negotiations = std::mem::replace(&mut self.postponed_negotiations, HashMap::new());
-
-        let fut = async move {
-            let dt = Duration::seconds(POSTPONED_NEGOTIATION_TIMEOUT_S);
-            let iter = negotiations.into_iter().choose(&mut rand::thread_rng());
-
-            for (subscription_id, (proposal, date_time)) in iter {
-                let now = chrono::Utc::now().naive_utc();
-                if now - date_time > dt {
+        let now = chrono::Utc::now().naive_utc();
+        let ttl = Duration::seconds(NEGOTIATION_TTL_S);
+        let mut negotiations = std::mem::replace(&mut self.postponed_negotiations, HashMap::new())
+            .into_iter()
+            .filter_map(|(subscription_id, (proposal, date_time))| {
+                if now - date_time > ttl {
                     log::info!(
                         "Postponed negotiation for subscription [{}] timed out.",
                         subscription_id
                     );
-                    continue;
+                    return None;
                 }
-
-                let subscription = match subscriptions.get(&subscription_id) {
+                let subscription = match self.offer_subscriptions.get(&subscription_id) {
                     Some(sub) => sub.clone(),
                     None => {
                         log::info!(
                             "Ignoring postponed negotiation: subscription [{}] no longer exists.",
                             subscription_id
                         );
-                        continue;
+                        return None;
                     }
                 };
+                Some((subscription, proposal))
+            })
+            .collect::<Vec<_>>();
+        negotiations.shuffle(&mut rand::thread_rng());
+
+        let myself = ctx.address();
+        let market_api = self.market_api.clone();
+        let fut = async move {
+            for (subscription, proposal) in negotiations {
+                let subscription_id = subscription.subscription_id.clone();
+                log::info!(
+                    "Resuming postponed negotiation of Proposal [{:?}] for subscription [{}].",
+                    proposal.proposal_id(),
+                    subscription_id
+                );
 
                 if let Err(error) = Self::process_proposal(
                     myself.clone(),
