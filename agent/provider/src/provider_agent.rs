@@ -106,13 +106,8 @@ impl ProviderAgent {
     }
 
     fn build_constraints(subnet: Option<String>) -> anyhow::Result<String> {
-        let now = chrono::Utc::now();
-        let min_expiration = now + chrono::Duration::minutes(5);
-        let max_expiration = now + chrono::Duration::minutes(30);
-        let mut cnts = constraints![
-            "golem.srv.comp.expiration" > min_expiration.timestamp_millis(),
-            "golem.srv.comp.expiration" < max_expiration.timestamp_millis(),
-        ];
+        let mut cnts =
+            constraints!["golem.srv.comp.expiration" > chrono::Utc::now().timestamp_millis(),];
         if let Some(subnet) = subnet {
             cnts = cnts.and(constraints!["golem.node.debug.subnet" == subnet,]);
         }
