@@ -49,7 +49,7 @@ use data_dir::DataDir;
 ///
 /// By running this software you declare that you have read,
 /// understood and hereby accept the disclaimer and
-/// privacy warning found at https://app.gitbook.com/@golem-network/s/golem-sdk-docs-test/terms
+/// privacy warning found at https://golem-network.gitbook.io/golem-sdk-docs-test/see-also/terms
 ///
 struct CliArgs {
     /// Service data dir
@@ -76,6 +76,11 @@ struct CliArgs {
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
+
+    /// Accept the disclaimer and privacy warning found at
+    /// {n}https://golem-network.gitbook.io/golem-sdk-docs-test/see-also/terms
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    accept_terms: bool,
 
     /// Enter interactive mode
     #[structopt(short, long)]
@@ -120,6 +125,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
+            accept_terms: args.accept_terms,
             interactive: args.interactive,
         })
     }
@@ -229,13 +235,12 @@ struct ServiceCommandOpts {
 
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        if !ctx.accept_terms {
+            prompt_terms()?;
+        }
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
                 let name = clap::crate_name!();
-                log::warn!(
-                    r#"By running this software you declare that you have read, understood and hereby accept the disclaimer
- and privacy warning found at https://app.gitbook.com/@golem-network/s/golem-sdk-docs-test/terms"#
-                );
                 log::info!("Starting {} service!", name);
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
@@ -265,6 +270,36 @@ impl ServiceCommand {
                 ))?)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
+        }
+    }
+}
+
+fn prompt_terms() -> Result<()> {
+    use std::io::Write;
+
+    let header = r#"
+By running this software you declare that you have read, understood
+and hereby accept the disclaimer and privacy warning found at
+https://golem-network.gitbook.io/golem-sdk-docs-test/see-also/terms
+
+"#;
+
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+
+    stdout.write(header.as_bytes())?;
+    stdout.flush()?;
+
+    loop {
+        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        stdout.flush()?;
+
+        let mut buffer = String::new();
+        stdin.read_line(&mut buffer)?;
+        match buffer.to_lowercase().trim() {
+            "yes" => return Ok(()),
+            "no" => std::process::exit(1),
+            _ => (),
         }
     }
 }
