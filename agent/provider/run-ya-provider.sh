@@ -111,20 +111,51 @@ main() {
 
     local prov_dir="ya-prov"
     mkdir -p "$prov_dir"
-    if [[ ! -f "$prov_dir/.env" ]]; then
+    ensure cd "$prov_dir"
+
+    if [[ ! -f ".env" ]]; then
         say "Configure ya-provider"
 
         ensure wget https://raw.githubusercontent.com/golemfactory/yagna/v0.3.3-alpha.0/.env-template
-        cp .env-template "$prov_dir/.env"
+        cp .env-template .env
 	      ensure sed \
             -e "s|#GSB_URL=tcp://127.0.0.1:7464|GSB_URL=tcp://127.0.0.1:17474|" \
             -e "s|#YAGNA_API_URL=http://127.0.0.1:7465|YAGNA_API_URL=http://127.0.0.1:17475|" \
-	          -e "s|__YOUR_NODE_NAME_GOES_HERE__|${USER}@${HOSTNAME}-ya-mkt-dece|" \
-	          -e "s|#SUBNET=1234567890|SUBNET=testnet|" \
-            -i.bckp "$prov_dir/.env"
+	          -e "s|__YOUR_NODE_NAME_GOES_HERE__|${USER}@${HOSTNAME}-ya-mkt-fwd|" \
+	          -e "s|#SUBNET=1234567890|SUBNET=testnet2|" \
+            -i.bckp .env
     fi
 
-    ensure cd "$prov_dir"
+cat > presets.json << EOF
+{
+  "active": [
+    "default",
+    "vm"
+  ],
+  "presets": [
+    {
+      "name": "vm",
+      "exeunit-name": "vm",
+      "pricing-model": "linear",
+      "usage-coeffs": {
+        "duration": 0.001,
+        "cpu": 0.002,
+        "initial": 0.0
+      }
+    },
+    {
+      "name": "default",
+      "exeunit-name": "wasmtime",
+      "pricing-model": "linear",
+      "usage-coeffs": {
+        "initial": 1.0,
+        "cpu": 1.0,
+        "duration": 0.1
+      }
+    }
+  ]
+}
+EOF
 
     local pid_file="yagna.pid"
     if [[ -f "$pid_file" ]]; then
