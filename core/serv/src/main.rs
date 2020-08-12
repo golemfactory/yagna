@@ -279,7 +279,7 @@ fn prompt_terms() -> Result<()> {
     let header = r#"
 By running this software you declare that you have read, understood
 and hereby accept the disclaimer and privacy warning found at
-https://app.gitbook.com/@golem-network/s/golem-sdk-docs-test/terms
+https://golem-network.gitbook.io/golem-sdk-docs-test/see-also/terms
 
 "#;
 
