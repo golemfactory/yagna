@@ -49,7 +49,7 @@ use data_dir::DataDir;
 ///
 /// By running this software you declare that you have read,
 /// understood and hereby accept the disclaimer and
-/// privacy warning found at https://app.gitbook.com/@golem-network/s/golem-sdk-docs-test/terms
+/// privacy warning found at https://golem-network.gitbook.io/golem-sdk-docs-test/see-also/terms
 ///
 struct CliArgs {
     /// Service data dir
@@ -78,7 +78,7 @@ struct CliArgs {
     json: bool,
 
     /// Accept the disclaimer and privacy warning found at
-    /// {n}https://app.gitbook.com/@golem-network/s/golem-sdk-docs-test/terms
+    /// {n}https://golem-network.gitbook.io/golem-sdk-docs-test/see-also/terms
     #[structopt(long, set = clap::ArgSettings::Global)]
     accept_terms: bool,
 
