@@ -157,6 +157,7 @@ impl ServiceContext {
             Self::make_entry::<MarketService>(path, "market")?,
             Self::make_entry::<ActivityService>(path, "activity")?,
             Self::make_entry::<PaymentService>(path, "payment")?,
+            Self::make_entry::<PaymentDriverService>(path, "gnt-driver")?,
         ]
         .iter()
         .cloned()
