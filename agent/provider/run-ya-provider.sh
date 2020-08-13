@@ -122,7 +122,7 @@ main() {
             -e "s|#GSB_URL=tcp://127.0.0.1:7464|GSB_URL=tcp://127.0.0.1:17474|" \
             -e "s|#YAGNA_API_URL=http://127.0.0.1:7465|YAGNA_API_URL=http://127.0.0.1:17475|" \
 	          -e "s|__YOUR_NODE_NAME_GOES_HERE__|${USER}@${HOSTNAME}-ya-mkt-fwd|" \
-	          -e "s|#SUBNET=1234567890|SUBNET=testnet2|" \
+	          -e "s|#SUBNET=1234567890|SUBNET=testnet|" \
             -i.bckp .env
     fi
 
