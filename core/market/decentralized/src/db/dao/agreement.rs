@@ -1,23 +1,20 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
-use diesel::sql_types;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
+use crate::db::dao::functions::{coalesce_id, datetime};
 use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
 use crate::db::schema::market_negotiation::dsl as negotiation_dsl;
 use crate::db::{DbError, DbResult};
+use crate::market::EnvConfig;
 
-const AGREEMENT_CLEANUP_GRACE_TIME_ENV_VAR: &str = "YAGNA_MARKET_AGREEMENT_GRACE_TIME";
-const AGREEMENT_CLEANUP_GRACE_TIME_DEFAULT: u64 = 90; // days
-const AGREEMENT_CLEANUP_GRACE_TIME_MIN: u64 = 30; // days
-
-diesel::sql_function!(fn datetime(timestring:sql_types::Text, modifier:sql_types::Text) -> sql_types::Timestamp);
-diesel::sql_function!(
-    #[sql_name = "coalesce"]
-    fn coalesce_id(column: sql_types::Nullable<sql_types::Text>, default: sql_types::Text) -> sql_types::Text
-);
+const AGREEMENT_CONFIG: EnvConfig<'static, u64> = EnvConfig {
+    name: "YAGNA_MARKET_AGREEMENT_GRACE_TIME",
+    default: 90, // days
+    min: 30,     // days
+};
 
 pub struct AgreementDao<'c> {
     pool: &'c PoolType,
@@ -108,10 +105,10 @@ impl<'c> AgreementDao<'c> {
     pub async fn clean(&self) -> DbResult<()> {
         // FIXME use grace time from config file when #460 is merged
         log::debug!("Clean market agreements: start");
-        let interval_days = std::env::var(AGREEMENT_CLEANUP_GRACE_TIME_ENV_VAR)
+        let interval_days = std::env::var(AGREEMENT_CONFIG.name)
             .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
-            .unwrap_or(AGREEMENT_CLEANUP_GRACE_TIME_DEFAULT)
-            .max(AGREEMENT_CLEANUP_GRACE_TIME_MIN);
+            .unwrap_or(AGREEMENT_CONFIG.default)
+            .max(AGREEMENT_CONFIG.min);
         let num_deleted = do_with_transaction(self.pool, move |conn| {
             let nd = diesel::delete(
                 dsl::market_agreement

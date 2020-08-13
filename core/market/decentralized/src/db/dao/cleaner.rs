@@ -1,4 +1,4 @@
-use crate::db::dao::{AgreementDao, DemandDao, OfferDao, ProposalDao};
+use crate::db::dao::{AgreementDao, DemandDao, EventsDao, OfferDao, ProposalDao};
 use futures::join;
 use std::time::Duration;
 use tokio::time;
@@ -6,6 +6,7 @@ use ya_persistence::executor::DbExecutor;
 
 async fn clean(db: DbExecutor) {
     let demand_db = db.clone();
+    let events_db = db.clone();
     let offer_db = db.clone();
     let agreement_db = db.clone();
     let proposal_db = db.clone();
@@ -15,12 +16,9 @@ async fn clean(db: DbExecutor) {
         async move { offer_db.as_dao::<OfferDao>().clean().await },
         async move { agreement_db.as_dao::<AgreementDao>().clean().await },
         async move { proposal_db.as_dao::<ProposalDao>().clean().await },
-        // async move { events_db.as_dao::<EventsDao>().clean().await },
+        async move { events_db.as_dao::<EventsDao>().clean().await },
     );
-    let v_results = vec![
-        results.0, results.1, results.2, results.3,
-        // results.4,
-    ];
+    let v_results = vec![results.0, results.1, results.2, results.3, results.4];
     for db_result in v_results.into_iter() {
         match db_result {
             Err(e) => log::error!("Market database cleaner error: {}", e),

@@ -6,10 +6,18 @@ use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::db::dao::demand::{demand_status, DemandState};
+use crate::db::dao::functions::datetime;
 use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, SubscriptionId};
 use crate::db::schema::market_event::dsl;
 use crate::db::{DbError, DbResult};
+use crate::market::EnvConfig;
+
+const EVENT_CONFIG: EnvConfig<'static, u64> = EnvConfig {
+    name: "YAGNA_MARKET_EVENT_GRACE_TIME",
+    default: 1, // days
+    min: 1,     // days
+};
 
 #[derive(Error, Debug)]
 pub enum TakeEventsError {
@@ -90,6 +98,28 @@ impl<'c> EventsDao<'c> {
             Ok(())
         })
         .await
+    }
+
+    pub async fn clean(&self) -> DbResult<()> {
+        log::debug!("Clean market events: start");
+        let interval_days = std::env::var(EVENT_CONFIG.name)
+            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
+            .unwrap_or(EVENT_CONFIG.default)
+            .max(EVENT_CONFIG.min);
+        let num_deleted = do_with_transaction(self.pool, move |conn| {
+            let nd = diesel::delete(
+                dsl::market_event
+                    .filter(dsl::timestamp.lt(datetime("NOW", format!("-{} days", interval_days)))),
+            )
+            .execute(conn)?;
+            Result::<usize, DbError>::Ok(nd)
+        })
+        .await?;
+        if num_deleted > 0 {
+            log::info!("Clean market events: {} cleaned", num_deleted);
+        }
+        log::debug!("Clean market events: done");
+        Ok(())
     }
 }
 

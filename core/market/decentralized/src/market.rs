@@ -22,6 +22,12 @@ use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
 
+pub struct EnvConfig<'a, T> {
+    pub name: &'a str,
+    pub default: T,
+    pub min: T,
+}
+
 #[derive(Error, Debug)]
 pub enum MarketError {
     #[error(transparent)]

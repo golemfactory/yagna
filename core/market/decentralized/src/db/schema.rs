@@ -47,7 +47,6 @@ table! {
         id -> Integer,
         subscription_id -> Text,
         timestamp -> Timestamp,
-        // remove after 24h
         event_type -> Integer,
         artifact_id -> Text,
     }
