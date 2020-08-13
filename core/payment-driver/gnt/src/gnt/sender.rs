@@ -638,8 +638,8 @@ impl TransactionSender {
                             // This number then increases as the information is added to the first block.
                             let confirmations = block_number - tx_block_number + 1;
                             log::info!(
-                                "tx_id={:?}, confirmations={}",
-                                pending_confirmation.tx_id,
+                                "tx_hash={:?}, confirmations={}",
+                                pending_confirmation.tx_hash,
                                 confirmations
                             );
                             if confirmations >= pending_confirmation.confirmations.into() {
@@ -717,7 +717,7 @@ impl TransactionSender {
         .into_actor(self)
         .then(|r, act, _ctx| {
             if let Some((tx_id, confirmation)) = r {
-                log::info!("tx_id={}, processed", &tx_id);
+                log::info!("tx_hash={}, processed", &confirmation.transaction_hash);
                 if let Some(sender) = act.receipt_queue.remove(&tx_id) {
                     if let Err(_e) = sender.send(confirmation) {
                         log::warn!("send tx_id={}, receipt failed", tx_id);
