@@ -7,6 +7,7 @@ use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao,
 
 use crate::db::model::{Demand, SubscriptionId};
 use crate::db::schema::market_demand::dsl;
+use crate::db::schema::market_negotiation::dsl as negotiation_dsl;
 use crate::db::{DbError, DbResult};
 
 #[allow(unused)]
@@ -83,7 +84,6 @@ impl<'c> DemandDao<'c> {
     }
 
     pub async fn clean(&self) -> DbResult<()> {
-        // FIXME clean negotiations also
         log::debug!("Clean market demands: start");
         let num_deleted = do_with_transaction(self.pool, move |conn| {
             let nd = diesel::delete(dsl::market_demand.filter(dsl::expiration_ts.lt(sql_now)))
@@ -95,6 +95,24 @@ impl<'c> DemandDao<'c> {
             log::info!("Clean market demands: {} cleaned", num_deleted);
         }
         log::debug!("Clean market demands: done");
+        self.clean_negotiations().await?;
+        Ok(())
+    }
+
+    pub async fn clean_negotiations(&self) -> DbResult<()> {
+        log::debug!("Clean market demands negotiations: start");
+        let num_deleted = do_with_transaction(self.pool, move |conn| {
+            let nd = diesel::delete(negotiation_dsl::market_negotiation)
+                .filter(negotiation_dsl::agreement_id.is_null())
+                .filter(negotiation_dsl::demand_id.ne_all(dsl::market_demand.select(dsl::id)))
+                .execute(conn)?;
+            Result::<usize, DbError>::Ok(nd)
+        })
+        .await?;
+        if num_deleted > 0 {
+            log::info!("Clean market demands negotiations: {} cleaned", num_deleted);
+        }
+        log::debug!("Clean market demands negotiations: done");
         Ok(())
     }
 }
