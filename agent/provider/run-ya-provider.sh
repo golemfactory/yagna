@@ -181,6 +181,7 @@ run() {
         say "Yagna service killed."
     fi
 
+    # TODO: kill service when this script exits
     say "Starting Yagna Service... (stdout & err in $(pwd)/yagna.log)"
     RUST_LOG=debug ../usr/bin/yagna --accept-terms service run >> yagna.log 2>&1 &
     local pid="$!"
