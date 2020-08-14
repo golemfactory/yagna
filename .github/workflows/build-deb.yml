@@ -40,13 +40,13 @@ jobs:
         run: docker run build-deb-router bash -c "cat /src/target/debian/ya-sb-router*.deb" > ya-sb-router.deb
 
       - name: Upload .deb
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2
         with:
           name: yagna-${{ steps.vars.outputs.yagna_deb_version }}.deb
           path: yagna.deb
 
       - name: Upload .deb with router
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2
         with:
           name: ya-sb-router-${{ steps.vars.outputs.router_deb_version }}.deb
           path: ya-sb-router.deb
