@@ -9,6 +9,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::time::Duration;
 
 #[derive(StructOpt)]
+#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 struct Args {
     #[structopt(flatten)]
     command: Command,
