@@ -208,4 +208,4 @@ presets_json() {
 EOF
 }
 
-main "$@"
+main "$@" 2>&1 | tee "/tmp/$0.log"
