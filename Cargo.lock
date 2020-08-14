@@ -5809,7 +5809,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.3.3-alpha.0"
+version = "0.3.3-alpha.2"
 dependencies = [
  "actix-rt",
  "actix-service",
