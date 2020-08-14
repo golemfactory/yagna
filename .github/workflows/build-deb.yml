@@ -41,11 +41,11 @@ jobs:
       - name: Upload .deb
         uses: actions/upload-artifact@v1
         with:
-          name: yagna.deb
+          name: yagna-${{ steps.vars.outputs.yagna_deb_version }}.deb
           path: yagna.deb
 
       - name: Upload .deb with router
         uses: actions/upload-artifact@v1
         with:
-          name: ya-sb-router.deb
+          name: ya-sb-router-${{ steps.vars.outputs.router_deb_version }}.deb
           path: ya-sb-router.deb
