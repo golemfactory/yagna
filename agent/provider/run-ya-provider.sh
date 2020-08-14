@@ -66,11 +66,16 @@ main() {
     fi
 
 
+    local testnet="testnet"
     local deb_file
-    case $1 in
-        -h|--help) usage; exit 0 ;;
-        *) deb_file="$1"; shift ;;
-    esac
+
+    while [[ "$#" -gt 0 ]]; do
+        case $1 in
+            -h|--help) usage; exit 0 ;;
+            -t) testnet="$2"; shift; shift ;;
+            *) deb_file="$1"; shift; break ;;
+        esac
+    done
 
     if [[ "$#" -gt 0 ]]; then
       usage
@@ -98,7 +103,7 @@ main() {
 
     if [[ ! -f usr/lib/yagna/plugins/ya-runtime-vm.json ]]; then
     	  say "Install VM runtime"
-        ensure wget https://github.com/golemfactory/ya-runtime-vm/releases/download/vm-poc/ya-runtime-vm_0.1.0_amd64.deb
+        ensure wget https://github.com/golemfactory/ya-runtime-vm/releases/download/pre-rel-1/ya-runtime-vm_0.1.0_amd64.deb
         dpkg-deb -R ya-runtime-vm_0.1.0_amd64.deb .
         rm -rf DEBIAN
     fi
@@ -113,49 +118,18 @@ main() {
     mkdir -p "$prov_dir"
     ensure cd "$prov_dir"
 
-    if [[ ! -f ".env" ]]; then
+    if [[ ! -f .env ]]; then
         say "Configure ya-provider"
 
-        ensure wget https://raw.githubusercontent.com/golemfactory/yagna/v0.3.3-alpha.0/.env-template
-        cp .env-template .env
+        ensure wget https://raw.githubusercontent.com/golemfactory/yagna/release/vm-poc/.env-template
 	      ensure sed \
-            -e "s|#GSB_URL=tcp://127.0.0.1:7464|GSB_URL=tcp://127.0.0.1:17474|" \
-            -e "s|#YAGNA_API_URL=http://127.0.0.1:7465|YAGNA_API_URL=http://127.0.0.1:17475|" \
-	          -e "s|__YOUR_NODE_NAME_GOES_HERE__|${USER}@${HOSTNAME}-ya-mkt-fwd|" \
-	          -e "s|#SUBNET=1234567890|SUBNET=testnet|" \
-            -i.bckp .env
+            -e "s|^#GSB_URL=tcp://127.0.0.1:7464|GSB_URL=tcp://127.0.0.1:17474|" \
+            -e "s|^#YAGNA_API_URL=http://127.0.0.1:7465|YAGNA_API_URL=http://127.0.0.1:17475|" \
+	          -e "s|__YOUR_NODE_NAME_GOES_HERE__|${USER}@${HOSTNAME}-${testnet}|" \
+	          -e "s|EXE_UNIT_PATH=.*|EXE_UNIT_PATH=../usr/lib/yagna/plugins/ya-runtime-*.json|" \
+	          -e "s|#SUBNET=1234567890|SUBNET=${testnet}|" \
+            .env-template > .env
     fi
-
-cat > presets.json << EOF
-{
-  "active": [
-    "default",
-    "vm"
-  ],
-  "presets": [
-    {
-      "name": "vm",
-      "exeunit-name": "vm",
-      "pricing-model": "linear",
-      "usage-coeffs": {
-        "duration": 0.001,
-        "cpu": 0.002,
-        "initial": 0.0
-      }
-    },
-    {
-      "name": "default",
-      "exeunit-name": "wasmtime",
-      "pricing-model": "linear",
-      "usage-coeffs": {
-        "initial": 1.0,
-        "cpu": 1.0,
-        "duration": 0.1
-      }
-    }
-  ]
-}
-EOF
 
     local pid_file="yagna.pid"
     if [[ -f "$pid_file" ]]; then
@@ -169,7 +143,7 @@ EOF
     fi
 
     say "Starting Yagna Service... (stdout & err in yagna.log)"
-    ../usr/bin/yagna service run >> yagna.log 2>&1 &
+    RUST_LOG=debug ../usr/bin/yagna --accept-terms service run >> yagna.log 2>&1 &
     local pid="$!"
     echo "$pid" > "$pid_file"
     sleep 2s # wait a bit for service to start fully
@@ -188,13 +162,50 @@ EOF
     say "Register provider's payment account"
     ensure ../usr/bin/yagna payment init -p
 
-    sleep 10s # wait for other nodes (optional)
+    # wait for other nodes (optional; only for decentralized market milestone 1)
+    #sleep 10s
+    if [[ ! -f presets.json ]]; then
+        presets_json > presets.json
+    fi
 
     say "Start the Provider Agent (stdout & err in ya-provider.log)"
     ignore ../usr/bin/ya-provider \
       --data-dir . \
       --exe-unit-path '../usr/lib/yagna/plugins/ya-runtime-*.json' \
       run 2>&1 | tee ya-provider.log
+}
+
+presets_json() {
+    cat << EOF
+{
+  "active": [
+    "vm"
+    "wasmtime",
+  ],
+  "presets": [
+    {
+      "name": "vm",
+      "exeunit-name": "vm",
+      "pricing-model": "linear",
+      "usage-coeffs": {
+        "duration": 0.001,
+        "cpu": 0.002,
+        "initial": 0.0
+      }
+    },
+    {
+      "name": "wasmtime",
+      "exeunit-name": "wasmtime",
+      "pricing-model": "linear",
+      "usage-coeffs": {
+        "initial": 1.0,
+        "cpu": 1.0,
+        "duration": 0.1
+      }
+    }
+  ]
+}
+EOF
 }
 
 main "$@"
