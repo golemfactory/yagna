@@ -1786,6 +1786,7 @@ dependencies = [
  "tokio 0.2.21",
  "url 2.1.1",
  "ya-client-model",
+ "ya-compile-time-utils",
  "ya-core-model",
  "ya-net",
  "ya-service-api",
