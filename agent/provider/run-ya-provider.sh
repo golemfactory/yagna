@@ -133,6 +133,8 @@ run() {
 
     cd "$install_dir"
 
+    # we are not installing deb's but just unpacking them
+    # thats why this is relative path and not `/usr/..`
     if [[ ! -f usr/lib/yagna/plugins/ya-runtime-wasi.json ]]; then
         say "Install WASI runtime"
         ensure wget https://github.com/golemfactory/ya-runtime-wasi/releases/download/v0.2.0/ya-runtime-wasi_0.2.0_amd64.deb
