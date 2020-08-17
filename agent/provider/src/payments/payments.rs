@@ -104,6 +104,9 @@ struct ProviderCtx {
     get_events_error_timeout: Duration,
     invoice_reissue_interval: Duration,
     invoice_resend_interval: Duration,
+
+    invoice_reissue_attempts: u32,
+    invoice_resend_attempts: u32,
 }
 
 /// Computes charges for tasks execution.
@@ -125,6 +128,8 @@ impl Payments {
             get_events_error_timeout: Duration::from_secs(5),
             invoice_reissue_interval: Duration::from_secs(5),
             invoice_resend_interval: Duration::from_secs(50),
+            invoice_reissue_attempts: 10,
+            invoice_resend_attempts: 10,
         };
 
         Payments {
@@ -532,7 +537,7 @@ impl Handler<IssueInvoice> for Payments {
         let future = async move {
             log::debug!("Issuing invoice {}.", serde_json::to_string(&invoice)?);
 
-            loop {
+            for _ in 0..provider_ctx.invoice_reissue_attempts {
                 match provider_ctx.payment_api.issue_invoice(&invoice).await {
                     Ok(invoice) => {
                         log::info!("Invoice [{}] issued.", invoice.invoice_id);
@@ -545,6 +550,8 @@ impl Handler<IssueInvoice> for Payments {
                     }
                 }
             }
+
+            Err(anyhow!("Cannot issue invoice. Retry limit reached."))
         };
 
         return ActorResponse::r#async(future.into_actor(self));
@@ -559,7 +566,7 @@ impl Handler<SendInvoice> for Payments {
         let future = async move {
             log::info!("Sending invoice [{}] to requestor...", msg.invoice_id);
 
-            loop {
+            for _ in 0..provider_ctx.invoice_resend_attempts {
                 match provider_ctx.payment_api.send_invoice(&msg.invoice_id).await {
                     Ok(_) => {
                         log::info!("Invoice [{}] sent.", msg.invoice_id);
@@ -572,6 +579,8 @@ impl Handler<SendInvoice> for Payments {
                     }
                 }
             }
+
+            Err(anyhow!("Cannot send invoice. Retry limit reached."))
         };
 
         return ActorResponse::r#async(future.into_actor(self));
