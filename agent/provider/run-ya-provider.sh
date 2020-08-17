@@ -189,7 +189,7 @@ run() {
     sleep 2s # wait a bit for service to start fully
     say "Yagna Service started ($pid)."
 
-    if grep "__GENERATED_APP_KEY__" .env > /dev/null; then
+    if grep -q "__GENERATED_APP_KEY__" .env; then
         say "Generate app key and place it within .env"
         ignore ../usr/bin/yagna app-key drop 'provider-agent'
         APP_KEY=$(ensure ../usr/bin/yagna app-key create 'provider-agent')
