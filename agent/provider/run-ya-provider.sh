@@ -217,7 +217,7 @@ run() {
 main() {
     local log_file="/tmp/$(basename $0 .sh).log"
     say "Redirecting all output to stdout **AND** ${log_file}"
-    run "$@" 2>&1 | tee $log_file
+    run "$@" > $log_file 2>&1
 }
 
 main "$@"
