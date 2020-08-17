@@ -423,7 +423,6 @@ impl Handler<CloseAgreement> for TaskManager {
             start_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
 
             runner.do_send(AgreementClosed::new(&msg.agreement_id));
-            //.await??;
             payments
                 .send(AgreementClosed::new(&msg.agreement_id))
                 .await??;

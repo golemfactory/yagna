@@ -491,8 +491,11 @@ impl Handler<AgreementClosed> for Payments {
 
                 let costs_summary = myself.send(GetAgreementSummary { agreement_id }).await??;
                 let invoice = myself.send(IssueInvoice { costs_summary }).await??;
+                // We do not want to wait for sending Invoice, as we are eager to start new
+                // negotiations. Waiting for invoice to be sent to Requestor could result in
+                // hanging Provider waiting for Requestor to appear in the net and receive the Invoice
                 let invoice_id = invoice.invoice_id;
-                myself.send(SendInvoice { invoice_id }).await??;
+                myself.do_send(SendInvoice { invoice_id });
 
                 Ok(())
             }
