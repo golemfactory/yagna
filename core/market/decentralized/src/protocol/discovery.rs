@@ -76,6 +76,7 @@ impl Discovery {
         let default_id = self.default_identity().await?;
         let bcast_msg = SendBroadcastMessage::new(OfferIdsReceived { offers });
 
+        // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         let _ = bus::service(broadcast::BUS_ID)
             .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
             .await?;
