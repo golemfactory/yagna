@@ -491,8 +491,8 @@ pub mod default {
     pub async fn empty_on_offer_unsubscribed(
         _caller: String,
         _msg: OfferUnsubscribed,
-    ) -> Result<Propagate, ()> {
-        Ok(Propagate::No(Reason::Unsubscribed))
+    ) -> Result<Vec<SubscriptionId>, ()> {
+        Ok(vec![])
     }
 
     pub async fn empty_on_initial_proposal(

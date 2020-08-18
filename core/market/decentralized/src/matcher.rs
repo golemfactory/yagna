@@ -11,8 +11,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::model::{Demand, DisplayVec, Offer, SubscriptionId};
 use crate::protocol::discovery::builder::DiscoveryBuilder;
 use crate::protocol::discovery::{
-    Discovery, DiscoveryRemoteError, GetOffers, OfferIdsReceived, OfferUnsubscribed,
-    OffersReceived, Propagate, Reason,
+    Discovery, DiscoveryRemoteError, GetOffers, OfferIdsReceived, OfferUnsubscribed, OffersReceived,
 };
 
 pub mod error;
@@ -21,7 +20,7 @@ pub(crate) mod store;
 
 use crate::config::Config;
 use crate::identity::IdentityApi;
-use error::{MatcherError, MatcherInitError, ModifyOfferError};
+use error::{MatcherError, MatcherInitError, ModifyOfferError, QueryOffersError};
 use resolver::Resolver;
 use std::iter::FromIterator;
 use store::SubscriptionStore;
@@ -103,10 +102,11 @@ impl Matcher {
         offer: &ClientOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
-        // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         let offer = self.store.create_offer(id, offer).await?;
         self.resolver.receive(&offer);
 
+        // Ignore error and don't retry to broadcast Offer. It will be broadcasted
+        // anyway during random broadcast, so nothing bad happens here in case of error.
         let _ = self
             .discovery
             .broadcast_offers(vec![offer.id.clone()])
@@ -128,11 +128,11 @@ impl Matcher {
 
         // Broadcast only, if no Error occurred in previous step.
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
-        // - We shouldn't bother agent with broadcasts
+        // - We shouldn't bother agent with broadcasts errors.
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .broadcast_unsubscribe(id.identity.to_string(), offer_id.clone())
+            .broadcast_unsubscribe(vec![offer_id.clone()])
             .await
             .map_err(|e| {
                 log::warn!(
@@ -163,8 +163,7 @@ impl Matcher {
         Ok(self.store.remove_demand(demand_id, id).await?)
     }
 
-    // TODO: Remove anyhow replace with typed error.
-    pub async fn list_our_offers(&self) -> Result<Vec<Offer>, anyhow::Error> {
+    pub async fn list_our_offers(&self) -> Result<Vec<Offer>, QueryOffersError> {
         let identities = self.identity.list().await?;
         let store = self.store.clone();
 
@@ -176,6 +175,10 @@ impl Matcher {
         Ok(our_offers)
     }
 }
+
+// =========================================== //
+// Discovery protocol messages handlers
+// =========================================== //
 
 pub(crate) async fn on_offer_ids_received(
     resolver: Resolver,
@@ -247,24 +250,36 @@ pub(crate) async fn on_offer_unsubscribed(
     store: SubscriptionStore,
     caller: String,
     msg: OfferUnsubscribed,
-) -> Result<Propagate, ()> {
-    store
-        .unsubscribe_offer(&msg.offer_id, false, caller.parse().ok())
-        .await
-        .map(|_| Propagate::Yes)
-        .or_else(|e| match e {
-            ModifyOfferError::UnsubscribeError(_, _)
-            | ModifyOfferError::UnsubscribedNotRemoved(_)
-            | ModifyOfferError::RemoveError(_, _) => {
-                log::error!("Propagating Offer unsubscription, despite error: {}", e);
-                // TODO: how should we handle it locally?
-                Ok(Propagate::Yes)
+) -> Result<Vec<SubscriptionId>, ()> {
+    Ok(futures::stream::iter(msg.offers.into_iter())
+        .filter_map(|offer_id| {
+            let store = store.clone();
+            let caller = caller.parse().ok();
+            async move {
+                store
+                    .unsubscribe_offer(&offer_id, false, caller)
+                    .await
+                    // Some errors don't mean we shouldn't propagate unsubscription.
+                    .or_else(|e| match e {
+                        ModifyOfferError::UnsubscribedNotRemoved(..) => Ok(()),
+                        _ => Err(e),
+                    })
+                    // Collect Offers, that were correctly unsubscribed.
+                    .map(|_| offer_id.clone())
+                    .map_err(|e| {
+                        log::warn!("Failed to unsubscribe Offer [{}]. Error: {}", &offer_id, &e);
+                        e
+                    })
+                    .ok()
             }
-            ModifyOfferError::NotFound(_) => Ok(Propagate::No(Reason::NotFound)),
-            ModifyOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
-            ModifyOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
         })
+        .collect::<Vec<SubscriptionId>>()
+        .await)
 }
+
+// =========================================== //
+// Cyclic broadcasting
+// =========================================== //
 
 async fn random_broadcast(matcher: Matcher) {
     let broadcast_interval = matcher
@@ -273,7 +288,7 @@ async fn random_broadcast(matcher: Matcher) {
         .discovery
         .mean_random_broadcast_interval
         .to_std()
-        .map_err(|e| format!("Failed to initialize broadcast interval: {}", e))
+        .map_err(|e| format!("Invalid broadcast interval. Error: {}", e))
         .unwrap();
     loop {
         let matcher = matcher.clone();
@@ -301,21 +316,9 @@ async fn random_broadcast(matcher: Matcher) {
                 .map(|offer| offer.id)
                 .collect::<Vec<SubscriptionId>>();
 
-            // Filter our Offers from set.
-            let all_offers_wo_ours = all_offers
-                .into_iter()
-                .collect::<HashSet<SubscriptionId>>()
-                .difference(&HashSet::from_iter(our_offers.clone().into_iter()))
-                .cloned()
-                .collect::<Vec<SubscriptionId>>();
-            let mut random_offers = all_offers_wo_ours
-                .choose_multiple(&mut rand::thread_rng(), num_to_broadcast as usize)
-                .cloned()
-                .collect::<Vec<SubscriptionId>>();
-            random_offers.extend(our_offers);
+            let random_offers = randomize_offers(our_offers, all_offers, num_to_broadcast as usize);
 
             matcher.discovery.broadcast_offers(random_offers).await?;
-            // TODO: Remove anyhow replace with typed error.
             Result::<(), anyhow::Error>::Ok(())
         }
         .await
@@ -327,6 +330,28 @@ async fn random_broadcast(matcher: Matcher) {
         })
         .ok();
     }
+}
+
+/// Chooses subset of all our Offers, that contains all of our
+/// own Offers and is extended with random Offers, that came from other Nodes.
+fn randomize_offers(
+    our_offers: Vec<SubscriptionId>,
+    all_offers: Vec<SubscriptionId>,
+    max_offers: usize,
+) -> Vec<SubscriptionId> {
+    // Filter our Offers from set.
+    let all_offers_wo_ours = all_offers
+        .into_iter()
+        .collect::<HashSet<SubscriptionId>>()
+        .difference(&HashSet::from_iter(our_offers.clone().into_iter()))
+        .cloned()
+        .collect::<Vec<SubscriptionId>>();
+    let mut random_offers = all_offers_wo_ours
+        .choose_multiple(&mut rand::thread_rng(), max_offers as usize)
+        .cloned()
+        .collect::<Vec<SubscriptionId>>();
+    random_offers.extend(our_offers);
+    random_offers
 }
 
 fn randomize_interval(mean_interval: std::time::Duration) -> std::time::Duration {

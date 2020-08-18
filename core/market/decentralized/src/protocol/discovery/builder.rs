@@ -123,7 +123,7 @@ mod test {
         DiscoveryBuilder::default()
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
-            .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
+            .add_handler(|_, _: OfferUnsubscribed| async { Ok(vec![]) })
             .build();
     }
 
@@ -132,7 +132,7 @@ mod test {
         DiscoveryBuilder::default()
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
-            .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
+            .add_handler(|_, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
             .add_handler(|_, _: GetOffers| async { Ok(vec![]) })
             .build();
@@ -144,7 +144,7 @@ mod test {
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .data("mock data")
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
-            .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
+            .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: GetOffers| async { Ok(vec![]) })
             .build();
@@ -163,7 +163,7 @@ mod test {
             .data("mock data")
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: GetOffers| async { panic!("should not be invoked") })
-            .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
+            .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_data_handler(move |data: usize, _, _: GetOffers| {
                 let cnt = cnt.clone();
                 async move {

@@ -75,7 +75,7 @@ impl SubscriptionStore {
             .as_dao::<OfferDao>()
             .get_offers(id, Utc::now().naive_utc())
             .await
-            .map_err(|e| QueryOffersError(e))?)
+            .map_err(QueryOffersError::from)?)
     }
 
     pub async fn get_client_offers(
@@ -105,7 +105,7 @@ impl SubscriptionStore {
             .as_dao::<OfferDao>()
             .batch_select(ids, Utc::now().naive_utc())
             .await
-            .map_err(|e| QueryOffersError(e))?)
+            .map_err(QueryOffersError::from)?)
     }
 
     pub async fn get_offers_before(
@@ -117,7 +117,7 @@ impl SubscriptionStore {
             .as_dao::<OfferDao>()
             .get_offers_before(insertion_ts, Utc::now().naive_utc())
             .await
-            .map_err(|e| QueryOffersError(e))?)
+            .map_err(QueryOffersError::from)?)
     }
 
     pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
@@ -235,6 +235,7 @@ impl SubscriptionStore {
         }
     }
 
+    /// Returns Offers SubscriptionId from vector, that don't exist in our database.
     pub async fn filter_existing(
         &self,
         offers: Vec<SubscriptionId>,

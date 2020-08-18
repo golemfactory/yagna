@@ -174,6 +174,9 @@ impl From<SubscriptionParseError> for ErrorMessage {
     }
 }
 
+/// Pretty display vector, as list with all elements in separate row.
+/// Implementation uses Display trait for all elements (not Debug) to make
+/// them more readable.
 pub struct DisplayVec<'a, T>(pub &'a Vec<T>);
 
 impl<'a, T> Display for DisplayVec<'a, T>

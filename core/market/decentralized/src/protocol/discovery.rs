@@ -101,16 +101,16 @@ impl Discovery {
 
     pub async fn broadcast_unsubscribe(
         &self,
-        caller: String,
-        offer_id: SubscriptionId,
+        offers: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
-        log::info!("Broadcasting unsubscribe offer [{}].", &offer_id);
+        let default_id = self.default_identity().await?;
 
-        let msg = OfferUnsubscribed { offer_id };
+        let msg = OfferUnsubscribed { offers };
         let bcast_msg = SendBroadcastMessage::new(msg);
 
+        // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         let _ = bus::service(broadcast::BUS_ID)
-            .send_as(caller, bcast_msg)
+            .send_as(default_id, bcast_msg)
             .await?;
         Ok(())
     }
@@ -157,6 +157,8 @@ impl Discovery {
     }
 
     async fn on_offers_received(self, caller: String, msg: OfferIdsReceived) -> Result<(), ()> {
+        log::info!("Received {} Offers from [{}].", msg.offers.len(), &caller);
+
         let filter_callback = self.inner.filter_unknown_offers.clone();
         let offer_received_callback = self.inner.offers_received.clone();
 
@@ -208,34 +210,27 @@ impl Discovery {
     }
 
     async fn on_offer_unsubscribed(self, caller: String, msg: OfferUnsubscribed) -> Result<(), ()> {
-        let callback = self.inner.offer_unsubscribed.clone();
-        let offer_id = msg.offer_id.clone();
-
+        let num_received_ids = msg.offers.len();
         log::info!(
-            "Received broadcasted unsubscribe Offer [{}]. Sender: [{}].",
-            offer_id,
+            "Received {} unsubscribed Offers from [{}].",
+            num_received_ids,
             &caller,
         );
 
-        match callback.call(caller.clone(), msg).await? {
-            Propagate::Yes => {
-                log::info!("Propagating further unsubscribe Offer [{}].", &offer_id,);
+        let callback = self.inner.offer_unsubscribed.clone();
+        let subscriptions = callback.call(caller.clone(), msg).await?;
 
-                // TODO: Should we retry in case of fail?
-                if let Err(error) = self.broadcast_unsubscribe(caller, offer_id.clone()).await {
-                    log::error!(
-                        "Error propagating unsubscribe Offer [{}] further. Error: {}",
-                        offer_id,
-                        error,
-                    );
-                }
-            }
-            Propagate::No(reason) => {
-                log::info!(
-                    "Not propagating unsubscribe Offer [{}] because: {}.",
-                    offer_id,
-                    reason
-                );
+        if !subscriptions.is_empty() {
+            log::info!(
+                "Propagating further {} unsubscribed Offers from {} received from [{}].",
+                subscriptions.len(),
+                num_received_ids,
+                &caller,
+            );
+
+            // No need to retry broadcasting, since we send cyclic broadcasts.
+            if let Err(error) = self.broadcast_unsubscribe(subscriptions).await {
+                log::error!("Error propagating unsubscribed Offers further: {}", error,);
             }
         }
         Ok(())
@@ -249,26 +244,6 @@ impl Discovery {
 // =========================================== //
 // Discovery messages
 // =========================================== //
-
-#[derive(Serialize, Deserialize, derive_more::Display)]
-pub enum Reason {
-    #[display(fmt = "Offer already exists in database")]
-    AlreadyExists,
-    #[display(fmt = "Offer already unsubscribed")]
-    Unsubscribed,
-    #[display(fmt = "Offer not found in database")]
-    NotFound,
-    #[display(fmt = "Offer expired")]
-    Expired,
-    #[display(fmt = "Propagation error: {}", "_0")]
-    Error(String),
-}
-
-#[derive(Serialize, Deserialize)]
-pub enum Propagate {
-    Yes,
-    No(Reason),
-}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -292,6 +267,8 @@ pub struct OffersReceived {
 }
 
 impl CallbackMessage for OffersReceived {
+    /// Callback handler should return all subscription ids, that were new to him
+    /// and should be propagated further to the network.
     type Item = Vec<SubscriptionId>;
     type Error = ();
 }
@@ -315,11 +292,13 @@ fn get_offers_addr(prefix: &str) -> String {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OfferUnsubscribed {
-    pub offer_id: SubscriptionId,
+    pub offers: Vec<SubscriptionId>,
 }
 
 impl CallbackMessage for OfferUnsubscribed {
-    type Item = Propagate;
+    /// Callback handler should return all subscription ids, that were new to him
+    /// and should be propagated further to the network.
+    type Item = Vec<SubscriptionId>;
     type Error = ();
 }
 
