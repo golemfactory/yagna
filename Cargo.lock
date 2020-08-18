@@ -1908,7 +1908,7 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 [[package]]
 name = "graphene_api"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/graphene-rust.git?rev=25e178d9ac6525470d9b089031a9ce88df347895#25e178d9ac6525470d9b089031a9ce88df347895"
+source = "git+https://github.com/golemfactory/graphene-rust.git?rev=8e14e8f012e790ccce5c696f20c1d750ca3f4398#8e14e8f012e790ccce5c696f20c1d750ca3f4398"
 dependencies = [
  "anyhow",
  "base64 0.11.0",
@@ -1917,6 +1917,7 @@ dependencies = [
  "http 0.2.1",
  "hyper 0.13.7",
  "hyper-tls 0.4.3",
+ "openssl",
  "serde",
  "serde_json",
  "sgx_types",
@@ -5578,6 +5579,7 @@ dependencies = [
  "bigdecimal",
  "bitflags 1.2.1",
  "chrono",
+ "graphene_api",
  "log 0.4.8",
  "serde",
  "serde_bytes",

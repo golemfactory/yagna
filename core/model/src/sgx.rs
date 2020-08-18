@@ -1,3 +1,4 @@
+pub use graphene::ias::AttestationResponse;
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 
@@ -7,14 +8,15 @@ pub const BUS_ID: &str = "/public/sgx";
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifyAttestationEvidence {
+    pub production: bool,
     pub ias_api_key: String,
+    pub ias_nonce: Option<String>,
     pub enclave_quote: Vec<u8>,
 }
 
 impl RpcMessage for VerifyAttestationEvidence {
     const ID: &'static str = "VerifyAttestationEvidence";
-    // TODO: proper structs for report + signature
-    type Item = (Vec<u8>, Vec<u8>);
+    type Item = AttestationResponse;
     type Error = Error;
 }
 
