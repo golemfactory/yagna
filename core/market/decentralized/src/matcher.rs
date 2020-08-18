@@ -1,5 +1,6 @@
 use futures::StreamExt;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
@@ -276,7 +277,7 @@ async fn random_broadcast(matcher: Matcher) {
         .unwrap();
     loop {
         let matcher = matcher.clone();
-        match async move {
+        async move {
             let random_interval = randomize_interval(broadcast_interval);
             tokio::time::delay_for(random_interval).await;
 
@@ -318,16 +319,17 @@ async fn random_broadcast(matcher: Matcher) {
             Result::<(), anyhow::Error>::Ok(())
         }
         .await
-        {
-            Err(e) => log::warn!(
+        .map_err(|e| {
+            log::warn!(
                 "Failed to send random subscriptions broadcast. Error: {}",
                 e
-            ),
-            Ok(_) => (),
-        }
+            )
+        })
+        .ok();
     }
 }
 
-fn randomize_interval(interval: std::time::Duration) -> std::time::Duration {
-    interval
+fn randomize_interval(mean_interval: std::time::Duration) -> std::time::Duration {
+    let mut rng = rand::thread_rng();
+    (2 * mean_interval).mul_f64(rng.gen::<f64>())
 }

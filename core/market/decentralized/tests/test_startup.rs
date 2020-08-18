@@ -34,11 +34,10 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     // Create some offers before we instantiate 3rd node.
     // This way this 3rd node won't get them in first broadcasts, that
     // are sent immediately, after subscription is made.
-    let mut subscriptions1 = vec![];
-    let mut subscriptions2 = vec![];
+    let mut subscriptions = vec![];
 
     for _n in (0..30).into_iter() {
-        subscriptions1.push(
+        subscriptions.push(
             market1
                 .subscribe_offer(&client::sample_offer(), &id1)
                 .await?,
@@ -46,7 +45,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     }
 
     for _n in (0..20).into_iter() {
-        subscriptions2.push(
+        subscriptions.push(
             market2
                 .subscribe_offer(&client::sample_offer(), &id2)
                 .await?,
@@ -62,12 +61,8 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     let market3 = network.get_market("Node-3");
 
     // Make sure we got all offers that, were created.
-    for subscription in subscriptions1.into_iter() {
+    for subscription in subscriptions.into_iter() {
         market3.get_offer(&subscription).await?;
     }
-    for subscription in subscriptions2.into_iter() {
-        market3.get_offer(&subscription).await?;
-    }
-
     Ok(())
 }
