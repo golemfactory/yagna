@@ -99,7 +99,7 @@ impl Discovery {
             .await??)
     }
 
-    pub async fn broadcast_unsubscribe(
+    pub async fn broadcast_unsubscribes(
         &self,
         offers: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
@@ -157,7 +157,9 @@ impl Discovery {
     }
 
     async fn on_offers_received(self, caller: String, msg: OfferIdsReceived) -> Result<(), ()> {
-        log::info!("Received {} Offers from [{}].", msg.offers.len(), &caller);
+        if !msg.offers.is_empty() {
+            log::debug!("Received {} Offers from [{}].", msg.offers.len(), &caller);
+        }
 
         let filter_callback = self.inner.filter_unknown_offers.clone();
         let offer_received_callback = self.inner.offers_received.clone();
@@ -211,11 +213,13 @@ impl Discovery {
 
     async fn on_offer_unsubscribed(self, caller: String, msg: OfferUnsubscribed) -> Result<(), ()> {
         let num_received_ids = msg.offers.len();
-        log::info!(
-            "Received {} unsubscribed Offers from [{}].",
-            num_received_ids,
-            &caller,
-        );
+        if !msg.offers.is_empty() {
+            log::debug!(
+                "Received {} unsubscribed Offers from [{}].",
+                num_received_ids,
+                &caller,
+            );
+        }
 
         let callback = self.inner.offer_unsubscribed.clone();
         let subscriptions = callback.call(caller.clone(), msg).await?;
@@ -229,7 +233,7 @@ impl Discovery {
             );
 
             // No need to retry broadcasting, since we send cyclic broadcasts.
-            if let Err(error) = self.broadcast_unsubscribe(subscriptions).await {
+            if let Err(error) = self.broadcast_unsubscribes(subscriptions).await {
                 log::error!("Error propagating unsubscribed Offers further: {}", error,);
             }
         }

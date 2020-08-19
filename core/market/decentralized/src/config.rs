@@ -10,7 +10,9 @@ pub struct Config {
 
 pub struct DiscoveryConfig {
     pub num_broadcasted_offers: u32,
+    pub num_broadcasted_unsubscribes: u32,
     pub mean_random_broadcast_interval: Duration,
+    pub mean_random_broadcast_unsubscribes_interval: Duration,
 }
 
 pub struct SubscriptionConfig {
@@ -30,7 +32,9 @@ impl Default for DiscoveryConfig {
     fn default() -> Self {
         DiscoveryConfig {
             num_broadcasted_offers: 50,
+            num_broadcasted_unsubscribes: 50,
             mean_random_broadcast_interval: Duration::seconds(3),
+            mean_random_broadcast_unsubscribes_interval: Duration::seconds(3),
         }
     }
 }

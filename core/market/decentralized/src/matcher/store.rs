@@ -78,6 +78,21 @@ impl SubscriptionStore {
             .map_err(QueryOffersError::from)?)
     }
 
+    pub async fn get_unsubscribed_offers(
+        &self,
+        id: Option<NodeId>,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_unsubscribes(id, Utc::now().naive_utc())
+            .await
+            .map_err(QueryOffersError::from)?
+            .into_iter()
+            .map(|entry| entry.id)
+            .collect())
+    }
+
     pub async fn get_client_offers(
         &self,
         id: Option<NodeId>,

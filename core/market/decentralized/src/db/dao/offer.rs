@@ -91,6 +91,24 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
+    pub async fn get_unsubscribes(
+        &self,
+        node_id: Option<NodeId>,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Vec<OfferUnsubscribed>> {
+        readonly_transaction(self.pool, move |conn| {
+            let unsubscribes = dsl_unsubscribed::market_offer_unsubscribed
+                .filter(dsl_unsubscribed::expiration_ts.ge(validation_ts));
+            Ok(match node_id {
+                Some(ident) => unsubscribes
+                    .filter(dsl_unsubscribed::node_id.eq(ident))
+                    .load::<OfferUnsubscribed>(conn)?,
+                _ => unsubscribes.load::<OfferUnsubscribed>(conn)?,
+            })
+        })
+        .await
+    }
+
     pub async fn get_offers_before(
         &self,
         insertion_ts: NaiveDateTime,

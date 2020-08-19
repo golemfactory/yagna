@@ -89,7 +89,8 @@ impl Matcher {
 
         // We can't spawn broadcasts, before gsb is bound.
         // That's why we don't spawn this in Matcher::new.
-        tokio::task::spawn_local(random_broadcast(self.clone()));
+        tokio::task::spawn_local(random_broadcast_offers(self.clone()));
+        tokio::task::spawn_local(random_broadcast_unsubscribes(self.clone()));
         Ok(())
     }
 
@@ -104,6 +105,13 @@ impl Matcher {
     ) -> Result<Offer, MatcherError> {
         let offer = self.store.create_offer(id, offer).await?;
         self.resolver.receive(&offer);
+
+        log::info!(
+            "Subscribed new Offer: [{}] using identity: {} [{}]",
+            &offer.id,
+            id.name,
+            id.identity
+        );
 
         // Ignore error and don't retry to broadcast Offer. It will be broadcasted
         // anyway during random broadcast, so nothing bad happens here in case of error.
@@ -126,13 +134,20 @@ impl Matcher {
             .unsubscribe_offer(offer_id, true, Some(id.identity))
             .await?;
 
+        log::info!(
+            "Unsubscribed Offer: [{}] using identity: {} [{}]",
+            &offer_id,
+            id.name,
+            id.identity
+        );
+
         // Broadcast only, if no Error occurred in previous step.
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
         // - We shouldn't bother agent with broadcasts errors.
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .broadcast_unsubscribe(vec![offer_id.clone()])
+            .broadcast_unsubscribes(vec![offer_id.clone()])
             .await
             .map_err(|e| {
                 log::warn!(
@@ -150,8 +165,14 @@ impl Matcher {
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
-
         self.resolver.receive(&demand);
+
+        log::info!(
+            "Subscribed new Demand: [{}] using identity: {} [{}]",
+            &demand.id,
+            id.name,
+            id.identity
+        );
         Ok(demand)
     }
 
@@ -160,7 +181,15 @@ impl Matcher {
         demand_id: &SubscriptionId,
         id: &Identity,
     ) -> Result<(), MatcherError> {
-        Ok(self.store.remove_demand(demand_id, id).await?)
+        self.store.remove_demand(demand_id, id).await?;
+
+        log::info!(
+            "Unsubscribed Demand: [{}] using identity: {} [{}]",
+            &demand_id,
+            id.name,
+            id.identity
+        );
+        Ok(())
     }
 
     pub async fn list_our_offers(&self) -> Result<Vec<Offer>, QueryOffersError> {
@@ -170,6 +199,20 @@ impl Matcher {
         let mut our_offers = vec![];
         for node_id in identities.into_iter() {
             our_offers.append(&mut store.get_offers(Some(node_id)).await?)
+        }
+
+        Ok(our_offers)
+    }
+
+    pub async fn list_our_unsubscribed_offers(
+        &self,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        let identities = self.identity.list().await?;
+        let store = self.store.clone();
+
+        let mut our_offers = vec![];
+        for node_id in identities.into_iter() {
+            our_offers.append(&mut store.get_unsubscribed_offers(Some(node_id)).await?)
         }
 
         Ok(our_offers)
@@ -251,7 +294,7 @@ pub(crate) async fn on_offer_unsubscribed(
     caller: String,
     msg: OfferUnsubscribed,
 ) -> Result<Vec<SubscriptionId>, ()> {
-    Ok(futures::stream::iter(msg.offers.into_iter())
+    let new_unsubscribes = futures::stream::iter(msg.offers.into_iter())
         .filter_map(|offer_id| {
             let store = store.clone();
             let caller = caller.parse().ok();
@@ -266,22 +309,39 @@ pub(crate) async fn on_offer_unsubscribed(
                     })
                     // Collect Offers, that were correctly unsubscribed.
                     .map(|_| offer_id.clone())
-                    .map_err(|e| {
-                        log::warn!("Failed to unsubscribe Offer [{}]. Error: {}", &offer_id, &e);
-                        e
+                    .map_err(|e| match e {
+                        // We don't want to warn about normal situations.
+                        ModifyOfferError::Unsubscribed(..) | ModifyOfferError::Expired(..) => e,
+                        _ => {
+                            log::warn!(
+                                "Failed to unsubscribe Offer [{}]. Error: {}",
+                                &offer_id,
+                                &e
+                            );
+                            e
+                        }
                     })
                     .ok()
             }
         })
         .collect::<Vec<SubscriptionId>>()
-        .await)
+        .await;
+
+    if !new_unsubscribes.is_empty() {
+        log::info!(
+            "Received new Offers to unsubscribe from [{}]: \n{}",
+            caller,
+            DisplayVec(&new_unsubscribes)
+        );
+    }
+    Ok(new_unsubscribes)
 }
 
 // =========================================== //
 // Cyclic broadcasting
 // =========================================== //
 
-async fn random_broadcast(matcher: Matcher) {
+async fn random_broadcast_offers(matcher: Matcher) {
     let broadcast_interval = matcher
         .config
         .clone()
@@ -328,6 +388,45 @@ async fn random_broadcast(matcher: Matcher) {
                 e
             )
         })
+        .ok();
+    }
+}
+
+async fn random_broadcast_unsubscribes(matcher: Matcher) {
+    let broadcast_interval = matcher
+        .config
+        .clone()
+        .discovery
+        .mean_random_broadcast_unsubscribes_interval
+        .to_std()
+        .map_err(|e| format!("Invalid broadcast interval. Error: {}", e))
+        .unwrap();
+    loop {
+        let matcher = matcher.clone();
+        async move {
+            let random_interval = randomize_interval(broadcast_interval);
+            tokio::time::delay_for(random_interval).await;
+
+            // We always broadcast our own Offers.
+            let our_offers = matcher.list_our_unsubscribed_offers().await?;
+
+            // Add some random subset of Offers to broadcast.
+            let num_to_broadcast = (matcher.config.discovery.num_broadcasted_unsubscribes
+                - our_offers.len() as u32)
+                .min(0);
+
+            let all_offers = matcher.store.get_unsubscribed_offers(None).await?;
+
+            let random_offers = randomize_offers(our_offers, all_offers, num_to_broadcast as usize);
+
+            matcher
+                .discovery
+                .broadcast_unsubscribes(random_offers)
+                .await?;
+            Result::<(), anyhow::Error>::Ok(())
+        }
+        .await
+        .map_err(|e| log::warn!("Failed to send random unsubscribes broadcast. Error: {}", e))
         .ok();
     }
 }

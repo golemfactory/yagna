@@ -33,6 +33,7 @@ impl DiscoveryBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn add_handler<M: CallbackMessage>(mut self, f: impl CallbackHandler<M>) -> Self {
         self.handlers
             .insert(TypeId::of::<M>(), Box::new(HandlerSlot::new(f)));
