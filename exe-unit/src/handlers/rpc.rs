@@ -5,11 +5,9 @@ use crate::{ExeUnit, RuntimeRef};
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::oneshot;
-use futures::prelude::*;
 use std::time::Duration;
 use tokio::time::timeout;
 use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
-use ya_core_model::activity::sgx::CallEncryptedService;
 use ya_core_model::activity::*;
 use ya_service_bus::RpcEnvelope;
 
@@ -154,21 +152,25 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
     }
 }
 
+#[cfg(feature = "sgx")]
 impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> {
     type Result = ResponseFuture<Result<Vec<u8>, RpcMessageError>>;
 
     fn handle(
         &mut self,
-        msg: RpcEnvelope<CallEncryptedService>,
+        msg: RpcEnvelope<sgx::CallEncryptedService>,
         ctx: &mut Context<Self>,
     ) -> Self::Result {
+        use futures::prelude::*;
+
         let me = ctx.address();
+        let dec = self.ctx.crypto.ctx();
+        let enc = self.ctx.crypto.ctx();
 
         async move {
-            let bytes = msg.bytes.as_slice();
-            // TODO: Decrypt message
-            let body: sgx::Request = serde_json::from_slice(bytes)
-                .map_err(|e| RpcMessageError::BadRequest(e.to_string()))?;
+            let body: sgx::Request = dec
+                .decrypt(msg.bytes.as_slice())
+                .map_err(|e| RpcMessageError::BadRequest(format!("Decryption error: {:?}", e)))?;
             Ok(match body {
                 sgx::Request::Exec(exec) => {
                     sgx::Response::Exec(me.send(RpcEnvelope::local(exec)).await.map_err(|_| {
@@ -186,20 +188,18 @@ impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> 
                 }
             })
         }
-        .then(|v| {
+        .then(move |v| {
             let response = match v {
                 Err(e) => sgx::Response::Error(e),
                 Ok(v) => v,
             };
-            let bytes = match serde_json::to_vec(&response) {
-                Ok(bytes) => bytes,
-                Err(_) => {
-                    return future::err(RpcMessageError::Service("unexpected error".to_string()))
-                }
-            };
-            // TODO encrypt bytes.
-
-            future::ok(bytes)
+            match enc.encrypt(&response) {
+                Ok(bytes) => future::ok(bytes),
+                Err(err) => future::err(RpcMessageError::BadRequest(format!(
+                    "Encryption error: {:?}",
+                    err
+                ))),
+            }
         })
         .boxed_local()
     }

@@ -102,6 +102,16 @@ fn start_http(path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "sgx")]
+fn init_crypto() -> anyhow::Result<ya_exe_unit::crypto::Crypto> {
+    use ya_exe_unit::crypto::Crypto;
+
+    // dummy impl
+    let ec = secp256k1::Secp256k1::new();
+    let (sec_key, req_key) = ec.generate_keypair(&mut rand::thread_rng());
+    Ok(Crypto::try_with_keys_raw(sec_key, req_key)?)
+}
+
 async fn transfer(addr: &Addr<TransferService>, from: &str, to: &str) -> Result<(), Error> {
     log::info!("Triggering transfer from {} to {}", from, to);
 
@@ -177,6 +187,8 @@ async fn main() -> anyhow::Result<()> {
         work_dir: work_dir.clone(),
         cache_dir,
         runtime_args,
+        #[cfg(feature = "sgx")]
+        crypto: init_crypto()?,
     };
     let transfer_service = TransferService::new(&exe_ctx);
     let addr = transfer_service.start();

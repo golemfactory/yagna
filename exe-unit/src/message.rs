@@ -32,6 +32,10 @@ pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
 #[rtype(result = "()")]
 pub struct SetTaskPackagePath(pub PathBuf);
 
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct SetRuntimeMode(pub RuntimeMode);
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub struct SetState {
@@ -148,10 +152,6 @@ impl From<proto::response::Error> for RuntimeCommandResult {
         }
     }
 }
-
-#[derive(Clone, Debug, Message)]
-#[rtype(result = "Result<()>")]
-pub struct SetRuntimeMode(pub RuntimeMode);
 
 #[derive(Clone, Debug, PartialEq, Message)]
 #[rtype(result = "()")]
