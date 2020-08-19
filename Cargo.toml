@@ -10,11 +10,12 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default=['market-forwarding']
+default=['market-forwarding', 'gnt-driver']
 static-openssl=["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized']
 dummy-driver = ['ya-dummy-driver']
+gnt-driver = ['ya-gnt-driver']
 
 [[bin]]
 name = "yagna"
@@ -24,7 +25,7 @@ path = "core/serv/src/main.rs"
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
-ya-gnt-driver = { version = "0.1" }
+ya-gnt-driver = { version = "0.1", optional = true }
 ya-identity = "0.2"
 ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
