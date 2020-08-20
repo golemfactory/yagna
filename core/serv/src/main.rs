@@ -6,7 +6,7 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -25,10 +25,6 @@ use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 
-#[cfg(feature = "dummy-driver")]
-use ya_dummy_driver::PaymentDriverService;
-#[cfg(not(feature = "dummy-driver"))]
-use ya_gnt_driver::PaymentDriverService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -151,7 +147,6 @@ impl ServiceContext {
             Self::make_entry::<MarketService>(path, "market")?,
             Self::make_entry::<ActivityService>(path, "activity")?,
             Self::make_entry::<PaymentService>(path, "payment")?,
-            Self::make_entry::<PaymentDriverService>(path, "gnt-driver")?,
         ]
         .iter()
         .cloned()
@@ -173,8 +168,22 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
-    #[enable(gsb)]
-    PaymentDriver(PaymentDriverService),
+}
+
+#[allow(unused)]
+async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
+    #[cfg(feature = "dummy-driver")]
+    {
+        use ya_dummy_driver::PaymentDriverService;
+        PaymentDriverService::gsb(&()).await?;
+    }
+    #[cfg(feature = "gnt-driver")]
+    {
+        use ya_gnt_driver::PaymentDriverService;
+        let db_executor = DbExecutor::from_data_dir(data_dir, "gnt-driver")?;
+        PaymentDriverService::gsb(&db_executor).await?;
+    }
+    Ok(())
 }
 
 #[derive(StructOpt, Debug)]
@@ -240,6 +249,7 @@ impl ServiceCommand {
 
                 let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
                 Services::gsb(&context).await?;
+                start_payment_drivers(&ctx.data_dir).await?;
 
                 payment_accounts::save_default_account()
                     .await
