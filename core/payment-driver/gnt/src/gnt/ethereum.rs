@@ -193,7 +193,7 @@ mod tests {
     use super::*;
     use crate::utils;
 
-    const GNT2_CONTRACT_ADDRESS: &str = "0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE";
+    const NGNT_CONTRACT_ADDRESS: &str = "0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE";
     const ETH_ADDRESS: &str = "0x2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 
     fn eth_client() -> anyhow::Result<EthereumClient> {
@@ -220,8 +220,8 @@ mod tests {
         let ethereum_client = eth_client()?;
         assert!(ethereum_client
             .get_contract(
-                utils::str_to_addr(GNT2_CONTRACT_ADDRESS)?,
-                include_bytes!("../contracts/gnt2.json")
+                utils::str_to_addr(NGNT_CONTRACT_ADDRESS)?,
+                include_bytes!("../contracts/ngnt.json")
             )
             .is_ok());
 

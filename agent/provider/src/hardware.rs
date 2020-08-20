@@ -1,5 +1,5 @@
 use crate::events::Event;
-use crate::startup_config::FileMonitor;
+use crate::startup_config::{FileMonitor, ProviderConfig};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -65,7 +65,30 @@ pub struct Resources {
 }
 
 impl Resources {
-    pub fn new_empty() -> Self {
+    pub fn try_with_config<P: AsRef<Path>>(
+        path: P,
+        config: &ProviderConfig,
+    ) -> Result<Self, Error> {
+        let max_caps = Self::max_caps(path)?;
+        if config.rt_cores.is_some() || config.rt_mem.is_some() || config.rt_storage.is_some() {
+            let mut user_caps = max_caps.clone();
+
+            if let Some(cores) = config.rt_cores {
+                user_caps.cpu_threads = cores as i32;
+            }
+            if let Some(mem) = config.rt_mem {
+                user_caps.mem_gib = mem;
+            }
+            if let Some(storage) = config.rt_storage {
+                user_caps.storage_gib = storage;
+            }
+
+            return Ok(user_caps.cap(&max_caps));
+        }
+        Ok(max_caps)
+    }
+
+    fn new_empty() -> Self {
         Resources {
             cpu_threads: 0,
             mem_gib: 0.,
@@ -73,7 +96,7 @@ impl Resources {
         }
     }
 
-    pub fn try_new(path: &Path) -> Result<Self, Error> {
+    fn max_caps<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         Ok(Resources {
             cpu_threads: num_cpus::get() as i32,
             mem_gib: 1000. * sys_info::mem_info()?.total as f64 / (1024. * 1024. * 1024.),
@@ -81,8 +104,8 @@ impl Resources {
         })
     }
 
-    pub fn try_default(work_dir: &Path) -> Result<Self, Error> {
-        let res = Self::try_new(work_dir)?;
+    fn default_caps<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        let res = Self::max_caps(path)?;
         Ok(Resources {
             cpu_threads: 1.max(res.cpu_threads - CPU_THREADS_RESERVED),
             mem_gib: 0.7 * res.mem_gib,
@@ -177,16 +200,21 @@ pub struct Profiles {
 }
 
 impl Profiles {
-    pub fn load_or_create<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let path = path.as_ref();
+    pub fn load_or_create(config: &ProviderConfig) -> Result<Self, Error> {
+        let path = config.hardware_file.as_path();
         match path.exists() {
             true => Self::load(path),
             false => {
-                if let Some(p) = path.parent() {
-                    std::fs::create_dir_all(p)?;
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
                 }
                 std::fs::File::create(&path)?;
-                let profiles = Self::try_default(&path)?;
+
+                let mut profiles = Self::try_with_config(&path, &config)?;
+                let default_caps = Resources::default_caps(&path)?;
+                for profile in profiles.profiles.values_mut() {
+                    *profile = profile.cap(&default_caps);
+                }
                 profiles.save(path)?;
                 Ok(profiles)
             }
@@ -208,8 +236,8 @@ impl Profiles {
         Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
     }
 
-    fn try_default<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let resources = Resources::try_default(path.as_ref())?;
+    fn try_with_config<P: AsRef<Path>>(path: P, config: &ProviderConfig) -> Result<Self, Error> {
+        let resources = Resources::try_with_config(path.as_ref(), &config)?;
         let active = DEFAULT_PROFILE_NAME.to_string();
         let profiles = vec![(active.clone(), resources)].into_iter().collect();
         Ok(Profiles { active, profiles })
@@ -317,11 +345,12 @@ impl ManagerState {
 }
 
 impl Manager {
-    pub fn try_new<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
-        let profiles = Profiles::load_or_create(&path)?;
+    pub fn try_new(conf: &ProviderConfig) -> Result<Self, Error> {
+        let profiles = Profiles::load_or_create(&conf)?;
+
         let mut state = ManagerState {
             profiles,
-            res_available: Resources::try_new(path.as_ref())?,
+            res_available: Resources::try_with_config(conf.hardware_file.as_path(), &conf)?,
             res_cap: Resources::new_empty(),
             res_remaining: Resources::new_empty(),
             res_alloc: HashMap::new(),
@@ -398,7 +427,8 @@ impl Manager {
 }
 
 /// Return free space on a partition with a given path
-fn partition_space(path: &Path) -> Result<u64, Error> {
+fn partition_space<P: AsRef<Path>>(path: P) -> Result<u64, Error> {
+    let path = path.as_ref();
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;

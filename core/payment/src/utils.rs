@@ -203,6 +203,10 @@ pub mod response {
     pub fn bad_request(e: &impl ToString) -> HttpResponse {
         HttpResponse::BadRequest().json(ErrorMessage::new(e.to_string()))
     }
+
+    pub fn conflict(e: &impl ToString) -> HttpResponse {
+        HttpResponse::Conflict().json(ErrorMessage::new(e.to_string()))
+    }
 }
 
 // These JSON methods exist for the sole purpose of converting error type. It cannot be done by

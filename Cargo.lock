@@ -55,6 +55,8 @@ dependencies = [
  "futures 0.3.5",
  "http 0.2.1",
  "log 0.4.8",
+ "openssl",
+ "tokio-openssl",
  "trust-dns-proto",
  "trust-dns-resolver",
 ]
@@ -91,6 +93,7 @@ dependencies = [
  "actix-rt",
  "actix-service",
  "actix-threadpool",
+ "actix-tls",
  "actix-utils",
  "base64 0.11.0",
  "bitflags 1.2.1",
@@ -238,6 +241,8 @@ dependencies = [
  "either",
  "futures 0.3.5",
  "log 0.4.8",
+ "openssl",
+ "tokio-openssl",
 ]
 
 [[package]]
@@ -549,6 +554,7 @@ dependencies = [
  "futures-core",
  "log 0.4.8",
  "mime 0.3.16",
+ "openssl",
  "percent-encoding 2.1.0",
  "rand 0.7.3",
  "serde",
@@ -4539,6 +4545,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-openssl"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c4b08c5f4208e699ede3df2520aca2e82401b2de33f45e96696a074480be594"
+dependencies = [
+ "openssl",
+ "tokio 0.2.21",
+]
+
+[[package]]
 name = "tokio-reactor"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5606,6 +5622,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-util",
  "humantime 2.0.1",
+ "lazy_static",
  "libc",
  "log 0.4.8",
  "log-derive",
@@ -5674,6 +5691,7 @@ dependencies = [
  "semver 0.10.0",
  "serde_json",
  "sha3 0.9.1",
+ "structopt",
  "tokio 0.2.21",
  "url 2.1.1",
  "ya-agreement-utils",
@@ -5959,6 +5977,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-utils-path",
 ]
 
 [[package]]
