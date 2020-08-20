@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use ya_client::model::ErrorMessage;
 use ya_client::model::NodeId;
@@ -57,11 +58,15 @@ pub struct Discovery {
     inner: Arc<DiscoveryImpl>,
 }
 
+pub(super) struct ReceiveHandlers {
+    offer_ids: HandlerSlot<OfferIdsReceived>,
+    offers: HandlerSlot<OffersReceived>,
+}
+
 pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
 
-    filter_unknown_offers: HandlerSlot<OfferIdsReceived>,
-    offers_received: HandlerSlot<OffersReceived>,
+    receive: Mutex<ReceiveHandlers>,
     offer_unsubscribed: HandlerSlot<OfferUnsubscribed>,
     get_offers_request: HandlerSlot<GetOffers>,
 }
@@ -161,16 +166,16 @@ impl Discovery {
             log::debug!("Received {} Offers from [{}].", msg.offers.len(), &caller);
         }
 
-        let filter_callback = self.inner.filter_unknown_offers.clone();
-        let offer_received_callback = self.inner.offers_received.clone();
-
-        // TODO: Do this under lock.
         // We should do filtering and getting Offers in single transaction. Otherwise multiple
         // broadcasts can overlap and we will ask other nodes for the same Offers more than once.
         // Note that it wouldn't cause incorrect behavior, because we will add Offers only once.
         // Other attempts to add them will end with error and we will filter all Offers, that already
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
+        let receive_handlers = self.inner.receive.lock().await;
+        let filter_callback = receive_handlers.offer_ids.clone();
+        let offer_received_callback = receive_handlers.offers.clone();
+
         let num_ids_received = msg.offers.len();
         let unseen_subscriptions = filter_callback.call(caller.clone(), msg).await?;
 
@@ -178,7 +183,7 @@ impl Discovery {
             let offers = self
                 .get_offers(caller.clone(), unseen_subscriptions)
                 .await
-                .map_err(|e| log::error!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
+                .map_err(|e| log::warn!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
 
             // We still could fail to add some Offers to database. If we fail to add them, we don't
             // want to propagate subscription further.
@@ -193,9 +198,12 @@ impl Discovery {
                     num_ids_received,
                     &caller
                 );
+
+                // We could broadcast outside of lock, but it shouldn't hurt either, because
+                // we don't wait for any responses from remote nodes.
                 self.broadcast_offers(new_ids)
                     .await
-                    .map_err(|e| log::error!("Failed to broadcast. Error: {}", e))?;
+                    .map_err(|e| log::warn!("Failed to broadcast. Error: {}", e))?;
             }
         }
         Ok(())

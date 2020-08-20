@@ -1,11 +1,13 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
 
 use super::{Discovery, DiscoveryImpl};
+use crate::protocol::discovery::ReceiveHandlers;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {
@@ -56,13 +58,16 @@ impl DiscoveryBuilder {
     }
 
     pub fn build(mut self) -> Discovery {
+        let receive = Mutex::new(ReceiveHandlers {
+            offers: self.get(),
+            offer_ids: self.get(),
+        });
         Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
-                offers_received: self.get(),
+                receive,
                 offer_unsubscribed: self.get(),
                 get_offers_request: self.get(),
-                filter_unknown_offers: self.get(),
             }),
         }
     }
