@@ -7,25 +7,28 @@ use std::{
     str::FromStr,
 };
 
-pub const DEFAULT_ORG_NAME: &str = "GolemFactory";
+const ORGANIZATION: &str = "GolemFactory";
+const QUALIFIER: &str = "";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DataDir(PathBuf);
 
 impl DataDir {
-    pub fn new(organisation: &str, app_name: &str) -> Self {
+    pub fn new(app_name: &str) -> Self {
         DataDir(
-            directories::ProjectDirs::from("", organisation, app_name)
+            directories::ProjectDirs::from(QUALIFIER, ORGANIZATION, app_name)
                 .map(|dirs| dirs.data_dir().into())
-                .unwrap_or_else(|| PathBuf::from(DEFAULT_ORG_NAME)),
+                .unwrap_or_else(|| PathBuf::from(ORGANIZATION).join(app_name)),
         )
     }
-}
 
-impl Default for DataDir {
-    #[inline]
-    fn default() -> Self {
-        Self::new(DEFAULT_ORG_NAME, "")
+    pub fn get_or_create(&self) -> anyhow::Result<PathBuf> {
+        if self.0.exists().not() {
+            log::info!("creating data dir: {}", self);
+            std::fs::create_dir_all(&self.0)
+                .context(format!("data dir {} creation error", self))?;
+        }
+        Ok(normalize_path(&self.0)?)
     }
 }
 
@@ -40,16 +43,5 @@ impl FromStr for DataDir {
 impl Display for DataDir {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "{:?}", self.0)
-    }
-}
-
-impl DataDir {
-    pub fn get_or_create(&self) -> anyhow::Result<PathBuf> {
-        if self.0.exists().not() {
-            log::info!("creating data dir: {}", self);
-            std::fs::create_dir_all(&self.0)
-                .context(format!("data dir {} creation error", self))?;
-        }
-        Ok(normalize_path(&self.0)?)
     }
 }

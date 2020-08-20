@@ -142,7 +142,10 @@ impl ProcessTree {
 
     #[inline]
     pub fn list(&self) -> Vec<Process> {
-        let parents = parents(self.proc.pid);
+        let parents = match parents(self.proc.pid) {
+            Ok(parents) => parents,
+            _ => return Vec::new(),
+        };
         Process::group(self.proc.pgid)
             .filter(move |p| !parents.contains(&p.pid))
             .collect()
@@ -190,55 +193,49 @@ pub fn getrusage(resource: i32) -> Result<Usage, SystemError> {
     }
 }
 
-async fn kill(pid: i32, timeout: i64) {
-    fn alive(pid: Pid) -> bool {
-        match waitpid(pid, Some(WaitPidFlag::WNOHANG)) {
-            Ok(status) => match status {
-                WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
-                _ => true,
-            },
-            _ => false,
-        }
+pub async fn kill(pid: i32, timeout: i64) -> Result<(), SystemError> {
+    fn alive(pid: Pid) -> Result<bool, SystemError> {
+        Ok(match waitpid(pid, Some(WaitPidFlag::WNOHANG))? {
+            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
+            _ => true,
+        })
     }
 
     let pid = Pid::from_raw(pid);
     let delay = Duration::from_secs_f32(timeout as f32 / 5.);
     let started = Instant::now();
 
-    if let Ok(_) = signal::kill(pid, signal::Signal::SIGTERM) {
-        log::info!("Sent SIGTERM to {:?}", pid);
-        loop {
-            if !alive(pid) {
-                break;
-            }
-            if Instant::now() >= started + delay {
-                log::info!("Sending SIGKILL to {:?}", pid);
-                if let Ok(_) = signal::kill(pid, signal::Signal::SIGKILL) {
-                    let _ = waitpid(pid, None);
-                }
-                break;
-            }
-            tokio::time::delay_for(delay).await;
+    signal::kill(pid, signal::Signal::SIGTERM)?;
+    log::info!("Sent SIGTERM to {:?}", pid);
+    loop {
+        if !alive(pid)? {
+            break;
         }
+        if Instant::now() >= started + delay {
+            log::info!("Sending SIGKILL to {:?}", pid);
+            signal::kill(pid, signal::Signal::SIGKILL)?;
+            waitpid(pid, None)?;
+            break;
+        }
+        tokio::time::delay_for(delay).await;
     }
+    Ok(())
 }
 
-fn parents(pid: i32) -> HashSet<i32> {
-    let mut parents = HashSet::new();
-    let mut proc = match Process::info(pid) {
-        Ok(proc) => proc,
-        _ => return parents,
-    };
+fn parents(pid: i32) -> Result<HashSet<i32>, SystemError> {
+    let mut proc = Process::info(pid)?;
+    let mut ancestors = HashSet::new();
+    let pgid = proc.pgid;
 
-    while proc.ppid != 0 {
-        parents.insert(proc.ppid);
+    while proc.ppid > 1 {
         proc = match Process::info(proc.ppid) {
-            Ok(p) => p,
+            Ok(proc) => proc,
             _ => break,
         };
-        if proc.ppid == proc.pgid {
+        ancestors.insert(proc.pid);
+        if proc.pid == pgid {
             break;
         }
     }
-    parents
+    Ok(ancestors)
 }

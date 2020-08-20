@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note (total amount due: {} GNT)...",
+        "Issuing debit note (total amount due: {} NGNT)...",
         &debit_note.total_amount_due
     );
     let debit_note = provider.issue_debit_note(&debit_note).await?;
@@ -77,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note (total amount due: {} GNT)...",
+        "Issuing debit note (total amount due: {} NGNT)...",
         debit_note2.total_amount_due
     );
     let debit_note2 = provider.issue_debit_note(&debit_note2).await?;
