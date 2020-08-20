@@ -6,7 +6,7 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -33,13 +33,14 @@ use ya_service_api_web::{
     middleware::{auth, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
+use ya_utils_path::data_dir::DataDir;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
 
-mod data_dir;
-use data_dir::DataDir;
-use std::path::Path;
+lazy_static::lazy_static! {
+    static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -53,7 +54,7 @@ struct CliArgs {
         long = "datadir",
         set = clap::ArgSettings::Global,
         env = "YAGNA_DATADIR",
-        default_value,
+        default_value = &*DEFAULT_DATA_DIR,
         hide_env_values = true,
     )]
     data_dir: DataDir,
