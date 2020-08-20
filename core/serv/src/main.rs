@@ -28,7 +28,7 @@ use ya_payment::{accounts as payment_accounts, PaymentService};
 #[cfg(feature = "dummy-driver")]
 use ya_dummy_driver::PaymentDriverService;
 #[cfg(not(feature = "dummy-driver"))]
-use ya_gnt_driver::PaymentDriverService;
+use ya_zksync_driver::PaymentDriverService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};

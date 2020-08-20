@@ -24,7 +24,7 @@ path = "core/serv/src/main.rs"
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
-ya-gnt-driver = { version = "0.1" }
+ya-zksync-driver = { version = "0.1" }
 ya-identity = "0.2"
 ya-market-decentralized = { version = "0.1", optional = true }
 ya-market-forwarding = { version = "0.1", optional = true }
@@ -82,6 +82,7 @@ members = [
     "core/payment",
     "core/payment-driver/dummy",
     "core/payment-driver/gnt",
+    "core/payment-driver/zksync",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/cache",
@@ -109,6 +110,7 @@ members = [
 ya-activity = { path = "core/activity" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
+ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-identity = { path = "core/identity" }
 ya-market-decentralized = { path = "core/market/decentralized" }
 ya-market-forwarding = { path = "core/market/forwarding" }
