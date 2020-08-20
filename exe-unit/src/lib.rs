@@ -4,11 +4,12 @@ use futures::TryFutureExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_client_model::activity::activity_state::StatePair;
 use ya_client_model::activity::{
-    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
+    activity_state::StatePair, ActivityUsage, CommandResult, ExeScriptCommand,
+    ExeScriptCommandResult, State,
 };
 use ya_core_model::activity;
+use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::agreement::Agreement;
@@ -22,8 +23,8 @@ use crate::state::{ExeUnitState, StateError};
 use chrono::Utc;
 
 pub mod agreement;
-use ya_runtime_api::deploy;
-
+#[cfg(feature = "sgx")]
+pub mod crypto;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -315,12 +316,15 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
 
-            if cfg!(feature = "sgx") {
+            #[cfg(feature = "sgx")]
+            {
                 actix_rpc::bind::<activity::sgx::CallEncryptedService>(
                     &srv_id,
                     addr.clone().recipient(),
                 );
-            } else {
+            }
+            #[cfg(not(feature = "sgx"))]
+            {
                 actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
                 actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
             }
@@ -342,7 +346,9 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+#[derive(Clone)]
 pub struct ExeUnitContext {
     pub activity_id: Option<String>,
     pub report_url: Option<String>,
@@ -350,6 +356,9 @@ pub struct ExeUnitContext {
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub runtime_args: RuntimeArgs,
+    #[cfg(feature = "sgx")]
+    #[derivative(Debug = "ignore")]
+    pub crypto: crate::crypto::Crypto,
 }
 
 impl ExeUnitContext {

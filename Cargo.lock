@@ -1089,6 +1089,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivative"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb582b60359da160a9477ee80f15c8d784c477e69c217ef2cdd4169c24ea380f"
+dependencies = [
+ "proc-macro2 1.0.18",
+ "quote 1.0.7",
+ "syn 1.0.33",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1479,7 +1490,7 @@ dependencies = [
  "parity-crypto 0.3.1",
  "rand 0.6.5",
  "rustc-hex",
- "secp256k1",
+ "secp256k1 0.15.5",
  "serde_json",
  "thiserror",
  "uuid 0.7.4",
@@ -1494,7 +1505,7 @@ dependencies = [
  "parity-crypto 0.4.2",
  "rand 0.7.3",
  "rustc-hex",
- "secp256k1",
+ "secp256k1 0.15.5",
  "serde",
  "zeroize 1.1.0",
 ]
@@ -3893,6 +3904,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "secp256k1"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
+dependencies = [
+ "rand 0.6.5",
+ "secp256k1-sys",
+ "serde",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab2c26f0d3552a0f12e639ae8a64afc2e3db9c52fe32f5fc6c289d38519f220"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "security-framework"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5455,7 +5486,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=f4d12744a4197518c97576e85c96fde78dc0e98c#f4d12744a4197518c97576e85c96fde78dc0e98c"
 dependencies = [
  "awc",
  "backtrace",
@@ -5465,6 +5496,7 @@ dependencies = [
  "failure",
  "futures 0.3.5",
  "log 0.4.8",
+ "rand 0.6.5",
  "serde",
  "serde_json",
  "structopt",
@@ -5476,11 +5508,15 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=f4d12744a4197518c97576e85c96fde78dc0e98c#f4d12744a4197518c97576e85c96fde78dc0e98c"
 dependencies = [
+ "base64 0.12.3",
  "bigdecimal",
  "chrono",
  "diesel",
+ "openssl",
+ "rand 0.7.3",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "thiserror",
@@ -5537,6 +5573,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "derivative",
  "dotenv 0.15.0",
  "env_logger 0.7.1",
  "flexi_logger",
@@ -5547,9 +5584,10 @@ dependencies = [
  "log 0.4.8",
  "nix 0.17.0",
  "procfs",
- "rand 0.7.3",
+ "rand 0.6.5",
  "regex",
  "reqwest",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5597,7 +5635,7 @@ dependencies = [
  "log 0.4.8",
  "num-bigint",
  "r2d2",
- "secp256k1",
+ "secp256k1 0.15.5",
  "serde",
  "serde_json",
  "sha3 0.8.2",

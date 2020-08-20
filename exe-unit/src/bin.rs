@@ -36,6 +36,12 @@ pub struct Cli {
     /// Hand off resource cap limiting to the Runtime
     #[structopt(long = "cap-handoff", parse(from_flag = std::ops::Not::not))]
     pub supervise_caps: bool,
+    /// Enclave secret key used in secure communication
+    #[structopt(long, env = "EXE_UNIT_SEC_KEY", hide_env_values = true)]
+    pub sec_key: Option<String>,
+    /// Requestor public key used in secure communication
+    #[structopt(long, env = "EXE_UNIT_REQUESTOR_PUB_KEY", hide_env_values = true)]
+    pub requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
     pub command: Command,
 }
@@ -82,9 +88,26 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     Ok(sanitize_path(path.canonicalize()?))
 }
 
+#[cfg(feature = "sgx")]
+fn init_crypto(
+    sec_key: Option<String>,
+    req_key: Option<String>,
+) -> anyhow::Result<ya_exe_unit::crypto::Crypto> {
+    use ya_exe_unit::crypto::Crypto;
+
+    let req_key = req_key.ok_or_else(|| anyhow::anyhow!("Missing requestor public key"))?;
+    match sec_key {
+        Some(key) => Ok(Crypto::try_with_keys(key, req_key)?),
+        None => {
+            log::info!("Generating a new key pair...");
+            Ok(Crypto::try_new(req_key)?)
+        }
+    }
+}
+
 fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-    let cli: Cli = Cli::from_args();
+    let mut cli: Cli = Cli::from_args();
 
     if !cli.agreement.exists() {
         bail!("Agreement file does not exist: {}", cli.agreement.display());
@@ -124,6 +147,11 @@ fn run() -> anyhow::Result<()> {
         work_dir,
         cache_dir,
         runtime_args,
+        #[cfg(feature = "sgx")]
+        crypto: {
+            let sec_key = cli.sec_key.replace("<hidden>".into());
+            init_crypto(sec_key, cli.requestor_pub_key.clone())?
+        },
     };
 
     log::debug!("CLI args: {:?}", cli);
