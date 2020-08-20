@@ -178,3 +178,31 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+/// Subscribing and unsubscribing should work despite network errors.
+/// Market should return subscription id and Offer Propagation will take place
+/// later during cyclic broadcasts. The same applies to unsubscribes.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new("test_network_error_while_subscribing")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let id1 = network.get_default_id("Node-1");
+
+    network.break_networking_for("Node-1")?;
+
+    // It's not an error. Should pass.
+    let subscription_id = market1
+        .subscribe_offer(&client::sample_offer(), &id1)
+        .await?;
+
+    market1.unsubscribe_offer(&subscription_id, &id1).await?;
+    Ok(())
+}
