@@ -2,7 +2,11 @@ use crate::error::Error;
 use crate::message::{
     RuntimeCommand, RuntimeCommandResult, SetRuntimeMode, SetTaskPackagePath, Shutdown,
 };
-use crate::process::{ProcessTree, SystemError};
+#[cfg(feature = "sgx")]
+use crate::process::kill;
+#[cfg(not(feature = "sgx"))]
+use crate::process::ProcessTree;
+use crate::process::SystemError;
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
 use crate::ExeUnitContext;
@@ -44,6 +48,11 @@ pub struct RuntimeProcess {
 
 #[derive(Clone, Hash, Eq, PartialEq)]
 enum ChildProcess {
+    #[cfg(feature = "sgx")]
+    Single {
+        pid: u32,
+    },
+    #[cfg(not(feature = "sgx"))]
     Tree(ProcessTree),
     Service(ProcessService),
 }
@@ -56,7 +65,10 @@ impl ChildProcess {
                 Ok(())
             }
             .boxed_local(),
+            #[cfg(not(feature = "sgx"))]
             ChildProcess::Tree(tree) => tree.kill(timeout).boxed_local(),
+            #[cfg(feature = "sgx")]
+            ChildProcess::Single { pid } => kill(pid as i32, timeout).boxed_local(),
         }
     }
 }
@@ -164,12 +176,24 @@ impl RuntimeProcess {
                 .stderr(Stdio::piped())
                 .spawn()?;
 
-            let tree =
-                ProcessTree::try_new(child.id()).map_err(|e| Error::RuntimeError(e.to_string()))?;
+            #[cfg(not(feature = "sgx"))]
+            let result = {
+                let tree = ProcessTree::try_new(child.id())
+                    .map_err(|e| Error::RuntimeError(e.to_string()))?;
+                address.do_send(AddChildProcess::from(tree.clone()));
+                let result = child.wait_with_output().await;
+                address.do_send(RemoveChildProcess::from(tree));
+                result
+            };
+            #[cfg(feature = "sgx")]
+            let result = {
+                let single_child = child.id();
+                address.do_send(AddChildProcess::from(single_child));
+                let result = child.wait_with_output().await;
+                address.do_send(RemoveChildProcess::from(single_child));
+                result
+            };
 
-            address.do_send(AddChildProcess::from(tree.clone()));
-            let result = child.wait_with_output().await;
-            address.do_send(RemoveChildProcess::from(tree));
             let output = result?;
 
             Ok(RuntimeCommandResult {
@@ -387,6 +411,7 @@ struct SetProcessService(ProcessService);
 #[rtype("()")]
 struct AddChildProcess(ChildProcess);
 
+#[cfg(not(feature = "sgx"))]
 impl From<ProcessTree> for AddChildProcess {
     fn from(process: ProcessTree) -> Self {
         AddChildProcess(ChildProcess::Tree(process))
@@ -399,10 +424,18 @@ impl From<ProcessService> for AddChildProcess {
     }
 }
 
+#[cfg(feature = "sgx")]
+impl From<u32> for AddChildProcess {
+    fn from(pid: u32) -> Self {
+        AddChildProcess(ChildProcess::Single { pid })
+    }
+}
+
 #[derive(Message)]
 #[rtype("()")]
 struct RemoveChildProcess(ChildProcess);
 
+#[cfg(not(feature = "sgx"))]
 impl From<ProcessTree> for RemoveChildProcess {
     fn from(process: ProcessTree) -> Self {
         RemoveChildProcess(ChildProcess::Tree(process))
@@ -412,5 +445,12 @@ impl From<ProcessTree> for RemoveChildProcess {
 impl From<ProcessService> for RemoveChildProcess {
     fn from(service: ProcessService) -> Self {
         RemoveChildProcess(ChildProcess::Service(service))
+    }
+}
+
+#[cfg(feature = "sgx")]
+impl From<u32> for RemoveChildProcess {
+    fn from(pid: u32) -> Self {
+        RemoveChildProcess(ChildProcess::Single { pid })
     }
 }

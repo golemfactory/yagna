@@ -224,15 +224,6 @@ impl ExeUnitDesc {
         if !self.supervisor_path.exists() {
             return Err(ExeUnitValidation::SupervisorNotFound { desc: self.clone() });
         }
-        // I'm not sure we should force it's existence.
-        if self
-            .runtime_path
-            .as_ref()
-            .map(|p| !p.exists())
-            .unwrap_or(false)
-        {
-            return Err(ExeUnitValidation::RuntimeNotFound { desc: self.clone() });
-        }
         Ok(())
     }
 }
