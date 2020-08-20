@@ -12,6 +12,7 @@ use std::time::Duration;
 /// No events available for not existent subscription.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_query_events_non_existent_subscription")
         .await
@@ -22,7 +23,7 @@ async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Err
     let non_existent_id = "80da375cb604426fb6cddd64f4ccc715-85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55".parse()?;
 
     // We expect that no events are available for non existent subscription.
-    let result = market1.query_events(&non_existent_id, 1.2, Some(5)).await;
+    let result = market1.query_events(&non_existent_id, 0.2, Some(5)).await;
 
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -36,6 +37,7 @@ async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Err
 /// query events endpoint.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_query_initial_proposal")
         .await
@@ -50,7 +52,7 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
     market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
     // We expect that proposal will be available as requestor event.
-    let events = market1.query_events(&demand_id, 1.0, Some(5)).await?;
+    let events = market1.query_events(&demand_id, 0.2, Some(5)).await?;
 
     assert_eq!(events.len(), 1);
 
@@ -73,6 +75,7 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 /// Test getting more then one event from query.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_query_multiple_events")
         .await
@@ -92,7 +95,7 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
     // We expect that 3 proposal will be available as requestor event.
     let mut events = vec![];
     for _ in 0..3 {
-        events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
+        events.append(&mut market1.query_events(&demand_id, 0.2, Some(5)).await?);
     }
     assert_eq!(events.len(), 3);
 
@@ -118,6 +121,7 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
 /// or timeout elapses.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_query_events_timeout")
         .await
@@ -136,7 +140,7 @@ async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
     // Query events, when no Proposal are in the queue yet.
     // We set timeout and we expect that function will wait until events will come.
     let query_handle = tokio::spawn(async move {
-        let events = market1c.query_events(&demand_id1c, 1.2, Some(5)).await?;
+        let events = market1c.query_events(&demand_id1c, 0.2, Some(5)).await?;
         assert_eq!(events.len(), 1);
         Result::<(), anyhow::Error>::Ok(())
     });
@@ -147,13 +151,14 @@ async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
     market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::from_millis(1250), query_handle).await???;
+    tokio::time::timeout(Duration::from_millis(250), query_handle).await???;
     Ok(())
 }
 
 /// Query events will return before timeout will elapse, if Demand will be unsubscribed.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_query_events_unsubscribe_notification")
         .await
@@ -187,7 +192,7 @@ async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Erro
     market1.unsubscribe_demand(&demand_id, &identity1).await?;
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::from_millis(1250), query_handle).await???;
+    tokio::time::timeout(Duration::from_millis(250), query_handle).await???;
 
     Ok(())
 }
@@ -196,6 +201,7 @@ async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Erro
 /// or unsubscribed demand.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_query_events_edge_cases")
         .await
@@ -254,6 +260,7 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
 /// only events related for requested subscription and shouldn't affect remaining events.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_query_events_for_multiple_subscriptions")
         .await
@@ -291,6 +298,7 @@ async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Er
 /// The same event shouldn't be returned twice.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_simultaneous_query_events")
         .await
@@ -308,7 +316,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     let market = market1.clone();
 
     let query1 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 1.2, Some(5)).await?;
+        let events = market.query_events(&demand_id, 0.2, Some(5)).await?;
         Result::<_, anyhow::Error>::Ok(events)
     });
 
@@ -316,7 +324,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     let demand_id = demand_id1.clone();
 
     let query2 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 1.2, Some(5)).await?;
+        let events = market.query_events(&demand_id, 0.2, Some(5)).await?;
         Result::<_, anyhow::Error>::Ok(events)
     });
 
@@ -326,8 +334,8 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     market1.subscribe_offer(&sample_offer(), &identity1).await?;
     market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
-    let mut events1 = tokio::time::timeout(Duration::from_millis(1250), query1).await???;
-    let events2 = tokio::time::timeout(Duration::from_millis(1250), query2).await???;
+    let mut events1 = tokio::time::timeout(Duration::from_millis(250), query1).await???;
+    let events2 = tokio::time::timeout(Duration::from_millis(250), query2).await???;
 
     // We expect no events duplication.
     assert_eq!(events1.len() + events2.len(), 2);
@@ -343,7 +351,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     assert_ne!(ids[0], ids[1]);
 
     // We expect, there are no events left.
-    let events = market1.query_events(&demand_id1, 0.1, Some(5)).await?;
+    let events = market1.query_events(&demand_id1, 0.2, Some(5)).await?;
     assert_eq!(events.len(), 0);
     Ok(())
 }
@@ -355,6 +363,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
 ///  of injecting them negotiation engine.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_initial_proposal")
         .await
@@ -371,7 +380,7 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
     // We expect that proposal will be available as event.
     let events = market1
         .requestor_engine
-        .query_events(&subscription_id, 1.0, Some(5))
+        .query_events(&subscription_id, 0.2, Some(5))
         .await?;
 
     assert_eq!(events.len(), 1);
@@ -392,7 +401,7 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
     let new_proposal_id = new_proposal_id.translate(OwnerType::Provider);
     let events = market1
         .provider_engine
-        .query_events(&offer_id, 1.5, Some(5))
+        .query_events(&offer_id, 0.2, Some(5))
         .await?;
     assert_eq!(events.len(), 1);
 

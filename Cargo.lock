@@ -3904,12 +3904,32 @@ dependencies = [
 [[package]]
 name = "serial_test"
 version = "0.4.0"
+source = "git+https://github.com/palfrey/serial_test?branch=support-async#a8f71b88a04afb88d93bf065bb6ba31fdf6b45e4"
+dependencies = [
+ "lazy_static",
+ "parking_lot 0.10.2",
+ "serial_test_derive 0.4.0 (git+https://github.com/palfrey/serial_test?branch=support-async)",
+]
+
+[[package]]
+name = "serial_test"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fef5f7c7434b2f2c598adc6f9494648a1e41274a75c0ba4056f680ae0c117fd6"
 dependencies = [
  "lazy_static",
  "parking_lot 0.10.2",
- "serial_test_derive",
+ "serial_test_derive 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "0.4.0"
+source = "git+https://github.com/palfrey/serial_test?branch=support-async#a8f71b88a04afb88d93bf065bb6ba31fdf6b45e4"
+dependencies = [
+ "proc-macro2 1.0.18",
+ "quote 1.0.7",
+ "syn 1.0.33",
 ]
 
 [[package]]
@@ -5452,6 +5472,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
+ "serial_test 0.4.0 (git+https://github.com/palfrey/serial_test?branch=support-async)",
  "sha3 0.8.2",
  "structopt",
  "thiserror",
@@ -5727,7 +5748,7 @@ dependencies = [
  "bytes 0.5.5",
  "prost 0.5.0",
  "prost-build 0.5.0",
- "serial_test",
+ "serial_test 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "tokio 0.2.21",
  "tokio-util 0.2.0",

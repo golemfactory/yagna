@@ -20,6 +20,7 @@ macro_rules! assert_err_eq {
 /// Than sending unsubscribe should remove Offer from other nodes.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new("test_broadcast_offer")
@@ -64,6 +65,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 /// reject such an Offer since it could be some kind of attack.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new("test_broadcast_offer_validation")
@@ -103,6 +105,7 @@ async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
 /// get Offer only from himself.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new("test_broadcast_stop_conditions")

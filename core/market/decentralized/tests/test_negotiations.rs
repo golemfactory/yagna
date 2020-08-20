@@ -8,6 +8,7 @@ use ya_client::model::market::proposal::State;
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_exchanging_draft_proposals")
         .await

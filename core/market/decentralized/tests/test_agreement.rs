@@ -13,6 +13,7 @@ const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_gsb_get_agreement() -> Result<()> {
     let network = MarketsNetwork::new("test_gsb_get_agreement")
         .await
@@ -49,6 +50,7 @@ async fn test_gsb_get_agreement() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() -> Result<()> {
     let network = MarketsNetwork::new("full_market_interaction_aka_happy_path")
         .await
@@ -109,6 +111,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
 //#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[ignore]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn second_creation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_creation_should_fail")
         .await
@@ -141,6 +144,7 @@ async fn second_creation_should_fail() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn second_confirmation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_confirmation_should_fail")
         .await
@@ -182,6 +186,7 @@ async fn second_confirmation_should_fail() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn agreement_expired_before_confirmation() -> Result<()> {
     let network = MarketsNetwork::new("agreement_expired_before_confirmation")
         .await
@@ -216,6 +221,7 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn agreement_expired_before_approval() -> Result<()> {
     let network = MarketsNetwork::new("agreement_expired_before_approval")
         .await
@@ -259,6 +265,7 @@ async fn agreement_expired_before_approval() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn waiting_wo_confirmation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("waiting_wo_confirmation_should_fail")
         .await
@@ -294,6 +301,7 @@ async fn waiting_wo_confirmation_should_fail() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn approval_before_confirmation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("approval_before_confirmation_should_fail")
         .await
@@ -336,6 +344,7 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn approval_without_waiting_should_pass() -> Result<()> {
     let network = MarketsNetwork::new("approval_without_waiting_should_pass")
         .await
@@ -377,6 +386,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn waiting_after_approval_should_pass() -> Result<()> {
     let network = MarketsNetwork::new("waiting_after_approval_should_pass")
         .await
@@ -424,6 +434,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn second_approval_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_approval_should_fail")
         .await
@@ -475,6 +486,7 @@ async fn second_approval_should_fail() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn second_waiting_should_pass() -> Result<()> {
     let network = MarketsNetwork::new("second_waiting_should_pass")
         .await
@@ -529,6 +541,7 @@ async fn second_waiting_should_pass() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn net_err_while_confirming() -> Result<()> {
     let network = MarketsNetwork::new("net_err_while_confirming")
         .await
@@ -568,6 +581,7 @@ async fn net_err_while_confirming() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn net_err_while_approving() -> Result<()> {
     let network = MarketsNetwork::new("net_err_while_approving")
         .await
