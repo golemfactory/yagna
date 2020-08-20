@@ -143,6 +143,14 @@ impl MarketsNetwork {
         MockNet::default().unregister_node(&id.identity)
     }
 
+    pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
+        let id = self.get_default_id(node_name);
+        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
+
+        MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        Ok(())
+    }
+
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
         let identity_api = MockIdentity::new(name);
@@ -425,6 +433,13 @@ pub async fn wait_for_bcast(
             break;
         }
     }
+}
+
+#[macro_export]
+macro_rules! assert_err_eq {
+    ($expected:expr, $actual:expr $(,)*) => {
+        assert_eq!($expected.to_string(), $actual.unwrap_err().to_string())
+    };
 }
 
 #[async_trait::async_trait]

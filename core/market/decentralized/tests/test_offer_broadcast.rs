@@ -4,16 +4,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::discovery::*;
 use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
 use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
-
-macro_rules! assert_err_eq {
-    ($expected:expr, $actual:expr $(,)*) => {
-        assert_eq!($expected.to_string(), $actual.unwrap_err().to_string())
-    };
-}
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.
