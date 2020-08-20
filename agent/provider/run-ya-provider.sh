@@ -211,7 +211,7 @@ run() {
     fi
 
     say "Start the Provider Agent (stdout & err in $(pwd)/ya-provider.log)"
-    ignore ../usr/bin/ya-provider --data-dir . run 2>&1 | tee ya-provider.log
+    ignore setsid setsid ../usr/bin/ya-provider --data-dir . run 2>&1 | tee -a ya-provider.log
 }
 
 main() {
