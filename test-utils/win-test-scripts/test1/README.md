@@ -31,7 +31,7 @@
   
   A mock agreement which shall be passed to the ExeUnit to execute.
   Note: this agreement points to the Wasm package for execution:
-    `"task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://34.244.4.185:8000/rust-wasi-tutorial.zip"`
+    `"task_package": "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://3.249.139.167:8000/rust-wasi-tutorial.zip"`
   
 - `exe_script.json`
 
