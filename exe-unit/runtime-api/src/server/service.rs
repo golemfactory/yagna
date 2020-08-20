@@ -24,8 +24,10 @@ async fn handle_command(
             service.kill_process(kill).await?;
             proto::response::Command::Kill(Default::default())
         }
-
-        _ => return Err(ErrorResponse::msg("unknown command")),
+        proto::request::Command::Shutdown(_) => {
+            service.shutdown().await?;
+            proto::response::Command::Shutdown(Default::default())
+        }
     })
 }
 
@@ -42,15 +44,14 @@ async fn handle(service: &impl RuntimeService, request: proto::Request) -> proto
     } else {
         proto::response::Command::Error(ErrorResponse::msg("unknown command"))
     });
-    eprintln!("response={:?}", resp);
     resp
 }
 
-pub struct EventEmiter {
+pub struct EventEmitter {
     tx: futures::channel::mpsc::UnboundedSender<proto::Response>,
 }
 
-impl RuntimeEvent for EventEmiter {
+impl RuntimeEvent for EventEmitter {
     fn on_process_status(&self, status: proto::response::ProcessStatus) {
         let mut response = proto::Response::default();
         response.event = true;
@@ -61,9 +62,10 @@ impl RuntimeEvent for EventEmiter {
     }
 }
 
-pub async fn run<Factory, Runtime>(factory: Factory)
+pub async fn run_async<Factory, FutureRuntime, Runtime>(factory: Factory)
 where
-    Factory: Fn(EventEmiter) -> Runtime,
+    Factory: Fn(EventEmitter) -> FutureRuntime,
+    FutureRuntime: Future<Output = Runtime>,
     Runtime: RuntimeService + 'static,
 {
     log::debug!("server starting");
@@ -73,32 +75,43 @@ where
     let mut input = codec::Codec::<proto::Request>::stream(stdin);
     let output = Rc::new(Mutex::new(codec::Codec::<proto::Response>::sink(stdout)));
     let (tx, mut rx) = futures::channel::mpsc::unbounded::<proto::Response>();
-    let emiter = EventEmiter { tx };
-    let service = Rc::new(factory(emiter));
+    let emitter = EventEmitter { tx };
+    let service = Rc::new(factory(emitter).await);
 
-    tokio::task::LocalSet::new()
-        .run_until(async {
-            let _event_sender = {
-                let output = output.clone();
-                async move {
-                    while let Some(event) = rx.next().await {
+    let local = tokio::task::LocalSet::new();
+
+    local.spawn_local({
+        let output = output.clone();
+        async move {
+            while let Some(event) = rx.next().await {
+                log::debug!("event: {:?}", event);
+                tokio::task::spawn_local({
+                    let output = output.clone();
+                    async move {
                         let mut output = output.lock().await;
-                        let _r = SinkExt::send(&mut *output, event).await;
+                        let r = SinkExt::send(&mut *output, event).await;
+                        log::debug!("sending event done: {:?}", r);
                     }
-                }
-            };
+                });
+            }
+        }
+    });
 
+    local
+        .run_until(async {
             while let Some(it) = input.next().await {
                 match it {
                     Ok(request) => {
                         let service = service.clone();
                         let output = output.clone();
-                        let _ = tokio::task::spawn_local(async move {
+                        tokio::task::spawn_local(async move {
+                            log::debug!("received request: {:?}", request);
                             let resp = handle(service.as_ref(), request).await;
+                            log::debug!("response to send: {:?}", resp);
                             let mut output = output.lock().await;
                             log::debug!("sending");
                             let r = SinkExt::send(&mut *output, resp).await;
-                            log::debug!("sending done: {:?}", r.is_ok());
+                            log::debug!("sending done: {:?}", r);
                         });
                     }
                     Err(e) => {
@@ -111,4 +124,12 @@ where
         .await;
 
     log::debug!("server stopped");
+}
+
+pub async fn run<Factory, Runtime>(factory: Factory)
+where
+    Factory: Fn(EventEmitter) -> Runtime,
+    Runtime: RuntimeService + 'static,
+{
+    run_async(|e| async { factory(e) }).await
 }
