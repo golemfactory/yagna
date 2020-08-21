@@ -25,7 +25,7 @@ identity = []
 market = []
 net = []
 payment = ['bigdecimal']
-sgx = ['graphene_api']
+sgx = ['sgx-types']
 
 [dependencies]
 ya-client-model = "0.1"
@@ -37,4 +37,4 @@ log = "0.4"
 serde = { version = "^1.0", features = ["derive"] }
 serde_bytes = "0.11.3"
 thiserror = "1.0.9"
-graphene_api = { git = "https://github.com/golemfactory/graphene-rust.git", rev = "8e14e8f012e790ccce5c696f20c1d750ca3f4398", optional = true }
+sgx-types = { git = "https://github.com/golemfactory/sgx-types.git", rev = "157af8487d538062155d98712fee61a6d69c8ced", features = ['with-serde'], optional = true }

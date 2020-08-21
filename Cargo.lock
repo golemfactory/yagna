@@ -4084,6 +4084,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sgx-types"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/sgx-types.git#e056cfb9f82f3f698e91a34d029cf9c9a0370870"
+dependencies = [
+ "byteorder",
+ "hex",
+]
+
+[[package]]
 name = "sgx_types"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5579,10 +5588,10 @@ dependencies = [
  "bigdecimal",
  "bitflags 1.2.1",
  "chrono",
- "graphene_api",
  "log 0.4.8",
  "serde",
  "serde_bytes",
+ "sgx-types",
  "thiserror",
  "ya-client-model",
  "ya-service-bus",

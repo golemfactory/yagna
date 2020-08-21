@@ -8,6 +8,5 @@ edition = "2018"
 ya-client-model = "0.1"
 ya-core-model = { version = "0.1", features = ["sgx"] }
 ya-service-bus = "0.2"
-graphene_api = { git = "https://github.com/golemfactory/graphene-rust.git", rev = "8e14e8f012e790ccce5c696f20c1d750ca3f4398" }
-
+graphene_api = { git = "https://github.com/golemfactory/graphene-rust.git", rev = "6c309f2627864f6d1634fc26312a73be4b47409a" }
 anyhow = "1.0"
