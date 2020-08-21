@@ -1907,8 +1907,8 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "graphene_api"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/graphene-rust.git?rev=8e14e8f012e790ccce5c696f20c1d750ca3f4398#8e14e8f012e790ccce5c696f20c1d750ca3f4398"
+version = "0.2.0"
+source = "git+https://github.com/golemfactory/graphene-rust.git?rev=6c309f2627864f6d1634fc26312a73be4b47409a#6c309f2627864f6d1634fc26312a73be4b47409a"
 dependencies = [
  "anyhow",
  "base64 0.11.0",
@@ -1920,7 +1920,7 @@ dependencies = [
  "openssl",
  "serde",
  "serde_json",
- "sgx_types",
+ "sgx-types",
  "thiserror",
  "tokio 0.2.21",
 ]
@@ -4086,17 +4086,12 @@ dependencies = [
 [[package]]
 name = "sgx-types"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/sgx-types.git#e056cfb9f82f3f698e91a34d029cf9c9a0370870"
+source = "git+https://github.com/golemfactory/sgx-types.git?rev=157af8487d538062155d98712fee61a6d69c8ced#157af8487d538062155d98712fee61a6d69c8ced"
 dependencies = [
  "byteorder",
  "hex",
+ "serde",
 ]
-
-[[package]]
-name = "sgx_types"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d124789bcc688f5e17f1267dee6ca3d2c871839240cde20dda0134417458245c"
 
 [[package]]
 name = "sha1"
