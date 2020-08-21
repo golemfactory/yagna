@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Set up environment
-        run:
+        run: |
           echo "::set-env name=CONTAINER_OUTPUT_DIR::/src/target/debian"
           echo "::set-env name=JOB_OUTPUT_DIR::${{ runner.temp }}/deb_packages"
       - name: Build Docker image
