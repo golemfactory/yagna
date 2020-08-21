@@ -25,13 +25,13 @@ jobs:
         run: docker build . -f build-deb.Dockerfile -t build-deb
 
       - name: Build yagna.deb file
-        run: docker run build-deb --env "PACKAGE_NAME=yagna" -v $JOB_OUTPUT_DIR:$CONTAINER_OUTPUT_DIR
+        run: docker run --env PACKAGE_NAME=yagna -v $JOB_OUTPUT_DIR:$CONTAINER_OUTPUT_DIR build-deb 
 
       - name: Commit built image
         run: docker commit $(docker ps -aq --filter "ancestor=build-deb") build-deb
 
       - name: Build ya-sb-router.deb file
-        run: docker run build-deb --env "PACKAGE_NAME=ya-sb-router" -v $JOB_OUTPUT_DIR:$CONTAINER_OUTPUT_DIR
+        run: docker run --env PACKAGE_NAME=ya-sb-router -v $JOB_OUTPUT_DIR:$CONTAINER_OUTPUT_DIR build-deb
 
       - name: Upload .deb packages
         uses: kittaakos/upload-artifact-as-is@v0
