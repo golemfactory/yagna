@@ -1,12 +1,10 @@
-use crate::error::{DbResult, Error, ExternalServiceError};
+use crate::error::{DbError, DbResult, Error, ExternalServiceError};
 use actix_web::HttpResponse;
-use futures::{Future, FutureExt};
-use std::pin::Pin;
-use std::sync::Arc;
+use futures::Future;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use ya_core_model::ethaddr::NodeId;
-use ya_core_model::{identity, market};
-use ya_model::market::Agreement;
+use ya_client_model::market::Agreement;
+use ya_core_model::market;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
@@ -17,7 +15,10 @@ pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
             if msg.agreement_id == agreement_id {
                 Ok(agreement)
             } else {
-                Err(market::RpcMessageError::NotFound)
+                Err(market::RpcMessageError::NotFound(format!(
+                    "have only agreement id: {}",
+                    agreement_id
+                )))
             }
         }
     });
@@ -33,38 +34,85 @@ pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Er
     .await
     {
         Ok(agreement) => Ok(Some(agreement)),
-        Err(Error::ExtService(ExternalServiceError::Market(market::RpcMessageError::NotFound))) => {
-            Ok(None)
-        }
+        Err(Error::ExtService(ExternalServiceError::Market(
+            market::RpcMessageError::NotFound(_),
+        ))) => Ok(None),
         Err(e) => Err(e),
     }
 }
 
-pub fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
-    let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> = sign_tx.into();
-    bus::bind(identity::BUS_ID, move |msg: identity::Sign| {
-        let sign_tx = sign_tx.clone();
-        let msg = msg.payload;
-        async move { Ok(sign_tx(msg).await) }
-    });
-}
+pub mod provider {
+    use crate::error::{Error, ExternalServiceError};
+    use ya_client_model::market::Agreement;
+    use ya_core_model::{activity, market};
+    use ya_service_bus::{typed as bus, RpcEndpoint};
 
-pub fn get_sign_tx(node_id: NodeId) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    move |payload| {
-        let fut = bus::service(identity::BUS_ID)
-            .send(identity::Sign { node_id, payload })
-            .map(|x| x.unwrap().unwrap());
-        Box::pin(fut)
+    pub fn fake_get_agreement_id(agreement_id: String) {
+        bus::bind(
+            activity::local::BUS_ID,
+            move |msg: activity::local::GetAgreementId| {
+                let agreement_id = agreement_id.clone();
+                async move { Ok(agreement_id) }
+            },
+        );
+    }
+
+    pub async fn get_agreement_id(activity_id: String) -> Result<Option<String>, Error> {
+        match async move {
+            let agreement_id = bus::service(activity::local::BUS_ID)
+                .send(activity::local::GetAgreementId {
+                    activity_id,
+                    timeout: None,
+                })
+                .await??;
+            Ok(agreement_id)
+        }
+        .await
+        {
+            Ok(agreement_id) => Ok(Some(agreement_id)),
+            Err(Error::ExtService(ExternalServiceError::Activity(
+                activity::RpcMessageError::NotFound(_),
+            ))) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn get_agreement_for_activity(
+        activity_id: String,
+    ) -> Result<Option<Agreement>, Error> {
+        match async move {
+            let agreement_id = bus::service(activity::local::BUS_ID)
+                .send(activity::local::GetAgreementId {
+                    activity_id,
+                    timeout: None,
+                })
+                .await??;
+            let agreement = bus::service(market::BUS_ID)
+                .send(market::GetAgreement::with_id(agreement_id.clone()))
+                .await??;
+            Ok(agreement)
+        }
+        .await
+        {
+            Ok(agreement_id) => Ok(Some(agreement_id)),
+            Err(Error::ExtService(ExternalServiceError::Activity(
+                activity::RpcMessageError::NotFound(_),
+            ))) => Ok(None),
+            Err(Error::ExtService(ExternalServiceError::Market(
+                market::RpcMessageError::NotFound(_),
+            ))) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 }
 
 pub async fn with_timeout<Work: Future<Output = HttpResponse>>(
-    timeout_secs: impl Into<u64>,
+    timeout_secs: impl Into<f64>,
     work: Work,
 ) -> HttpResponse {
     let timeout_secs = timeout_secs.into();
-    if timeout_secs > 0 {
-        match tokio::time::timeout(Duration::from_secs(timeout_secs), work).await {
+    if timeout_secs > 0.0 {
+        match tokio::time::timeout(Duration::from_secs_f64(timeout_secs), work).await {
             Ok(v) => v,
             Err(_) => return HttpResponse::GatewayTimeout().finish(),
         }
@@ -94,16 +142,16 @@ where
 
 pub async fn listen_for_events<T: EventGetter>(
     getter: T,
-    timeout_secs: impl Into<u64>,
+    timeout_secs: impl Into<f64>,
 ) -> DbResult<Vec<T::Event>> {
-    let timeout_secs: u64 = timeout_secs.into();
+    let timeout_secs = timeout_secs.into();
     match getter.get_events().await {
         Err(e) => return Err(e),
-        Ok(events) if events.len() > 0 || timeout_secs == 0 => return Ok(events),
+        Ok(events) if events.len() > 0 || timeout_secs == 0.0 => return Ok(events),
         _ => (),
     }
 
-    let timeout = Duration::from_secs(timeout_secs);
+    let timeout = Duration::from_secs_f64(timeout_secs);
     tokio::time::timeout(timeout, async move {
         loop {
             tokio::time::delay_for(Duration::from_secs(1)).await;
@@ -120,7 +168,7 @@ pub async fn listen_for_events<T: EventGetter>(
 pub mod response {
     use actix_web::HttpResponse;
     use serde::Serialize;
-    use ya_model::ErrorMessage;
+    use ya_client_model::ErrorMessage;
 
     pub fn ok<T: Serialize>(t: T) -> HttpResponse {
         HttpResponse::Ok().json(t)
@@ -147,10 +195,29 @@ pub mod response {
     }
 
     pub fn server_error(e: &impl ToString) -> HttpResponse {
-        HttpResponse::InternalServerError().json(ErrorMessage::new(e.to_string()))
+        let e = e.to_string();
+        log::error!("Payment API server error: {}", e);
+        HttpResponse::InternalServerError().json(ErrorMessage::new(e))
     }
 
     pub fn bad_request(e: &impl ToString) -> HttpResponse {
         HttpResponse::BadRequest().json(ErrorMessage::new(e.to_string()))
     }
+
+    pub fn conflict(e: &impl ToString) -> HttpResponse {
+        HttpResponse::Conflict().json(ErrorMessage::new(e.to_string()))
+    }
+}
+
+// These JSON methods exist for the sole purpose of converting error type. It cannot be done by
+// implementing From<> because serde_json has a single error type for serialization and deserialization.
+
+pub fn json_to_string<T: Serialize>(t: &T) -> DbResult<String> {
+    serde_json::to_string(t)
+        .map_err(|e| DbError::Query(format!("JSON serialization failed: {}", e)))
+}
+
+pub fn json_from_str<'a, T: Deserialize<'a>>(s: &'a str) -> DbResult<T> {
+    serde_json::from_str(s)
+        .map_err(|e| DbError::Integrity(format!("JSON deserialization failed: {}", e)))
 }

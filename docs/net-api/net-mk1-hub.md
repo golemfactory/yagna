@@ -32,10 +32,10 @@ The first implementation called YagnaNet Mk1 uses a centralized server to allow 
 
 YagnaNet module receives messages from two sources:
 
-- Yagna Service Bus (GSB)
+- Service Bus (GSB)
 - Other nodes in the network
 
-After receiving a message, YagnaNet module may put it on the Yagna Service Bus if it is addressed to the current node,
+After receiving a message, YagnaNet module may put it on the Service Bus if it is addressed to the current node,
 send it to the centralized server which forwards it to the YagnaNet module of the destination node (YagnaNet Mk1) or
 use P2P network to send it to the destination node (YagnaNet Mk2).
 
@@ -47,7 +47,7 @@ Every message contains following parts:
 
 | Message Part Name | Example |
 |--|--|
-| [Destination](#message-destination) | net/0x123/market-api/get-offers |
+| [Destination](#message-destination) | /net/0x123/market-api/get-offers |
 | [Payload](#payload) | { "max-offers": 50 } |
 | [Reply To](#reply-to) | 0x789 |
 | [Request ID](#request-id) | 1574244629 |
@@ -57,7 +57,7 @@ Every message contains following parts:
 
 #### Prefix
 
-Messages addressed to YagnaNet module must start with `net/`.
+Messages addressed to YagnaNet module must start with `/net/`.
 
 #### Address
 
@@ -87,8 +87,8 @@ The next part of the message should be the destination module name followed by t
 
 | Destination | Description |
 |--|--|
-| net/0x123/market-api/get-offers | Get offers from the Market API module on node 0x123. |
-| net/broadcast:5/payment/get-payment-method | Get payment methods from nodes that are not further than N hops from the originating node. |
+| /net/0x123/market-api/get-offers | Get offers from the Market API module on node 0x123. |
+| /net/broadcast:5/payment/get-payment-method | Get payment methods from nodes that are not further than N hops from the originating node. |
 
 ### Payload
 
@@ -116,11 +116,11 @@ Request ID is necessary to pair a request with response. It should be a unguessa
 
 ### Requests
 
-When YagnaNet receives a network message prefixed with `net/NODE_ID/`, where NODE_ID is the current node identifier,
-the message is put on the Yagna Service Bus without the `net/NODE_ID/` prefix, so that modules subscribed to this type
+When YagnaNet receives a network message prefixed with `/net/NODE_ID/`, where NODE_ID is the current node identifier,
+the message is put on the Service Bus without the `/net/NODE_ID/` prefix, so that modules subscribed to this type
 of message receive it.
 
-If the message is prefixed with `net/NODE_ID/`, where NODE_ID is different from the current node identifier,
+If the message is prefixed with `/net/NODE_ID/`, where NODE_ID is different from the current node identifier,
 the message (in YagnaNet Mk1 version) is forwarded to the centralized server (hub) which relays it to the destination
 node.
 

@@ -1,0 +1,88 @@
+{
+  "agreementId": "4724b50d-493e-4f0c-85ab-30098f56c624",
+  "demand": {
+    "constraints": "(&(golem.node.debug.subnet=demo-1)\n\t(&(golem.inf.mem.gib>=0.5)\n\t(golem.inf.storage.gib>=2.0)\n\t(golem.runtime.name=vm))\n\t(golem.com.pricing.model=linear))",
+    "demandId": "98513eff-defe-4e52-adf4-32c3e9cba6c8",
+    "properties": {
+      "golem": {
+        "node": {
+          "debug": {
+            "subnet": "demo-1"
+          }
+        },
+        "srv": {
+          "comp": {
+            "expiration": 1594370429690,
+            "task_package": "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:http://3.249.139.167:8000/local-image-c76719083b.gvmi",
+            "vm": {
+              "package_format": "gvmkit-squash"
+            }
+          }
+        }
+      }
+    },
+    "requestorId": "0x47c9a1ae6e29750b7e0ebdb0e85d8af0cb7161e4"
+  },
+  "offer": {
+    "constraints": "(&\n  (golem.srv.comp.expiration>0)\n  (golem.node.debug.subnet=demo-1)\n)",
+    "offerId": "4724b50d-493e-4f0c-85ab-30098f56c624",
+    "properties": {
+      "golem": {
+        "com": {
+          "pricing": {
+            "model": {
+              "@tag": "linear",
+              "linear": {
+                "coeffs": [
+                  0.001,
+                  0.002,
+                  0.01
+                ]
+              }
+            }
+          },
+          "scheme": {
+            "@tag": "payu",
+            "payu": {
+              "interval_sec": 6.0
+            }
+          },
+          "usage": {
+            "vector": [
+              "golem.usage.duration_sec",
+              "golem.usage.cpu_sec"
+            ]
+          }
+        },
+        "inf": {
+          "cpu": {
+            "architecture": "x86_64",
+            "cores": 6,
+            "threads": 2
+          },
+          "mem": {
+            "gib": 2.0
+          },
+          "storage": {
+            "gib": 20.0
+          }
+        },
+        "node": {
+          "debug": {
+            "subnet": "demo-1"
+          },
+          "id": {
+            "name": "smok1"
+          }
+        },
+        "runtime": {
+          "name": "vm",
+          "version": "0.1.0"
+        }
+      }
+    },
+    "providerId": "0xb3dfb4222764d4e0ada2f17ee12efd6eae7c54fb"
+  },
+  "state": "Pending",
+  "validTo": "2020-07-10T09:25:33.967333Z"
+}

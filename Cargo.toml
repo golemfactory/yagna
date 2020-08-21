@@ -1,47 +1,127 @@
+[package]
+name = "yagna"
+version = "0.3.0"
+description = "Open platform and marketplace for distributed computations"
+readme = "README.md"
+authors = ["Golem Factory <contact@golem.network>"]
+homepage = "https://github.com/golemfactory/yagna/core/serv"
+repository = "https://github.com/golemfactory/yagna"
+license = "GPL-3.0"
+edition = "2018"
+
+[features]
+default=['market-forwarding', 'gnt-driver']
+static-openssl=["openssl/vendored"]
+market-forwarding = ['ya-market-forwarding']
+market-decentralized = ['ya-market-decentralized']
+dummy-driver = ['ya-dummy-driver']
+gnt-driver = ['ya-gnt-driver']
+
+[[bin]]
+name = "yagna"
+path = "core/serv/src/main.rs"
+
+[dependencies]
+ya-activity = "0.2"
+ya-compile-time-utils = "0.1"
+ya-dummy-driver = { version = "0.1", optional = true }
+ya-gnt-driver = { version = "0.1", optional = true }
+ya-identity = "0.2"
+ya-market-decentralized = { version = "0.1", optional = true }
+ya-market-forwarding = { version = "0.1", optional = true }
+ya-net = { version = "0.1", features = ["service"] }
+ya-payment = "0.1"
+ya-persistence = "0.2"
+ya-sb-proto = "0.1"
+ya-sb-router = "0.1"
+ya-service-api = "0.1"
+ya-service-api-derive = "0.1"
+ya-service-api-interfaces = "0.1"
+ya-service-api-web = "0.1"
+ya-service-bus = "0.2"
+ya-utils-path = "0.1"
+
+actix-rt = "1.0"
+actix-service = "1.0"
+actix-web = "2.0"
+anyhow = "1.0"
+directories = "2.0.2"
+dotenv = "0.15.0"
+env_logger = "0.7"
+futures = "0.3"
+lazy_static = "1.4"
+log = "0.4"
+openssl="0.10"
+structopt = "0.3"
+url = "2.1.1"
+
+[package.metadata.deb]
+assets = [
+    ["target/release/yagna", "usr/bin/", "755"],
+    ["target/release/ya-requestor", "usr/bin/", "755"],
+    ["target/release/ya-provider", "usr/bin/", "755"],
+    ["target/release/gftp", "usr/bin/", "755"],
+    ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
+    ["README.md", "usr/share/doc/yagna/", "644"],
+    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
+    ["agent/provider/readme.md", "usr/share/doc/yagna/run-provider.md", "644"],
+]
+features=["static-openssl"]
+
 [workspace]
 members = [
     "agent/provider",
     "agent/requestor",
-    "agent/offer-model",
+    "agent/requestor-sdk",
     "core/activity",
     "core/gftp",
     "core/identity",
-    "core/market",
+    "core/market/decentralized",
+    "core/market/forwarding",
+    "core/market/resolver",
     "core/model",
     "core/net",
     "core/payment",
-    "core/payment-driver",
+    "core/payment-driver/dummy",
+    "core/payment-driver/gnt",
     "core/persistence",
-    "core/serv",
     "core/serv-api",
     "core/serv-api/cache",
+    "core/serv-api/derive",
     "core/serv-api/interfaces",
     "core/serv-api/web",
-    "core/serv-api/derive",
     "exe-unit",
-    "exe-unit/wasm-mozjs",
-    "exe-unit/wasmtime",
-    "exe-unit/exe-unit-tools",
-    "interfaces/client",
-    "interfaces/model",
+    "exe-unit/runtime-api",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
     "service-bus/router",
     "service-bus/util",
-    "utils/scheduler",
     "utils/actix_utils",
+    "utils/agreement-utils",
+    "utils/compile-time-utils",
+    "utils/path",
+    "utils/process",
+    "utils/scheduler",
+    "utils/transfer",
 ]
 
 [patch.crates-io]
 ## SERVICES
 ya-activity = { path = "core/activity" }
-ya-payment = { path = "core/payment" }
+ya-dummy-driver = { path = "core/payment-driver/dummy" }
+ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
+ya-market-decentralized = { path = "core/market/decentralized" }
+ya-market-forwarding = { path = "core/market/forwarding" }
+ya-market-resolver = { path = "core/market/resolver" }
 ya-net = { path = "core/net" }
+ya-payment = { path = "core/payment" }
+
 
 ## CORE UTILS
+ya-core-model = { path = "core/model" }
+ya-persistence = { path = "core/persistence" }
 ya-service-api = { path = "core/serv-api" }
 ya-service-api-cache = { path = "core/serv-api/cache" }
 ya-service-api-derive = { path = "core/serv-api/derive" }
@@ -54,12 +134,16 @@ ya-sb-proto = { path = "service-bus/proto" }
 ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
+## CLIENT
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "91dfde2b204a24031f137151a1af300029271832"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "91dfde2b204a24031f137151a1af300029271832"}
+
 ## OTHERS
-ya-agent-offer-model = { path = "agent/offer-model" }
-ya-client = { path = "interfaces/client" }
-ya-core-model = { path = "core/model" }
+gftp = { path = "core/gftp" }
+ya-agreement-utils = { path = "utils/agreement-utils" }
+ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
-ya-model = { path = "interfaces/model" }
-ya-payment-driver = { path = "core/payment-driver" }
-ya-persistence = { path = "core/persistence" }
+ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-path = { path = "utils/path"}
+ya-utils-process = { path = "utils/process"}

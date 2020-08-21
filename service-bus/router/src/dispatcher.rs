@@ -29,16 +29,19 @@ where
         &mut self,
         addr: A,
         sink: B,
-    ) -> failure::Fallible<()> {
+    ) -> anyhow::Result<()> {
         match self.senders.entry(addr) {
-            Entry::Occupied(_) => Err(failure::err_msg("Sender already registered")),
+            Entry::Occupied(entry) => anyhow::bail!("Sender already registered: {}", entry.key()),
             Entry::Vacant(entry) => {
                 let (tx, rx) = mpsc::channel(1000);
                 tokio::spawn(async move {
                     let mut rx = rx;
                     futures::pin_mut!(sink);
                     if let Err(e) = sink.send_all(&mut rx).await {
-                        log::error!("register send failed: {:?}", e)
+                        log::error!("Send failed: {:?}", e)
+                    }
+                    if let Err(e) = sink.close().await {
+                        log::error!("Connection close failed: {:?}", e)
                     }
                 });
                 entry.insert(tx);
@@ -47,19 +50,16 @@ where
         }
     }
 
-    pub fn unregister(&mut self, addr: &A) -> failure::Fallible<()> {
-        match self.senders.remove(addr) {
-            None => Err(failure::err_msg("Sender not registered")),
-            Some(_) => Ok(()),
-        }
+    pub fn unregister(&mut self, addr: &A) -> () {
+        self.senders.remove(addr);
     }
 
-    pub fn send_message<T>(&mut self, addr: &A, msg: T) -> failure::Fallible<()>
+    pub fn send_message<T>(&mut self, addr: &A, msg: T) -> anyhow::Result<()>
     where
-        T: Into<M>,
+        T: Into<M> + Debug,
     {
         match self.senders.get_mut(addr) {
-            None => Err(failure::err_msg("Sender not registered")),
+            None => anyhow::bail!("Sender not registered: {}, msg: {:?}", addr, msg),
             Some(sender) => {
                 let sender = sender.clone();
                 let msg = msg.into();
@@ -103,7 +103,7 @@ mod test {
         let addr = "test_addr".to_string();
         let msg = "test_msg";
         dispatcher.register(addr.clone(), tx).unwrap();
-        dispatcher.unregister(&addr).unwrap();
+        dispatcher.unregister(&addr);
         dispatcher.send_message(&addr, msg.to_string()).unwrap_err(); // Should be error
     }
 }

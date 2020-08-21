@@ -1,12 +1,13 @@
-use crate::error::DbResult;
-use crate::models::*;
+use crate::error::{DbError, DbResult};
+use crate::models::allocation::{ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
-use crate::schema::pay_payment::dsl as payment_dsl;
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::BigDecimal;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use std::collections::HashMap;
-use ya_core_model::ethaddr::NodeId;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_client_model::payment::{Allocation, NewAllocation};
+use ya_client_model::NodeId;
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 use ya_persistence::types::{BigDecimalField, Summable};
 
 pub struct AllocationDao<'c> {
@@ -19,104 +20,95 @@ impl<'c> AsDao<'c> for AllocationDao<'c> {
     }
 }
 
+pub fn spend_from_allocation(
+    allocation_id: &String,
+    amount: &BigDecimalField,
+    conn: &ConnType,
+) -> DbResult<()> {
+    let allocation: ReadObj = dsl::pay_allocation.find(allocation_id).first(conn)?;
+    if amount > &allocation.remaining_amount {
+        return Err(DbError::Query(format!(
+            "Not enough funds in allocation. Needed: {} Remaining: {}",
+            amount, allocation.remaining_amount
+        )));
+    }
+    let spent_amount = &allocation.spent_amount + amount;
+    let remaining_amount = &allocation.remaining_amount - amount;
+    diesel::update(&allocation)
+        .set((
+            dsl::spent_amount.eq(spent_amount),
+            dsl::remaining_amount.eq(remaining_amount),
+        ))
+        .execute(conn)?;
+    Ok(())
+}
+
 impl<'c> AllocationDao<'c> {
-    pub async fn create(&self, allocation: NewAllocation) -> DbResult<()> {
+    pub async fn create(&self, allocation: NewAllocation, owner_id: NodeId) -> DbResult<String> {
+        let allocation = WriteObj::new(allocation, owner_id);
+        let allocation_id = allocation.id.clone();
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::pay_allocation)
                 .values(allocation)
                 .execute(conn)?;
-            Ok(())
+            Ok(allocation_id)
         })
         .await
     }
 
-    pub async fn get(&self, allocation_id: String) -> DbResult<Option<Allocation>> {
-        do_with_transaction(self.pool, move |conn| {
-            let allocation: Option<NewAllocation> = dsl::pay_allocation
-                .find(allocation_id.clone())
+    pub async fn get(
+        &self,
+        allocation_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<Option<Allocation>> {
+        readonly_transaction(self.pool, move |conn| {
+            let allocation: Option<ReadObj> = dsl::pay_allocation
+                .filter(dsl::owner_id.eq(owner_id))
+                .find(allocation_id)
                 .first(conn)
                 .optional()?;
-            match allocation {
-                Some(allocation) => {
-                    let payments: Vec<BigDecimalField> = payment_dsl::pay_payment
-                        .select(payment_dsl::amount)
-                        .filter(payment_dsl::allocation_id.eq(allocation_id))
-                        .load(conn)?;
-                    let spent_amount = payments.sum();
-                    let remaining_amount = &allocation.total_amount.0 - &spent_amount;
-                    Ok(Some(Allocation {
-                        allocation,
-                        spent_amount,
-                        remaining_amount,
-                    }))
-                }
-                None => Ok(None),
-            }
+            Ok(allocation.map(Into::into))
         })
         .await
     }
 
-    pub async fn get_all(&self) -> DbResult<Vec<Allocation>> {
-        do_with_transaction(self.pool, move |conn| {
-            let allocations: Vec<NewAllocation> = dsl::pay_allocation.load(conn)?;
-            let payments: Vec<BarePayment> = payment_dsl::pay_payment.load(conn)?;
-            let mut payments_map = payments
-                .into_iter()
-                .fold(HashMap::new(), |mut map, payment| {
-                    if let Some(allocation_id) = payment.allocation_id.clone() {
-                        let x = map.entry(allocation_id).or_insert_with(BigDecimal::zero);
-                        *x += Into::<BigDecimal>::into(payment.amount);
-                    }
-                    map
-                });
-            let allocations = allocations
-                .into_iter()
-                .map(|allocation| {
-                    let spent_amount = payments_map
-                        .remove(&allocation.id)
-                        .unwrap_or(BigDecimal::zero());
-                    let remaining_amount = &allocation.total_amount.0 - &spent_amount;
-                    Allocation {
-                        allocation,
-                        spent_amount,
-                        remaining_amount,
-                    }
-                })
-                .collect();
-            Ok(allocations)
+    pub async fn get_for_owner(&self, owner_id: NodeId) -> DbResult<Vec<Allocation>> {
+        readonly_transaction(self.pool, move |conn| {
+            let allocations: Vec<ReadObj> = dsl::pay_allocation
+                .filter(dsl::owner_id.eq(owner_id))
+                .load(conn)?;
+            Ok(allocations.into_iter().map(Into::into).collect())
         })
         .await
     }
 
-    pub async fn delete(&self, allocation_id: String) -> DbResult<()> {
+    pub async fn delete(&self, allocation_id: String, owner_id: NodeId) -> DbResult<bool> {
         do_with_transaction(self.pool, move |conn| {
-            diesel::delete(dsl::pay_allocation.filter(dsl::id.eq(allocation_id))).execute(conn)?;
-            Ok(())
+            let num_deleted = diesel::delete(
+                dsl::pay_allocation
+                    .filter(dsl::id.eq(allocation_id))
+                    .filter(dsl::owner_id.eq(owner_id)),
+            )
+            .execute(conn)?;
+            Ok(num_deleted > 0)
         })
         .await
     }
 
-    pub async fn total_allocation(&self, identity: NodeId) -> DbResult<BigDecimal> {
-        do_with_transaction(self.pool, move |conn| {
-            let me = identity.to_string();
-            // TODO: Allocation owner
-            let total_allocations = dsl::pay_allocation
-                .select(dsl::total_amount)
+    pub async fn total_remaining_allocation(
+        &self,
+        platform: String,
+        address: String,
+    ) -> DbResult<BigDecimal> {
+        readonly_transaction(self.pool, move |conn| {
+            let total_remaining_amount = dsl::pay_allocation
+                .select(dsl::remaining_amount)
+                .filter(dsl::payment_platform.eq(platform))
+                .filter(dsl::address.eq(address))
                 .get_results::<BigDecimalField>(conn)?
-                .into_iter()
-                .map(Into::into)
-                .fold(BigDecimal::default(), |acc, v: BigDecimal| acc + v);
+                .sum();
 
-            let total_payments = payment_dsl::pay_payment
-                .select(payment_dsl::amount)
-                .filter(payment_dsl::payer_id.eq(me))
-                .filter(payment_dsl::allocation_id.is_not_null())
-                .get_results::<BigDecimalField>(conn)?
-                .into_iter()
-                .map(Into::into)
-                .fold(BigDecimal::default(), |acc, v: BigDecimal| acc + v);
-
-            Ok(total_allocations - total_payments)
+            Ok(total_remaining_amount)
         })
         .await
     }

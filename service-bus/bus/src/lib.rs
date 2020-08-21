@@ -1,25 +1,19 @@
-#![allow(unused_imports)]
-#![allow(dead_code)]
 use actix::Message;
 use futures::prelude::Stream;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-use std::future::Future;
+use std::{fmt::Debug, future::Future};
 
 pub mod actix_rpc;
 pub mod connection;
 pub mod error;
 mod local_router;
 mod remote_router;
+mod serialization;
+pub mod timeout;
 pub mod typed;
 pub mod untyped;
 
 pub use error::Error;
-use futures::TryStream;
-
-pub mod timeout;
-
-mod serialization;
 
 pub trait RpcMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
     const ID: &'static str;
@@ -93,6 +87,16 @@ pub struct RpcRawCall {
     pub body: Vec<u8>,
 }
 
+impl RpcRawCall {
+    fn from_envelope_addr<T: Serialize>(envelope: RpcEnvelope<T>, addr: String) -> Self {
+        RpcRawCall {
+            caller: envelope.caller,
+            addr,
+            body: crate::serialization::to_vec(&envelope.body).unwrap(),
+        }
+    }
+}
+
 impl Message for RpcRawCall {
     type Result = Result<Vec<u8>, error::Error>;
 }
@@ -106,9 +110,9 @@ impl<T: RpcMessage> RpcEnvelope<T> {
         self.body
     }
 
-    pub fn with_caller(caller: impl Into<String>, body: T) -> Self {
+    pub fn with_caller(caller: impl ToString, body: T) -> Self {
         RpcEnvelope {
-            caller: caller.into(),
+            caller: caller.to_string(),
             body,
         }
     }
@@ -159,6 +163,8 @@ pub trait RpcEndpoint<T: RpcMessage>: Clone {
     type Result: Future<Output = Result<<RpcEnvelope<T> as Message>::Result, error::Error>>;
 
     fn send(&self, msg: T) -> Self::Result;
+
+    fn send_as(&self, caller: impl ToString + 'static, msg: T) -> Self::Result;
 }
 
 pub trait RpcHandler<T: RpcMessage> {

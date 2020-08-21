@@ -6,6 +6,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-client = "0.3"
 ya-core-model = { version = "0.1", features = ["appkey"] }
 ya-service-api = "0.1"
 ya-service-api-cache = "0.1"
@@ -13,10 +14,11 @@ ya-service-bus = "0.2"
 
 actix-service = "1.0.0"
 actix-web = "2.0.0"
+actix-web-httpauth="0.4"
 futures = "0.3"
 log = "0.4"
 serde = { version = "^1.0", features = ["derive"] }
-actix-web-httpauth="0.4"
+url = "2.1.1"
 
 [dev-dependencies]
 ya-identity = "0.2"

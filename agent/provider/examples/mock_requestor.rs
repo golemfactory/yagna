@@ -1,8 +1,8 @@
 use serde_json;
 use std::{thread, time::Duration};
 
+use ya_client::model::market::{AgreementProposal, Demand, RequestorEvent};
 use ya_client::{market::MarketRequestorApi, web::WebClient, Error, Result};
-use ya_model::market::{AgreementProposal, Demand, RequestorEvent};
 
 async fn query_events(
     client: &MarketRequestorApi,
@@ -83,5 +83,5 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
-    simulate_requestor(WebClient::builder().build()?.interface()?).await
+    simulate_requestor(WebClient::builder().build().interface()?).await
 }

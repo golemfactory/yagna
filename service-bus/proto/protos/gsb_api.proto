@@ -26,6 +26,7 @@ service Bus {
 /* Exposed by registering services */
 service Service {
   rpc Call (CallRequest) returns (CallReply);
+  rpc Check (Ping) returns (Pong);
 }
 
 enum RegisterReplyCode {
@@ -114,11 +115,16 @@ message UnsubscribeReply {
 }
 
 message BroadcastRequest {
-  string topic = 1;
+  string caller = 1;
   bytes data = 2;
+  string topic = 3;
 }
 
 message BroadcastReply {
   BroadcastReplyCode code = 1;
   string message = 2;  // in case of errors
 }
+
+message Ping {}
+
+message Pong {}

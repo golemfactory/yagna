@@ -1,81 +1,177 @@
 use crate::error::Error;
+use crate::runtime::RuntimeMode;
 use crate::Result;
 use actix::prelude::*;
 use serde::{Deserialize, Serialize};
-use ya_model::activity::activity_state::{State, StatePair};
-use ya_model::activity::{
+use std::path::PathBuf;
+use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::{
     CommandResult, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
 };
+use ya_runtime_api::server::proto;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
 pub struct GetMetrics;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
-#[rtype(result = "GetStateResult")]
+#[rtype(result = "GetStateResponse")]
 pub struct GetState;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
-pub struct GetStateResult(pub StatePair);
+pub struct GetStateResponse(pub StatePair);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[rtype(result = "GetBatchResultsResponse")]
+pub struct GetBatchResults(pub String);
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
+pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
+
+#[derive(Debug, Message)]
+#[rtype(result = "()")]
+pub struct SetTaskPackagePath(pub PathBuf);
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "()")]
 pub struct SetState {
-    pub state: Option<StatePair>,
-    pub running_command: Option<Option<ExeScriptCommandState>>,
-    pub batch_result: Option<(String, ExeScriptCommandResult)>,
+    pub state: Option<StateUpdate>,
+    pub running_command: Option<CommandUpdate>,
+    pub batch_result: Option<ResultUpdate>,
 }
 
-impl From<StatePair> for SetState {
-    fn from(state: StatePair) -> Self {
-        SetState {
-            state: Some(state),
-            running_command: None,
-            batch_result: None,
-        }
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StateUpdate {
+    pub state: StatePair,
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CommandUpdate {
+    pub cmd: Option<ExeScriptCommandState>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ResultUpdate {
+    pub batch_id: String,
+    pub result: ExeScriptCommandResult,
+}
+
+impl SetState {
+    pub fn state(mut self, state: StatePair) -> Self {
+        self.state = Some(StateUpdate {
+            state,
+            reason: None,
+        });
+        self
+    }
+
+    pub fn state_reason(mut self, state: StatePair, reason: String) -> Self {
+        self.state = Some(StateUpdate {
+            state,
+            reason: Some(reason),
+        });
+        self
+    }
+
+    pub fn cmd(mut self, command: Option<ExeScriptCommand>) -> Self {
+        self.running_command = Some(CommandUpdate {
+            cmd: command.map(|c| c.into()),
+        });
+        self
+    }
+
+    pub fn result(mut self, batch_id: String, result: ExeScriptCommandResult) -> Self {
+        self.batch_result = Some(ResultUpdate { batch_id, result });
+        self
     }
 }
 
 impl From<State> for SetState {
+    #[inline]
     fn from(state: State) -> Self {
-        SetState {
-            state: Some(StatePair::from(state)),
-            running_command: None,
-            batch_result: None,
-        }
+        Self::from(StatePair::from(state))
+    }
+}
+
+impl From<StatePair> for SetState {
+    #[inline]
+    fn from(state: StatePair) -> Self {
+        Self::default().state(state)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Message)]
-#[rtype(result = "Result<ExecCmdResult>")]
-pub struct ExecCmd(pub ExeScriptCommand);
+#[rtype(result = "Result<RuntimeCommandResult>")]
+pub struct RuntimeCommand(pub ExeScriptCommand);
 
 #[derive(Clone, Debug)]
-pub struct ExecCmdResult {
+pub struct RuntimeCommandResult {
     pub result: CommandResult,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
 }
 
-impl ExecCmdResult {
-    pub fn into_exe_result(self, index: usize) -> ExeScriptCommandResult {
-        let message = match self.result {
-            CommandResult::Ok => self.stdout,
-            CommandResult::Error => self.stderr,
-        };
-        ExeScriptCommandResult {
-            index: index as u32,
-            result: Some(self.result),
-            message,
+impl RuntimeCommandResult {
+    pub fn ok() -> Self {
+        RuntimeCommandResult {
+            result: CommandResult::Ok,
+            stdout: None,
+            stderr: None,
+        }
+    }
+
+    pub fn error(err: impl ToString) -> Self {
+        RuntimeCommandResult {
+            result: CommandResult::Error,
+            stdout: None,
+            stderr: Some(err.to_string()),
         }
     }
 }
+
+impl From<proto::response::Error> for RuntimeCommandResult {
+    fn from(err_resp: proto::response::Error) -> Self {
+        let result = match err_resp.code {
+            0 => CommandResult::Ok,
+            _ => CommandResult::Error,
+        };
+        let mut stderr = err_resp.message;
+        for (key, value) in err_resp.context {
+            stderr = format!("{}\n{} = {}", stderr, key, value);
+        }
+
+        RuntimeCommandResult {
+            result,
+            stdout: None,
+            stderr: Some(stderr),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct SetRuntimeMode(pub RuntimeMode);
 
 #[derive(Clone, Debug, PartialEq, Message)]
 #[rtype(result = "()")]
 pub struct Register<Svc>(pub Addr<Svc>)
 where
     Svc: Actor<Context = Context<Svc>> + Handler<Shutdown>;
+
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Stop {
+    pub exclude_batches: Vec<String>,
+}
+
+impl Default for Stop {
+    fn default() -> Self {
+        Stop {
+            exclude_batches: Vec::new(),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<()>")]

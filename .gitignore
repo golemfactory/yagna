@@ -7,6 +7,7 @@
 
 ## Workdir
 workdir/*
+core/market/decentralized/tests/test-workdir/*
 
 # IDEs
 .idea
@@ -14,8 +15,18 @@ workdir/*
 .vscode
 
 **/.env
+.*.swp
 
 # Databases
-**/yagna.db
-**/yagna.db-shm
-**/yagna.db-wal
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Provider dir
+**/ya-prov
+
+# Requestor dir
+**/ya-req
+
+# Keys
+**/*.key

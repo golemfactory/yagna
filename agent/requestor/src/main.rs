@@ -1,220 +1,250 @@
-use actix_rt::Arbiter;
+use actix_rt::{signal, Arbiter};
+use chrono::Utc;
 use futures::{channel::mpsc, prelude::*};
-use std::time::Duration;
-use structopt::StructOpt;
-use url::Url;
+use humantime::Duration;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use structopt::{clap, StructOpt};
 
-use ya_client::{
-    activity::ActivityRequestorControlApi, market::MarketRequestorApi, web::WebClient,
-};
-//use ya_model::market::proposal::State;
-use ya_model::market::{proposal::State, AgreementProposal, Demand, Proposal, RequestorEvent};
+use std::convert::TryFrom;
+use ya_client::{cli::ApiOpts, cli::RequestorApi, Error};
+
+mod activity;
+mod market;
+mod payment;
+
+const DEFAULT_NODE_NAME: &str = "test1";
+const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://3.249.139.167:8000/rust-wasi-tutorial.zip";
 
 #[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+#[structopt(about = clap::crate_description!())]
+#[structopt(setting = clap::AppSettings::ColoredHelp)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 struct AppSettings {
-    /// Authorization token to server
-    #[structopt(long = "app-key", env = "YAGNA_APPKEY", hide_env_values = true)]
-    app_key: String,
-
+    #[structopt(flatten)]
+    api: ApiOpts,
+    #[structopt(long)]
+    exe_script: PathBuf,
+    /// Subnetwork identifier. You can set this value to filter nodes
+    /// with other identifiers than selected. Useful for test purposes.
+    #[structopt(long, env = "SUBNET")]
+    pub subnet: Option<String>,
+    #[structopt(long, default_value = DEFAULT_NODE_NAME)]
+    node_name: String,
+    #[structopt(long, default_value = DEFAULT_TASK_PACKAGE)]
+    task_package: String,
+    #[structopt(long, default_value = "100")]
+    allocation_size: i64,
+    /// Estimated time limit for requested task completion. All agreements will expire
+    /// after specified time counted from demand subscription. All activities will
+    /// be destroyed, when agreement expires.
     ///
-    #[structopt(
-        long = "market-url",
-        env = "YAGNA_MARKET_URL",
-        default_value = "http://10.30.10.202:5001/market-api/v1/"
-    )]
-    market_url: Url,
-
+    /// It is not well specified, what to do with payment after agreement expiration.
+    /// There are many scenarios, eg.:
+    /// - Requestor requested bigger work than feasible to compute within this limit
     ///
-    #[structopt(long = "activity-url", env = "YAGNA_ACTIVITY_URL")]
-    activity_url: Option<Url>,
+    /// - Provider was not as performant as he declared
+    #[structopt(long, default_value = "15min")]
+    pub task_expiration: Duration,
+    /// Exit after processing one agreement.
+    #[structopt(long)]
+    one_agreement: bool,
 }
 
-impl AppSettings {
-    fn market_api(&self) -> Result<ya_client::market::MarketRequestorApi, anyhow::Error> {
-        Ok(WebClient::with_token(&self.app_key)?.interface_at(self.market_url.clone()))
+/// if needed unsubscribes from the market and releases allocation
+async fn shutdown(
+    activities: Arc<Mutex<HashSet<String>>>,
+    agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
+    subscription_id: String,
+    api: RequestorApi,
+) {
+    log::info!("terminating...");
+
+    let activities = std::mem::replace(&mut (*activities.lock().unwrap()), HashSet::new());
+    let agreement_allocation =
+        std::mem::replace(&mut (*agreement_allocation.lock().unwrap()), HashMap::new());
+
+    log::info!("unsubscribing demand...");
+    let mut pending = vec![api
+        .market
+        .unsubscribe(&subscription_id)
+        .map(|_| Ok(()))
+        .map_err(move |e: Error| log::error!("unable to unsubscribe the demand: {:?}", e))
+        .boxed_local()];
+
+    if activities.len() > 0 {
+        log::info!("destroying activities ({}) ...", activities.len());
+        pending.extend(activities.iter().map(|id| {
+            log::debug!("destroying activity {}", id);
+            api.activity
+                .control()
+                .destroy_activity(&id)
+                .map_err(move |e| log::error!("unable to destroy activity {}: {:?}", id, e))
+                .boxed_local()
+        }));
     }
 
-    fn activity_api(&self) -> Result<ActivityRequestorControlApi, anyhow::Error> {
-        let client = WebClient::with_token(&self.app_key)?;
-        if let Some(url) = &self.activity_url {
-            Ok(client.interface_at(url.clone()))
-        } else {
-            Ok(client.interface()?)
-        }
-    }
-}
-
-enum ProcessOfferResult {
-    ProposalId(String),
-    AgreementId(String),
-}
-
-async fn process_offer(
-    requestor_api: MarketRequestorApi,
-    offer: Proposal,
-    subscription_id: &str,
-    my_demand: Demand,
-) -> Result<ProcessOfferResult, anyhow::Error> {
-    let proposal_id = offer.proposal_id()?.clone();
-
-    if offer.state.unwrap_or(State::Initial) == State::Initial {
-        if offer.prev_proposal_id.is_some() {
-            anyhow::bail!("Proposal in Initial state but with prev id: {:#?}", offer)
-        }
-        let bespoke_proposal = offer.counter_demand(my_demand)?;
-        let new_proposal_id = requestor_api
-            .counter_proposal(&bespoke_proposal, subscription_id)
-            .await?;
-        return Ok(ProcessOfferResult::ProposalId(new_proposal_id));
+    if agreement_allocation.len() > 0 {
+        log::info!("releasing allocations ({}) ...", agreement_allocation.len());
+        pending.extend(
+            agreement_allocation
+                .iter()
+                .map(|(agreement_id, allocation_id)| {
+                    // TODO: we need to terminate the agreement first (Market service does not support it yet)
+                    // api.market.terminate_agreement(&agreement_id).await;
+                    log::debug!(
+                        "releasing allocation {} for {}",
+                        allocation_id,
+                        agreement_id
+                    );
+                    api.payment
+                        .release_allocation(&allocation_id)
+                        .map_err(move |e| {
+                            log::error!("unable to release allocation {}: {:?}", allocation_id, e)
+                        })
+                        .boxed_local()
+                }),
+        );
     }
 
-    let new_agreement_id = proposal_id;
-    let new_agreement = AgreementProposal::new(
-        new_agreement_id.clone(),
-        "2021-01-01T18:54:16.655397Z".parse()?,
-    );
-    let _ack = requestor_api.create_agreement(&new_agreement).await?;
-    log::info!("confirm agreement = {}", new_agreement_id);
-    requestor_api.confirm_agreement(&new_agreement_id).await?;
-    log::info!("wait for agreement = {}", new_agreement_id);
-    requestor_api
-        .wait_for_approval(&new_agreement_id, Some(7.879))
-        .await?;
-    log::info!("agreement = {} CONFIRMED!", new_agreement_id);
+    futures::future::join_all(pending.into_iter()).await;
 
-    Ok(ProcessOfferResult::AgreementId(new_agreement_id))
+    //TODO: maybe even accept invoice
+    match (activities.len(), agreement_allocation.len()) {
+        (0, 0) => log::info!("cleanly terminated."),
+        (act, 0) => log::warn!("terminated.\n\n {} activity(ies) destroyed prematurely.", act),
+        (0, alloc) => log::warn!("terminated.\n\n {} agreement(s) possibly not settled.", alloc),
+        (act, alloc) => log::warn!(
+            "terminated.\n\n {} activity(ies) destroyed prematurely and {} agreement(s) possibly not settled.",
+            act,
+            alloc
+        ),
+    }
+
+    Arbiter::current().stop();
 }
 
-async fn spawn_workers(
-    requestor_api: MarketRequestorApi,
-    subscription_id: &str,
-    my_demand: &Demand,
-    tx: futures::channel::mpsc::Sender<String>,
-) -> Result<(), anyhow::Error> {
-    loop {
-        let events = requestor_api
-            .collect(&subscription_id, Some(2.0), Some(5))
-            .await?;
+fn shutdown_handler(
+    activities: Arc<Mutex<HashSet<String>>>,
+    agreement_allocation: Arc<Mutex<HashMap<String, String>>>,
+    subscription_id: String,
+    api: RequestorApi,
+) -> (impl Future, futures::future::AbortHandle) {
+    let (future_ctrl_c, ctrl_c_abort) = futures::future::abortable(signal::ctrl_c());
 
-        if !events.is_empty() {
-            log::debug!("market events={:#?}", events);
-        } else {
-            tokio::time::delay_for(Duration::from_millis(3000)).await;
-        }
-        for event in events {
-            match event {
-                RequestorEvent::ProposalEvent {
-                    event_date: _,
-                    proposal,
-                } => {
-                    let mut tx = tx.clone();
-                    let requestor_api = requestor_api.clone();
-                    let my_subs_id = subscription_id.to_string();
-                    let my_demand = my_demand.clone();
-                    Arbiter::spawn(async move {
-                        match process_offer(requestor_api, proposal, &my_subs_id, my_demand).await {
-                            Ok(ProcessOfferResult::ProposalId(id)) => {
-                                log::info!("responded with counter proposal (id: {})", id)
-                            }
-                            Ok(ProcessOfferResult::AgreementId(id)) => tx.send(id).await.unwrap(),
-                            Err(e) => {
-                                log::error!("unable to process offer: {}", e);
-                                return;
-                            }
-                        }
-                    });
-                }
-                _ => {
-                    log::warn!("invalid response");
-                }
+    let shutdown_fut = async {
+        match future_ctrl_c.await {
+            Ok(Ok(())) => log::info!("Caught ctrl-c"),
+            Ok(Err(error)) => log::error!("Failed listening to ctrl-c: {}", error),
+            Err(futures::future::Aborted) => {
+                log::info!("Finished processing one Agreement. Payment is confirmed. Finishing")
             }
         }
-    }
-}
+        shutdown(activities, agreement_allocation, subscription_id, api).await;
+    };
 
-fn build_demand(node_name: &str) -> Demand {
-    Demand {
-        properties: serde_json::json!({
-            "golem": {
-                "node": {
-                    "id": {
-                        "name": node_name
-                    },
-                    "ala": 1
-                }
-            }
-        }),
-        constraints: r#"(&
-            (golem.inf.mem.gib>0.5)
-            (golem.inf.storage.gib>1)
-        )"#
-        .to_string(),
-
-        demand_id: Default::default(),
-        requestor_id: Default::default(),
-    }
-}
-
-async fn process_agreement(
-    activity_api: &ActivityRequestorControlApi,
-    agreement_id: String,
-) -> Result<(), anyhow::Error> {
-    log::info!("GOT new agreement = {}", agreement_id);
-
-    let act_id = activity_api.create_activity(&agreement_id).await?;
-    log::info!("GOT new activity = (({})); YAY!", act_id);
-
-    tokio::time::delay_for(Duration::from_millis(7000)).await;
-
-    log::info!("destroying activity = (({})); AGRRR!", act_id);
-    activity_api.destroy_activity(&act_id).await?;
-    log::info!("I'M DONE FOR NOW");
-
-    //activity_api.exec(ExeScriptRequest::new("".to_string()), &act_id).await.unwrap();
-    Ok(())
+    return (shutdown_fut, ctrl_c_abort);
 }
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+    std::env::set_var(
+        "RUST_LOG",
+        std::env::var("RUST_LOG").unwrap_or("info".into()),
+    );
     env_logger::init();
 
+    let started_at = Utc::now();
     let settings = AppSettings::from_args();
+    let api = RequestorApi::try_from(&settings.api)?;
 
-    let node_name = "test1";
+    let exe_script = std::fs::read_to_string(&settings.exe_script)?;
+    let commands_cnt = match serde_json::from_str(&exe_script)? {
+        serde_json::Value::Array(arr) => arr.len(),
+        _ => return Err(anyhow::anyhow!("Command list is empty")),
+    };
 
-    let my_demand = build_demand(node_name);
-    //(golem.runtime.wasm.wasi.version@v=*)
+    let activities = Arc::new(Mutex::new(HashSet::new()));
+    let agreement_allocation = Arc::new(Mutex::new(HashMap::new()));
+    let my_demand = market::build_demand(
+        &settings.node_name,
+        &settings.task_package,
+        chrono::Duration::from_std(*settings.task_expiration)?,
+        &settings.subnet,
+    );
 
-    log::error!("Market API URL: {}", settings.market_url);
+    log::debug!(
+        "Demand created: {}",
+        serde_json::to_string_pretty(&my_demand).unwrap()
+    );
 
-    let market_api = settings.market_api()?;
-    let subscription_id = market_api.subscribe(&my_demand).await?;
+    let subscription_id = api.market.subscribe(&my_demand).await?;
+    log::info!("\n\n DEMAND SUBSCRIBED: {}", subscription_id);
 
-    log::error!("sub_id={}", subscription_id);
+    let (shutdown_fut, app_abort_handle) = shutdown_handler(
+        activities.clone(),
+        agreement_allocation.clone(),
+        subscription_id.clone(),
+        api.clone(),
+    );
 
-    let mkt_api = market_api.clone();
-    let sub_id = subscription_id.clone();
-    Arbiter::spawn(async move {
-        tokio::signal::ctrl_c().await.unwrap();
-        mkt_api.unsubscribe(&sub_id).await.unwrap();
-    });
-
-    let mkt_api = market_api.clone();
-    let sub_id = subscription_id.clone();
-    let (tx, mut rx) = mpsc::channel::<String>(1);
-    Arbiter::spawn(async move {
-        if let Err(e) = spawn_workers(mkt_api, &sub_id, &my_demand, tx).await {
-            log::error!("spawning workers for {} error: {}", sub_id, e);
-        }
-    });
-
-    let activity_api = settings.activity_api()?;
-    if let Some(id) = rx.next().await {
-        if let Err(e) = process_agreement(&activity_api, id.clone()).await {
-            log::error!("processing agreement id {} error: {}", id, e);
-        }
+    let (agreement_tx, mut agreement_rx) = mpsc::channel::<String>(1);
+    {
+        let api = api.clone();
+        let subscription_id = subscription_id.clone();
+        let allocation_size = settings.allocation_size;
+        let agreement_allocation = agreement_allocation.clone();
+        Arbiter::spawn(async move {
+            if let Err(e) = market::spawn_negotiations(
+                &api,
+                &subscription_id,
+                &my_demand,
+                allocation_size,
+                agreement_allocation,
+                agreement_tx,
+            )
+            .await
+            {
+                log::error!("spawning negotiation for {} error: {}", subscription_id, e);
+            }
+        });
     }
-    market_api.unsubscribe(&subscription_id).await?;
+
+    let payment_api = api.payment.clone();
+    Arbiter::spawn(payment::log_and_ignore_debit_notes(
+        payment_api.clone(),
+        started_at.clone(),
+    ));
+
+    Arbiter::spawn(payment::process_payments(
+        payment_api.clone(),
+        started_at,
+        agreement_allocation.clone(),
+        match settings.one_agreement {
+            true => Some(app_abort_handle.clone()),
+            false => None,
+        },
+    ));
+
+    Arbiter::spawn(async move {
+        while let Some(agreement_id) = agreement_rx.next().await {
+            Arbiter::spawn(activity::spawn_activity(
+                api.clone(),
+                agreement_id,
+                exe_script.clone(),
+                commands_cnt,
+                activities.clone(),
+            ));
+            if settings.one_agreement {
+                break;
+            }
+        }
+    });
+
+    shutdown_fut.await;
     Ok(())
 }

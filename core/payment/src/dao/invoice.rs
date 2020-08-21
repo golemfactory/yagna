@@ -1,17 +1,20 @@
+use crate::dao::{agreement, invoice_event};
 use crate::error::DbResult;
-use crate::models::*;
-use crate::schema::pay_debit_note::dsl as debit_note_dsl;
+use crate::models::invoice::{InvoiceXActivity, ReadObj, WriteObj};
+use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
 use bigdecimal::BigDecimal;
-use diesel::sql_types::Text;
-use diesel::QueryableByName;
-use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{
+    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+};
 use std::collections::HashMap;
-use ya_core_model::ethaddr::NodeId;
-use ya_core_model::payment::local::StatusNotes;
-use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
-use ya_persistence::types::{BigDecimalField, Summable};
+use ya_client_model::payment::{DocumentStatus, EventType, Invoice, NewInvoice};
+use ya_client_model::NodeId;
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
+use ya_persistence::types::{BigDecimalField, Role, Summable};
 
 pub struct InvoiceDao<'c> {
     pool: &'c PoolType,
@@ -23,67 +26,102 @@ impl<'c> AsDao<'c> for InvoiceDao<'c> {
     }
 }
 
+// FIXME: This could probably be a function
+macro_rules! query {
+    () => {
+        dsl::pay_invoice
+            .inner_join(
+                agreement_dsl::pay_agreement.on(dsl::owner_id
+                    .eq(agreement_dsl::owner_id)
+                    .and(dsl::agreement_id.eq(agreement_dsl::id))),
+            )
+            .select((
+                dsl::id,
+                dsl::owner_id,
+                dsl::role,
+                dsl::agreement_id,
+                dsl::status,
+                dsl::timestamp,
+                dsl::amount,
+                dsl::payment_due_date,
+                agreement_dsl::peer_id,
+                agreement_dsl::payee_addr,
+                agreement_dsl::payer_addr,
+                agreement_dsl::payment_platform,
+            ))
+    };
+}
+
+pub fn update_status(
+    invoice_id: &String,
+    owner_id: &NodeId,
+    status: &DocumentStatus,
+    conn: &ConnType,
+) -> DbResult<()> {
+    diesel::update(
+        dsl::pay_invoice
+            .filter(dsl::id.eq(invoice_id))
+            .filter(dsl::owner_id.eq(owner_id)),
+    )
+    .set(dsl::status.eq(status.to_string()))
+    .execute(conn)?;
+    Ok(())
+}
+
 impl<'c> InvoiceDao<'c> {
-    pub async fn create(&self, invoice: NewInvoice) -> DbResult<()> {
+    async fn insert(&self, invoice: WriteObj, activity_ids: Vec<String>) -> DbResult<()> {
+        let invoice_id = invoice.id.clone();
+        let owner_id = invoice.owner_id.clone();
+        let role = invoice.role.clone();
         do_with_transaction(self.pool, move |conn| {
-            let activity_ids = invoice.activity_ids;
-            let mut invoice = invoice.invoice;
-            let invoice_id = invoice.id.clone();
-            // TODO: Move last_debit_note_id assignment to database trigger
-            invoice.last_debit_note_id = debit_note_dsl::pay_debit_note
-                .select(debit_note_dsl::id)
-                .filter(debit_note_dsl::agreement_id.eq(invoice.agreement_id.clone()))
-                .order_by(debit_note_dsl::timestamp.desc())
-                .first(conn)
-                .optional()?;
+            agreement::set_amount_due(&invoice.agreement_id, &owner_id, &invoice.amount, conn)?;
+
             diesel::insert_into(dsl::pay_invoice)
                 .values(invoice)
                 .execute(conn)?;
+
             // Diesel cannot do batch insert into SQLite database
             activity_ids.into_iter().try_for_each(|activity_id| {
                 let invoice_id = invoice_id.clone();
+                let owner_id = owner_id.clone();
                 diesel::insert_into(activity_dsl::pay_invoice_x_activity)
                     .values(InvoiceXActivity {
                         invoice_id,
                         activity_id,
+                        owner_id,
                     })
                     .execute(conn)
                     .map(|_| ())
             })?;
+
+            if let Role::Requestor = role {
+                invoice_event::create::<()>(invoice_id, owner_id, EventType::Received, None, conn)?;
+            }
 
             Ok(())
         })
         .await
     }
 
-    pub async fn insert(&self, invoice: Invoice) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            // TODO: Check last_debit_note_id
-            let activity_ids = invoice.activity_ids;
-            let invoice_id = invoice.invoice.id.clone();
-            diesel::insert_into(dsl::pay_invoice)
-                .values(invoice.invoice)
-                .execute(conn)?;
-            // Diesel cannot do batch insert into SQLite database
-            activity_ids.into_iter().try_for_each(|activity_id| {
-                let invoice_id = invoice_id.clone();
-                diesel::insert_into(activity_dsl::pay_invoice_x_activity)
-                    .values(InvoiceXActivity {
-                        invoice_id,
-                        activity_id,
-                    })
-                    .execute(conn)
-                    .map(|_| ())
-            })?;
-            Ok(())
-        })
-        .await
+    pub async fn create_new(&self, invoice: NewInvoice, issuer_id: NodeId) -> DbResult<String> {
+        let activity_ids = invoice.activity_ids.clone().unwrap_or(vec![]);
+        let invoice = WriteObj::new_issued(invoice, issuer_id.clone());
+        let invoice_id = invoice.id.clone();
+        self.insert(invoice, activity_ids).await?;
+        Ok(invoice_id)
     }
 
-    pub async fn get(&self, invoice_id: String) -> DbResult<Option<Invoice>> {
-        do_with_transaction(self.pool, move |conn| {
-            let invoice: Option<BareInvoice> = dsl::pay_invoice
-                .find(invoice_id.clone())
+    pub async fn insert_received(&self, invoice: Invoice) -> DbResult<()> {
+        let activity_ids = invoice.activity_ids.clone();
+        let invoice = WriteObj::new_received(invoice);
+        self.insert(invoice, activity_ids).await
+    }
+
+    pub async fn get(&self, invoice_id: String, owner_id: NodeId) -> DbResult<Option<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let invoice: Option<ReadObj> = query!()
+                .filter(dsl::id.eq(&invoice_id))
+                .filter(dsl::owner_id.eq(owner_id))
                 .first(conn)
                 .optional()?;
             match invoice {
@@ -91,11 +129,9 @@ impl<'c> InvoiceDao<'c> {
                     let activity_ids = activity_dsl::pay_invoice_x_activity
                         .select(activity_dsl::activity_id)
                         .filter(activity_dsl::invoice_id.eq(invoice_id))
+                        .filter(activity_dsl::owner_id.eq(owner_id))
                         .load(conn)?;
-                    Ok(Some(Invoice {
-                        invoice,
-                        activity_ids,
-                    }))
+                    Ok(Some(invoice.into_api_model(activity_ids)?))
                 }
                 None => Ok(None),
             }
@@ -103,58 +139,121 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    pub async fn get_all(&self) -> DbResult<Vec<Invoice>> {
-        do_with_transaction(self.pool, move |conn| {
-            let invoices = dsl::pay_invoice.load(conn)?;
+    pub async fn get_many(
+        &self,
+        invoice_ids: Vec<String>,
+        owner_id: NodeId,
+    ) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let invoices = query!()
+                .filter(dsl::id.eq_any(invoice_ids))
+                .filter(dsl::owner_id.eq(owner_id))
+                .load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity.load(conn)?;
-            Ok(join_invoices_with_activities(invoices, activities))
+            join_invoices_with_activities(invoices, activities)
         })
         .await
     }
 
-    pub async fn get_issued(&self, issuer_id: String) -> DbResult<Vec<Invoice>> {
-        do_with_transaction(self.pool, move |conn| {
-            let invoices = dsl::pay_invoice
-                .filter(dsl::issuer_id.eq(issuer_id.clone()))
+    async fn get_for_role(&self, node_id: NodeId, role: Role) -> DbResult<Vec<Invoice>> {
+        readonly_transaction(self.pool, move |conn| {
+            let invoices = query!()
+                .filter(dsl::owner_id.eq(node_id))
+                .filter(dsl::role.eq(&role))
                 .load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity
-                .inner_join(dsl::pay_invoice)
-                .filter(dsl::issuer_id.eq(issuer_id))
+                .inner_join(
+                    dsl::pay_invoice.on(activity_dsl::owner_id
+                        .eq(dsl::owner_id)
+                        .and(activity_dsl::invoice_id.eq(dsl::id))),
+                )
+                .filter(dsl::owner_id.eq(node_id))
+                .filter(dsl::role.eq(role))
                 .select(crate::schema::pay_invoice_x_activity::all_columns)
                 .load(conn)?;
-            Ok(join_invoices_with_activities(invoices, activities))
+            join_invoices_with_activities(invoices, activities)
         })
         .await
     }
 
-    pub async fn get_received(&self, recipient_id: String) -> DbResult<Vec<Invoice>> {
+    pub async fn get_for_provider(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
+        self.get_for_role(node_id, Role::Provider).await
+    }
+
+    pub async fn get_for_requestor(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
+        self.get_for_role(node_id, Role::Requestor).await
+    }
+
+    pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            let invoices = dsl::pay_invoice
-                .filter(dsl::recipient_id.eq(recipient_id.clone()))
-                .load(conn)?;
-            let activities = activity_dsl::pay_invoice_x_activity
-                .inner_join(dsl::pay_invoice)
-                .filter(dsl::recipient_id.eq(recipient_id))
-                .select(crate::schema::pay_invoice_x_activity::all_columns)
-                .load(conn)?;
-            Ok(join_invoices_with_activities(invoices, activities))
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Received, conn)
         })
         .await
     }
 
-    pub async fn update_status(&self, invoice_id: String, status: String) -> DbResult<()> {
+    pub async fn accept(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            diesel::update(dsl::pay_invoice.find(invoice_id))
-                .set(dsl::status.eq(status))
-                .execute(conn)?;
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
+            agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
+            if let Role::Provider = role {
+                invoice_event::create::<()>(invoice_id, owner_id, EventType::Accepted, None, conn)?;
+            }
             Ok(())
         })
         .await
     }
 
-    pub async fn get_total_amount(&self, invoice_ids: Vec<String>) -> DbResult<BigDecimal> {
+    pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
+            if let Role::Provider = role {
+                invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected, None, conn)?;
+            }
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn cancel(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+
+            agreement::compute_amount_due(&agreement_id, &owner_id, conn)?;
+
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Cancelled, conn)?;
+            if let Role::Requestor = role {
+                invoice_event::create::<()>(
+                    invoice_id,
+                    owner_id,
+                    EventType::Cancelled,
+                    None,
+                    conn,
+                )?;
+            }
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn get_total_amount(
+        &self,
+        invoice_ids: Vec<String>,
+        owner_id: NodeId,
+    ) -> DbResult<BigDecimal> {
+        readonly_transaction(self.pool, move |conn| {
             let amounts: Vec<BigDecimalField> = dsl::pay_invoice
+                .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::id.eq_any(invoice_ids))
                 .select(dsl::amount)
                 .load(conn)?;
@@ -162,99 +261,12 @@ impl<'c> InvoiceDao<'c> {
         })
         .await
     }
-
-    pub async fn get_accounts_ids(&self, invoice_ids: Vec<String>) -> DbResult<Vec<String>> {
-        do_with_transaction(self.pool, move |conn| {
-            let account_ids: Vec<String> = dsl::pay_invoice
-                .filter(dsl::id.eq_any(invoice_ids))
-                .select(dsl::credit_account_id)
-                .distinct()
-                .load(conn)?;
-            Ok(account_ids)
-        })
-        .await
-    }
-
-    pub async fn status_report(&self, identity: NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
-        #[derive(QueryableByName, Default)]
-        struct SettledAmount {
-            #[sql_type = "Text"]
-            total_amount_due: BigDecimalField,
-        }
-
-        fn find_settled_amount(
-            c: &ConnType,
-            identity: NodeId,
-            agreement_id: &str,
-        ) -> diesel::QueryResult<BigDecimal> {
-            let f = diesel::sql_query(
-                r#"
-            SELECT total_amount_due
-                FROM pay_debit_note as n
-            WHERE status = 'SETTLED'
-            AND (issuer_id = ? or recipient_id=?)
-            AND agreement_id = ?
-            AND NOT EXISTS (SELECT 1 FROM pay_debit_note
-            where previous_debit_note_id = n.id and status = 'SETTLED')
-            "#,
-            )
-            .bind::<Text, _>(identity)
-            .bind::<Text, _>(identity)
-            .bind::<Text, _>(agreement_id)
-            .get_result::<SettledAmount>(c)
-            .optional()
-            .map_err(|e| {
-                log::error!("get pay_debit_note for invoice: {}", e);
-                e
-            })?;
-
-            Ok(f.unwrap_or_default().total_amount_due.into())
-        }
-
-        do_with_transaction(self.pool, move |c| {
-            let invoices: Vec<BareInvoice> = diesel::sql_query(
-                r#"
-                    SELECT *
-                    FROM pay_invoice
-                    WHERE status in ('RECEIVED', 'ACCEPTED','REJECTED')
-                    AND issuer_id = ? or recipient_id = ?"#,
-            )
-            .bind(identity)
-            .bind(identity)
-            .get_results(c)
-            .map_err(|e| {
-                log::error!("get BareInvoice: {}", e);
-                e
-            })?;
-            let mut incoming = StatusNotes::default();
-            let mut outgoing = StatusNotes::default();
-            let me = identity.to_string();
-            for invoice in invoices {
-                let s = if invoice.issuer_id == me {
-                    &mut incoming
-                } else {
-                    &mut outgoing
-                };
-                let settled = find_settled_amount(c, identity, invoice.agreement_id.as_str())?;
-
-                let pending_amount = invoice.amount.0 - settled;
-                match invoice.status.as_str() {
-                    "RECEIVED" => s.requested += pending_amount,
-                    "ACCEPTED" => s.accepted += pending_amount,
-                    "REJECTED" => s.rejected += pending_amount,
-                    _ => (),
-                }
-            }
-            Ok((incoming, outgoing))
-        })
-        .await
-    }
 }
 
 fn join_invoices_with_activities(
-    invoices: Vec<BareInvoice>,
+    invoices: Vec<ReadObj>,
     activities: Vec<InvoiceXActivity>,
-) -> Vec<Invoice> {
+) -> DbResult<Vec<Invoice>> {
     let mut activities_map = activities
         .into_iter()
         .fold(HashMap::new(), |mut map, activity| {
@@ -265,9 +277,9 @@ fn join_invoices_with_activities(
         });
     invoices
         .into_iter()
-        .map(|invoice| Invoice {
-            activity_ids: activities_map.remove(&invoice.id).unwrap_or(vec![]),
-            invoice,
+        .map(|invoice| {
+            let activity_ids = activities_map.remove(&invoice.id).unwrap_or(vec![]);
+            invoice.into_api_model(activity_ids)
         })
         .collect()
 }

@@ -1,10 +1,9 @@
-use crate::ethaddr::NodeId;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
-pub const SERVICE_ID: &str = "/appkey";
 pub const BUS_ID: &'static str = "/private/appkey";
 
 pub const DEFAULT_ROLE: &str = "manager";
@@ -104,4 +103,35 @@ impl RpcMessage for Remove {
     const ID: &'static str = "Remove";
     type Item = ();
     type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Subscribe {
+    pub endpoint: String,
+}
+
+impl RpcMessage for Subscribe {
+    const ID: &'static str = "Subscribe";
+    type Item = u64;
+    type Error = Error;
+}
+
+pub mod event {
+    use super::Error;
+    use serde::{Deserialize, Serialize};
+    use ya_client_model::NodeId;
+    use ya_service_bus::RpcMessage;
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Event {
+        NewKey { identity: NodeId },
+    }
+
+    impl RpcMessage for Event {
+        const ID: &'static str = "AppKey__Event";
+        type Item = ();
+        type Error = Error;
+    }
 }

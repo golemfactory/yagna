@@ -1,14 +1,15 @@
-use crate::dao::{DaoError, NotFoundAsOption, Result};
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
 use serde_json;
-use std::time::Duration;
+use std::{convert::TryInto, time::Duration};
 use tokio::time::delay_for;
-use ya_model::activity::activity_state::StatePair;
-use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
-use ya_persistence::models::ActivityState;
-use ya_persistence::schema;
+
+use ya_client_model::activity::activity_state::{ActivityState, StatePair};
+use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+
+use crate::dao::{DaoError, Result};
+use crate::db::{models::ActivityState as DbActivityState, schema};
 
 pub struct ActivityStateDao<'c> {
     pool: &'c PoolType,
@@ -26,85 +27,75 @@ impl<'c> ActivityStateDao<'c> {
 
         log::debug!("getting activity state");
         let activity_id = activity_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
-            let state: ActivityState = dsl::activity
+
+        do_with_transaction(self.pool, move |conn| {
+            Ok(dsl::activity
                 .inner_join(schema::activity_state::table)
                 .select(schema::activity_state::all_columns)
-                .filter(dsl::natural_id.eq(activity_id))
-                .first(conn)
-                .map_err(DaoError::from)?;
-
-            Ok(state)
+                .filter(dsl::natural_id.eq(&activity_id))
+                .first::<DbActivityState>(conn)
+                .map_err(|e| match e {
+                    diesel::NotFound => {
+                        DaoError::NotFound(format!("activity state: {}", activity_id))
+                    }
+                    e => e.into(),
+                })?
+                .try_into()?)
         })
         .await
     }
 
-    pub async fn get_future(
+    pub async fn get_state_wait(
         &self,
         activity_id: &str,
-        state: Option<StatePair>,
+        states: Vec<StatePair>,
     ) -> Result<ActivityState> {
-        let state = state.map(|s| serde_json::to_string(&s).unwrap());
         let duration = Duration::from_millis(750);
 
-        log::debug!("waiting {:?} for activity state: {:?}", duration, state);
+        log::debug!("waiting {:?} for activity states: {:?}", duration, states);
         loop {
-            let result = self.get(activity_id).await.not_found_as_option()?;
-            if let Some(s) = result {
-                match &state {
-                    Some(state) => {
-                        if &s.name == state {
-                            log::debug!("got state {}", state);
-                            return Ok(s);
-                        }
-                        log::debug!("got state: {} != {}", s.name, state);
-                    }
-                    None => return Ok(s),
+            let result = self.get(activity_id).await;
+            if let Ok(s) = result {
+                if states.contains(&s.state) {
+                    log::debug!("got requested state: {:?}", s.state);
+                    return Ok(s);
                 }
+                log::debug!("got state: {:?} != {:?}. Waiting...", s.state, states);
             }
 
             delay_for(duration).await;
         }
     }
 
-    pub async fn set(
-        &self,
-        activity_id: &str,
-        state: StatePair,
-        reason: Option<String>,
-        error_message: Option<String>,
-    ) -> Result<()> {
+    pub async fn set(&self, activity_id: &str, state: ActivityState) -> Result<ActivityState> {
         use schema::activity::dsl;
         use schema::activity_state::dsl as dsl_state;
 
-        let state = serde_json::to_string(&state).unwrap();
+        let str_state_pair = serde_json::to_string(&state.state)?;
         let now = Utc::now().naive_utc();
-
         let activity_id = activity_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
-            {
-                let num_updates = diesel::update(
-                    dsl_state::activity_state.filter(exists(
-                        dsl::activity
-                            .filter(dsl::natural_id.eq(activity_id))
-                            .filter(dsl::state_id.eq(dsl_state::id)),
-                    )),
-                )
-                .set((
-                    dsl_state::name.eq(&state),
-                    dsl_state::reason.eq(reason),
-                    dsl_state::error_message.eq(error_message),
-                    dsl_state::updated_date.eq(now),
-                ))
-                .execute(conn)?;
 
-                match num_updates {
-                    0 => Err(diesel::result::Error::NotFound),
-                    1 => Ok(()),
-                    _ => Err(diesel::result::Error::RollbackTransaction),
-                }
-            }
-            .map_err(DaoError::from)
+        do_with_transaction(self.pool, move |conn| {
+            let num_updates = diesel::update(
+                dsl_state::activity_state.filter(exists(
+                    dsl::activity
+                        .filter(dsl::natural_id.eq(activity_id))
+                        .filter(dsl::state_id.eq(dsl_state::id)),
+                )),
+            )
+            .set((
+                dsl_state::name.eq(&str_state_pair),
+                dsl_state::reason.eq(state.reason.clone()),
+                dsl_state::error_message.eq(state.error_message.clone()),
+                dsl_state::updated_date.eq(now),
+            ))
+            .execute(conn)?;
+
+            Ok(match num_updates {
+                0 => Err(diesel::result::Error::NotFound),
+                1 => Ok(state),
+                _ => Err(diesel::result::Error::RollbackTransaction),
+            }?)
         })
         .await
     }

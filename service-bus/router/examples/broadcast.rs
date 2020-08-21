@@ -5,8 +5,7 @@ use ya_sb_proto::*;
 use ya_sb_router::tcp_connect;
 
 async fn run_client() {
-    let router_addr = *ya_service_api::constants::YAGNA_BUS_ADDR;
-    let (mut writer, mut reader) = tcp_connect(&router_addr).await;
+    let (mut writer, mut reader) = tcp_connect(&gsb_addr(None)).await;
 
     println!("Sending subscribe request...");
     let topic = "test";
@@ -27,12 +26,14 @@ async fn run_client() {
                 "Non-zero reply code"
             )
         }
+        GsbMessage::Ping => {}
         _ => panic!("Unexpected message received"),
     }
 
     println!("Sending broadcast request...");
     let broadcast_data = "broadcast";
     let broadcast_request = BroadcastRequest {
+        caller: "some_id".into(),
         topic: topic.to_string(),
         data: broadcast_data.to_string().into_bytes(),
     };
@@ -50,6 +51,7 @@ async fn run_client() {
                 "Non-zero reply code"
             )
         }
+        GsbMessage::Ping => {}
         _ => panic!("Unexpected message received"),
     }
 
@@ -63,6 +65,7 @@ async fn run_client() {
             println!("Broadcast message received");
             assert!(msg == broadcast_request, "Wrong data received")
         }
+        GsbMessage::Ping => {}
         _ => panic!("Unexpected message received"),
     }
 
@@ -84,6 +87,7 @@ async fn run_client() {
                 "Non-zero reply code"
             )
         }
+        GsbMessage::Ping => {}
         _ => panic!("Unexpected message received"),
     }
 }

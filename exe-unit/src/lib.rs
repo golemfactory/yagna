@@ -1,27 +1,38 @@
-pub mod error;
-mod handlers;
-pub mod message;
-pub mod metrics;
-pub mod runtime;
-pub mod service;
-pub mod state;
+use actix::prelude::*;
+use futures::channel::oneshot;
+use futures::TryFutureExt;
+use std::path::PathBuf;
+use std::time::Duration;
 
+use ya_client_model::activity::activity_state::StatePair;
+use ya_client_model::activity::{
+    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
+};
+use ya_core_model::activity;
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+
+use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
 use crate::service::metrics::MetricsService;
+use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
-use actix::prelude::*;
-use futures::TryFutureExt;
-use std::path::PathBuf;
-use std::time::Duration;
-use ya_core_model::activity::*;
-use ya_model::activity::activity_state::StatePair;
-use ya_model::activity::{
-    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
-};
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+use chrono::Utc;
+
+pub mod agreement;
+use ya_runtime_api::deploy;
+pub mod error;
+mod handlers;
+pub mod message;
+pub mod metrics;
+mod notify;
+pub mod process;
+pub mod runtime;
+pub mod service;
+pub mod state;
+pub mod util;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -34,29 +45,33 @@ pub struct ExeUnit<R: Runtime> {
     state: ExeUnitState,
     runtime: Addr<R>,
     metrics: Addr<MetricsService>,
+    transfers: Addr<TransferService>,
     services: Vec<Box<dyn ServiceControl>>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
-    pub fn new(ctx: ExeUnitContext, runtime: R) -> Self {
-        let state = ExeUnitState::default();
-        let runtime = runtime.with_context(ctx.clone()).start();
-        let metrics = MetricsService::default().start();
-
+    pub fn new(
+        ctx: ExeUnitContext,
+        metrics: Addr<MetricsService>,
+        transfers: Addr<TransferService>,
+        runtime: Addr<R>,
+    ) -> Self {
         ExeUnit {
             ctx,
-            state,
+            state: ExeUnitState::default(),
             runtime: runtime.clone(),
             metrics: metrics.clone(),
+            transfers: transfers.clone(),
             services: vec![
                 Box::new(ServiceAddr::new(metrics)),
+                Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
         }
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
-        if let Some(activity_id) = &self.ctx.service_id {
+        if let Some(activity_id) = &self.ctx.activity_id {
             let fut = report_usage(
                 self.ctx.report_url.clone().unwrap(),
                 activity_id.clone(),
@@ -76,127 +91,199 @@ impl<R: Runtime> ExeUnit<R> {
             log::warn!("Unable to stop the runtime: {:?}", e);
         }
     }
-
-    async fn shutdown(addr: &Addr<Self>, reason: ShutdownReason) {
-        log::warn!("Initiating shutdown: {}", reason);
-
-        if let Err(error) = addr.send(Shutdown(reason)).await {
-            log::error!(
-                "Unable to perform a graceful shutdown: {:?}. Terminating",
-                error
-            );
-            System::current().stop();
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
-struct ExecCtx {
+struct ExeCtx {
     batch_id: String,
+    batch_size: usize,
     idx: usize,
     cmd: ExeScriptCommand,
 }
 
+impl ExeCtx {
+    pub fn convert_runtime_result(&self, result: RuntimeCommandResult) -> ExeScriptCommandResult {
+        let stdout = result
+            .stdout
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stdout: {}", s));
+        let stderr = result
+            .stderr
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("stderr: {}", s));
+        let message = match (stdout, stderr) {
+            (None, None) => None,
+            (Some(stdout), None) => Some(stdout),
+            (None, Some(stderr)) => Some(stderr),
+            (Some(stdout), Some(stderr)) => Some(format!("{}\n{}", stdout, stderr)),
+        };
+        let finished = self.idx == self.batch_size - 1 || result.result == CommandResult::Error;
+        ExeScriptCommandResult {
+            index: self.idx as u32,
+            result: result.result,
+            is_batch_finished: finished,
+            message,
+        }
+    }
+}
+
 impl<R: Runtime> ExeUnit<R> {
-    async fn exec(addr: Addr<Self>, exe_unit: Addr<R>, exec: Exec) {
+    async fn exec(
+        addr: Addr<Self>,
+        runtime: Addr<R>,
+        transfers: Addr<TransferService>,
+        exec: activity::Exec,
+        mut control: oneshot::Receiver<()>,
+    ) {
+        let batch_size = exec.exe_script.len();
+        let on_error = |batch_id, result| async {
+            let set_state = SetState::default().cmd(None).result(batch_id, result);
+            if let Err(error) = addr.send(set_state).await {
+                log::error!("Cannot update state during exec: {:?}", error);
+            }
+        };
+
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
-            let ctx = ExecCtx {
+            let ctx = ExeCtx {
                 batch_id: exec.batch_id.clone(),
+                batch_size,
                 idx,
                 cmd,
             };
 
-            if let Err(error) = Self::exec_cmd(addr.clone(), exe_unit.clone(), ctx.clone()).await {
-                let cmd_result = ExeScriptCommandResult {
-                    index: ctx.idx as u32,
-                    result: Some(ya_model::activity::CommandResult::Error),
-                    message: Some(error.to_string()),
-                };
-                let set_state = SetState {
-                    state: None,
-                    running_command: Some(None),
-                    batch_result: Some((ctx.batch_id, cmd_result)),
-                };
-
-                if let Err(error) = addr.send(set_state).await {
-                    log::error!(
-                        "Unable to update the state during exec failure: {:?}",
-                        error
-                    );
-                }
-
-                let message = format!("Command interrupted: {}", error.to_string());
-                Self::shutdown(&addr, ShutdownReason::Error(message)).await;
+            if let Ok(Some(_)) = control.try_recv() {
+                let cmd_result =
+                    ctx.convert_runtime_result(RuntimeCommandResult::error("interrupted"));
+                on_error(ctx.batch_id, cmd_result).await;
                 break;
             }
 
-            if let ExeScriptCommand::Terminate {} = &ctx.cmd {
-                Self::shutdown(&addr, ShutdownReason::Finished).await;
-                return;
+            if let Err(error) = Self::exec_cmd(
+                addr.clone(),
+                runtime.clone(),
+                transfers.clone(),
+                ctx.clone(),
+            )
+            .await
+            {
+                log::warn!("Command interrupted: {}", error.to_string());
+                let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::error(&error));
+                on_error(ctx.batch_id, cmd_result).await;
+                break;
             }
         }
     }
 
-    async fn exec_cmd(addr: Addr<Self>, exe_unit: Addr<R>, ctx: ExecCtx) -> Result<()> {
+    async fn exec_cmd(
+        addr: Addr<Self>,
+        runtime: Addr<R>,
+        transfer_service: Addr<TransferService>,
+        ctx: ExeCtx,
+    ) -> Result<()> {
+        if let ExeScriptCommand::Terminate {} = &ctx.cmd {
+            log::warn!("Terminating running ExeScripts");
+
+            let exclude_batches = vec![ctx.batch_id];
+            let set_state = SetState::default()
+                .state(StatePair(State::Initialized, None))
+                .cmd(None);
+
+            addr.send(Stop { exclude_batches }).await??;
+            addr.send(set_state).await?;
+            return Ok(());
+        }
+
         let state = addr.send(GetState {}).await?.0;
-        let before_state = match (&state.0, &state.1) {
+        let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
             }
-            (State::Terminated, _) => {
+            (State::New, _) | (State::Terminated, _) => {
                 return Err(StateError::InvalidState(state).into());
             }
-            (State::New, _) => match &ctx.cmd {
-                ExeScriptCommand::Deploy { .. } => StatePair(State::New, Some(State::Deployed)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
+            (State::Initialized, _) => match &ctx.cmd {
+                ExeScriptCommand::Deploy { .. } => {
+                    StatePair(State::Initialized, Some(State::Deployed))
                 }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (State::Deployed, _) => match &ctx.cmd {
                 ExeScriptCommand::Start { .. } => StatePair(State::Deployed, Some(State::Ready)),
-                _ => {
-                    return Err(StateError::InvalidState(state).into());
-                }
+                _ => return Err(StateError::InvalidState(state).into()),
             },
             (s, _) => match &ctx.cmd {
                 ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
                     return Err(StateError::InvalidState(state).into());
                 }
-                _ => StatePair(s.clone(), Some(*s)),
+                _ => StatePair(*s, Some(*s)),
             },
         };
 
-        addr.send(SetState {
-            state: Some(before_state.clone()),
-            running_command: Some(Some(ctx.cmd.clone().into())),
-            batch_result: None,
-        })
+        log::info!("Executing command: {:?}", ctx.cmd);
+
+        addr.send(
+            SetState::default()
+                .state(state_pre.clone())
+                .cmd(Some(ctx.cmd.clone())),
+        )
         .await?;
 
-        let exe_result = exe_unit.send(ExecCmd(ctx.cmd.clone())).await??;
-        if let CommandResult::Error = exe_result.result {
-            return Err(Error::CommandError(format!(
-                "{:?} command error: {}",
-                ctx.cmd,
-                exe_result.stderr.unwrap_or("<no stderr output>".to_owned())
-            )));
+        match &ctx.cmd {
+            ExeScriptCommand::Transfer { from, to } => {
+                let msg = TransferResource {
+                    from: from.clone(),
+                    to: to.clone(),
+                };
+                transfer_service.send(msg).await??;
+            }
+            ExeScriptCommand::Deploy {} => {
+                let msg = DeployImage {};
+                let path = transfer_service.send(msg).await??;
+                runtime.send(SetTaskPackagePath(path)).await?;
+            }
+            _ => (),
         }
 
-        let sanity_state = addr.send(GetState {}).await?.0;
-        if sanity_state != before_state {
+        let runtime_result = runtime.send(RuntimeCommand(ctx.cmd.clone())).await??;
+
+        if let ExeScriptCommand::Deploy { .. } = &ctx.cmd {
+            let mut runtime_mode = RuntimeMode::ProcessPerCommand;
+            if let Some(output) = &runtime_result.stdout {
+                let deployment = match deploy::DeployResult::from_bytes(output) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log::error!("Deploy failed: {}", e);
+                        return Err(Error::CommandError(runtime_result));
+                    }
+                };
+                log::info!("Adding volumes: {:?}", deployment.vols);
+                transfer_service
+                    .send(AddVolumes::new(deployment.vols))
+                    .await??;
+                runtime_mode = deployment.start_mode.into();
+            }
+            runtime.send(SetRuntimeMode(runtime_mode)).await??;
+        }
+
+        if let CommandResult::Error = runtime_result.result {
+            return Err(Error::CommandError(runtime_result));
+        }
+
+        let state_cur = addr.send(GetState {}).await?.0;
+        if state_cur != state_pre {
             return Err(StateError::UnexpectedState {
-                current: sanity_state,
-                expected: before_state,
+                current: state_cur,
+                expected: state_pre,
             }
             .into());
         }
 
-        addr.send(SetState {
-            state: Some(StatePair(before_state.1.unwrap(), None)),
-            running_command: Some(None),
-            batch_result: Some((ctx.batch_id.clone(), exe_result.into_exe_result(ctx.idx))),
-        })
-        .await?;
+        let cmd_result = ctx.convert_runtime_result(runtime_result);
+        let state_post = SetState::default()
+            .state(state_pre.1.unwrap().into())
+            .cmd(None)
+            .result(ctx.batch_id, cmd_result);
+        addr.send(state_post).await?;
 
         Ok(())
     }
@@ -208,18 +295,20 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     fn started(&mut self, ctx: &mut Self::Context) {
         let addr = ctx.address();
 
-        if let Some(s) = &self.ctx.service_id {
-            actix_rpc::bind::<Exec>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityState>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetActivityUsage>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetRunningCommand>(&s, addr.clone().recipient());
-            actix_rpc::bind::<GetExecBatchResults>(&s, addr.clone().recipient());
+        if let Some(activity_id) = &self.ctx.activity_id {
+            let srv_id = activity::exeunit::bus_id(activity_id);
+            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
             .finish()
             .spawn(ctx);
 
+        addr.do_send(SetState::from(State::Initialized));
         log::info!("Started");
     }
 
@@ -233,21 +322,22 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
 #[derive(Clone, Debug)]
 pub struct ExeUnitContext {
-    pub service_id: Option<String>,
+    pub activity_id: Option<String>,
     pub report_url: Option<String>,
-    pub agreement: PathBuf,
+    pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub runtime_args: RuntimeArgs,
 }
 
 impl ExeUnitContext {
-    pub fn match_service(&self, service_id: &str) -> Result<()> {
-        match &self.service_id {
-            Some(sid) => match sid == service_id {
+    pub fn verify_activity_id(&self, activity_id: &str) -> Result<()> {
+        match &self.activity_id {
+            Some(act_id) => match act_id == activity_id {
                 true => Ok(()),
                 false => Err(Error::RemoteServiceError(format!(
-                    "Invalid destination service address: {}",
-                    service_id
+                    "Forbidden! Invalid activity id: {}",
+                    activity_id
                 ))),
             },
             None => Ok(()),
@@ -275,9 +365,12 @@ async fn report_usage<R: Runtime>(
     match metrics.send(GetMetrics).await {
         Ok(resp) => match resp {
             Ok(data) => {
-                let msg = SetActivityUsage {
+                let msg = activity::local::SetUsage {
                     activity_id,
-                    usage: ActivityUsage::from(data),
+                    usage: ActivityUsage {
+                        current_usage: Some(data),
+                        timestamp: Utc::now().timestamp(),
+                    },
                     timeout: None,
                 };
                 report(report_url, msg).await;

@@ -1,11 +1,14 @@
-use crate::dao::{DaoError, Result};
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
 use serde_json;
-use ya_persistence::executor::{do_with_connection, AsDao, PoolType};
-use ya_persistence::models::ActivityUsage;
-use ya_persistence::schema;
+use std::convert::TryInto;
+
+use ya_client_model::activity::activity_usage::ActivityUsage;
+use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+
+use crate::dao::{DaoError, Result};
+use crate::db::{models::ActivityUsage as DbActivityUsage, schema};
 
 pub struct ActivityUsageDao<'c> {
     pool: &'c PoolType,
@@ -23,28 +26,34 @@ impl<'c> ActivityUsageDao<'c> {
         use schema::activity_usage::dsl as dsl_usage;
 
         let activity_id = activity_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
-            let usage: ActivityUsage = dsl::activity
+
+        do_with_transaction(self.pool, move |conn| {
+            Ok(dsl::activity
                 .inner_join(dsl_usage::activity_usage)
                 .select(schema::activity_usage::all_columns)
-                .filter(dsl::natural_id.eq(activity_id))
-                .first(conn)
-                .map_err(DaoError::from)?;
-
-            Ok(usage)
+                .filter(dsl::natural_id.eq(&activity_id))
+                .first::<DbActivityUsage>(conn)
+                .map_err(|e| match e {
+                    diesel::NotFound => {
+                        DaoError::NotFound(format!("activity usage: {}", activity_id))
+                    }
+                    e => e.into(),
+                })?
+                .try_into()?)
         })
         .await
     }
 
-    pub async fn set(&self, activity_id: &str, vector: &Option<Vec<f64>>) -> Result<()> {
+    pub async fn set(&self, activity_id: &str, usage: ActivityUsage) -> Result<ActivityUsage> {
         use schema::activity::dsl;
         use schema::activity_usage::dsl as dsl_usage;
 
-        let vector = serde_json::to_string(vector).unwrap();
+        let vector = serde_json::to_string(&usage.current_usage)?;
         let now = Utc::now().naive_utc();
 
         let activity_id = activity_id.to_owned();
-        do_with_connection(self.pool, move |conn| {
+
+        do_with_transaction(self.pool, move |conn| {
             diesel::update(
                 dsl_usage::activity_usage.filter(exists(
                     dsl::activity
@@ -56,10 +65,9 @@ impl<'c> ActivityUsageDao<'c> {
                 dsl_usage::vector_json.eq(&vector),
                 dsl_usage::updated_date.eq(now),
             ))
-            .execute(conn)
-            .map_err(DaoError::from)?;
+            .execute(conn)?;
 
-            Ok(())
+            Ok(usage)
         })
         .await
     }

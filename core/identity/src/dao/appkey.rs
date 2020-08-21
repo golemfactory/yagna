@@ -5,8 +5,10 @@ use diesel::prelude::*;
 
 use diesel::{Connection, ExpressionMethods, RunQueryDsl};
 use std::cmp::max;
-use ya_core_model::ethaddr::NodeId;
-use ya_persistence::executor::{do_with_connection, AsDao, ConnType, PoolType};
+use ya_client_model::NodeId;
+use ya_persistence::executor::{
+    do_with_connection, do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 
 pub type Result<T> = std::result::Result<T, DaoError>;
 
@@ -50,24 +52,22 @@ impl<'c> AppKeyDao<'c> {
         use crate::db::schema::app_key as app_key_dsl;
         use crate::db::schema::role as role_dsl;
 
-        do_with_connection(self.pool, move |conn| {
-            conn.transaction(|| {
-                let role: Role = role_dsl::table
-                    .filter(role_dsl::name.eq(role))
-                    .first(conn)?;
+        do_with_transaction(self.pool, move |conn| {
+            let role: Role = role_dsl::table
+                .filter(role_dsl::name.eq(role))
+                .first(conn)?;
 
-                diesel::insert_into(app_key_dsl::table)
-                    .values((
-                        app_key_dsl::role_id.eq(&role.id),
-                        app_key_dsl::name.eq(name),
-                        app_key_dsl::key.eq(key),
-                        app_key_dsl::identity_id.eq(identity),
-                        app_key_dsl::created_date.eq(Utc::now().naive_utc()),
-                    ))
-                    .execute(conn)?;
+            diesel::insert_into(app_key_dsl::table)
+                .values((
+                    app_key_dsl::role_id.eq(&role.id),
+                    app_key_dsl::name.eq(name),
+                    app_key_dsl::key.eq(key),
+                    app_key_dsl::identity_id.eq(identity),
+                    app_key_dsl::created_date.eq(Utc::now().naive_utc()),
+                ))
+                .execute(conn)?;
 
-                Ok(())
-            })
+            Ok(())
         })
         .await
     }
@@ -76,7 +76,7 @@ impl<'c> AppKeyDao<'c> {
         use crate::db::schema::app_key as app_key_dsl;
         use crate::db::schema::role as role_dsl;
 
-        self.with_transaction(|conn| {
+        readonly_transaction(self.pool, move |conn| {
             let result = app_key_dsl::table
                 .inner_join(role_dsl::table)
                 .filter(app_key_dsl::key.eq(key))
@@ -91,7 +91,7 @@ impl<'c> AppKeyDao<'c> {
         use crate::db::schema::app_key as app_key_dsl;
         use crate::db::schema::role as role_dsl;
 
-        self.with_transaction(|conn| {
+        readonly_transaction(self.pool, |conn| {
             let result = app_key_dsl::table
                 .inner_join(role_dsl::table)
                 .filter(app_key_dsl::identity_id.eq(identity_id))
@@ -112,7 +112,7 @@ impl<'c> AppKeyDao<'c> {
         use crate::db::schema::role as role_dsl;
 
         let offset = max(0, (page - 1) * per_page);
-        self.with_transaction(move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             let query = app_key_dsl::table
                 .inner_join(role_dsl::table)
                 .limit(per_page as i64)

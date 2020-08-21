@@ -1,3 +1,24 @@
 {
-  "golem.srv.comp.wasm.task_package": "http://localhost:8000/rust-wasi-tutorial.zip"
+  "agreementId": "0a88ff65-b6d4-48e4-8de3-aba9f06f54dd",
+  "demand": {
+    "properties": {
+      "golem": {
+        "srv.comp": {
+          "task_package": "hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://3.249.139.167:8000/rust-wasi-tutorial.zip"
+        }
+      }
+    }
+  },
+  "offer": {
+    "properties.golem.inf": {
+      "mem.gib": 0.5,
+      "storage.gib": 5
+    },
+    "properties.golem.com.usage.vector": [
+      "golem.usage.duration_sec",
+      "golem.usage.cpu_sec",
+      "golem.usage.gib",
+      "golem.usage.storage_gib"
+    ]
+  }
 }

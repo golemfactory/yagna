@@ -1,11 +1,13 @@
+//! Yagna internal definitions for service bus API.
+
 #[cfg(feature = "activity")]
 pub mod activity;
 
 #[cfg(feature = "appkey")]
 pub mod appkey;
 
-#[cfg(any(feature = "ethaddr", feature = "identity"))]
-pub mod ethaddr;
+#[cfg(feature = "driver")]
+pub mod driver;
 
 #[cfg(feature = "identity")]
 pub mod identity;

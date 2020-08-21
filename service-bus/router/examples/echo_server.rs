@@ -5,8 +5,7 @@ use ya_sb_proto::*;
 use ya_sb_router::tcp_connect;
 
 async fn run_server() {
-    let router_addr = *ya_service_api::constants::YAGNA_BUS_ADDR;
-    let (mut writer, mut reader) = tcp_connect(&router_addr).await;
+    let (mut writer, mut reader) = tcp_connect(&gsb_addr(None)).await;
 
     println!("Sending register request...");
     let register_request = RegisterRequest {
@@ -26,6 +25,7 @@ async fn run_server() {
         GsbMessage::RegisterReply(msg) if msg.code == RegisterReplyCode::RegisteredOk as i32 => {
             println!("Service successfully registered")
         }
+        GsbMessage::Ping => {}
         _ => panic!("Unexpected message received"),
     }
 
@@ -47,6 +47,7 @@ async fn run_server() {
         GsbMessage::RegisterReply(msg) if msg.code == RegisterReplyCode::RegisteredOk as i32 => {
             println!("Service successfully registered")
         }
+        GsbMessage::Ping => {}
         _ => panic!("Unexpected message received"),
     }
 
@@ -65,6 +66,10 @@ async fn run_server() {
                         data: msg.data,
                     }
                     .into()))
+                }
+                Ok(GsbMessage::Ping) => {
+                    println!("Ping received");
+                    Some(Ok(GsbMessage::Pong))
                 }
                 _ => {
                     eprintln!("Unexpected message received");

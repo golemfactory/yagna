@@ -4,7 +4,7 @@
 use crate::db::schema::{app_key, identity, role};
 use chrono::NaiveDateTime;
 use diesel::{Associations, Identifiable, Insertable, Queryable};
-use ya_core_model::ethaddr::NodeId;
+use ya_client_model::NodeId;
 
 #[derive(Queryable, Debug, Identifiable, Insertable, Clone)]
 #[table_name = "identity"]

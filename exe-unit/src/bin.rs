@@ -1,14 +1,25 @@
 use actix::{Actor, System};
-use std::path::PathBuf;
-use structopt::StructOpt;
-use ya_core_model::activity::Exec;
+use anyhow::bail;
+use flexi_logger::{DeferredNow, Record};
+use std::convert::TryFrom;
+use std::env;
+use std::ffi::OsString;
+use std::path::{Component, PathBuf, Prefix};
+use structopt::{clap, StructOpt};
+use ya_core_model::activity;
+use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
+use ya_exe_unit::runtime::RuntimeArgs;
+use ya_exe_unit::service::metrics::MetricsService;
 use ya_exe_unit::service::signal::SignalMonitor;
+use ya_exe_unit::service::transfer::TransferService;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
 use ya_service_bus::RpcEnvelope;
 
 #[derive(structopt::StructOpt, Debug)]
+#[structopt(global_setting = clap::AppSettings::ColoredHelp)]
+#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 pub struct Cli {
     /// Agreement file path
     #[structopt(long, short)]
@@ -22,6 +33,9 @@ pub struct Cli {
     /// Runtime binary
     #[structopt(long, short)]
     pub binary: PathBuf,
+    /// Hand off resource cap limiting to the Runtime
+    #[structopt(long = "cap-handoff", parse(from_flag = std::ops::Not::not))]
+    pub supervise_caps: bool,
     #[structopt(subcommand)]
     pub command: Command,
 }
@@ -37,54 +51,120 @@ pub enum Command {
     },
 }
 
+// canonicalize on Windows adds `\\?` (or `%3f` when url-encoded) prefix
+fn sanitize_path(path: PathBuf) -> PathBuf {
+    if !cfg!(windows) {
+        return path;
+    }
+
+    let mut components = path.components();
+    match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::Disk(_) => path,
+            Prefix::VerbatimDisk(disk) => {
+                let mut p = OsString::from(format!("{}:", disk as char));
+                p.push(components.as_path());
+                PathBuf::from(p)
+            }
+            _ => panic!("Invalid path: {:?}", path),
+        },
+        _ => path,
+    }
+}
+
 fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     if let Err(error) = std::fs::create_dir_all(path) {
         match &error.kind() {
             std::io::ErrorKind::AlreadyExists => (),
-            _ => return Err(error.into()),
+            _ => bail!("Can't create directory: {}, {}", path.display(), error),
         }
     }
-    Ok(path.canonicalize()?)
+    Ok(sanitize_path(path.canonicalize()?))
 }
 
-fn main() -> anyhow::Result<()> {
+fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-    env_logger::init();
-
     let cli: Cli = Cli::from_args();
-    let binary = cli.binary.clone();
+
+    if !cli.agreement.exists() {
+        bail!("Agreement file does not exist: {}", cli.agreement.display());
+    }
+    if !cli.binary.exists() {
+        bail!("Runtime binary does not exist: {}", cli.binary.display());
+    }
+
+    let work_dir = create_path(&cli.work_dir).map_err(|e| {
+        anyhow::anyhow!(
+            "Cannot create the working directory {}: {}",
+            cli.work_dir.display(),
+            e
+        )
+    })?;
+    let cache_dir = create_path(&cli.cache_dir).map_err(|e| {
+        anyhow::anyhow!(
+            "Cannot create the cache directory {}: {}",
+            cli.work_dir.display(),
+            e
+        )
+    })?;
+    let agreement = Agreement::try_from(&cli.agreement).map_err(|e| {
+        anyhow::anyhow!(
+            "Error parsing the agreement from {}: {}",
+            cli.agreement.display(),
+            e
+        )
+    })?;
+    let runtime_args = RuntimeArgs::new(&work_dir, &agreement, !cli.supervise_caps);
+
     let mut commands = None;
     let mut ctx = ExeUnitContext {
-        service_id: None,
+        activity_id: None,
         report_url: None,
-        agreement: create_path(&cli.agreement)?,
-        work_dir: create_path(&cli.work_dir)?,
-        cache_dir: create_path(&cli.cache_dir)?,
+        agreement,
+        work_dir,
+        cache_dir,
+        runtime_args,
     };
+
+    log::debug!("CLI args: {:?}", cli);
+    log::debug!("ExeUnitContext args: {:?}", ctx);
 
     match cli.command {
         Command::FromFile { input } => {
-            let contents = std::fs::read_to_string(&input)?;
-            commands = Some(serde_json::from_str(&contents)?);
+            let contents = std::fs::read_to_string(&input).map_err(|e| {
+                anyhow::anyhow!("Cannot read commands from file {}: {}", input.display(), e)
+            })?;
+            let contents = serde_json::from_str(&contents).map_err(|e| {
+                anyhow::anyhow!(
+                    "Cannot deserialize commands from file {}: {}",
+                    input.display(),
+                    e
+                )
+            })?;
+            commands = Some(contents);
         }
         Command::ServiceBus {
             service_id,
             report_url,
         } => {
-            ctx.service_id = Some(service_id);
+            ctx.activity_id = Some(service_id);
             ctx.report_url = Some(report_url);
         }
     }
 
     let sys = System::new("exe-unit");
-    let exe_unit = ExeUnit::new(ctx, RuntimeProcess::new(binary)).start();
+
+    let metrics = MetricsService::try_new(&ctx, Some(10000), cli.supervise_caps)?.start();
+    let transfers = TransferService::new(&ctx).start();
+    let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
+    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
     exe_unit.do_send(Register(signals));
 
     if let Some(exe_script) = commands {
-        let msg = Exec {
+        let msg = activity::Exec {
             activity_id: String::new(),
-            batch_id: String::new(),
+            batch_id: hex::encode(&rand::random::<[u8; 16]>()),
             exe_script,
             timeout: None,
         };
@@ -93,4 +173,58 @@ fn main() -> anyhow::Result<()> {
 
     sys.run()?;
     Ok(())
+}
+
+pub fn colored_stderr_exeunit_prefixed_format(
+    w: &mut dyn std::io::Write,
+    now: &mut DeferredNow,
+    record: &Record,
+) -> Result<(), std::io::Error> {
+    write!(w, "[ExeUnit] ")?;
+    flexi_logger::colored_opt_format(w, now, record)
+}
+
+fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
+    logger
+        .format(flexi_logger::colored_opt_format)
+        .duplicate_to_stderr(flexi_logger::Duplicate::Debug)
+        .format_for_stderr(colored_stderr_exeunit_prefixed_format)
+}
+
+fn main() {
+    if let Err(_) = configure_logger(flexi_logger::Logger::with_env())
+        .log_to_file()
+        .directory("logs")
+        .start()
+    {
+        configure_logger(flexi_logger::Logger::with_env())
+            .start()
+            .expect("Failed to initialize logging");
+        log::warn!("Switched to fallback logging method");
+    }
+
+    std::process::exit(match run() {
+        Ok(_) => 0,
+        Err(error) => {
+            log::error!("{}", error);
+            1
+        }
+    })
+}
+
+#[cfg(windows)]
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn test_remove_verbatim_prefix() {
+        let path = Path::new(r"c:\windows\System32")
+            .to_path_buf()
+            .canonicalize()
+            .expect("should canonicalize: c:\\");
+
+        assert_eq!(PathBuf::from(r"C:\Windows\System32"), sanitize_path(path));
+    }
 }

@@ -1,11 +1,14 @@
 pub mod metrics;
 pub mod signal;
+pub mod transfer;
 
 use crate::message::{Shutdown, ShutdownReason};
 use actix::prelude::*;
+use futures::future::LocalBoxFuture;
+use futures::FutureExt;
 
 pub trait ServiceControl {
-    fn stop(&mut self);
+    fn stop(&mut self) -> LocalBoxFuture<()>;
 }
 
 pub(crate) struct ServiceAddr<Svc>
@@ -28,7 +31,11 @@ impl<Svc> ServiceControl for ServiceAddr<Svc>
 where
     Svc: Actor<Context = Context<Svc>> + Handler<Shutdown>,
 {
-    fn stop(&mut self) {
-        self.addr.do_send(Shutdown(ShutdownReason::Finished))
+    fn stop(&mut self) -> LocalBoxFuture<()> {
+        let addr = self.addr.clone();
+        async move {
+            let _ = addr.send(Shutdown(ShutdownReason::Finished)).await;
+        }
+        .boxed_local()
     }
 }

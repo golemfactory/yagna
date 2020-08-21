@@ -1,283 +1,380 @@
-use crate::dao::debit_note::DebitNoteDao;
-use crate::dao::invoice::InvoiceDao;
-use crate::dao::payment::PaymentDao;
-use crate::error::{Error, PaymentError, PaymentResult};
-use crate::models as db_models;
-use crate::utils::get_sign_tx;
-use bigdecimal::BigDecimal;
-use ethereum_types::{Address, U256};
-use futures::lock::Mutex;
-use num_bigint::ToBigInt;
-use std::sync::Arc;
-use std::time::Duration;
-use uuid::Uuid;
-use ya_core_model::ethaddr::NodeId;
-use ya_core_model::payment::public::{SendPayment, BUS_ID};
-use ya_model::payment::{Invoice, InvoiceStatus, Payment};
-use ya_net::RemoteEndpoint;
-use ya_payment_driver::{
-    AccountBalance, AccountMode, PaymentAmount, PaymentConfirmation, PaymentDriver,
-    PaymentDriverError, PaymentStatus,
+use crate::dao::{ActivityDao, AgreementDao, OrderDao, PaymentDao};
+use crate::error::processor::{
+    AccountNotRegistered, DriverNotRegistered, GetStatusError, NotifyPaymentError,
+    OrderValidationError, SchedulePaymentError, VerifyPaymentError,
 };
+use crate::models::order::ReadObj as DbOrder;
+use bigdecimal::{BigDecimal, Zero};
+use futures::lock::Mutex;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::sync::Arc;
+use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
+use ya_core_model::driver::{
+    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails,
+};
+use ya_core_model::payment::local::{
+    Account, NotifyPayment, RegisterAccount, RegisterAccountError, SchedulePayment,
+    UnregisterAccount, UnregisterAccountError,
+};
+use ya_core_model::payment::public::{SendPayment, BUS_ID};
+use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::typed::Endpoint;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
-const PRECISION: u64 = 1_000_000_000_000_000_000;
-const GAS_LIMIT: u64 = 1_000_000_000_000_000_000; // TODO: Handle gas limits otherwise
+fn driver_endpoint(driver: &str) -> Endpoint {
+    bus::service(driver_bus_id(driver))
+}
+
+async fn validate_orders(
+    orders: &Vec<DbOrder>,
+    platform: &str,
+    payer_addr: &str,
+    payee_addr: &str,
+    amount: &BigDecimal,
+) -> Result<(), OrderValidationError> {
+    let mut total_amount = BigDecimal::zero();
+    for order in orders.iter() {
+        if &order.payment_platform != platform {
+            return OrderValidationError::platform(order, platform);
+        }
+        if &order.payer_addr != &payer_addr {
+            return OrderValidationError::payer_addr(order, payer_addr);
+        }
+        if &order.payee_addr != &payee_addr {
+            return OrderValidationError::payee_addr(order, payee_addr);
+        }
+
+        total_amount += &order.amount.0;
+    }
+
+    if &total_amount != amount {
+        return OrderValidationError::amount(&total_amount, amount);
+    }
+
+    Ok(())
+}
+
+#[derive(Clone, Default)]
+struct DriverRegistry {
+    accounts: HashMap<(String, String), (String, AccountMode)>, // (platform, address) -> (driver, mode)
+    drivers: HashMap<String, String>,                           // driver -> platform
+}
+
+impl DriverRegistry {
+    pub fn register_account(&mut self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+        match self.drivers.entry(msg.driver.clone()) {
+            Entry::Vacant(entry) => {
+                entry.insert(msg.platform.clone());
+            }
+            Entry::Occupied(entry) if entry.get() != &msg.platform => {
+                return Err(RegisterAccountError::Other(format!(
+                    "Driver {} is registered as handling platform {}",
+                    msg.driver,
+                    entry.get()
+                )))
+            }
+            _ => {}
+        }
+
+        match self.accounts.entry((msg.platform, msg.address)) {
+            Entry::Occupied(_) => return Err(RegisterAccountError::AlreadyRegistered),
+            Entry::Vacant(entry) => entry.insert((msg.driver, msg.mode)),
+        };
+        Ok(())
+    }
+
+    pub fn unregister_account(
+        &mut self,
+        msg: UnregisterAccount,
+    ) -> Result<(), UnregisterAccountError> {
+        match self.accounts.remove(&(msg.platform, msg.address)) {
+            Some(_) => Ok(()),
+            None => Err(UnregisterAccountError::NotRegistered),
+        }
+    }
+
+    pub fn get_accounts(&self) -> Vec<Account> {
+        self.accounts
+            .iter()
+            .map(|((platform, address), (driver, mode))| Account {
+                platform: platform.clone(),
+                address: address.clone(),
+                driver: driver.clone(),
+                send: mode.contains(AccountMode::SEND),
+                receive: mode.contains(AccountMode::RECV),
+            })
+            .collect()
+    }
+
+    pub fn driver(
+        &self,
+        platform: &str,
+        address: &str,
+        mode: AccountMode,
+    ) -> Result<String, AccountNotRegistered> {
+        match self
+            .accounts
+            .get(&(platform.to_owned(), address.to_owned()))
+        {
+            Some((driver, reg_mode)) if reg_mode.contains(mode) => Ok(driver.to_owned()),
+            _ => Err(AccountNotRegistered::new(platform, address, mode)),
+        }
+    }
+
+    pub fn platform(&self, driver: &str) -> Result<String, DriverNotRegistered> {
+        match self.drivers.get(driver) {
+            Some(platform) => Ok(platform.to_owned()),
+            None => Err(DriverNotRegistered::new(driver)),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct PaymentProcessor {
-    driver: Arc<Mutex<Box<dyn PaymentDriver + Send + Sync + 'static>>>,
     db_executor: DbExecutor,
-}
-
-fn str_to_addr(addr: &str) -> PaymentResult<Address> {
-    match addr.trim_start_matches("0x").parse() {
-        Ok(addr) => Ok(addr),
-        Err(e) => Err(PaymentError::Address(addr.to_string())),
-    }
-}
-
-fn addr_to_str(addr: Address) -> String {
-    format!("0x{}", hex::encode(addr.to_fixed_bytes()))
-}
-
-fn big_dec_to_u256(v: BigDecimal) -> PaymentResult<U256> {
-    let v = v * Into::<BigDecimal>::into(PRECISION);
-    let v = v.to_bigint().unwrap();
-    let v = &v.to_string();
-    Ok(U256::from_dec_str(v)?)
-}
-
-fn u256_to_big_dec(v: U256) -> PaymentResult<BigDecimal> {
-    let v: BigDecimal = v.to_string().parse()?;
-    Ok(v / Into::<BigDecimal>::into(PRECISION))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_currency_conversion() {
-        let amount_str = "10000.123456789012345678";
-        let big_dec: BigDecimal = amount_str.parse().unwrap();
-        let u256 = big_dec_to_u256(big_dec.clone()).unwrap();
-        assert_eq!(big_dec, u256_to_big_dec(u256).unwrap());
-    }
-
-    #[test]
-    fn test_address_conversion() {
-        let addr_str = "0xd39a168f0480b8502c2531b2ffd8588c592d713a";
-        let addr = str_to_addr(addr_str).unwrap();
-        assert_eq!(addr_str, addr_to_str(addr));
-    }
+    registry: Arc<Mutex<DriverRegistry>>,
 }
 
 impl PaymentProcessor {
-    pub fn new<D>(driver: D, db_executor: DbExecutor) -> Self
-    where
-        D: PaymentDriver + Send + Sync + 'static,
-    {
+    pub fn new(db_executor: DbExecutor) -> Self {
         Self {
-            driver: Arc::new(Mutex::new(Box::new(driver))),
             db_executor,
+            registry: Default::default(),
         }
     }
 
-    async fn wait_for_payment(&self, invoice_id: &str) -> PaymentResult<PaymentConfirmation> {
-        loop {
-            match self
-                .driver
-                .lock()
-                .await
-                .get_payment_status(&invoice_id)
-                .await?
-            {
-                PaymentStatus::Ok(confirmation) => return Ok(confirmation),
-                PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
-                _ => return Err(PaymentError::Driver(PaymentDriverError::InsufficientFunds)),
+    pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+        self.registry.lock().await.register_account(msg)
+    }
+
+    pub async fn unregister_account(
+        &self,
+        msg: UnregisterAccount,
+    ) -> Result<(), UnregisterAccountError> {
+        self.registry.lock().await.unregister_account(msg)
+    }
+
+    pub async fn get_accounts(&self) -> Vec<Account> {
+        self.registry.lock().await.get_accounts()
+    }
+
+    pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+        let payment_platform = self.registry.lock().await.platform(&msg.driver)?;
+        let payer_addr = msg.sender;
+        let payee_addr = msg.recipient;
+
+        let orders = self
+            .db_executor
+            .as_dao::<OrderDao>()
+            .get_many(msg.order_ids, msg.driver)
+            .await?;
+        validate_orders(
+            &orders,
+            &payment_platform,
+            &payer_addr,
+            &payee_addr,
+            &msg.amount,
+        )
+        .await?;
+
+        let mut activity_payments = vec![];
+        let mut agreement_payments = vec![];
+        for order in orders.iter() {
+            let amount = order.amount.clone().into();
+            match (order.activity_id.clone(), order.agreement_id.clone()) {
+                (Some(activity_id), None) => activity_payments.push(ActivityPayment {
+                    activity_id,
+                    amount,
+                    allocation_id: Some(order.allocation_id.clone()),
+                }),
+                (None, Some(agreement_id)) => agreement_payments.push(AgreementPayment {
+                    agreement_id,
+                    amount,
+                    allocation_id: Some(order.allocation_id.clone()),
+                }),
+                _ => return NotifyPaymentError::invalid_order(&order),
             }
         }
-    }
 
-    async fn process_payment(&self, invoice: Invoice, allocation_id: String) {
-        let invoice_id = invoice.invoice_id.clone();
-        let result: Result<(), Error> = async move {
-            let confirmation = self.wait_for_payment(&invoice.invoice_id).await?;
+        // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
+        //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
+        //        data model. Payments can no longer by assigned to a single payer and payee.
+        let payer_id = orders.get(0).unwrap().payer_id;
+        let payee_id = orders.get(0).unwrap().payee_id;
 
-            let payment_id = Uuid::new_v4().to_string();
-            let payment = db_models::BareNewPayment {
-                id: payment_id.clone(),
-                payer_id: invoice.recipient_id,
-                payee_id: invoice.issuer_id,
-                amount: invoice.amount.into(),
-                allocation_id: Some(allocation_id),
-                details: confirmation.confirmation,
-            };
-            let payment = db_models::NewPayment {
-                payment,
-                debit_note_ids: vec![],
-                invoice_ids: vec![invoice.invoice_id.clone()],
-            };
-            let payment_dao: PaymentDao = self.db_executor.as_dao();
-            payment_dao.create(payment).await?;
-            let payment = payment_dao.get(payment_id).await?.unwrap();
-
-            let payee_id: NodeId = payment.payment.payee_id.parse().unwrap();
-            let msg = SendPayment(payment.into());
-            payee_id.service(BUS_ID).call(msg).await??;
-
-            let invoice_dao: InvoiceDao = self.db_executor.as_dao();
-            invoice_dao
-                .update_status(invoice.invoice_id, InvoiceStatus::Settled.into())
-                .await?;
-            Ok(())
-        }
-        .await;
-
-        if let Err(e) = result {
-            log::error!("Payment failed: {}", e);
-            let invoice_dao: InvoiceDao = self.db_executor.as_dao();
-            invoice_dao
-                .update_status(invoice_id, InvoiceStatus::Failed.into())
-                .await
-                .unwrap_or_else(|e| log::error!("{}", e));
-        }
-    }
-
-    pub async fn schedule_payment(
-        &self,
-        invoice: Invoice,
-        allocation_id: String,
-    ) -> PaymentResult<()> {
-        let invoice_id = invoice.invoice_id.clone();
-        let amount = PaymentAmount {
-            base_currency_amount: big_dec_to_u256(invoice.amount.clone())?,
-            gas_amount: None,
-        };
-        // TODO: Allow signing transactions with different key than node ID
-        let sender = str_to_addr(&invoice.recipient_id)?;
-        let recipient = str_to_addr(&invoice.credit_account_id)?;
-        let sign_tx = get_sign_tx(invoice.recipient_id.parse().unwrap());
-        self.driver
-            .lock()
-            .await
-            .schedule_payment(
-                &invoice_id,
-                amount,
-                sender,
-                recipient,
-                invoice.payment_due_date,
-                &sign_tx,
+        let payment_dao: PaymentDao = self.db_executor.as_dao();
+        let payment_id = payment_dao
+            .create_new(
+                payer_id,
+                payee_id,
+                payer_addr,
+                payee_addr,
+                payment_platform,
+                msg.amount,
+                msg.confirmation.confirmation,
+                activity_payments,
+                agreement_payments,
             )
             .await?;
 
-        let processor = self.clone();
-        tokio::task::spawn_local(async move {
-            processor.process_payment(invoice, allocation_id).await;
-        });
+        let mut payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
+        // Allocation IDs are requestor's private matter and should not be sent to provider
+        for agreement_payment in payment.agreement_payments.iter_mut() {
+            agreement_payment.allocation_id = None;
+        }
+        for activity_payment in payment.activity_payments.iter_mut() {
+            activity_payment.allocation_id = None;
+        }
+
+        let msg = SendPayment(payment);
+        ya_net::from(payer_id)
+            .to(payee_id)
+            .service(BUS_ID)
+            .call(msg)
+            .await??;
+
+        // TODO: Implement re-sending mechanism in case SendPayment fails
 
         Ok(())
     }
 
-    pub async fn verify_payment(&self, payment: Payment) -> Result<(), Error> {
-        let payment: db_models::Payment = payment.into();
-        let confirmation = PaymentConfirmation {
-            confirmation: payment.payment.details.clone(),
+    pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+        let amount = msg.amount.clone();
+        let driver = self.registry.lock().await.driver(
+            &msg.payment_platform,
+            &msg.payer_addr,
+            AccountMode::SEND,
+        )?;
+        let order_id = driver_endpoint(&driver)
+            .send(driver::SchedulePayment::new(
+                amount,
+                msg.payer_addr.clone(),
+                msg.payee_addr.clone(),
+                msg.due_date.clone(),
+            ))
+            .await??;
+
+        self.db_executor
+            .as_dao::<OrderDao>()
+            .create(msg, order_id, driver)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn verify_payment(&self, payment: Payment) -> Result<(), VerifyPaymentError> {
+        // TODO: Split this into smaller functions
+
+        let confirmation = match base64::decode(&payment.details) {
+            Ok(confirmation) => PaymentConfirmation { confirmation },
+            Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
-        let details = self
-            .driver
-            .lock()
-            .await
-            .verify_payment(&confirmation)
+        let driver = self.registry.lock().await.driver(
+            &payment.payment_platform,
+            &payment.payee_addr,
+            AccountMode::RECV,
+        )?;
+        let details: PaymentDetails = driver_endpoint(&driver)
+            .send(driver::VerifyPayment::from(confirmation))
+            .await??;
+
+        // Verify if amount declared in message matches actual amount transferred on blockchain
+        if &details.amount != &payment.amount {
+            return VerifyPaymentError::amount(&details.amount, &payment.amount);
+        }
+
+        // Verify if payment shares for agreements and activities sum up to the total amount
+        let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
+        let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
+        if &details.amount != &(&agreement_sum + &activity_sum) {
+            return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
+        }
+
+        let payee_id = payment.payee_id;
+        let payer_id = payment.payer_id;
+        let payee_addr = &payment.payee_addr;
+        let payer_addr = &payment.payer_addr;
+
+        // Verify recipient address
+        if &details.recipient != payee_addr {
+            return VerifyPaymentError::recipient(payee_addr, &details.recipient);
+        }
+        if &details.sender != payer_addr {
+            return VerifyPaymentError::sender(payer_addr, &details.sender);
+        }
+
+        // Verify agreement payments
+        let agreement_dao: AgreementDao = self.db_executor.as_dao();
+        for agreement_payment in payment.agreement_payments.iter() {
+            let agreement_id = &agreement_payment.agreement_id;
+            let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
+            match agreement {
+                None => return VerifyPaymentError::agreement_not_found(agreement_id),
+                Some(agreement) if &agreement.payee_addr != payee_addr => {
+                    return VerifyPaymentError::agreement_payee(&agreement, payee_addr)
+                }
+                Some(agreement) if &agreement.payer_addr != payer_addr => {
+                    return VerifyPaymentError::agreement_payer(&agreement, payer_addr)
+                }
+                _ => (),
+            }
+        }
+
+        // Verify activity payments
+        let activity_dao: ActivityDao = self.db_executor.as_dao();
+        for activity_payment in payment.activity_payments.iter() {
+            let activity_id = &activity_payment.activity_id;
+            let activity = activity_dao.get(activity_id.clone(), payee_id).await?;
+            match activity {
+                None => return VerifyPaymentError::activity_not_found(activity_id),
+                Some(activity) if &activity.payee_addr != payee_addr => {
+                    return VerifyPaymentError::activity_payee(&activity, payee_addr)
+                }
+                Some(activity) if &activity.payer_addr != payer_addr => {
+                    return VerifyPaymentError::activity_payer(&activity, payer_addr)
+                }
+                _ => (),
+            }
+        }
+
+        // Verify if transaction hash hasn't been re-used by comparing transaction balance
+        // between payer and payee in database and on blockchain
+        let db_balance = agreement_dao
+            .get_transaction_balance(payee_id, payee_addr.clone(), payer_addr.clone())
             .await?;
+        let bc_balance = driver_endpoint(&driver)
+            .send(driver::GetTransactionBalance::new(
+                payer_addr.clone(),
+                payee_addr.clone(),
+            ))
+            .await??;
 
-        let actual_amount = u256_to_big_dec(details.amount)?;
-        let declared_amount: BigDecimal = payment.payment.amount.clone().into();
-        if actual_amount != declared_amount {
-            let msg = format!(
-                "Invalid payment amount. Declared: {} Actual: {}",
-                declared_amount, actual_amount
-            );
-            return Err(PaymentError::Verification(msg).into());
+        if bc_balance < db_balance + &details.amount {
+            return VerifyPaymentError::balance();
         }
 
-        let invoice_ids = payment.invoice_ids.clone();
-        let debit_note_ids = payment.debit_note_ids.clone();
-
-        let invoice_dao: InvoiceDao = self.db_executor.as_dao();
-        let total_amount = invoice_dao.get_total_amount(invoice_ids.clone()).await?;
-        if total_amount != actual_amount {
-            let msg = format!(
-                "Invalid payment amount. Expected: {} Actual: {}",
-                total_amount, actual_amount
-            );
-            return Err(PaymentError::Verification(msg).into());
-        }
-
-        let recipient = addr_to_str(details.recipient);
-        let account_ids = invoice_dao.get_accounts_ids(invoice_ids.clone()).await?;
-        log::debug!("Recipient: {}, account_ids: {:?}", recipient, account_ids);
-        if account_ids != [recipient] {
-            return Err(PaymentError::Verification("Invalid account ID".to_string()).into());
-        }
-
-        // TODO: Check debit notes as well
-        // It's not as simple as with invoices because debit notes contain total amount due.
-        // Probably payments should be related to agreements not particular invoices/debit notes.
-
-        // FIXME: This code assumes that payer always uses the same Ethereum address
+        // Insert payment into database (this operation creates and updates all related entities)
         let payment_dao: PaymentDao = self.db_executor.as_dao();
-        let db_balance = payment_dao
-            .get_transaction_balance(payment.payment.payer_id.clone())
-            .await?;
-        let bc_balance = self
-            .driver
-            .lock()
-            .await
-            .get_transaction_balance(details.sender, details.recipient)
-            .await?;
-        let bc_balance = u256_to_big_dec(bc_balance.amount)?;
-
-        if bc_balance < db_balance + actual_amount {
-            let msg = "Transaction balance too low (probably tx hash re-used)".to_string();
-            return Err(PaymentError::Verification(msg).into());
-        }
-
-        payment_dao.create(payment.into()).await?;
-
-        let debit_note_dao: DebitNoteDao = self.db_executor.as_dao();
-        for debit_note_id in debit_note_ids {
-            debit_note_dao
-                .update_status(debit_note_id, InvoiceStatus::Settled.into())
-                .await?;
-        }
-        for invoice_id in invoice_ids {
-            invoice_dao
-                .update_status(invoice_id, InvoiceStatus::Settled.into())
-                .await?;
-        }
+        payment_dao.insert_received(payment, payee_id).await?;
 
         Ok(())
     }
 
-    pub async fn init(&self, addr: Address, requestor: bool, provider: bool) -> PaymentResult<()> {
-        let mut mode = AccountMode::NONE;
-        if requestor {
-            mode |= AccountMode::SEND;
-        }
-        if provider {
-            mode |= AccountMode::RECV;
-        }
-        let node_id = addr_to_str(addr).parse().unwrap();
-        let sign_tx = get_sign_tx(node_id);
-        Ok({ self.driver.lock().await.init(mode, addr, &sign_tx) }.await?)
-    }
-
-    pub async fn get_status(&self, addr: Address) -> PaymentResult<BigDecimal> {
-        let balance: AccountBalance =
-            { self.driver.lock().await.get_account_balance(addr) }.await?;
-
-        Ok(u256_to_big_dec(balance.base_currency.amount)?)
+    pub async fn get_status(
+        &self,
+        platform: String,
+        address: String,
+    ) -> Result<BigDecimal, GetStatusError> {
+        let driver =
+            self.registry
+                .lock()
+                .await
+                .driver(&platform, &address, AccountMode::empty())?;
+        let amount = driver_endpoint(&driver)
+            .send(driver::GetAccountBalance::from(address))
+            .await??;
+        Ok(amount)
     }
 }

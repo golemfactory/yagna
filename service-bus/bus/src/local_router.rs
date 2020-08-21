@@ -1,25 +1,18 @@
-use crate::local_router::into_actix::RpcHandlerWrapper;
-use crate::remote_router::{RemoteRouter, UpdateService};
-use crate::untyped::RawHandler;
-use crate::ResponseChunk::Full;
-use crate::{
-    error::Error, Handle, ResponseChunk, RpcEnvelope, RpcHandler, RpcMessage, RpcRawCall,
-    RpcRawStreamCall, RpcStreamCall, RpcStreamHandler, RpcStreamMessage,
-};
-use actix::prelude::*;
-use actix::{Actor, SystemService};
-use futures::future::ErrInto;
-use futures::prelude::*;
-use futures::{future, FutureExt, SinkExt, StreamExt, TryStreamExt};
-use serde::{Deserialize, Serialize};
+use actix::{prelude::*, Actor, SystemService};
+use futures::{prelude::*, StreamExt};
 use std::any::Any;
-use std::collections::HashMap;
 use std::io::Cursor;
-use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+
 use ya_sb_util::futures::IntoFlatten;
 use ya_sb_util::PrefixLookupBag;
+
+use crate::{
+    remote_router::{RemoteRouter, UpdateService},
+    Error, Handle, ResponseChunk, RpcEnvelope, RpcHandler, RpcMessage, RpcRawCall,
+    RpcRawStreamCall, RpcStreamCall, RpcStreamHandler, RpcStreamMessage,
+};
 
 mod into_actix;
 
@@ -339,8 +332,35 @@ impl Router {
         let addr = format!("{}/{}", addr, T::ID);
         log::debug!("binding {}", addr);
         let _ = self.handlers.insert(addr.clone(), slot);
-        RemoteRouter::from_registry().do_send(UpdateService::Add(addr.into()));
+        RemoteRouter::from_registry().do_send(UpdateService::Add(addr));
         Handle { _inner: () }
+    }
+
+    pub fn unbind(&mut self, addr: &str) -> impl Future<Output = Result<bool, Error>> + Unpin {
+        let pattern = match addr.ends_with('/') {
+            true => addr.to_string(),
+            false => format!("{}/", addr),
+        };
+        let addrs = self
+            .handlers
+            .keys()
+            .filter(|a| a.starts_with(&pattern))
+            .cloned()
+            .collect::<Vec<String>>();
+
+        addrs.iter().for_each(|addr| {
+            log::debug!("unbinding {}", addr);
+            self.handlers.remove(&addr);
+        });
+
+        Box::pin(async move {
+            let router = RemoteRouter::from_registry();
+            let success = !addrs.is_empty();
+            for addr in addrs {
+                router.send(UpdateService::Remove(addr)).await?;
+            }
+            Ok(success)
+        })
     }
 
     pub fn bind_stream<T: RpcStreamMessage>(
@@ -387,19 +407,14 @@ impl Router {
     pub fn forward<T: RpcMessage + Unpin>(
         &mut self,
         addr: &str,
-        caller: Option<String>,
-        msg: T,
+        msg: RpcEnvelope<T>,
     ) -> impl Future<Output = Result<Result<T::Item, T::Error>, Error>> + Unpin {
-        let caller = caller.unwrap_or("local".into());
         let addr = format!("{}/{}", addr, T::ID);
         if let Some(slot) = self.handlers.get_mut(&addr) {
             (if let Some(h) = slot.recipient() {
-                h.send(RpcEnvelope::with_caller(caller, msg))
-                    .map_err(Error::from)
-                    .left_future()
+                h.send(msg).map_err(Error::from).left_future()
             } else {
-                let body = crate::serialization::to_vec(&msg).unwrap();
-                slot.send(RpcRawCall { caller, addr, body })
+                slot.send(RpcRawCall::from_envelope_addr(msg, addr))
                     .then(|b| {
                         future::ready(match b {
                             Ok(b) => crate::serialization::from_read(std::io::Cursor::new(&b))
@@ -411,10 +426,8 @@ impl Router {
             })
             .left_future()
         } else {
-            let body = crate::serialization::to_vec(&msg).unwrap();
-
             RemoteRouter::from_registry()
-                .send(RpcRawCall { caller, addr, body })
+                .send(RpcRawCall::from_envelope_addr(msg, addr))
                 .then(|v| {
                     future::ready(match v {
                         Ok(v) => v,
@@ -435,6 +448,7 @@ impl Router {
     pub fn streaming_forward<T: RpcStreamMessage>(
         &mut self,
         addr: &str,
+        // TODO: add `from: &str` as in `forward_bytes` below
         msg: T,
     ) -> impl Stream<Item = Result<Result<T::Item, T::Error>, Error>> {
         let caller = "local".to_string();
@@ -471,12 +485,12 @@ impl Router {
     pub fn forward_bytes(
         &mut self,
         addr: &str,
-        from: &str,
+        caller: &str,
         msg: Vec<u8>,
     ) -> impl Future<Output = Result<Vec<u8>, Error>> + Unpin {
         if let Some(slot) = self.handlers.get_mut(addr) {
             slot.send(RpcRawCall {
-                caller: from.into(),
+                caller: caller.into(),
                 addr: addr.into(),
                 body: msg,
             })
@@ -484,7 +498,7 @@ impl Router {
         } else {
             RemoteRouter::from_registry()
                 .send(RpcRawCall {
-                    caller: from.into(),
+                    caller: caller.into(),
                     addr: addr.into(),
                     body: msg,
                 })
@@ -499,12 +513,12 @@ impl Router {
     pub fn forward_bytes_local(
         &mut self,
         addr: &str,
-        from: &str,
+        caller: &str,
         msg: &[u8],
     ) -> impl Stream<Item = Result<ResponseChunk, Error>> {
         if let Some(slot) = self.handlers.get_mut(addr) {
             slot.send_streaming(RpcRawCall {
-                caller: from.into(),
+                caller: caller.into(),
                 addr: addr.into(),
                 body: msg.into(),
             })

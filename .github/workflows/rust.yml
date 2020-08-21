@@ -13,13 +13,13 @@ jobs:
     name: Build
     env:
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         #commented bc of too much spend on Macos which is counted 10x, Windows is 2x
         # os: [macos-latest, windows-latest, ubuntu-latest]
         os: [windows-latest, ubuntu-latest]
-      fail-fast: true
 
     steps:
       - name: Checkout
@@ -54,27 +54,63 @@ jobs:
 
       - name: cargo fmt
         uses: actions-rs/cargo@v1
-        if: matrix.os == 'ubuntu-latest'
         with:
           command: fmt
           args: --all -- --check
+
+      - name: Cache vcpkg's artifacts
+        uses: actions/cache@v1
+        if: matrix.os == 'windows-latest'
+        with:
+          path: c:/vcpkg/installed
+          key: vcpkg-${{ runner.os }}-v0
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Install openssl
+        if: matrix.os == 'windows-latest'
+        run: |
+          vcpkg install openssl:x64-windows openssl:x64-windows-static
+          vcpkg list
+          vcpkg integrate install
 
       - name: cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --workspace
+
+      - name: cargo test bins with decentralized market
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --bins --workspace --features market-decentralized --no-default-features
+
+      - name: decentralized market test suite
+        uses: actions-rs/cargo@v1
+        if: startsWith( github.head_ref, 'market-decentralized/' )
+        with:
+          command: test
+          # Due to cargo quirks it is more efficient to run all tests from workspace as:
+          #   --tests --workspace
+          # than just:
+          #   --tests -p ya-market-decentralized
+          # because the latter needs separate compilation of lots of dependant crates again.
+          #
+          # we use single thread, because GSB Router is a singleton shared among tests
+          args: --tests --workspace --features ya-market-decentralized/market-test-suite --features market-decentralized --no-default-features -- --test-threads=1
 
       - name: cargo build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --bins
+          args: --workspace
 
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
         run: |
           mkdir build
-          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit,wasmtime-exeunit} build
+          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit} build
           strip -x build/*
 
       - name: Copy binaries Windows
@@ -85,7 +121,6 @@ jobs:
           copy target\debug\ya-provider.exe build
           copy target\debug\ya-requestor.exe build
           copy target\debug\exe-unit.exe build
-          copy target\debug\wasmtime-exeunit.exe build
 
       - name: Upload binaries
         uses: actions/upload-artifact@v1
