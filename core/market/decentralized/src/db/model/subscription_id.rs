@@ -186,9 +186,9 @@ where
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "[\n")?;
         for id in self.0.iter() {
-            write!(f, "    {}", id)?;
+            write!(f, "    {}\n", id)?;
         }
-        write!(f, "\n]")?;
+        write!(f, "]")?;
         Ok(())
     }
 }
