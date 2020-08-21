@@ -375,9 +375,6 @@ async fn random_broadcast_offers(matcher: Matcher) {
                 .into_iter()
                 .map(|offer| offer.id)
                 .collect::<Vec<SubscriptionId>>();
-
-            log::debug!("All Offers number: {}", all_offers.len());
-
             let random_offers = randomize_offers(our_offers, all_offers, num_to_broadcast as usize);
 
             log::debug!(

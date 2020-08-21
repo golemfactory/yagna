@@ -277,3 +277,91 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     }
     Ok(())
 }
+
+/// Nodes send in cyclic broadcasts not only own Offers unsubscribes, but Offers
+/// from other Nodes either.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> {
+    let _ = env_logger::builder().try_init();
+
+    // Change expected time of sending broadcasts.
+    let mut config = Config::default();
+    config.discovery.mean_random_broadcast_interval = Duration::milliseconds(100);
+    config.discovery.mean_random_broadcast_unsubscribes_interval = Duration::milliseconds(100);
+    config.discovery.num_broadcasted_offers = 50;
+    config.discovery.num_broadcasted_unsubscribes = 50;
+
+    let network = MarketsNetwork::new("test_sharing_someones_else_unsubscribes")
+        .await
+        .with_config(Arc::new(config))
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?
+        .add_market_instance("Node-3")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let id1 = network.get_default_id("Node-1");
+
+    let market2 = network.get_market("Node-2");
+    let id2 = network.get_default_id("Node-2");
+
+    let market3 = network.get_market("Node-3");
+
+    // Create some offers before we instantiate 3rd node.
+    // This way this 3rd node won't get them in first broadcasts, that
+    // are sent immediately, after subscription is made.
+    let mut subscriptions = vec![];
+
+    for _n in (0..30).into_iter() {
+        subscriptions.push(
+            market1
+                .subscribe_offer(&client::sample_offer(), &id1)
+                .await?,
+        )
+    }
+
+    for _n in (0..20).into_iter() {
+        subscriptions.push(
+            market2
+                .subscribe_offer(&client::sample_offer(), &id2)
+                .await?,
+        )
+    }
+
+    // Wait until Nodes will share their Offers.
+    tokio::time::delay_for(std::time::Duration::from_millis(100)).await;
+
+    // Sanity check. Node-3 should have all Offers from market1.
+    for subscription in subscriptions.iter() {
+        assert!(market2.get_offer(subscription).await.is_ok());
+    }
+
+    // Break networking for Node-3, so he won't see any unsubscribes.
+    network.break_networking_for("Node-3")?;
+
+    for subscription in subscriptions[30..].iter() {
+        market2.unsubscribe_offer(subscription, &id2).await?;
+    }
+
+    tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+
+    // Disconnect Node-2. Only Node-1 can propagate unsubscribes to Node-3.
+    network.break_networking_for("Node-2")?;
+    network.enable_networking_for("Node-3")?;
+
+    // We expect that all unsubscribed will be shared with Node-3 after this delay.
+    tokio::time::delay_for(std::time::Duration::from_millis(300)).await;
+    for subscription in subscriptions[30..].into_iter() {
+        let expected_error = QueryOfferError::Unsubscribed(subscription.clone());
+        assert_err_eq!(expected_error, market3.get_offer(&subscription).await)
+    }
+
+    // All other Offers should remain untouched.
+    for subscription in subscriptions[0..30].into_iter() {
+        market3.get_offer(&subscription).await?;
+    }
+    Ok(())
+}
