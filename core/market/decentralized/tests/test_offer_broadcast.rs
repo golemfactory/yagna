@@ -178,3 +178,38 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+/// Discovery GetOffers gsb endpoint should return only existing Offers.
+/// Test sends GetOffers requesting existing and not existing subscription.
+/// Market is expected to return only existing Offer without any error.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new("test_network_error_while_subscribing")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_discovery_instance("Node-2", MarketsNetwork::discovery_builder())
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let id1 = network.get_default_id("Node-1");
+    let discovery2 = network.get_discovery("Node-2");
+
+    let subscription_id = market1
+        .subscribe_offer(&client::sample_offer(), &id1)
+        .await?;
+    let invalid_subscription = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
+
+    let offers = discovery2
+        .get_offers(
+            id1.identity.to_string(),
+            vec![subscription_id.clone(), invalid_subscription],
+        )
+        .await?;
+
+    assert_eq!(offers.len(), 1);
+    assert_eq!(offers[0].id, subscription_id);
+    Ok(())
+}
