@@ -18,6 +18,7 @@ ethereum-tx-sign = { git = "https://github.com/bidzyyys/ethereum-tx-sign" }
 ethereum-types = "0.6.0"
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 hex = "0.4"
+hyper="0.13"
 lazy_static = "1.4.0"
 log = "0.4.8"
 num-bigint = "0.2"

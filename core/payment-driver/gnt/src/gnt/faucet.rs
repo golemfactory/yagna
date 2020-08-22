@@ -1,6 +1,10 @@
 use crate::utils;
 use crate::{GNTDriverError, GNTDriverResult};
 use ethereum_types::Address;
+use hyper::body::HttpBody as _;
+use hyper::client::HttpConnector;
+use hyper::http::uri::InvalidUri;
+use hyper::{Body, Uri};
 use std::{env, time};
 
 const MAX_ETH_FAUCET_REQUESTS: u32 = 6;
@@ -24,18 +28,37 @@ impl EthFaucetConfig {
 
     pub async fn request_eth(&self, address: Address) -> GNTDriverResult<()> {
         log::debug!("request eth");
-        let client = awc::Client::new();
+        let client = hyper::Client::new();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
 
-        async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {
+        async fn try_request_eth(
+            client: &hyper::Client<HttpConnector, Body>,
+            url: &str,
+        ) -> GNTDriverResult<()> {
+            let uri: Uri = url.parse().map_err(|e: InvalidUri| {
+                GNTDriverError::LibraryError(format!("URL parse() error: {}", e.to_string()))
+            })?;
             let body = client
-                .get(url)
-                .send()
+                .get(uri)
                 .await
-                .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?
-                .body()
+                .map_err(|e| {
+                    GNTDriverError::LibraryError(format!(
+                        "Faucet request - Send() error: {}",
+                        e.to_string()
+                    ))
+                })?
+                .body_mut()
+                .data()
                 .await
-                .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?;
+                .ok_or(GNTDriverError::LibraryError(String::from(
+                    "Faucet request returned empty response...",
+                )))?
+                .map_err(|e| {
+                    GNTDriverError::LibraryError(format!(
+                        "Faucet request - Body() error: {}",
+                        e.to_string()
+                    ))
+                })?;
             let resp = std::string::String::from_utf8_lossy(body.as_ref());
             if resp.contains("sufficient funds") || resp.contains("txhash") {
                 log::debug!("resp: {}", resp);
