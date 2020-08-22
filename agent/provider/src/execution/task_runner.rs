@@ -79,6 +79,7 @@ pub struct ActivityDestroyed {
 struct CreateActivity {
     pub activity_id: String,
     pub agreement_id: String,
+    pub requestor_pub_key: Option<String>,
 }
 
 /// Called when we got destroyActivity event.
@@ -228,9 +229,14 @@ impl TaskRunner {
                     ProviderEvent::CreateActivity {
                         activity_id,
                         agreement_id,
+                        requestor_pub_key,
                     } => {
                         myself
-                            .send(CreateActivity::new(activity_id, agreement_id))
+                            .send(CreateActivity::new(
+                                activity_id,
+                                agreement_id,
+                                requestor_pub_key.as_ref(),
+                            ))
                             .await?
                     }
                     ProviderEvent::DestroyActivity {
@@ -268,7 +274,12 @@ impl TaskRunner {
 
         let exeunit_name = exe_unit_name_from(&agreement)?;
 
-        let task = match self.create_task(&exeunit_name, &msg.activity_id, &msg.agreement_id) {
+        let task = match self.create_task(
+            &exeunit_name,
+            &msg.activity_id,
+            &msg.agreement_id,
+            msg.requestor_pub_key.as_ref().map(|s| s.as_str()),
+        ) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
         };
@@ -352,6 +363,7 @@ impl TaskRunner {
         exeunit_name: &str,
         activity_id: &str,
         agreement_id: &str,
+        requestor_pub_key: Option<&str>,
     ) -> Result<Task> {
         let working_dir = self
             .tasks_dir
@@ -378,6 +390,10 @@ impl TaskRunner {
         args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
+
+        if let Some(req_pub_key) = requestor_pub_key {
+            args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
+        }
 
         args.push("service-bus");
         args.push(activity_id);
@@ -647,10 +663,15 @@ impl Handler<AgreementBroken> for TaskRunner {
 // =========================================== //
 
 impl CreateActivity {
-    pub fn new(activity_id: &str, agreement_id: &str) -> CreateActivity {
+    pub fn new<S: AsRef<str>>(
+        activity_id: S,
+        agreement_id: S,
+        requestor_pub_key: Option<S>,
+    ) -> CreateActivity {
         CreateActivity {
-            activity_id: activity_id.to_string(),
-            agreement_id: agreement_id.to_string(),
+            activity_id: activity_id.as_ref().to_string(),
+            agreement_id: agreement_id.as_ref().to_string(),
+            requestor_pub_key: requestor_pub_key.map(|s| s.as_ref().to_string()),
         }
     }
 }
