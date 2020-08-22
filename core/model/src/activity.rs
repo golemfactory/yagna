@@ -40,8 +40,15 @@ pub struct Create {
 
 impl RpcMessage for Create {
     const ID: &'static str = "CreateActivity";
-    type Item = String;
+    type Item = CreateResponse;
     type Error = RpcMessageError;
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateResponse {
+    pub activity_id: String,
+    pub credentials: Option<local::Credentials>,
 }
 
 /// Destroy activity.
@@ -109,6 +116,7 @@ pub mod sgx {
     pub enum Request {
         Exec(super::Exec),
         GetExecBatchResults(super::GetExecBatchResults),
+        GetRunningCommand(super::GetRunningCommand),
     }
 
     #[derive(Clone, Serialize, Deserialize)]
@@ -116,6 +124,7 @@ pub mod sgx {
     pub enum Response {
         Exec(Result<String, RpcMessageError>),
         GetExecBatchResults(Result<Vec<super::ExeScriptCommandResult>, RpcMessageError>),
+        GetRunningCommand(Result<super::ExeScriptCommandState, RpcMessageError>),
         Error(RpcMessageError),
     }
 }
@@ -188,16 +197,20 @@ pub mod local {
         pub state: ActivityState,
         pub timeout: Option<f32>,
         #[serde(default)]
-        pub credentials: Option<Box<Credentials>>,
+        pub credentials: Option<Credentials>,
     }
 
     impl SetState {
-        pub fn new(activity_id: String, state: ActivityState) -> Self {
+        pub fn new(
+            activity_id: String,
+            state: ActivityState,
+            credentials: Option<Credentials>,
+        ) -> Self {
             SetState {
                 activity_id,
                 state,
                 timeout: Default::default(),
-                credentials: Default::default(),
+                credentials,
             }
         }
     }
@@ -215,7 +228,6 @@ pub mod local {
             requestor: Vec<u8>,
             enclave: Vec<u8>,
             // sha3-256
-            payload_sha3: [u8; 32],
             enclave_hash: [u8; 32],
             ias_report: String,
             ias_sig: Vec<u8>,
