@@ -186,6 +186,15 @@ impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> 
                             })?,
                     )
                 }
+                sgx::Request::GetRunningCommand(get_running_command) => {
+                    sgx::Response::GetRunningCommand(
+                        me.send(RpcEnvelope::local(get_running_command))
+                            .await
+                            .map_err(|_e| {
+                                RpcMessageError::Service("fatal: exe-unit disconnected".to_string())
+                            })?,
+                    )
+                }
             })
         }
         .then(move |v| {
