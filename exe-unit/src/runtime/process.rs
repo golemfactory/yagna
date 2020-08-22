@@ -2,7 +2,11 @@ use crate::error::Error;
 use crate::message::{
     RuntimeCommand, RuntimeCommandResult, SetRuntimeMode, SetTaskPackagePath, Shutdown,
 };
-use crate::process::{ProcessTree, SystemError};
+#[cfg(feature = "sgx")]
+use crate::process::kill;
+#[cfg(not(feature = "sgx"))]
+use crate::process::ProcessTree;
+use crate::process::SystemError;
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
 use crate::ExeUnitContext;
@@ -13,7 +17,7 @@ use futures::FutureExt;
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -44,6 +48,11 @@ pub struct RuntimeProcess {
 
 #[derive(Clone, Hash, Eq, PartialEq)]
 enum ChildProcess {
+    #[cfg(feature = "sgx")]
+    Single {
+        pid: u32,
+    },
+    #[cfg(not(feature = "sgx"))]
     Tree(ProcessTree),
     Service(ProcessService),
 }
@@ -56,7 +65,10 @@ impl ChildProcess {
                 Ok(())
             }
             .boxed_local(),
+            #[cfg(not(feature = "sgx"))]
             ChildProcess::Tree(tree) => tree.kill(timeout).boxed_local(),
+            #[cfg(feature = "sgx")]
+            ChildProcess::Single { pid } => kill(pid as i32, timeout).boxed_local(),
         }
     }
 }
@@ -164,12 +176,24 @@ impl RuntimeProcess {
                 .stderr(Stdio::piped())
                 .spawn()?;
 
-            let tree =
-                ProcessTree::try_new(child.id()).map_err(|e| Error::RuntimeError(e.to_string()))?;
+            #[cfg(not(feature = "sgx"))]
+            let result = {
+                let tree = ProcessTree::try_new(child.id())
+                    .map_err(|e| Error::RuntimeError(e.to_string()))?;
+                address.do_send(AddChildProcess::from(tree.clone()));
+                let result = child.wait_with_output().await;
+                address.do_send(RemoveChildProcess::from(tree));
+                result
+            };
+            #[cfg(feature = "sgx")]
+            let result = {
+                let single_child = child.id();
+                address.do_send(AddChildProcess::from(single_child));
+                let result = child.wait_with_output().await;
+                address.do_send(RemoveChildProcess::from(single_child));
+                result
+            };
 
-            address.do_send(AddChildProcess::from(tree.clone()));
-            let result = child.wait_with_output().await;
-            address.do_send(RemoveChildProcess::from(tree));
             let output = result?;
 
             Ok(RuntimeCommandResult {
@@ -192,17 +216,17 @@ impl RuntimeProcess {
         let binary = self.binary.clone();
         match command {
             ExeScriptCommand::Start { args } => {
-                let monitor = self
-                    .monitor
-                    .get_or_insert_with(|| EventMonitor::default())
-                    .clone();
+                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
+                let mut cmd_args = vec![OsString::from("start")];
+                cmd_args.extend(args.into_iter().map(OsString::from));
+                let args = self.args(cmd_args).unwrap_or_else(|_| Vec::new());
+
+                log::info!("Executing {:?} with {:?}", binary, args);
+
+                let mut command = Command::new(binary);
+                command.args(args);
 
                 async move {
-                    let mut cmd_args = vec![String::from("start")];
-                    cmd_args.extend(args);
-                    let mut command = Command::new(binary);
-                    command.args(cmd_args);
-
                     let service = spawn(command, monitor)
                         .map_err(|e| Error::RuntimeError(e.to_string()))
                         .await?;
@@ -216,22 +240,25 @@ impl RuntimeProcess {
                 }
                 .boxed_local()
             }
-            ExeScriptCommand::Run { entry_point, args } => {
-                let mut cmd_args = vec![
-                    String::from("run"),
-                    String::from("--entrypoint"),
-                    String::from(entry_point),
-                ];
-                cmd_args.extend(args);
-
-                let mut run_process = RunProcess::default();
-                run_process.bin = binary.display().to_string();
-                run_process.args = cmd_args;
+            ExeScriptCommand::Run {
+                entry_point,
+                mut args,
+            } => {
+                log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
 
                 let service = self.service.as_ref().unwrap().service.clone();
                 let mut monitor = self.monitor.as_ref().unwrap().clone();
 
                 async move {
+                    let name = Path::new(&entry_point)
+                        .file_name()
+                        .ok_or_else(|| Error::RuntimeError("Invalid binary name".into()))?;
+                    args.insert(0, name.to_string_lossy().to_string());
+
+                    let mut run_process = RunProcess::default();
+                    run_process.bin = entry_point;
+                    run_process.args = args;
+
                     let process = match service.run_process(run_process).await {
                         Ok(result) => result,
                         Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
@@ -384,6 +411,7 @@ struct SetProcessService(ProcessService);
 #[rtype("()")]
 struct AddChildProcess(ChildProcess);
 
+#[cfg(not(feature = "sgx"))]
 impl From<ProcessTree> for AddChildProcess {
     fn from(process: ProcessTree) -> Self {
         AddChildProcess(ChildProcess::Tree(process))
@@ -396,10 +424,18 @@ impl From<ProcessService> for AddChildProcess {
     }
 }
 
+#[cfg(feature = "sgx")]
+impl From<u32> for AddChildProcess {
+    fn from(pid: u32) -> Self {
+        AddChildProcess(ChildProcess::Single { pid })
+    }
+}
+
 #[derive(Message)]
 #[rtype("()")]
 struct RemoveChildProcess(ChildProcess);
 
+#[cfg(not(feature = "sgx"))]
 impl From<ProcessTree> for RemoveChildProcess {
     fn from(process: ProcessTree) -> Self {
         RemoveChildProcess(ChildProcess::Tree(process))
@@ -409,5 +445,12 @@ impl From<ProcessTree> for RemoveChildProcess {
 impl From<ProcessService> for RemoveChildProcess {
     fn from(service: ProcessService) -> Self {
         RemoveChildProcess(ChildProcess::Service(service))
+    }
+}
+
+#[cfg(feature = "sgx")]
+impl From<u32> for RemoveChildProcess {
+    fn from(pid: u32) -> Self {
+        RemoveChildProcess(ChildProcess::Single { pid })
     }
 }

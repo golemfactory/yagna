@@ -13,7 +13,7 @@ gftp = "0.1"
 
 actix-http = "1.0.1"
 actix-rt = "1.0.0"
-awc = "1.0.1"
+awc = { version = "1.0.1", features = ["openssl"] }
 bytes = "0.5.4"
 futures = { version = "0.3.4" }
 hex = "0.4.2"

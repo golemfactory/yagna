@@ -217,5 +217,13 @@ async fn main() -> anyhow::Result<()> {
     verify_hash(&hash, temp_dir.path(), "rnd_upload");
     log::warn!("Verification complete");
 
+    transfer(
+        &addr,
+        "https://www.rust-lang.org",
+        "http://127.0.0.1:8002/index.html",
+    )
+    .await
+    .expect("HTTPS transfer failed");
+
     Ok(())
 }
