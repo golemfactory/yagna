@@ -46,19 +46,19 @@ async fn create_activity(
         requestor_pub_key: None,
     };
 
-    let activity_id = net::from(id.identity)
+    let create_resp = net::from(id.identity)
         .to(provider_id)
         .service(activity::BUS_ID)
         .send(msg)
         .timeout(query.timeout)
         .await???;
 
-    log::debug!("activity created: {}, inserting", activity_id);
+    log::debug!("activity created: {}, inserting", create_resp.activity_id);
     db.as_dao::<ActivityDao>()
-        .create_if_not_exists(&activity_id, &agreement_id)
+        .create_if_not_exists(&create_resp.activity_id, &agreement_id)
         .await?;
 
-    Ok::<_, Error>(web::Json(activity_id))
+    Ok::<_, Error>(web::Json(create_resp))
 }
 
 /// Destroys given Activity.

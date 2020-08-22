@@ -18,6 +18,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
+use ya_core_model::activity::CreateResponse;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -86,6 +87,7 @@ async fn create_activity_gsb(
             &activity_id,
             &provider_id,
             ActivityEventType::CreateActivity,
+            msg.requestor_pub_key,
         )
         .await
         .map_err(Error::from)?;
@@ -106,8 +108,24 @@ async fn create_activity_gsb(
             Error::from(e)
         })?;
 
-    Arbiter::spawn(monitor_activity(db, activity_id.clone(), provider_id));
-    Ok(activity_id)
+    Arbiter::spawn(monitor_activity(
+        db.clone(),
+        activity_id.clone(),
+        provider_id,
+    ));
+
+    let credentials = db
+        .as_dao::<ActivityCredentialsDao>()
+        .get(&activity_id)
+        .await
+        .map_err(Error::from)?
+        .map(|c| serde_json::from_str(&c.credentials).map_err(|e| Error::Service(e.to_string())))
+        .transpose()?;
+
+    Ok(CreateResponse {
+        activity_id,
+        credentials,
+    })
 }
 
 /// Destroys given Activity.
@@ -128,6 +146,7 @@ async fn destroy_activity_gsb(
             &msg.activity_id,
             agreement.provider_id().map_err(Error::from)?,
             ActivityEventType::DestroyActivity,
+            None,
         )
         .await
         .map_err(Error::from)?;
@@ -191,6 +210,7 @@ fn enqueue_destroy_evt(
                 &activity_id,
                 &provider_id,
                 ActivityEventType::DestroyActivity,
+                None,
             )
             .await
         {
@@ -272,6 +292,12 @@ mod local {
         _caller: String,
         msg: activity::local::SetState,
     ) -> RpcMessageResult<activity::local::SetState> {
+        if let Some(credentials) = msg.credentials {
+            db.as_dao::<ActivityCredentialsDao>()
+                .set(&msg.activity_id, credentials)
+                .await
+                .map_err(Error::from)?;
+        }
         set_persisted_state(&db, &msg.activity_id, msg.state).await?;
         Ok(())
     }
