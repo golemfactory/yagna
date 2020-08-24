@@ -22,7 +22,7 @@ pub enum NegotiationInitError {
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum MatchValidationError {
-    #[error("Proposal [{new}] doesn't match previous Proposal [{prev}].")]
+    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}].")]
     NotMatching { new: ProposalId, prev: ProposalId },
     #[error("Can't match Proposal [{new}] with previous Proposal [{prev}]. Error: {error}")]
     MatchingFailed {
@@ -40,6 +40,8 @@ pub enum AgreementError {
     GetProposal(ProposalId, ProposalId, DbError),
     #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
     NoNegotiations(ProposalId),
+    #[error("Can't create Agreement for out own Proposal {0}. You can promote only provider's Proposals to Agreement.")]
+    OwnProposal(ProposalId),
     #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]

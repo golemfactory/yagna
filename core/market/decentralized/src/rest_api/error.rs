@@ -143,6 +143,7 @@ impl ResponseError for AgreementError {
             | AgreementError::Expired(_)
             | AgreementError::Terminated(_) => HttpResponse::Gone().json(msg),
             AgreementError::NoNegotiations(_)
+            | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)

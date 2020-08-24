@@ -2,10 +2,12 @@ use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
-use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
+use ya_market_decentralized::testing::proposal_util::{
+    exchange_draft_proposals, NegotiationHelper,
+};
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::{
-    AgreementError, ApprovalStatus, OwnerType, WaitForApprovalError,
+    client::sample_demand, AgreementError, ApprovalStatus, OwnerType, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -740,5 +742,47 @@ async fn net_err_while_approving() -> Result<()> {
         e => panic!("expected protocol error, but got: {}", e),
     };
 
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn cant_promote_requestor_proposal() -> Result<()> {
+    let network = MarketsNetwork::new("cant_promote_requestor_proposal")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let NegotiationHelper {
+        proposal,
+        proposal_id,
+        demand_id,
+        ..
+    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let our_proposal = proposal.counter_demand(sample_demand())?;
+    let our_proposal_id = req_market
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal_id, &our_proposal)
+        .await?;
+
+    // Requestor tries to promote his own Proposal to Agreement.
+    match req_engine
+        .create_agreement(
+            req_id.clone(),
+            &our_proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+    {
+        Err(AgreementError::OwnProposal(id)) => assert_eq!(id, our_proposal_id),
+        _ => panic!("Expected AgreementError::OwnProposal."),
+    }
     Ok(())
 }

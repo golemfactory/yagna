@@ -11,7 +11,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::{
     dao::{AgreementDao, EventsDao, ProposalDao, StateError},
     model::{Agreement, AgreementId, AgreementState, OwnerType},
-    model::{Demand as ModelDemand, Proposal, ProposalId, SubscriptionId},
+    model::{Demand as ModelDemand, IssuerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
@@ -192,13 +192,18 @@ impl RequestorBroker {
         proposal_id: &ProposalId,
         valid_to: DateTime<Utc>,
     ) -> Result<AgreementId, AgreementError> {
-        // TODO: Check if we are owner of Proposal
         let offer_proposal_id = proposal_id;
         let offer_proposal = self
             .common
             .get_proposal(offer_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
+
+        // We can promote only Offers, that we got from Provider.
+        // Can't promote our own Offer.
+        if offer_proposal.body.issuer != IssuerType::Them {
+            return Err(AgreementError::OwnProposal(proposal_id.clone()));
+        }
 
         let demand_proposal_id = offer_proposal
             .body
