@@ -9,7 +9,6 @@ use ya_persistence::executor::{
 
 use crate::db::model::SubscriptionId;
 use crate::db::model::{Offer, OfferUnsubscribed};
-use crate::db::schema::market_negotiation::dsl as negotiation_dsl;
 use crate::db::schema::market_offer::dsl;
 use crate::db::schema::market_offer_unsubscribed::dsl as dsl_unsubscribed;
 use crate::db::{DbError, DbResult};
@@ -172,25 +171,22 @@ impl<'c> OfferDao<'c> {
         if num_deleted > 0 {
             log::info!("Clean market offers: {} cleaned", num_deleted);
         }
-        self.clean_negotiations().await?;
+        self.clean_unsubscribes().await?;
         log::debug!("Clean market offers: done");
         Ok(())
     }
 
-    pub async fn clean_negotiations(&self) -> DbResult<()> {
-        log::debug!("Clean market offers negotiations: start");
+    pub async fn clean_unsubscribes(&self) -> DbResult<()> {
+        log::debug!("Clean market offers unsubscribes: start");
         let num_deleted = do_with_transaction(self.pool, move |conn| {
-            let nd = diesel::delete(negotiation_dsl::market_negotiation)
-                .filter(negotiation_dsl::agreement_id.is_null())
-                .filter(negotiation_dsl::offer_id.ne_all(dsl::market_offer.select(dsl::id)))
+            let nd = diesel::delete(dsl_unsubscribed::market_offer_unsubscribed.filter(dsl_unsubscribed::expiration_ts.lt(sql_now)))
                 .execute(conn)?;
             Result::<usize, DbError>::Ok(nd)
-        })
-        .await?;
+        }).await?;
         if num_deleted > 0 {
-            log::info!("Clean market offers negotiations: {} cleaned", num_deleted);
+            log::info!("Clean market offers unsubscribes: {} cleaned", num_deleted);
         }
-        log::debug!("Clean market offers negotiations: done");
+        log::debug!("Clean market offers unsubscribes: done");
         Ok(())
     }
 }

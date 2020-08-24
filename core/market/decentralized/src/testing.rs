@@ -9,6 +9,7 @@ pub use super::negotiation::{error::*, *};
 pub use super::protocol::*;
 
 pub mod bcast;
+pub mod dao;
 pub mod events_helper;
 pub mod mock_net;
 pub mod mock_node;

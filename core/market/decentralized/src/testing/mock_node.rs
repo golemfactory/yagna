@@ -131,7 +131,6 @@ impl MarketsNetwork {
 
     pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
-        db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
         let (matcher, listeners) = Matcher::new(store)?;
@@ -334,10 +333,11 @@ impl MarketsNetwork {
         .await
     }
 
-    fn init_database(&self, name: &str) -> Result<DbExecutor> {
+    pub fn init_database(&self, name: &str) -> Result<DbExecutor> {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))?;
+        db.apply_migration(crate::db::migrations::run_with_output)?;
         Ok(db)
     }
 

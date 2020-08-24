@@ -119,8 +119,7 @@ table! {
 }
 
 allow_tables_to_appear_in_same_query!(market_demand, market_offer, market_offer_unsubscribed);
-allow_tables_to_appear_in_same_query!(market_demand, market_negotiation);
-allow_tables_to_appear_in_same_query!(market_offer, market_negotiation);
+allow_tables_to_appear_in_same_query!(market_proposal, market_negotiation);
 
 joinable!(market_negotiation -> market_agreement (agreement_id));
 joinable!(market_offer -> market_offer_unsubscribed (id));

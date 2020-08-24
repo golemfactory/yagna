@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::time;
 use ya_persistence::executor::DbExecutor;
 
-async fn clean(db: DbExecutor) {
+pub async fn clean(db: DbExecutor) {
     let demand_db = db.clone();
     let events_db = db.clone();
     let offer_db = db.clone();

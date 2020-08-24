@@ -1,8 +1,20 @@
+use chrono::NaiveDateTime;
 use std::str::FromStr;
 
 use ya_client::model::market::Proposal;
 
-use crate::db::model::ProposalId;
+use crate::db::model::{EventType, ProposalId, SubscriptionId,};
+use crate::db::schema::market_event;
+
+#[derive(Clone, Debug, Insertable, Queryable)]
+#[table_name = "market_event"]
+pub struct TestMarketEvent {
+    pub id: i32,
+    pub subscription_id: SubscriptionId,
+    pub timestamp: NaiveDateTime,
+    pub event_type: EventType,
+    pub artifact_id: ProposalId,
+}
 
 pub mod requestor {
     use ya_client::model::market::event::RequestorEvent;
