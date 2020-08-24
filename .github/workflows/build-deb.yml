@@ -19,21 +19,21 @@ jobs:
 
       - name: Set up environment
         run: |
-          echo "::set-env name=CONTAINER_OUTPUT_DIR::/src/target/debian"
-          echo "::set-env name=JOB_OUTPUT_DIR::${{ runner.temp }}/deb_packages"
+          echo "::set-env name=CONTAINER_OUTPUT_PATH::/src/target/debian"
+          echo "::set-env name=JOB_OUTPUT_PATH::${{ runner.temp }}/deb_packages"
       - name: Build Docker image
         run: docker build . -f build-deb.Dockerfile -t build-deb
 
       - name: Build yagna.deb file
-        run: docker run --env PACKAGE_NAME=yagna -v $JOB_OUTPUT_DIR:$CONTAINER_OUTPUT_DIR build-deb 
+        run: docker run --env PACKAGE_NAME=yagna -v $JOB_OUTPUT_PATH:$CONTAINER_OUTPUT_PATH build-deb 
 
       - name: Commit built image
         run: docker commit $(docker ps -aq --filter "ancestor=build-deb") build-deb
 
       - name: Build ya-sb-router.deb file
-        run: docker run --env PACKAGE_NAME=ya-sb-router -v $JOB_OUTPUT_DIR:$CONTAINER_OUTPUT_DIR build-deb
+        run: docker run --env PACKAGE_NAME=ya-sb-router -v $JOB_OUTPUT_PATH:$CONTAINER_OUTPUT_PATH build-deb
 
       - name: Upload .deb packages
         uses: kittaakos/upload-artifact-as-is@v0
         with:
-          path: $JOB_OUTPUT_DIR
+          path: ${{ env.JOB_OUTPUT_PATH }}
