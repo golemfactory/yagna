@@ -75,6 +75,7 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                     Some(Credentials::Sgx {
                         requestor: Vec::new(),
                         enclave: Vec::new(),
+                        payload_sha3: [0u8; 32],
                         enclave_hash: [0u8; 32],
                         ias_report: String::new(),
                         ias_sig: Vec::new(),

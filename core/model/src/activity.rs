@@ -228,6 +228,7 @@ pub mod local {
             requestor: Vec<u8>,
             enclave: Vec<u8>,
             // sha3-256
+            payload_sha3: [u8; 32],
             enclave_hash: [u8; 32],
             ias_report: String,
             ias_sig: Vec<u8>,
