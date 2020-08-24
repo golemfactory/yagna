@@ -1,14 +1,13 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-use super::super::callbacks::CallbackMessage;
-use super::errors::{AgreementError, CounterProposalError, ProposalError};
-use crate::db::models::Demand;
-use crate::db::models::{DbProposal, OwnerType, ProposalId};
-use crate::SubscriptionId;
-
-use ya_client::model::NodeId;
 use ya_service_bus::RpcMessage;
+
+use crate::db::model::{Agreement, AgreementId};
+use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
+
+use super::super::callback::CallbackMessage;
+use super::error::{AgreementError, ApproveAgreementError, CounterProposalError, ProposalError};
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -83,8 +82,7 @@ impl RpcMessage for ProposalRejected {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementReceived {
-    pub agreement_id: String,
-    // TODO: Send agreement content.
+    pub agreement: Agreement,
 }
 
 impl RpcMessage for AgreementReceived {
@@ -96,20 +94,20 @@ impl RpcMessage for AgreementReceived {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementApproved {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
     // TODO: We should send here signature.
 }
 
 impl RpcMessage for AgreementApproved {
     const ID: &'static str = "AgreementApproved";
     type Item = ();
-    type Error = AgreementError;
+    type Error = ApproveAgreementError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementRejected {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 impl RpcMessage for AgreementRejected {
@@ -121,7 +119,7 @@ impl RpcMessage for AgreementRejected {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementCancelled {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 impl RpcMessage for AgreementCancelled {
@@ -148,19 +146,6 @@ impl ProposalContent {
     }
 }
 
-impl InitialProposalReceived {
-    pub fn into_demand(self, owner: NodeId) -> Demand {
-        Demand {
-            id: self.demand_id,
-            properties: self.proposal.properties,
-            constraints: self.proposal.constraints,
-            node_id: owner,
-            creation_ts: self.proposal.creation_ts,
-            insertion_ts: None,
-            expiration_ts: self.proposal.expiration_ts,
-        }
-    }
-}
 impl ProposalReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());
@@ -179,6 +164,13 @@ impl InitialProposalReceived {
 impl ProposalRejected {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.proposal_id = self.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementApproved {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner.clone());
         self
     }
 }

@@ -6,8 +6,8 @@ use std::string::ToString;
 use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
 
-use crate::protocol::OfferReceived;
-use crate::{Demand, Offer};
+use crate::db::model::{Demand, Offer};
+use crate::protocol::discovery::OfferReceived;
 
 pub fn generate_identity(name: &str) -> Identity {
     let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
@@ -78,7 +78,7 @@ pub mod client {
                     "node.id.name": "its-test-requestor",
                     "node.debug.subnet": "blaa",
                     "srv.comp.expiration": 3,
-                    "srv.comp.wasm.task_package": "test-package",
+                    "srv.comp.task_package": "test-package",
                 },
             }),
             constraints![

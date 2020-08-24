@@ -76,6 +76,12 @@ impl ProcessTree {
     }
 }
 
+pub async fn kill(pid: i32, _timeout: i64) -> Result<(), SystemError> {
+    let job = JobObject::try_new(Some(pid as u32))?;
+    job.terminate()?;
+    Ok(())
+}
+
 #[derive(Clone, Debug)]
 pub struct JobObject {
     handle: HANDLE,

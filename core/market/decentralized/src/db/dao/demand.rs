@@ -4,7 +4,7 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
-use crate::db::models::{Demand, SubscriptionId};
+use crate::db::model::{Demand, SubscriptionId};
 use crate::db::schema::market_demand::dsl;
 use crate::db::DbResult;
 
@@ -27,6 +27,7 @@ pub enum DemandState {
 }
 
 impl<'c> DemandDao<'c> {
+    // TODO: return DemandState
     pub async fn select(&self, id: &SubscriptionId) -> DbResult<Option<Demand>> {
         let id = id.clone();
         let now = Utc::now().naive_utc();

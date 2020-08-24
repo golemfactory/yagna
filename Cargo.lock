@@ -55,6 +55,8 @@ dependencies = [
  "futures 0.3.5",
  "http 0.2.1",
  "log 0.4.8",
+ "openssl",
+ "tokio-openssl",
  "trust-dns-proto",
  "trust-dns-resolver",
 ]
@@ -91,6 +93,7 @@ dependencies = [
  "actix-rt",
  "actix-service",
  "actix-threadpool",
+ "actix-tls",
  "actix-utils",
  "base64 0.11.0",
  "bitflags 1.2.1",
@@ -238,6 +241,8 @@ dependencies = [
  "either",
  "futures 0.3.5",
  "log 0.4.8",
+ "openssl",
+ "tokio-openssl",
 ]
 
 [[package]]
@@ -387,7 +392,7 @@ checksum = "cfd7e7ae3f9a1fb5c03b389fc6bb9a51400d0c13053f0dca698c832bfd893a0d"
 dependencies = [
  "block-cipher-trait",
  "byteorder",
- "opaque-debug",
+ "opaque-debug 0.2.3",
 ]
 
 [[package]]
@@ -397,7 +402,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f70a6b5f971e473091ab7cfb5ffac6cde81666c4556751d8d5620ead8abf100"
 dependencies = [
  "block-cipher-trait",
- "opaque-debug",
+ "opaque-debug 0.2.3",
  "stream-cipher",
 ]
 
@@ -549,6 +554,7 @@ dependencies = [
  "futures-core",
  "log 0.4.8",
  "mime 0.3.16",
+ "openssl",
  "percent-encoding 2.1.0",
  "rand 0.7.3",
  "serde",
@@ -652,10 +658,20 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 dependencies = [
- "block-padding",
+ "block-padding 0.1.5",
  "byte-tools 0.3.1",
  "byteorder",
  "generic-array 0.12.3",
+]
+
+[[package]]
+name = "block-buffer"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
+dependencies = [
+ "block-padding 0.2.0",
+ "generic-array 0.14.2",
 ]
 
 [[package]]
@@ -674,7 +690,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31aa8410095e39fdb732909fb5730a48d5bd7c2e3cd76bd1b07b3dbea130c529"
 dependencies = [
  "block-cipher-trait",
- "block-padding",
+ "block-padding 0.1.5",
 ]
 
 [[package]]
@@ -685,6 +701,12 @@ checksum = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
 dependencies = [
  "byte-tools 0.3.1",
 ]
+
+[[package]]
+name = "block-padding"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c98bfd7c112b6399fef97cc0614af1cd375b27a112e552ce60f94c1b5f13cb74"
 
 [[package]]
 name = "brotli-sys"
@@ -1150,6 +1172,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "digest"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
+dependencies = [
+ "generic-array 0.14.2",
+]
+
+[[package]]
 name = "directories"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1312,6 +1343,19 @@ name = "env_logger"
 version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15b0a4d2e39f8420210be8b27eeda28029729e2fd4291019455016c348240c38"
+dependencies = [
+ "atty",
+ "humantime 1.3.0",
+ "log 0.4.8",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aafcde04e90a5226a6443b7aabdb016ba2f8307c847d524724bd9b346dd1a2d3"
 dependencies = [
  "atty",
  "humantime 1.3.0",
@@ -1755,6 +1799,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "generic-array"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac746a5f3bbfdadd6106868134545e684693d54d9d44f6e9588a7d54af0bf980"
+dependencies = [
+ "typenum",
+ "version_check 0.9.2",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1779,7 +1833,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
- "sha3",
+ "sha3 0.8.2",
  "structopt",
  "tempdir",
  "thiserror",
@@ -2696,6 +2750,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2839e79665f131bdb5782e51f2c6c9599c133c6098982a54c794358bf432529c"
 
 [[package]]
+name = "opaque-debug"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
+
+[[package]]
 name = "openssl"
 version = "0.10.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3515,7 +3575,7 @@ checksum = "ad5112e0dbbb87577bfbc56c42450235e3012ce336e29c5befd7807bd626da4a"
 dependencies = [
  "block-buffer 0.7.3",
  "digest 0.8.1",
- "opaque-debug",
+ "opaque-debug 0.2.3",
 ]
 
 [[package]]
@@ -3601,7 +3661,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
- "semver",
+ "semver 0.9.0",
 ]
 
 [[package]]
@@ -3764,6 +3824,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "semver"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "394cec28fa623e00903caf7ba4fa6fb9a0e260280bb8cdbbba029611108a0190"
+dependencies = [
+ "semver-parser",
+]
+
+[[package]]
 name = "semver-parser"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3882,7 +3951,7 @@ dependencies = [
  "block-buffer 0.7.3",
  "digest 0.8.1",
  "fake-simd",
- "opaque-debug",
+ "opaque-debug 0.2.3",
 ]
 
 [[package]]
@@ -3895,7 +3964,19 @@ dependencies = [
  "byte-tools 0.3.1",
  "digest 0.8.1",
  "keccak",
- "opaque-debug",
+ "opaque-debug 0.2.3",
+]
+
+[[package]]
+name = "sha3"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f81199417d4e5de3f04b1e871023acea7389672c4135918f05aa9cbf2f2fa809"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "keccak",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]
@@ -4462,6 +4543,16 @@ dependencies = [
  "proc-macro2 1.0.18",
  "quote 1.0.7",
  "syn 1.0.33",
+]
+
+[[package]]
+name = "tokio-openssl"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c4b08c5f4208e699ede3df2520aca2e82401b2de33f45e96696a074480be594"
+dependencies = [
+ "openssl",
+ "tokio 0.2.21",
 ]
 
 [[package]]
@@ -5139,7 +5230,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
 dependencies = [
  "awc",
  "backtrace",
@@ -5160,7 +5251,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=b1653df7bc1f921af2c1267af2fe09b662424d37#b1653df7bc1f921af2c1267af2fe09b662424d37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5193,6 +5284,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-dummy-driver"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "anyhow",
+ "bigdecimal",
+ "chrono",
+ "futures 0.3.5",
+ "log 0.4.8",
+ "serde_json",
+ "uuid 0.8.1",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
@@ -5218,7 +5327,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "sha3",
+ "sha3 0.8.2",
  "signal-hook",
  "structopt",
  "tempdir",
@@ -5235,6 +5344,48 @@ dependencies = [
  "ya-sb-router",
  "ya-service-bus",
  "ya-transfer",
+]
+
+[[package]]
+name = "ya-gnt-driver"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-rt",
+ "anyhow",
+ "awc",
+ "bigdecimal",
+ "bitflags 1.2.1",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "dotenv 0.15.0",
+ "env_logger 0.7.1",
+ "ethereum-tx-sign",
+ "ethereum-types",
+ "ethkey",
+ "futures 0.3.5",
+ "hex",
+ "lazy_static",
+ "libsqlite3-sys",
+ "log 0.4.8",
+ "num-bigint",
+ "r2d2",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "sha3 0.8.2",
+ "thiserror",
+ "tokio 0.2.21",
+ "uint",
+ "ureq",
+ "uuid 0.8.1",
+ "web3",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -5302,7 +5453,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
- "sha3",
+ "sha3 0.8.2",
  "structopt",
  "thiserror",
  "tokio 0.2.21",
@@ -5364,7 +5515,7 @@ dependencies = [
  "log 0.4.8",
  "nom 2.2.1",
  "regex",
- "semver",
+ "semver 0.9.0",
  "serde_json",
  "thiserror",
 ]
@@ -5424,55 +5575,14 @@ dependencies = [
  "ya-client",
  "ya-client-model",
  "ya-core-model",
+ "ya-dummy-driver",
+ "ya-gnt-driver",
  "ya-net",
- "ya-payment-driver",
  "ya-persistence",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus",
-]
-
-[[package]]
-name = "ya-payment-driver"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-rt",
- "anyhow",
- "awc",
- "bigdecimal",
- "bitflags 1.2.1",
- "chrono",
- "diesel",
- "diesel_migrations",
- "dotenv 0.15.0",
- "env_logger 0.7.1",
- "ethereum-tx-sign",
- "ethereum-types",
- "ethkey",
- "futures 0.3.5",
- "hex",
- "lazy_static",
- "libsqlite3-sys",
- "log 0.4.8",
- "num-bigint",
- "r2d2",
- "secp256k1",
- "serde",
- "serde_json",
- "sha3",
- "thiserror",
- "tokio 0.2.21",
- "uint",
- "ureq",
- "uuid 0.8.1",
- "web3",
- "ya-client-model",
- "ya-core-model",
- "ya-persistence",
- "ya-service-api-interfaces",
  "ya-service-bus",
 ]
 
@@ -5513,6 +5623,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-util",
  "humantime 2.0.1",
+ "lazy_static",
  "libc",
  "log 0.4.8",
  "log-derive",
@@ -5520,7 +5631,7 @@ dependencies = [
  "notify",
  "num_cpus",
  "path-clean",
- "semver",
+ "semver 0.9.0",
  "serde",
  "serde_json",
  "shared_child",
@@ -5562,6 +5673,30 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client",
  "ya-compile-time-utils",
+]
+
+[[package]]
+name = "ya-requestor-sdk"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-rt",
+ "anyhow",
+ "bigdecimal",
+ "chrono",
+ "dotenv 0.15.0",
+ "env_logger 0.6.2",
+ "futures 0.3.5",
+ "gftp",
+ "log 0.4.8",
+ "semver 0.10.0",
+ "serde_json",
+ "sha3 0.9.1",
+ "structopt",
+ "tokio 0.2.21",
+ "url 2.1.1",
+ "ya-agreement-utils",
+ "ya-client",
 ]
 
 [[package]]
@@ -5758,7 +5893,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "sha2 0.8.2",
- "sha3",
+ "sha3 0.8.2",
  "tempdir",
  "thiserror",
  "tokio 0.2.21",
@@ -5828,12 +5963,13 @@ dependencies = [
  "url 2.1.1",
  "ya-activity",
  "ya-compile-time-utils",
+ "ya-dummy-driver",
+ "ya-gnt-driver",
  "ya-identity",
  "ya-market-decentralized",
  "ya-market-forwarding",
  "ya-net",
  "ya-payment",
- "ya-payment-driver",
  "ya-persistence",
  "ya-sb-proto",
  "ya-sb-router",
@@ -5842,6 +5978,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-utils-path",
 ]
 
 [[package]]

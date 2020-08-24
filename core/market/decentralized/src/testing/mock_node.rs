@@ -1,11 +1,14 @@
+use actix_http::{body::Body, Request};
+use actix_service::Service as ActixService;
+use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, Context, Result};
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::middleware::{auth::dummy::DummyAuth, Identity};
 
-use crate::{migrations, Demand, MarketService, Offer, SubscriptionId};
+use crate::MarketService;
 
 #[cfg(feature = "bcast-singleton")]
 use super::bcast::singleton::BCastService;
@@ -15,11 +18,14 @@ use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
 use super::mock_offer::generate_identity;
 use super::negotiation::{provider, requestor};
-use super::{Matcher, SubscriptionStore};
-use crate::matcher::{DemandError, EventsListeners, QueryOfferError};
-use crate::negotiation::QueryEventsError;
+use super::{store::SubscriptionStore, Matcher};
+use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::matcher::error::{DemandError, QueryOfferError};
+use crate::matcher::EventsListeners;
+use crate::negotiation::error::QueryEventsError;
+use crate::protocol::callback::*;
+use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
 use crate::protocol::negotiation::messages::*;
-use crate::protocol::*;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -112,6 +118,11 @@ impl MarketsNetwork {
         Ok(self)
     }
 
+    pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
+        let id = self.get_default_id(node_name);
+        MockNet::default().unregister_node(&id.identity)
+    }
+
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
         let market = Arc::new(MarketService::new(&db)?);
@@ -120,7 +131,7 @@ impl MarketsNetwork {
 
     pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
         let (matcher, listeners) = Matcher::new(store)?;
@@ -304,6 +315,25 @@ impl MarketsNetwork {
             .unwrap()
     }
 
+    pub async fn get_rest_app(
+        &self,
+        node_name: &str,
+    ) -> impl ActixService<
+        Request = Request,
+        Response = ServiceResponse<Body>,
+        Error = actix_http::error::Error,
+    > {
+        let market = self.get_market(node_name);
+        let identity = self.get_default_id(node_name);
+
+        test::init_service(
+            App::new()
+                .wrap(DummyAuth::new(identity))
+                .service(MarketService::bind_rest(market)),
+        )
+        .await
+    }
+
     fn init_database(&self, name: &str) -> Result<DbExecutor> {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
@@ -315,6 +345,10 @@ impl MarketsNetwork {
         let dir = self.test_dir.join(name);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    pub fn node_gsb_prefixes(&self, node_name: &str) -> (String, String) {
+        gsb_prefixes(&self.test_name, node_name)
     }
 }
 
@@ -387,12 +421,10 @@ impl MarketServiceExt for MarketService {
 }
 
 pub mod default {
-    use crate::protocol::negotiation::errors::{
-        AgreementError, CounterProposalError, ProposalError,
+    use super::*;
+    use crate::protocol::negotiation::error::{
+        AgreementError, ApproveAgreementError, CounterProposalError, ProposalError,
     };
-    use crate::protocol::negotiation::messages::*;
-    use crate::protocol::*;
-    use crate::Offer;
 
     pub async fn empty_on_offer_received(
         _caller: String,
@@ -446,7 +478,7 @@ pub mod default {
     pub async fn empty_on_agreement_approved(
         _caller: String,
         _msg: AgreementApproved,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ApproveAgreementError> {
         Ok(())
     }
 

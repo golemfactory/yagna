@@ -4,8 +4,6 @@ use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
 pub enum RpcMessageError {
-    #[error("Schedule payment error: {0}")]
-    Schedule(#[from] local::ScheduleError),
     #[error("Send error: {0}")]
     Send(#[from] public::SendError),
     #[error("Accept/reject error: {0}")]
@@ -18,22 +16,13 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
+    use crate::driver::{AccountMode, PaymentConfirmation};
     use bigdecimal::BigDecimal;
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
-
-    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-    pub enum ScheduleError {
-        #[error("Currency conversion error: {0}")]
-        Conversion(String),
-        #[error("Invalid address: {0}")]
-        Address(String),
-        #[error("Payment driver error: {0}")]
-        Driver(String),
-    }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -60,6 +49,7 @@ pub mod local {
         pub payee_id: NodeId,
         pub payer_addr: String,
         pub payee_addr: String,
+        pub payment_platform: String,
         pub allocation_id: String,
         pub amount: BigDecimal,
         pub due_date: DateTime<Utc>,
@@ -76,6 +66,7 @@ pub mod local {
                 payee_id: invoice.issuer_id,
                 payer_addr: invoice.payer_addr,
                 payee_addr: invoice.payee_addr,
+                payment_platform: invoice.payment_platform,
                 allocation_id,
                 amount,
                 due_date: invoice.payment_due_date,
@@ -96,6 +87,7 @@ pub mod local {
                 payee_id: debit_note.issuer_id,
                 payer_addr: debit_note.payer_addr,
                 payee_addr: debit_note.payee_addr,
+                payment_platform: debit_note.payment_platform,
                 allocation_id,
                 amount,
                 due_date,
@@ -115,7 +107,7 @@ pub mod local {
     impl RpcMessage for SchedulePayment {
         const ID: &'static str = "SchedulePayment";
         type Item = ();
-        type Error = ScheduleError;
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
@@ -132,37 +124,67 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct Init {
-        pub identity: NodeId,
-        pub provider: bool,
-        pub requestor: bool,
+    pub struct RegisterAccount {
+        pub platform: String,
+        pub address: String,
+        pub driver: String,
+        pub mode: AccountMode,
     }
 
-    impl RpcMessage for Init {
-        const ID: &'static str = "init";
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum RegisterAccountError {
+        #[error("Account already registered")]
+        AlreadyRegistered,
+        #[error("Error while registering account: {0}")]
+        Other(String),
+    }
+
+    impl RpcMessage for RegisterAccount {
+        const ID: &'static str = "RegisterAccount";
+        type Item = ();
+        type Error = RegisterAccountError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct UnregisterAccount {
+        pub platform: String,
+        pub address: String,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum UnregisterAccountError {
+        #[error("Account not registered")]
+        NotRegistered,
+        #[error("Error while unregistering account: {0}")]
+        Other(String),
+    }
+
+    impl RpcMessage for UnregisterAccount {
+        const ID: &'static str = "UnregisterAccount";
+        type Item = ();
+        type Error = UnregisterAccountError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct NotifyPayment {
+        pub driver: String,
+        pub amount: BigDecimal,
+        pub sender: String,
+        pub recipient: String,
+        pub order_ids: Vec<String>,
+        pub confirmation: PaymentConfirmation,
+    }
+
+    impl RpcMessage for NotifyPayment {
+        const ID: &'static str = "NotifyPayment";
         type Item = ();
         type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct GetStatus(NodeId);
-
-    impl From<NodeId> for GetStatus {
-        fn from(id: NodeId) -> Self {
-            GetStatus(id)
-        }
-    }
-
-    impl AsRef<NodeId> for GetStatus {
-        fn as_ref(&self) -> &NodeId {
-            &self.0
-        }
-    }
-
-    impl GetStatus {
-        pub fn identity(&self) -> NodeId {
-            self.0
-        }
+    pub struct GetStatus {
+        pub platform: String,
+        pub address: String,
     }
 
     impl RpcMessage for GetStatus {
@@ -183,7 +205,6 @@ pub mod local {
         pub requested: BigDecimal,
         pub accepted: BigDecimal,
         pub confirmed: BigDecimal,
-        pub rejected: BigDecimal,
     }
 
     impl std::ops::Add for StatusNotes {
@@ -194,9 +215,32 @@ pub mod local {
                 requested: self.requested + rhs.requested,
                 accepted: self.accepted + rhs.accepted,
                 confirmed: self.confirmed + rhs.confirmed,
-                rejected: self.rejected + rhs.rejected,
             }
         }
+    }
+
+    impl std::iter::Sum<StatusNotes> for StatusNotes {
+        fn sum<I: Iterator<Item = StatusNotes>>(iter: I) -> Self {
+            iter.fold(Default::default(), |acc, item| acc + item)
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetAccounts {}
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct Account {
+        pub platform: String,
+        pub address: String,
+        pub driver: String,
+        pub send: bool,
+        pub receive: bool,
+    }
+
+    impl RpcMessage for GetAccounts {
+        const ID: &'static str = "GetAccounts";
+        type Item = Vec<Account>;
+        type Error = GenericError;
     }
 }
 
@@ -337,7 +381,7 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct RejectInvoice {
-        pub debit_note_id: String,
+        pub invoice_id: String,
         pub rejection: Rejection,
     }
 
@@ -350,7 +394,8 @@ pub mod public {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct CancelInvoice {
-        pub debit_note_id: String,
+        pub invoice_id: String,
+        pub recipient_id: NodeId,
     }
 
     impl RpcMessage for CancelInvoice {

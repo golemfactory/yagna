@@ -1,6 +1,7 @@
 use crate::dao::{invoice, invoice_event};
 use crate::error::DbResult;
 use crate::models::agreement::{ReadObj, WriteObj};
+use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::{BigDecimal, Zero};
@@ -41,6 +42,27 @@ pub fn set_amount_due(
         .find((agreement_id, owner_id))
         .first(conn)?;
     assert!(total_amount_due >= &agreement.total_amount_due); // TODO: Remove when payment service is production-ready.
+    diesel::update(&agreement)
+        .set(dsl::total_amount_due.eq(total_amount_due))
+        .execute(conn)?;
+    Ok(())
+}
+
+/// Compute and set amount due based on activities
+pub fn compute_amount_due(
+    agreement_id: &String,
+    owner_id: &NodeId,
+    conn: &ConnType,
+) -> DbResult<()> {
+    let agreement: ReadObj = dsl::pay_agreement
+        .find((agreement_id, owner_id))
+        .first(conn)?;
+    let activity_amounts: Vec<BigDecimalField> = activity_dsl::pay_activity
+        .filter(activity_dsl::owner_id.eq(owner_id))
+        .filter(activity_dsl::agreement_id.eq(agreement_id))
+        .select(activity_dsl::total_amount_due)
+        .load(conn)?;
+    let total_amount_due: BigDecimalField = activity_amounts.sum().into();
     diesel::update(&agreement)
         .set(dsl::total_amount_due.eq(total_amount_due))
         .execute(conn)?;
@@ -190,29 +212,48 @@ impl<'a> AgreementDao<'a> {
         .await
     }
 
-    /// Get total requested/accepted/paid amount of incoming and outgoing transactions
-    pub async fn status_report(&self, node_id: NodeId) -> DbResult<(StatusNotes, StatusNotes)> {
+    /// Get total requested/accepted/paid amount of incoming transactions
+    pub async fn incoming_transaction_summary(
+        &self,
+        platform: String,
+        payee_addr: String,
+    ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
-                .filter(dsl::owner_id.eq(node_id))
+                .filter(dsl::role.eq(Role::Provider))
+                .filter(dsl::payment_platform.eq(platform))
+                .filter(dsl::payee_addr.eq(payee_addr))
                 .get_results(conn)?;
-            let (incoming, outgoing) = agreements.into_iter().fold(
-                (StatusNotes::default(), StatusNotes::default()),
-                |(incoming, outgoing), agreement| {
-                    let status_notes = StatusNotes {
-                        requested: agreement.total_amount_due.into(),
-                        accepted: agreement.total_amount_accepted.into(),
-                        confirmed: agreement.total_amount_paid.into(),
-                        rejected: Default::default(), // TODO: Support rejected amount (?)
-                    };
-                    match agreement.role {
-                        Role::Provider => (incoming + status_notes, outgoing),
-                        Role::Requestor => (incoming, outgoing + status_notes),
-                    }
-                },
-            );
-            Ok((incoming, outgoing))
+            Ok(make_summary(agreements))
         })
         .await
     }
+
+    /// Get total requested/accepted/paid amount of outgoing transactions
+    pub async fn outgoing_transaction_summary(
+        &self,
+        platform: String,
+        payer_addr: String,
+    ) -> DbResult<StatusNotes> {
+        readonly_transaction(self.pool, move |conn| {
+            let agreements: Vec<ReadObj> = dsl::pay_agreement
+                .filter(dsl::role.eq(Role::Requestor))
+                .filter(dsl::payment_platform.eq(platform))
+                .filter(dsl::payer_addr.eq(payer_addr))
+                .get_results(conn)?;
+            Ok(make_summary(agreements))
+        })
+        .await
+    }
+}
+
+fn make_summary(agreements: Vec<ReadObj>) -> StatusNotes {
+    agreements
+        .into_iter()
+        .map(|agreement| StatusNotes {
+            requested: agreement.total_amount_due.into(),
+            accepted: agreement.total_amount_accepted.into(),
+            confirmed: agreement.total_amount_paid.into(),
+        })
+        .sum()
 }

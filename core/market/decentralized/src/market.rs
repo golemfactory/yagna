@@ -2,15 +2,14 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::db::models::SubscriptionId;
+use crate::db::model::SubscriptionId;
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
-use crate::matcher::{Matcher, SubscriptionStore};
-use crate::negotiation::{NegotiationError, NegotiationInitError};
+use crate::matcher::{store::SubscriptionStore, Matcher};
+use crate::negotiation::error::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 
-use crate::migrations;
 use crate::rest_api;
 
 use ya_client::model::market::{Demand, Offer};
@@ -20,6 +19,8 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
+
+pub mod agreement;
 
 #[derive(Error, Debug)]
 pub enum MarketError {
@@ -49,6 +50,7 @@ pub enum MarketInitError {
 
 /// Structure connecting all market objects.
 pub struct MarketService {
+    pub db: DbExecutor,
     pub matcher: Matcher,
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
@@ -56,7 +58,7 @@ pub struct MarketService {
 
 impl MarketService {
     pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone());
         let (matcher, listeners) = Matcher::new(store.clone())?;
@@ -65,6 +67,7 @@ impl MarketService {
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
 
         Ok(MarketService {
+            db: db.clone(),
             matcher,
             provider_engine,
             requestor_engine,
@@ -83,6 +86,7 @@ impl MarketService {
         self.requestor_engine
             .bind_gsb(public_prefix, private_prefix)
             .await?;
+        agreement::bind_gsb(self.db.clone(), public_prefix, private_prefix).await;
         Ok(())
     }
 
@@ -102,7 +106,7 @@ impl MarketService {
     }
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
-        actix_web::web::scope(crate::MARKET_API_PATH)
+        actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
             .data(myself)
             .app_data(rest_api::path_config())
             .extend(rest_api::provider::register_endpoints)

@@ -7,8 +7,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
-use crate::db::models::MarketEvent;
-use crate::db::models::{OwnerType, Proposal, SubscriptionId};
+use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, SubscriptionId};
 use crate::db::schema::market_event::dsl;
 use crate::db::{DbError, DbResult};
 
@@ -35,7 +34,18 @@ impl<'c> AsDao<'c> for EventsDao<'c> {
 impl<'c> EventsDao<'c> {
     pub async fn add_proposal_event(&self, proposal: Proposal, owner: OwnerType) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            let event = MarketEvent::from_proposal(&proposal, owner);
+            let event = MarketEvent::from_proposal(proposal, owner);
+            diesel::insert_into(dsl::market_event)
+                .values(event)
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn add_agreement_event(&self, agreement: Agreement) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let event = MarketEvent::from_agreement(agreement);
             diesel::insert_into(dsl::market_event)
                 .values(event)
                 .execute(conn)?;

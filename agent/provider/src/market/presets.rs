@@ -390,12 +390,18 @@ impl fmt::Display for Preset {
         write!(f, "{}\n", "Coefficients:")?;
 
         for (name, coeff) in self.usage_coeffs.iter() {
-            write!(f, "    {:width$}{} GNT\n", name, coeff, width = align_coeff)?;
+            write!(
+                f,
+                "    {:width$}{} NGNT\n",
+                name,
+                coeff,
+                width = align_coeff
+            )?;
         }
 
         write!(
             f,
-            "    {:16}{} GNT",
+            "    {:16}{} NGNT",
             "Init price",
             self.usage_coeffs.get(&Coefficient::Initial).unwrap(),
         )?;

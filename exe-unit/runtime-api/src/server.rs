@@ -54,4 +54,4 @@ mod client;
 mod service;
 
 pub use client::spawn;
-pub use service::run;
+pub use service::{run, run_async};

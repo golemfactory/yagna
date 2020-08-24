@@ -15,7 +15,7 @@ mod market;
 mod payment;
 
 const DEFAULT_NODE_NAME: &str = "test1";
-const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://3.249.139.167:8000/rust-wasi-tutorial.zip";
+const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://3.249.139.167:8000/rust-wasi-tutorial.zip";
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
