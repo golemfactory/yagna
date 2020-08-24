@@ -1,17 +1,23 @@
 use futures::prelude::*;
-use std::env;
-
-use std::time::Duration;
+use std::{
+    clone::Clone,
+    env,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tokio;
-use ya_runtime_api::server;
-use ya_runtime_api::server::AsyncResponse;
-use ya_runtime_api::server::RuntimeService;
+use ya_runtime_api::server::{self, AsyncResponse, ProcessStatus, RuntimeEvent, RuntimeService};
 
-struct RuntimeMock;
+// server
 
-struct EventMock;
+struct RuntimeMock<E>
+where
+    E: RuntimeEvent,
+{
+    event_emitter: E,
+}
 
-impl server::RuntimeService for RuntimeMock {
+impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
     fn hello(&self, version: &str) -> AsyncResponse<String> {
         eprintln!("server version: {}", version);
         async { Ok("0.0.0-demo".to_owned()) }.boxed_local()
@@ -21,12 +27,19 @@ impl server::RuntimeService for RuntimeMock {
         &self,
         _run: server::RunProcess,
     ) -> server::AsyncResponse<server::RunProcessResp> {
-        async {
+        async move {
             let mut resp: server::RunProcessResp = Default::default();
             resp.pid = 100;
             log::debug!("before delay_for");
             tokio::time::delay_for(Duration::from_secs(3)).await;
             log::debug!("after delay_for");
+            self.event_emitter.on_process_status(ProcessStatus {
+                pid: resp.pid,
+                running: true,
+                return_code: 0,
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            });
             Ok(resp)
         }
         .boxed_local()
@@ -43,7 +56,33 @@ impl server::RuntimeService for RuntimeMock {
     }
 }
 
-impl server::RuntimeEvent for EventMock {}
+// client
+
+// holds last received status
+struct EventMock(Arc<Mutex<ProcessStatus>>);
+
+impl EventMock {
+    fn new() -> Self {
+        Self(Arc::new(Mutex::new(Default::default())))
+    }
+
+    fn get_last_status(&self) -> ProcessStatus {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl RuntimeEvent for EventMock {
+    fn on_process_status(&self, status: ProcessStatus) {
+        log::debug!("event: {:?}", status);
+        *(self.0.lock().unwrap()) = status;
+    }
+}
+
+impl Clone for EventMock {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -52,14 +91,15 @@ async fn main() -> anyhow::Result<()> {
     }
     env_logger::init();
     if env::var("X_SERVER").is_ok() {
-        server::run(|_e| RuntimeMock).await
+        server::run(|event_emitter| RuntimeMock { event_emitter }).await
     } else {
         use tokio::process::Command;
         let exe = env::current_exe().unwrap();
 
         let mut cmd = Command::new(exe);
         cmd.env("X_SERVER", "1");
-        let c = server::spawn(cmd, EventMock).await?;
+        let events = EventMock::new();
+        let c = server::spawn(cmd, events.clone()).await?;
         log::debug!("hello_result={:?}", c.hello("0.0.0x").await);
         let mut run = server::RunProcess::default();
         run.bin = "sleep".to_owned();
@@ -71,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
         log::info!("sleep1={:?}", sleep_1.await);
         log::info!("start sleep2 sleep3");
         log::info!("sleep23={:?}", future::join(sleep_2, sleep_3).await);
+        log::info!("last status: {:?}", events.get_last_status());
     }
     Ok(())
 }

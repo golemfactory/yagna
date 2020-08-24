@@ -5622,6 +5622,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-util",
  "humantime 2.0.1",
+ "lazy_static",
  "libc",
  "log 0.4.8",
  "log-derive",
@@ -5690,6 +5691,7 @@ dependencies = [
  "semver 0.10.0",
  "serde_json",
  "sha3 0.9.1",
+ "structopt",
  "tokio 0.2.21",
  "url 2.1.1",
  "ya-agreement-utils",
@@ -5975,6 +5977,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-utils-path",
 ]
 
 [[package]]

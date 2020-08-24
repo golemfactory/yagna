@@ -14,7 +14,7 @@ use ya_service_bus::{
 use crate::api::{self, net_service, parse_from_addr};
 
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
-pub const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
+pub const DEFAULT_CENTRAL_ADDR: &str = "3.249.139.167:7464";
 
 pub fn central_net_addr() -> std::io::Result<SocketAddr> {
     Ok(std::env::var(CENTRAL_ADDR_ENV_VAR)
