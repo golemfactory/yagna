@@ -165,14 +165,18 @@ impl SubscriptionStore {
         &self,
         offer_id: &SubscriptionId,
         local_caller: bool,
-        caller_id: Option<NodeId>,
+        _caller_id: Option<NodeId>,
     ) -> Result<(), ModifyOfferError> {
-        if let Ok(offer) = self.get_offer(offer_id).await {
-            if caller_id != Some(offer.node_id) {
-                // TODO: unauthorized?
-                return Err(ModifyOfferError::NotFound(offer_id.clone()));
-            }
-        }
+        // TODO: We can't check caller_id to authorize this operation, because
+        //  otherwise we can't get unsubscribe events from other Nodes, than Offer
+        //  owner. But on the other side, if we allow anyone to unsubscribe, someone
+        //  can use it to attacks. Probably we must ask owner, if he really unsubscribed his Offer.
+        // if let Ok(offer) = self.get_offer(offer_id).await {
+        //     if caller_id != Some(offer.node_id) {
+        //         // TODO: unauthorized?
+        //         return Err(ModifyOfferError::NotFound(offer_id.clone()));
+        //     }
+        // }
 
         // If this fn was called before, we won't remove our Offer below,
         // because `Unsubscribed` error will pop-up here.
