@@ -7,7 +7,9 @@ use crate::matcher::error::{QueryOffersError, SaveOfferError};
 use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalError};
 use crate::{
     market::MarketError,
-    matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
+    matcher::error::{
+        DemandError, MatcherError, ModifyOfferError, ResolverError, SubscriptionError,
+    },
     negotiation::error::{NegotiationError, QueryEventsError},
 };
 
@@ -69,11 +71,11 @@ impl ResponseError for QueryOffersError {
     }
 }
 
-impl ResponseError for QueryOfferError {
+impl ResponseError for SubscriptionError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            QueryOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            SubscriptionError::NotFound(_) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
     }

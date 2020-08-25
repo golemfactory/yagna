@@ -9,7 +9,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::dao::*;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::matcher::error::{
-    DemandError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
+    DemandError, ModifyOfferError, QueryOffersError, SaveOfferError, SubscriptionError,
 };
 
 lazy_static! {
@@ -104,14 +104,14 @@ impl SubscriptionStore {
             .map_err(|e| QueryOffersError(e))?)
     }
 
-    pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
+    pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, SubscriptionError> {
         let now = Utc::now().naive_utc();
         match self.db.as_dao::<OfferDao>().select(id, now).await {
-            Err(e) => Err(QueryOfferError::Get(e, id.clone())),
+            Err(e) => Err(SubscriptionError::Get(e, id.clone())),
             Ok(OfferState::Active(offer)) => Ok(offer),
-            Ok(OfferState::Unsubscribed(_)) => Err(QueryOfferError::Unsubscribed(id.clone())),
-            Ok(OfferState::Expired(_)) => Err(QueryOfferError::Expired(id.clone())),
-            Ok(OfferState::NotFound) => Err(QueryOfferError::NotFound(id.clone())),
+            Ok(OfferState::Unsubscribed(_)) => Err(SubscriptionError::Unsubscribed(id.clone())),
+            Ok(OfferState::Expired(_)) => Err(SubscriptionError::Expired(id.clone())),
+            Ok(OfferState::NotFound) => Err(SubscriptionError::NotFound(id.clone())),
         }
     }
 
@@ -177,11 +177,11 @@ impl SubscriptionStore {
         Ok(demand)
     }
 
-    pub async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
+    pub async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, SubscriptionError> {
         match self.db.as_dao::<DemandDao>().select(id).await {
-            Err(e) => Err(DemandError::GetSingle(e, id.clone())),
+            Err(e) => Err(SubscriptionError::Get(e, id.clone())),
             Ok(Some(demand)) => Ok(demand),
-            Ok(None) => Err(DemandError::NotFound(id.clone())),
+            Ok(None) => Err(SubscriptionError::NotFound(id.clone())),
         }
     }
 
@@ -202,7 +202,11 @@ impl SubscriptionStore {
         demand_id: &SubscriptionId,
         id: &Identity,
     ) -> Result<(), DemandError> {
-        let demand = self.get_demand(demand_id).await?;
+        let demand = self.get_demand(demand_id).await.map_err(|e| match e {
+            SubscriptionError::Get(db, sub_id) => DemandError::GetSingle(db, sub_id),
+            _ => DemandError::NotFound(demand_id.clone()),
+        })?;
+
         if id.identity != demand.node_id {
             return Err(DemandError::NotFound(demand_id.clone()));
         }

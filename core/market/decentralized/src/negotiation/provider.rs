@@ -14,7 +14,7 @@ use super::error::{NegotiationError, NegotiationInitError};
 use crate::db::dao::{AgreementDao, EventsDao, ProposalDao};
 use crate::db::model::{AgreementId, AgreementState, Offer as ModelOffer, SubscriptionId};
 use crate::db::model::{OwnerType, Proposal, ProposalId};
-use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
+use crate::matcher::{error::SubscriptionError, store::SubscriptionStore};
 use crate::negotiation::common::CommonBroker;
 use crate::negotiation::error::{AgreementError, ProposalError, QueryEventsError};
 use crate::negotiation::notifier::EventNotifier;
@@ -206,8 +206,8 @@ async fn initial_proposal(
     // Check subscription.
     let offer = match store.get_offer(&msg.offer_id).await {
         Err(e) => match e {
-            QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-            QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
+            SubscriptionError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
+            SubscriptionError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
             _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
         },
         Ok(offer) => offer,

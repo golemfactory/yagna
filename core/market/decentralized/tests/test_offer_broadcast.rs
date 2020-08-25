@@ -8,7 +8,7 @@ use ya_market_decentralized::testing::discovery::*;
 use ya_market_decentralized::testing::mock_node::default::*;
 use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
 use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
-use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
+use ya_market_decentralized::testing::{SubscriptionError, SubscriptionId};
 
 macro_rules! assert_err_eq {
     ($expected:expr, $actual:expr $(,)*) => {
@@ -49,7 +49,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 
     // Unsubscribe Offer. Wait some delay for propagation.
     market1.unsubscribe_offer(&subscription_id, &id1).await?;
-    let expected_error = QueryOfferError::Unsubscribed(subscription_id.clone());
+    let expected_error = SubscriptionError::Unsubscribed(subscription_id.clone());
     assert_err_eq!(expected_error, market1.get_offer(&subscription_id).await);
     // Expect, that Offer will disappear on other nodes.
     wait_for_bcast(1000, &market2, &subscription_id, false).await;
@@ -91,7 +91,7 @@ async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
     tokio::time::delay_for(Duration::from_millis(50)).await;
 
     assert_err_eq!(
-        QueryOfferError::NotFound(invalid_id.clone()),
+        SubscriptionError::NotFound(invalid_id.clone()),
         market1.get_offer(&invalid_id).await,
     );
     Ok(())
@@ -132,14 +132,14 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
         .unsubscribe_offer(&subscription_id, &identity1)
         .await?;
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
+        SubscriptionError::Unsubscribed(subscription_id.clone()),
         market1.get_offer(&subscription_id).await
     );
 
     // Expect, that Offer will disappear on other nodes.
     wait_for_bcast(1000, &market2, &subscription_id, false).await;
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
+        SubscriptionError::Unsubscribed(subscription_id.clone()),
         market2.get_offer(&subscription_id).await
     );
 
@@ -180,11 +180,11 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 
     // We expect, that Offers won't be available on other nodes now
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
+        SubscriptionError::Unsubscribed(subscription_id.clone()),
         market1.get_offer(&subscription_id).await,
     );
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
+        SubscriptionError::Unsubscribed(subscription_id.clone()),
         market2.get_offer(&subscription_id).await,
     );
 

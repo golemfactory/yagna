@@ -22,15 +22,15 @@ pub enum DemandError {
 pub struct QueryOffersError(pub DbError);
 
 #[derive(thiserror::Error, Debug)]
-pub enum QueryOfferError {
-    #[error("Offer [{0}] not found.")]
+pub enum SubscriptionError {
+    #[error("Subscription [{0}] not found.")]
     NotFound(SubscriptionId),
-    #[error("Failed to get Offer [{1}]. Error: {0}.")]
-    Get(DbError, SubscriptionId),
-    #[error("Offer [{0}] unsubscribed.")]
+    #[error("Offer/Demand [{0}] unsubscribed.")]
     Unsubscribed(SubscriptionId),
-    #[error("Offer [{0}] expired.")]
+    #[error("Subscription [{0}] expired.")]
     Expired(SubscriptionId),
+    #[error("Failed to get Offer/Demand [{1}] from Database. Error: {0}.")]
+    Get(DbError, SubscriptionId),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -69,14 +69,14 @@ pub enum ModifyOfferError {
     UnsubscribedNotRemoved(SubscriptionId),
 }
 
-impl From<QueryOfferError> for ModifyOfferError {
-    fn from(e: QueryOfferError) -> Self {
+impl From<SubscriptionError> for ModifyOfferError {
+    fn from(e: SubscriptionError) -> Self {
         match e {
-            QueryOfferError::NotFound(id) | QueryOfferError::Get(_, id) => {
+            SubscriptionError::NotFound(id) | SubscriptionError::Get(_, id) => {
                 ModifyOfferError::NotFound(id)
             }
-            QueryOfferError::Unsubscribed(id) => ModifyOfferError::Unsubscribed(id),
-            QueryOfferError::Expired(id) => ModifyOfferError::Expired(id),
+            SubscriptionError::Unsubscribed(id) => ModifyOfferError::Unsubscribed(id),
+            SubscriptionError::Expired(id) => ModifyOfferError::Expired(id),
         }
     }
 }
@@ -88,7 +88,7 @@ pub enum MatcherError {
     #[error(transparent)]
     QueryOffersError(#[from] QueryOffersError),
     #[error(transparent)]
-    QueryOfferError(#[from] QueryOfferError),
+    QueryOfferError(#[from] SubscriptionError),
     #[error(transparent)]
     SaveOfferError(#[from] SaveOfferError),
     #[error(transparent)]
@@ -104,7 +104,7 @@ pub enum MatcherInitError {
 #[derive(thiserror::Error, Debug)]
 pub enum ResolverError {
     #[error(transparent)]
-    QueryOfferError(#[from] QueryOfferError),
+    QueryOfferError(#[from] SubscriptionError),
     #[error(transparent)]
     QueryOffersError(#[from] QueryOffersError),
     #[error(transparent)]

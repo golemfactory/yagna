@@ -11,10 +11,7 @@ use ya_persistence::executor::Error as DbError;
 use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
 use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
 use crate::db::model::{ProposalId, SubscriptionId};
-use crate::matcher::{
-    error::{DemandError, QueryOfferError},
-    store::SubscriptionStore,
-};
+use crate::matcher::{error::SubscriptionError, store::SubscriptionStore};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
     error::{MatchValidationError, ProposalError, QueryEventsError},
@@ -40,38 +37,26 @@ impl CommonBroker {
         proposal: &ClientProposal,
         owner: OwnerType,
     ) -> Result<(Proposal, IsFirst), ProposalError> {
+        let prev_proposal = self
+            .get_proposal(prev_proposal_id)
+            .await
+            .map_err(|e| ProposalError::from(&subscription_id, e))?;
+
         // Check if subscription is still active.
         // Note that subscription can be unsubscribed, before we get to saving
         // Proposal to database. This seems like race conditions, but there's no
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
-        // TODO: We should use validate_subscription function to do this stuff.
-        if owner == OwnerType::Provider {
-            self.store
-                .get_offer(&subscription_id)
-                .await
-                .map_err(|e| match e {
-                    QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
-                    QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
-                    QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
-                    QueryOfferError::Get(..) => {
-                        ProposalError::InternalError(prev_proposal_id.clone(), e.to_string())
-                    }
-                })?;
-        } else {
-            self.store
-                .get_demand(&subscription_id)
-                .await
-                .map_err(|e| match e {
-                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
-                    _ => ProposalError::InternalError(prev_proposal_id.clone(), e.to_string()),
-                })?;
-        }
-
-        let prev_proposal = self
-            .get_proposal(prev_proposal_id)
+        self.validate_subscription(&prev_proposal, owner)
             .await
-            .map_err(|e| ProposalError::from(&subscription_id, e))?;
+            .map_err(|e| match e {
+                SubscriptionError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
+                SubscriptionError::Expired(id) => ProposalError::SubscriptionExpired(id),
+                SubscriptionError::NotFound(id) => ProposalError::NoSubscription(id),
+                SubscriptionError::Get(..) => {
+                    ProposalError::InternalError(prev_proposal_id.clone(), e.to_string())
+                }
+            })?;
 
         // We use ProposalNotFound, because we don't want to leak information,
         // that such Proposal exists, but for different subscription_id.
@@ -238,23 +223,14 @@ impl CommonBroker {
         &self,
         proposal: &Proposal,
         owner: OwnerType,
-    ) -> Result<(), RemoteProposalError> {
-        if let Err(e) = self.store.get_offer(&proposal.negotiation.offer_id).await {
-            match e {
-                QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-                QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
-                _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
-            }
-        };
+    ) -> Result<(), SubscriptionError> {
+        self.store.get_offer(&proposal.negotiation.offer_id).await?;
 
         // On Requestor side we have both Offer and Demand, but Provider has only Offers.
         if owner == OwnerType::Requestor {
-            if let Err(e) = self.store.get_demand(&proposal.negotiation.demand_id).await {
-                match e {
-                    DemandError::NotFound(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-                    _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
-                }
-            };
+            self.store
+                .get_demand(&proposal.negotiation.demand_id)
+                .await?;
         }
         Ok(())
     }
@@ -281,6 +257,21 @@ pub fn validate_match(
                 new: new_proposal.body.id.clone(),
                 prev: prev_proposal.body.id.clone(),
             })
+        }
+    }
+}
+
+impl From<SubscriptionError> for RemoteProposalError {
+    fn from(e: SubscriptionError) -> Self {
+        match e {
+            // In case of RemoteProposalError it is not possible, that subscription
+            // doesn't exist. Even if we get NotFound for Demand, that means that,
+            // this subscription existed before and was unsubscribed.
+            SubscriptionError::NotFound(id) | SubscriptionError::Unsubscribed(id) => {
+                RemoteProposalError::Unsubscribed(id)
+            }
+            SubscriptionError::Expired(id) => RemoteProposalError::Expired(id),
+            SubscriptionError::Get(..) => RemoteProposalError::Unexpected(e.to_string()),
         }
     }
 }

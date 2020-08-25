@@ -404,7 +404,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::FailedSendProposal(..) => (),
-        _ => panic!("Expected ProposalError::FailedSendProposal."),
+        e => panic!("Expected ProposalError::FailedSendProposal. Got: {}", e),
     }
 
     Ok(())
@@ -445,7 +445,7 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Er
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::FailedSendProposal(..) => (),
-        _ => panic!("Expected ProposalError::FailedSendProposal."),
+        e => panic!("Expected ProposalError::FailedSendProposal. Got: {}", e),
     }
 
     Ok(())

@@ -1,5 +1,5 @@
 use ya_market_decentralized::testing::client::{sample_demand, sample_offer};
-use ya_market_decentralized::testing::{DemandError, QueryOfferError};
+use ya_market_decentralized::testing::SubscriptionError;
 use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
 
 macro_rules! assert_err_eq {
@@ -45,7 +45,7 @@ async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
 
     // Offer shouldn't be available after unsubscribed.
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
+        SubscriptionError::Unsubscribed(subscription_id.clone()),
         market1.get_offer(&subscription_id).await
     );
 
@@ -89,7 +89,7 @@ async fn test_subscribe_demand() -> Result<(), anyhow::Error> {
 
     // Offer should be removed from database after unsubscribed.
     assert_err_eq!(
-        DemandError::NotFound(subscription_id.clone()),
+        SubscriptionError::NotFound(subscription_id.clone()),
         market1.get_demand(&subscription_id).await
     );
 

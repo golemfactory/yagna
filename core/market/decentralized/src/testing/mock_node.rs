@@ -20,7 +20,7 @@ use super::mock_offer::generate_identity;
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
 use crate::db::model::{Demand, Offer, SubscriptionId};
-use crate::matcher::error::{DemandError, QueryOfferError};
+use crate::matcher::error::SubscriptionError;
 use crate::matcher::EventsListeners;
 use crate::negotiation::error::QueryEventsError;
 use crate::protocol::callback::*;
@@ -396,8 +396,8 @@ pub async fn wait_for_bcast(
 
 #[async_trait::async_trait]
 pub trait MarketServiceExt {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, SubscriptionError>;
+    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, SubscriptionError>;
     async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -408,11 +408,11 @@ pub trait MarketServiceExt {
 
 #[async_trait::async_trait]
 impl MarketServiceExt for MarketService {
-    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
+    async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, SubscriptionError> {
         self.matcher.store.get_offer(id).await
     }
 
-    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
+    async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, SubscriptionError> {
         self.matcher.store.get_demand(id).await
     }
 

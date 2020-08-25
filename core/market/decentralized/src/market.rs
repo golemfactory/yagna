@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::db::model::SubscriptionId;
 use crate::matcher::error::{
-    DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
+    DemandError, MatcherError, MatcherInitError, QueryOffersError, SubscriptionError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
 use crate::negotiation::error::{NegotiationError, NegotiationInitError};
@@ -27,7 +27,7 @@ pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
     #[error(transparent)]
-    QueryOfferError(#[from] QueryOfferError),
+    QueryOfferError(#[from] SubscriptionError),
     #[error(transparent)]
     QueryOffersError(#[from] QueryOffersError),
     #[error(transparent)]
