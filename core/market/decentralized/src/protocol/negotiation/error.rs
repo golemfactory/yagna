@@ -33,6 +33,8 @@ pub enum RemoteProposalError {
     Expired(SubscriptionId),
     #[error("Trying to counter not existing Proposal [{0}].")]
     ProposalNotFound(ProposalId),
+    #[error("Proposal [{0}] was already countered.")]
+    AlreadyCountered(ProposalId),
     #[error(transparent)]
     InvalidId(#[from] ProposalIdValidationError),
     #[error(transparent)]

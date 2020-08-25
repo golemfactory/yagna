@@ -148,12 +148,9 @@ impl Proposal {
         );
 
         // TODO: Initial proposal id will differ on Requestor and Provider!!
-        let proposal_id = ProposalId::generate_id(
-            &offer.id,
-            &demand_id,
-            &Utc::now().naive_utc(),
-            OwnerType::Provider,
-        );
+        let creation_ts = Utc::now().naive_utc();
+        let proposal_id =
+            ProposalId::generate_id(&offer.id, &demand_id, &creation_ts, OwnerType::Provider);
 
         let proposal = DbProposal {
             id: proposal_id,
@@ -163,7 +160,7 @@ impl Proposal {
             properties: offer.properties,
             constraints: offer.constraints,
             state: ProposalState::Initial,
-            creation_ts: offer.creation_ts,
+            creation_ts,
             expiration_ts: offer.expiration_ts,
         };
 

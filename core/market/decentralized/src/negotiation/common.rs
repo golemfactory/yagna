@@ -23,7 +23,7 @@ use crate::negotiation::{
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::ProposalReceived;
 
-type IsInitial = bool;
+type IsFirst = bool;
 
 #[derive(Clone)]
 pub struct CommonBroker {
@@ -39,7 +39,7 @@ impl CommonBroker {
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
         owner: OwnerType,
-    ) -> Result<(Proposal, IsInitial), ProposalError> {
+    ) -> Result<(Proposal, IsFirst), ProposalError> {
         // Check if subscription is still active.
         // Note that subscription can be unsubscribed, before we get to saving
         // Proposal to database. This seems like race conditions, but there's no
@@ -73,6 +73,8 @@ impl CommonBroker {
             .await
             .map_err(|e| ProposalError::from(&subscription_id, e))?;
 
+        // We use ProposalNotFound, because we don't want to leak information,
+        // that such Proposal exists, but for different subscription_id.
         if &prev_proposal.negotiation.subscription_id != subscription_id {
             Err(ProposalError::ProposalNotFound(
                 prev_proposal_id.clone(),
@@ -84,7 +86,7 @@ impl CommonBroker {
             return Err(ProposalError::OwnProposal(prev_proposal_id.clone()));
         }
 
-        let is_initial = prev_proposal.body.prev_proposal_id.is_none();
+        let is_first = prev_proposal.body.prev_proposal_id.is_none();
         let new_proposal = prev_proposal.from_client(proposal);
         let proposal_id = new_proposal.body.id.clone();
 
@@ -98,7 +100,7 @@ impl CommonBroker {
                 SaveProposalError::AlreadyCountered(id) => ProposalError::AlreadyCountered(id),
                 _ => ProposalError::FailedSaveProposal(proposal_id.clone(), e),
             })?;
-        Ok((new_proposal, is_initial))
+        Ok((new_proposal, is_first))
     }
 
     pub async fn query_events(
@@ -204,7 +206,16 @@ impl CommonBroker {
             .as_dao::<ProposalDao>()
             .save_proposal(&proposal)
             .await
-            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
+            .map_err(|e| match e {
+                SaveProposalError::AlreadyCountered(id) => {
+                    RemoteProposalError::AlreadyCountered(id)
+                }
+                _ => {
+                    // TODO: Don't leak our database error, but send meaningful message as response.
+                    log::warn!("[ProposalReceived] Error saving Proposal: {}", e);
+                    RemoteProposalError::Unexpected(e.to_string())
+                }
+            })?;
 
         // Create Proposal Event and add it to queue (database).
         let subscription_id = proposal.negotiation.subscription_id.clone();
@@ -212,7 +223,11 @@ impl CommonBroker {
             .as_dao::<EventsDao>()
             .add_proposal_event(proposal, owner)
             .await
-            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
+            .map_err(|e| {
+                // TODO: Don't leak our database error, but send meaningful message as response.
+                log::warn!("[ProposalReceived] Error adding Proposal event: {}", e);
+                RemoteProposalError::Unexpected(e.to_string())
+            })?;
 
         // Send channel message to wake all query_events waiting for proposals.
         self.notifier.notify(&subscription_id).await;
