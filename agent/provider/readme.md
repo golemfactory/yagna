@@ -466,12 +466,12 @@ cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json --o
 ```
 
 ## Central setup
-We have centrally deployed (ip: `34.244.4.185`) three independent standalone modules/apps:
- - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 34.244.4.185:7464 \
+We have centrally deployed (ip: `3.249.139.167`) three independent standalone modules/apps:
+ - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 3.249.139.167:7464 \
    (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router`)
- - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://34.244.4.185:8080/market-api/v1/ \
+ - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://3.249.139.167:8080/market-api/v1/ \
    (can be run locally with `dotnet run --urls "http://0.0.0.0:5001" -p GolemClientMockAPI`)
- - simple "wasm store" @ 34.244.4.185:8000 \
+ - simple "wasm store" @ 3.249.139.167:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
 
