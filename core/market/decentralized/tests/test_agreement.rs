@@ -13,14 +13,6 @@ use ya_service_bus::RpcEndpoint;
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
-#[test]
-fn aaa_init_logger() {
-    env_logger::from_env(
-        env_logger::Env::default().default_filter_or("debug,ya_market_decentralized=trace"),
-    )
-    .init();
-}
-
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_gsb_get_agreement() -> Result<()> {
