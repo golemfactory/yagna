@@ -66,7 +66,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         Some(identity1.identity.to_string()),
     );
     assert_eq!(proposal1_prov.state, Some(State::Draft));
-    // Requestor and Provider have different initial Proposals IDs
+    // Requestor and Provider have different first Proposals IDs
     assert!(proposal1_prov.prev_proposal_id.is_some());
 
     // Provider counters proposal.
@@ -279,7 +279,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Can't counter Proposal, for which Demand was unsubscribed.
+/// Requestor can't counter Proposal, for which he has unsubscribed Demand.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
@@ -319,7 +319,7 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Can't counter Proposal, for which Offer was unsubscribed.
+/// Provider can't counter Proposal, for which he has unsubscribed Offer.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
