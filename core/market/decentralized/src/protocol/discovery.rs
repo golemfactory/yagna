@@ -162,8 +162,9 @@ impl Discovery {
     }
 
     async fn on_offers_received(self, caller: String, msg: OfferIdsReceived) -> Result<(), ()> {
+        let num_ids_received = msg.offers.len();
         if !msg.offers.is_empty() {
-            log::debug!("Received {} Offers from [{}].", msg.offers.len(), &caller);
+            log::debug!("Received {} Offers from [{}].", num_ids_received, &caller);
         }
 
         // We should do filtering and getting Offers in single transaction. Otherwise multiple
@@ -172,40 +173,44 @@ impl Discovery {
         // Other attempts to add them will end with error and we will filter all Offers, that already
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
-        let receive_handlers = self.inner.receive.lock().await;
-        let filter_callback = receive_handlers.offer_ids.clone();
-        let offer_received_callback = receive_handlers.offers.clone();
+        let new_ids = {
+            let receive_handlers = self.inner.receive.lock().await;
+            let filter_callback = receive_handlers.offer_ids.clone();
+            let offer_received_callback = receive_handlers.offers.clone();
 
-        let num_ids_received = msg.offers.len();
-        let unseen_subscriptions = filter_callback.call(caller.clone(), msg).await?;
+            let unseen_subscriptions = filter_callback.call(caller.clone(), msg).await?;
 
-        if !unseen_subscriptions.is_empty() {
-            let offers = self
-                .get_offers(caller.clone(), unseen_subscriptions)
-                .await
-                .map_err(|e| log::warn!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
-
-            // We still could fail to add some Offers to database. If we fail to add them, we don't
-            // want to propagate subscription further.
-            let new_ids = offer_received_callback
-                .call(caller.clone(), OffersReceived { offers })
-                .await?;
-
-            if !new_ids.is_empty() {
-                log::info!(
-                    "Propagating {} Offers from {} received from [{}].",
-                    new_ids.len(),
-                    num_ids_received,
-                    &caller
-                );
-
-                // We could broadcast outside of lock, but it shouldn't hurt either, because
-                // we don't wait for any responses from remote nodes.
-                self.broadcast_offers(new_ids)
+            if !unseen_subscriptions.is_empty() {
+                let offers = self
+                    .get_offers(caller.clone(), unseen_subscriptions)
                     .await
-                    .map_err(|e| log::warn!("Failed to broadcast. Error: {}", e))?;
+                    .map_err(|e| log::warn!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
+
+                // We still could fail to add some Offers to database. If we fail to add them, we don't
+                // want to propagate subscription further.
+                offer_received_callback
+                    .call(caller.clone(), OffersReceived { offers })
+                    .await?
+            } else {
+                vec![]
             }
+        };
+
+        if !new_ids.is_empty() {
+            log::info!(
+                "Propagating {}/{} Offers received from [{}].",
+                new_ids.len(),
+                num_ids_received,
+                &caller
+            );
+
+            // We could broadcast outside of lock, but it shouldn't hurt either, because
+            // we don't wait for any responses from remote nodes.
+            self.broadcast_offers(new_ids)
+                .await
+                .map_err(|e| log::warn!("Failed to broadcast. Error: {}", e))?;
         }
+
         Ok(())
     }
 
