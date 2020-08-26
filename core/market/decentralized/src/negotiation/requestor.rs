@@ -185,7 +185,7 @@ impl RequestorBroker {
     /// by a `confirm_agreement` and `wait_for_approval` call in order to listen
     /// for responses from the Provider.
     ///
-    /// TODO: **Note**: Moves given Proposal to `Approved` state.
+    /// TODO: **Note**: Moves given Proposal to `Accepted` state.
     pub async fn create_agreement(
         &self,
         _id: Identity,
@@ -199,8 +199,8 @@ impl RequestorBroker {
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
 
-        // We can promote only Offers, that we got from Provider.
-        // Can't promote our own Offer.
+        // We can promote only Proposals, that we got from Provider.
+        // Can't promote our own Proposal.
         if offer_proposal.body.issuer != IssuerType::Them {
             return Err(AgreementError::OwnProposal(proposal_id.clone()));
         }
@@ -226,7 +226,7 @@ impl RequestorBroker {
         self.common
             .db
             .as_dao::<AgreementDao>()
-            .save(agreement)
+            .save(agreement, &offer_proposal_id)
             .await
             .map_err(|e| AgreementError::Save(proposal_id.clone(), e))?;
         Ok(id)

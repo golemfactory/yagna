@@ -90,6 +90,22 @@ impl Agreement {
         owner: OwnerType,
     ) -> Agreement {
         let creation_ts = Utc::now().naive_utc();
+        Agreement::new_with_ts(
+            demand_proposal,
+            offer_proposal,
+            valid_to,
+            creation_ts,
+            owner,
+        )
+    }
+
+    pub fn new_with_ts(
+        demand_proposal: Proposal,
+        offer_proposal: Proposal,
+        valid_to: NaiveDateTime,
+        creation_ts: NaiveDateTime,
+        owner: OwnerType,
+    ) -> Agreement {
         let agreement_id = ProposalId::generate_id(
             &offer_proposal.negotiation.offer_id,
             &offer_proposal.negotiation.demand_id,

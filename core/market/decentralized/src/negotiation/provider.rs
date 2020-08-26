@@ -11,15 +11,17 @@ use ya_client::model::{
 use ya_persistence::executor::DbExecutor;
 
 use super::error::{NegotiationError, NegotiationInitError};
-use crate::db::dao::{AgreementDao, EventsDao, ProposalDao};
-use crate::db::model::{AgreementId, AgreementState, Offer as ModelOffer, SubscriptionId};
+use crate::db::dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError};
+use crate::db::model::{
+    Agreement, AgreementId, AgreementState, IssuerType, Offer as ModelOffer, SubscriptionId,
+};
 use crate::db::model::{OwnerType, Proposal, ProposalId};
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
-use crate::negotiation::common::CommonBroker;
+use crate::negotiation::common::{CommonBroker, GetProposalError};
 use crate::negotiation::error::{AgreementError, ProposalError, QueryEventsError};
 use crate::negotiation::notifier::EventNotifier;
 use crate::protocol::negotiation::error::{
-    AgreementError as ProtocolAgreementError, CounterProposalError, RemoteProposalError,
+    CounterProposalError, ProposeAgreementError, RemoteProposalError, RemoteProposeAgreementError,
 };
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
@@ -240,31 +242,108 @@ async fn initial_proposal(
 
 async fn on_agreement_received(
     broker: CommonBroker,
-    _caller: String,
-    mut msg: AgreementReceived,
-) -> Result<(), ProtocolAgreementError> {
-    let id = msg.agreement.id.clone();
-    let subscription_id = msg.agreement.offer_id.clone();
+    caller: String,
+    msg: AgreementReceived,
+) -> Result<(), ProposeAgreementError> {
+    let id = msg.agreement_id.clone();
+    agreement_received(broker, caller, msg)
+        .await
+        .map_err(|e| match e {
+            RemoteProposeAgreementError::Unexpected(..) => {
+                log::warn!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
+                ProposeAgreementError::Remote(e, id)
+            }
+            e => {
+                log::info!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
+                ProposeAgreementError::Remote(e, id)
+            }
+        })
+}
 
-    // TODO: we should build new agreement here from local Proposal and signatures
-    msg.agreement.state = AgreementState::Pending;
+async fn agreement_received(
+    broker: CommonBroker,
+    _caller: String,
+    msg: AgreementReceived,
+) -> Result<(), RemoteProposeAgreementError> {
+    let offer_proposal = broker.get_proposal(&msg.proposal_id).await?;
+    let offer_proposal_id = offer_proposal.body.id.clone();
+
+    if offer_proposal.body.issuer != IssuerType::Us {
+        return Err(RemoteProposeAgreementError::RequestorProposal(
+            offer_proposal_id.clone(),
+        ));
+    }
+
+    let demand_proposal_id = offer_proposal
+        .body
+        .prev_proposal_id
+        .clone()
+        .ok_or_else(|| RemoteProposeAgreementError::NoNegotiations(offer_proposal_id))?;
+    let demand_proposal = broker.get_proposal(&demand_proposal_id).await?;
+
+    let mut agreement = Agreement::new_with_ts(
+        demand_proposal,
+        offer_proposal,
+        msg.valid_to,
+        msg.creation_ts,
+        OwnerType::Requestor,
+    );
+    agreement.state = AgreementState::Pending;
+
+    // Check if we generated the same id, as Requestor sent us. If not, reject
+    // it, because wrong generated ids could be not unique.
+    let id = agreement.id.clone();
+    if id != msg.agreement_id {
+        Err(RemoteProposeAgreementError::InvalidId(id.clone()))?
+    }
 
     broker
         .db
         .as_dao::<AgreementDao>()
-        .save(msg.agreement.clone())
+        .save(agreement, &msg.proposal_id)
         .await
-        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
+        .map_err(|e| match e {
+            SaveAgreementError::ProposalCountered(id) => {
+                RemoteProposeAgreementError::ProposalCountered(id)
+            }
+            _ => RemoteProposeAgreementError::Unexpected(format!(
+                "Failed to save Agreement [{}]",
+                id.to_string()
+            )),
+        })?;
 
     broker
         .db
         .as_dao::<EventsDao>()
-        .add_agreement_event(msg.agreement)
+        .add_agreement_event(&agreement)
         .await
-        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
+        .map_err(|e| {
+            RemoteProposeAgreementError::Unexpected(format!(
+                "Failed to add event for Agreement [{}]",
+                id.to_string()
+            ))
+        })?;
 
     // Send channel message to wake all query_events waiting for proposals.
-    broker.notifier.notify(&subscription_id).await;
+    broker
+        .notifier
+        .notify(&offer_proposal.negotiation.offer_id)
+        .await;
 
     Ok(())
+}
+
+impl From<GetProposalError> for RemoteProposeAgreementError {
+    fn from(e: GetProposalError) -> Self {
+        match e {
+            GetProposalError::NotFound(id) => RemoteProposeAgreementError::ProposalNotFound(id),
+            GetProposalError::FailedGetFromDb(id, ..) => {
+                log::warn!("{}", e);
+                RemoteProposeAgreementError::Unexpected(format!(
+                    "Failed to get proposal from db [{}].",
+                    id.to_string()
+                ))
+            }
+        }
+    }
 }

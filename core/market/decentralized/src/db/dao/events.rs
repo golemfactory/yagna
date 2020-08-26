@@ -51,9 +51,9 @@ impl<'c> EventsDao<'c> {
         .await
     }
 
-    pub async fn add_agreement_event(&self, agreement: Agreement) -> DbResult<()> {
+    pub async fn add_agreement_event(&self, agreement: &Agreement) -> DbResult<()> {
+        let event = MarketEvent::from_agreement(agreement);
         do_with_transaction(self.pool, move |conn| {
-            let event = MarketEvent::from_agreement(agreement);
             diesel::insert_into(dsl::market_event)
                 .values(event)
                 .execute(conn)?;

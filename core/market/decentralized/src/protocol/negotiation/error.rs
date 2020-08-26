@@ -49,6 +49,32 @@ pub enum AgreementError {
     GsbError(String, AgreementId),
     #[error("Saving Agreement [{1}] error: {0}.")]
     Saving(String, AgreementId),
+    #[error("Agreement [{1}] remote error: {0}")]
+    Remote(RemoteAgreementError, AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum ProposeAgreementError {
+    #[error("Agreement [{1}] GSB error: {0}.")]
+    GsbError(String, AgreementId),
+    #[error("Agreement [{1}] remote error: {0}")]
+    Remote(RemoteProposeAgreementError, AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum RemoteProposeAgreementError {
+    #[error("Proposal [{0}] not found.")]
+    ProposalNotFound(ProposalId),
+    #[error("Requestor can't promote his own Proposal [{0}] to Agreement.")]
+    RequestorProposal(ProposalId),
+    #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
+    NoNegotiations(ProposalId),
+    #[error("Can't create Agreement for already countered Proposal [{0}].")]
+    ProposalCountered(ProposalId),
+    #[error("Agreement id [{0}] is invalid.")]
+    InvalidId(AgreementId),
+    #[error("Unexpected error: {0}.")]
+    Unexpected(String),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
