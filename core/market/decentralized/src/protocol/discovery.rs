@@ -219,7 +219,7 @@ impl Discovery {
         caller: String,
         msg: GetOffers,
     ) -> Result<Vec<ModelOffer>, DiscoveryRemoteError> {
-        log::info!("[{}] tries to get Offers from us.", &caller);
+        log::info!("[{}] asks for {} Offers.", &caller, msg.offers.len());
         let callback = self.inner.get_offers_request.clone();
         Ok(callback.call(caller, msg).await?)
     }
