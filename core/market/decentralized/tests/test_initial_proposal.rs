@@ -8,6 +8,7 @@ use ya_market_decentralized::MarketService;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use chrono::Utc;
 
 /// No events available for not existent subscription.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -74,6 +75,7 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
+    let start = Utc::now();
     let network = MarketsNetwork::new("test_query_multiple_events")
         .await
         .add_market_instance("Node-1")
@@ -91,9 +93,23 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
 
     // We expect that 3 proposal will be available as requestor event.
     let mut events = vec![];
-    for _ in 0..3 {
-        events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
-    }
+    // for _ in 0..3 {
+    //     events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
+    // }
+
+    println!("0: {}", Utc::now() - start);
+    let start = Utc::now();
+    events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
+    println!("1: {}", Utc::now() - start);
+    let start = Utc::now();
+    events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
+    println!("2: {}", Utc::now() - start);
+    let start = Utc::now();
+    events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
+    println!("3: {}", Utc::now() - start);
+    let start = Utc::now();
+
+
     assert_eq!(events.len(), 3);
 
     for event in events {
@@ -111,6 +127,7 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
 
     assert_eq!(events.len(), 0);
 
+    println!("4: {}", Utc::now() - start);
     Ok(())
 }
 
