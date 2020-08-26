@@ -5,10 +5,10 @@ use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork, OwnerTy
 use ya_market_decentralized::testing::{QueryEventsError, TakeEventsError};
 use ya_market_decentralized::MarketService;
 
+use chrono::Utc;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::Utc;
 
 /// No events available for not existent subscription.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -75,6 +75,9 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
+    let _ = env_logger::builder().try_init();
+    env_logger::Env::default().default_filter_or("debug,ya_market_decentralized=trace");
+
     let start = Utc::now();
     let network = MarketsNetwork::new("test_query_multiple_events")
         .await
@@ -108,7 +111,6 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
     events.append(&mut market1.query_events(&demand_id, 1.0, Some(5)).await?);
     println!("3: {}", Utc::now() - start);
     let start = Utc::now();
-
 
     assert_eq!(events.len(), 3);
 

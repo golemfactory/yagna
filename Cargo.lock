@@ -5482,6 +5482,8 @@ name = "ya-gnt-driver"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-connect",
+ "actix-http",
  "actix-rt",
  "anyhow",
  "awc",
@@ -5508,6 +5510,7 @@ dependencies = [
  "sha3 0.9.1",
  "thiserror",
  "tokio 0.2.22",
+ "trust-dns-resolver",
  "uint",
  "ureq",
  "uuid 0.8.1",
