@@ -111,7 +111,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir build
-          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit} build
+          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit,golem} build
           strip -x build/*
 
       - name: Copy binaries Windows

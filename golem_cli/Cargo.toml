@@ -1,0 +1,21 @@
+[package]
+name = "golem"
+description = "User friedly CLI for running provider"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+ya-compile-time-utils = "0.1"
+ya-service-api-web = "0.1"
+
+anyhow = "1.0"
+byte-unit = "4.0"
+dotenv = "0.15"
+env_logger = "0.7"
+futures = "0.3"
+log = "0.4"
+strip-ansi-escapes = "0.1"
+structopt = "0.3"
+tokio = { version = "0.2", features = ["macros", "process", "rt-core", "rt-threaded", "signal", "time"] }
+url = "2.1"
