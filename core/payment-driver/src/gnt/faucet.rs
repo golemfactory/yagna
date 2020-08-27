@@ -14,7 +14,7 @@ const ETH_FAUCET_ADDRESS_ENV_VAR: &str = "ETH_FAUCET_ADDRESS";
 const DEFAULT_ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
 
 pub struct EthFaucetConfig {
-    faucet_address: awc::http::Uri,
+    faucet_address: hyper::Uri,
 }
 
 impl EthFaucetConfig {

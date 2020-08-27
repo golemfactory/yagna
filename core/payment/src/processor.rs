@@ -94,7 +94,7 @@ impl PaymentProcessor {
 
             Ok(())
         }
-            .await;
+        .await;
 
         if let Err(e) = result {
             log::error!("Payment failed: {}", e);
