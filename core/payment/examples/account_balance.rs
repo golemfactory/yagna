@@ -1,11 +1,3 @@
-use bigdecimal::BigDecimal;
-use chrono::Utc;
-use std::time::Duration;
-use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::WebClient;
-use ya_client_model::payment::{
-    Acceptance, DocumentStatus, EventType, NewAllocation, NewDebitNote, NewInvoice,
-};
 use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
 
@@ -15,17 +7,23 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let client = WebClient::builder().build();
-    let provider: PaymentProviderApi = client.interface()?;
-    let requestor: PaymentRequestorApi = client.interface()?;
-
-    let payer_status = bus::service(pay::BUS_ID)
-        .call(pay::GetStatus {
-            platform: payment_platform.to_string(),
-            address: payer_addr.to_string(),
-        })
+    let account_list = bus::service(pay::BUS_ID)
+        .call(pay::GetAccounts {})
         .await??;
-    info!("Balance amount: {}", payer_status);
+    log::debug!("account_list: {:?}", account_list);
 
+    for account in account_list.into_iter() {
+
+        let payer_status = bus::service(pay::BUS_ID)
+            .call(pay::GetStatus {
+                platform: account.platform.to_string(),
+                address: account.address.to_string(),
+            })
+            .await??;
+
+        log::info!("Address: {:?}", account.address);
+        log::info!("Balance: {:?}", payer_status.amount);
+        log::debug!("payer_status: {:?}", payer_status);
+    }
     Ok(())
 }

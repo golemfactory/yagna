@@ -8,6 +8,11 @@ use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
+use client::rpc_client::RpcClient;
+use client::wallet::{Wallet, BalanceState};
+
+use web3::types::Address;
+
 pub fn bind_service() {
     log::debug!("Binding payment driver service to service bus");
 
@@ -48,7 +53,17 @@ async fn get_account_balance(
 ) -> Result<BigDecimal, GenericError> {
     log::info!("get account balance: {:?}", msg);
 
-    BigDecimal::from_str("1000000000000000000000000").map_err(GenericError::new)
+    let pub_address = Address::from_str(&msg.address()[2..]).unwrap();
+    log::info!("Public address. {}", pub_address);
+    let provider = RpcClient::new("https://rinkeby-api.zksync.io/jsrpc");
+    let wallet = Wallet::from_public_address(pub_address, provider);
+    let token = "GNT";
+    let balance_com = wallet.get_balance(token, BalanceState::Committed).await;
+    let balance_ver = wallet.get_balance(token, BalanceState::Verified).await;
+
+    log::info!("balance_com: {}", balance_com);
+    log::info!("balance_ver: {}", balance_ver);
+    Ok(BigDecimal::from_str(&balance_com.to_string()).unwrap())
 }
 
 async fn get_transaction_balance(
