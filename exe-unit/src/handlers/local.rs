@@ -66,6 +66,8 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
     type Result = ResponseActFuture<Self, <Initialize as Message>::Result>;
 
     fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
+        #[cfg(feature = "sgx")]
+        let crypto = self.ctx.crypto.clone();
         let fut = async move {
             Ok::<_, Error>({
                 #[cfg(feature = "sgx")]
@@ -73,8 +75,8 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                     use ya_core_model::activity::local::Credentials;
                     // TODO: attestation
                     Some(Credentials::Sgx {
-                        requestor: Vec::new(),
-                        enclave: Vec::new(),
+                        requestor: crypto.requestor_pub_key.serialize().to_vec(),
+                        enclave: crypto.pub_key.serialize().to_vec(),
                         payload_sha3: [0u8; 32],
                         enclave_hash: [0u8; 32],
                         ias_report: String::new(),

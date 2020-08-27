@@ -1,4 +1,5 @@
 use actix_web::{web, Responder};
+use futures::StreamExt;
 use serde::Deserialize;
 
 use ya_client_model::activity::{
@@ -25,6 +26,7 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         .service(destroy_activity)
         .service(exec)
         .service(get_batch_results)
+        .service(encrypted)
 }
 
 /// Creates new Activity based on given Agreement.
@@ -169,6 +171,41 @@ async fn get_batch_results(
         .await???;
 
     Ok::<_, Error>(web::Json(results))
+}
+
+/// Forwards an encrypted ExeUnit call.
+#[actix_web::post("/activity/{activity_id}/encrypted")]
+async fn encrypted(
+    db: web::Data<DbExecutor>,
+    path: web::Path<PathActivity>,
+    query: web::Query<QueryTimeout>,
+    mut body: web::Payload,
+    id: Identity,
+) -> impl Responder {
+    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+
+    let mut bytes = web::BytesMut::new();
+    while let Some(item) = body.next().await {
+        bytes.extend_from_slice(
+            &item.map_err(|e| Error::Service(format!("Payload error: {:?}", e)))?,
+        );
+    }
+
+    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    let msg = activity::sgx::CallEncryptedService {
+        activity_id: path.activity_id.clone(),
+        sender: id.identity,
+        bytes: bytes.to_vec(),
+    };
+
+    let result = ya_net::from(id.identity)
+        .to(agreement.provider_id()?.parse()?)
+        .service(&activity::exeunit::bus_id(&path.activity_id))
+        .send(msg)
+        .timeout(query.timeout)
+        .await???;
+
+    Ok::<_, Error>(web::Bytes::from(result))
 }
 
 #[derive(Deserialize)]
