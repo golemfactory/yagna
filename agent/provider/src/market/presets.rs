@@ -45,12 +45,6 @@ impl Coefficient {
     }
 }
 
-impl fmt::Display for Coefficient {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 impl<'s> TryFrom<&'s str> for Coefficient {
     type Error = Error;
 
@@ -370,7 +364,7 @@ impl PartialEq for Preset {
 impl fmt::Display for Preset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let align = 20;
-        let align_coeff = align - 4; // Minus intent.
+        let align_coeff = align - 4; // Minus indent.
 
         write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
         write!(
@@ -393,18 +387,12 @@ impl fmt::Display for Preset {
             write!(
                 f,
                 "    {:width$}{} NGNT\n",
-                name,
+                name.to_readable(),
                 coeff,
                 width = align_coeff
             )?;
         }
 
-        write!(
-            f,
-            "    {:16}{} NGNT",
-            "Init price",
-            self.usage_coeffs.get(&Coefficient::Initial).unwrap(),
-        )?;
         Ok(())
     }
 }
