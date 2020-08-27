@@ -60,6 +60,11 @@ pub struct ProviderConfig {
         env = "YA_RT_STORAGE")
     ]
     pub rt_storage: Option<f64>,
+
+    /// Negotiator strategy used by this provider.
+    /// Can be one of: LimitAgreements, AcceptAll.
+    #[structopt(long, default_value = "LimitAgreements")]
+    pub negotiator_strategy: String,
 }
 
 impl ProviderConfig {

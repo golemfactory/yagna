@@ -37,7 +37,7 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
 
-        let market = ProviderMarket::new(api.market, "LimitAgreements").start();
+        let market = ProviderMarket::new(api.market, &config.negotiator_strategy).start();
         let payments = Payments::new(api.activity.clone(), api.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner_config, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
