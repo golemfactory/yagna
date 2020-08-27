@@ -14,7 +14,6 @@ integration-tests = []
 actix = "0.9"
 actix-rt = "1.0"
 anyhow = "1.0"
-awc = "1.0.1"
 bigdecimal = "0.1.0"
 bitflags = "1.2"
 chrono = { version = "0.4", features = ["serde"] }
@@ -24,6 +23,7 @@ ethereum-tx-sign = { git = "https://github.com/bidzyyys/ethereum-tx-sign" }
 ethereum-types = "0.6.0"
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 hex = "0.4"
+hyper = "0.13"
 lazy_static = "1.4.0"
 log = "0.4.8"
 num-bigint = "0.2"

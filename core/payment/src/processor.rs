@@ -28,8 +28,13 @@ impl PaymentProcessor {
             let payment_status: PaymentStatus = bus::service(driver::BUS_ID)
                 .send(driver::GetPaymentStatus::from(invoice_id.to_string()))
                 .await
-                .unwrap()
-                .unwrap();
+                .map_err(|e| PaymentError::DriverService(e))?
+                .map_err(|e| {
+                    PaymentError::Driver(format!(
+                        "Payment GetPaymentStatus driver error: {}",
+                        e.to_string()
+                    ))
+                })?;
             match payment_status {
                 PaymentStatus::Ok(confirmation) => return Ok(confirmation),
                 PaymentStatus::NotYet => tokio::time::delay_for(Duration::from_secs(5)).await,
@@ -111,8 +116,13 @@ impl PaymentProcessor {
                 msg.due_date.clone(),
             ))
             .await
-            .unwrap()
-            .unwrap();
+            .map_err(|e| PaymentError::DriverService(e))?
+            .map_err(|e| {
+                PaymentError::Driver(format!(
+                    "Payment SchedulePayment driver error: {}",
+                    e.to_string()
+                ))
+            })?;
 
         let processor = self.clone();
         tokio::task::spawn_local(async move {
@@ -133,8 +143,13 @@ impl PaymentProcessor {
         let details: PaymentDetails = bus::service(driver::BUS_ID)
             .send(driver::VerifyPayment::from(confirmation))
             .await
-            .unwrap()
-            .unwrap();
+            .map_err(|e| PaymentError::DriverService(e))?
+            .map_err(|e| {
+                PaymentError::Driver(format!(
+                    "Payment VerifyPayment driver error: {}",
+                    e.to_string()
+                ))
+            })?;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
         let actual_amount = details.amount;
@@ -242,8 +257,13 @@ impl PaymentProcessor {
                 details.recipient.clone(),
             ))
             .await
-            .unwrap()
-            .unwrap();
+            .map_err(|e| PaymentError::DriverService(e))?
+            .map_err(|e| {
+                PaymentError::Driver(format!(
+                    "Payment GetTransactionBalance driver error: {}",
+                    e.to_string()
+                ))
+            })?;
 
         let bc_balance = bc_balance.amount;
         if bc_balance < db_balance + actual_amount {
@@ -269,8 +289,10 @@ impl PaymentProcessor {
         bus::service(driver::BUS_ID)
             .send(driver::Init::new(addr, mode))
             .await
-            .unwrap()
-            .unwrap();
+            .map_err(|e| PaymentError::DriverService(e))?
+            .map_err(|e| {
+                PaymentError::Driver(format!("Payment Init driver error: {}", e.to_string()))
+            })?;
         Ok(())
     }
 
@@ -279,8 +301,13 @@ impl PaymentProcessor {
         let account_balance: AccountBalance = bus::service(driver::BUS_ID)
             .send(driver::GetAccountBalance::from(address))
             .await
-            .unwrap()
-            .unwrap();
+            .map_err(|e| PaymentError::DriverService(e))?
+            .map_err(|e| {
+                PaymentError::Driver(format!(
+                    "Payment GetAccountBalance driver error: {}",
+                    e.to_string()
+                ))
+            })?;
         Ok(account_balance.base_currency.amount)
     }
 }
