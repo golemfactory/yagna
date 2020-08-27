@@ -33,7 +33,7 @@ pub fn list_presets(config: ProviderConfig) -> anyhow::Result<()> {
 pub fn list_metrics(_: ProviderConfig) -> anyhow::Result<()> {
     for entry in Coefficient::variants() {
         if let Some(property) = entry.to_property() {
-            println!("{:15}{}", entry, property);
+            println!("{:15}{}", entry.to_readable(), property);
         }
     }
     Ok(())
