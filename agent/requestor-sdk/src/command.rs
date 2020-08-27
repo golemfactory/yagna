@@ -132,8 +132,8 @@ impl CommandList {
     }
 }
 
-#[derive(Debug)]
-pub(super) struct ExeScript {
+#[derive(Clone, Debug)]
+pub struct ExeScript {
     pub request: ExeScriptRequest,
     pub num_cmds: usize,
     pub run_indices: HashSet<usize>,

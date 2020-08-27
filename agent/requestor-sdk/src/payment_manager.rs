@@ -182,7 +182,7 @@ impl Handler<GetPending> for PaymentManager {
     }
 }
 
-struct ReleaseAllocation;
+pub struct ReleaseAllocation;
 
 impl Message for ReleaseAllocation {
     type Result = anyhow::Result<()>;
@@ -196,7 +196,7 @@ impl Handler<ReleaseAllocation> for PaymentManager {
         let allocation_id = self.allocation_id.clone();
         let _ = ctx.spawn(
             async move {
-                log::info!("Releasing allocation");
+                log::info!("releasing allocation");
                 api.release_allocation(&allocation_id).await;
             }
             .into_actor(self),

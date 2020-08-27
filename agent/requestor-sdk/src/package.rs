@@ -30,15 +30,21 @@ impl Package {
     pub async fn publish(&self) -> Result<(String, Url)> {
         match self {
             Self::Archive(path) => {
-                let image_path = path.canonicalize()?;
+                let image_path = path
+                    .canonicalize()
+                    .map_err(|e| anyhow::anyhow!("invalid image path {:?}: {}", path, e))?;
 
                 log::info!("image file path: {}", image_path.display());
 
-                let url = gftp::publish(&path).await?;
+                let url = gftp::publish(&path).await.map_err(|e| {
+                    anyhow::anyhow!("gftp: unable to publish image {:?}: {}", path, e)
+                })?;
 
                 log::info!("image published at: {}", url);
 
-                let contents = fs::read(&image_path).await?;
+                let contents = fs::read(&image_path)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("unable to open image {:?}: {}", image_path, e))?;
                 let digest = Sha3_512::digest(&contents);
                 let digest = format!("{:x}", digest);
 
@@ -47,12 +53,38 @@ impl Package {
                 Ok((digest, url))
             }
             Self::Url { digest, url } => {
-                let url = Url::parse(&url)?;
+                let url = Url::parse(&url)
+                    .map_err(|e| anyhow::anyhow!("invalid URL \"{}\": {}", url, e))?;
 
                 log::info!("parsed url for image file: {}", url);
                 log::info!("digest of the published image: {}", digest);
 
                 Ok((digest.clone(), url))
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum Image {
+    WebAssembly(semver::Version),
+    GVMKit(semver::Version),
+    Sgx(semver::Version),
+}
+
+impl Image {
+    pub fn runtime_name(&self) -> &'static str {
+        match self {
+            Image::WebAssembly(_) => "wasmtime",
+            Image::GVMKit(_) => "vm",
+            Image::Sgx(_) => "sgx",
+        }
+    }
+
+    pub fn runtime_version(&self) -> semver::Version {
+        match self {
+            Image::WebAssembly(version) | Image::GVMKit(version) | Image::Sgx(version) => {
+                version.clone()
             }
         }
     }

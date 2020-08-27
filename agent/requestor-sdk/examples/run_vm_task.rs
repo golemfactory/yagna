@@ -1,9 +1,6 @@
-use anyhow::Result;
-use futures::future::{select, FutureExt};
-use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::Duration;
 use structopt::StructOpt;
-
 use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_requestor_sdk::{commands, CommandList, Image::GVMKit, Package, Requestor};
 
@@ -30,15 +27,14 @@ impl From<Location> for Package {
 }
 
 #[actix_rt::main]
-async fn main() -> Result<()> {
-    let _ = dotenv::dotenv()?;
-    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-
+async fn main() -> anyhow::Result<()> {
     let args = Args::from_args();
     let package = args.package.clone().into();
 
-    let requestor = Requestor::new("My Requestor", GVMKit, package)
-        .with_max_budget_gnt(5)
+    Requestor::new("My Requestor", GVMKit((0, 1, 0).into()), package)
+        .with_subnet("testnet")
+        .with_max_budget_ngnt(5)
+        .with_timeout(Duration::from_secs(12 * 60))
         .with_constraints(constraints![
             "golem.inf.mem.gib" > 0.5,
             "golem.inf.storage.gib" > 1.0
@@ -51,22 +47,9 @@ async fn main() -> Result<()> {
                 download("/workdir/output", format!("output-{}", i))
             }
         }))
-        .on_completed(|outputs: HashMap<String, String>| {
-            for (prov_id, output) in outputs {
-                println!("{} => {}", prov_id, output);
-            }
+        .on_completed(|activity_id, output| {
+            println!("{} => {:?}", activity_id, output);
         })
-        .run();
-
-    let ctrl_c = actix_rt::signal::ctrl_c().then(|r| async move {
-        match r {
-            Ok(_) => Ok(log::warn!("interrupted: ctrl-c detected!")),
-            Err(e) => Err(anyhow::Error::from(e)),
-        }
-    });
-
-    select(requestor.boxed_local(), ctrl_c.boxed_local())
+        .run()
         .await
-        .into_inner()
-        .0
 }

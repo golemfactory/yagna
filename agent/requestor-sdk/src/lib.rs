@@ -1,4 +1,5 @@
 /* TODO don't use PaymentManager from gwasm-runner */
+mod activity;
 mod command;
 mod package;
 #[allow(dead_code)]
@@ -8,8 +9,8 @@ mod payment_manager;
 mod requestor;
 
 pub use command::{Command, CommandList};
-pub use package::Package;
-pub use requestor::{Image, Requestor};
+pub use package::{Image, Package};
+pub use requestor::Requestor;
 
 #[macro_export]
 macro_rules! expand_cmd {
