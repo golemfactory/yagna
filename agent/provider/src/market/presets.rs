@@ -274,6 +274,23 @@ impl PresetManager {
         Ok(())
     }
 
+    pub fn update_preset<F>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Preset) -> Result<()>,
+    {
+        let mut state = self.state.lock().unwrap();
+        match state.presets.get_mut(name) {
+            None => Err(anyhow!("Preset [{}] doesn't exists.", &name)),
+            Some(preset) => {
+                // if f fails, preset stays unchanged
+                let mut new_preset = preset.clone();
+                f(&mut new_preset)?;
+                *preset = new_preset;
+                Ok(())
+            }
+        }
+    }
+
     pub fn active(&self) -> Vec<String> {
         let state = self.state.lock().unwrap();
         state.active.clone()
@@ -293,6 +310,11 @@ impl PresetManager {
                 None => Err(anyhow!("Can't find preset [{}].", name)),
             })
             .collect()
+    }
+
+    pub fn list_names(&self) -> Vec<String> {
+        let state = self.state.lock().unwrap();
+        state.presets.keys().cloned().collect()
     }
 
     pub fn activate(&mut self, name: &String) -> Result<()> {

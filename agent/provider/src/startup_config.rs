@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use structopt::{clap, StructOpt};
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
-use crate::hardware::Resources;
+use crate::hardware::{Resources, UpdateResources};
 use futures::channel::oneshot;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -91,7 +91,7 @@ pub struct RunConfig {
     pub runner_config: TaskRunnerConfig,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 pub struct PresetNoInteractive {
     #[structopt(long)]
     pub preset_name: Option<String>,
@@ -101,6 +101,16 @@ pub struct PresetNoInteractive {
     pub pricing: Option<String>,
     #[structopt(long, parse(try_from_str = parse_key_val))]
     pub price: Vec<(String, f64)>,
+}
+
+#[derive(StructOpt)]
+#[structopt(group = clap::ArgGroup::with_name("update_names").multiple(true).required(true))]
+pub struct UpdateNames {
+    #[structopt(long, group = "update_names")]
+    pub all: bool,
+
+    #[structopt(group = "update_names")]
+    pub names: Vec<String>,
 }
 
 #[derive(StructOpt)]
@@ -121,7 +131,8 @@ pub enum PresetsConfig {
     Remove { name: String },
     /// Update a preset
     Update {
-        name: String,
+        #[structopt(flatten)]
+        names: UpdateNames,
         #[structopt(long)]
         no_interactive: bool,
         #[structopt(flatten)]
@@ -150,9 +161,10 @@ pub enum ProfileConfig {
     },
     /// Update a profile
     Update {
-        name: String,
         #[structopt(flatten)]
-        resources: Resources,
+        names: UpdateNames,
+        #[structopt(flatten)]
+        resources: UpdateResources,
     },
     /// Remove an existing profile
     Remove { name: String },

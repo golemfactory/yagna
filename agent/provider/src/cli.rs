@@ -1,7 +1,8 @@
+use crate::hardware::{ProfileError, Profiles, Resources, UpdateResources};
 use crate::market::presets::Coefficient;
 use crate::market::{Preset, PresetManager};
 use crate::preset_cli::PresetUpdater;
-use crate::startup_config::{PresetNoInteractive, ProviderConfig};
+use crate::startup_config::{PresetNoInteractive, ProviderConfig, UpdateNames};
 use anyhow::{anyhow, bail};
 use std::convert::TryFrom;
 
@@ -39,9 +40,20 @@ pub fn list_metrics(_: ProviderConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_preset(config: &ProviderConfig, preset: &Preset) -> anyhow::Result<()> {
+    // Validate ExeUnit existence and pricing model.
+    let registry = config.registry()?;
+    registry.find_exeunit(&preset.exeunit_name)?;
+
+    if !(preset.pricing_model == "linear") {
+        bail!("Not supported pricing model.")
+    }
+
+    Ok(())
+}
+
 pub fn create_preset(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Result<()> {
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
-    let registry = config.registry()?;
 
     let mut preset = Preset::default();
     preset.name = params
@@ -56,11 +68,7 @@ pub fn create_preset(config: ProviderConfig, params: PresetNoInteractive) -> any
             .insert(Coefficient::try_from(name.as_str())?, *price);
     }
 
-    // Validate ExeUnit existence and pricing model.
-    registry.find_exeunit(&preset.exeunit_name)?;
-    if !(preset.pricing_model == "linear") {
-        bail!("Not supported pricing model.")
-    }
+    validate_preset(&config, &preset)?;
 
     presets.add_preset(preset.clone())?;
     presets.save_to_file(&config.presets_file)?;
@@ -142,39 +150,83 @@ pub fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow
     Ok(())
 }
 
-pub fn update_preset(
-    config: ProviderConfig,
-    name: String,
+pub fn update_presets(
+    config: &ProviderConfig,
+    names: UpdateNames,
     params: PresetNoInteractive,
 ) -> anyhow::Result<()> {
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
-    let registry = config.registry()?;
 
-    let mut preset = presets.get(&name)?;
+    let names = if names.all {
+        presets.list_names()
+    } else {
+        names.names
+    };
 
-    // All values are optional. If not set, previous value will remain.
-    preset.name = params.preset_name.unwrap_or(preset.name);
-    preset.exeunit_name = params.exe_unit.unwrap_or(preset.exeunit_name);
-    preset.pricing_model = params.pricing.unwrap_or(preset.pricing_model);
+    for name in names {
+        let params = params.clone();
+        presets.update_preset(&name, |preset| -> anyhow::Result<()> {
+            if let Some(new_name) = params.preset_name {
+                preset.name = new_name;
+            }
+            if let Some(new_exeunit_name) = params.exe_unit {
+                preset.exeunit_name = new_exeunit_name;
+            }
+            if let Some(new_pricing_model) = params.pricing {
+                preset.pricing_model = new_pricing_model;
+            }
 
-    for (name, price) in params.price.iter() {
-        preset
-            .usage_coeffs
-            .insert(Coefficient::try_from(name.as_str())?, *price);
+            for (name, price) in params.price.iter() {
+                preset
+                    .usage_coeffs
+                    .insert(Coefficient::try_from(name.as_str())?, *price);
+            }
+
+            validate_preset(&config, &preset)?;
+
+            Ok(())
+        })?;
     }
 
-    // Validate ExeUnit existence and pricing model.
-    registry.find_exeunit(&preset.exeunit_name)?;
-    if !(preset.pricing_model == "linear") {
-        bail!("Not supported pricing model.")
-    }
-
-    presets.remove_preset(&name)?;
-    presets.add_preset(preset.clone())?;
     presets.save_to_file(&config.presets_file)?;
 
     println!();
-    println!("Preset updated:");
-    println!("{}", preset);
+    println!("Presets updated");
+    Ok(())
+}
+
+fn update_profile(resources: &mut Resources, new_resources: UpdateResources) {
+    if let Some(cpu_threads) = new_resources.cpu_threads {
+        resources.cpu_threads = cpu_threads;
+    }
+    if let Some(mem_gib) = new_resources.mem_gib {
+        resources.mem_gib = mem_gib;
+    }
+    if let Some(storage_gib) = new_resources.storage_gib {
+        resources.storage_gib = storage_gib;
+    }
+}
+
+pub fn update_profiles(
+    config: ProviderConfig,
+    names: UpdateNames,
+    new_resources: UpdateResources,
+) -> anyhow::Result<()> {
+    let mut profiles = Profiles::load_or_create(&config)?;
+
+    if names.all {
+        for resources in profiles.list().values_mut() {
+            update_profile(resources, new_resources);
+        }
+    } else {
+        for name in names.names {
+            match profiles.get_mut(&name) {
+                Some(resources) => update_profile(resources, new_resources),
+                _ => return Err(ProfileError::Unknown(name).into()),
+            }
+        }
+    }
+
+    profiles.save(config.hardware_file.as_path())?;
     Ok(())
 }
