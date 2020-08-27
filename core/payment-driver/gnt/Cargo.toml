@@ -8,7 +8,6 @@ edition = "2018"
 actix = "0.9"
 actix-rt = "1.0"
 anyhow = "1.0"
-awc = "1.0.1"
 bigdecimal = "0.1.0"
 bitflags = "1.2"
 chrono = { version = "0.4", features = ["serde"] }

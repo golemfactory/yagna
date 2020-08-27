@@ -13,7 +13,7 @@ const INIT_ETH_SLEEP: time::Duration = time::Duration::from_secs(15);
 const ETH_FAUCET_ADDRESS_ENV_VAR: &str = "ETH_FAUCET_ADDRESS";
 
 pub struct EthFaucetConfig {
-    faucet_address: awc::http::Uri,
+    faucet_address: hyper::Uri,
 }
 
 impl EthFaucetConfig {
