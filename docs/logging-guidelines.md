@@ -44,7 +44,7 @@ Care must be taken when confidential or personal data need to be recorded in log
 
 ### CRITICAL/FATAL
 Purpose: 
-- Indicate the app is unable to continue, it should exit after this message
+- Indicate the app is unable to continue, it should exit after this message.
 
 Audience:
 - Users
