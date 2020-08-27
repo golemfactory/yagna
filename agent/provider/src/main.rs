@@ -69,12 +69,15 @@ async fn main() -> anyhow::Result<()> {
             PresetsConfig::Update {
                 no_interactive,
                 params,
-                name,
+                mut names,
             } => {
                 if no_interactive {
-                    cli::update_preset(config, name, params)
+                    cli::update_presets(&config, names, params)
                 } else {
-                    cli::update_preset_interactive(config, name)
+                    if names.all || names.names.len() != 1 {
+                        anyhow::bail!("choose one name for interactive update");
+                    }
+                    cli::update_preset_interactive(config, names.names.drain(..).next().unwrap())
                 }
             }
             PresetsConfig::Activate { name } => cli::activate_preset(config, name),
@@ -96,13 +99,8 @@ async fn main() -> anyhow::Result<()> {
                     profiles.add(name, resources)?;
                     profiles.save(path)?;
                 }
-                ProfileConfig::Update { name, resources } => {
-                    let mut profiles = Profiles::load_or_create(&config)?;
-                    match profiles.get_mut(&name) {
-                        Some(profile) => *profile = resources,
-                        _ => return Err(hardware::ProfileError::Unknown(name).into()),
-                    }
-                    profiles.save(path)?;
+                ProfileConfig::Update { names, resources } => {
+                    cli::update_profiles(config, names, resources)?;
                 }
                 ProfileConfig::Remove { name } => {
                     let mut profiles = Profiles::load_or_create(&config)?;
