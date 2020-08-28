@@ -13,3 +13,6 @@ futures = "0.3"
 futures-util = "0.3.4"
 shared_child = "0.3.4"
 tokio = { version = "0.2.10", features = ["process", "signal"] }
+
+[target.'cfg(target_family = "unix")'.dependencies]
+nix = "0.17.0"

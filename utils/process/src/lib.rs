@@ -14,21 +14,31 @@ use {
     shared_child::unix::SharedChildExt,
 };
 
-#[cfg(unix)]
-pub trait CommandSetSid<T> {
-    fn setsid(&mut self) -> &mut T;
+pub trait ProcessGroupExt<T> {
+    fn new_process_group(&mut self) -> &mut T;
 }
 
-#[cfg(unix)]
-impl CommandSetSid<Command> for Command {
-    fn setsid(&mut self) -> &mut Command {
+impl ProcessGroupExt<Command> for Command {
+    #[cfg(unix)]
+    fn new_process_group(&mut self) -> &mut Command {
+        use nix::Error;
+        use std::io;
         use std::os::unix::process::CommandExt;
+
         unsafe {
             self.pre_exec(|| {
-                libc::setsid();
+                nix::unistd::setsid().map_err(|e| match e {
+                    Error::Sys(errno) => io::Error::from(errno),
+                    error => io::Error::new(io::ErrorKind::Other, error),
+                })?;
                 Ok(())
             });
         }
+        self
+    }
+
+    #[cfg(not(unix))]
+    fn new_process_group(&mut self) -> &mut Command {
         self
     }
 }
