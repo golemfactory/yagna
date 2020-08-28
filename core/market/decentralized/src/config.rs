@@ -1,4 +1,4 @@
-use chrono::Duration;
+use std::time::Duration;
 
 /// TODO: Decide where should this config be loaded from.
 ///  We could deserialize it from .json file or use structopt and
@@ -11,12 +11,12 @@ pub struct Config {
 pub struct DiscoveryConfig {
     pub num_broadcasted_offers: u32,
     pub num_broadcasted_unsubscribes: u32,
-    pub mean_random_broadcast_interval: Duration,
-    pub mean_random_broadcast_unsubscribes_interval: Duration,
+    pub mean_cyclic_broadcast_interval: std::time::Duration,
+    pub mean_cyclic_unsubscribes_interval: std::time::Duration,
 }
 
 pub struct SubscriptionConfig {
-    pub default_ttl: Duration,
+    pub default_ttl: chrono::Duration,
 }
 
 impl Default for Config {
@@ -33,8 +33,8 @@ impl Default for DiscoveryConfig {
         DiscoveryConfig {
             num_broadcasted_offers: 50,
             num_broadcasted_unsubscribes: 50,
-            mean_random_broadcast_interval: Duration::seconds(3),
-            mean_random_broadcast_unsubscribes_interval: Duration::seconds(3),
+            mean_cyclic_broadcast_interval: Duration::from_secs(3),
+            mean_cyclic_unsubscribes_interval: Duration::from_secs(3),
         }
     }
 }
@@ -42,7 +42,7 @@ impl Default for DiscoveryConfig {
 impl Default for SubscriptionConfig {
     fn default() -> Self {
         SubscriptionConfig {
-            default_ttl: Duration::hours(24),
+            default_ttl: chrono::Duration::hours(24),
         }
     }
 }

@@ -4,6 +4,7 @@ use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
+use itertools::Itertools;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
 use std::io::Write;
@@ -184,11 +185,15 @@ where
     T: Display,
 {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "[\n")?;
-        for id in self.0.iter() {
-            write!(f, "    {}\n", id)?;
+        if self.0.is_empty() {
+            write!(f, "[]")?;
+        } else {
+            let data_formatter = self
+                .0
+                .iter()
+                .format_with("\n", |elt, f| f(&format_args!(" {}", elt)));
+            write!(f, "[\n{}\n]", data_formatter)?;
         }
-        write!(f, "]")?;
         Ok(())
     }
 }

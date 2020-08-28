@@ -1,6 +1,6 @@
-use chrono::Duration;
 use rand::seq::SliceRandom;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::mock_offer::client;
@@ -18,7 +18,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_random_broadcast_interval = Duration::milliseconds(100);
+    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
     config.discovery.num_broadcasted_offers = 50;
 
     let network = MarketsNetwork::new("test_startup_offers_sharing")
@@ -60,7 +60,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 
     // We expect, that after this time we, should get at least one broadcast
     // from each Node.
-    tokio::time::delay_for(std::time::Duration::from_millis(300)).await;
+    tokio::time::delay_for(Duration::from_millis(300)).await;
 
     let market3 = network.get_market("Node-3");
 
@@ -84,8 +84,8 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_random_broadcast_interval = Duration::milliseconds(100);
-    config.discovery.mean_random_broadcast_unsubscribes_interval = Duration::milliseconds(100);
+    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
+    config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
     config.discovery.num_broadcasted_offers = 50;
     config.discovery.num_broadcasted_unsubscribes = 50;
 
@@ -130,7 +130,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     }
 
     // We expect, that after this time all nodes will have the same knowledge about Offers.
-    tokio::time::delay_for(std::time::Duration::from_millis(30)).await;
+    tokio::time::delay_for(Duration::from_millis(100)).await;
 
     // Break networking, so unsubscribe broadcasts won't come to Node-3.
     network.break_networking_for("Node-3")?;
@@ -154,9 +154,9 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 
     // Reenable networking for Node-3. We should get only cyclic broadcast.
     // Immediate broadcast should be already lost.
-    tokio::time::delay_for(std::time::Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(100)).await;
     network.enable_networking_for("Node-3")?;
-    tokio::time::delay_for(std::time::Duration::from_millis(300)).await;
+    tokio::time::delay_for(Duration::from_millis(300)).await;
 
     // Check if all expected Offers were unsubscribed.
     for subscription in subscriptions1[10..].into_iter() {
@@ -216,7 +216,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_random_broadcast_interval = Duration::milliseconds(100);
+    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
     config.discovery.num_broadcasted_offers = 50;
 
     let network = MarketsNetwork::new("test_sharing_someones_else_offers")
@@ -255,7 +255,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     }
 
     // Wait until Node-1 and Node-2 will share their Offers.
-    tokio::time::delay_for(std::time::Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(100)).await;
 
     // Sanity check. Node-2 should have all Offers from market1.
     for subscription in subscriptions.iter() {
@@ -269,7 +269,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     let market3 = network.get_market("Node-3");
 
     // We expect, that after this time we, should get at least one broadcast.
-    tokio::time::delay_for(std::time::Duration::from_millis(300)).await;
+    tokio::time::delay_for(Duration::from_millis(300)).await;
 
     // Make sure we got all offers that, were created.
     for subscription in subscriptions.into_iter() {
@@ -287,8 +287,8 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_random_broadcast_interval = Duration::milliseconds(100);
-    config.discovery.mean_random_broadcast_unsubscribes_interval = Duration::milliseconds(100);
+    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
+    config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
     config.discovery.num_broadcasted_offers = 50;
     config.discovery.num_broadcasted_unsubscribes = 50;
 
@@ -332,7 +332,7 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
     }
 
     // Wait until Nodes will share their Offers.
-    tokio::time::delay_for(std::time::Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(100)).await;
 
     // Sanity check. Node-3 should have all Offers from market1.
     for subscription in subscriptions.iter() {
@@ -346,14 +346,14 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
         market2.unsubscribe_offer(subscription, &id2).await?;
     }
 
-    tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+    tokio::time::delay_for(Duration::from_millis(50)).await;
 
     // Disconnect Node-2. Only Node-1 can propagate unsubscribes to Node-3.
     network.break_networking_for("Node-2")?;
     network.enable_networking_for("Node-3")?;
 
     // We expect that all unsubscribed will be shared with Node-3 after this delay.
-    tokio::time::delay_for(std::time::Duration::from_millis(300)).await;
+    tokio::time::delay_for(Duration::from_millis(300)).await;
     for subscription in subscriptions[30..].into_iter() {
         let expected_error = QueryOfferError::Unsubscribed(subscription.clone());
         assert_err_eq!(expected_error, market3.get_offer(&subscription).await)

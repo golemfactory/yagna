@@ -255,7 +255,7 @@ impl SubscriptionStore {
     }
 
     /// Returns Offers SubscriptionId from vector, that don't exist in our database.
-    pub async fn filter_existing(
+    pub async fn filter_out_existing(
         &self,
         offers: Vec<SubscriptionId>,
     ) -> Result<Vec<SubscriptionId>, QueryOfferError> {

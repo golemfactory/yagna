@@ -60,7 +60,7 @@ impl Matcher {
             .data(identity_api.clone())
             .data(store.clone())
             .data(resolver.clone())
-            .add_data_handler(on_offer_ids_received)
+            .add_data_handler(filter_known_offer_ids)
             .add_data_handler(on_offers_received)
             .add_data_handler(on_get_offers)
             .add_data_handler(on_offer_unsubscribed)
@@ -89,8 +89,8 @@ impl Matcher {
 
         // We can't spawn broadcasts, before gsb is bound.
         // That's why we don't spawn this in Matcher::new.
-        tokio::task::spawn_local(random_broadcast_offers(self.clone()));
-        tokio::task::spawn_local(random_broadcast_unsubscribes(self.clone()));
+        tokio::task::spawn_local(cyclic_broadcast_offers(self.clone()));
+        tokio::task::spawn_local(cyclic_broadcast_unsubscribes(self.clone()));
         Ok(())
     }
 
@@ -223,7 +223,7 @@ impl Matcher {
 // Discovery protocol messages handlers
 // =========================================== //
 
-pub(crate) async fn on_offer_ids_received(
+pub(crate) async fn filter_known_offer_ids(
     resolver: Resolver,
     _caller: String,
     msg: OfferIdsReceived,
@@ -233,7 +233,7 @@ pub(crate) async fn on_offer_ids_received(
     // not only Offers from other nodes.
     Ok(resolver
         .store
-        .filter_existing(msg.offers)
+        .filter_out_existing(msg.offers)
         .await
         .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
 }
@@ -283,8 +283,9 @@ pub(crate) async fn on_get_offers(
         Ok(offers) => Ok(offers),
         Err(e) => {
             log::error!("Failed to get batch offers. Error: {}", e);
-            // TODO: Propagate error.
-            Ok(vec![])
+            Err(DiscoveryRemoteError::InternalError(format!(
+                "Failed to get offers from db."
+            )))
         }
     }
 }
@@ -341,20 +342,12 @@ pub(crate) async fn on_offer_unsubscribed(
 // Cyclic broadcasting
 // =========================================== //
 
-async fn random_broadcast_offers(matcher: Matcher) {
-    let broadcast_interval = matcher
-        .config
-        .clone()
-        .discovery
-        .mean_random_broadcast_interval
-        .to_std()
-        .map_err(|e| format!("Invalid broadcast interval. Error: {}", e))
-        .unwrap();
+async fn cyclic_broadcast_offers(matcher: Matcher) {
+    let broadcast_interval = matcher.config.discovery.mean_cyclic_broadcast_interval;
     loop {
         let matcher = matcher.clone();
         async move {
-            let random_interval = randomize_interval(broadcast_interval);
-            tokio::time::delay_for(random_interval).await;
+            wait_random_interval(broadcast_interval).await;
 
             // We always broadcast our own Offers.
             let our_offers = matcher
@@ -368,6 +361,7 @@ async fn random_broadcast_offers(matcher: Matcher) {
             let num_ours_offers = our_offers.len();
             let num_to_broadcast = matcher.config.discovery.num_broadcasted_offers;
 
+            // TODO: Don't query full Offers from database if we only need ids.
             let all_offers = matcher
                 .store
                 .get_offers(None)
@@ -397,20 +391,12 @@ async fn random_broadcast_offers(matcher: Matcher) {
     }
 }
 
-async fn random_broadcast_unsubscribes(matcher: Matcher) {
-    let broadcast_interval = matcher
-        .config
-        .clone()
-        .discovery
-        .mean_random_broadcast_unsubscribes_interval
-        .to_std()
-        .map_err(|e| format!("Invalid broadcast interval. Error: {}", e))
-        .unwrap();
+async fn cyclic_broadcast_unsubscribes(matcher: Matcher) {
+    let broadcast_interval = matcher.config.discovery.mean_cyclic_unsubscribes_interval;
     loop {
         let matcher = matcher.clone();
         async move {
-            let random_interval = randomize_interval(broadcast_interval);
-            tokio::time::delay_for(random_interval).await;
+            wait_random_interval(broadcast_interval).await;
 
             // We always broadcast our own Offers.
             let our_offers = matcher.list_our_unsubscribed_offers().await?;
@@ -466,6 +452,11 @@ fn randomize_offers(
 fn randomize_interval(mean_interval: std::time::Duration) -> std::time::Duration {
     let mut rng = rand::thread_rng();
     (2 * mean_interval).mul_f64(rng.gen::<f64>())
+}
+
+async fn wait_random_interval(mean_interval: std::time::Duration) {
+    let random_interval = randomize_interval(mean_interval);
+    tokio::time::delay_for(random_interval).await;
 }
 
 #[cfg(test)]

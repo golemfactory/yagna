@@ -2215,6 +2215,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3173,7 +3182,7 @@ checksum = "eb788126ea840817128183f8f603dce02cb7aea25c2a0b764359d8e20010702e"
 dependencies = [
  "bytes 0.4.12",
  "heck",
- "itertools",
+ "itertools 0.8.2",
  "log 0.4.8",
  "multimap 0.4.0",
  "petgraph 0.4.13",
@@ -3191,7 +3200,7 @@ checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
 dependencies = [
  "bytes 0.5.5",
  "heck",
- "itertools",
+ "itertools 0.8.2",
  "log 0.4.8",
  "multimap 0.8.1",
  "petgraph 0.5.1",
@@ -3208,7 +3217,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e7dc378b94ac374644181a2247cebf59a6ec1c88b49ac77f3a94b86b79d0e11"
 dependencies = [
  "failure",
- "itertools",
+ "itertools 0.8.2",
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
@@ -3221,7 +3230,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "537aa19b95acde10a12fec4301466386f757403de4cd4e5b4fa78fb5ecb18f72"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.8.2",
  "proc-macro2 1.0.18",
  "quote 1.0.7",
  "syn 1.0.33",
@@ -5443,6 +5452,7 @@ dependencies = [
  "digest 0.8.1",
  "env_logger 0.7.1",
  "futures 0.3.5",
+ "itertools 0.9.0",
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.8",

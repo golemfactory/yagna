@@ -37,7 +37,10 @@ pub enum DiscoveryError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum DiscoveryRemoteError {}
+pub enum DiscoveryRemoteError {
+    #[error("Internal error: {0}.")]
+    InternalError(String),
+}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum DiscoveryInitError {
@@ -72,8 +75,8 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
-    /// Broadcasts offer to other nodes in network. Connected nodes will
-    /// get call to function bound in `offer_received`.
+    /// Broadcasts Offers to other nodes in network. Connected nodes will
+    /// get call to function bound as `OfferIdsReceived`.
     pub async fn broadcast_offers(
         &self,
         offers: Vec<SubscriptionId>,
