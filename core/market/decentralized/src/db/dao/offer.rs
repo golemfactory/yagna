@@ -53,40 +53,29 @@ impl<'c> OfferDao<'c> {
         .await
     }
 
-    pub async fn batch_select(
-        &self,
-        ids: Vec<SubscriptionId>,
-        validation_ts: NaiveDateTime,
-    ) -> DbResult<Vec<Offer>> {
-        readonly_transaction(self.pool, move |conn| {
-            Ok(dsl::market_offer
-                .filter(dsl::id.eq_any(ids))
-                .filter(dsl::id.ne_all(
-                    dsl_unsubscribed::market_offer_unsubscribed.select(dsl_unsubscribed::id),
-                ))
-                .filter(dsl::expiration_ts.ge(validation_ts))
-                .load::<Offer>(conn)?)
-        })
-        .await
-    }
-
     pub async fn get_offers(
         &self,
+        ids: Option<Vec<SubscriptionId>>,
         node_id: Option<NodeId>,
         validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<Offer>> {
         readonly_transaction(self.pool, move |conn| {
-            let active_offers = dsl::market_offer
+            let mut query = dsl::market_offer
                 .filter(dsl::id.ne_all(
                     dsl_unsubscribed::market_offer_unsubscribed.select(dsl_unsubscribed::id),
                 ))
-                .filter(dsl::expiration_ts.ge(validation_ts));
-            Ok(match node_id {
-                Some(ident) => active_offers
-                    .filter(dsl::node_id.eq(ident))
-                    .load::<Offer>(conn)?,
-                _ => active_offers.load::<Offer>(conn)?,
-            })
+                .filter(dsl::expiration_ts.ge(validation_ts))
+                .into_boxed();
+
+            if let Some(ident) = node_id {
+                query = query.filter(dsl::node_id.eq(ident));
+            };
+
+            if let Some(ids) = ids {
+                query = query.filter(dsl::id.eq_any(ids));
+            };
+
+            Ok(query.load::<Offer>(conn)?)
         })
         .await
     }

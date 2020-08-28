@@ -73,7 +73,7 @@ impl SubscriptionStore {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers(id, Utc::now().naive_utc())
+            .get_offers(None, id, Utc::now().naive_utc())
             .await
             .map_err(QueryOffersError::from)?)
     }
@@ -118,7 +118,7 @@ impl SubscriptionStore {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .batch_select(ids, Utc::now().naive_utc())
+            .get_offers(Some(ids), None, Utc::now().naive_utc())
             .await
             .map_err(QueryOffersError::from)?)
     }
