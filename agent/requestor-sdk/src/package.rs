@@ -67,7 +67,7 @@ impl Package {
 
 #[derive(Clone)]
 pub enum Image {
-    WebAssembly(semver::Version),
+    Wasm(semver::Version),
     GVMKit(semver::Version),
     Sgx(semver::Version),
 }
@@ -75,7 +75,7 @@ pub enum Image {
 impl Image {
     pub fn runtime_name(&self) -> &'static str {
         match self {
-            Image::WebAssembly(_) => "wasmtime",
+            Image::Wasm(_) => "wasmtime",
             Image::GVMKit(_) => "vm",
             Image::Sgx(_) => "sgx",
         }
@@ -83,9 +83,7 @@ impl Image {
 
     pub fn runtime_version(&self) -> semver::Version {
         match self {
-            Image::WebAssembly(version) | Image::GVMKit(version) | Image::Sgx(version) => {
-                version.clone()
-            }
+            Image::Wasm(version) | Image::GVMKit(version) | Image::Sgx(version) => version.clone(),
         }
     }
 }

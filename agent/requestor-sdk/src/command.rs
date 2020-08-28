@@ -20,17 +20,17 @@ pub enum Command {
     Run(Vec<String>),
     /// Transfer from `from` url to `to` url.
     ///
-    /// TODO explain which urls are valid: [`file:/`, `http://`, `gftp:/`, `container:/`].
+    /// TODO explain which urls are valid: [`http://`, `gftp://`, `container:`].
     Transfer {
         from: String,
         to: String,
     },
-    /// Path to file(s) to upload.
+    /// Path to file(s) to upload via gftp.
     Upload {
         from: PathBuf,
         to: String,
     },
-    /// Path to file(s) to download.
+    /// Path to file(s) to download via gftp.
     Download {
         from: String,
         to: PathBuf,

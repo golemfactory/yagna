@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::command::ExeScript;
 use crate::CommandList;
 use anyhow::Result;
@@ -25,9 +27,9 @@ impl Activity {
         api: ActivityRequestorApi,
         agreement_id: String,
         task: CommandList,
-        tee: bool,
+        secure: bool,
     ) -> Result<Self> {
-        let (kind, activity_id) = match tee {
+        let (kind, activity_id) = match secure {
             true => {
                 let secure_api = api.control().create_secure_activity(&agreement_id).await?;
                 let activity_id = secure_api.activity_id();
@@ -48,9 +50,15 @@ impl Activity {
             script: task.into_exe_script().await?,
         })
     }
-}
 
-impl Activity {
+    pub async fn destroy(&self) -> Result<()> {
+        Ok(self
+            .api
+            .control()
+            .destroy_activity(&self.activity_id)
+            .await?)
+    }
+
     pub async fn exec(&self) -> Result<String> {
         let batch_id = match &self.kind {
             ActivityKind::Default => {
@@ -92,11 +100,7 @@ impl Activity {
         Ok(self.api.state().get_state(&self.activity_id).await?)
     }
 
-    pub async fn destroy(&self) -> Result<()> {
-        Ok(self
-            .api
-            .control()
-            .destroy_activity(&self.activity_id)
-            .await?)
+    pub async fn get_usage(&self) -> Result<Vec<f64>> {
+        Ok(self.api.state().get_usage(&self.activity_id).await?)
     }
 }

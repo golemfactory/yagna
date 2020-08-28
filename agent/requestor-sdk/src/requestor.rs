@@ -16,34 +16,24 @@ use std::{
 use tokio::time;
 use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
 use ya_client::activity::ActivityRequestorApi;
-use ya_client::{
-    market::MarketRequestorApi,
-    model::{
-        self,
-        activity::CommandResult,
-        market::{
-            proposal::{Proposal, State},
-            AgreementProposal, Demand, RequestorEvent,
-        },
+use ya_client::model::{
+    self,
+    activity::CommandResult,
+    market::{
+        proposal::{Proposal, State},
+        AgreementProposal, Demand, RequestorEvent,
     },
-    payment::PaymentRequestorApi,
-    web::WebClient,
 };
+use ya_client::{market::MarketRequestorApi, payment::PaymentRequestorApi, web::WebClient};
 
 const MAX_CONCURRENT_JOBS: usize = 64;
-static START: Once = Once::new();
+static INIT_LOGGER: Once = Once::new();
 
 #[derive(Clone, Debug, MessageResponse)]
 enum ComputationState {
     AwaitingProviders,
     AwaitingCompletion,
-    Done,
-}
-
-impl Default for ComputationState {
-    fn default() -> Self {
-        ComputationState::AwaitingProviders
-    }
+    Finished,
 }
 
 #[derive(Clone, Debug)]
@@ -62,13 +52,21 @@ impl Default for ComputationTracker {
 }
 
 #[derive(Clone)]
+struct ProposalCtx {
+    requestor: Addr<Requestor>,
+    payment_manager: Addr<PaymentManager>,
+    activity_api: ActivityRequestorApi,
+    market_api: MarketRequestorApi,
+}
+
+#[derive(Clone)]
 pub struct Requestor {
     name: String,
     subnet: String,
     image_type: Image,
     task_package: Package,
     constraints: Constraints,
-    tee: bool,
+    secure: bool,
     tasks: Vec<CommandList>,
     timeout: Duration,
     budget: BigDecimal,
@@ -79,31 +77,34 @@ pub struct Requestor {
 
 impl Requestor {
     /// Creates a new requestor from `Image` and `Package` with given `name`.
-    pub fn new<T: Into<String>>(name: T, image_type: Image, task_package: Package) -> Self {
-        START.call_once(|| {
+    pub fn new(name: impl ToString, image_type: Image, task_package: Package) -> Self {
+        INIT_LOGGER.call_once(|| {
             dotenv::dotenv().ok();
             env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
         });
 
         Self {
-            name: name.into(),
+            name: name.to_string(),
             subnet: "testnet".into(),
             image_type,
             task_package,
             constraints: constraints!["golem.com.pricing.model" == "linear"], /* TODO: other models */
-            tee: false,
+            secure: false,
             tasks: vec![],
-            timeout: Duration::from_secs(60),
+            timeout: Duration::from_secs(300),
             budget: 0.into(),
-            state: ComputationState::default(),
+            state: ComputationState::AwaitingProviders,
             tracker: ComputationTracker::default(),
             on_completed: None,
         }
     }
 
     /// Compute in a Trusted Execution Environment.
-    pub fn tee(self) -> Self {
-        Self { tee: true, ..self }
+    pub fn secure(self) -> Self {
+        Self {
+            secure: true,
+            ..self
+        }
     }
 
     /// `Demand`s will be handled only by providers in this subnetwork.
@@ -152,7 +153,8 @@ impl Requestor {
 
     /// Runs all tasks asynchronously.
     pub async fn run(self) -> Result<()> {
-        let client = web_client()?;
+        let app_key = std::env::var("YAGNA_APPKEY")?;
+        let client = WebClient::builder().auth_token(&app_key).build();
         let market_api: MarketRequestorApi = client.interface()?;
         let payment_api: PaymentRequestorApi = client.interface()?;
         let activity_api: ActivityRequestorApi = client.interface()?;
@@ -172,7 +174,7 @@ impl Requestor {
         let subscription_id = market_api.subscribe(&demand).await?;
         log::info!("subscribed to market (id: [{}])", subscription_id);
 
-        let tee = self.tee;
+        let secure = self.secure;
         let timeout = self.timeout;
         let deadline = Instant::now() + timeout;
 
@@ -180,7 +182,7 @@ impl Requestor {
         let requestor = self.start();
 
         let (proposal_tx, proposal_rx) = mpsc::channel(MAX_CONCURRENT_JOBS);
-        Arbiter::spawn(process_events(
+        Arbiter::spawn(process_market_events(
             requestor.clone(),
             market_api.clone(),
             subscription_id.clone(),
@@ -219,7 +221,7 @@ impl Requestor {
                             ctx.activity_api.clone(),
                             agr_id.clone(),
                             task.clone(),
-                            tee,
+                            secure,
                         );
                         async move {
                             let activity = activity_fut.await.map_err(|e| {
@@ -262,19 +264,19 @@ impl Requestor {
         let wait_fut = async move {
             loop {
                 match requestor.send(GetState).await {
-                    Ok(ComputationState::Done) => {
+                    Ok(ComputationState::Finished) => {
                         log::info!("all activities finished");
                         break;
                     }
                     Err(e) => {
                         log::error!("unable to retrieve state: internal error: {:?}", e);
-                        requestor.do_send(SetState(ComputationState::Done));
+                        requestor.do_send(SetState(ComputationState::Finished));
                         break;
                     }
                     _ => {
                         if Instant::now() > deadline {
                             log::warn!("computation timed out after {:?}s", timeout.as_secs());
-                            requestor.do_send(SetState(ComputationState::Done));
+                            requestor.do_send(SetState(ComputationState::Finished));
                             break;
                         }
                     }
@@ -285,7 +287,7 @@ impl Requestor {
 
         let ctrl_c = actix_rt::signal::ctrl_c().then(|r| async move {
             match r {
-                Ok(_) => Ok(log::warn!("interrupted: ctrl-c detected!")),
+                Ok(_) => Ok(log::warn!("interrupted with ctrl-c")),
                 Err(e) => Err(anyhow::Error::from(e)),
             }
         });
@@ -342,7 +344,7 @@ impl Requestor {
     }
 }
 
-async fn process_events(
+async fn process_market_events(
     requestor: Addr<Requestor>,
     market_api: MarketRequestorApi,
     subscription_id: String,
@@ -360,7 +362,7 @@ async fn process_events(
 
         for event in events {
             match requestor.send(GetState).await {
-                Ok(ComputationState::Done) => break 'outer,
+                Ok(ComputationState::Finished) => break 'outer,
                 Ok(ComputationState::AwaitingCompletion) => continue,
                 Ok(ComputationState::AwaitingProviders) => (),
                 Err(e) => {
@@ -448,72 +450,58 @@ async fn monitor_activity(
     activity: Activity,
     payment_manager: Addr<PaymentManager>,
 ) -> Result<Vec<String>> {
-    let script = activity.script.clone();
     let activity_id = activity.activity_id.clone();
-    let batch_id = activity.exec().await.map_err(|e| {
-        anyhow::anyhow!(
-            "activity [{}] error: exec script failed: {}",
-            activity_id,
-            e
-        )
-    })?;
+    let batch_id = activity
+        .exec()
+        .await
+        .map_err(|e| anyhow::anyhow!("exec failed: {}", e))?;
 
-    let mut all_res = vec![];
+    let delay = Duration::from_secs(3);
+    let mut results = vec![];
     loop {
-        match activity.get_state().await {
-            Ok(state) => match state.alive() {
-                true => state,
-                false => {
-                    log::warn!("activity [{}] is no longer alive", activity_id);
-                    break;
-                }
-            },
-            Err(e) => {
-                log::error!("activity [{}] get_state error: {}", activity_id, e);
-                break;
-            }
+        time::delay_for(delay).await;
+        if !activity
+            .get_state()
+            .await
+            .map_err(|e| anyhow::anyhow!("get_state failed: {}", e))?
+            .alive()
+        {
+            log::warn!("activity [{}] is no longer alive", activity_id);
+            break;
         };
-
-        all_res = activity.get_exec_batch_results(&batch_id).await?;
-        log::debug!("batch_results: {}", all_res.len());
-        if let Some(last) = all_res.last() {
-            if last.is_batch_finished {
-                break;
-            }
-        }
-
-        let delay = time::Instant::now() + Duration::from_secs(3);
-        time::delay_until(delay).await;
-    }
-
-    if all_res.len() == script.num_cmds
-        && all_res
-            .last()
-            .map(|l| l.result == CommandResult::Ok)
-            .unwrap_or(false)
-    {
-        log::info!("activity [{}] finished", activity_id);
-    } else {
-        log::warn!("activity [{}] interrupted", activity_id);
-    }
-
-    let only_stdout = |txt: String| {
-        match txt.starts_with("stdout: ") {
-            true => match txt.find("\nstderr:") {
-                Some(pos) => &txt[8..pos],
-                None => &txt[8..],
+        results = match activity.get_exec_batch_results(&batch_id).await {
+            Ok(results) => results,
+            Err(e) => match e.to_string().as_str() {
+                "Timeout" => continue,
+                _ => return Err(anyhow::anyhow!("get results error: {}", e)),
             },
-            false => "",
+        };
+        if results.last().map(|r| r.is_batch_finished).unwrap_or(false) {
+            log::info!("activity [{}] finished", activity_id);
+            break;
         }
-        .to_string()
-    };
+    }
 
-    let output = all_res
+    if results.len() != activity.script.num_cmds {
+        log::warn!("activity [{}] interrupted", activity_id);
+    } else if results
+        .last()
+        .map(|r| r.result != CommandResult::Ok)
+        .unwrap_or(false)
+    {
+        log::warn!("activity [{}] failed", activity_id);
+    }
+
+    activity
+        .destroy()
+        .await
+        .map_err(|e| anyhow::anyhow!("destroy failed: {}", e))?;
+
+    let output = results
         .into_iter()
         .enumerate()
-        .filter_map(|(i, r)| match script.run_indices.contains(&i) {
-            // stdout: {}\nstdout;
-            true => Some(r.message.unwrap_or("".to_string())).map(only_stdout),
+        .filter_map(|(i, r)| match activity.script.run_indices.contains(&i) {
+            true => Some(r.message.unwrap_or_else(String::new)),
             false => None,
         })
         .collect::<Vec<_>>();
@@ -524,7 +512,6 @@ async fn monitor_activity(
         })
         .await?;
 
-    activity.destroy().await?;
     Ok(output)
 }
 
@@ -532,95 +519,84 @@ impl Actor for Requestor {
     type Context = Context<Self>;
 }
 
+macro_rules! actix_handler {
+    ($actor:ty, $message:ty, $handle:expr) => {
+        impl Handler<$message> for $actor {
+            type Result = <$message as actix::Message>::Result;
+
+            fn handle(&mut self, msg: $message, ctx: &mut Context<Self>) -> Self::Result {
+                $handle(self, msg, ctx)
+            }
+        }
+    };
+}
+
 #[derive(Message)]
 #[rtype(result = "ComputationState")]
 struct GetState;
-
-impl Handler<GetState> for Requestor {
-    type Result = <GetState as Message>::Result;
-
-    fn handle(&mut self, _: GetState, _: &mut Context<Self>) -> Self::Result {
-        self.state.clone()
-    }
-}
+actix_handler!(Requestor, GetState, |actor: &mut Requestor, _, _| {
+    actor.state.clone()
+});
 
 #[derive(Message)]
 #[rtype(result = "()")]
 struct SetState(ComputationState);
-
-impl Handler<SetState> for Requestor {
-    type Result = <SetState as Message>::Result;
-
-    fn handle(&mut self, msg: SetState, _: &mut Context<Self>) -> Self::Result {
-        self.state = msg.0;
+actix_handler!(
+    Requestor,
+    SetState,
+    |actor: &mut Requestor, msg: SetState, _| {
+        actor.state = msg.0;
     }
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-struct ReturnTask(CommandList);
-
-impl Handler<ReturnTask> for Requestor {
-    type Result = <ReturnTask as Message>::Result;
-
-    fn handle(&mut self, msg: ReturnTask, _: &mut Context<Self>) -> Self::Result {
-        self.tasks.push(msg.0);
-        self.state = ComputationState::AwaitingProviders;
-    }
-}
+);
 
 #[derive(Message)]
 #[rtype(result = "Result<CommandList>")]
 struct TakeTask;
-
-impl Handler<TakeTask> for Requestor {
-    type Result = <TakeTask as Message>::Result;
-
-    fn handle(&mut self, _: TakeTask, _: &mut Context<Self>) -> Self::Result {
-        match self.tasks.pop() {
-            Some(task) => {
-                if self.tasks.len() == 0 {
-                    self.state = ComputationState::AwaitingCompletion;
-                }
-                Ok(task)
+actix_handler!(Requestor, TakeTask, |actor: &mut Requestor, _, _| {
+    match actor.tasks.pop() {
+        Some(task) => {
+            if actor.tasks.len() == 0 {
+                actor.state = ComputationState::AwaitingCompletion;
             }
-            None => Err(anyhow::anyhow!("no more tasks")),
+            Ok(task)
         }
+        None => Err(anyhow::anyhow!("no more tasks")),
     }
-}
+});
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct ReturnTask(CommandList);
+actix_handler!(
+    Requestor,
+    ReturnTask,
+    |actor: &mut Requestor, msg: ReturnTask, _| {
+        actor.tasks.push(msg.0);
+        actor.state = ComputationState::AwaitingProviders;
+    }
+);
 
 #[derive(Message)]
 #[rtype(result = "()")]
 struct FinishTask(String, Vec<String>);
+actix_handler!(
+    Requestor,
+    FinishTask,
+    |actor: &mut Requestor, msg: FinishTask, _| {
+        let track = &mut actor.tracker;
+        track.completed += 1;
 
-impl Handler<FinishTask> for Requestor {
-    type Result = <FinishTask as Message>::Result;
-
-    fn handle(&mut self, msg: FinishTask, _: &mut Context<Self>) -> Self::Result {
-        self.tracker.completed += 1;
-        log::warn!(
-            "Completed {} out of {}",
-            self.tracker.completed,
-            self.tracker.initial
+        log::info!(
+            "completed {} tasks out of {}",
+            track.completed,
+            track.initial
         );
-        if self.tracker.completed == self.tracker.initial {
-            self.state = ComputationState::Done;
+
+        if track.completed == track.initial {
+            actor.state = ComputationState::Finished;
         }
-        if let Some(f) = &self.on_completed {
+        if let Some(f) = &actor.on_completed {
             f(msg.0, msg.1)
         }
     }
-}
-
-#[derive(Clone)]
-struct ProposalCtx {
-    requestor: Addr<Requestor>,
-    payment_manager: Addr<PaymentManager>,
-    activity_api: ActivityRequestorApi,
-    market_api: MarketRequestorApi,
-}
-
-fn web_client() -> Result<WebClient> {
-    let app_key = std::env::var("YAGNA_APPKEY")?;
-    Ok(WebClient::builder().auth_token(&app_key).build())
-}
+);
