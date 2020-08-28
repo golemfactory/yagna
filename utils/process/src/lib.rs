@@ -14,6 +14,25 @@ use {
     shared_child::unix::SharedChildExt,
 };
 
+#[cfg(unix)]
+pub trait CommandSetSid<T> {
+    fn setsid(&mut self) -> &mut T;
+}
+
+#[cfg(unix)]
+impl CommandSetSid<Command> for Command {
+    fn setsid(&mut self) -> &mut Command {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            self.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+        self
+    }
+}
+
 #[derive(Display)]
 pub enum ExeUnitExitStatus {
     #[display(fmt = "Aborted - {}", _0)]

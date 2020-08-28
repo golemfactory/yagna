@@ -34,6 +34,13 @@ impl ExeUnitInstance {
         let mut command = Command::new(&binary_path);
         command.args(args).current_dir(working_dir);
 
+        #[cfg(unix)]
+        {
+            // executes the command in its own process group
+            use ya_utils_process::CommandSetSid;
+            command.setsid();
+        }
+
         let child = ProcessHandle::new(&mut command).map_err(|error| {
             anyhow!(
                 "Can't spawn ExeUnit [{}] from binary [{}] in working directory [{}]. Error: {}",
