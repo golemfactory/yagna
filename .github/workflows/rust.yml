@@ -128,8 +128,9 @@ jobs:
           name: Yagna ${{ runner.os }}
           path: build
 
-#    - name: Clippy
-#      uses: actions-rs/clippy-check@v1
-#      with:
-#        token: ${{ secrets.GITHUB_TOKEN }}
-#        args: --all-features
+      - name: Clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # TODO: resolve critical errors and remove "-W clippy::all"
+          args: --workspace --all-targets -- -W clippy::all
