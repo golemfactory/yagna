@@ -5229,7 +5229,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=4259165b86c13266f79098ac02e6590c39dc3012#4259165b86c13266f79098ac02e6590c39dc3012"
 dependencies = [
  "awc",
  "backtrace",
@@ -5250,7 +5250,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=91dfde2b204a24031f137151a1af300029271832#91dfde2b204a24031f137151a1af300029271832"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=4259165b86c13266f79098ac02e6590c39dc3012#4259165b86c13266f79098ac02e6590c39dc3012"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5622,6 +5622,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-util",
  "humantime 2.0.1",
+ "lazy_static",
  "libc",
  "log 0.4.8",
  "log-derive",
@@ -5690,6 +5691,7 @@ dependencies = [
  "semver 0.10.0",
  "serde_json",
  "sha3 0.9.1",
+ "structopt",
  "tokio 0.2.21",
  "url 2.1.1",
  "ya-agreement-utils",
@@ -5975,6 +5977,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-utils-path",
 ]
 
 [[package]]
