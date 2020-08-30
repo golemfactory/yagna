@@ -77,10 +77,11 @@ Care must be taken when confidential or personal data need to be recorded in log
 
 **Examples:**
 - Uncaught exceptions/unhandled errors
+- Resources exhausted (eg. out of memory, out of storage space)
 
 ### ERROR
 **Purpose:** 
-- Indicate that app is unable to perform the requested action and stops trying.
+- Indicate that app is unable to perform the requested **action** and stops trying.
 
 **Audience:**
 - Users
@@ -88,6 +89,8 @@ Care must be taken when confidential or personal data need to be recorded in log
 - Core system developers
 
 **Examples:**
+- REST API and CLI command processing errors
+- Payment-related (eg. blockchain interaction) errors
 
 ### WARN
 **Purpose:**
@@ -100,6 +103,8 @@ Care must be taken when confidential or personal data need to be recorded in log
 - Core system developers
 
 **Examples:**
+- Errors in actions which will be retried
+- Invalid parameters, attributes, addresses which will be ignored/superseded by eg. default values, etc. 
 
 ### INFO
 **Purpose:**
