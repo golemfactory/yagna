@@ -40,8 +40,15 @@ pub struct Create {
 
 impl RpcMessage for Create {
     const ID: &'static str = "CreateActivity";
-    type Item = String;
+    type Item = CreateResponse;
     type Error = RpcMessageError;
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateResponse {
+    pub activity_id: String,
+    pub credentials: Option<local::Credentials>,
 }
 
 /// Destroy activity.
@@ -102,21 +109,6 @@ pub mod sgx {
         const ID: &'static str = "CallEncryptedService";
         type Item = Vec<u8>;
         type Error = RpcMessageError;
-    }
-
-    #[derive(Clone, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    pub enum Request {
-        Exec(super::Exec),
-        GetExecBatchResults(super::GetExecBatchResults),
-    }
-
-    #[derive(Clone, Serialize, Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    pub enum Response {
-        Exec(Result<String, RpcMessageError>),
-        GetExecBatchResults(Result<Vec<super::ExeScriptCommandResult>, RpcMessageError>),
-        Error(RpcMessageError),
     }
 }
 
@@ -188,16 +180,20 @@ pub mod local {
         pub state: ActivityState,
         pub timeout: Option<f32>,
         #[serde(default)]
-        pub credentials: Option<Box<Credentials>>,
+        pub credentials: Option<Credentials>,
     }
 
     impl SetState {
-        pub fn new(activity_id: String, state: ActivityState) -> Self {
+        pub fn new(
+            activity_id: String,
+            state: ActivityState,
+            credentials: Option<Credentials>,
+        ) -> Self {
             SetState {
                 activity_id,
                 state,
                 timeout: Default::default(),
-                credentials: Default::default(),
+                credentials,
             }
         }
     }

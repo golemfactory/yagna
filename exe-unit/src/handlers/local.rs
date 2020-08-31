@@ -6,7 +6,7 @@ use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
 use futures::FutureExt;
-use ya_client_model::activity::ActivityState;
+use ya_client_model::activity;
 use ya_core_model::activity::local::SetState as SetActivityState;
 
 impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
@@ -37,21 +37,64 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 self.state.inner = update.state.clone();
 
                 if let Some(id) = &self.ctx.activity_id {
+                    let credentials = match &update.state {
+                        activity::StatePair(activity::State::Initialized, None) => {
+                            self.ctx.credentials.clone()
+                        }
+                        _ => None,
+                    };
                     let fut = report(
                         self.ctx.report_url.clone().unwrap(),
                         SetActivityState::new(
                             id.clone(),
-                            ActivityState {
+                            activity::ActivityState {
                                 state: update.state,
                                 reason: update.reason,
                                 error_message: None,
                             },
+                            credentials,
                         ),
                     );
                     ctx.spawn(fut.into_actor(self));
                 }
             }
         }
+    }
+}
+
+impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
+    type Result = ResponseActFuture<Self, <Initialize as Message>::Result>;
+
+    fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
+        #[cfg(feature = "sgx")]
+        let crypto = self.ctx.crypto.clone();
+        let fut = async move {
+            Ok::<_, Error>({
+                #[cfg(feature = "sgx")]
+                {
+                    use ya_core_model::activity::local::Credentials;
+                    // TODO: attestation
+                    Some(Credentials::Sgx {
+                        requestor: crypto.requestor_pub_key.serialize().to_vec(),
+                        enclave: crypto.pub_key.serialize().to_vec(),
+                        payload_sha3: [0u8; 32],
+                        enclave_hash: [0u8; 32],
+                        ias_report: String::new(),
+                        ias_sig: Vec::new(),
+                        session_key: Vec::new(),
+                    })
+                }
+                #[cfg(not(feature = "sgx"))]
+                None
+            })
+        }
+        .into_actor(self)
+        .map(move |result, actor, _| {
+            actor.ctx.credentials = result?;
+            Ok(())
+        });
+
+        Box::new(fut)
     }
 }
 

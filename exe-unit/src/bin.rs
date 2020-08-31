@@ -107,6 +107,7 @@ fn init_crypto(
 
 fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+    #[allow(unused_mut)]
     let mut cli: Cli = Cli::from_args();
 
     if !cli.agreement.exists() {
@@ -143,15 +144,16 @@ fn run() -> anyhow::Result<()> {
     let mut ctx = ExeUnitContext {
         activity_id: None,
         report_url: None,
+        credentials: None,
         agreement,
         work_dir,
         cache_dir,
         runtime_args,
         #[cfg(feature = "sgx")]
-        crypto: {
-            let sec_key = cli.sec_key.replace("<hidden>".into());
-            init_crypto(sec_key, cli.requestor_pub_key.clone())?
-        },
+        crypto: init_crypto(
+            cli.sec_key.replace("<hidden>".into()),
+            cli.requestor_pub_key.clone(),
+        )?,
     };
 
     log::debug!("CLI args: {:?}", cli);

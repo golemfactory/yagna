@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use futures::channel::oneshot;
-use futures::TryFutureExt;
+use futures::{FutureExt, TryFutureExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -9,6 +9,7 @@ use ya_client_model::activity::{
     ExeScriptCommandResult, State,
 };
 use ya_core_model::activity;
+use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
@@ -314,7 +315,6 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             let srv_id = activity::exeunit::bus_id(activity_id);
             actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
 
             #[cfg(feature = "sgx")]
             {
@@ -327,6 +327,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             {
                 actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
                 actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
+                actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
             }
         }
 
@@ -334,8 +335,15 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             .finish()
             .spawn(ctx);
 
-        addr.do_send(SetState::from(State::Initialized));
-        log::info!("Started");
+        let fut = async move {
+            addr.send(Initialize).await?.map_err(Error::from)?;
+            addr.send(SetState::from(State::Initialized)).await?;
+            Ok(())
+        }
+        .map_err(|e: Error| panic!("Supervisor initialization error: {}", e))
+        .map(|_| log::info!("Started"));
+
+        ctx.spawn(fut.into_actor(self));
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -352,6 +360,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 pub struct ExeUnitContext {
     pub activity_id: Option<String>,
     pub report_url: Option<String>,
+    pub credentials: Option<Credentials>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,

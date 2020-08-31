@@ -18,6 +18,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
+use ya_core_model::activity::local::Credentials;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -86,28 +87,52 @@ async fn create_activity_gsb(
             &activity_id,
             &provider_id,
             ActivityEventType::CreateActivity,
+            msg.requestor_pub_key,
         )
         .await
         .map_err(Error::from)?;
 
-    db.as_dao::<ActivityStateDao>()
-        .get_state_wait(
-            &activity_id,
-            vec![State::Initialized.into(), State::Terminated.into()],
-        )
-        .timeout(msg.timeout)
+    let credentials = activity_credentials(db.clone(), &activity_id, &provider_id, msg.timeout)
         .await
-        .map_err(|e| {
-            Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, &provider_id));
-            Error::from(e)
-        })?
         .map_err(|e| {
             Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, &provider_id));
             Error::from(e)
         })?;
 
-    Arbiter::spawn(monitor_activity(db, activity_id.clone(), provider_id));
-    Ok(activity_id)
+    Ok(activity::CreateResponse {
+        activity_id,
+        credentials,
+    })
+}
+
+async fn activity_credentials(
+    db: DbExecutor,
+    activity_id: &String,
+    provider_id: &String,
+    timeout: Option<f32>,
+) -> Result<Option<Credentials>, Error> {
+    db.as_dao::<ActivityStateDao>()
+        .get_state_wait(
+            &activity_id,
+            vec![State::Initialized.into(), State::Terminated.into()],
+        )
+        .timeout(timeout)
+        .await??;
+
+    Arbiter::spawn(monitor_activity(
+        db.clone(),
+        activity_id.clone(),
+        provider_id.clone(),
+    ));
+
+    let credentials = db
+        .as_dao::<ActivityCredentialsDao>()
+        .get(&activity_id)
+        .await?
+        .map(|c| serde_json::from_str(&c.credentials).map_err(|e| Error::Service(e.to_string())))
+        .transpose()?;
+
+    Ok(credentials)
 }
 
 /// Destroys given Activity.
@@ -128,6 +153,7 @@ async fn destroy_activity_gsb(
             &msg.activity_id,
             agreement.provider_id().map_err(Error::from)?,
             ActivityEventType::DestroyActivity,
+            None,
         )
         .await
         .map_err(Error::from)?;
@@ -191,6 +217,7 @@ fn enqueue_destroy_evt(
                 &activity_id,
                 &provider_id,
                 ActivityEventType::DestroyActivity,
+                None,
             )
             .await
         {
@@ -272,6 +299,12 @@ mod local {
         _caller: String,
         msg: activity::local::SetState,
     ) -> RpcMessageResult<activity::local::SetState> {
+        if let Some(credentials) = msg.credentials {
+            db.as_dao::<ActivityCredentialsDao>()
+                .set(&msg.activity_id, credentials)
+                .await
+                .map_err(Error::from)?;
+        }
         set_persisted_state(&db, &msg.activity_id, msg.state).await?;
         Ok(())
     }

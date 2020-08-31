@@ -5,8 +5,8 @@ use ya_client_model::activity::encrypted::EncryptionCtx;
 #[derive(Clone)]
 pub struct Crypto {
     sec_key: SecretKey,
-    pub_key: PublicKey,
-    requestor_pub_key: PublicKey,
+    pub pub_key: PublicKey,
+    pub requestor_pub_key: PublicKey,
 }
 
 impl Crypto {
@@ -56,10 +56,5 @@ impl Crypto {
 
     pub fn ctx(&mut self) -> EncryptionCtx {
         EncryptionCtx::new(&self.requestor_pub_key, &self.sec_key)
-    }
-
-    pub fn public_key(&self) -> String {
-        let key = self.pub_key.serialize().to_vec();
-        hex::encode(&key)
     }
 }

@@ -153,6 +153,10 @@ impl From<proto::response::Error> for RuntimeCommandResult {
     }
 }
 
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Initialize;
+
 #[derive(Clone, Debug, PartialEq, Message)]
 #[rtype(result = "()")]
 pub struct Register<Svc>(pub Addr<Svc>)

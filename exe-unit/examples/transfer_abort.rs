@@ -166,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
     let exe_ctx = ExeUnitContext {
         activity_id: None,
         report_url: None,
+        credentials: None,
         agreement,
         work_dir,
         cache_dir,
