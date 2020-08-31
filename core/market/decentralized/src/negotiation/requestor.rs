@@ -41,7 +41,7 @@ pub enum ApprovalStatus {
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
-    common: CommonBroker,
+    pub common: CommonBroker,
     api: NegotiationApi,
     agreement_notifier: EventNotifier<AgreementId>,
 }

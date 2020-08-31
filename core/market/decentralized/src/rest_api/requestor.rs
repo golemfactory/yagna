@@ -102,11 +102,15 @@ async fn counter_proposal(
 
 #[actix_web::get("/demands/{subscription_id}/proposals/{proposal_id}")]
 async fn get_proposal(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathSubscriptionProposal>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    path: Path<PathSubscriptionProposal>,
+    id: Identity,
+) -> impl Responder {
+    let PathSubscriptionProposal { proposal_id, .. } = path.into_inner();
+    market
+        .get_proposal(&proposal_id, &id)
+        .await
+        .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 
 #[actix_web::delete("/demands/{subscription_id}/proposals/{proposal_id}")]

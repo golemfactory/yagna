@@ -1,11 +1,9 @@
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use thiserror::Error;
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
-use ya_persistence::executor::Error as DbError;
 
 use crate::db::dao::{EventsDao, ProposalDao};
 use crate::db::model::{MarketEvent, OwnerType, Proposal};
@@ -13,7 +11,7 @@ use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
-    error::{ProposalError, QueryEventsError},
+    error::{GetProposalError, ProposalError, QueryEventsError},
     EventNotifier,
 };
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
@@ -191,12 +189,4 @@ impl CommonBroker {
         self.notifier.notify(&subscription_id).await;
         Ok(())
     }
-}
-
-#[derive(Error, Debug)]
-pub enum GetProposalError {
-    #[error("Proposal [{0}] not found.")]
-    NotFound(ProposalId),
-    #[error("Failed to get Proposal [{0}]. Error: [{1}]")]
-    FailedGetFromDb(ProposalId, DbError),
 }

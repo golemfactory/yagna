@@ -8,7 +8,7 @@ use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalEr
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
-    negotiation::error::{NegotiationError, QueryEventsError},
+    negotiation::error::{GetProposalError, NegotiationError, QueryEventsError},
 };
 
 impl From<MarketError> for actix_web::HttpResponse {
@@ -25,6 +25,7 @@ impl ResponseError for MarketError {
             MarketError::QueryOffersError(e) => e.error_response(),
             MarketError::DemandError(e) => e.error_response(),
             MarketError::Negotiation(e) => e.error_response(),
+            MarketError::GetProposal(e) => e.error_response(),
             MarketError::InternalError(e) => HttpResponse::InternalServerError().json(e),
         }
     }
@@ -167,6 +168,18 @@ impl ResponseError for WaitForApprovalError {
             }
             WaitForApprovalError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
             WaitForApprovalError::InternalError(_) | WaitForApprovalError::FailedGetFromDb(..) => {
+                HttpResponse::InternalServerError().json(msg)
+            }
+        }
+    }
+}
+
+impl ResponseError for GetProposalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            GetProposalError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            GetProposalError::FailedGetFromDb { .. } => {
                 HttpResponse::InternalServerError().json(msg)
             }
         }

@@ -1,6 +1,5 @@
 use thiserror::Error;
 
-use super::common::GetProposalError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
@@ -9,6 +8,14 @@ use crate::protocol::negotiation::error::{
     AgreementError as ProtocolAgreementError, ApproveAgreementError,
     CounterProposalError as ProtocolProposalError, NegotiationApiInitError,
 };
+
+#[derive(Error, Debug)]
+pub enum GetProposalError {
+    #[error("Proposal [{0}] not found.")]
+    NotFound(ProposalId),
+    #[error("Failed to get Proposal [{0}]. Error: [{1}]")]
+    FailedGetFromDb(ProposalId, DbError),
+}
 
 #[derive(Error, Debug)]
 pub enum NegotiationError {}

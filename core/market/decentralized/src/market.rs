@@ -2,17 +2,17 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::db::model::SubscriptionId;
+use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
-use crate::negotiation::error::{NegotiationError, NegotiationInitError};
+use crate::negotiation::error::{GetProposalError, NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 
 use crate::rest_api;
 
-use ya_client::model::market::{Demand, Offer};
+use ya_client::model::market::{Demand, Offer, Proposal};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{private, BUS_ID};
 use ya_persistence::executor::DbExecutor;
@@ -34,6 +34,8 @@ pub enum MarketError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
+    #[error(transparent)]
+    GetProposal(#[from] GetProposalError),
     #[error("Internal error: {0}.")]
     InternalError(#[from] ErrorMessage),
 }
@@ -157,6 +159,22 @@ impl MarketService {
         self.requestor_engine.unsubscribe_demand(demand_id).await?;
         // TODO: shouldn't remove precede negotiation unsubscribe?
         Ok(self.matcher.unsubscribe_demand(demand_id, id).await?)
+    }
+
+    pub async fn get_proposal(
+        &self,
+        proposal_id: &ProposalId,
+        _id: &Identity,
+    ) -> Result<Proposal, MarketError> {
+        // TODO: Autorization
+        // This could be both `requestor_engine` and `provider_engine`,
+        // because CommonBroker has the same implementation.
+        Ok(self
+            .requestor_engine
+            .common
+            .get_proposal(proposal_id)
+            .await?
+            .into_client()?)
     }
 }
 
