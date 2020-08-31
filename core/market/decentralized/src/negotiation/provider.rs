@@ -22,9 +22,7 @@ use crate::negotiation::error::{
     AgreementError, AgreementStateError, ProposalError, QueryEventsError,
 };
 use crate::negotiation::notifier::EventNotifier;
-use crate::protocol::negotiation::error::{
-    CounterProposalError, ProposeAgreementError, RemoteProposalError, RemoteProposeAgreementError,
-};
+use crate::protocol::negotiation::error::{CounterProposalError, ProposeAgreementError, RemoteProposalError, RemoteProposeAgreementError, RemoteSensitiveError};
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,
@@ -253,7 +251,7 @@ async fn on_agreement_received(
         .map_err(|e| match e {
             RemoteProposeAgreementError::Unexpected { .. } => {
                 log::warn!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
-                ProposeAgreementError::Remote(e, id)
+                ProposeAgreementError::Remote(e.hide_sensitive_info(), id)
             }
             e => {
                 log::info!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
@@ -310,18 +308,20 @@ async fn agreement_received(
                 RemoteProposeAgreementError::ProposalCountered(id)
             }
             _ => RemoteProposeAgreementError::Unexpected {
-                public_msg: format!("Failed to save Agreement [{}]", id.to_string()),
+                public_msg: format!("Failed to save Agreement."),
                 original_msg: e.to_string(),
             },
         })?;
 
+    // TODO: If creating Agreement succeeds, but event can't be added, provider
+    //  will never approve Agreement.
     broker
         .db
         .as_dao::<EventsDao>()
         .add_agreement_event(&agreement)
         .await
         .map_err(|e| RemoteProposeAgreementError::Unexpected {
-            public_msg: format!("Failed to add event for Agreement [{}]", id.to_string()),
+            public_msg: format!("Failed to add event for Agreement."),
             original_msg: e.to_string(),
         })?;
 

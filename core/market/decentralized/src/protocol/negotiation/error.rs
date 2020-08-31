@@ -6,6 +6,13 @@ use crate::db::model::{
 };
 use crate::negotiation::error::MatchValidationError;
 
+/// Trait for Error types, that shouldn't expose sensitive information
+/// to other Nodes in network, but should contain more useful message, when displaying
+/// them on local Node.
+pub trait RemoteSensitiveError {
+    fn hide_sensitive_info(self) -> RemoteProposeAgreementError;
+}
+
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum NegotiationApiInitError {}
 
@@ -73,8 +80,9 @@ pub enum RemoteProposeAgreementError {
     ProposalCountered(ProposalId),
     #[error("Agreement id [{0}] is invalid.")]
     InvalidId(AgreementId),
-    /// TODO: We should hide `original_msg`, since we don't want to reveal our details to
-    ///  other Nodes. On the other side we should log whole message on local Node.
+    /// We should hide `original_msg`, since we don't want to reveal our details to
+    /// other Nodes. On the other side we should log whole message on local Node.
+    /// Use `RemoteSensitiveError::hide_sensitive_info` for this.
     #[error("Unexpected error: {public_msg} {original_msg}.")]
     Unexpected {
         public_msg: String,
@@ -108,4 +116,18 @@ pub enum RemoteAgreementError {
     InvalidState(AgreementId, AgreementState),
     #[error("Can't approve Agreement [{0}] due to internal error.")]
     InternalError(AgreementId),
+}
+
+impl RemoteSensitiveError for RemoteProposeAgreementError {
+    fn hide_sensitive_info(self) -> RemoteProposeAgreementError {
+        match self {
+            RemoteProposeAgreementError::Unexpected { public_msg, .. } => {
+                RemoteProposeAgreementError::Unexpected {
+                    public_msg,
+                    original_msg: "".to_string(),
+                }
+            }
+            _ => self,
+        }
+    }
 }
