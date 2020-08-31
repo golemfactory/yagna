@@ -7,7 +7,7 @@ use ya_market_decentralized::testing::proposal_util::{
 };
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::{
-    client::sample_demand, AgreementError, AgreementStateError, ApprovalStatus, OwnerType,
+    client::sample_demand, client::sample_offer, events_helper::*, AgreementError, AgreementStateError, ApprovalStatus, OwnerType,
     WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
@@ -747,6 +747,8 @@ async fn net_err_while_approving() -> Result<()> {
     Ok(())
 }
 
+/// Requestor can create Agreements only from Proposals, that came from Provider.
+/// He can turn his own Proposal into Agreement.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn cant_promote_requestor_proposal() -> Result<()> {
@@ -785,6 +787,46 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
     {
         Err(AgreementError::OwnProposal(id)) => assert_eq!(id, our_proposal_id),
         _ => panic!("Expected AgreementError::OwnProposal."),
+    }
+    Ok(())
+}
+
+/// Requestor can't create Agreement from initial Proposal. At least one step
+/// of negotiations must happen, before he can create Agreement.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn cant_promote_initial_proposal() -> Result<()> {
+    let network = MarketsNetwork::new("cant_promote_initial_proposal")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_identity = network.get_default_id(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+    let prov_identity = network.get_default_id(PROV_NAME);
+
+    let demand_id = req_market
+        .subscribe_demand(&sample_demand(), &req_identity)
+        .await?;
+    prov_market.subscribe_offer(&sample_offer(), &prov_identity).await?;
+
+    let proposal = requestor::query_proposal(&req_market, &demand_id, 1).await?;
+    let proposal_id = proposal.get_proposal_id()?;
+
+    match req_market
+        .requestor_engine
+        .create_agreement(
+            req_identity.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+    {
+        Err(AgreementError::NoNegotiations(id)) => assert_eq!(id, proposal_id),
+        _ => panic!("Expected AgreementError::NoNegotiations."),
     }
     Ok(())
 }
