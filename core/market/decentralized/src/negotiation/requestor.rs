@@ -89,9 +89,9 @@ impl RequestorBroker {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), NegotiationInitError> {
-        self.api.bind_gsb(public_prefix, private_prefix).await?;
+        self.api.bind_gsb(public_prefix, local_prefix).await?;
         Ok(())
     }
 
