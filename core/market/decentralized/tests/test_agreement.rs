@@ -7,8 +7,8 @@ use ya_market_decentralized::testing::proposal_util::{
 };
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::{
-    client::sample_demand, client::sample_offer, events_helper::*, AgreementError, AgreementStateError, ApprovalStatus, OwnerType,
-    WaitForApprovalError,
+    client::sample_demand, client::sample_offer, events_helper::*, AgreementError,
+    AgreementStateError, ApprovalStatus, OwnerType, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -185,10 +185,10 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
     Ok(())
 }
 
-// TODO: It is allowed in general, but probably after rejection or expiration??
-// TODO: but we don't know even how we should handle this case
-//#[cfg_attr(not(feature = "market-test-suite"), ignore)]
-#[ignore]
+/// Requestor can't counter the same Proposal for the second time.
+// TODO: Should it be allowed after expiration?? For sure it shouldn't be allowed
+// TODO: after rejection, because rejection always ends negotiations.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn second_creation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_creation_should_fail")
@@ -216,7 +216,7 @@ async fn second_creation_should_fail() -> Result<()> {
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)).to_string()
+        AgreementError::AgreementExists(agreement_id, proposal_id).to_string()
     );
 
     Ok(())
@@ -811,7 +811,9 @@ async fn cant_promote_initial_proposal() -> Result<()> {
     let demand_id = req_market
         .subscribe_demand(&sample_demand(), &req_identity)
         .await?;
-    prov_market.subscribe_offer(&sample_offer(), &prov_identity).await?;
+    prov_market
+        .subscribe_offer(&sample_offer(), &prov_identity)
+        .await?;
 
     let proposal = requestor::query_proposal(&req_market, &demand_id, 1).await?;
     let proposal_id = proposal.get_proposal_id()?;
@@ -827,6 +829,51 @@ async fn cant_promote_initial_proposal() -> Result<()> {
     {
         Err(AgreementError::NoNegotiations(id)) => assert_eq!(id, proposal_id),
         _ => panic!("Expected AgreementError::NoNegotiations."),
+    }
+    Ok(())
+}
+
+/// Requestor can promote only last proposal in negotiation chain.
+/// If negotiations were more advanced, `create_agreement` will end with error.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn cant_promote_not_last_proposal() -> Result<()> {
+    let network = MarketsNetwork::new("cant_promote_not_last_proposal")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let NegotiationHelper {
+        proposal,
+        proposal_id,
+        demand_id,
+        ..
+    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let our_proposal = proposal.counter_demand(sample_demand())?;
+    req_market
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal_id, &our_proposal)
+        .await?;
+
+    // Requestor tries to promote Proposal that was already followed by
+    // further negotiations.
+    match req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+    {
+        Err(AgreementError::ProposalCountered(id)) => assert_eq!(id, proposal_id),
+        _ => panic!("Expected AgreementError::ProposalCountered."),
     }
     Ok(())
 }

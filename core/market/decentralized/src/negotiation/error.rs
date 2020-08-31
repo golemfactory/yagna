@@ -56,6 +56,8 @@ pub enum AgreementError {
     NotFound(AgreementId),
     #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
     ProposalNotFound(ProposalId, ProposalId),
+    #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
+    AgreementExists(AgreementId, ProposalId),
     #[error("Can't create Agreement for Proposal {0}. Failed to get Proposal {1}. Error: {2}")]
     GetProposal(ProposalId, ProposalId, DbError),
     #[error("Can't create Agreement for already countered Proposal [{0}].")]

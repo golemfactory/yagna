@@ -234,6 +234,9 @@ impl RequestorBroker {
                     AgreementError::Save(proposal_id.clone(), e)
                 }
                 SaveAgreementError::ProposalCountered(id) => AgreementError::ProposalCountered(id),
+                SaveAgreementError::AgreementExists(agreement_id, proposal_id) => {
+                    AgreementError::AgreementExists(agreement_id, proposal_id)
+                }
             })?;
         Ok(id)
     }

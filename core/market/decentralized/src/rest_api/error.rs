@@ -137,6 +137,7 @@ impl ResponseError for AgreementError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            AgreementError::AgreementExists(_, _) => HttpResponse::Conflict().json(msg),
             AgreementError::InvalidState(e) => match e {
                 AgreementStateError::Confirmed(_)
                 | AgreementStateError::Cancelled(_)

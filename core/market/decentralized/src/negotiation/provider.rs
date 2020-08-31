@@ -22,7 +22,10 @@ use crate::negotiation::error::{
     AgreementError, AgreementStateError, ProposalError, QueryEventsError,
 };
 use crate::negotiation::notifier::EventNotifier;
-use crate::protocol::negotiation::error::{CounterProposalError, ProposeAgreementError, RemoteProposalError, RemoteProposeAgreementError, RemoteSensitiveError};
+use crate::protocol::negotiation::error::{
+    CounterProposalError, ProposeAgreementError, RemoteProposalError, RemoteProposeAgreementError,
+    RemoteSensitiveError,
+};
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
     ProposalRejected,

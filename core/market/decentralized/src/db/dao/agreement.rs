@@ -20,6 +20,8 @@ const AGREEMENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
 pub enum SaveAgreementError {
     #[error("Can't create Agreement for already countered Proposal [{0}].")]
     ProposalCountered(ProposalId),
+    #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
+    AgreementExists(AgreementId, ProposalId),
     #[error("Failed to save Agreement to database. Error: {0}.")]
     DatabaseError(DbError),
 }
@@ -87,6 +89,13 @@ impl<'c> AgreementDao<'c> {
                 return Err(SaveAgreementError::ProposalCountered(proposal_id.clone()));
             }
 
+            if let Some(agreement) = find_agreement_for_proposal(conn, &proposal_id)? {
+                return Err(SaveAgreementError::AgreementExists(
+                    agreement.id,
+                    proposal_id.clone(),
+                ));
+            }
+
             diesel::insert_into(dsl::market_agreement)
                 .values(&agreement)
                 .execute(conn)?;
@@ -137,6 +146,16 @@ impl<'c> AgreementDao<'c> {
         log::debug!("Clean market agreements: done");
         Ok(())
     }
+}
+
+fn find_agreement_for_proposal(
+    conn: &ConnType,
+    proposal_id: &ProposalId,
+) -> DbResult<Option<Agreement>> {
+    Ok(dsl::market_agreement
+        .filter(dsl::offer_proposal_id.eq(&proposal_id))
+        .first::<Agreement>(conn)
+        .optional()?)
 }
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for StateError {
