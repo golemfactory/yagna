@@ -135,11 +135,15 @@ async fn create_agreement(
 
 #[actix_web::get("/agreements/{agreement_id}")]
 async fn get_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    body: Path<PathAgreement>,
+    id: Identity,
+) -> impl Responder {
+    let agreement_id = body.into_inner().agreement_id;
+    market
+        .get_agreement(&agreement_id, &id)
+        .await
+        .map(|agreement| HttpResponse::Ok().json(agreement))
 }
 
 #[actix_web::post("/agreements/{agreement_id}/confirm")]

@@ -2,17 +2,19 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::db::model::SubscriptionId;
+use crate::db::model::{AgreementId, SubscriptionId};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
-use crate::negotiation::error::{NegotiationError, NegotiationInitError};
+use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 
 use crate::rest_api;
 
-use ya_client::model::market::{Demand, Offer};
+use crate::db::dao::AgreementDao;
+use chrono::Utc;
+use ya_client::model::market::{Agreement, Demand, Offer};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{private, BUS_ID};
 use ya_persistence::executor::DbExecutor;
@@ -157,6 +159,26 @@ impl MarketService {
         self.requestor_engine.unsubscribe_demand(demand_id).await?;
         // TODO: shouldn't remove precede negotiation unsubscribe?
         Ok(self.matcher.unsubscribe_demand(demand_id, id).await?)
+    }
+
+    pub async fn get_agreement(
+        &self,
+        agreement_id: &AgreementId,
+        _id: &Identity,
+    ) -> Result<Agreement, AgreementError> {
+        // TODO: Authorization
+        match self
+            .db
+            .as_dao::<AgreementDao>()
+            .select(agreement_id, Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            Some(agreement) => Ok(agreement
+                .into_client()
+                .map_err(|e| AgreementError::InternalError(e.to_string()))?),
+            None => Err(AgreementError::NotFound(agreement_id.clone())),
+        }
     }
 }
 

@@ -55,6 +55,8 @@ pub enum AgreementError {
     Protocol(#[from] ProtocolAgreementError),
     #[error("Protocol error while approving: {0}")]
     ProtocolApprove(#[from] ApproveAgreementError),
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 #[derive(Error, Debug)]
