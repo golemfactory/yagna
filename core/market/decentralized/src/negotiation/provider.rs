@@ -317,7 +317,7 @@ async fn agreement_received(
         })?;
 
     // TODO: If creating Agreement succeeds, but event can't be added, provider
-    //  will never approve Agreement.
+    // TODO: will never approve Agreement. Solve problem when Event API will be available.
     broker
         .db
         .as_dao::<EventsDao>()

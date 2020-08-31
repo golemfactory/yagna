@@ -185,7 +185,6 @@ impl RequestorBroker {
     /// A successful call to `create_agreement` shall immediately be followed
     /// by a `confirm_agreement` and `wait_for_approval` call in order to listen
     /// for responses from the Provider.
-    ///
     pub async fn create_agreement(
         &self,
         _id: Identity,
