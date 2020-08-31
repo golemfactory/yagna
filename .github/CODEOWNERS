@@ -1,6 +1,3 @@
-
-.github/			@prekucki
-
 core/activity/                  @golemfactory/exe-unit
 core/model/src/activity.rs      @golemfactory/exe-unit
 exe-unit/                       @golemfactory/exe-unit
@@ -10,5 +7,3 @@ core/model/src/market.rs        @golemfactory/ya-market
 
 service-bus/                    @golemfactory/ya-net
 core/net/                       @golemfactory/ya-net
-
-
