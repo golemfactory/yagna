@@ -2,13 +2,14 @@ use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
+use ya_market_decentralized::testing::mock_node::MarketServiceExt;
 use ya_market_decentralized::testing::proposal_util::{
     exchange_draft_proposals, NegotiationHelper,
 };
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::{
     client::sample_demand, client::sample_offer, events_helper::*, AgreementError,
-    AgreementStateError, ApprovalStatus, OwnerType, WaitForApprovalError,
+    AgreementStateError, ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -147,6 +148,15 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
             Utc::now() + Duration::hours(1),
         )
         .await?;
+
+    assert_eq!(
+        req_market
+            .get_proposal_from_db(&proposal_id)
+            .await?
+            .body
+            .state,
+        ProposalState::Accepted
+    );
 
     // Confirms it immediately
     req_engine

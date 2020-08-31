@@ -186,7 +186,6 @@ impl RequestorBroker {
     /// by a `confirm_agreement` and `wait_for_approval` call in order to listen
     /// for responses from the Provider.
     ///
-    /// TODO: **Note**: Moves given Proposal to `Accepted` state.
     pub async fn create_agreement(
         &self,
         _id: Identity,

@@ -1,7 +1,7 @@
 use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
@@ -19,7 +19,8 @@ use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
 use crate::config::Config;
-use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::db::dao::ProposalDao;
+use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
@@ -463,6 +464,10 @@ macro_rules! assert_err_eq {
 pub trait MarketServiceExt {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+    async fn get_proposal_from_db(
+        &self,
+        proposal_id: &ProposalId,
+    ) -> Result<Proposal, anyhow::Error>;
     async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -479,6 +484,19 @@ impl MarketServiceExt for MarketService {
 
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
         self.matcher.store.get_demand(id).await
+    }
+
+    async fn get_proposal_from_db(
+        &self,
+        proposal_id: &ProposalId,
+    ) -> Result<Proposal, anyhow::Error> {
+        let db = self.db.clone();
+        Ok(
+            match db.as_dao::<ProposalDao>().get_proposal(proposal_id).await? {
+                Some(proposal) => proposal,
+                None => bail!("Proposal [{}] not found", proposal_id),
+            },
+        )
     }
 
     async fn query_events(
