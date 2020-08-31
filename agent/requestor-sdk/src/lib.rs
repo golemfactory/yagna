@@ -1,3 +1,6 @@
+// TODO it's a workaround for #521
+#![type_length_limit = "1117844"]
+
 /* TODO don't use PaymentManager from gwasm-runner */
 mod command;
 mod package;
