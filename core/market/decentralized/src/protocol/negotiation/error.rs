@@ -73,8 +73,13 @@ pub enum RemoteProposeAgreementError {
     ProposalCountered(ProposalId),
     #[error("Agreement id [{0}] is invalid.")]
     InvalidId(AgreementId),
-    #[error("Unexpected error: {0}.")]
-    Unexpected(String),
+    /// TODO: We should hide `original_msg`, since we don't want to reveal our details to
+    ///  other Nodes. On the other side we should log whole message on local Node.
+    #[error("Unexpected error: {public_msg} {original_msg}.")]
+    Unexpected {
+        public_msg: String,
+        original_msg: String,
+    },
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

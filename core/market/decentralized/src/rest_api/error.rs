@@ -4,7 +4,9 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
 use crate::matcher::error::{QueryOffersError, SaveOfferError};
-use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalError};
+use crate::negotiation::error::{
+    AgreementError, AgreementStateError, ProposalError, WaitForApprovalError,
+};
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
@@ -135,22 +137,26 @@ impl ResponseError for AgreementError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            AgreementError::Confirmed(_)
-            | AgreementError::Cancelled(_)
-            | AgreementError::Approved(_)
-            | AgreementError::Proposed(_) => HttpResponse::Conflict().json(msg),
-            AgreementError::Rejected(_)
-            | AgreementError::Expired(_)
-            | AgreementError::Terminated(_) => HttpResponse::Gone().json(msg),
+            AgreementError::InvalidState(e) => match e {
+                AgreementStateError::Confirmed(_)
+                | AgreementStateError::Cancelled(_)
+                | AgreementStateError::Approved(_)
+                | AgreementStateError::Proposed(_) => HttpResponse::Conflict().json(msg),
+                AgreementStateError::Rejected(_)
+                | AgreementStateError::Expired(_)
+                | AgreementStateError::Terminated(_) => HttpResponse::Gone().json(msg),
+            },
             AgreementError::NoNegotiations(_)
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
+            | AgreementError::ProposalCountered(..)
             | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
             | AgreementError::Update(..)
             | AgreementError::Protocol(_)
+            | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)
             | AgreementError::InternalError(_) => HttpResponse::InternalServerError().json(msg),
         }

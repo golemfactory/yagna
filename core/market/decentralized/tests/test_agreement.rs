@@ -7,7 +7,8 @@ use ya_market_decentralized::testing::proposal_util::{
 };
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::{
-    client::sample_demand, AgreementError, ApprovalStatus, OwnerType, WaitForApprovalError,
+    client::sample_demand, AgreementError, AgreementStateError, ApprovalStatus, OwnerType,
+    WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -215,7 +216,7 @@ async fn second_creation_should_fail() -> Result<()> {
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Confirmed(agreement_id).to_string()
+        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)).to_string()
     );
 
     Ok(())
@@ -258,7 +259,7 @@ async fn second_confirmation_should_fail() -> Result<()> {
         .await;
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Confirmed(agreement_id).to_string()
+        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)).to_string()
     );
 
     Ok(())
@@ -297,7 +298,7 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
     // results with Expired error
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Expired(agreement_id).to_string()
+        AgreementError::InvalidState(AgreementStateError::Expired(agreement_id)).to_string()
     );
 
     Ok(())
@@ -582,9 +583,10 @@ async fn second_approval_should_fail() -> Result<()> {
             0.1,
         )
         .await;
+    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Approved(agreement_id.clone().translate(OwnerType::Provider)).to_string()
+        AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)).to_string()
     );
 
     Ok(())
@@ -684,7 +686,7 @@ async fn net_err_while_confirming() -> Result<()> {
         .confirm_agreement(req_id.clone(), &agreement_id)
         .await;
     match result.unwrap_err() {
-        AgreementError::Protocol(_) => (),
+        AgreementError::ProtocolCreate(_) => (),
         e => panic!("expected protocol error, but got: {}", e),
     };
 

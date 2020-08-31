@@ -497,6 +497,7 @@ pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
         AgreementError, ApproveAgreementError, CounterProposalError, ProposalError,
+        ProposeAgreementError,
     };
 
     pub async fn empty_on_offers_received(
@@ -551,7 +552,7 @@ pub mod default {
     pub async fn empty_on_agreement_received(
         _caller: String,
         _msg: AgreementReceived,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ProposeAgreementError> {
         Ok(())
     }
 

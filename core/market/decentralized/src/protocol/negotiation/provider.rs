@@ -206,7 +206,7 @@ impl NegotiationApi {
     ) -> Result<(), ProposeAgreementError> {
         log::debug!(
             "Negotiation API: Agreement proposal [{}] sent by [{}].",
-            &msg.agreement.id,
+            &msg.agreement_id,
             &caller
         );
         self.inner

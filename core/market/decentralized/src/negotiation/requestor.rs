@@ -9,7 +9,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao, StateError},
+    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError, StateError},
     model::{Agreement, AgreementId, AgreementState, OwnerType},
     model::{Demand as ModelDemand, IssuerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
@@ -28,6 +28,7 @@ use super::{
     notifier::NotifierError,
     EventNotifier,
 };
+use crate::negotiation::error::AgreementStateError;
 
 #[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
@@ -226,9 +227,14 @@ impl RequestorBroker {
         self.common
             .db
             .as_dao::<AgreementDao>()
-            .save(agreement, &offer_proposal_id)
+            .save(agreement)
             .await
-            .map_err(|e| AgreementError::Save(proposal_id.clone(), e))?;
+            .map_err(|e| match e {
+                SaveAgreementError::DatabaseError(e) => {
+                    AgreementError::Save(proposal_id.clone(), e)
+                }
+                SaveAgreementError::ProposalCountered(id) => AgreementError::ProposalCountered(id),
+            })?;
         Ok(id)
     }
 
@@ -308,19 +314,19 @@ impl RequestorBroker {
                 // 1. this state check should be also `db.update_state`
                 // 2. `db.update_state` must be invoked after successful propose_agreement
                 agreement.state = AgreementState::Pending;
-                self.api.propose_agreement(agreement).await?;
+                self.api.propose_agreement(&agreement).await?;
                 dao.update_state(agreement_id, AgreementState::Pending)
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
                 return Ok(());
             }
-            AgreementState::Pending => AgreementError::Confirmed(agreement.id),
-            AgreementState::Cancelled => AgreementError::Cancelled(agreement.id),
-            AgreementState::Rejected => AgreementError::Rejected(agreement.id),
-            AgreementState::Approved => AgreementError::Approved(agreement.id),
-            AgreementState::Expired => AgreementError::Expired(agreement.id),
-            AgreementState::Terminated => AgreementError::Terminated(agreement.id),
-        })
+            AgreementState::Pending => AgreementStateError::Confirmed(agreement.id),
+            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
+            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
+            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
+        })?
     }
 }
 

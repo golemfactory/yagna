@@ -131,7 +131,6 @@ impl NegotiationApi {
     pub async fn propose_agreement(
         &self,
         agreement: &Agreement,
-        proposal_id: &ProposalId,
     ) -> Result<(), ProposeAgreementError> {
         let requestor_id = agreement.requestor_id.clone();
         let provider_id = agreement.provider_id.clone();
@@ -140,7 +139,7 @@ impl NegotiationApi {
             agreement_id: agreement.id.clone(),
             valid_to: agreement.valid_to.clone(),
             creation_ts: agreement.creation_ts.clone(),
-            proposal_id: proposal_id.clone(),
+            proposal_id: agreement.offer_proposal_id.clone(),
         };
         net::from(requestor_id)
             .to(provider_id)

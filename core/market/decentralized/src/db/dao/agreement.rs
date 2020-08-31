@@ -79,12 +79,9 @@ impl<'c> AgreementDao<'c> {
         do_with_transaction(self.pool, move |conn| update_state(conn, &id, &state)).await
     }
 
-    pub async fn save(
-        &self,
-        agreement: Agreement,
-        proposal_id: &ProposalId,
-    ) -> Result<(), SaveAgreementError> {
-        let proposal_id = proposal_id.clone();
+    pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
+        // Agreement is always created for last Provider Proposal.
+        let proposal_id = agreement.offer_proposal_id.clone();
         do_with_transaction(self.pool, move |conn| {
             if has_counter_proposal(conn, &proposal_id)? {
                 return Err(SaveAgreementError::ProposalCountered(proposal_id.clone()));
@@ -94,7 +91,8 @@ impl<'c> AgreementDao<'c> {
                 .values(&agreement)
                 .execute(conn)?;
 
-            Ok(set_proposal_accepted(conn, &proposal_id)?)
+            set_proposal_accepted(conn, &proposal_id)?;
+            Ok(agreement)
         })
         .await
     }
