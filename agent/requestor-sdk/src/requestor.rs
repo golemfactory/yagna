@@ -1,10 +1,11 @@
 use crate::activity::Activity;
+use crate::payment_manager::ReleaseAllocation;
 use crate::{payment_manager, CommandList, Image, Package};
 use actix::prelude::*;
 use anyhow::{Error, Result};
 use bigdecimal::BigDecimal;
 use futures::channel::mpsc;
-use futures::future::select;
+use futures::future::{select, Either};
 use futures::prelude::*;
 use payment_manager::PaymentManager;
 use std::sync::Once;
@@ -161,6 +162,7 @@ impl Requestor {
 
         let demand = self.create_demand().await?;
         log::debug!("demand: {}", serde_json::to_string_pretty(&demand)?);
+
         let allocation = payment_api
             .create_allocation(&model::payment::NewAllocation {
                 address: None,
@@ -171,32 +173,24 @@ impl Requestor {
             })
             .await?;
         log::info!("allocated {} NGNT", &allocation.total_amount);
+
         let subscription_id = market_api.subscribe(&demand).await?;
         log::info!("subscribed to market (id: [{}])", subscription_id);
 
         let secure = self.secure;
         let timeout = self.timeout;
-        let deadline = Instant::now() + timeout;
-
         let payment_manager = PaymentManager::new(payment_api.clone(), allocation).start();
         let requestor = self.start();
 
-        let (proposal_tx, proposal_rx) = mpsc::channel(MAX_CONCURRENT_JOBS);
-        Arbiter::spawn(process_market_events(
-            requestor.clone(),
-            market_api.clone(),
-            subscription_id.clone(),
-            demand,
-            proposal_tx,
-        ));
-
+        let (proposal_tx, proposal_rx) = mpsc::channel::<Proposal>(MAX_CONCURRENT_JOBS);
         let proposal_ctx = ProposalCtx {
             requestor: requestor.clone(),
             payment_manager: payment_manager.clone(),
             activity_api,
             market_api: market_api.clone(),
         };
-        let comp_fut = proposal_rx.for_each_concurrent(MAX_CONCURRENT_JOBS, move |proposal| {
+
+        let compute = proposal_rx.for_each_concurrent(MAX_CONCURRENT_JOBS, move |proposal| {
             let ctx = proposal_ctx.clone();
             let p_id = proposal.proposal_id.clone();
 
@@ -259,39 +253,31 @@ impl Requestor {
                     .await;
             }
         });
-        Arbiter::spawn(comp_fut);
 
-        let wait_fut = async move {
-            loop {
-                match requestor.send(GetState).await {
-                    Ok(ComputationState::Finished) => {
-                        log::info!("all activities finished");
-                        break;
-                    }
-                    Err(e) => {
-                        log::error!("unable to retrieve state: internal error: {:?}", e);
-                        requestor.do_send(SetState(ComputationState::Finished));
-                        break;
-                    }
-                    _ => {
-                        if Instant::now() > deadline {
-                            log::warn!("computation timed out after {:?}s", timeout.as_secs());
-                            requestor.do_send(SetState(ComputationState::Finished));
-                            break;
-                        }
-                    }
+        Arbiter::spawn(compute);
+        Arbiter::spawn(process_market_events(
+            requestor.clone(),
+            market_api.clone(),
+            subscription_id.clone(),
+            demand,
+            proposal_tx,
+        ));
+
+        match select(
+            await_activity(requestor, timeout).boxed_local(),
+            actix_rt::signal::ctrl_c().boxed_local(),
+        )
+        .await
+        {
+            Either::Left((_, _)) => (),
+            Either::Right((result, fut)) => match result {
+                Ok(_) => log::warn!("interrupted with ctrl-c"),
+                Err(_) => {
+                    log::warn!("unable to bind a ctrl-c handler; waiting for computation");
+                    fut.await;
                 }
-                tokio::time::delay_for(Duration::from_secs(1)).await;
-            }
-        };
-
-        let ctrl_c = actix_rt::signal::ctrl_c().then(|r| async move {
-            match r {
-                Ok(_) => Ok(log::warn!("interrupted with ctrl-c")),
-                Err(e) => Err(anyhow::Error::from(e)),
-            }
-        });
-        let _ = select(wait_fut.boxed_local(), ctrl_c.boxed_local()).await;
+            },
+        }
 
         log::info!("waiting for payments");
         loop {
@@ -308,10 +294,8 @@ impl Requestor {
             log::warn!("unable to unsubscribe from the market: {}", e);
         }
 
-        if let Err(e) = payment_manager
-            .send(payment_manager::ReleaseAllocation)
-            .await
-        {
+        log::info!("releasing allocation");
+        if let Err(e) = payment_manager.send(ReleaseAllocation).await {
             log::warn!("unable to release allocation: {:?}", e);
         }
 
@@ -366,7 +350,7 @@ async fn process_market_events(
                 Ok(ComputationState::AwaitingCompletion) => continue,
                 Ok(ComputationState::AwaitingProviders) => (),
                 Err(e) => {
-                    log::error!("unable to retrieve state: {:?}", e);
+                    log::error!("unable to read computation state: {:?}", e);
                     break 'outer;
                 }
             }
@@ -421,7 +405,6 @@ async fn process_market_events(
 
 async fn create_agreement(market_api: MarketRequestorApi, proposal: Proposal) -> Result<String> {
     let id = proposal.proposal_id()?;
-    let issuer = proposal.issuer_id()?;
     let agreement = AgreementProposal::new(
         id.clone(),
         chrono::Utc::now() + chrono::Duration::minutes(10), /* TODO */
@@ -429,9 +412,9 @@ async fn create_agreement(market_api: MarketRequestorApi, proposal: Proposal) ->
 
     let agreement_id = market_api.create_agreement(&agreement).await?;
     log::info!(
-        "created agreement [{}] with [{}]; confirming",
+        "created agreement [{}] with [{:?}]; confirming",
         agreement_id,
-        issuer
+        proposal.issuer_id()
     );
     let _ = market_api.confirm_agreement(&id).await?;
     log::info!("waiting for approval of agreement [{}]", agreement_id);
@@ -513,6 +496,31 @@ async fn monitor_activity(
         .await?;
 
     Ok(output)
+}
+
+async fn await_activity(requestor: Addr<Requestor>, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match requestor.send(GetState).await {
+            Ok(ComputationState::Finished) => {
+                log::info!("all activities finished");
+                break;
+            }
+            Err(e) => {
+                log::error!("unable to retrieve state: internal error: {:?}", e);
+                requestor.do_send(SetState(ComputationState::Finished));
+                break;
+            }
+            _ => {
+                if Instant::now() > deadline {
+                    log::warn!("computation timed out after {:?}s", timeout.as_secs());
+                    requestor.do_send(SetState(ComputationState::Finished));
+                    break;
+                }
+            }
+        }
+        tokio::time::delay_for(Duration::from_secs(1)).await;
+    }
 }
 
 impl Actor for Requestor {

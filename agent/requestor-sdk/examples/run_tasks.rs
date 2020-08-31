@@ -29,9 +29,9 @@ struct Args {
 
 #[derive(Debug, Clone, StructOpt)]
 enum Location {
-    /// Task package is a file on disk
+    /// Task package from disk
     File { path: PathBuf },
-    /// Task package is available at URL
+    /// Task package from URL
     Url {
         #[structopt(short, long)]
         url: String,
@@ -53,9 +53,8 @@ impl From<Location> for Package {
 async fn main() -> anyhow::Result<()> {
     let args: Args = Args::from_args();
     let package: Package = args.package.clone().into();
-    let secure: bool = args.secure;
 
-    match secure {
+    match args.secure {
         true => Requestor::new(&args.name, Image::Sgx((0, 1, 0).into()), package).secure(),
         false => Requestor::new(&args.name, Image::Wasm((0, 1, 0).into()), package),
     }
@@ -66,28 +65,12 @@ async fn main() -> anyhow::Result<()> {
         "golem.inf.mem.gib" > 0.4,
         "golem.inf.storage.gib" > 0.1
     ])
-    .with_tasks(vec!["1", "2"].into_iter().map(|i| match secure {
+    .with_tasks(vec!["1", "2"].into_iter().map(|i| match args.secure {
         true => {
+            // TODO: define a proper set of commands when the SGX runtime is ready
             commands![
                 run("main", "/input/input.txt", "/output/output.txt");
             ]
-            // let up_url: String = args.upload_url.clone().expect(
-            //     "secure computations support HTTP(S) transfers only; upload URL is required",
-            // );
-            // let down_url: String = args.download_url.clone().expect(
-            //     "secure computations support HTTP(S) transfers only; download URL is required",
-            // );
-            // commands![
-            //     transfer(
-            //         format!("{}/input-{}.txt", up_url, i),
-            //         "container:/input/input.txt"
-            //     );
-            //     run("main", "/input/input.txt", "/output/output.txt");
-            //     transfer(
-            //         "container:/output/output.txt",
-            //         format!("{}/input-{}.txt", down_url, i)
-            //     )
-            // ]
         }
         false => commands![
             upload(format!("input-{}.txt", i), "/input/input.txt");
