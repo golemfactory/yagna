@@ -18,7 +18,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
-use ya_core_model::activity::CreateResponse;
+use ya_core_model::activity::local::Credentials;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -92,40 +92,47 @@ async fn create_activity_gsb(
         .await
         .map_err(Error::from)?;
 
-    db.as_dao::<ActivityStateDao>()
-        .get_state_wait(
-            &activity_id,
-            vec![State::Initialized.into(), State::Terminated.into()],
-        )
-        .timeout(msg.timeout)
+    let credentials = activity_credentials(db.clone(), &activity_id, &provider_id, msg.timeout)
         .await
-        .map_err(|e| {
-            Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, &provider_id));
-            Error::from(e)
-        })?
         .map_err(|e| {
             Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, &provider_id));
             Error::from(e)
         })?;
 
+    Ok(activity::CreateResponse {
+        activity_id,
+        credentials,
+    })
+}
+
+async fn activity_credentials(
+    db: DbExecutor,
+    activity_id: &String,
+    provider_id: &String,
+    timeout: Option<f32>,
+) -> Result<Option<Credentials>, Error> {
+    db.as_dao::<ActivityStateDao>()
+        .get_state_wait(
+            &activity_id,
+            vec![State::Initialized.into(), State::Terminated.into()],
+        )
+        .timeout(timeout)
+        .await??;
+
     Arbiter::spawn(monitor_activity(
         db.clone(),
         activity_id.clone(),
-        provider_id,
+        provider_id.clone(),
     ));
 
     let credentials = db
         .as_dao::<ActivityCredentialsDao>()
         .get(&activity_id)
-        .await
-        .map_err(Error::from)?
+        .await?
         .map(|c| serde_json::from_str(&c.credentials).map_err(|e| Error::Service(e.to_string())))
         .transpose()?;
 
-    Ok(CreateResponse {
-        activity_id,
-        credentials,
-    })
+    Ok(credentials)
 }
 
 /// Destroys given Activity.
