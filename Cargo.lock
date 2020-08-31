@@ -5932,6 +5932,7 @@ dependencies = [
  "futures 0.3.5",
  "futures-util",
  "libc",
+ "nix 0.17.0",
  "shared_child",
  "tokio 0.2.21",
 ]
