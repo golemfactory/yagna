@@ -10,7 +10,7 @@ use crate::protocol::discovery::{
 
 use super::{resolver::Resolver, store::SubscriptionStore};
 
-pub(crate) async fn filter_out_known_offer_ids(
+pub(super) async fn filter_out_known_offer_ids(
     store: SubscriptionStore,
     _caller: String,
     msg: OfferIdsReceived,
@@ -24,7 +24,7 @@ pub(crate) async fn filter_out_known_offer_ids(
         .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
 }
 
-pub(crate) async fn save_and_match_offers(
+pub(super) async fn save_and_match_offers(
     resolver: Resolver,
     caller: String,
     msg: OffersReceived,
@@ -60,7 +60,7 @@ pub(crate) async fn save_and_match_offers(
     Ok(added_offers_ids)
 }
 
-pub(crate) async fn get_offers(
+pub(super) async fn get_offers(
     store: SubscriptionStore,
     _caller: String,
     msg: GetOffers,
@@ -76,7 +76,7 @@ pub(crate) async fn get_offers(
     }
 }
 
-pub(crate) async fn unsubscribe_offers(
+pub(super) async fn unsubscribe_offers(
     store: SubscriptionStore,
     caller: String,
     msg: OfferUnsubscribed,

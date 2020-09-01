@@ -7,7 +7,7 @@ use std::iter::FromIterator;
 use super::Matcher;
 use crate::db::model::SubscriptionId;
 
-pub(crate) async fn broadcast_offers(matcher: Matcher) {
+pub(super) async fn broadcast_offers(matcher: Matcher) {
     let broadcast_interval = matcher.config.discovery.mean_cyclic_broadcast_interval;
     loop {
         let matcher = matcher.clone();
@@ -56,7 +56,7 @@ pub(crate) async fn broadcast_offers(matcher: Matcher) {
     }
 }
 
-pub(crate) async fn broadcast_unsubscribes(matcher: Matcher) {
+pub(super) async fn broadcast_unsubscribes(matcher: Matcher) {
     let broadcast_interval = matcher.config.discovery.mean_cyclic_unsubscribes_interval;
     loop {
         let matcher = matcher.clone();
