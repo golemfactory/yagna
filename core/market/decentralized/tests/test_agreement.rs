@@ -51,8 +51,8 @@ async fn test_gsb_get_agreement() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn test_rest_get_agreement() -> Result<()> {
-    let network = MarketsNetwork::new("test_rest_get_agreement")
+async fn test_get_agreement() -> Result<()> {
+    let network = MarketsNetwork::new("test_get_agreement")
         .await
         .add_market_instance(REQ_NAME)
         .await?
