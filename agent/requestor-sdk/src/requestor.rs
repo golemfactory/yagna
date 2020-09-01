@@ -8,7 +8,6 @@ use futures::channel::mpsc;
 use futures::future::{select, Either};
 use futures::prelude::*;
 use payment_manager::PaymentManager;
-use std::sync::Once;
 use std::{
     iter::FromIterator,
     sync::Arc,
@@ -28,7 +27,6 @@ use ya_client::model::{
 use ya_client::{market::MarketRequestorApi, payment::PaymentRequestorApi, web::WebClient};
 
 const MAX_CONCURRENT_JOBS: usize = 64;
-static INIT_LOGGER: Once = Once::new();
 
 #[derive(Clone, Debug, MessageResponse)]
 enum ComputationState {
@@ -78,14 +76,9 @@ pub struct Requestor {
 
 impl Requestor {
     /// Creates a new requestor from `Image` and `Package` with given `name`.
-    pub fn new(name: impl ToString, image_type: Image, task_package: Package) -> Self {
-        INIT_LOGGER.call_once(|| {
-            dotenv::dotenv().ok();
-            env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
-        });
-
+    pub fn new(name: impl Into<String>, image_type: Image, task_package: Package) -> Self {
         Self {
-            name: name.to_string(),
+            name: name.into(),
             subnet: "testnet".into(),
             image_type,
             task_package,
@@ -109,9 +102,9 @@ impl Requestor {
     }
 
     /// `Demand`s will be handled only by providers in this subnetwork.
-    pub fn with_subnet(self, subnet: impl ToString) -> Self {
+    pub fn with_subnet(self, subnet: impl Into<String>) -> Self {
         Self {
-            subnet: subnet.to_string(),
+            subnet: subnet.into(),
             ..self
         }
     }
@@ -192,66 +185,56 @@ impl Requestor {
 
         let compute = proposal_rx.for_each_concurrent(MAX_CONCURRENT_JOBS, move |proposal| {
             let ctx = proposal_ctx.clone();
-            let p_id = proposal.proposal_id.clone();
-
             async move {
-                create_agreement(ctx.market_api.clone(), proposal)
-                    .map_err(move |e| {
-                        format!("create agreement error (proposal [{:?}]): {}", p_id, e)
+                let proposal_id = proposal.proposal_id.clone();
+                let agreement_id = create_agreement(ctx.market_api.clone(), proposal)
+                    .map_err(|e| {
+                        e.context(format!(
+                            "cannot create agreement for proposal [{:?}]",
+                            proposal_id
+                        ))
                     })
-                    // get task
-                    .and_then(|agr_id| {
-                        let task_fut = ctx.requestor.send(TakeTask);
-                        async move {
-                            let res = async { Ok::<_, Error>((agr_id.clone(), task_fut.await??)) }
-                                .map_err(|e| format!("no tasks for agreement [{}]: {}", &agr_id, e))
-                                .await?;
-                            Ok(res)
+                    .await?;
+
+                let task = async { Ok::<_, Error>(ctx.requestor.send(TakeTask).await??) }
+                    .map_err(|e| e.context(format!("no tasks for agreement [{:?}]", agreement_id)))
+                    .await?;
+
+                let activity = Activity::create(
+                    ctx.activity_api.clone(),
+                    agreement_id.clone(),
+                    task.clone(),
+                    secure,
+                )
+                .map_err(|e| {
+                    e.context(format!(
+                        "can't create activity for agreement [{:?}]",
+                        agreement_id
+                    ))
+                })
+                .await?;
+
+                let activity_id = activity.activity_id.clone();
+                let task = activity.task.clone();
+                let fut = monitor_activity(activity, ctx.payment_manager.clone()).then(
+                    |result| async move {
+                        match result {
+                            Ok(o) => {
+                                ctx.requestor.do_send(FinishTask(activity_id, o));
+                            }
+                            Err(e) => {
+                                log::error!("activity [{}] error: {}", activity_id, e);
+                                ctx.requestor.do_send(ReturnTask(task));
+                            }
                         }
-                    })
-                    // create activity
-                    .and_then(|(agr_id, task)| {
-                        let activity_fut = Activity::create(
-                            ctx.activity_api.clone(),
-                            agr_id.clone(),
-                            task.clone(),
-                            secure,
-                        );
-                        async move {
-                            let activity = activity_fut.await.map_err(|e| {
-                                format!("cannot create activity (agreement [{}]): {}", &agr_id, e)
-                            })?;
-                            Ok(activity)
-                        }
-                    })
-                    // monitor activity
-                    .and_then(|activity: Activity| {
-                        let id = activity.activity_id.clone();
-                        let task = activity.task.clone();
-                        let req = ctx.requestor.clone();
-                        let fut = monitor_activity(activity, ctx.payment_manager.clone()).then(
-                            |result| async move {
-                                match result {
-                                    Ok(o) => {
-                                        req.do_send(FinishTask(id, o));
-                                    }
-                                    Err(e) => {
-                                        log::error!("activity [{}] error: {}", id, e);
-                                        req.do_send(ReturnTask(task));
-                                    }
-                                }
-                            },
-                        );
-                        Arbiter::spawn(fut);
-                        futures::future::ok(())
-                    })
-                    .then(|result| async move {
-                        if let Err(e) = result {
-                            log::error!("activity error: {}", e);
-                        }
-                    })
-                    .await;
+                    },
+                );
+                Arbiter::spawn(fut);
+
+                Ok::<_, Error>(())
             }
+            .map_err(|e| log::error!("activity error: {}", e))
+            .then(|_| async move { () })
         });
 
         Arbiter::spawn(compute);
@@ -269,7 +252,7 @@ impl Requestor {
         )
         .await
         {
-            Either::Left((_, _)) => (),
+            Either::Left(_) => (),
             Either::Right((result, fut)) => match result {
                 Ok(_) => log::warn!("interrupted with ctrl-c"),
                 Err(_) => {

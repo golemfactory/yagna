@@ -28,6 +28,9 @@ impl From<Location> for Package {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    dotenv::dotenv().ok();
+    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     let args = Args::from_args();
     let package = args.package.clone().into();
 

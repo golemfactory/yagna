@@ -51,12 +51,16 @@ impl From<Location> for Package {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    dotenv::dotenv().ok();
+    env_logger::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     let args: Args = Args::from_args();
     let package: Package = args.package.clone().into();
 
-    match args.secure {
-        true => Requestor::new(&args.name, Image::Sgx((0, 1, 0).into()), package).secure(),
-        false => Requestor::new(&args.name, Image::Wasm((0, 1, 0).into()), package),
+    if args.secure {
+        Requestor::new(&args.name, Image::Sgx((0, 1, 0).into()), package).secure()
+    } else {
+        Requestor::new(&args.name, Image::Wasm((0, 1, 0).into()), package)
     }
     .with_subnet(&args.subnet)
     .with_max_budget_ngnt(10)
@@ -65,18 +69,19 @@ async fn main() -> anyhow::Result<()> {
         "golem.inf.mem.gib" > 0.4,
         "golem.inf.storage.gib" > 0.1
     ])
-    .with_tasks(vec!["1", "2"].into_iter().map(|i| match args.secure {
-        true => {
+    .with_tasks(vec!["1", "2"].into_iter().map(|i| {
+        if args.secure {
             // TODO: define a proper set of commands when the SGX runtime is ready
             commands![
                 run("main", "/input/input.txt", "/output/output.txt");
             ]
+        } else {
+            commands![
+                upload(format!("input-{}.txt", i), "/input/input.txt");
+                run("main", "/input/input.txt", "/output/output.txt");
+                download("/output/output.txt", format!("output-{}.txt", i))
+            ]
         }
-        false => commands![
-            upload(format!("input-{}.txt", i), "/input/input.txt");
-            run("main", "/input/input.txt", "/output/output.txt");
-            download("/output/output.txt", format!("output-{}.txt", i))
-        ],
     }))
     .on_completed(|activity_id, output| {
         println!("{} => {:?}", activity_id, output);

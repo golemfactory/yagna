@@ -29,16 +29,13 @@ impl Activity {
         task: CommandList,
         secure: bool,
     ) -> Result<Self> {
-        let (kind, activity_id) = match secure {
-            true => {
-                let secure_api = api.control().create_secure_activity(&agreement_id).await?;
-                let activity_id = secure_api.activity_id();
-                (ActivityKind::Secure(secure_api), activity_id)
-            }
-            false => {
-                let activity_id = api.control().create_activity(&agreement_id).await?;
-                (ActivityKind::Default, activity_id)
-            }
+        let (kind, activity_id) = if secure {
+            let secure_api = api.control().create_secure_activity(&agreement_id).await?;
+            let activity_id = secure_api.activity_id();
+            (ActivityKind::Secure(secure_api), activity_id)
+        } else {
+            let activity_id = api.control().create_activity(&agreement_id).await?;
+            (ActivityKind::Default, activity_id)
         };
 
         Ok(Activity {
