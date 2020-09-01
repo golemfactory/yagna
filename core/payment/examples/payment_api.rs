@@ -16,6 +16,7 @@ use ya_dummy_driver::{
     PaymentDriverService as DummyDriverService, DRIVER_NAME as DUMMY_DRIVER_NAME,
 };
 use ya_gnt_driver::{PaymentDriverService as GntDriverService, DRIVER_NAME as GNT_DRIVER_NAME};
+use ya_zksync_driver::{PaymentDriverService as ZksyncDriverService, DRIVER_NAME as ZKSYNC_DRIVER_NAME};
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
@@ -28,6 +29,7 @@ use ya_service_bus::typed as bus;
 enum Driver {
     Dummy,
     Ngnt,
+    Zksync
 }
 
 impl FromStr for Driver {
@@ -37,6 +39,7 @@ impl FromStr for Driver {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
             "ngnt" => Ok(Driver::Ngnt),
+            "zksync" => Ok(Driver::Zksync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -47,6 +50,7 @@ impl std::fmt::Display for Driver {
         match self {
             Driver::Dummy => write!(f, "dummy"),
             Driver::Ngnt => write!(f, "ngnt"),
+            Driver::Zksync => write!(f, "zksync"),
         }
     }
 }
@@ -84,6 +88,11 @@ pub async fn start_gnt_driver(
 
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
+    Ok(())
+}
+
+pub async fn start_zksync_driver() -> anyhow::Result<()> {
+    ZksyncDriverService::gsb(&()).await?;
     Ok(())
 }
 
@@ -175,6 +184,10 @@ async fn main() -> anyhow::Result<()> {
         Driver::Ngnt => {
             start_gnt_driver(&db, requestor_account).await?;
             GNT_DRIVER_NAME
+        }
+        Driver::Zksync => {
+            start_zksync_driver().await?;
+            ZKSYNC_DRIVER_NAME
         }
     };
 
