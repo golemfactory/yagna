@@ -13,6 +13,9 @@ use client::wallet::{Wallet, BalanceState};
 
 use web3::types::Address;
 
+const ZKSYNC_RPC_ADDRESS: &'static str = "https://rinkeby-api.zksync.io/jsrpc";
+const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
+
 pub fn bind_service() {
     log::debug!("Binding payment driver service to service bus");
 
@@ -51,18 +54,14 @@ async fn get_account_balance(
     _caller: String,
     msg: GetAccountBalance,
 ) -> Result<BigDecimal, GenericError> {
-    log::info!("get account balance: {:?}", msg);
+    log::debug!("get account balance: {:?}", msg);
 
     let pub_address = Address::from_str(&msg.address()[2..]).unwrap();
-    log::info!("Public address. {}", pub_address);
-    let provider = RpcClient::new("https://rinkeby-api.zksync.io/jsrpc");
+    let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
     let wallet = Wallet::from_public_address(pub_address, provider);
-    let token = "GNT";
-    let balance_com = wallet.get_balance(token, BalanceState::Committed).await;
-    let balance_ver = wallet.get_balance(token, BalanceState::Verified).await;
+    let balance_com = wallet.get_balance(ZKSYNC_TOKEN_NAME, BalanceState::Committed).await;
 
-    log::info!("balance_com: {}", balance_com);
-    log::info!("balance_ver: {}", balance_ver);
+    log::debug!("balance: {}", balance_com);
     Ok(BigDecimal::from_str(&balance_com.to_string()).unwrap())
 }
 

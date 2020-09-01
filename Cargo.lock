@@ -944,7 +944,7 @@ dependencies = [
 [[package]]
 name = "client"
 version = "0.0.1"
-source = "git+https://github.com/golemfactory/zksync?branch=mwu/decouple-client-server#0249d619da9dba4dcef3977de3e0ff3e20d0a6c7"
+source = "git+https://github.com/golemfactory/zksync?branch=pay/client-crate#dfd2e8bb9c8c3e135f7db5fb3f2025d6eae1af2e"
 dependencies = [
  "bigdecimal",
  "crypto_exports",
@@ -1139,7 +1139,7 @@ dependencies = [
 [[package]]
 name = "crypto_exports"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/zksync?branch=mwu/decouple-client-server#0249d619da9dba4dcef3977de3e0ff3e20d0a6c7"
+source = "git+https://github.com/golemfactory/zksync?branch=pay/client-crate#dfd2e8bb9c8c3e135f7db5fb3f2025d6eae1af2e"
 dependencies = [
  "franklin-crypto",
  "rand 0.4.6",
@@ -2951,7 +2951,7 @@ dependencies = [
 [[package]]
 name = "models"
 version = "0.0.1"
-source = "git+https://github.com/golemfactory/zksync?branch=mwu/decouple-client-server#0249d619da9dba4dcef3977de3e0ff3e20d0a6c7"
+source = "git+https://github.com/golemfactory/zksync?branch=pay/client-crate#dfd2e8bb9c8c3e135f7db5fb3f2025d6eae1af2e"
 dependencies = [
  "backoff",
  "bigdecimal",
