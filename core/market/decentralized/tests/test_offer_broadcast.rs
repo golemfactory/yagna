@@ -203,7 +203,7 @@ async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
     let invalid_subscription = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
 
     let offers = discovery2
-        .get_offers(
+        .retrieve_offers(
             id1.identity.to_string(),
             vec![subscription_id.clone(), invalid_subscription],
         )

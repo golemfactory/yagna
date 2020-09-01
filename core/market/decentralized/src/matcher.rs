@@ -11,7 +11,8 @@ use ya_service_api_web::middleware::Identity;
 use crate::db::model::{Demand, DisplayVec, Offer, SubscriptionId};
 use crate::protocol::discovery::builder::DiscoveryBuilder;
 use crate::protocol::discovery::{
-    Discovery, DiscoveryRemoteError, GetOffers, OfferIdsReceived, OfferUnsubscribed, OffersReceived,
+    Discovery, DiscoveryRemoteError, GetOffers, OfferIdsReceived, OfferUnsubscribed,
+    OffersRetrieved,
 };
 
 pub mod error;
@@ -241,7 +242,7 @@ pub(crate) async fn filter_known_offer_ids(
 pub(crate) async fn on_offers_received(
     resolver: Resolver,
     caller: String,
-    msg: OffersReceived,
+    msg: OffersRetrieved,
 ) -> Result<Vec<SubscriptionId>, ()> {
     let added_offers_ids = futures::stream::iter(msg.offers.into_iter())
         .filter_map(|offer| {

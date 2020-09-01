@@ -110,7 +110,7 @@ mod test {
     fn build_with_single_handler_should_fail() {
         DiscoveryBuilder::default()
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
@@ -119,7 +119,7 @@ mod test {
     fn setting_db_handler_wo_db_should_fail() {
         DiscoveryBuilder::default()
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_data_handler(|_: u8, _, _: OffersReceived| async { Ok(vec![]) })
+            .add_data_handler(|_: u8, _, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
@@ -128,7 +128,7 @@ mod test {
     fn build_from_with_missing_handler_should_fail() {
         DiscoveryBuilder::default()
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(vec![]) })
             .build();
     }
@@ -137,7 +137,7 @@ mod test {
     fn build_from_with_four_handlers_should_pass() {
         DiscoveryBuilder::default()
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
             .add_handler(|_, _: GetOffers| async { Ok(vec![]) })
@@ -149,7 +149,7 @@ mod test {
         DiscoveryBuilder::default()
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .data("mock data")
-            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: GetOffers| async { Ok(vec![]) })
@@ -167,7 +167,7 @@ mod test {
             .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .data(7 as usize)
             .data("mock data")
-            .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: GetOffers| async { panic!("should not be invoked") })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_data_handler(move |data: usize, _, _: GetOffers| {
@@ -185,7 +185,7 @@ mod test {
         // when
         let node_id = generate_identity("caller").identity.to_string();
         discovery
-            .on_get_offers(node_id, sample_get_offer_received())
+            .on_retrieve_offers(node_id, sample_get_offer_received())
             .await
             .unwrap();
 

@@ -63,7 +63,7 @@ pub struct Discovery {
 
 pub(super) struct ReceiveHandlers {
     offer_ids: HandlerSlot<OfferIdsReceived>,
-    offers: HandlerSlot<OffersReceived>,
+    offers: HandlerSlot<OffersRetrieved>,
 }
 
 pub struct DiscoveryImpl {
@@ -92,7 +92,7 @@ impl Discovery {
     }
 
     /// Ask remote Node for specified Offers.
-    pub async fn get_offers(
+    pub async fn retrieve_offers(
         &self,
         from: String,
         offers: Vec<SubscriptionId>,
@@ -135,7 +135,7 @@ impl Discovery {
             &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferIdsReceived>| {
                 let myself = myself.clone();
-                myself.on_offers_received(caller, msg.body().to_owned())
+                myself.on_broadcast_offers(caller, msg.body().to_owned())
             },
         )
         .await
@@ -148,7 +148,7 @@ impl Discovery {
             &broadcast_address,
             move |caller, msg: SendBroadcastMessage<OfferUnsubscribed>| {
                 let myself = myself.clone();
-                myself.on_offer_unsubscribed(caller, msg.body().to_owned())
+                myself.on_broadcast_unsubscribes(caller, msg.body().to_owned())
             },
         )
         .await
@@ -157,14 +157,14 @@ impl Discovery {
         ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
             move |_, myself, caller: String, msg: GetOffers| {
                 let myself = myself.clone();
-                myself.on_get_offers(caller, msg)
+                myself.on_retrieve_offers(caller, msg)
             },
         );
 
         Ok(())
     }
 
-    async fn on_offers_received(self, caller: String, msg: OfferIdsReceived) -> Result<(), ()> {
+    async fn on_broadcast_offers(self, caller: String, msg: OfferIdsReceived) -> Result<(), ()> {
         let num_ids_received = msg.offers.len();
         if !msg.offers.is_empty() {
             log::debug!("Received {} Offers from [{}].", num_ids_received, &caller);
@@ -185,14 +185,14 @@ impl Discovery {
 
             if !unseen_subscriptions.is_empty() {
                 let offers = self
-                    .get_offers(caller.clone(), unseen_subscriptions)
+                    .retrieve_offers(caller.clone(), unseen_subscriptions)
                     .await
                     .map_err(|e| log::warn!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
 
                 // We still could fail to add some Offers to database. If we fail to add them, we don't
                 // want to propagate subscription further.
                 offer_received_callback
-                    .call(caller.clone(), OffersReceived { offers })
+                    .call(caller.clone(), OffersRetrieved { offers })
                     .await?
             } else {
                 vec![]
@@ -217,7 +217,7 @@ impl Discovery {
         Ok(())
     }
 
-    async fn on_get_offers(
+    async fn on_retrieve_offers(
         self,
         caller: String,
         msg: GetOffers,
@@ -227,7 +227,11 @@ impl Discovery {
         Ok(callback.call(caller, msg).await?)
     }
 
-    async fn on_offer_unsubscribed(self, caller: String, msg: OfferUnsubscribed) -> Result<(), ()> {
+    async fn on_broadcast_unsubscribes(
+        self,
+        caller: String,
+        msg: OfferUnsubscribed,
+    ) -> Result<(), ()> {
         let num_received_ids = msg.offers.len();
         if !msg.offers.is_empty() {
             log::debug!(
@@ -282,11 +286,11 @@ impl BroadcastMessage for OfferIdsReceived {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OffersReceived {
+pub struct OffersRetrieved {
     pub offers: Vec<ModelOffer>,
 }
 
-impl CallbackMessage for OffersReceived {
+impl CallbackMessage for OffersRetrieved {
     /// Callback handler should return all subscription ids, that were new to him
     /// and should be propagated further to the network.
     type Item = Vec<SubscriptionId>;

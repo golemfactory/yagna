@@ -484,7 +484,7 @@ pub mod default {
 
     pub async fn empty_on_offers_received(
         _caller: String,
-        _msg: OffersReceived,
+        _msg: OffersRetrieved,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
