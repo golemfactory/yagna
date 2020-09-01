@@ -186,7 +186,7 @@ impl MarketsNetwork {
     ) -> Result<Self> {
         let identity_api = MockIdentity::new(name);
         let discovery = builder
-            .data(identity_api.clone() as Arc<dyn IdentityApi>)
+            .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
             .build();
         self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
             .await

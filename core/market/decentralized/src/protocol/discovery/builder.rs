@@ -16,7 +16,7 @@ pub struct DiscoveryBuilder {
 }
 
 impl DiscoveryBuilder {
-    pub fn data<T: Clone + Send + Sync + 'static>(mut self, data: T) -> Self {
+    pub fn add_data<T: Clone + Send + Sync + 'static>(mut self, data: T) -> Self {
         self.data.insert(TypeId::of::<T>(), Box::new(data));
         self
     }
@@ -42,7 +42,7 @@ impl DiscoveryBuilder {
         self
     }
 
-    fn get<M: CallbackMessage>(&mut self) -> HandlerSlot<M> {
+    fn get_handler<M: CallbackMessage>(&mut self) -> HandlerSlot<M> {
         let boxed = self.handlers.remove(&TypeId::of::<M>()).unwrap();
         *(boxed as Box<dyn Any + 'static>).downcast().unwrap()
     }
@@ -59,15 +59,15 @@ impl DiscoveryBuilder {
 
     pub fn build(mut self) -> Discovery {
         let receive = Mutex::new(ReceiveHandlers {
-            offers: self.get(),
-            offer_ids: self.get(),
+            offers: self.get_handler(),
+            offer_ids: self.get_handler(),
         });
         Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 receive,
-                offer_unsubscribed: self.get(),
-                get_offers_request: self.get(),
+                offer_unsubscribed: self.get_handler(),
+                get_offers_request: self.get_handler(),
             }),
         }
     }
@@ -109,7 +109,7 @@ mod test {
     #[should_panic]
     fn build_with_single_handler_should_fail() {
         DiscoveryBuilder::default()
-            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .build();
     }
@@ -118,7 +118,7 @@ mod test {
     #[should_panic(expected = "[DiscoveryBuilder] Can't find data of required type.")]
     fn setting_db_handler_wo_db_should_fail() {
         DiscoveryBuilder::default()
-            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_data_handler(|_: u8, _, _: OffersReceived| async { Ok(vec![]) })
             .build();
     }
@@ -127,7 +127,7 @@ mod test {
     #[should_panic]
     fn build_from_with_missing_handler_should_fail() {
         DiscoveryBuilder::default()
-            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(vec![]) })
             .build();
@@ -136,7 +136,7 @@ mod test {
     #[test]
     fn build_from_with_four_handlers_should_pass() {
         DiscoveryBuilder::default()
-            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
@@ -147,8 +147,8 @@ mod test {
     #[test]
     fn build_from_with_mixed_handlers_should_pass() {
         DiscoveryBuilder::default()
-            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .data("mock data")
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data("mock data")
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(vec![]) })
             .add_handler(|_, _: OfferIdsReceived| async { Ok(vec![]) })
@@ -164,9 +164,9 @@ mod test {
         let cnt = counter.clone();
 
         let discovery = DiscoveryBuilder::default()
-            .data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .data(7 as usize)
-            .data("mock data")
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data(7 as usize)
+            .add_data("mock data")
             .add_handler(|_, _: OffersReceived| async { Ok(vec![]) })
             .add_handler(|_, _: GetOffers| async { panic!("should not be invoked") })
             .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(vec![]) })
