@@ -1,8 +1,10 @@
 use anyhow::Result;
 use structopt::{clap, StructOpt};
+use ya_client::cli::ApiOpts;
 
 mod service;
 mod settings;
+mod status;
 
 /// Manage environments
 #[derive(StructOpt, Debug)]
@@ -18,11 +20,20 @@ enum SettingsCommand {
     Env(Environments),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt)]
 enum Commands {
-    Run,
+    Run {
+        /// Accept the disclaimer and privacy warning found at
+        /// {n}https://handbook.golem.network/see-also/terms
+        #[structopt(long)]
+        accept_terms: bool,
+    },
     Settings(SettingsCommand),
-    Status,
+    Status {
+        #[structopt(flatten)]
+        api_opts: ApiOpts,
+    },
 }
 
 #[derive(StructOpt)]
@@ -43,7 +54,7 @@ async fn my_main() -> Result</*exit code*/ i32> {
     let cli_args: StartupConfig = StartupConfig::from_args();
 
     match cli_args.commands {
-        Commands::Run => service::run().await,
+        Commands::Run { accept_terms } => service::run(accept_terms).await,
         Commands::Settings(command) => match command {
             SettingsCommand::Set(set) => settings::run(set).await,
             SettingsCommand::Env(env) => {
@@ -51,14 +62,11 @@ async fn my_main() -> Result</*exit code*/ i32> {
                 Ok(0)
             }
         },
-        Commands::Status => {
-            // TODO
-            Ok(0)
-        }
+        Commands::Status { api_opts } => status::run(&api_opts).await,
     }
 }
 
-#[tokio::main]
+#[actix_rt::main]
 async fn main() {
     std::process::exit(match my_main().await {
         Ok(code) => code,

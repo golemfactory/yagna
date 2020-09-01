@@ -99,11 +99,13 @@ fn handle_subprocess(
     }
 }
 
-pub async fn run() -> Result</*exit code*/ i32> {
-    let service = spawn(
-        "yagna service",
-        Command::new("yagna").arg("service").arg("run"),
-    )?;
+pub async fn run(accept_terms: bool) -> Result</*exit code*/ i32> {
+    let mut command = Command::new("yagna");
+    command.arg("service").arg("run");
+    if accept_terms {
+        command.arg("--accept-terms");
+    }
+    let service = spawn("yagna service", &mut command)?;
 
     // otherwise ya-provider will bail out saying it cannot connect to yagna api
     wait_for_socket(
@@ -114,8 +116,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
         .context("Failed to parse yagna API URL")?
         .socket_addrs(|| None)
         .context("Failed to resolve yagna API URL")?
-        .iter()
-        .next()
+        .get(0)
         .unwrap(),
     )
     .await?;

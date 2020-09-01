@@ -1926,16 +1926,23 @@ dependencies = [
 name = "golem"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "anyhow",
+ "bigdecimal",
  "byte-unit",
+ "chrono",
  "dotenv",
  "env_logger 0.7.1",
  "futures 0.3.5",
  "log 0.4.11",
+ "serde",
+ "serde_json",
  "strip-ansi-escapes",
  "structopt",
  "tokio 0.2.22",
  "url 2.1.1",
+ "ya-client",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-service-api-web",
 ]
@@ -5369,7 +5376,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=1bfbcfa25694c1638b81f86774137b4bdf3abb37#1bfbcfa25694c1638b81f86774137b4bdf3abb37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=311afdc2a06168b47890eccb9ca7d8097a32f024#311afdc2a06168b47890eccb9ca7d8097a32f024"
 dependencies = [
  "awc",
  "backtrace",
@@ -5390,7 +5397,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=1bfbcfa25694c1638b81f86774137b4bdf3abb37#1bfbcfa25694c1638b81f86774137b4bdf3abb37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=311afdc2a06168b47890eccb9ca7d8097a32f024#311afdc2a06168b47890eccb9ca7d8097a32f024"
 dependencies = [
  "bigdecimal",
  "chrono",
