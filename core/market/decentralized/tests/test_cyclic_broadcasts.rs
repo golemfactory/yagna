@@ -130,7 +130,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     }
 
     // We expect, that after this time all nodes will have the same knowledge about Offers.
-    tokio::time::delay_for(Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(200)).await;
 
     // Break networking, so unsubscribe broadcasts won't come to Node-3.
     network.break_networking_for("Node-3")?;
