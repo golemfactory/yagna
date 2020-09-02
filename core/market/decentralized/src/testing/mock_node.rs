@@ -124,7 +124,7 @@ impl MarketsNetwork {
     }
 
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
-        let db = self.init_database(name)?;
+        let db = self.create_database(name)?;
         let market = Arc::new(MarketService::new(&db)?);
         self.add_node(name, MockNodeKind::Market(market)).await
     }
@@ -333,10 +333,15 @@ impl MarketsNetwork {
         .await
     }
 
-    pub fn init_database(&self, name: &str) -> Result<DbExecutor> {
+    fn create_database(&self, name: &str) -> Result<DbExecutor> {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))?;
+        Ok(db)
+    }
+
+    pub fn init_database(&self, name: &str) -> Result<DbExecutor> {
+        let db = self.create_database(name)?;
         db.apply_migration(crate::db::migrations::run_with_output)?;
         Ok(db)
     }
