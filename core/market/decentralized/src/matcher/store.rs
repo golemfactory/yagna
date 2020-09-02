@@ -170,7 +170,8 @@ impl SubscriptionStore {
         // TODO: We can't check caller_id to authorize this operation, because
         //  otherwise we can't get unsubscribe events from other Nodes, than Offer
         //  owner. But on the other side, if we allow anyone to unsubscribe, someone
-        //  can use it to attacks. Probably we must ask owner, if he really unsubscribed his Offer.
+        //  can use it to attacks. Probably we must ask owner, if he really
+        //  unsubscribed his Offer or require owner signatures for all unsubscribes.
         // if let Ok(offer) = self.get_offer(offer_id).await {
         //     if caller_id != Some(offer.node_id) {
         //         // TODO: unauthorized?

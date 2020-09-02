@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 /// Implement for callback message parameter.
 pub trait CallbackMessage: Serialize + DeserializeOwned + 'static + Sync + Send {
-    type Item: Serialize + DeserializeOwned + 'static + Sync + Send;
+    type Ok: Serialize + DeserializeOwned + 'static + Sync + Send;
     type Error: Serialize + DeserializeOwned + 'static + Sync + Send + Debug;
 }
 
@@ -59,7 +59,7 @@ pub trait CallbackHandler<MsgType: CallbackMessage>: Send + Sync + 'static {
 
 pub type CallbackFuture<MsgType> = Pin<Box<dyn OutputFuture<MsgType>>>;
 pub type CallbackResult<MsgType> =
-    Result<<MsgType as CallbackMessage>::Item, <MsgType as CallbackMessage>::Error>;
+    Result<<MsgType as CallbackMessage>::Ok, <MsgType as CallbackMessage>::Error>;
 
 /// Implements callback handler for FnMut to enable passing
 /// lambdas and other functions to handlers.

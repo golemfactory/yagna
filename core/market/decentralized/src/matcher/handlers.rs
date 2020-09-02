@@ -5,29 +5,32 @@ use crate::db::model::{DisplayVec, Offer, SubscriptionId};
 
 use crate::matcher::error::ModifyOfferError;
 use crate::protocol::discovery::{
-    DiscoveryRemoteError, GetOffers, OfferIdsReceived, OfferUnsubscribed, OffersReceived,
+    DiscoveryRemoteError, OffersBcast, OffersRetrieved, RetrieveOffers, UnsubscribedOffersBcast,
 };
 
 use super::{resolver::Resolver, store::SubscriptionStore};
 
+/// Returns only those of input offers ids, that were not yet known.
 pub(super) async fn filter_out_known_offer_ids(
     store: SubscriptionStore,
     _caller: String,
-    msg: OfferIdsReceived,
+    msg: OffersBcast,
 ) -> Result<Vec<SubscriptionId>, ()> {
     // We shouldn't propagate Offer, if we already have it in our database.
     // Note that when we broadcast our Offer, it will reach us too, so it concerns
     // not only Offers from other nodes.
     Ok(store
-        .filter_out_existing(msg.offers)
+        .filter_out_existing(msg.offer_ids)
         .await
         .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
 }
 
-pub(super) async fn save_and_match_offers(
+/// Returns only ids of those from input offers, that was successfully stored locally.
+/// Also triggers Resolver to match newly stored Offers against local Demands.
+pub(super) async fn receive_remote_offers(
     resolver: Resolver,
     caller: String,
-    msg: OffersReceived,
+    msg: OffersRetrieved,
 ) -> Result<Vec<SubscriptionId>, ()> {
     let added_offers_ids = futures::stream::iter(msg.offers.into_iter())
         .filter_map(|offer| {
@@ -60,12 +63,12 @@ pub(super) async fn save_and_match_offers(
     Ok(added_offers_ids)
 }
 
-pub(super) async fn get_offers(
+pub(super) async fn get_local_offers(
     store: SubscriptionStore,
     _caller: String,
-    msg: GetOffers,
+    msg: RetrieveOffers,
 ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
-    match store.get_offers_batch(msg.offers).await {
+    match store.get_offers_batch(msg.offer_ids).await {
         Ok(offers) => Ok(offers),
         Err(e) => {
             log::error!("Failed to get batch offers. Error: {}", e);
@@ -76,12 +79,13 @@ pub(super) async fn get_offers(
     }
 }
 
-pub(super) async fn unsubscribe_offers(
+/// Returns only those of input offer ids, that were able to be unsubscribed locally.
+pub(super) async fn receive_remote_offer_unsubscribes(
     store: SubscriptionStore,
     caller: String,
-    msg: OfferUnsubscribed,
+    msg: UnsubscribedOffersBcast,
 ) -> Result<Vec<SubscriptionId>, ()> {
-    let new_unsubscribes = futures::stream::iter(msg.offers.into_iter())
+    let new_unsubscribes = futures::stream::iter(msg.offer_ids.into_iter())
         .filter_map(|offer_id| {
             let store = store.clone();
             let caller = caller.parse().ok();

@@ -55,9 +55,9 @@ impl Matcher {
             .add_data(store.clone())
             .add_data(resolver.clone())
             .add_data_handler(handlers::filter_out_known_offer_ids)
-            .add_data_handler(handlers::save_and_match_offers)
-            .add_data_handler(handlers::get_offers)
-            .add_data_handler(handlers::unsubscribe_offers)
+            .add_data_handler(handlers::receive_remote_offers)
+            .add_data_handler(handlers::get_local_offers)
+            .add_data_handler(handlers::receive_remote_offer_unsubscribes)
             .build();
 
         let matcher = Matcher {
@@ -83,8 +83,8 @@ impl Matcher {
 
         // We can't spawn broadcasts, before gsb is bound.
         // That's why we don't spawn this in Matcher::new.
-        tokio::task::spawn_local(cyclic::broadcast_offers(self.clone()));
-        tokio::task::spawn_local(cyclic::broadcast_unsubscribes(self.clone()));
+        tokio::task::spawn_local(cyclic::bcast_offers(self.clone()));
+        tokio::task::spawn_local(cyclic::bcast_unsubscribes(self.clone()));
         Ok(())
     }
 
@@ -111,10 +111,10 @@ impl Matcher {
         // anyway during random broadcast, so nothing bad happens here in case of error.
         let _ = self
             .discovery
-            .broadcast_offers(vec![offer.id.clone()])
+            .bcast_offers(vec![offer.id.clone()])
             .await
             .map_err(|e| {
-                log::warn!("Failed to broadcast offer [{}]. Error: {}.", offer.id, e,);
+                log::warn!("Failed to bcast offer [{}]. Error: {}.", offer.id, e,);
             });
         Ok(offer)
     }
@@ -141,11 +141,11 @@ impl Matcher {
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .broadcast_unsubscribes(vec![offer_id.clone()])
+            .bcast_unsubscribes(vec![offer_id.clone()])
             .await
             .map_err(|e| {
                 log::warn!(
-                    "Failed to broadcast unsubscribe offer [{1}]. Error: {0}.",
+                    "Failed to bcast unsubscribe offer [{1}]. Error: {0}.",
                     e,
                     offer_id
                 );

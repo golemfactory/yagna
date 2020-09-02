@@ -1,4 +1,4 @@
-//! Cyclic broadcasting
+//! Cyclic methods for Matcher spawned after binding to GSB
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::collections::HashSet;
@@ -7,12 +7,12 @@ use std::iter::FromIterator;
 use super::Matcher;
 use crate::db::model::SubscriptionId;
 
-pub(super) async fn broadcast_offers(matcher: Matcher) {
-    let broadcast_interval = matcher.config.discovery.mean_cyclic_broadcast_interval;
+pub(super) async fn bcast_offers(matcher: Matcher) {
+    let bcast_interval = matcher.config.discovery.mean_cyclic_bcast_interval;
     loop {
         let matcher = matcher.clone();
         async move {
-            wait_random_interval(broadcast_interval).await;
+            wait_random_interval(bcast_interval).await;
 
             // We always broadcast our own Offers.
             let our_offers = matcher
@@ -24,7 +24,7 @@ pub(super) async fn broadcast_offers(matcher: Matcher) {
 
             // Add some random subset of Offers to broadcast.
             let num_ours_offers = our_offers.len();
-            let num_to_broadcast = matcher.config.discovery.num_broadcasted_offers;
+            let num_to_bcast = matcher.config.discovery.num_bcasted_offers;
 
             // TODO: Don't query full Offers from database if we only need ids.
             let all_offers = matcher
@@ -34,59 +34,55 @@ pub(super) async fn broadcast_offers(matcher: Matcher) {
                 .into_iter()
                 .map(|offer| offer.id)
                 .collect::<Vec<SubscriptionId>>();
-            let random_offers = randomize_offers(our_offers, all_offers, num_to_broadcast as usize);
+            let random_offers = randomize_offers(our_offers, all_offers, num_to_bcast as usize);
 
             log::debug!(
-                "Cyclic broadcast: Sending {} Offers including {} ours.",
+                "Cyclic bcast: Sending {} Offers including {} ours.",
                 random_offers.len(),
                 num_ours_offers
             );
 
-            matcher.discovery.broadcast_offers(random_offers).await?;
+            matcher.discovery.bcast_offers(random_offers).await?;
             Result::<(), anyhow::Error>::Ok(())
         }
         .await
-        .map_err(|e| {
-            log::warn!(
-                "Failed to send random subscriptions broadcast. Error: {}",
-                e
-            )
-        })
+        .map_err(|e| log::warn!("Failed to send random subscriptions bcast. Error: {}", e))
         .ok();
     }
 }
 
-pub(super) async fn broadcast_unsubscribes(matcher: Matcher) {
-    let broadcast_interval = matcher.config.discovery.mean_cyclic_unsubscribes_interval;
+pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
+    let bcast_interval = matcher.config.discovery.mean_cyclic_unsubscribes_interval;
     loop {
         let matcher = matcher.clone();
         async move {
-            wait_random_interval(broadcast_interval).await;
+            wait_random_interval(bcast_interval).await;
 
-            // We always broadcast our own Offers.
+            // We always broadcast our own Offer unsubscribes.
             let our_offers = matcher.list_our_unsubscribed_offers().await?;
 
-            // Add some random subset of Offers to broadcast.
+            // Add some random subset of Offer unsubscribes to bcast.
             let num_ours_offers = our_offers.len();
-            let num_to_broadcast = matcher.config.discovery.num_broadcasted_unsubscribes;
+            let num_to_bcast = matcher.config.discovery.num_bcasted_unsubscribes;
 
             let all_offers = matcher.store.get_unsubscribed_offers(None).await?;
-            let random_offers = randomize_offers(our_offers, all_offers, num_to_broadcast as usize);
+            let our_and_random_offers =
+                randomize_offers(our_offers, all_offers, num_to_bcast as usize);
 
             log::debug!(
-                "Cyclic broadcast: Sending {} unsubscribes including {} ours.",
-                random_offers.len(),
+                "Cyclic bcast: Sending {} unsubscribes including {} ours.",
+                our_and_random_offers.len(),
                 num_ours_offers
             );
 
             matcher
                 .discovery
-                .broadcast_unsubscribes(random_offers)
+                .bcast_unsubscribes(our_and_random_offers)
                 .await?;
             Result::<(), anyhow::Error>::Ok(())
         }
         .await
-        .map_err(|e| log::warn!("Failed to send random unsubscribes broadcast. Error: {}", e))
+        .map_err(|e| log::warn!("Failed to send random unsubscribes bcast. Error: {}", e))
         .ok();
     }
 }

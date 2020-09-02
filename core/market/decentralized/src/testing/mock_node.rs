@@ -484,28 +484,28 @@ pub mod default {
 
     pub async fn empty_on_offers_received(
         _caller: String,
-        _msg: OffersReceived,
+        _msg: OffersRetrieved,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
 
     pub async fn empty_on_offers_ids_received(
         _caller: String,
-        _msg: OfferIdsReceived,
+        _msg: OffersBcast,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
 
     pub async fn empty_on_get_offers(
         _caller: String,
-        _msg: GetOffers,
+        _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])
     }
 
     pub async fn empty_on_offer_unsubscribed(
         _caller: String,
-        _msg: OfferUnsubscribed,
+        _msg: UnsubscribedOffersBcast,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
