@@ -1,6 +1,6 @@
 use ya_client_model::market::Agreement;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -42,9 +42,7 @@ impl AgreementView {
             .pointer(pointer)
             .ok_or(Error::NoKey(pointer.to_string()))?;
 
-        let mut map = Map::new();
-        properties(String::new(), &mut map, value.clone());
-        let map = map
+        let map = flatten(value.clone())
             .into_iter()
             .filter_map(|(k, v)| match <T as Deserialize>::deserialize(v) {
                 Ok(v) => Some((k, v)),
@@ -84,6 +82,40 @@ impl TryFrom<&Agreement> for AgreementView {
 
     fn try_from(agreement: &Agreement) -> Result<Self, Self::Error> {
         Self::try_from(expand(serde_json::to_value(agreement)?))
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct OfferTemplate {
+    pub properties: serde_json::Value,
+    pub constraints: String,
+}
+
+impl Default for OfferTemplate {
+    fn default() -> Self {
+        OfferTemplate {
+            properties: serde_json::Value::Object(serde_json::Map::new()),
+            constraints: String::new(),
+        }
+    }
+}
+
+impl OfferTemplate {
+    pub fn add_property(&mut self, key: &str, value: impl Into<String>) {
+        let properties = self.properties.as_object_mut().unwrap();
+        properties.insert(key.to_string(), serde_json::Value::String(value.into()));
+    }
+
+    pub fn add_properties(&mut self, value: serde_json::Value) {
+        extend(&mut self.properties, value);
+    }
+
+    pub fn add_constraints(&mut self, constraints: String) {
+        if self.constraints.is_empty() {
+            self.constraints = constraints;
+        } else {
+            self.constraints = format!("(& {} {})", self.constraints, constraints);
+        }
     }
 }
 
@@ -235,7 +267,13 @@ fn merge_obj(a: &mut Value, b: Value) {
     }
 }
 
-fn properties(prefix: String, result: &mut Map<String, Value>, value: Value) {
+pub fn flatten(value: Value) -> Map<String, Value> {
+    let mut map = Map::new();
+    flatten_inner(String::new(), &mut map, value);
+    map
+}
+
+fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) {
     match value {
         Value::Object(m) => {
             for (k, v) in m.into_iter() {
@@ -243,16 +281,32 @@ fn properties(prefix: String, result: &mut Map<String, Value>, value: Value) {
                     result.insert(prefix.clone(), v);
                     continue;
                 }
-                let pi = match prefix.is_empty() {
+                let p = match prefix.is_empty() {
                     true => k,
                     _ => format!("{}.{}", prefix, k),
                 };
-                properties(pi, result, v);
+                flatten_inner(p, result, v);
             }
         }
         v => {
             result.insert(prefix, v);
         }
+    }
+}
+
+pub fn extend(a: &mut Value, b: Value) {
+    match (a, b) {
+        (a @ &mut Value::Object(_), Value::Object(b)) => {
+            let a = a.as_object_mut().unwrap();
+            for (k, v) in b {
+                extend(a.entry(k).or_insert(Value::Null), v);
+            }
+        }
+        (a @ &mut Value::Array(_), Value::Array(b)) => {
+            let a = a.as_array_mut().unwrap();
+            a.extend_from_slice(b.as_slice());
+        }
+        (a, b) => *a = b,
     }
 }
 
@@ -504,10 +558,45 @@ constraints: |
             "r": [123, "string"]
         });
 
-        let mut map = Map::new();
-        properties(String::new(), &mut map, source);
+        let map = flatten(source);
         assert_eq!(map.get("a.b.c").unwrap(), 1);
         assert_eq!(map.get("a.b").unwrap(), 2);
         assert_eq!(map.get("r").unwrap(), &serde_json::json!([123, "string"]));
+    }
+
+    #[test]
+    fn extend_json() {
+        let mut first = serde_json::json!({
+          "string": "original",
+          "unmodified": "unmodified",
+          "object" : {
+            "first" : "first original value",
+            "second" : "second original value"
+          },
+          "entries": [ "first", "second" ]
+        });
+        let second = serde_json::json!({
+          "string": "extended",
+          "extra": "extra",
+          "object": {
+            "first" : "first extended value",
+            "third": "third extended value"
+          },
+          "entries": [ "third" ]
+        });
+        let expected = serde_json::json!({
+          "string": "extended",
+          "unmodified": "unmodified",
+          "extra": "extra",
+          "object": {
+            "first" : "first extended value",
+            "second" : "second original value",
+            "third": "third extended value"
+          },
+          "entries": [ "first", "second", "third" ]
+        });
+
+        extend(&mut first, second);
+        assert_eq!(first, expected);
     }
 }

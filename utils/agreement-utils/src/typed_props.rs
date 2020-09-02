@@ -1,3 +1,6 @@
+use crate::agreement::flatten;
+use crate::OfferTemplate;
+
 pub trait OfferBuilder {
     fn build(&self) -> serde_json::Value;
 }
@@ -7,19 +10,21 @@ pub struct OfferDefinition {
     pub node_info: NodeInfo,
     pub service: ServiceInfo,
     pub com_info: ComInfo,
-
-    // TODO: We should implement better api for constructing
-    //       constraints. Dealing with strings will be difficult.
-    pub constraints: String,
+    pub offer: OfferTemplate,
 }
 
 impl OfferDefinition {
-    pub fn into_json(self) -> serde_json::Value {
+    pub fn into_json(mut self) -> serde_json::Value {
         let mut base = serde_json::Map::new();
         self.node_info.write_json(&mut base);
         self.service.write_json(&mut base);
         self.com_info.write_json(&mut base);
-        serde_json::json!({ "golem": base })
+
+        let json = serde_json::json!({ "golem": base });
+        let value = serde_json::Value::Object(flatten(json));
+
+        self.offer.add_properties(value);
+        self.offer.properties
     }
 }
 
@@ -191,7 +196,7 @@ mod test {
                 exeunit_info: serde_json::json!({"wasm.wasi.version@v".to_string(): "0.9.0".to_string()}),
             },
             com_info: Default::default(),
-            constraints: "()".to_string(),
+            offer: OfferTemplate::default(),
         };
 
         eprintln!(
