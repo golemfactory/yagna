@@ -91,7 +91,6 @@ impl<'c> ProposalDao<'c> {
                 // so we'll do some manual operations here
                 // TODO: Use sql max(expiration_ts)
                 let expired_negotiations = dsl_negotiation::market_negotiation
-                    .filter(dsl_negotiation::agreement_id.is_null())
                     .filter(
                         dsl_negotiation::id.ne_all(
                             dsl::market_proposal

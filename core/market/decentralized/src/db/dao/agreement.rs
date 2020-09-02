@@ -3,10 +3,9 @@ use diesel::prelude::*;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
-use crate::db::dao::sql_functions::{coalesce_id, datetime};
+use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
-use crate::db::schema::market_negotiation::dsl as negotiation_dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
 
@@ -121,31 +120,7 @@ impl<'c> AgreementDao<'c> {
         if num_deleted > 0 {
             log::info!("Clean market agreements: {} cleaned", num_deleted);
         }
-        self.clean_negotiations().await?;
         log::debug!("Clean market agreements: done");
-        Ok(())
-    }
-
-    pub async fn clean_negotiations(&self) -> DbResult<()> {
-        log::debug!("Clean market agreements negotiations: start");
-        let num_deleted = do_with_transaction(self.pool, move |conn| {
-            let nd = diesel::delete(negotiation_dsl::market_negotiation)
-                .filter(negotiation_dsl::agreement_id.is_not_null())
-                .filter(
-                    coalesce_id(negotiation_dsl::agreement_id, "")
-                        .ne_all(dsl::market_agreement.select(dsl::id)),
-                )
-                .execute(conn)?;
-            Result::<usize, DbError>::Ok(nd)
-        })
-        .await?;
-        if num_deleted > 0 {
-            log::info!(
-                "Clean market agreements negotiations: {} cleaned",
-                num_deleted
-            );
-        }
-        log::debug!("Clean market agreements negotiations: done");
         Ok(())
     }
 }

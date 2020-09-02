@@ -70,25 +70,13 @@ async fn test_agreement() -> Result<()> {
     let agreement_dao = db.as_dao::<AgreementDao>();
     agreement_dao.save(valid_agreement.clone()).await?;
     agreement_dao.save(expired_agreement.clone()).await?;
-    let valid_negotiation = generate_negotiation(Some(valid_agreement.id.clone()));
-    let expired_negotiation = generate_negotiation(Some(expired_agreement.id.clone()));
-    <PoolType as TestingDao<Negotiation>>::raw_insert(&db.clone().pool, valid_negotiation.clone()).await?;
-    <PoolType as TestingDao<Negotiation>>::raw_insert(&db.clone().pool, expired_negotiation.clone()).await?;
     clean(db.clone()).await;
     assert_eq!(
         <PoolType as TestingDao<Agreement>>::exists(&db.clone().pool, valid_agreement.id).await,
         true
     );
     assert_eq!(
-        <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, valid_negotiation.id).await,
-        true
-    );
-    assert_eq!(
         <PoolType as TestingDao<Agreement>>::exists(&db.clone().pool, expired_agreement.id).await,
-        false
-    );
-    assert_eq!(
-        <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, expired_negotiation.id).await,
         false
     );
     Ok(())
