@@ -416,6 +416,12 @@ async fn monitor_activity(
     activity: Activity,
     payment_manager: Addr<PaymentManager>,
 ) -> Result<Vec<String>> {
+    let _ = payment_manager
+        .send(payment_manager::AcceptAgreement {
+            agreement_id: activity.agreement_id.clone(),
+        })
+        .await?;
+
     let activity_id = activity.activity_id.clone();
     let batch_id = activity
         .exec()
@@ -471,12 +477,6 @@ async fn monitor_activity(
             false => None,
         })
         .collect::<Vec<_>>();
-
-    let _ = payment_manager
-        .send(payment_manager::AcceptAgreement {
-            agreement_id: activity.agreement_id.clone(),
-        })
-        .await?;
 
     Ok(output)
 }
