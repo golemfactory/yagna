@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 mod pre_exec;
 
 #[derive(Default, Clone, Copy)]

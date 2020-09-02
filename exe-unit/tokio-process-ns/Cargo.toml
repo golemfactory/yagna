@@ -7,9 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio= { version = "0.2", features=["process"] }
+
+[target.'cfg(target_os="linux")'.dependencies]
 libc= "0.2"
 nix="0.11.0"
-tokio= { version = "0.2", features=["process"] }
 
 [dev-dependencies]
 tokio= { version = "0.2", features=["process", "rt-threaded", "macros"] }
