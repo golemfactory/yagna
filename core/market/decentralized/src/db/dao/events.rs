@@ -6,8 +6,8 @@ use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::db::dao::demand::{demand_status, DemandState};
-use crate::db::dao::sql_functions::datetime;
 use crate::db::dao::offer::{query_state, OfferState};
+use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, SubscriptionId};
 use crate::db::schema::market_event::dsl;
 use crate::db::{DbError, DbResult};
@@ -102,10 +102,7 @@ impl<'c> EventsDao<'c> {
 
     pub async fn clean(&self) -> DbResult<()> {
         log::debug!("Clean market events: start");
-        let interval_days = std::env::var(EVENT_CONFIG.name)
-            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
-            .unwrap_or(EVENT_CONFIG.default)
-            .max(EVENT_CONFIG.min);
+        let interval_days = EVENT_CONFIG.get_value();
         let num_deleted = do_with_transaction(self.pool, move |conn| {
             let nd = diesel::delete(
                 dsl::market_event

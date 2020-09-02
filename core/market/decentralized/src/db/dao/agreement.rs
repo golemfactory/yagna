@@ -104,10 +104,7 @@ impl<'c> AgreementDao<'c> {
     pub async fn clean(&self) -> DbResult<()> {
         // FIXME use grace time from config file when #460 is merged
         log::debug!("Clean market agreements: start");
-        let interval_days = std::env::var(AGREEMENT_CONFIG.name)
-            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
-            .unwrap_or(AGREEMENT_CONFIG.default)
-            .max(AGREEMENT_CONFIG.min);
+        let interval_days = AGREEMENT_CONFIG.get_value();
         let num_deleted = do_with_transaction(self.pool, move |conn| {
             let nd = diesel::delete(
                 dsl::market_agreement

@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use ya_client::model::market::Proposal;
 
-use crate::db::model::{EventType, ProposalId, SubscriptionId,};
+use crate::db::model::{EventType, ProposalId, SubscriptionId};
 use crate::db::schema::market_event;
 
 #[derive(Clone, Debug, Insertable, Queryable)]

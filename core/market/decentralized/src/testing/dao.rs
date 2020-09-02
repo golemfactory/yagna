@@ -2,8 +2,6 @@ use async_trait::async_trait;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_persistence::executor::{do_with_transaction, PoolType};
 
-use crate::testing::events_helper::TestMarketEvent;
-use crate::db::{DbError, DbResult,};
 use crate::db::model::{
     Agreement, DbProposal, Demand, Negotiation, Offer, ProposalId, SubscriptionId,
 };
@@ -13,6 +11,8 @@ use crate::db::schema::market_event::dsl as event_dsl;
 use crate::db::schema::market_negotiation::dsl as negotiation_dsl;
 use crate::db::schema::market_offer::dsl as offer_dsl;
 use crate::db::schema::market_proposal::dsl as proposal_dsl;
+use crate::db::{DbError, DbResult};
+use crate::testing::events_helper::TestMarketEvent;
 
 #[async_trait]
 pub trait TestingDao<M: 'static + Send> {
@@ -109,8 +109,13 @@ impl TestingDao<DbProposal> for PoolType {
 
     async fn raw_insert(&self, instance: DbProposal) -> DbResult<()> {
         do_with_transaction(self, move |conn| {
-            Result::<usize, DbError>::Ok(diesel::insert_into(proposal_dsl::market_proposal).values(instance).execute(conn)?)
-        }).await?;
+            Result::<usize, DbError>::Ok(
+                diesel::insert_into(proposal_dsl::market_proposal)
+                    .values(instance)
+                    .execute(conn)?,
+            )
+        })
+        .await?;
         Ok(())
     }
 }
@@ -130,8 +135,13 @@ impl TestingDao<Negotiation> for PoolType {
 
     async fn raw_insert(&self, instance: Negotiation) -> DbResult<()> {
         do_with_transaction(self, move |conn| {
-            Result::<usize, DbError>::Ok(diesel::insert_into(negotiation_dsl::market_negotiation).values(instance).execute(conn)?)
-        }).await?;
+            Result::<usize, DbError>::Ok(
+                diesel::insert_into(negotiation_dsl::market_negotiation)
+                    .values(instance)
+                    .execute(conn)?,
+            )
+        })
+        .await?;
         Ok(())
     }
 }
@@ -150,8 +160,13 @@ impl TestingDao<TestMarketEvent> for PoolType {
     }
     async fn raw_insert(&self, instance: TestMarketEvent) -> DbResult<()> {
         do_with_transaction(self, move |conn| {
-            Result::<usize, DbError>::Ok(diesel::insert_into(event_dsl::market_event).values(instance).execute(conn)?)
-        }).await?;
+            Result::<usize, DbError>::Ok(
+                diesel::insert_into(event_dsl::market_event)
+                    .values(instance)
+                    .execute(conn)?,
+            )
+        })
+        .await?;
         Ok(())
     }
 }

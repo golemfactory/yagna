@@ -28,6 +28,15 @@ pub struct EnvConfig<'a, T> {
     pub min: T,
 }
 
+impl<'a> EnvConfig<'a, u64> {
+    pub fn get_value(&self) -> u64 {
+        std::env::var(self.name)
+            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
+            .unwrap_or(self.default)
+            .max(self.min)
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum MarketError {
     #[error(transparent)]

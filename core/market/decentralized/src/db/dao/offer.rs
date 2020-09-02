@@ -179,10 +179,14 @@ impl<'c> OfferDao<'c> {
     pub async fn clean_unsubscribes(&self) -> DbResult<()> {
         log::debug!("Clean market offers unsubscribes: start");
         let num_deleted = do_with_transaction(self.pool, move |conn| {
-            let nd = diesel::delete(dsl_unsubscribed::market_offer_unsubscribed.filter(dsl_unsubscribed::expiration_ts.lt(sql_now)))
-                .execute(conn)?;
+            let nd = diesel::delete(
+                dsl_unsubscribed::market_offer_unsubscribed
+                    .filter(dsl_unsubscribed::expiration_ts.lt(sql_now)),
+            )
+            .execute(conn)?;
             Result::<usize, DbError>::Ok(nd)
-        }).await?;
+        })
+        .await?;
         if num_deleted > 0 {
             log::info!("Clean market offers unsubscribes: {} cleaned", num_deleted);
         }
