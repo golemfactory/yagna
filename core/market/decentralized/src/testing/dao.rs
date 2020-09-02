@@ -71,29 +71,6 @@ impl TestingDao<Offer> for PoolType {
     }
 }
 
-/*
-#[async_trait]
-impl TestingDao<NewMarketEvent> for PoolType {
-    type IdType = i32;
-    async fn get_by_id(&self, id: i32) -> DbResult<Option<NewMarketEvent>> {
-        do_with_transaction(self, move |conn| {
-            Ok(event_dsl::market_event
-                .filter(event_dsl::id.eq(id))
-                .first(conn)
-                .optional()?)
-        })
-        .await
-    }
-
-    async fn raw_insert(&self, instance: NewMarketEvent) -> DbResult<()> {
-        do_with_transaction(self, move |conn| {
-            Result::<usize, DbError>::Ok(diesel::insert_into(event_dsl::market_event).values(instance).execute(conn)?)
-        }).await?;
-        Ok(())
-    }
-}
-*/
-
 #[async_trait]
 impl TestingDao<DbProposal> for PoolType {
     type IdType = ProposalId;
