@@ -73,6 +73,17 @@ impl MetricsService {
             metrics,
         })
     }
+
+    pub fn usage_vector() -> Vec<String> {
+        // TODO: sgx
+        [
+            TimeMetric::ID.to_string(),
+            CpuMetric::ID.to_string(),
+            MemMetric::ID.to_string(),
+            StorageMetric::ID.to_string(),
+        ]
+        .to_vec()
+    }
 }
 
 impl Actor for MetricsService {

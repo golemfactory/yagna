@@ -7,6 +7,7 @@ use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
 use actix::prelude::*;
 use futures::future::{AbortHandle, Abortable};
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::io;
@@ -146,6 +147,27 @@ pub struct TransferService {
 
 impl TransferService {
     pub fn new(ctx: &ExeUnitContext) -> TransferService {
+        TransferService {
+            providers: Self::default_providers(),
+            cache: Cache::new(ctx.cache_dir.clone()),
+            work_dir: ctx.work_dir.clone(),
+            task_package: ctx.agreement.task_package.clone(),
+            abort_handles: HashSet::new(),
+        }
+    }
+
+    pub fn schemes() -> Vec<String> {
+        Self::default_providers()
+            .values()
+            .map(|p| p.schemes())
+            .flatten()
+            .unique()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    fn default_providers(
+    ) -> HashMap<&'static str, Rc<dyn TransferProvider<TransferData, TransferError>>> {
         let mut providers = HashMap::new();
 
         let provider_vec: Vec<Rc<dyn TransferProvider<TransferData, TransferError>>> = vec![
@@ -157,14 +179,7 @@ impl TransferService {
                 providers.insert(scheme, provider.clone());
             }
         }
-
-        TransferService {
-            providers,
-            cache: Cache::new(ctx.cache_dir.clone()),
-            work_dir: ctx.work_dir.clone(),
-            task_package: ctx.agreement.task_package.clone(),
-            abort_handles: HashSet::new(),
-        }
+        providers
     }
 
     fn source(

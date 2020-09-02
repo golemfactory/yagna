@@ -1,14 +1,17 @@
 use actix::prelude::*;
+use chrono::Utc;
 use futures::channel::oneshot;
 use futures::TryFutureExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::activity_state::StatePair;
 use ya_client_model::activity::{
     ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
 };
 use ya_core_model::activity;
+use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::agreement::Agreement;
@@ -19,10 +22,8 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
-use chrono::Utc;
 
 pub mod agreement;
-use ya_runtime_api::deploy;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -68,6 +69,22 @@ impl<R: Runtime> ExeUnit<R> {
                 Box::new(ServiceAddr::new(runtime)),
             ],
         }
+    }
+
+    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate> {
+        use crate::runtime::process::RuntimeProcess;
+        let mut template = RuntimeProcess::offer_template(binary)?;
+
+        template.add_property(
+            "golem.usage.vector",
+            format!("[{}]", MetricsService::usage_vector().join(", ")),
+        );
+        template.add_property(
+            "golem.activity.caps.transfer.protocol",
+            format!("[{}]", TransferService::schemes().join(", ")),
+        );
+
+        Ok(template)
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
