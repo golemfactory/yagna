@@ -43,6 +43,30 @@ impl ProcessGroupExt<Command> for Command {
     }
 }
 
+impl ProcessGroupExt<tokio::process::Command> for tokio::process::Command {
+    #[cfg(unix)]
+    fn new_process_group(&mut self) -> &mut tokio::process::Command {
+        use nix::Error;
+        use std::io;
+
+        unsafe {
+            self.pre_exec(|| {
+                nix::unistd::setsid().map_err(|e| match e {
+                    Error::Sys(errno) => io::Error::from(errno),
+                    error => io::Error::new(io::ErrorKind::Other, error),
+                })?;
+                Ok(())
+            });
+        }
+        self
+    }
+
+    #[cfg(not(unix))]
+    fn new_process_group(&mut self) -> &mut tokio::process::Command {
+        self
+    }
+}
+
 #[derive(Display)]
 pub enum ExeUnitExitStatus {
     #[display(fmt = "Aborted - {}", _0)]
