@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use derive_more::Display;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
 
 use ya_utils_process::{ProcessGroupExt, ProcessHandle};
@@ -57,6 +57,32 @@ impl ExeUnitInstance {
         };
 
         Ok(instance)
+    }
+
+    pub async fn run_with_output(
+        binary_path: &Path,
+        working_dir: &Path,
+        args: Vec<String>,
+    ) -> Result<String> {
+        log::info!("Running ExeUnit: {}", binary_path.display());
+        log::debug!("Running args: {:?}", args);
+        log::debug!("Running in: {:?}", working_dir);
+
+        let binary_path = binary_path
+            .canonicalize()
+            .with_context(|| format!("Failed to run [{}].", binary_path.display()))?;
+        let mut command = tokio::process::Command::new(&binary_path);
+
+        // new_process_group is a no-op on non-Unix systems
+        let child = command
+            .args(args)
+            .current_dir(working_dir)
+            .stdout(Stdio::piped())
+            .new_process_group()
+            .spawn()?;
+
+        let output = child.wait_with_output().await?;
+        Ok(String::from_utf8_lossy(output.stdout.as_slice()).to_string())
     }
 
     pub fn kill(&self) {

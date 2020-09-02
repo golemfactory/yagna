@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use derive_more::Display;
 use futures::future::join_all;
+use futures::{FutureExt, TryFutureExt};
 use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
 
-use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
 use ya_client_model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_core_model::activity;
@@ -25,6 +26,7 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
+use crate::market::Preset;
 use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // =========================================== //
@@ -43,6 +45,10 @@ pub struct UpdateActivity;
 pub struct GetExeUnit {
     pub name: String,
 }
+
+#[derive(Message)]
+#[rtype(result = "Result<HashMap<String, OfferTemplate>>")]
+pub struct GetOfferTemplates(pub Vec<Preset>);
 
 // =========================================== //
 // Public signals sent by TaskRunner
@@ -346,6 +352,14 @@ impl TaskRunner {
         Ok(())
     }
 
+    fn offer_template(&self, exeunit_name: &str) -> impl Future<Output = Result<String>> {
+        let working_dir = self.tasks_dir.clone();
+        let args = vec![String::from("offer-template")];
+        self.registry
+            .run_exeunit_with_output(exeunit_name, args, &working_dir)
+            .map_err(|error| error.context(format!("ExeUnit offer-template command failed")))
+    }
+
     #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
@@ -374,14 +388,10 @@ impl TaskRunner {
 
         self.save_agreement(&agreement_path, &agreement_id)?;
 
-        let mut args = vec![];
+        let mut args = vec!["service-bus", activity_id, activity::local::BUS_ID];
         args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
-
-        args.push("service-bus");
-        args.push(activity_id);
-        args.push(activity::local::BUS_ID);
 
         let args = args.iter().map(ToString::to_string).collect();
 
@@ -516,6 +526,30 @@ impl Actor for TaskRunner {
 forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
+
+impl Handler<GetOfferTemplates> for TaskRunner {
+    type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
+
+    fn handle(&mut self, msg: GetOfferTemplates, _: &mut Context<Self>) -> Self::Result {
+        let entries = msg
+            .0
+            .into_iter()
+            .map(|p| (p.name, self.offer_template(&p.exeunit_name)))
+            .collect::<Vec<_>>();
+
+        async move {
+            let mut result: HashMap<String, OfferTemplate> = HashMap::new();
+            for (key, fut) in entries {
+                log::info!("Reading offer template for {}", key);
+                let string = fut.await?;
+                let value = serde_json::from_str(string.as_str())?;
+                result.insert(key, value);
+            }
+            Ok(result)
+        }
+        .boxed_local()
+    }
+}
 
 forward_actix_handler!(
     TaskRunner,

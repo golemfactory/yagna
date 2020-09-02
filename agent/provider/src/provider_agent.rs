@@ -1,5 +1,5 @@
 use crate::events::Event;
-use crate::execution::{GetExeUnit, TaskRunner, UpdateActivity};
+use crate::execution::{GetExeUnit, GetOfferTemplates, TaskRunner, UpdateActivity};
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
@@ -66,6 +66,7 @@ impl ProviderAgent {
 
         let preset_names = presets.iter().map(|p| &p.name).collect::<Vec<_>>();
         log::debug!("Preset names: {:?}", preset_names);
+        let offer_templates = runner.send(GetOfferTemplates(presets.clone())).await??;
 
         for preset in presets {
             let com_info = match preset.pricing_model.as_str() {
@@ -79,6 +80,10 @@ impl ProviderAgent {
                     ))
                 }
             };
+            let mut offer = offer_templates
+                .get(&preset.name)
+                .ok_or_else(|| anyhow!("Offer template not found for preset [{}]", preset.name))?
+                .clone();
 
             let msg = GetExeUnit {
                 name: preset.exeunit_name.clone(),
@@ -91,6 +96,9 @@ impl ProviderAgent {
                 )
             })?;
 
+            let constraints = Self::build_constraints(node_info.subnet.clone())?;
+            offer.add_constraints(constraints);
+
             // Create simple offer on market.
             let create_offer_message = CreateOffer {
                 preset,
@@ -98,7 +106,7 @@ impl ProviderAgent {
                     node_info: node_info.clone(),
                     service: ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build()),
                     com_info,
-                    constraints: Self::build_constraints(node_info.subnet.clone())?,
+                    offer,
                 },
             };
             market.send(create_offer_message).await??;
