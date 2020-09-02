@@ -1,14 +1,14 @@
 use anyhow::Result;
 use chrono::{Duration, NaiveDateTime, Utc};
-use std::str::FromStr;
-use ya_client::model::NodeId;
 use ya_market_decentralized::testing::cleaner::clean;
 use ya_market_decentralized::testing::dao::TestingDao;
-use ya_market_decentralized::testing::events_helper::TestMarketEvent;
+use ya_market_decentralized::testing::events_helper::{generate_event, TestMarketEvent};
+use ya_market_decentralized::testing::mock_agreement::generate_agreement;
+use ya_market_decentralized::testing::mock_offer::{generate_demand, generate_offer};
+use ya_market_decentralized::testing::proposal_util::{generate_negotiation, generate_proposal};
 use ya_market_decentralized::testing::{
-    Agreement, AgreementDao, AgreementState, DbProposal, Demand, DemandDao, EventType, IssuerType,
-    MarketsNetwork, Negotiation, Offer, OfferDao, OwnerType, ProposalId, ProposalState,
-    SubscriptionId,
+    Agreement, AgreementDao, DbProposal, Demand, DemandDao, MarketsNetwork, Negotiation, Offer,
+    OfferDao,
 };
 use ya_persistence::executor::PoolType;
 
@@ -18,46 +18,6 @@ fn future() -> NaiveDateTime {
 
 fn past() -> NaiveDateTime {
     (Utc::now() - Duration::days(91)).naive_utc()
-}
-
-fn generate_negotiation(agreement_id: Option<ProposalId>) -> Negotiation {
-    use uuid::Uuid;
-    Negotiation {
-        id: format!("{}", Uuid::new_v4()),
-        subscription_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        offer_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        demand_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        provider_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
-        requestor_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
-        agreement_id,
-    }
-}
-
-fn generate_agreement(unifier: i64, valid_to: NaiveDateTime) -> Agreement {
-    Agreement {
-        id: ProposalId::generate_id(
-                &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-                &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-                // Add parametrized integer - unifier to ensure unique ids
-                &(Utc::now() + Duration::days(unifier)).naive_utc(),
-                OwnerType::Requestor,
-        ),
-        offer_properties: "".to_string(),
-        offer_constraints: "".to_string(),
-        demand_properties: "".to_string(),
-        demand_constraints: "".to_string(),
-        offer_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        demand_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        provider_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
-        requestor_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
-        creation_ts: Utc::now().naive_utc(),
-        valid_to,
-        approved_date: None,
-        state: AgreementState::Proposal,
-        proposed_signature: None,
-        approved_signature: None,
-        committed_signature: None,
-    }
 }
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -81,18 +41,6 @@ async fn test_agreement() -> Result<()> {
         false
     );
     Ok(())
-}
-
-fn generate_demand(id: &str, expiration_ts: NaiveDateTime) -> Demand {
-    Demand {
-        id: SubscriptionId::from_str(id).unwrap(),
-        properties: "".to_string(),
-        constraints: "".to_string(),
-        node_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
-        creation_ts: Utc::now().naive_utc(),
-        insertion_ts: None,
-        expiration_ts,
-    }
 }
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -123,18 +71,6 @@ async fn test_demand() -> Result<()> {
         false
     );
     Ok(())
-}
-
-fn generate_offer(id: &str, expiration_ts: NaiveDateTime) -> Offer {
-    Offer {
-        id: SubscriptionId::from_str(id).unwrap(),
-        properties: "".to_string(),
-        constraints: "".to_string(),
-        node_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
-        creation_ts: Utc::now().naive_utc(),
-        insertion_ts: None,
-        expiration_ts,
-    }
 }
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -172,21 +108,6 @@ async fn test_offer() -> Result<()> {
     Ok(())
 }
 
-fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
-    TestMarketEvent {
-        id,
-        subscription_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        event_type: EventType::ProviderProposal,
-        artifact_id: ProposalId::generate_id(
-                &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-                &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-                &Utc::now().naive_utc(),
-                OwnerType::Requestor,
-        ),
-        timestamp,
-    }
-}
-
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_events() -> Result<()> {
@@ -210,30 +131,6 @@ async fn test_events() -> Result<()> {
         false
     );
     Ok(())
-}
-
-fn generate_proposal(
-    unifier: i64,
-    expiration_ts: NaiveDateTime,
-    negotiation_id: String,
-) -> DbProposal {
-    DbProposal {
-        id: ProposalId::generate_id(
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-            // Add parametrized integer - unifier to ensure unique ids
-            &(Utc::now() + Duration::days(unifier)).naive_utc(),
-            OwnerType::Requestor,
-        ),
-        prev_proposal_id: None,
-        issuer: IssuerType::Them,
-        negotiation_id,
-        properties: "".to_string(),
-        constraints: "".to_string(),
-        state: ProposalState::Initial,
-        creation_ts: Utc::now().naive_utc(),
-        expiration_ts,
-    }
 }
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]

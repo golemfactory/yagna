@@ -11,6 +11,7 @@ pub use super::protocol::*;
 pub mod bcast;
 pub mod dao;
 pub mod events_helper;
+pub mod mock_agreement;
 pub mod mock_net;
 pub mod mock_node;
 pub mod mock_offer;
