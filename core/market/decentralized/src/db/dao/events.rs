@@ -13,8 +13,8 @@ use crate::db::schema::market_event::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
 
-const EVENT_CONFIG: EnvConfig<'static, u64> = EnvConfig {
-    name: "YAGNA_MARKET_EVENT_GRACE_TIME",
+const EVENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
+    name: "YAGNA_MARKET_EVENT_STORE_DAYS",
     default: 1, // days
     min: 1,     // days
 };
@@ -102,7 +102,7 @@ impl<'c> EventsDao<'c> {
 
     pub async fn clean(&self) -> DbResult<()> {
         log::debug!("Clean market events: start");
-        let interval_days = EVENT_CONFIG.get_value();
+        let interval_days = EVENT_STORE_DAYS.get_value();
         let num_deleted = do_with_transaction(self.pool, move |conn| {
             let nd = diesel::delete(
                 dsl::market_event

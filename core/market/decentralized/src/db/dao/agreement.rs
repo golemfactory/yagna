@@ -9,8 +9,8 @@ use crate::db::schema::market_agreement::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
 
-const AGREEMENT_CONFIG: EnvConfig<'static, u64> = EnvConfig {
-    name: "YAGNA_MARKET_AGREEMENT_GRACE_TIME",
+const AGREEMENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
+    name: "YAGNA_MARKET_AGREEMENT_STORE_DAYS",
     default: 90, // days
     min: 30,     // days
 };
@@ -104,7 +104,7 @@ impl<'c> AgreementDao<'c> {
     pub async fn clean(&self) -> DbResult<()> {
         // FIXME use grace time from config file when #460 is merged
         log::debug!("Clean market agreements: start");
-        let interval_days = AGREEMENT_CONFIG.get_value();
+        let interval_days = AGREEMENT_STORE_DAYS.get_value();
         let num_deleted = do_with_transaction(self.pool, move |conn| {
             let nd = diesel::delete(
                 dsl::market_agreement
