@@ -1907,9 +1907,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
-name = "graphene_api"
+name = "graphene"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/graphene-rust.git?rev=6c309f2627864f6d1634fc26312a73be4b47409a#6c309f2627864f6d1634fc26312a73be4b47409a"
+source = "git+https://github.com/golemfactory/graphene-rust.git?rev=57b0a366658a2d609d9c0cef209955760e363730#57b0a366658a2d609d9c0cef209955760e363730"
 dependencies = [
  "anyhow",
  "base64 0.11.0",
@@ -1921,9 +1921,7 @@ dependencies = [
  "openssl",
  "serde",
  "serde_json",
- "sgx-types",
  "thiserror",
- "tokio 0.2.22",
 ]
 
 [[package]]
@@ -4123,16 +4121,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sgx-types"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/sgx-types.git?rev=157af8487d538062155d98712fee61a6d69c8ced#157af8487d538062155d98712fee61a6d69c8ced"
-dependencies = [
- "byteorder",
- "hex",
- "serde",
-]
-
-[[package]]
 name = "sha1"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5611,10 +5599,10 @@ dependencies = [
  "bigdecimal",
  "bitflags 1.2.1",
  "chrono",
+ "graphene",
  "log 0.4.11",
  "serde",
  "serde_bytes",
- "sgx-types",
  "thiserror",
  "ya-client-model",
  "ya-service-bus",
@@ -6218,7 +6206,7 @@ name = "ya-sgx"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "graphene_api",
+ "graphene",
  "ya-client-model",
  "ya-core-model",
  "ya-service-bus",

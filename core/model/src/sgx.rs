@@ -10,7 +10,7 @@ pub enum Error {
 
 pub mod local {
     use super::*;
-    pub use sgx_types::ias::AttestationResponse;
+    pub use graphene::AttestationResponse;
     use ya_service_bus::RpcMessage;
 
     /// Local SGX bus address.
