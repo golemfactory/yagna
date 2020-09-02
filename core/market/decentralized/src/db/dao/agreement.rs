@@ -3,7 +3,7 @@ use diesel::prelude::*;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
-use crate::db::dao::functions::{coalesce_id, datetime};
+use crate::db::dao::sql_functions::{coalesce_id, datetime};
 use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
 use crate::db::schema::market_negotiation::dsl as negotiation_dsl;

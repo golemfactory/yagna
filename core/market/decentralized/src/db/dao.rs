@@ -2,7 +2,7 @@ mod agreement;
 pub mod cleaner;
 mod demand;
 mod events;
-pub mod functions {
+pub mod sql_functions {
     use diesel::sql_types;
     diesel::sql_function!(fn datetime(timestring:sql_types::Text, modifier:sql_types::Text) -> sql_types::Timestamp);
     diesel::sql_function!(
