@@ -7,7 +7,7 @@ use super::Matcher;
 use crate::db::model::SubscriptionId;
 
 pub(super) async fn bcast_offers(matcher: Matcher) {
-    if matcher.config.discovery.num_bcasted_offers == 0 {
+    if matcher.config.discovery.max_bcasted_offers <= 0 {
         return;
     }
 
@@ -44,7 +44,7 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
 }
 
 pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
-    if matcher.config.discovery.num_bcasted_unsubscribes == 0 {
+    if matcher.config.discovery.max_bcasted_unsubscribes <= 0 {
         return;
     }
 
