@@ -25,7 +25,7 @@ use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
 use crate::negotiation::error::QueryEventsError;
 use crate::protocol::callback::*;
-use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
+use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
 use crate::testing::mock_identity::MockIdentity;
 use crate::testing::mock_node::default::{
@@ -186,7 +186,7 @@ impl MarketsNetwork {
     ) -> Result<Self> {
         let identity_api = MockIdentity::new(name);
         let discovery = builder
-            .data(identity_api.clone() as Arc<dyn IdentityApi>)
+            .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
             .build();
         self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
             .await
@@ -491,21 +491,21 @@ pub mod default {
 
     pub async fn empty_on_offers_ids_received(
         _caller: String,
-        _msg: OfferIdsReceived,
+        _msg: OffersBcast,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
 
     pub async fn empty_on_get_offers(
         _caller: String,
-        _msg: GetOffers,
+        _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])
     }
 
     pub async fn empty_on_offer_unsubscribed(
         _caller: String,
-        _msg: OfferUnsubscribed,
+        _msg: UnsubscribedOffersBcast,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }

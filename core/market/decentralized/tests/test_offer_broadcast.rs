@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::discovery::*;
+use ya_market_decentralized::testing::discovery::{message::*, Discovery};
 use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
 use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
@@ -76,7 +76,7 @@ async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
     offer.id = invalid_id.clone();
 
     // Offer should be propagated to market1, but he should reject it.
-    discovery2.broadcast_offers(vec![offer.id]).await?;
+    discovery2.bcast_offers(vec![offer.id]).await?;
     tokio::time::delay_for(Duration::from_millis(50)).await;
 
     assert_err_eq!(
@@ -139,7 +139,7 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     let counter = offers_counter.clone();
 
     let discovery_builder = MarketsNetwork::discovery_builder().add_handler(
-        move |_caller: String, _msg: OfferIdsReceived| {
+        move |_caller: String, _msg: OffersBcast| {
             let offers_counter = counter.clone();
             let mut tx = tx.clone();
             async move {
@@ -155,7 +155,7 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 
     // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
     let discovery3: Discovery = network.get_discovery("Node-3");
-    discovery3.broadcast_offers(vec![offer.id]).await?;
+    discovery3.bcast_offers(vec![offer.id]).await?;
 
     // Wait for broadcast.
     tokio::time::timeout(Duration::from_millis(150), rx.next()).await?;
@@ -203,7 +203,7 @@ async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
     let invalid_subscription = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
 
     let offers = discovery2
-        .retrieve_offers(
+        .get_remote_offers(
             id1.identity.to_string(),
             vec![subscription_id.clone(), invalid_subscription],
         )

@@ -18,8 +18,8 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
-    config.discovery.num_broadcasted_offers = 50;
+    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
+    config.discovery.num_bcasted_offers = 50;
 
     let network = MarketsNetwork::new("test_startup_offers_sharing")
         .await
@@ -84,10 +84,10 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
+    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
     config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
-    config.discovery.num_broadcasted_offers = 50;
-    config.discovery.num_broadcasted_unsubscribes = 50;
+    config.discovery.num_bcasted_offers = 50;
+    config.discovery.num_bcasted_unsubscribes = 50;
 
     let network = MarketsNetwork::new("test_unsubscribes_cyclic_broadcasts")
         .await
@@ -130,7 +130,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     }
 
     // We expect, that after this time all nodes will have the same knowledge about Offers.
-    tokio::time::delay_for(Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(200)).await;
 
     // Break networking, so unsubscribe broadcasts won't come to Node-3.
     network.break_networking_for("Node-3")?;
@@ -216,8 +216,8 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
-    config.discovery.num_broadcasted_offers = 50;
+    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
+    config.discovery.num_bcasted_offers = 50;
 
     let network = MarketsNetwork::new("test_sharing_someones_else_offers")
         .await
@@ -287,10 +287,10 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
 
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
-    config.discovery.mean_cyclic_broadcast_interval = Duration::from_millis(100);
+    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
     config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
-    config.discovery.num_broadcasted_offers = 50;
-    config.discovery.num_broadcasted_unsubscribes = 50;
+    config.discovery.num_bcasted_offers = 50;
+    config.discovery.num_bcasted_unsubscribes = 50;
 
     let network = MarketsNetwork::new("test_sharing_someones_else_unsubscribes")
         .await

@@ -1,29 +1,22 @@
-use futures::StreamExt;
-use rand::seq::SliceRandom;
-use rand::Rng;
-use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::model::{Demand, DisplayVec, Offer, SubscriptionId};
-use crate::protocol::discovery::builder::DiscoveryBuilder;
-use crate::protocol::discovery::{
-    Discovery, DiscoveryRemoteError, GetOffers, OfferIdsReceived, OfferUnsubscribed,
-    OffersRetrieved,
-};
+use crate::config::Config;
+use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::identity::IdentityApi;
+use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
 
+pub(crate) mod cyclic;
 pub mod error;
+pub(crate) mod handlers;
 pub(crate) mod resolver;
 pub(crate) mod store;
 
-use crate::config::Config;
-use crate::identity::IdentityApi;
-use error::{MatcherError, MatcherInitError, ModifyOfferError, QueryOffersError};
+use error::{MatcherError, MatcherInitError, QueryOffersError};
 use resolver::Resolver;
-use std::iter::FromIterator;
 use store::SubscriptionStore;
 
 /// Stores proposal generated from resolver.
@@ -58,13 +51,13 @@ impl Matcher {
         let resolver = Resolver::new(store.clone(), proposal_sender);
 
         let discovery = DiscoveryBuilder::default()
-            .data(identity_api.clone())
-            .data(store.clone())
-            .data(resolver.clone())
-            .add_data_handler(filter_known_offer_ids)
-            .add_data_handler(on_offers_received)
-            .add_data_handler(on_get_offers)
-            .add_data_handler(on_offer_unsubscribed)
+            .add_data(identity_api.clone())
+            .add_data(store.clone())
+            .add_data(resolver.clone())
+            .add_data_handler(handlers::filter_out_known_offer_ids)
+            .add_data_handler(handlers::receive_remote_offers)
+            .add_data_handler(handlers::get_local_offers)
+            .add_data_handler(handlers::receive_remote_offer_unsubscribes)
             .build();
 
         let matcher = Matcher {
@@ -88,8 +81,8 @@ impl Matcher {
 
         // We can't spawn broadcasts, before gsb is bound.
         // That's why we don't spawn this in Matcher::new.
-        tokio::task::spawn_local(cyclic_broadcast_offers(self.clone()));
-        tokio::task::spawn_local(cyclic_broadcast_unsubscribes(self.clone()));
+        tokio::task::spawn_local(cyclic::bcast_offers(self.clone()));
+        tokio::task::spawn_local(cyclic::bcast_unsubscribes(self.clone()));
         Ok(())
     }
 
@@ -116,10 +109,10 @@ impl Matcher {
         // anyway during random broadcast, so nothing bad happens here in case of error.
         let _ = self
             .discovery
-            .broadcast_offers(vec![offer.id.clone()])
+            .bcast_offers(vec![offer.id.clone()])
             .await
             .map_err(|e| {
-                log::warn!("Failed to broadcast offer [{}]. Error: {}.", offer.id, e,);
+                log::warn!("Failed to bcast offer [{}]. Error: {}.", offer.id, e,);
             });
         Ok(offer)
     }
@@ -146,11 +139,11 @@ impl Matcher {
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .broadcast_unsubscribes(vec![offer_id.clone()])
+            .bcast_unsubscribes(vec![offer_id.clone()])
             .await
             .map_err(|e| {
                 log::warn!(
-                    "Failed to broadcast unsubscribe offer [{1}]. Error: {0}.",
+                    "Failed to bcast unsubscribe offer [{1}]. Error: {0}.",
                     e,
                     offer_id
                 );
@@ -215,290 +208,5 @@ impl Matcher {
         }
 
         Ok(our_offers)
-    }
-}
-
-// =========================================== //
-// Discovery protocol messages handlers
-// =========================================== //
-
-pub(crate) async fn filter_known_offer_ids(
-    resolver: Resolver,
-    _caller: String,
-    msg: OfferIdsReceived,
-) -> Result<Vec<SubscriptionId>, ()> {
-    // We shouldn't propagate Offer, if we already have it in our database.
-    // Note that when we broadcast our Offer, it will reach us too, so it concerns
-    // not only Offers from other nodes.
-    Ok(resolver
-        .store
-        .filter_out_existing(msg.offers)
-        .await
-        .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
-}
-
-pub(crate) async fn on_offers_received(
-    resolver: Resolver,
-    caller: String,
-    msg: OffersRetrieved,
-) -> Result<Vec<SubscriptionId>, ()> {
-    let added_offers_ids = futures::stream::iter(msg.offers.into_iter())
-        .filter_map(|offer| {
-            let resolver = resolver.clone();
-            let offer_id = offer.id.clone();
-            async move {
-                resolver
-                    .store
-                    .save_offer(offer)
-                    .await
-                    .map(|offer| {
-                        resolver.receive(&offer);
-                        offer.id
-                    })
-                    .map_err(|e| {
-                        log::warn!("Failed to save Offer [{}]. Error: {}", &offer_id, &e);
-                        e
-                    })
-                    .ok()
-            }
-        })
-        .collect::<Vec<SubscriptionId>>()
-        .await;
-
-    log::info!(
-        "Received new Offers from [{}]: \n{}",
-        caller,
-        DisplayVec(&added_offers_ids)
-    );
-    Ok(added_offers_ids)
-}
-
-pub(crate) async fn on_get_offers(
-    resolver: Resolver,
-    _caller: String,
-    msg: GetOffers,
-) -> Result<Vec<Offer>, DiscoveryRemoteError> {
-    match resolver.store.get_offers_batch(msg.offers).await {
-        Ok(offers) => Ok(offers),
-        Err(e) => {
-            log::error!("Failed to get batch offers. Error: {}", e);
-            Err(DiscoveryRemoteError::InternalError(format!(
-                "Failed to get offers from db."
-            )))
-        }
-    }
-}
-
-pub(crate) async fn on_offer_unsubscribed(
-    store: SubscriptionStore,
-    caller: String,
-    msg: OfferUnsubscribed,
-) -> Result<Vec<SubscriptionId>, ()> {
-    let new_unsubscribes = futures::stream::iter(msg.offers.into_iter())
-        .filter_map(|offer_id| {
-            let store = store.clone();
-            let caller = caller.parse().ok();
-            async move {
-                store
-                    .unsubscribe_offer(&offer_id, false, caller)
-                    .await
-                    // Some errors don't mean we shouldn't propagate unsubscription.
-                    .or_else(|e| match e {
-                        ModifyOfferError::UnsubscribedNotRemoved(..) => Ok(()),
-                        _ => Err(e),
-                    })
-                    // Collect Offers, that were correctly unsubscribed.
-                    .map(|_| offer_id.clone())
-                    .map_err(|e| match e {
-                        // We don't want to warn about normal situations.
-                        ModifyOfferError::Unsubscribed(..) | ModifyOfferError::Expired(..) => e,
-                        _ => {
-                            log::warn!(
-                                "Failed to unsubscribe Offer [{}]. Error: {}",
-                                &offer_id,
-                                &e
-                            );
-                            e
-                        }
-                    })
-                    .ok()
-            }
-        })
-        .collect::<Vec<SubscriptionId>>()
-        .await;
-
-    if !new_unsubscribes.is_empty() {
-        log::info!(
-            "Received new Offers to unsubscribe from [{}]: \n{}",
-            caller,
-            DisplayVec(&new_unsubscribes)
-        );
-    }
-    Ok(new_unsubscribes)
-}
-
-// =========================================== //
-// Cyclic broadcasting
-// =========================================== //
-
-async fn cyclic_broadcast_offers(matcher: Matcher) {
-    let broadcast_interval = matcher.config.discovery.mean_cyclic_broadcast_interval;
-    loop {
-        let matcher = matcher.clone();
-        async move {
-            wait_random_interval(broadcast_interval).await;
-
-            // We always broadcast our own Offers.
-            let our_offers = matcher
-                .list_our_offers()
-                .await?
-                .into_iter()
-                .map(|offer| offer.id)
-                .collect::<Vec<SubscriptionId>>();
-
-            // Add some random subset of Offers to broadcast.
-            let num_ours_offers = our_offers.len();
-            let num_to_broadcast = matcher.config.discovery.num_broadcasted_offers;
-
-            // TODO: Don't query full Offers from database if we only need ids.
-            let all_offers = matcher
-                .store
-                .get_offers(None)
-                .await?
-                .into_iter()
-                .map(|offer| offer.id)
-                .collect::<Vec<SubscriptionId>>();
-            let random_offers = randomize_offers(our_offers, all_offers, num_to_broadcast as usize);
-
-            log::debug!(
-                "Cyclic broadcast: Sending {} Offers including {} ours.",
-                random_offers.len(),
-                num_ours_offers
-            );
-
-            matcher.discovery.broadcast_offers(random_offers).await?;
-            Result::<(), anyhow::Error>::Ok(())
-        }
-        .await
-        .map_err(|e| {
-            log::warn!(
-                "Failed to send random subscriptions broadcast. Error: {}",
-                e
-            )
-        })
-        .ok();
-    }
-}
-
-async fn cyclic_broadcast_unsubscribes(matcher: Matcher) {
-    let broadcast_interval = matcher.config.discovery.mean_cyclic_unsubscribes_interval;
-    loop {
-        let matcher = matcher.clone();
-        async move {
-            wait_random_interval(broadcast_interval).await;
-
-            // We always broadcast our own Offers.
-            let our_offers = matcher.list_our_unsubscribed_offers().await?;
-
-            // Add some random subset of Offers to broadcast.
-            let num_ours_offers = our_offers.len();
-            let num_to_broadcast = matcher.config.discovery.num_broadcasted_unsubscribes;
-
-            let all_offers = matcher.store.get_unsubscribed_offers(None).await?;
-            let random_offers = randomize_offers(our_offers, all_offers, num_to_broadcast as usize);
-
-            log::debug!(
-                "Cyclic broadcast: Sending {} unsubscribes including {} ours.",
-                random_offers.len(),
-                num_ours_offers
-            );
-
-            matcher
-                .discovery
-                .broadcast_unsubscribes(random_offers)
-                .await?;
-            Result::<(), anyhow::Error>::Ok(())
-        }
-        .await
-        .map_err(|e| log::warn!("Failed to send random unsubscribes broadcast. Error: {}", e))
-        .ok();
-    }
-}
-
-/// Chooses subset of all our Offers, that contains all of our
-/// own Offers and is extended with random Offers, that came from other Nodes.
-fn randomize_offers(
-    our_offers: Vec<SubscriptionId>,
-    all_offers: Vec<SubscriptionId>,
-    max_offers: usize,
-) -> Vec<SubscriptionId> {
-    // Filter our Offers from set.
-    let num_to_select = (max_offers - our_offers.len()).max(0);
-    let all_offers_wo_ours = all_offers
-        .into_iter()
-        .collect::<HashSet<SubscriptionId>>()
-        .difference(&HashSet::from_iter(our_offers.clone().into_iter()))
-        .cloned()
-        .collect::<Vec<SubscriptionId>>();
-    let mut random_offers = all_offers_wo_ours
-        .choose_multiple(&mut rand::thread_rng(), num_to_select)
-        .cloned()
-        .collect::<Vec<SubscriptionId>>();
-    random_offers.extend(our_offers);
-    random_offers
-}
-
-fn randomize_interval(mean_interval: std::time::Duration) -> std::time::Duration {
-    let mut rng = rand::thread_rng();
-    (2 * mean_interval).mul_f64(rng.gen::<f64>())
-}
-
-async fn wait_random_interval(mean_interval: std::time::Duration) {
-    let random_interval = randomize_interval(mean_interval);
-    tokio::time::delay_for(random_interval).await;
-}
-
-#[cfg(test)]
-mod test {
-    use std::str::FromStr;
-
-    use super::*;
-
-    #[test]
-    fn test_randomize_offers_max_2() {
-        let base_sub_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a5";
-        let sub1 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 1)).unwrap();
-        let sub2 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 2)).unwrap();
-        let sub3 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 3)).unwrap();
-
-        let our_offers = vec![sub1.clone()];
-        let all_offers = vec![sub1.clone(), sub2.clone(), sub3.clone()];
-
-        let offers = randomize_offers(our_offers, all_offers, 2);
-
-        // Our Offer must be included.
-        assert!(offers.contains(&sub1));
-        // One of someone's else Offer must be included.
-        assert!(offers.contains(&sub2) | offers.contains(&sub3));
-        assert_eq!(offers.len(), 2);
-    }
-
-    #[test]
-    fn test_randomize_offers_max_4() {
-        let base_sub_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a5";
-        let sub1 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 1)).unwrap();
-        let sub2 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 2)).unwrap();
-        let sub3 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 3)).unwrap();
-
-        let our_offers = vec![sub1.clone()];
-        let all_offers = vec![sub1.clone(), sub2.clone(), sub3.clone()];
-
-        let offers = randomize_offers(our_offers, all_offers, 4);
-
-        // All Offers should be included.
-        assert!(offers.contains(&sub1));
-        assert!(offers.contains(&sub2));
-        assert!(offers.contains(&sub3));
-        assert_eq!(offers.len(), 3);
     }
 }

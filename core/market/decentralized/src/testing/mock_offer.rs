@@ -1,13 +1,13 @@
 use chrono::{Duration, Utc};
 
 use crate::db::model::{Demand, Offer};
-use crate::protocol::discovery::GetOffers;
+use crate::protocol::discovery::message::RetrieveOffers;
 use crate::testing::mock_identity::generate_identity;
 
 #[allow(unused)]
-pub fn sample_get_offer_received() -> GetOffers {
-    GetOffers {
-        offers: vec![sample_offer().id],
+pub fn sample_get_offer_received() -> RetrieveOffers {
+    RetrieveOffers {
+        offer_ids: vec![sample_offer().id],
     }
 }
 
