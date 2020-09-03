@@ -8,6 +8,7 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::market::MarketService;
 
+use super::common::*;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, ProposalId, QueryTimeout,
     QueryTimeoutMaxEvents,
@@ -131,15 +132,6 @@ async fn create_agreement(
         .create_agreement(id, &proposal_id, valid_to)
         .await
         .map(|agreement_id| HttpResponse::Ok().json(agreement_id))
-}
-
-#[actix_web::get("/agreements/{agreement_id}")]
-async fn get_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
 }
 
 #[actix_web::post("/agreements/{agreement_id}/confirm")]

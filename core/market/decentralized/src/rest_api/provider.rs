@@ -5,6 +5,7 @@ use std::sync::Arc;
 use ya_client::model::market::{Offer, Proposal};
 use ya_service_api_web::middleware::Identity;
 
+use super::common::*;
 use crate::market::MarketService;
 
 use super::{
@@ -143,15 +144,6 @@ async fn reject_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/terminate")]
 async fn terminate_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
-}
-
-#[actix_web::get("/agreements/{agreement_id}")]
-async fn get_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
     _id: Identity,

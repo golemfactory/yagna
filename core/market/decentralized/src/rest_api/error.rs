@@ -150,7 +150,8 @@ impl ResponseError for AgreementError {
             | AgreementError::Get(..)
             | AgreementError::Update(..)
             | AgreementError::Protocol(_)
-            | AgreementError::ProtocolApprove(_) => HttpResponse::InternalServerError().json(msg),
+            | AgreementError::ProtocolApprove(_)
+            | AgreementError::InternalError(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }
