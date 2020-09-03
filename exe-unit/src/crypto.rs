@@ -1,5 +1,7 @@
 use crate::error::Error;
-use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use secp256k1::ecdh::SharedSecret;
+use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
+use sha3::Digest;
 use ya_client_model::activity::encrypted::EncryptionCtx;
 
 #[derive(Clone)]
@@ -29,8 +31,8 @@ impl Crypto {
         let req_key = PublicKey::from_slice(req_key_vec.as_slice())?;
 
         let ec = Secp256k1::new();
-        let sec_vec = hex::decode(sec_key)?;
-        let sec_key = SecretKey::from_slice(sec_vec.as_slice())?;
+        let sec_key_vec = hex::decode(sec_key)?;
+        let sec_key = SecretKey::from_slice(sec_key_vec.as_slice())?;
         let pub_key = PublicKey::from_secret_key(&ec, &sec_key);
 
         Ok(Crypto {
@@ -40,21 +42,21 @@ impl Crypto {
         })
     }
 
-    pub fn try_with_keys_raw(
-        sec_key: SecretKey,
-        requestor_pub_key: PublicKey,
-    ) -> Result<Self, Error> {
-        let ec = Secp256k1::new();
-        let pub_key = PublicKey::from_secret_key(&ec, &sec_key);
-
-        Ok(Crypto {
-            sec_key,
-            pub_key,
-            requestor_pub_key,
-        })
+    pub fn shared_secret(&self) -> Vec<u8> {
+        SharedSecret::new(&self.requestor_pub_key, &self.sec_key)
+            .as_ref()
+            .to_vec()
     }
 
     pub fn ctx(&mut self) -> EncryptionCtx {
         EncryptionCtx::new(&self.requestor_pub_key, &self.sec_key)
+    }
+
+    pub fn sign<T: AsRef<[u8]>>(&self, data: T) -> Result<Vec<u8>, Error> {
+        let ec = Secp256k1::new();
+        let hash = sha3::Sha3_256::digest(data.as_ref());
+        let msg = Message::from_slice(hash.as_slice())?;
+        let sig = ec.sign(&msg, &self.sec_key).serialize_der();
+        Ok(sig.as_ref().to_vec())
     }
 }

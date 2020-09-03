@@ -108,8 +108,8 @@ fn init_crypto() -> anyhow::Result<ya_exe_unit::crypto::Crypto> {
 
     // dummy impl
     let ec = secp256k1::Secp256k1::new();
-    let (sec_key, req_key) = ec.generate_keypair(&mut rand::thread_rng());
-    Ok(Crypto::try_with_keys_raw(sec_key, req_key)?)
+    let (_, req_key) = ec.generate_keypair(&mut rand::thread_rng());
+    Ok(Crypto::try_new(hex::encode(req_key.serialize()))?)
 }
 
 async fn transfer(addr: &Addr<TransferService>, from: &str, to: &str) -> Result<(), Error> {

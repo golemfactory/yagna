@@ -65,14 +65,17 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
 impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
     type Result = ResponseActFuture<Self, <Initialize as Message>::Result>;
 
+    #[cfg(feature = "sgx")]
     fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
-        #[cfg(feature = "sgx")]
         let crypto = self.ctx.crypto.clone();
+        let shared_secret = crypto.shared_secret();
+        let mut session_key = Vec::from(shared_secret.as_slice());
+
         let fut = async move {
             Ok::<_, Error>({
-                #[cfg(feature = "sgx")]
                 {
                     use ya_core_model::activity::local::Credentials;
+                    session_key.extend(crypto.sign(shared_secret)?.into_iter());
                     // TODO: attestation
                     Some(Credentials::Sgx {
                         requestor: crypto.requestor_pub_key.serialize().to_vec(),
@@ -81,11 +84,9 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                         enclave_hash: [0u8; 32],
                         ias_report: String::new(),
                         ias_sig: Vec::new(),
-                        session_key: Vec::new(),
+                        session_key,
                     })
                 }
-                #[cfg(not(feature = "sgx"))]
-                None
             })
         }
         .into_actor(self)
@@ -95,6 +96,11 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
         });
 
         Box::new(fut)
+    }
+
+    #[cfg(not(feature = "sgx"))]
+    fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
+        Box::new(futures::future::ok(()).into_actor(self))
     }
 }
 
