@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use derive_more::Display;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -27,15 +27,14 @@ impl ExeUnitInstance {
         log::debug!("Spawning args: {:?}", args);
         log::debug!("Spawning in: {:?}", working_dir);
 
-        let binary_path = binary_path
-            .canonicalize()
-            .with_context(|| format!("Failed to spawn [{}].", binary_path.display()))?;
+        let binary_path = ya_utils_path::normalize_path(&binary_path)
+            .map_err(|e| anyhow!("Failed to spawn [{}]: {}", binary_path.display(), e))?;
 
         let mut command = Command::new(&binary_path);
-        // new_process_group is a no-op on non-Unix systems
         command
             .args(args)
             .current_dir(working_dir)
+            // new_process_group is a no-op on non-Unix systems
             .new_process_group();
 
         let child = ProcessHandle::new(&mut command).map_err(|error| {
@@ -68,18 +67,25 @@ impl ExeUnitInstance {
         log::debug!("Running args: {:?}", args);
         log::debug!("Running in: {:?}", working_dir);
 
-        let binary_path = binary_path
-            .canonicalize()
-            .with_context(|| format!("Failed to run [{}].", binary_path.display()))?;
+        let binary_path = ya_utils_path::normalize_path(&binary_path)
+            .map_err(|e| anyhow!("Failed to run [{}]: {}", binary_path.display(), e))?;
         let mut command = tokio::process::Command::new(&binary_path);
 
-        // new_process_group is a no-op on non-Unix systems
         let child = command
             .args(args)
             .current_dir(working_dir)
             .stdout(Stdio::piped())
+            // new_process_group is a no-op on non-Unix systems
             .new_process_group()
-            .spawn()?;
+            .spawn()
+            .map_err(|error| {
+                anyhow!(
+                    "Can't run ExeUnit [{}] in working directory [{}]. Error: {}",
+                    binary_path.display(),
+                    working_dir.display(),
+                    error
+                )
+            })?;
 
         let output = child.wait_with_output().await?;
         Ok(String::from_utf8_lossy(output.stdout.as_slice()).to_string())
