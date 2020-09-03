@@ -3,9 +3,17 @@ use diesel::prelude::*;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
+use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{Agreement, AgreementId, AgreementState};
 use crate::db::schema::market_agreement::dsl;
 use crate::db::{DbError, DbResult};
+use crate::market::EnvConfig;
+
+const AGREEMENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
+    name: "YAGNA_MARKET_AGREEMENT_STORE_DAYS",
+    default: 90, // days
+    min: 30,     // days
+};
 
 pub struct AgreementDao<'c> {
     pool: &'c PoolType,
@@ -91,6 +99,26 @@ impl<'c> AgreementDao<'c> {
             Ok(())
         })
         .await
+    }
+
+    pub async fn clean(&self) -> DbResult<()> {
+        // FIXME use grace time from config file when #460 is merged
+        log::debug!("Clean market agreements: start");
+        let interval_days = AGREEMENT_STORE_DAYS.get_value();
+        let num_deleted = do_with_transaction(self.pool, move |conn| {
+            let nd = diesel::delete(
+                dsl::market_agreement
+                    .filter(dsl::valid_to.lt(datetime("NOW", format!("-{} days", interval_days)))),
+            )
+            .execute(conn)?;
+            Result::<usize, DbError>::Ok(nd)
+        })
+        .await?;
+        if num_deleted > 0 {
+            log::info!("Clean market agreements: {} cleaned", num_deleted);
+        }
+        log::debug!("Clean market agreements: done");
+        Ok(())
     }
 }
 

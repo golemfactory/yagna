@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -6,7 +7,7 @@ use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao,
 use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
-use crate::db::DbResult;
+use crate::db::{DbError, DbResult};
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,
@@ -79,5 +80,50 @@ impl<'c> ProposalDao<'c> {
             Ok(proposal.is_some())
         })
         .await
+    }
+
+    pub async fn clean(&self) -> DbResult<()> {
+        // FIXME clean negotiations also
+        log::debug!("Clean market proposals: start");
+        loop {
+            let (num_deleted_p, num_deleted_n) = do_with_transaction(self.pool, move |conn| {
+                // diesel forbids the same table appearing more than once in a query
+                // so we'll do some manual operations here
+                // TODO: Use sql max(expiration_ts)
+                let expired_negotiations = dsl_negotiation::market_negotiation
+                    .filter(
+                        dsl_negotiation::id.ne_all(
+                            dsl::market_proposal
+                                .filter(dsl::expiration_ts.gt(sql_now))
+                                .select(dsl::negotiation_id),
+                        ),
+                    )
+                    .select(dsl_negotiation::id)
+                    .load::<String>(conn)?;
+                let ndp = diesel::delete(
+                    dsl::market_proposal
+                        .filter(dsl::negotiation_id.eq_any(expired_negotiations.clone())),
+                )
+                .execute(conn)?;
+                let ndn = diesel::delete(
+                    dsl_negotiation::market_negotiation
+                        .filter(dsl_negotiation::id.eq_any(expired_negotiations)),
+                )
+                .execute(conn)?;
+                Result::<(usize, usize), DbError>::Ok((ndp, ndn))
+            })
+            .await?;
+            if (num_deleted_p > 0) || (num_deleted_n > 0) {
+                log::info!(
+                    "Clean market proposals: {}({} negotiations) cleaned",
+                    num_deleted_p,
+                    num_deleted_n
+                );
+            } else {
+                break;
+            }
+        }
+        log::debug!("Clean market proposals: done");
+        Ok(())
     }
 }
