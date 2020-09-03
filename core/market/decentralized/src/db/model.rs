@@ -8,11 +8,12 @@ mod subscription_id;
 
 pub use agreement::{Agreement, AgreementId, AgreementState};
 pub use demand::Demand;
-pub use events::{EventError, MarketEvent};
+pub use events::{EventError, EventType, MarketEvent};
 pub use offer::{Offer, OfferUnsubscribed};
-pub use proposal::{DbProposal, IssuerType, Negotiation, Proposal};
+pub use proposal::{DbProposal, IssuerType, Negotiation, Proposal, ProposalState};
 
 pub use proposal_id::{OwnerType, ProposalId, ProposalIdParseError, ProposalIdValidationError};
 pub use subscription_id::{
-    generate_random_id, SubscriptionId, SubscriptionParseError, SubscriptionValidationError,
+    generate_random_id, DisplayVec, SubscriptionId, SubscriptionParseError,
+    SubscriptionValidationError,
 };

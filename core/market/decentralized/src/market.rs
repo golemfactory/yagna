@@ -2,25 +2,41 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+use crate::config::Config;
 use crate::db::model::SubscriptionId;
+use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
 use crate::negotiation::error::{NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
-
 use crate::rest_api;
 
 use ya_client::model::market::{Demand, Offer};
 use ya_client::model::ErrorMessage;
-use ya_core_model::market::{private, BUS_ID};
+use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
+
+pub struct EnvConfig<'a, T> {
+    pub name: &'a str,
+    pub default: T,
+    pub min: T,
+}
+
+impl<'a> EnvConfig<'a, u64> {
+    pub fn get_value(&self) -> u64 {
+        std::env::var(self.name)
+            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
+            .unwrap_or(self.default)
+            .max(self.min)
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum MarketError {
@@ -57,14 +73,22 @@ pub struct MarketService {
 }
 
 impl MarketService {
-    pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
+    pub fn new(
+        db: &DbExecutor,
+        identity_api: Arc<dyn IdentityApi>,
+        config: Arc<Config>,
+    ) -> Result<Self, MarketInitError> {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
-        let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(store.clone())?;
+        let store = SubscriptionStore::new(db.clone(), config.clone());
+        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config)?;
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
+        let cleaner_db = db.clone();
+        tokio::spawn(async move {
+            crate::db::dao::cleaner::clean_forever(cleaner_db).await;
+        });
 
         Ok(MarketService {
             db: db.clone(),
@@ -77,22 +101,22 @@ impl MarketService {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), MarketInitError> {
-        self.matcher.bind_gsb(public_prefix, private_prefix).await?;
+        self.matcher.bind_gsb(public_prefix, local_prefix).await?;
         self.provider_engine
-            .bind_gsb(public_prefix, private_prefix)
+            .bind_gsb(public_prefix, local_prefix)
             .await?;
         self.requestor_engine
-            .bind_gsb(public_prefix, private_prefix)
+            .bind_gsb(public_prefix, local_prefix)
             .await?;
-        agreement::bind_gsb(self.db.clone(), public_prefix, private_prefix).await;
+        agreement::bind_gsb(self.db.clone(), public_prefix, local_prefix).await;
         Ok(())
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb(BUS_ID, private::BUS_ID).await?)
+        Ok(market.bind_gsb(BUS_ID, local::BUS_ID).await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
@@ -114,7 +138,11 @@ impl MarketService {
     }
 
     pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<Offer>, MarketError> {
-        Ok(self.matcher.store.get_offers(id).await?)
+        Ok(self
+            .matcher
+            .store
+            .get_client_offers(id.map(|identity| identity.identity))
+            .await?)
     }
 
     pub async fn subscribe_offer(
@@ -188,7 +216,9 @@ impl StaticMarket {
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let market = Arc::new(MarketService::new(db)?);
+            let identity_api = IdentityGSB::new();
+            let config = Arc::new(Config::default());
+            let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

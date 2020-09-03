@@ -95,6 +95,16 @@ impl MockNet {
             )))?
         }
     }
+
+    pub fn node_by_prefix(&self, address: &str) -> Option<NodeId> {
+        let inner = self.inner.lock().unwrap();
+        for (id, prefix) in inner.nodes.iter() {
+            if address.contains(prefix) {
+                return Some(id.clone());
+            }
+        }
+        None
+    }
 }
 
 // TODO: all tests using this mock net implementation should be run sequentially
@@ -122,6 +132,7 @@ impl MockNetInner {
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
         let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
         let _ = local_bus::subscribe(&addr, move |caller: &str, _addr: &str, msg: &[u8]| {
+            let mock_net = MockNet::default();
             let resp = resp.clone();
             let bcast = bcast.clone();
 
@@ -136,7 +147,26 @@ impl MockNetInner {
             log::debug!("BCasting on {} to {:?} from {}", topic, endpoints, caller);
             for endpoint in endpoints {
                 let addr = format!("{}/{}", endpoint, bcast_service_id);
-                log::debug!("BCasting on {} to {}", topic, addr);
+
+                let node_id = match mock_net.node_by_prefix(&addr) {
+                    Some(node_id) => node_id,
+                    None => {
+                        log::debug!(
+                            "Not broadcasting on topic {} to {}. Node not found on list. \
+                         Probably networking was disabled for this Node.",
+                            topic,
+                            addr
+                        );
+                        continue;
+                    }
+                };
+
+                log::debug!(
+                    "BCasting on {} to address: {}, node: [{}]",
+                    topic,
+                    addr,
+                    node_id
+                );
                 let caller = caller.clone();
                 let msg = msg.clone();
                 Arbiter::spawn(async move {

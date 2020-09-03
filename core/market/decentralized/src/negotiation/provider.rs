@@ -76,9 +76,9 @@ impl ProviderBroker {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), NegotiationInitError> {
-        Ok(self.api.bind_gsb(public_prefix, private_prefix).await?)
+        Ok(self.api.bind_gsb(public_prefix, local_prefix).await?)
     }
 
     pub async fn subscribe_offer(&self, _offer: &ModelOffer) -> Result<(), NegotiationError> {

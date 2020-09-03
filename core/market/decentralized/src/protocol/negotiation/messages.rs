@@ -130,7 +130,7 @@ impl RpcMessage for AgreementCancelled {
 
 /// The same messaged will be used on GSB and as messages in callbacks.
 impl<Message: RpcMessage> CallbackMessage for Message {
-    type Item = <Message as RpcMessage>::Item;
+    type Ok = <Message as RpcMessage>::Item;
     type Error = <Message as RpcMessage>::Error;
 }
 
