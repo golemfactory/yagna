@@ -1,8 +1,12 @@
 use chrono::{Duration, NaiveDateTime, Utc};
+use std::str::FromStr;
+
+use ya_client::model::NodeId;
 
 use crate::db::model::{Demand, Offer};
 use crate::protocol::discovery::message::RetrieveOffers;
 use crate::testing::mock_identity::generate_identity;
+use crate::testing::SubscriptionId;
 
 #[allow(unused)]
 pub fn sample_get_offer_received() -> RetrieveOffers {
@@ -32,6 +36,18 @@ pub fn sample_offer_with_expiration(expiration_ts: NaiveDateTime) -> Offer {
     )
 }
 
+pub fn generate_offer(id: &str, expiration_ts: NaiveDateTime) -> Offer {
+    Offer {
+        id: SubscriptionId::from_str(id).unwrap(),
+        properties: "".to_string(),
+        constraints: "".to_string(),
+        node_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
+        creation_ts: Utc::now().naive_utc(),
+        insertion_ts: None,
+        expiration_ts,
+    }
+}
+
 pub fn sample_demand() -> Demand {
     let creation_ts = Utc::now().naive_utc();
     let expiration_ts = creation_ts + Duration::hours(1);
@@ -41,6 +57,18 @@ pub fn sample_demand() -> Demand {
         creation_ts,
         expiration_ts,
     )
+}
+
+pub fn generate_demand(id: &str, expiration_ts: NaiveDateTime) -> Demand {
+    Demand {
+        id: SubscriptionId::from_str(id).unwrap(),
+        properties: "".to_string(),
+        constraints: "".to_string(),
+        node_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
+        creation_ts: Utc::now().naive_utc(),
+        insertion_ts: None,
+        expiration_ts,
+    }
 }
 
 pub mod client {

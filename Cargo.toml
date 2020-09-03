@@ -92,6 +92,7 @@ members = [
     "core/serv-api/web",
     "exe-unit",
     "exe-unit/runtime-api",
+    "exe-unit/tokio-process-ns",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
