@@ -12,7 +12,7 @@ msgpack=["rmp-serde"]
 
 [dependencies]
 ya-sb-proto = { version = "0.1", path="../proto" }
-ya-sb-util = "0.1"
+ya-sb-util = {version = "0.1", path="../util", features=["futures"] }
 
 actix = "0.9"
 thiserror = "1.0.9"
