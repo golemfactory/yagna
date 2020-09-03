@@ -3,8 +3,10 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+use crate::config::Config;
 use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, SubscriptionId};
+use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
@@ -73,11 +75,15 @@ pub struct MarketService {
 }
 
 impl MarketService {
-    pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
+    pub fn new(
+        db: &DbExecutor,
+        identity_api: Arc<dyn IdentityApi>,
+        config: Arc<Config>,
+    ) -> Result<Self, MarketInitError> {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
-        let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(store.clone())?;
+        let store = SubscriptionStore::new(db.clone(), config.clone());
+        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config)?;
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
@@ -134,7 +140,11 @@ impl MarketService {
     }
 
     pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<Offer>, MarketError> {
-        Ok(self.matcher.store.get_offers(id).await?)
+        Ok(self
+            .matcher
+            .store
+            .get_client_offers(id.map(|identity| identity.identity))
+            .await?)
     }
 
     pub async fn subscribe_offer(
@@ -228,7 +238,9 @@ impl StaticMarket {
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let market = Arc::new(MarketService::new(db)?);
+            let identity_api = IdentityGSB::new();
+            let config = Arc::new(Config::default());
+            let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

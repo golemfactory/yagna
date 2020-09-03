@@ -1,35 +1,33 @@
 use chrono::{Duration, NaiveDateTime, Utc};
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use std::str::FromStr;
-use std::string::ToString;
 
 use ya_client::model::NodeId;
-use ya_service_api_web::middleware::Identity;
 
-use crate::db::model::{Demand, Offer, SubscriptionId};
-use crate::protocol::discovery::OfferReceived;
-
-pub fn generate_identity(name: &str) -> Identity {
-    let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
-
-    Identity {
-        name: name.to_string(),
-        role: "manager".to_string(),
-        identity: NodeId::from(random_node_id.as_bytes()),
-    }
-}
+use crate::db::model::{Demand, Offer};
+use crate::protocol::discovery::message::RetrieveOffers;
+use crate::testing::mock_identity::generate_identity;
+use crate::testing::SubscriptionId;
 
 #[allow(unused)]
-pub fn sample_offer_received() -> OfferReceived {
-    OfferReceived {
-        offer: sample_offer(),
+pub fn sample_get_offer_received() -> RetrieveOffers {
+    RetrieveOffers {
+        offer_ids: vec![sample_offer().id],
     }
 }
 
 pub fn sample_offer() -> Offer {
     let creation_ts = Utc::now().naive_utc();
     let expiration_ts = creation_ts + Duration::hours(1);
+    Offer::from_new(
+        &client::sample_offer(),
+        &generate_identity(""),
+        creation_ts,
+        expiration_ts,
+    )
+}
+
+pub fn sample_offer_with_expiration(expiration_ts: NaiveDateTime) -> Offer {
+    let creation_ts = Utc::now().naive_utc();
     Offer::from_new(
         &client::sample_offer(),
         &generate_identity(""),

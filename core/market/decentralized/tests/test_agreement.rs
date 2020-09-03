@@ -266,6 +266,9 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await?;
 
+    // try to wait a bit, because CI on Windows is failing here...
+    tokio::time::delay_for(Duration::milliseconds(50).to_std()?).await;
+
     // than: a try to confirm agreement...
     let result = req_engine
         .confirm_agreement(req_id.clone(), &agreement_id)

@@ -91,10 +91,10 @@ async fn test_offer() -> Result<()> {
     let offer_dao = db.as_dao::<OfferDao>();
     let validation_ts = (Utc::now() - Duration::days(100)).naive_utc();
     offer_dao
-        .insert(valid_offer.clone(), validation_ts.clone())
+        .put(valid_offer.clone(), validation_ts.clone())
         .await?;
     offer_dao
-        .insert(expired_offer.clone(), validation_ts.clone())
+        .put(expired_offer.clone(), validation_ts.clone())
         .await?;
     clean(db.clone()).await;
     assert_eq!(
