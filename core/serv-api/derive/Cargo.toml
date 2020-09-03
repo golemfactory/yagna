@@ -8,21 +8,20 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
+lazy_static = "1.4"
 proc-macro-hack = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
-lazy_static = "1.4"
+strum = "0.19"
+strum_macros = "0.19"
 syn = { version = "1.0", features = ["full"] }
-strum = "0.17"
-strum_macros = "0.17"
 
 [dev-dependencies]
+ya-service-api-interfaces = "0.1"
+
 actix-rt = "1.0"
 actix-service = "1.0"
 actix-web = "2.0"
 anyhow = "1.0"
-clap = "2.33"
 log = "0.4"
 structopt = "0.3"
-ya-service-api-interfaces = "0.1"
-
