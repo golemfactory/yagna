@@ -102,11 +102,16 @@ impl MarketsNetwork {
 
         MockNet::default().bind_gsb();
 
+        // Disable cyclic broadcasts by default.
+        let mut config = Config::default();
+        config.discovery.num_bcasted_offers = 0;
+        config.discovery.num_bcasted_unsubscribes = 0;
+
         MarketsNetwork {
             nodes: vec![],
             test_dir,
             test_name: test_name.to_string(),
-            config: Arc::new(Config::default()),
+            config: Arc::new(config),
         }
     }
 

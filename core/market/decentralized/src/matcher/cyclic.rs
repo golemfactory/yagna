@@ -8,6 +8,10 @@ use super::Matcher;
 use crate::db::model::SubscriptionId;
 
 pub(super) async fn bcast_offers(matcher: Matcher) {
+    if matcher.config.discovery.num_bcasted_offers == 0 {
+        return;
+    }
+
     let bcast_interval = matcher.config.discovery.mean_cyclic_bcast_interval;
     loop {
         let matcher = matcher.clone();
@@ -23,6 +27,7 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
                 .collect::<Vec<SubscriptionId>>();
 
             // Add some random subset of Offers to broadcast.
+            // TODO: We will send more Offers, than config states, if we have many own Offers.
             let num_ours_offers = our_offers.len();
             let num_to_bcast = matcher.config.discovery.num_bcasted_offers;
 
@@ -52,6 +57,10 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
 }
 
 pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
+    if matcher.config.discovery.num_bcasted_offers == 0 {
+        return;
+    }
+
     let bcast_interval = matcher.config.discovery.mean_cyclic_unsubscribes_interval;
     loop {
         let matcher = matcher.clone();
@@ -65,6 +74,7 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
             let num_ours_offers = our_offers.len();
             let num_to_bcast = matcher.config.discovery.num_bcasted_unsubscribes;
 
+            // TODO: We will send more unsubscribes, than config states, if we have many own unsubscribes.
             let all_offers = matcher.store.get_unsubscribed_offers(None).await?;
             let our_and_random_offers =
                 randomize_offers(our_offers, all_offers, num_to_bcast as usize);
