@@ -2,7 +2,7 @@ use crate::activity::Activity;
 use crate::payment_manager::ReleaseAllocation;
 use crate::{payment_manager, CommandList, Image, Package};
 use actix::prelude::*;
-use anyhow::{Error, Result};
+use anyhow::{Context, Error, Result};
 use bigdecimal::BigDecimal;
 use futures::channel::mpsc;
 use futures::future::{select, Either};
@@ -188,17 +188,14 @@ impl Requestor {
             async move {
                 let proposal_id = proposal.proposal_id.clone();
                 let agreement_id = create_agreement(ctx.market_api.clone(), proposal)
-                    .map_err(|e| {
-                        e.context(format!(
-                            "cannot create agreement for proposal [{:?}]",
-                            proposal_id
-                        ))
-                    })
-                    .await?;
+                    .await
+                    .with_context(|| {
+                        format!("cannot create agreement for proposal [{:?}]", proposal_id)
+                    })?;
 
                 let task = async { Ok::<_, Error>(ctx.requestor.send(TakeTask).await??) }
-                    .map_err(|e| e.context(format!("no tasks for agreement [{:?}]", agreement_id)))
-                    .await?;
+                    .await
+                    .with_context(|| format!("no tasks for agreement [{:?}]", agreement_id))?;
 
                 let activity = Activity::create(
                     ctx.activity_api.clone(),
@@ -206,13 +203,10 @@ impl Requestor {
                     task.clone(),
                     secure,
                 )
-                .map_err(|e| {
-                    e.context(format!(
-                        "can't create activity for agreement [{:?}]",
-                        agreement_id
-                    ))
-                })
-                .await?;
+                .await
+                .with_context(|| {
+                    format!("can't create activity for agreement [{:?}]", agreement_id)
+                })?;
 
                 let activity_id = activity.activity_id.clone();
                 let task = activity.task.clone();
@@ -507,7 +501,7 @@ async fn await_activity(requestor: Addr<Requestor>, timeout: Duration) {
 }
 
 impl Actor for Requestor {
-    type Context = Context<Self>;
+    type Context = actix::Context<Self>;
 }
 
 macro_rules! actix_handler {
@@ -515,7 +509,7 @@ macro_rules! actix_handler {
         impl Handler<$message> for $actor {
             type Result = <$message as actix::Message>::Result;
 
-            fn handle(&mut self, msg: $message, ctx: &mut Context<Self>) -> Self::Result {
+            fn handle(&mut self, msg: $message, ctx: &mut actix::Context<Self>) -> Self::Result {
                 $handle(self, msg, ctx)
             }
         }
