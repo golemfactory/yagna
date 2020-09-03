@@ -2,9 +2,9 @@
 use rand::seq::IteratorRandom;
 use rand::Rng;
 use std::collections::HashSet;
+use std::hash::Hash;
 
 use super::Matcher;
-use crate::db::model::SubscriptionId;
 
 pub(super) async fn bcast_offers(matcher: Matcher) {
     if matcher.config.discovery.max_bcasted_offers <= 0 {
@@ -21,7 +21,6 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
             let our_ids = matcher.get_our_active_offer_ids().await?;
 
             // Add some random subset of Offers to broadcast.
-            // TODO: We will send more Offers, than config states, if we have many own Offers.
             let num_our_offers = our_ids.len();
             let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
 
@@ -58,7 +57,6 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
             let our_ids = matcher.get_our_unsubscribed_offer_ids().await?;
 
             // Add some random subset of Offer unsubscribes to bcast.
-            // TODO: We will send more unsubscribes, than config states, if we have many own unsubscribes.
             let num_our_unsubscribes = our_ids.len();
             let max_bcast = matcher.config.discovery.max_bcasted_unsubscribes as usize;
 
@@ -85,22 +83,24 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
 
 /// Returns vector of at most `cap_size` getting all our ids
 /// and random sample from other ids (all ids might include our ids).
-fn randomize_ids(
-    our_ids: Vec<SubscriptionId>,
-    all_ids: Vec<SubscriptionId>,
+fn randomize_ids<T: Eq + Hash + Clone>(
+    our_ids: Vec<T>,
+    all_ids: Vec<T>,
     cap_size: usize,
-) -> Vec<SubscriptionId> {
+) -> Vec<T> {
     let our_len = our_ids.len();
     if our_len > cap_size {
         log::warn!("Our ids count: {} exceed cap: {}", our_len, cap_size);
-        return our_ids;
+        return our_ids
+            .into_iter()
+            .choose_multiple(&mut rand::thread_rng(), cap_size);
     }
-    // Filter our Offers from set.
+
     let num_to_select = (cap_size - our_len).max(0);
     let our_ids = our_ids.into_iter().collect();
     let mut randomized_ids = all_ids
         .into_iter()
-        .collect::<HashSet<SubscriptionId>>()
+        .collect::<HashSet<T>>()
         .difference(&our_ids)
         .cloned()
         .choose_multiple(&mut rand::thread_rng(), num_to_select);
@@ -120,31 +120,50 @@ async fn wait_random_interval(mean_interval: std::time::Duration) {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use crate::db::model::SubscriptionId;
     use std::str::FromStr;
 
-    use super::*;
+    #[test]
+    fn test_randomize_cap_0() {
+        let offers = randomize_ids(vec![1], vec![], 0);
+        assert_eq!(offers.len(), 0)
+    }
 
     #[test]
-    fn test_randomize_offers_max_2() {
-        let base_sub_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a5";
-        let sub1 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 1)).unwrap();
-        let sub2 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 2)).unwrap();
-        let sub3 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 3)).unwrap();
+    fn test_randomize_cap_1() {
+        let offers = randomize_ids(vec![7], vec![8, 9], 1);
+        assert_eq!(offers.len(), 1);
+        assert_eq!(offers[0], 7)
+    }
 
-        let our_offers = vec![sub1.clone()];
-        let all_offers = vec![sub1.clone(), sub2.clone(), sub3.clone()];
+    #[test]
+    fn test_randomize_cap_1_empty_ours() {
+        let offers = randomize_ids(vec![], vec![12], 1);
+        assert_eq!(offers.len(), 1);
+        assert_eq!(offers[0], 12)
+    }
 
-        let offers = randomize_ids(our_offers, all_offers, 2);
+    #[test]
+    fn test_randomize_cap_2_not_enough() {
+        let offers = randomize_ids(vec![17], vec![], 2);
+        assert_eq!(offers.len(), 1);
+        assert_eq!(offers[0], 17)
+    }
+
+    #[test]
+    fn test_randomize_cap_2() {
+        let offers = randomize_ids(vec![1], vec![1, 2, 3], 2);
 
         // Our Offer must be included.
-        assert!(offers.contains(&sub1));
+        assert!(offers.contains(&1));
         // One of someone's else Offer must be included.
-        assert!(offers.contains(&sub2) | offers.contains(&sub3));
+        assert!(offers.contains(&2) | offers.contains(&3));
         assert_eq!(offers.len(), 2);
     }
 
     #[test]
-    fn test_randomize_offers_max_4() {
+    fn test_randomize_offers_cap_4() {
         let base_sub_id = "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a5";
         let sub1 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 1)).unwrap();
         let sub2 = SubscriptionId::from_str(&format!("{}{}", base_sub_id, 2)).unwrap();
