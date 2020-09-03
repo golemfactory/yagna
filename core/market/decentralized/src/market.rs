@@ -1,7 +1,9 @@
+use chrono::Utc;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, SubscriptionId};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
@@ -9,11 +11,8 @@ use crate::matcher::error::{
 use crate::matcher::{store::SubscriptionStore, Matcher};
 use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
-
 use crate::rest_api;
 
-use crate::db::dao::AgreementDao;
-use chrono::Utc;
 use ya_client::model::market::{Agreement, Demand, Offer};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{private, BUS_ID};
