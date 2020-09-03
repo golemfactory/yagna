@@ -9,7 +9,7 @@ use crate::testing::mock_identity::generate_identity;
 use crate::testing::SubscriptionId;
 
 #[allow(unused)]
-pub fn sample_get_offer_received() -> RetrieveOffers {
+pub fn sample_retrieve_offers() -> RetrieveOffers {
     RetrieveOffers {
         offer_ids: vec![sample_offer().id],
     }
