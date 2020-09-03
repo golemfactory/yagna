@@ -43,7 +43,7 @@ impl<MsgType: CallbackMessage> HandlerSlot<MsgType> {
 /// struct GenericMessage;
 ///
 /// impl CallbackMessage for GenericMessage {
-///     type Item = String;
+///     type Ok = String;
 ///     type Error=();
 /// }
 ///
