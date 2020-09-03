@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
 
 use crate::db::model::{Demand, Offer};
 use crate::protocol::discovery::message::RetrieveOffers;
@@ -14,6 +14,16 @@ pub fn sample_get_offer_received() -> RetrieveOffers {
 pub fn sample_offer() -> Offer {
     let creation_ts = Utc::now().naive_utc();
     let expiration_ts = creation_ts + Duration::hours(1);
+    Offer::from_new(
+        &client::sample_offer(),
+        &generate_identity(""),
+        creation_ts,
+        expiration_ts,
+    )
+}
+
+pub fn sample_offer_with_expiration(expiration_ts: NaiveDateTime) -> Offer {
+    let creation_ts = Utc::now().naive_utc();
     Offer::from_new(
         &client::sample_offer(),
         &generate_identity(""),

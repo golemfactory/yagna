@@ -7,7 +7,9 @@ use tokio::time::Duration;
 
 use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::discovery::{message::*, Discovery};
-use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
+use ya_market_decentralized::testing::mock_offer::{
+    client, sample_offer, sample_offer_with_expiration,
+};
 use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
 
@@ -150,8 +152,8 @@ async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
     let market1 = network.get_market("Node-1");
 
     // Prepare expired Offer to send.
-    let mut offer = sample_offer();
-    offer.expiration_ts = Utc::now().naive_utc() - chrono::Duration::hours(1);
+    let expiration = Utc::now().naive_utc() - chrono::Duration::hours(1);
+    let offer = sample_offer_with_expiration(expiration);
     let offer_id = offer.id.clone();
 
     let network = network
