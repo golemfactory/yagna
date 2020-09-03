@@ -95,7 +95,7 @@ impl Handler<GetMetrics> for MetricsService {
         let mut metrics = Vec::with_capacity(self.usage_vector.len());
 
         for name in self.usage_vector.iter() {
-            let metric = self
+            /*let metric = self
                 .metrics
                 .get_mut(name)
                 .ok_or(MetricError::Unsupported(name.to_string()))?;
@@ -113,8 +113,9 @@ impl Handler<GetMetrics> for MetricsService {
                     )))
                 }
             }
+            */
+            metrics.push(0.0_f64);
         }
-
         Ok(metrics)
     }
 }

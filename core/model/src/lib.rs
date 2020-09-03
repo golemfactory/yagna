@@ -23,3 +23,6 @@ pub mod payment;
 
 #[cfg(feature = "gftp")]
 pub mod gftp;
+
+#[cfg(feature = "sgx")]
+pub mod sgx;
