@@ -5,3 +5,18 @@ pub use self::gftp::{
     close, download_file, download_from_url, extract_url, open_for_upload, publish, upload_file,
     DEFAULT_CHUNK_SIZE,
 };
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn t() {
+        println!(
+            "{}",
+            concat!(
+                env!("CARGO_PKG_VERSION"),
+                git_version!(prefix = "-", fallback = "")
+            )
+        )
+    }
+}

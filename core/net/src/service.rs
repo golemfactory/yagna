@@ -11,7 +11,7 @@ use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
 
-use crate::api::{self, net_service, parse_from_addr};
+use crate::api::{net_service, parse_from_addr};
 
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 pub const DEFAULT_CENTRAL_ADDR: &str = "3.249.139.167:7464";
@@ -111,29 +111,24 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     {
         let central_bus = central_bus.clone();
 
-        local_bus::subscribe(
-            api::FROM_BUS_ID,
-            move |_caller: &str, addr: &str, msg: &[u8]| {
-                let (from_node, to_addr) = match parse_from_addr(addr) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return future::err(Error::GsbBadRequest(e.to_string())).left_future()
-                    }
-                };
-                log::debug!("{} is calling {}", from_node, to_addr);
-                if !nodes.contains(&from_node) {
-                    return future::err(Error::GsbBadRequest(format!(
-                        "caller: {:?} is not on src list: {:?}",
-                        from_node, nodes,
-                    )))
-                    .left_future();
-                }
+        local_bus::subscribe("/from", move |_caller: &str, addr: &str, msg: &[u8]| {
+            let (from_node, to_addr) = match parse_from_addr(addr) {
+                Ok(v) => v,
+                Err(e) => return future::err(Error::GsbBadRequest(e.to_string())).left_future(),
+            };
+            log::debug!("{} is calling {}", from_node, to_addr);
+            if !nodes.contains(&from_node) {
+                return future::err(Error::GsbBadRequest(format!(
+                    "caller: {:?} is not on src list: {:?}",
+                    from_node, nodes,
+                )))
+                .left_future();
+            }
 
-                central_bus
-                    .call(from_node.to_string(), to_addr, Vec::from(msg))
-                    .right_future()
-            },
-        );
+            central_bus
+                .call(from_node.to_string(), to_addr, Vec::from(msg))
+                .right_future()
+        });
     }
 
     {
