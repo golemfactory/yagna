@@ -53,6 +53,70 @@ async fn test_gsb_get_agreement() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+async fn test_get_agreement() -> Result<()> {
+    let network = MarketsNetwork::new("test_get_agreement")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+
+    let agreement_id = req_engine
+        .create_agreement(req_id.clone(), &proposal_id, Utc::now())
+        .await?;
+
+    let agreement = req_market.get_agreement(&agreement_id, &req_id).await?;
+    assert_eq!(agreement.agreement_id, agreement_id.to_string());
+    assert_eq!(
+        agreement.demand.requestor_id.unwrap(),
+        req_id.identity.to_string()
+    );
+    assert_eq!(
+        agreement.offer.provider_id.unwrap(),
+        prov_id.identity.to_string()
+    );
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_rest_get_not_existing_agreement() -> Result<()> {
+    let network = MarketsNetwork::new("test_rest_get_not_existing_agreement")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    // Create invalid id. Translation to provider id should give us
+    // something, that can't be found on Requestor.
+    let agreement_id = req_engine
+        .create_agreement(req_id.clone(), &proposal_id, Utc::now())
+        .await?
+        .translate(OwnerType::Provider);
+
+    let result = req_market.get_agreement(&agreement_id, &req_id).await;
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        AgreementError::NotFound(agreement_id.clone()).to_string()
+    );
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
 async fn full_market_interaction_aka_happy_path() -> Result<()> {
     let network = MarketsNetwork::new("full_market_interaction_aka_happy_path")
         .await
