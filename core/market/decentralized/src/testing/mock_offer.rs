@@ -1,12 +1,13 @@
-use chrono::{Duration, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
+use std::str::FromStr;
 use std::string::ToString;
 
 use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::model::{Demand, Offer};
+use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::protocol::discovery::OfferReceived;
 
 pub fn generate_identity(name: &str) -> Identity {
@@ -37,6 +38,18 @@ pub fn sample_offer() -> Offer {
     )
 }
 
+pub fn generate_offer(id: &str, expiration_ts: NaiveDateTime) -> Offer {
+    Offer {
+        id: SubscriptionId::from_str(id).unwrap(),
+        properties: "".to_string(),
+        constraints: "".to_string(),
+        node_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
+        creation_ts: Utc::now().naive_utc(),
+        insertion_ts: None,
+        expiration_ts,
+    }
+}
+
 pub fn sample_demand() -> Demand {
     let creation_ts = Utc::now().naive_utc();
     let expiration_ts = creation_ts + Duration::hours(1);
@@ -46,6 +59,18 @@ pub fn sample_demand() -> Demand {
         creation_ts,
         expiration_ts,
     )
+}
+
+pub fn generate_demand(id: &str, expiration_ts: NaiveDateTime) -> Demand {
+    Demand {
+        id: SubscriptionId::from_str(id).unwrap(),
+        properties: "".to_string(),
+        constraints: "".to_string(),
+        node_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
+        creation_ts: Utc::now().naive_utc(),
+        insertion_ts: None,
+        expiration_ts,
+    }
 }
 
 pub mod client {
