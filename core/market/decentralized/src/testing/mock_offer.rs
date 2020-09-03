@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 
 use crate::db::model::{Demand, Offer};
-use crate::protocol::discovery::RetrieveOffers;
+use crate::protocol::discovery::message::RetrieveOffers;
 use crate::testing::mock_identity::generate_identity;
 
 #[allow(unused)]

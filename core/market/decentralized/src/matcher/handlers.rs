@@ -5,7 +5,8 @@ use crate::db::model::{DisplayVec, Offer, SubscriptionId};
 
 use crate::matcher::error::ModifyOfferError;
 use crate::protocol::discovery::{
-    DiscoveryRemoteError, OffersBcast, OffersRetrieved, RetrieveOffers, UnsubscribedOffersBcast,
+    error::DiscoveryRemoteError,
+    message::{OffersBcast, OffersRetrieved, RetrieveOffers, UnsubscribedOffersBcast},
 };
 
 use super::{resolver::Resolver, store::SubscriptionStore};

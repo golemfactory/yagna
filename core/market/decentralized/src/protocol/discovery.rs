@@ -1,58 +1,26 @@
-use serde::{Deserialize, Serialize};
+//! Discovery protocol interface
+use std::str::FromStr;
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::sync::Mutex;
 
-use ya_client::model::ErrorMessage;
 use ya_client::model::NodeId;
+use ya_core_model::market::BUS_ID;
 use ya_core_model::net::local as local_net;
-use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
+use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
 use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+use ya_service_bus::typed::ServiceBinder;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
+use super::callback::HandlerSlot;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError};
 
-use super::callback::{CallbackMessage, HandlerSlot};
-use std::str::FromStr;
-use ya_core_model::market::BUS_ID;
-use ya_service_bus::typed::ServiceBinder;
-
 pub mod builder;
+pub mod error;
+pub mod message;
 
-// =========================================== //
-// Errors
-// =========================================== //
-
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum DiscoveryError {
-    #[error(transparent)]
-    RemoteError(#[from] DiscoveryRemoteError),
-    #[error("Failed to broadcast caused by gsb error: {0}.")]
-    GsbError(String),
-    #[error("Internal error: {0}.")]
-    InternalError(String),
-    #[error(transparent)]
-    Identity(#[from] IdentityError),
-}
-
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum DiscoveryRemoteError {
-    #[error("Internal error: {0}.")]
-    InternalError(String),
-}
-
-#[derive(Error, Debug, Serialize, Deserialize)]
-pub enum DiscoveryInitError {
-    #[error("Failed to bind broadcast `{0}` to gsb. Error: {1}.")]
-    BindingGsbFailed(String, String),
-    #[error("Failed to subscribe to broadcast `{0}`. Error: {1}.")]
-    BroadcastSubscribeFailed(String, String),
-}
-
-// =========================================== //
-// Discovery interface
-// =========================================== //
+use error::*;
+use message::*;
 
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
@@ -260,101 +228,5 @@ impl Discovery {
 
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
         Ok(self.inner.identity.default_identity().await?)
-    }
-}
-
-// =========================================== //
-// Discovery messages
-// =========================================== //
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OffersBcast {
-    pub offer_ids: Vec<SubscriptionId>,
-}
-
-/// Local handler will return only ids of offers, that were not yet known.
-/// Those will be retrieved directly from the bcast sender.
-impl CallbackMessage for OffersBcast {
-    type Ok = Vec<SubscriptionId>;
-    type Error = ();
-}
-
-impl BroadcastMessage for OffersBcast {
-    const TOPIC: &'static str = "market-protocol-discovery-mk1-offers";
-}
-
-fn get_offers_addr(prefix: &str) -> String {
-    format!("{}/protocol/discovery/mk1/offers", prefix)
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RetrieveOffers {
-    pub offer_ids: Vec<SubscriptionId>,
-}
-
-impl RpcMessage for RetrieveOffers {
-    const ID: &'static str = "Get";
-    type Item = Vec<ModelOffer>;
-    type Error = DiscoveryRemoteError;
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OffersRetrieved {
-    pub offers: Vec<ModelOffer>,
-}
-
-/// Local handler will return only ids of offers, that was successfully saved.
-/// Those will be bcasted further to the network.
-impl CallbackMessage for OffersRetrieved {
-    type Ok = Vec<SubscriptionId>;
-    type Error = ();
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UnsubscribedOffersBcast {
-    pub offer_ids: Vec<SubscriptionId>,
-}
-
-/// Local handler will return only ids of offers, that were not yet known as unsubscribed.
-/// Those will be bcasted further to the network.
-impl CallbackMessage for UnsubscribedOffersBcast {
-    type Ok = Vec<SubscriptionId>;
-    type Error = ();
-}
-
-impl BroadcastMessage for UnsubscribedOffersBcast {
-    const TOPIC: &'static str = "market-protocol-discovery-mk1-offers-unsubscribe";
-}
-
-// =========================================== //
-// Errors From impls
-// =========================================== //
-
-impl DiscoveryInitError {
-    fn from_pair(addr: String, e: BindBroadcastError) -> Self {
-        match e {
-            BindBroadcastError::GsbError(e) => {
-                DiscoveryInitError::BindingGsbFailed(addr, e.to_string())
-            }
-            BindBroadcastError::SubscribeError(e) => {
-                DiscoveryInitError::BroadcastSubscribeFailed(addr, e.to_string())
-            }
-        }
-    }
-}
-
-impl From<ya_service_bus::error::Error> for DiscoveryError {
-    fn from(e: ya_service_bus::error::Error) -> Self {
-        DiscoveryError::GsbError(e.to_string())
-    }
-}
-
-impl From<ErrorMessage> for DiscoveryError {
-    fn from(e: ErrorMessage) -> Self {
-        DiscoveryError::InternalError(e.to_string())
     }
 }

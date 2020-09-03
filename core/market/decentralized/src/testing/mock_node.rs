@@ -25,7 +25,7 @@ use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
 use crate::negotiation::error::QueryEventsError;
 use crate::protocol::callback::*;
-use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
+use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
 use crate::testing::mock_identity::MockIdentity;
 use crate::testing::mock_node::default::{
