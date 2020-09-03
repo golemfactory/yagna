@@ -223,7 +223,7 @@ impl NegotiationApi {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        _private_prefix: &str,
+        _local_prefix: &str,
     ) -> Result<(), NegotiationApiInitError> {
         ServiceBinder::new(&requestor::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {

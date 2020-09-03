@@ -2,7 +2,6 @@ use crate::metrics::error::MetricError;
 use crate::metrics::Result;
 use crate::process::*;
 use std::time::Duration;
-use winapi::um;
 
 pub fn cpu_time() -> Result<Duration> {
     let info = ProcessTree::job()
@@ -29,6 +28,6 @@ pub fn mem_peak_rss() -> Result<f64> {
 }
 
 #[inline(always)]
-fn to_duration(large_int: &um::winnt::LARGE_INTEGER_u) -> Duration {
+fn to_duration(large_int: &winapi::shared::ntdef::LARGE_INTEGER_u) -> Duration {
     Duration::from_nanos(((large_int.HighPart as u64) << 32) + large_int.LowPart as u64)
 }

@@ -17,7 +17,7 @@ pub(crate) fn prepare_gnt_contract(
     prepare_contract(
         ethereum_client,
         env.gnt_contract_address,
-        include_bytes!("../contracts/gnt2.json"),
+        include_bytes!("../contracts/ngnt.json"),
     )
 }
 

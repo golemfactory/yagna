@@ -1,6 +1,6 @@
 mod service;
 
-pub const PLATFORM_NAME: &'static str = "GNT";
+pub const PLATFORM_NAME: &'static str = "NGNT";
 pub const DRIVER_NAME: &'static str = "dummy";
 
 pub struct PaymentDriverService;

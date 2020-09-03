@@ -6,14 +6,14 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+gftp = "0.1"
 ya-core-model = "0.1"
 ya-net = "0.1"
 ya-service-bus = "0.2"
-gftp = "0.1"
 
 actix-http = "1.0.1"
 actix-rt = "1.0.0"
-awc = "1.0.1"
+awc = { version = "1.0.1", features = ["openssl"] }
 bytes = "0.5.4"
 futures = { version = "0.3.4" }
 hex = "0.4.2"

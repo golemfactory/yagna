@@ -9,7 +9,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 pub const CENTRAL_MARKET_URL_ENV_VAR: &str = "CENTRAL_MARKET_URL";
-pub const DEFAULT_CENTRAL_MARKET_URL: &str = "http://34.244.4.185:8080/market-api/v1/";
+pub const DEFAULT_CENTRAL_MARKET_URL: &str = "http://3.249.139.167:8080/market-api/v1/";
 
 lazy_static::lazy_static! {
     pub(crate) static ref CENTRAL_MARKET_URL: Url =
