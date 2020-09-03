@@ -184,29 +184,18 @@ impl Matcher {
         Ok(())
     }
 
-    pub async fn list_our_offers(&self) -> Result<Vec<Offer>, QueryOffersError> {
-        let identities = self.identity.list().await?;
-        let store = self.store.clone();
-
-        let mut our_offers = vec![];
-        for node_id in identities.into_iter() {
-            our_offers.append(&mut store.get_offers(Some(node_id)).await?)
-        }
-
-        Ok(our_offers)
+    pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        let our_node_ids = self.identity.list().await?;
+        Ok(self.store.get_active_offer_ids(Some(our_node_ids)).await?)
     }
 
-    pub async fn list_our_unsubscribed_offers(
+    pub async fn get_our_unsubscribed_offer_ids(
         &self,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        let identities = self.identity.list().await?;
-        let store = self.store.clone();
-
-        let mut our_offers = vec![];
-        for node_id in identities.into_iter() {
-            our_offers.append(&mut store.get_unsubscribed_offers(Some(node_id)).await?)
-        }
-
-        Ok(our_offers)
+        let our_node_ids = self.identity.list().await?;
+        Ok(self
+            .store
+            .get_unsubscribed_offer_ids(Some(our_node_ids))
+            .await?)
     }
 }

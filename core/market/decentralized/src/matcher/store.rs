@@ -1,5 +1,4 @@
 use chrono::{NaiveDateTime, Utc};
-use futures::StreamExt;
 use std::sync::Arc;
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
@@ -13,6 +12,7 @@ use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
 };
+use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
@@ -53,7 +53,7 @@ impl SubscriptionStore {
         match self
             .db
             .as_dao::<OfferDao>()
-            .insert(offer, Utc::now().naive_utc())
+            .put(offer, Utc::now().naive_utc())
             .await
         {
             Ok((true, OfferState::Active(offer))) => Ok(offer),
@@ -69,37 +69,45 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn get_offers(&self, id: Option<NodeId>) -> Result<Vec<Offer>, QueryOffersError> {
-        Ok(self
-            .db
-            .as_dao::<OfferDao>()
-            .get_offers(None, id, Utc::now().naive_utc())
-            .await
-            .map_err(QueryOffersError::from)?)
-    }
-
-    pub async fn get_unsubscribed_offers(
+    pub async fn get_active_offer_ids(
         &self,
-        id: Option<NodeId>,
+        node_ids: Option<Vec<NodeId>>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_unsubscribes(id, Utc::now().naive_utc())
+            .get_offer_ids(node_ids, Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?
-            .into_iter()
-            .map(|entry| entry.id)
-            .collect())
+            .map_err(QueryOffersError::from)?)
+    }
+
+    pub async fn get_unsubscribed_offer_ids(
+        &self,
+        node_ids: Option<Vec<NodeId>>,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_unsubscribed_ids(node_ids, Utc::now().naive_utc())
+            .await
+            .map_err(QueryOffersError::from)?)
     }
 
     pub async fn get_client_offers(
         &self,
-        id: Option<NodeId>,
+        node_id: Option<NodeId>,
     ) -> Result<Vec<ClientOffer>, QueryOffersError> {
         Ok(self
-            .get_offers(id)
-            .await?
+            .db
+            .as_dao::<OfferDao>()
+            .get_offers(
+                None,
+                node_id.map(|id| vec![id]),
+                None,
+                Utc::now().naive_utc(),
+            )
+            .await
+            .map_err(QueryOffersError::from)?
             .into_iter()
             .filter_map(|o| match o.into_client_offer() {
                 Err(e) => {
@@ -111,33 +119,54 @@ impl SubscriptionStore {
             .collect())
     }
 
-    pub async fn get_offers_batch(
+    pub async fn get_offers(
         &self,
         ids: Vec<SubscriptionId>,
     ) -> Result<Vec<Offer>, QueryOffersError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers(Some(ids), None, Utc::now().naive_utc())
+            .get_offers(Some(ids), None, None, Utc::now().naive_utc())
             .await
             .map_err(QueryOffersError::from)?)
     }
 
     pub async fn get_offers_before(
         &self,
-        insertion_ts: NaiveDateTime,
+        inserted_before_ts: NaiveDateTime,
     ) -> Result<Vec<Offer>, QueryOffersError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers_before(insertion_ts, Utc::now().naive_utc())
+            .get_offers(None, None, Some(inserted_before_ts), Utc::now().naive_utc())
             .await
             .map_err(QueryOffersError::from)?)
     }
 
+    /// Returns Offers SubscriptionId from vector, that don't exist in our database.
+    pub async fn filter_out_known_offer_ids(
+        &self,
+        offer_ids: Vec<SubscriptionId>,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        let known_ids = self
+            .db
+            .as_dao::<OfferDao>()
+            .get_known_ids(offer_ids.clone())
+            .await?
+            .into_iter()
+            .collect();
+
+        Ok(offer_ids
+            .into_iter()
+            .collect::<HashSet<SubscriptionId>>()
+            .difference(&known_ids)
+            .cloned()
+            .collect())
+    }
+
     pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
         let now = Utc::now().naive_utc();
-        match self.db.as_dao::<OfferDao>().select(id, now).await {
+        match self.db.as_dao::<OfferDao>().get_state(id, now).await {
             Err(e) => Err(QueryOfferError::Get(e, id.clone())),
             Ok(OfferState::Active(offer)) => Ok(offer),
             Ok(OfferState::Unsubscribed(_)) => Err(QueryOfferError::Unsubscribed(id.clone())),
@@ -149,7 +178,7 @@ impl SubscriptionStore {
     async fn mark_offer_unsubscribed(&self, id: &SubscriptionId) -> Result<(), ModifyOfferError> {
         self.db
             .as_dao::<OfferDao>()
-            .mark_unsubscribed(id, Utc::now().naive_utc())
+            .unsubscribe(id, Utc::now().naive_utc())
             .await
             .map_err(|e| ModifyOfferError::UnsubscribeError(e.into(), id.clone()))
             .and_then(|state| match state {
@@ -253,38 +282,5 @@ impl SubscriptionStore {
             true => Ok(()),
             false => Err(DemandError::NotFound(demand_id.clone())),
         }
-    }
-
-    /// Returns Offers SubscriptionId from vector, that don't exist in our database.
-    pub async fn filter_out_existing(
-        &self,
-        offers: Vec<SubscriptionId>,
-    ) -> Result<Vec<SubscriptionId>, QueryOfferError> {
-        Ok(futures::stream::iter(offers.into_iter())
-            .filter_map(|offer_id| {
-                let db = self.db.clone();
-                async move {
-                    match db
-                        .as_dao::<OfferDao>()
-                        .select(&offer_id, Utc::now().naive_utc())
-                        .await
-                    {
-                        Ok(offer_state) => match offer_state {
-                            OfferState::NotFound => Some(offer_id),
-                            _ => None,
-                        },
-                        Err(e) => {
-                            log::error!(
-                                "Can't get Offer [{}] from database. Error: {}",
-                                &offer_id,
-                                e
-                            );
-                            None
-                        }
-                    }
-                }
-            })
-            .collect::<Vec<SubscriptionId>>()
-            .await)
     }
 }

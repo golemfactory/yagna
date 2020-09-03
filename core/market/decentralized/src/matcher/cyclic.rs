@@ -1,8 +1,7 @@
 //! Cyclic methods for Matcher spawned after binding to GSB
-use rand::seq::SliceRandom;
+use rand::seq::IteratorRandom;
 use rand::Rng;
 use std::collections::HashSet;
-use std::iter::FromIterator;
 
 use super::Matcher;
 use crate::db::model::SubscriptionId;
@@ -19,35 +18,23 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
             wait_random_interval(bcast_interval).await;
 
             // We always broadcast our own Offers.
-            let our_offers = matcher
-                .list_our_offers()
-                .await?
-                .into_iter()
-                .map(|offer| offer.id)
-                .collect::<Vec<SubscriptionId>>();
+            let our_ids = matcher.get_our_active_offer_ids().await?;
 
             // Add some random subset of Offers to broadcast.
             // TODO: We will send more Offers, than config states, if we have many own Offers.
-            let num_ours_offers = our_offers.len();
-            let num_to_bcast = matcher.config.discovery.num_bcasted_offers;
+            let num_our_offers = our_ids.len();
+            let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
 
-            // TODO: Don't query full Offers from database if we only need ids.
-            let all_offers = matcher
-                .store
-                .get_offers(None)
-                .await?
-                .into_iter()
-                .map(|offer| offer.id)
-                .collect::<Vec<SubscriptionId>>();
-            let random_offers = randomize_offers(our_offers, all_offers, num_to_bcast as usize);
+            let all_ids = matcher.store.get_active_offer_ids(None).await?;
+            let our_and_random_ids = randomize_ids(our_ids, all_ids, num_to_bcast as usize);
 
             log::debug!(
                 "Cyclic bcast: Sending {} Offers including {} ours.",
-                random_offers.len(),
-                num_ours_offers
+                our_and_random_ids.len(),
+                num_our_offers
             );
 
-            matcher.discovery.bcast_offers(random_offers).await?;
+            matcher.discovery.bcast_offers(our_and_random_ids).await?;
             Result::<(), anyhow::Error>::Ok(())
         }
         .await
@@ -68,26 +55,25 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
             wait_random_interval(bcast_interval).await;
 
             // We always broadcast our own Offer unsubscribes.
-            let our_offers = matcher.list_our_unsubscribed_offers().await?;
+            let our_ids = matcher.get_our_unsubscribed_offer_ids().await?;
 
             // Add some random subset of Offer unsubscribes to bcast.
-            let num_ours_offers = our_offers.len();
-            let num_to_bcast = matcher.config.discovery.num_bcasted_unsubscribes;
-
             // TODO: We will send more unsubscribes, than config states, if we have many own unsubscribes.
-            let all_offers = matcher.store.get_unsubscribed_offers(None).await?;
-            let our_and_random_offers =
-                randomize_offers(our_offers, all_offers, num_to_bcast as usize);
+            let num_our_unsubscribes = our_ids.len();
+            let max_bcast = matcher.config.discovery.max_bcasted_unsubscribes as usize;
+
+            let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
+            let our_and_random_ids = randomize_ids(our_ids, all_ids, max_bcast);
 
             log::debug!(
                 "Cyclic bcast: Sending {} unsubscribes including {} ours.",
-                our_and_random_offers.len(),
-                num_ours_offers
+                our_and_random_ids.len(),
+                num_our_unsubscribes
             );
 
             matcher
                 .discovery
-                .bcast_unsubscribes(our_and_random_offers)
+                .bcast_unsubscribes(our_and_random_ids)
                 .await?;
             Result::<(), anyhow::Error>::Ok(())
         }
@@ -97,27 +83,29 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
     }
 }
 
-/// Chooses subset of all our Offers, that contains all of our
-/// own Offers and is extended with random Offers, that came from other Nodes.
-fn randomize_offers(
-    our_offers: Vec<SubscriptionId>,
-    all_offers: Vec<SubscriptionId>,
-    max_offers: usize,
+/// Returns vector of at most `cap_size` getting all our ids
+/// and random sample from other ids (all ids might include our ids).
+fn randomize_ids(
+    our_ids: Vec<SubscriptionId>,
+    all_ids: Vec<SubscriptionId>,
+    cap_size: usize,
 ) -> Vec<SubscriptionId> {
+    let our_len = our_ids.len();
+    if our_len > cap_size {
+        log::warn!("Our ids count: {} exceed cap: {}", our_len, cap_size);
+        return our_ids;
+    }
     // Filter our Offers from set.
-    let num_to_select = (max_offers - our_offers.len()).max(0);
-    let all_offers_wo_ours = all_offers
+    let num_to_select = (cap_size - our_len).max(0);
+    let our_ids = our_ids.into_iter().collect();
+    let mut randomized_ids = all_ids
         .into_iter()
         .collect::<HashSet<SubscriptionId>>()
-        .difference(&HashSet::from_iter(our_offers.clone().into_iter()))
+        .difference(&our_ids)
         .cloned()
-        .collect::<Vec<SubscriptionId>>();
-    let mut random_offers = all_offers_wo_ours
-        .choose_multiple(&mut rand::thread_rng(), num_to_select)
-        .cloned()
-        .collect::<Vec<SubscriptionId>>();
-    random_offers.extend(our_offers);
-    random_offers
+        .choose_multiple(&mut rand::thread_rng(), num_to_select);
+    randomized_ids.extend(our_ids);
+    randomized_ids
 }
 
 fn randomize_interval(mean_interval: std::time::Duration) -> std::time::Duration {
@@ -146,7 +134,7 @@ mod test {
         let our_offers = vec![sub1.clone()];
         let all_offers = vec![sub1.clone(), sub2.clone(), sub3.clone()];
 
-        let offers = randomize_offers(our_offers, all_offers, 2);
+        let offers = randomize_ids(our_offers, all_offers, 2);
 
         // Our Offer must be included.
         assert!(offers.contains(&sub1));
@@ -165,7 +153,7 @@ mod test {
         let our_offers = vec![sub1.clone()];
         let all_offers = vec![sub1.clone(), sub2.clone(), sub3.clone()];
 
-        let offers = randomize_offers(our_offers, all_offers, 4);
+        let offers = randomize_ids(our_offers, all_offers, 4);
 
         // All Offers should be included.
         assert!(offers.contains(&sub1));

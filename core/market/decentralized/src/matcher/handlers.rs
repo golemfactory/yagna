@@ -21,7 +21,7 @@ pub(super) async fn filter_out_known_offer_ids(
     // Note that when we broadcast our Offer, it will reach us too, so it concerns
     // not only Offers from other nodes.
     Ok(store
-        .filter_out_existing(msg.offer_ids)
+        .filter_out_known_offer_ids(msg.offer_ids)
         .await
         .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
 }
@@ -69,7 +69,7 @@ pub(super) async fn get_local_offers(
     _caller: String,
     msg: RetrieveOffers,
 ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
-    match store.get_offers_batch(msg.offer_ids).await {
+    match store.get_offers(msg.offer_ids).await {
         Ok(offers) => Ok(offers),
         Err(e) => {
             log::error!("Failed to get batch offers. Error: {}", e);

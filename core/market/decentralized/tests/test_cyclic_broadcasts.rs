@@ -19,7 +19,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
     config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
-    config.discovery.num_bcasted_offers = 50;
+    config.discovery.max_bcasted_offers = 50;
 
     let network = MarketsNetwork::new("test_startup_offers_sharing")
         .await
@@ -86,8 +86,8 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     let mut config = Config::default();
     config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
     config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
-    config.discovery.num_bcasted_offers = 50;
-    config.discovery.num_bcasted_unsubscribes = 50;
+    config.discovery.max_bcasted_offers = 50;
+    config.discovery.max_bcasted_unsubscribes = 50;
 
     let network = MarketsNetwork::new("test_unsubscribes_cyclic_broadcasts")
         .await
@@ -217,7 +217,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     // Change expected time of sending broadcasts.
     let mut config = Config::default();
     config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
-    config.discovery.num_bcasted_offers = 50;
+    config.discovery.max_bcasted_offers = 50;
 
     let network = MarketsNetwork::new("test_sharing_someones_else_offers")
         .await
@@ -289,8 +289,8 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
     let mut config = Config::default();
     config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
     config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
-    config.discovery.num_bcasted_offers = 50;
-    config.discovery.num_bcasted_unsubscribes = 50;
+    config.discovery.max_bcasted_offers = 50;
+    config.discovery.max_bcasted_unsubscribes = 50;
 
     let network = MarketsNetwork::new("test_sharing_someones_else_unsubscribes")
         .await

@@ -104,8 +104,8 @@ impl MarketsNetwork {
 
         // Disable cyclic broadcasts by default.
         let mut config = Config::default();
-        config.discovery.num_bcasted_offers = 0;
-        config.discovery.num_bcasted_unsubscribes = 0;
+        config.discovery.max_bcasted_offers = 0;
+        config.discovery.max_bcasted_unsubscribes = 0;
 
         MarketsNetwork {
             nodes: vec![],

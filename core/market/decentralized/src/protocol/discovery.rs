@@ -45,9 +45,9 @@ pub struct DiscoveryImpl {
 impl Discovery {
     /// Broadcasts Offers to other nodes in network. Connected nodes will
     /// get call to function bound at `OfferIdsBcast`.
-    pub async fn bcast_offers(&self, offers: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
+    pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
         let default_id = self.default_identity().await?;
-        let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids: offers });
+        let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         let _ = bus::service(local_net::BUS_ID)
@@ -76,11 +76,11 @@ impl Discovery {
 
     pub async fn bcast_unsubscribes(
         &self,
-        offers: Vec<SubscriptionId>,
+        offer_ids: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
         let default_id = self.default_identity().await?;
 
-        let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids: offers });
+        let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         let _ = bus::service(local_net::BUS_ID)
