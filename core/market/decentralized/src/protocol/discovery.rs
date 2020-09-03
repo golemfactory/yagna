@@ -124,11 +124,11 @@ impl Discovery {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
         let myself = self.clone();
-        // /private/market/market-protocol-mk1-offer
-        let bcast_address = format!("{}/{}", private_prefix, OffersBcast::TOPIC);
+        // /local/market/market-protocol-mk1-offer
+        let bcast_address = format!("{}/{}", local_prefix, OffersBcast::TOPIC);
         ya_net::bind_broadcast_with_caller(
             &bcast_address,
             move |caller, msg: SendBroadcastMessage<OffersBcast>| {
@@ -140,8 +140,8 @@ impl Discovery {
         .map_err(|e| DiscoveryInitError::from_pair(bcast_address, e))?;
 
         let myself = self.clone();
-        // /private/market/market-protocol-mk1-offer-unsubscribe
-        let bcast_address = format!("{}/{}", private_prefix, UnsubscribedOffersBcast::TOPIC);
+        // /local/market/market-protocol-mk1-offer-unsubscribe
+        let bcast_address = format!("{}/{}", local_prefix, UnsubscribedOffersBcast::TOPIC);
         ya_net::bind_broadcast_with_caller(
             &bcast_address,
             move |caller, msg: SendBroadcastMessage<UnsubscribedOffersBcast>| {

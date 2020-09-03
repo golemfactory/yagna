@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use ya_utils_process::ProcessHandle;
+use ya_utils_process::{ProcessGroupExt, ProcessHandle};
 
 /// Working ExeUnit instance representation.
 #[derive(Display)]
@@ -32,7 +32,11 @@ impl ExeUnitInstance {
             .with_context(|| format!("Failed to spawn [{}].", binary_path.display()))?;
 
         let mut command = Command::new(&binary_path);
-        command.args(args).current_dir(working_dir);
+        // new_process_group is a no-op on non-Unix systems
+        command
+            .args(args)
+            .current_dir(working_dir)
+            .new_process_group();
 
         let child = ProcessHandle::new(&mut command).map_err(|error| {
             anyhow!(
