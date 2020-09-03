@@ -255,7 +255,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     }
 
     // Wait until Node-1 and Node-2 will share their Offers.
-    tokio::time::delay_for(Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(200)).await;
 
     // Sanity check. Node-2 should have all Offers from market1.
     for subscription in subscriptions.iter() {
@@ -332,7 +332,7 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
     }
 
     // Wait until Nodes will share their Offers.
-    tokio::time::delay_for(Duration::from_millis(100)).await;
+    tokio::time::delay_for(Duration::from_millis(200)).await;
 
     // Sanity check. Node-3 should have all Offers from market1.
     for subscription in subscriptions.iter() {
