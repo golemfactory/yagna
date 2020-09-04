@@ -1,0 +1,23 @@
+name: Additional Checks
+on:
+  check_run:
+    types:
+      - rerequested
+      - requested_action
+jobs:
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install Last Stable Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # TODO: resolve critical errors and remove "-W clippy::all"
+          args: --workspace --all-targets
