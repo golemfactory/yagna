@@ -3,6 +3,11 @@ name = "ya-agreement-utils"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
+homepage = "https://github.com/golemfactory/yagna"
+repository = "https://github.com/golemfactory/yagna"
+license = "LGPL-3.0"
+description="part of golem project, types for agreement specification"
+keywords=["golem", "yagna"]
 
 [dependencies]
 ya-client-model = "0.1"
