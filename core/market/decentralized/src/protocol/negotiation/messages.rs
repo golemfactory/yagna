@@ -148,7 +148,7 @@ impl ProposalContent {
 
 impl ProposalReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
-        self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());
+        self.prev_proposal_id = self.prev_proposal_id.translate(owner);
         self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
         self
     }
@@ -170,7 +170,14 @@ impl ProposalRejected {
 
 impl AgreementApproved {
     pub fn translate(mut self, owner: OwnerType) -> Self {
-        self.agreement_id = self.agreement_id.translate(owner.clone());
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement.id = self.agreement.id.translate(owner);
         self
     }
 }

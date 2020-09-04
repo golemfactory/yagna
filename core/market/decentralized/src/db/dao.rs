@@ -17,4 +17,4 @@ pub use agreement::{AgreementDao, StateError};
 pub use demand::DemandDao;
 pub use events::{EventsDao, TakeEventsError};
 pub use offer::{OfferDao, OfferState};
-pub use proposal::ProposalDao;
+pub use proposal::{ProposalDao, SaveProposalError};

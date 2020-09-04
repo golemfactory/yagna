@@ -23,7 +23,9 @@ async fn test_gsb_get_agreement() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -59,7 +61,9 @@ async fn test_get_agreement() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -92,7 +96,9 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -123,7 +129,9 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -161,7 +169,11 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
     network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(network.get_default_id(PROV_NAME), &agreement_id, 0.1)
+        .approve_agreement(
+            network.get_default_id(PROV_NAME),
+            &agreement_id.clone().translate(OwnerType::Provider),
+            0.1,
+        )
         .await?;
 
     // Protect from eternal waiting.
@@ -183,7 +195,9 @@ async fn second_creation_should_fail() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -215,7 +229,9 @@ async fn second_confirmation_should_fail() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -256,7 +272,9 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -293,7 +311,9 @@ async fn agreement_expired_before_approval() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -336,7 +356,9 @@ async fn waiting_wo_confirmation_should_fail() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -371,7 +393,9 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -413,7 +437,9 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -438,7 +464,11 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
     network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(
+            prov_id.clone(),
+            &agreement_id.translate(OwnerType::Provider),
+            0.1,
+        )
         .await?;
 
     Ok(())
@@ -454,7 +484,9 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -478,7 +510,11 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
     network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(
+            prov_id.clone(),
+            &agreement_id.clone().translate(OwnerType::Provider),
+            0.1,
+        )
         .await?;
 
     // Requestor successfully waits for the Agreement approval
@@ -501,7 +537,9 @@ async fn second_approval_should_fail() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -527,16 +565,24 @@ async fn second_approval_should_fail() -> Result<()> {
 
     // First approval succeeds
     prov_market
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(
+            prov_id.clone(),
+            &agreement_id.clone().translate(OwnerType::Provider),
+            0.1,
+        )
         .await?;
 
     // ... but second fails
     let result = prov_market
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(
+            prov_id.clone(),
+            &agreement_id.clone().translate(OwnerType::Provider),
+            0.1,
+        )
         .await;
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Approved(agreement_id).to_string()
+        AgreementError::Approved(agreement_id.clone().translate(OwnerType::Provider)).to_string()
     );
 
     Ok(())
@@ -552,7 +598,9 @@ async fn second_waiting_should_pass() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -576,7 +624,11 @@ async fn second_waiting_should_pass() -> Result<()> {
     network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(
+            prov_id.clone(),
+            &agreement_id.clone().translate(OwnerType::Provider),
+            0.1,
+        )
         .await?;
 
     // Requestor successfully waits for the Agreement approval first time
@@ -606,7 +658,9 @@ async fn net_err_while_confirming() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -645,7 +699,9 @@ async fn net_err_while_approving() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -672,7 +728,11 @@ async fn net_err_while_approving() -> Result<()> {
     let result = network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(
+            prov_id.clone(),
+            &agreement_id.clone().translate(OwnerType::Provider),
+            0.1,
+        )
         .await;
 
     match result.unwrap_err() {

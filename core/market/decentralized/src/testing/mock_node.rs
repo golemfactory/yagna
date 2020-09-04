@@ -136,6 +136,7 @@ impl MarketsNetwork {
         };
 
         let node_id = node.mock_identity.default.clone().identity;
+        log::info!("Creating mock node {}: [{}].", name, &node_id);
         BCastService::default().register(&node_id, &self.test_name);
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
 
@@ -412,12 +413,18 @@ impl MarketsNetwork {
 }
 
 fn test_data_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test-workdir")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-workdir")
 }
 
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
     let test_dir: PathBuf = test_data_dir().join(dir_name);
 
+    log::info!(
+        "[MockNode] Preparing test directory: {}",
+        test_dir.display()
+    );
     if test_dir.exists() {
         fs::remove_dir_all(&test_dir)
             .with_context(|| format!("Removing test directory: {}", test_dir.display()))?;

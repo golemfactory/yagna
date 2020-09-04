@@ -131,16 +131,16 @@ impl RequestorBroker {
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
     ) -> Result<ProposalId, ProposalError> {
-        let (new_proposal, is_initial) = self
+        let (new_proposal, is_first) = self
             .common
-            .counter_proposal(demand_id, prev_proposal_id, proposal)
+            .counter_proposal(demand_id, prev_proposal_id, proposal, OwnerType::Requestor)
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
         // Send Proposal to Provider. Note that it can be either our first communication with
         // Provider or we negotiated with him already, so we need to send different message in each
         // of these cases.
-        match is_initial {
+        match is_first {
             true => self.api.initial_proposal(new_proposal).await,
             false => self.api.counter_proposal(new_proposal).await,
         }

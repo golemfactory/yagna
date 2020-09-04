@@ -204,7 +204,10 @@ impl NegotiationApi {
             &msg.agreement_id,
             &caller
         );
-        self.inner.agreement_approved.call(caller, msg).await
+        self.inner
+            .agreement_approved
+            .call(caller, msg.translate(OwnerType::Requestor))
+            .await
     }
 
     async fn on_agreement_rejected(
