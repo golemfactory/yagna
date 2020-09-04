@@ -81,7 +81,6 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                         enclave_hash: [0u8; 32],
                         ias_report: String::new(),
                         ias_sig: Vec::new(),
-                        session_key: Vec::new(),
                     })
                 }
                 #[cfg(not(feature = "sgx"))]

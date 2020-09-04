@@ -225,7 +225,6 @@ fn convert_credentials(
             enclave_hash,
             ias_report,
             ias_sig,
-            session_key,
         } => Credentials::Sgx(
             SgxCredentials::try_with(
                 enclave,
@@ -234,7 +233,6 @@ fn convert_credentials(
                 hex::encode(&enclave_hash),
                 ias_report,
                 ias_sig,
-                session_key,
             )
             .map_err(|e| Error::Service(format!("Unable to convert SGX credentials: {}", e)))?,
         ),
