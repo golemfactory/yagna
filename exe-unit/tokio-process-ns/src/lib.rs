@@ -35,3 +35,10 @@ impl NsCommand for tokio::process::Command {
         unsafe { self.pre_exec(move || pre_exec::pre_exec(options)) }
     }
 }
+
+impl NsCommand for std::process::Command {
+    fn new_ns(&mut self, options: NsOptions) -> &mut Self {
+        use std::os::unix::process::CommandExt;
+        unsafe { self.pre_exec(move || pre_exec::pre_exec(options)) }
+    }
+}
