@@ -2,10 +2,14 @@ use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
-use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
+use ya_market_decentralized::testing::mock_node::MarketServiceExt;
+use ya_market_decentralized::testing::proposal_util::{
+    exchange_draft_proposals, NegotiationHelper,
+};
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::{
-    AgreementError, ApprovalStatus, OwnerType, WaitForApprovalError,
+    client::sample_demand, client::sample_offer, events_helper::*, AgreementError,
+    AgreementStateError, ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -145,6 +149,15 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
         )
         .await?;
 
+    assert_eq!(
+        req_market
+            .get_proposal_from_db(&proposal_id)
+            .await?
+            .body
+            .state,
+        ProposalState::Accepted
+    );
+
     // Confirms it immediately
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id)
@@ -182,10 +195,10 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
     Ok(())
 }
 
-// TODO: It is allowed in general, but probably after rejection or expiration??
-// TODO: but we don't know even how we should handle this case
-//#[cfg_attr(not(feature = "market-test-suite"), ignore)]
-#[ignore]
+/// Requestor can't counter the same Proposal for the second time.
+// TODO: Should it be allowed after expiration?? For sure it shouldn't be allowed
+// TODO: after rejection, because rejection always ends negotiations.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn second_creation_should_fail() -> Result<()> {
     let network = MarketsNetwork::new("second_creation_should_fail")
@@ -213,7 +226,7 @@ async fn second_creation_should_fail() -> Result<()> {
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Confirmed(agreement_id).to_string()
+        AgreementError::AgreementExists(agreement_id, proposal_id).to_string()
     );
 
     Ok(())
@@ -256,7 +269,7 @@ async fn second_confirmation_should_fail() -> Result<()> {
         .await;
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Confirmed(agreement_id).to_string()
+        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)).to_string()
     );
 
     Ok(())
@@ -295,7 +308,7 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
     // results with Expired error
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Expired(agreement_id).to_string()
+        AgreementError::InvalidState(AgreementStateError::Expired(agreement_id)).to_string()
     );
 
     Ok(())
@@ -580,9 +593,10 @@ async fn second_approval_should_fail() -> Result<()> {
             0.1,
         )
         .await;
+    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::Approved(agreement_id.clone().translate(OwnerType::Provider)).to_string()
+        AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)).to_string()
     );
 
     Ok(())
@@ -682,7 +696,7 @@ async fn net_err_while_confirming() -> Result<()> {
         .confirm_agreement(req_id.clone(), &agreement_id)
         .await;
     match result.unwrap_err() {
-        AgreementError::Protocol(_) => (),
+        AgreementError::ProtocolCreate(_) => (),
         e => panic!("expected protocol error, but got: {}", e),
     };
 
@@ -740,5 +754,136 @@ async fn net_err_while_approving() -> Result<()> {
         e => panic!("expected protocol error, but got: {}", e),
     };
 
+    Ok(())
+}
+
+/// Requestor can create Agreements only from Proposals, that came from Provider.
+/// He can turn his own Proposal into Agreement.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn cant_promote_requestor_proposal() -> Result<()> {
+    let network = MarketsNetwork::new("cant_promote_requestor_proposal")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let NegotiationHelper {
+        proposal,
+        proposal_id,
+        demand_id,
+        ..
+    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let our_proposal = proposal.counter_demand(sample_demand())?;
+    let our_proposal_id = req_market
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal_id, &our_proposal)
+        .await?;
+
+    // Requestor tries to promote his own Proposal to Agreement.
+    match req_engine
+        .create_agreement(
+            req_id.clone(),
+            &our_proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+    {
+        Err(AgreementError::OwnProposal(id)) => assert_eq!(id, our_proposal_id),
+        _ => panic!("Expected AgreementError::OwnProposal."),
+    }
+    Ok(())
+}
+
+/// Requestor can't create Agreement from initial Proposal. At least one step
+/// of negotiations must happen, before he can create Agreement.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn cant_promote_initial_proposal() -> Result<()> {
+    let network = MarketsNetwork::new("cant_promote_initial_proposal")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_identity = network.get_default_id(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+    let prov_identity = network.get_default_id(PROV_NAME);
+
+    let demand_id = req_market
+        .subscribe_demand(&sample_demand(), &req_identity)
+        .await?;
+    prov_market
+        .subscribe_offer(&sample_offer(), &prov_identity)
+        .await?;
+
+    let proposal = requestor::query_proposal(&req_market, &demand_id, 1).await?;
+    let proposal_id = proposal.get_proposal_id()?;
+
+    match req_market
+        .requestor_engine
+        .create_agreement(
+            req_identity.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+    {
+        Err(AgreementError::NoNegotiations(id)) => assert_eq!(id, proposal_id),
+        _ => panic!("Expected AgreementError::NoNegotiations."),
+    }
+    Ok(())
+}
+
+/// Requestor can promote only last proposal in negotiation chain.
+/// If negotiations were more advanced, `create_agreement` will end with error.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn cant_promote_not_last_proposal() -> Result<()> {
+    let network = MarketsNetwork::new("cant_promote_not_last_proposal")
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let NegotiationHelper {
+        proposal,
+        proposal_id,
+        demand_id,
+        ..
+    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let our_proposal = proposal.counter_demand(sample_demand())?;
+    req_market
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal_id, &our_proposal)
+        .await?;
+
+    // Requestor tries to promote Proposal that was already followed by
+    // further negotiations.
+    match req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+    {
+        Err(AgreementError::ProposalCountered(id)) => assert_eq!(id, proposal_id),
+        _ => panic!("Expected AgreementError::ProposalCountered."),
+    }
     Ok(())
 }

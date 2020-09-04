@@ -218,6 +218,8 @@ impl CommonBroker {
             })?;
 
         // Create Proposal Event and add it to queue (database).
+        // TODO: If creating Proposal succeeds, but event can't be added, provider
+        // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
         self.db
             .as_dao::<EventsDao>()

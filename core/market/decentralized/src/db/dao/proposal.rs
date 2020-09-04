@@ -6,7 +6,7 @@ use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
-use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId};
+use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId, ProposalState};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
 use crate::db::{DbError, DbResult};
@@ -137,12 +137,28 @@ impl<'c> ProposalDao<'c> {
     }
 }
 
-fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<bool> {
+pub(super) fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<bool> {
     let proposal: Option<DbProposal> = dsl::market_proposal
         .filter(dsl::prev_proposal_id.eq(&proposal_id))
         .first(conn)
         .optional()?;
     Ok(proposal.is_some())
+}
+
+pub(super) fn set_proposal_accepted(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<()> {
+    // TODO: Check if we can do transition to this state.
+    update_proposal_state(conn, proposal_id, ProposalState::Accepted)
+}
+
+fn update_proposal_state(
+    conn: &ConnType,
+    proposal_id: &ProposalId,
+    new_state: ProposalState,
+) -> DbResult<()> {
+    diesel::update(dsl::market_proposal.filter(dsl::id.eq(&proposal_id)))
+        .set(dsl::state.eq(new_state))
+        .execute(conn)?;
+    Ok(())
 }
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for SaveProposalError {

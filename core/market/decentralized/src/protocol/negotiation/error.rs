@@ -6,6 +6,13 @@ use crate::db::model::{
 };
 use crate::negotiation::error::MatchValidationError;
 
+/// Trait for Error types, that shouldn't expose sensitive information
+/// to other Nodes in network, but should contain more useful message, when displaying
+/// them on local Node.
+pub trait RemoteSensitiveError {
+    fn hide_sensitive_info(self) -> RemoteProposeAgreementError;
+}
+
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum NegotiationApiInitError {}
 
@@ -49,6 +56,38 @@ pub enum AgreementError {
     GsbError(String, AgreementId),
     #[error("Saving Agreement [{1}] error: {0}.")]
     Saving(String, AgreementId),
+    #[error("Agreement [{1}] remote error: {0}")]
+    Remote(RemoteAgreementError, AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum ProposeAgreementError {
+    #[error("Agreement [{1}] GSB error: {0}.")]
+    GsbError(String, AgreementId),
+    #[error("Agreement [{1}] remote error: {0}")]
+    Remote(RemoteProposeAgreementError, AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum RemoteProposeAgreementError {
+    #[error("Proposal [{0}] not found.")]
+    ProposalNotFound(ProposalId),
+    #[error("Requestor can't promote his own Proposal [{0}] to Agreement.")]
+    RequestorProposal(ProposalId),
+    #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
+    NoNegotiations(ProposalId),
+    #[error("Can't create Agreement for already countered Proposal [{0}].")]
+    ProposalCountered(ProposalId),
+    #[error("Agreement id [{0}] is invalid.")]
+    InvalidId(AgreementId),
+    /// We should hide `original_msg`, since we don't want to reveal our details to
+    /// other Nodes. On the other side we should log whole message on local Node.
+    /// Use `RemoteSensitiveError::hide_sensitive_info` for this.
+    #[error("Unexpected error: {public_msg} {original_msg}.")]
+    Unexpected {
+        public_msg: String,
+        original_msg: String,
+    },
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -77,4 +116,18 @@ pub enum RemoteAgreementError {
     InvalidState(AgreementId, AgreementState),
     #[error("Can't approve Agreement [{0}] due to internal error.")]
     InternalError(AgreementId),
+}
+
+impl RemoteSensitiveError for RemoteProposeAgreementError {
+    fn hide_sensitive_info(self) -> RemoteProposeAgreementError {
+        match self {
+            RemoteProposeAgreementError::Unexpected { public_msg, .. } => {
+                RemoteProposeAgreementError::Unexpected {
+                    public_msg,
+                    original_msg: "".to_string(),
+                }
+            }
+            _ => self,
+        }
+    }
 }

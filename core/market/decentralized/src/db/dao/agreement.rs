@@ -3,8 +3,9 @@ use diesel::prelude::*;
 
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
+use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
 use crate::db::dao::sql_functions::datetime;
-use crate::db::model::{Agreement, AgreementId, AgreementState};
+use crate::db::model::{Agreement, AgreementId, AgreementState, ProposalId};
 use crate::db::schema::market_agreement::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
@@ -14,6 +15,16 @@ const AGREEMENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
     default: 90, // days
     min: 30,     // days
 };
+
+#[derive(thiserror::Error, Debug)]
+pub enum SaveAgreementError {
+    #[error("Can't create Agreement for already countered Proposal [{0}].")]
+    ProposalCountered(ProposalId),
+    #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
+    AgreementExists(AgreementId, ProposalId),
+    #[error("Failed to save Agreement to database. Error: {0}.")]
+    DatabaseError(DbError),
+}
 
 pub struct AgreementDao<'c> {
     pool: &'c PoolType,
@@ -70,12 +81,27 @@ impl<'c> AgreementDao<'c> {
         do_with_transaction(self.pool, move |conn| update_state(conn, &id, &state)).await
     }
 
-    pub async fn save(&self, agreement: Agreement) -> DbResult<()> {
+    pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
+        // Agreement is always created for last Provider Proposal.
+        let proposal_id = agreement.offer_proposal_id.clone();
         do_with_transaction(self.pool, move |conn| {
+            if has_counter_proposal(conn, &proposal_id)? {
+                return Err(SaveAgreementError::ProposalCountered(proposal_id.clone()));
+            }
+
+            if let Some(agreement) = find_agreement_for_proposal(conn, &proposal_id)? {
+                return Err(SaveAgreementError::AgreementExists(
+                    agreement.id,
+                    proposal_id.clone(),
+                ));
+            }
+
             diesel::insert_into(dsl::market_agreement)
                 .values(&agreement)
                 .execute(conn)?;
-            Ok(())
+
+            set_proposal_accepted(conn, &proposal_id)?;
+            Ok(agreement)
         })
         .await
     }
@@ -122,9 +148,25 @@ impl<'c> AgreementDao<'c> {
     }
 }
 
+fn find_agreement_for_proposal(
+    conn: &ConnType,
+    proposal_id: &ProposalId,
+) -> DbResult<Option<Agreement>> {
+    Ok(dsl::market_agreement
+        .filter(dsl::offer_proposal_id.eq(&proposal_id))
+        .first::<Agreement>(conn)
+        .optional()?)
+}
+
 impl<ErrorType: Into<DbError>> From<ErrorType> for StateError {
     fn from(err: ErrorType) -> Self {
         StateError::DbError(err.into())
+    }
+}
+
+impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
+    fn from(err: ErrorType) -> Self {
+        SaveAgreementError::DatabaseError(err.into())
     }
 }
 
