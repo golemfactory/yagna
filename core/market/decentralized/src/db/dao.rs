@@ -13,8 +13,8 @@ pub mod sql_functions {
 mod offer;
 mod proposal;
 
-pub use agreement::{AgreementDao, StateError};
+pub use agreement::{AgreementDao, SaveAgreementError, StateError};
 pub use demand::DemandDao;
 pub use events::{EventsDao, TakeEventsError};
 pub use offer::{OfferDao, OfferState};
-pub use proposal::ProposalDao;
+pub use proposal::{ProposalDao, SaveProposalError};

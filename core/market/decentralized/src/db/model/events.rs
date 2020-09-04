@@ -72,11 +72,11 @@ impl MarketEvent {
         }
     }
 
-    pub fn from_agreement(agreement: Agreement) -> NewMarketEvent {
+    pub fn from_agreement(agreement: &Agreement) -> NewMarketEvent {
         NewMarketEvent {
-            subscription_id: agreement.offer_id,
+            subscription_id: agreement.offer_id.clone(),
             event_type: EventType::ProviderAgreement,
-            artifact_id: agreement.id,
+            artifact_id: agreement.id.clone(),
         }
     }
 
