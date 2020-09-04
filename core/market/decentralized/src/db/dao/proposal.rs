@@ -137,7 +137,7 @@ impl<'c> ProposalDao<'c> {
     }
 }
 
-pub fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<bool> {
+pub(super) fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<bool> {
     let proposal: Option<DbProposal> = dsl::market_proposal
         .filter(dsl::prev_proposal_id.eq(&proposal_id))
         .first(conn)
@@ -145,7 +145,7 @@ pub fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) -> DbResu
     Ok(proposal.is_some())
 }
 
-pub fn set_proposal_accepted(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<()> {
+pub(super) fn set_proposal_accepted(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<()> {
     // TODO: Check if we can do transition to this state.
     update_proposal_state(conn, proposal_id, ProposalState::Accepted)
 }
