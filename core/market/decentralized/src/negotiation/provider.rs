@@ -11,15 +11,20 @@ use ya_client::model::{
 use ya_persistence::executor::DbExecutor;
 
 use super::error::{NegotiationError, NegotiationInitError};
-use crate::db::dao::{AgreementDao, EventsDao, ProposalDao};
-use crate::db::model::{AgreementId, AgreementState, Offer as ModelOffer, SubscriptionId};
+use crate::db::dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError};
+use crate::db::model::{
+    Agreement, AgreementId, AgreementState, IssuerType, Offer as ModelOffer, SubscriptionId,
+};
 use crate::db::model::{OwnerType, Proposal, ProposalId};
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
-use crate::negotiation::common::CommonBroker;
-use crate::negotiation::error::{AgreementError, ProposalError, QueryEventsError};
+use crate::negotiation::common::{CommonBroker, GetProposalError};
+use crate::negotiation::error::{
+    AgreementError, AgreementStateError, ProposalError, QueryEventsError,
+};
 use crate::negotiation::notifier::EventNotifier;
 use crate::protocol::negotiation::error::{
-    AgreementError as ProtocolAgreementError, CounterProposalError, RemoteProposalError,
+    CounterProposalError, ProposeAgreementError, RemoteProposalError, RemoteProposeAgreementError,
+    RemoteSensitiveError,
 };
 use crate::protocol::negotiation::messages::{
     AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
@@ -76,9 +81,9 @@ impl ProviderBroker {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), NegotiationInitError> {
-        Ok(self.api.bind_gsb(public_prefix, private_prefix).await?)
+        Ok(self.api.bind_gsb(public_prefix, local_prefix).await?)
     }
 
     pub async fn subscribe_offer(&self, _offer: &ModelOffer) -> Result<(), NegotiationError> {
@@ -102,7 +107,12 @@ impl ProviderBroker {
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
             .common
-            .counter_proposal(subscription_id, prev_proposal_id, proposal)
+            .counter_proposal(
+                subscription_id,
+                prev_proposal_id,
+                proposal,
+                OwnerType::Provider,
+            )
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
@@ -151,12 +161,12 @@ impl ProviderBroker {
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
         {
-            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            None => Err(AgreementError::NotFound(agreement_id.clone()))?,
             Some(agreement) => agreement,
         };
 
         Err(match agreement.state {
-            AgreementState::Proposal => AgreementError::Proposed(agreement.id),
+            AgreementState::Proposal => AgreementStateError::Proposed(agreement.id),
             AgreementState::Pending => {
                 // TODO : possible race condition here ISSUE#430
                 // 1. this state check should be also `db.update_state`
@@ -167,15 +177,18 @@ impl ProviderBroker {
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
                 return Ok(());
             }
-            AgreementState::Cancelled => AgreementError::Cancelled(agreement.id),
-            AgreementState::Rejected => AgreementError::Rejected(agreement.id),
-            AgreementState::Approved => AgreementError::Approved(agreement.id),
-            AgreementState::Expired => AgreementError::Expired(agreement.id),
-            AgreementState::Terminated => AgreementError::Terminated(agreement.id),
-        })
+            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
+            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
+            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
+        })?
     }
 }
 
+// TODO: We need more elegant solution than this. This function still returns
+//  CounterProposalError, which should be hidden in negotiation API and implementations
+//  of handlers should return RemoteProposalError.
 async fn on_initial_proposal(
     broker: CommonBroker,
     caller: String,
@@ -192,9 +205,8 @@ async fn initial_proposal(
     caller: String,
     msg: InitialProposalReceived,
 ) -> Result<(), RemoteProposalError> {
-    let db = broker.db;
-    let store = broker.store;
-    let notifier = broker.notifier;
+    let db = broker.db.clone();
+    let store = broker.store.clone();
 
     // Check subscription.
     let offer = match store.get_offer(&msg.offer_id).await {
@@ -206,55 +218,132 @@ async fn initial_proposal(
         Ok(offer) => offer,
     };
 
-    // Add proposal to database together with Negotiation record.
+    // In this step we add Proposal, that was generated on Requestor by market.
+    // This way we have the same state on Provider as on Requestor and we can use
+    // the same function to handle this, as in normal counter_proposal flow.
+    // TODO: Initial proposal id will differ on Requestor and Provider!! It isn't problem as long
+    //  we don't log ids somewhere and try to compare between nodes.
     let owner_id =
         NodeId::from_str(&caller).map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-    let proposal = Proposal::new_provider(&msg.demand_id, owner_id, msg.proposal, offer);
+    let proposal = Proposal::new_provider(&msg.demand_id, owner_id, offer);
     let proposal = db
         .as_dao::<ProposalDao>()
         .save_initial_proposal(proposal)
         .await
         .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
 
-    // Create Proposal Event and add it to queue (database).
-    let subscription_id = proposal.negotiation.subscription_id.clone();
-    db.as_dao::<EventsDao>()
-        .add_proposal_event(proposal, OwnerType::Provider)
+    // Now, since we have previous event in database, we can pretend that someone sent us
+    // normal counter proposal.
+    let received_msg = ProposalReceived {
+        prev_proposal_id: proposal.body.id,
+        proposal: msg.proposal,
+    };
+    broker
+        .proposal_received(caller, received_msg, OwnerType::Provider)
         .await
-        .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-
-    // Send channel message to wake all query_events waiting for proposals.
-    notifier.notify(&subscription_id).await;
-    Ok(())
 }
 
 async fn on_agreement_received(
     broker: CommonBroker,
+    caller: String,
+    msg: AgreementReceived,
+) -> Result<(), ProposeAgreementError> {
+    let id = msg.agreement_id.clone();
+    agreement_received(broker, caller, msg)
+        .await
+        .map_err(|e| match e {
+            RemoteProposeAgreementError::Unexpected { .. } => {
+                log::warn!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
+                ProposeAgreementError::Remote(e.hide_sensitive_info(), id)
+            }
+            e => {
+                log::info!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
+                ProposeAgreementError::Remote(e, id)
+            }
+        })
+}
+
+async fn agreement_received(
+    broker: CommonBroker,
     _caller: String,
-    mut msg: AgreementReceived,
-) -> Result<(), ProtocolAgreementError> {
-    let id = msg.agreement.id.clone();
-    let subscription_id = msg.agreement.offer_id.clone();
+    msg: AgreementReceived,
+) -> Result<(), RemoteProposeAgreementError> {
+    let offer_proposal = broker.get_proposal(&msg.proposal_id).await?;
+    let offer_proposal_id = offer_proposal.body.id.clone();
+    let offer_id = &offer_proposal.negotiation.offer_id.clone();
 
-    // TODO: we should build new agreement here from local Proposal and signatures
-    msg.agreement.state = AgreementState::Pending;
+    if offer_proposal.body.issuer != IssuerType::Us {
+        return Err(RemoteProposeAgreementError::RequestorProposal(
+            offer_proposal_id.clone(),
+        ));
+    }
 
-    broker
+    let demand_proposal_id = offer_proposal
+        .body
+        .prev_proposal_id
+        .clone()
+        .ok_or_else(|| RemoteProposeAgreementError::NoNegotiations(offer_proposal_id))?;
+    let demand_proposal = broker.get_proposal(&demand_proposal_id).await?;
+
+    let mut agreement = Agreement::new_with_ts(
+        demand_proposal,
+        offer_proposal,
+        msg.valid_to,
+        msg.creation_ts,
+        OwnerType::Provider,
+    );
+    agreement.state = AgreementState::Pending;
+
+    // Check if we generated the same id, as Requestor sent us. If not, reject
+    // it, because wrong generated ids could be not unique.
+    let id = agreement.id.clone();
+    if id != msg.agreement_id {
+        Err(RemoteProposeAgreementError::InvalidId(id.clone()))?
+    }
+
+    let agreement = broker
         .db
         .as_dao::<AgreementDao>()
-        .save(msg.agreement.clone())
+        .save(agreement)
         .await
-        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
+        .map_err(|e| match e {
+            SaveAgreementError::ProposalCountered(id) => {
+                RemoteProposeAgreementError::ProposalCountered(id)
+            }
+            _ => RemoteProposeAgreementError::Unexpected {
+                public_msg: format!("Failed to save Agreement."),
+                original_msg: e.to_string(),
+            },
+        })?;
 
+    // TODO: If creating Agreement succeeds, but event can't be added, provider
+    // TODO: will never approve Agreement. Solve problem when Event API will be available.
     broker
         .db
         .as_dao::<EventsDao>()
-        .add_agreement_event(msg.agreement)
+        .add_agreement_event(&agreement)
         .await
-        .map_err(|e| ProtocolAgreementError::Saving(e.to_string(), id.clone()))?;
+        .map_err(|e| RemoteProposeAgreementError::Unexpected {
+            public_msg: format!("Failed to add event for Agreement."),
+            original_msg: e.to_string(),
+        })?;
 
     // Send channel message to wake all query_events waiting for proposals.
-    broker.notifier.notify(&subscription_id).await;
+    broker.notifier.notify(&offer_id).await;
 
     Ok(())
+}
+
+impl From<GetProposalError> for RemoteProposeAgreementError {
+    fn from(e: GetProposalError) -> Self {
+        match e {
+            GetProposalError::NotFound(id) => RemoteProposeAgreementError::ProposalNotFound(id),
+            GetProposalError::FailedGetFromDb(id, db_error) => {
+                RemoteProposeAgreementError::Unexpected {
+                    public_msg: format!("Failed to get proposal from db [{}].", id.to_string()),
+                    original_msg: db_error.to_string(),
+                }
+            }
+        }
+    }
 }
