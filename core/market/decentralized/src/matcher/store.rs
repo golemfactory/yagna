@@ -1,30 +1,28 @@
-use chrono::{Duration, NaiveDateTime, Utc};
-use lazy_static::lazy_static;
+use chrono::{NaiveDateTime, Utc};
+use std::sync::Arc;
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+use crate::config::Config;
 use crate::db::dao::*;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
 };
-
-lazy_static! {
-    // TODO: agents should set expiration.
-    static ref DEFAULT_TTL: Duration = Duration::hours(24);
-}
+use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
     db: DbExecutor,
+    config: Arc<Config>,
 }
 
 impl SubscriptionStore {
-    pub fn new(db: DbExecutor) -> Self {
-        Self { db }
+    pub fn new(db: DbExecutor, config: Arc<Config>) -> Self {
+        Self { db, config }
     }
 
     /// returns newly created offer with insertion_ts
@@ -35,7 +33,7 @@ impl SubscriptionStore {
     ) -> Result<Offer, SaveOfferError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
-        let expiration_ts = creation_ts + *DEFAULT_TTL;
+        let expiration_ts = creation_ts + self.config.subscription.default_ttl;
         let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts);
         self.insert_offer(offer).await
     }
@@ -55,7 +53,7 @@ impl SubscriptionStore {
         match self
             .db
             .as_dao::<OfferDao>()
-            .insert(offer, Utc::now().naive_utc())
+            .put(offer, Utc::now().naive_utc())
             .await
         {
             Ok((true, OfferState::Active(offer))) => Ok(offer),
@@ -71,16 +69,45 @@ impl SubscriptionStore {
         }
     }
 
-    pub async fn get_offers(
+    pub async fn get_active_offer_ids(
         &self,
-        id: Option<Identity>,
+        node_ids: Option<Vec<NodeId>>,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_offer_ids(node_ids, Utc::now().naive_utc())
+            .await
+            .map_err(QueryOffersError::from)?)
+    }
+
+    pub async fn get_unsubscribed_offer_ids(
+        &self,
+        node_ids: Option<Vec<NodeId>>,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_unsubscribed_ids(node_ids, Utc::now().naive_utc())
+            .await
+            .map_err(QueryOffersError::from)?)
+    }
+
+    pub async fn get_client_offers(
+        &self,
+        node_id: Option<NodeId>,
     ) -> Result<Vec<ClientOffer>, QueryOffersError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers(id.map(|ident| ident.identity), Utc::now().naive_utc())
+            .get_offers(
+                None,
+                node_id.map(|id| vec![id]),
+                None,
+                Utc::now().naive_utc(),
+            )
             .await
-            .map_err(|e| QueryOffersError(e))?
+            .map_err(QueryOffersError::from)?
             .into_iter()
             .filter_map(|o| match o.into_client_offer() {
                 Err(e) => {
@@ -92,21 +119,54 @@ impl SubscriptionStore {
             .collect())
     }
 
-    pub async fn get_offers_before(
+    pub async fn get_offers(
         &self,
-        insertion_ts: NaiveDateTime,
+        ids: Vec<SubscriptionId>,
     ) -> Result<Vec<Offer>, QueryOffersError> {
         Ok(self
             .db
             .as_dao::<OfferDao>()
-            .get_offers_before(insertion_ts, Utc::now().naive_utc())
+            .get_offers(Some(ids), None, None, Utc::now().naive_utc())
             .await
-            .map_err(|e| QueryOffersError(e))?)
+            .map_err(QueryOffersError::from)?)
+    }
+
+    pub async fn get_offers_before(
+        &self,
+        inserted_before_ts: NaiveDateTime,
+    ) -> Result<Vec<Offer>, QueryOffersError> {
+        Ok(self
+            .db
+            .as_dao::<OfferDao>()
+            .get_offers(None, None, Some(inserted_before_ts), Utc::now().naive_utc())
+            .await
+            .map_err(QueryOffersError::from)?)
+    }
+
+    /// Returns Offers SubscriptionId from vector, that don't exist in our database.
+    pub async fn filter_out_known_offer_ids(
+        &self,
+        offer_ids: Vec<SubscriptionId>,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        let known_ids = self
+            .db
+            .as_dao::<OfferDao>()
+            .get_known_ids(offer_ids.clone())
+            .await?
+            .into_iter()
+            .collect();
+
+        Ok(offer_ids
+            .into_iter()
+            .collect::<HashSet<SubscriptionId>>()
+            .difference(&known_ids)
+            .cloned()
+            .collect())
     }
 
     pub async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError> {
         let now = Utc::now().naive_utc();
-        match self.db.as_dao::<OfferDao>().select(id, now).await {
+        match self.db.as_dao::<OfferDao>().get_state(id, now).await {
             Err(e) => Err(QueryOfferError::Get(e, id.clone())),
             Ok(OfferState::Active(offer)) => Ok(offer),
             Ok(OfferState::Unsubscribed(_)) => Err(QueryOfferError::Unsubscribed(id.clone())),
@@ -118,7 +178,7 @@ impl SubscriptionStore {
     async fn mark_offer_unsubscribed(&self, id: &SubscriptionId) -> Result<(), ModifyOfferError> {
         self.db
             .as_dao::<OfferDao>()
-            .mark_unsubscribed(id, Utc::now().naive_utc())
+            .unsubscribe(id, Utc::now().naive_utc())
             .await
             .map_err(|e| ModifyOfferError::UnsubscribeError(e.into(), id.clone()))
             .and_then(|state| match state {
@@ -134,14 +194,19 @@ impl SubscriptionStore {
         &self,
         offer_id: &SubscriptionId,
         local_caller: bool,
-        caller_id: Option<NodeId>,
+        _caller_id: Option<NodeId>,
     ) -> Result<(), ModifyOfferError> {
-        if let Ok(offer) = self.get_offer(offer_id).await {
-            if caller_id != Some(offer.node_id) {
-                // TODO: unauthorized?
-                return Err(ModifyOfferError::NotFound(offer_id.clone()));
-            }
-        }
+        // TODO: We can't check caller_id to authorize this operation, because
+        //  otherwise we can't get unsubscribe events from other Nodes, than Offer
+        //  owner. But on the other side, if we allow anyone to unsubscribe, someone
+        //  can use it to attacks. Probably we must ask owner, if he really
+        //  unsubscribed his Offer or require owner signatures for all unsubscribes.
+        // if let Ok(offer) = self.get_offer(offer_id).await {
+        //     if caller_id != Some(offer.node_id) {
+        //         // TODO: unauthorized?
+        //         return Err(ModifyOfferError::NotFound(offer_id.clone()));
+        //     }
+        // }
 
         // If this fn was called before, we won't remove our Offer below,
         // because `Unsubscribed` error will pop-up here.
@@ -167,7 +232,7 @@ impl SubscriptionStore {
     ) -> Result<Demand, DemandError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.
-        let expiration_ts = creation_ts + *DEFAULT_TTL;
+        let expiration_ts = creation_ts + self.config.subscription.default_ttl;
         let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts);
         self.db
             .as_dao::<DemandDao>()
