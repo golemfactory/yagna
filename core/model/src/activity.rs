@@ -215,9 +215,6 @@ pub mod local {
             enclave_hash: [u8; 32],
             ias_report: String,
             ias_sig: Vec<u8>,
-            // Encrypted by requestorPubKey + signed by enclave
-            // aes-256 encyption key.
-            session_key: Vec<u8>,
         },
     }
 

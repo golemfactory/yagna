@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::error::Error;
 use crate::message::{GetMetrics, Shutdown};
 use crate::metrics::error::MetricError;
@@ -92,10 +94,11 @@ impl Handler<GetMetrics> for MetricsService {
     type Result = <GetMetrics as Message>::Result;
 
     fn handle(&mut self, _: GetMetrics, _: &mut Self::Context) -> Self::Result {
-        let mut metrics = Vec::with_capacity(self.usage_vector.len());
+        let mut metrics = vec![0f64; self.usage_vector.len()];
 
-        for name in self.usage_vector.iter() {
-            /*let metric = self
+        #[cfg(not(feature = "sgx"))]
+        for (i, name) in self.usage_vector.iter().enumerate() {
+            let metric = self
                 .metrics
                 .get_mut(name)
                 .ok_or(MetricError::Unsupported(name.to_string()))?;
@@ -104,7 +107,7 @@ impl Handler<GetMetrics> for MetricsService {
             metric.log_report(report.clone());
 
             match report {
-                MetricReport::Frame(data) => metrics.push(data),
+                MetricReport::Frame(data) => metrics[i] = data,
                 MetricReport::Error(error) => return Err(error.into()),
                 MetricReport::LimitExceeded(data) => {
                     return Err(Error::UsageLimitExceeded(format!(
@@ -113,10 +116,9 @@ impl Handler<GetMetrics> for MetricsService {
                     )))
                 }
             }
-            */
-            metrics.push(0.0_f64);
         }
-        Ok(metrics)
+
+        Ok::<_, Error>(metrics)
     }
 }
 
