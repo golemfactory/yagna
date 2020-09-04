@@ -231,7 +231,9 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
         .add_market_instance("Node-2")
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+    let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2")
+        .await?
+        .proposal_id;
     let req_market = network.get_market("Node-1");
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id("Node-1");

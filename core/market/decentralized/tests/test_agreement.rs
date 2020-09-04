@@ -61,7 +61,9 @@ async fn test_get_agreement() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
@@ -94,7 +96,9 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
