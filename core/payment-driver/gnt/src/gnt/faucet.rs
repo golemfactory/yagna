@@ -1,10 +1,7 @@
 use crate::utils;
 use crate::{GNTDriverError, GNTDriverResult};
+use actix_rt::Arbiter;
 use ethereum_types::Address;
-use hyper::body::HttpBody as _;
-use hyper::client::HttpConnector;
-use hyper::http::uri::InvalidUri;
-use hyper::{Body, Uri};
 use std::{env, time};
 
 const MAX_ETH_FAUCET_REQUESTS: u32 = 6;
@@ -13,7 +10,7 @@ const INIT_ETH_SLEEP: time::Duration = time::Duration::from_secs(15);
 const ETH_FAUCET_ADDRESS_ENV_VAR: &str = "ETH_FAUCET_ADDRESS";
 
 pub struct EthFaucetConfig {
-    faucet_address: hyper::Uri,
+    faucet_address: awc::http::Uri,
 }
 
 impl EthFaucetConfig {
@@ -28,37 +25,27 @@ impl EthFaucetConfig {
 
     pub async fn request_eth(&self, address: Address) -> GNTDriverResult<()> {
         log::debug!("request eth");
-        let client = hyper::Client::new();
+        let (resolver, bg) = trust_dns_resolver::AsyncResolver::from_system_conf().unwrap();
+        Arbiter::spawn(bg);
+        let tcp_connector = actix_connect::new_connector(resolver);
+        let client = awc::Client::build()
+            .connector(
+                actix_http::client::Connector::new()
+                    .connector(tcp_connector)
+                    .finish(),
+            )
+            .finish();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
 
-        async fn try_request_eth(
-            client: &hyper::Client<HttpConnector, Body>,
-            url: &str,
-        ) -> GNTDriverResult<()> {
-            let uri: Uri = url.parse().map_err(|e: InvalidUri| {
-                GNTDriverError::LibraryError(format!("URL parse() error: {}", e.to_string()))
-            })?;
+        async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {
             let body = client
-                .get(uri)
+                .get(url)
+                .send()
                 .await
-                .map_err(|e| {
-                    GNTDriverError::LibraryError(format!(
-                        "Faucet request - Send() error: {}",
-                        e.to_string()
-                    ))
-                })?
-                .body_mut()
-                .data()
+                .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?
+                .body()
                 .await
-                .ok_or(GNTDriverError::LibraryError(String::from(
-                    "Faucet request returned empty response...",
-                )))?
-                .map_err(|e| {
-                    GNTDriverError::LibraryError(format!(
-                        "Faucet request - Body() error: {}",
-                        e.to_string()
-                    ))
-                })?;
+                .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?;
             let resp = std::string::String::from_utf8_lossy(body.as_ref());
             if resp.contains("sufficient funds") || resp.contains("txhash") {
                 log::debug!("resp: {}", resp);
