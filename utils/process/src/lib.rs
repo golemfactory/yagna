@@ -14,6 +14,42 @@ use {
     shared_child::unix::SharedChildExt,
 };
 
+pub trait ProcessGroupExt<T> {
+    fn new_process_group(&mut self) -> &mut T;
+}
+
+impl ProcessGroupExt<Command> for Command {
+    #[cfg(target_os = "linux")]
+    fn new_process_group(&mut self) -> &mut Command {
+        use tokio_process_ns::{NsCommand, NsOptions};
+
+        self.new_ns(NsOptions::new().procfs().kill_child())
+    }
+
+    #[cfg(target_os = "macos")]
+    fn new_process_group(&mut self) -> &mut Command {
+        use nix::Error;
+        use std::io;
+        use std::os::unix::process::CommandExt;
+
+        unsafe {
+            self.pre_exec(|| {
+                nix::unistd::setsid().map_err(|e| match e {
+                    Error::Sys(errno) => io::Error::from(errno),
+                    error => io::Error::new(io::ErrorKind::Other, error),
+                })?;
+                Ok(())
+            });
+        }
+        self
+    }
+
+    #[cfg(target_os = "windows")]
+    fn new_process_group(&mut self) -> &mut Command {
+        self
+    }
+}
+
 #[derive(Display)]
 pub enum ExeUnitExitStatus {
     #[display(fmt = "Aborted - {}", _0)]

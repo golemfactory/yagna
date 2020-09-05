@@ -6,10 +6,10 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+gftp = "0.1"
 ya-core-model = "0.1"
 ya-net = "0.1"
 ya-service-bus = "0.2"
-gftp = "0.1"
 
 actix-http = "1.0.1"
 actix-rt = "1.0.0"
