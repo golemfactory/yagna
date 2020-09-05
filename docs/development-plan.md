@@ -15,11 +15,11 @@ It will run WASM code and measure CPU time spent on computations.
 
 ### Project Artifacts
 
-| Platform | Artifacts |
-|--|--|
-| Linux | Debian/Ubuntu Package (.deb) |
-| macOS | Apple Disk Image (.dmg) |
-| Windows | Windows Installer (.msi) |
+| Platform | Artifacts                    |
+| -------- | ---------------------------- |
+| Linux    | Debian/Ubuntu Package (.deb) |
+| macOS    | Apple Disk Image (.dmg)      |
+| Windows  | Windows Installer (.msi)     |
 
 ## Development Process
 
@@ -30,24 +30,24 @@ Milestones should be used to pin issues to specific releases.
 
 Labels should be used to filter issues by other criteria:
 
-| Label | Description |
-|--|--|
-| enhancement | A new feature that can be implemented. |
-| bug | A bug report. |
-| in progress | Work on this issue is in progress. |
-| duplicate | A very similar issue already exists. |
-| deferred | Will be done later, after other issues are closed. |
+| Label       | Description                                        |
+| ----------- | -------------------------------------------------- |
+| enhancement | A new feature that can be implemented.             |
+| bug         | A bug report.                                      |
+| in progress | Work on this issue is in progress.                 |
+| duplicate   | A very similar issue already exists.               |
+| deferred    | Will be done later, after other issues are closed. |
 
 ### Working on Git Branches
 
 Software development should be done on Git branches.
 
-| Branch Name or Prefix | Meaning |
-|--|--|
-| master | Main branch. |
-| feature/ | New feature, e.g. feature/connection-manager. |
-| bugfix/ | Bug fix, e.g. bugfix/division-by-zero. |
-| release/ | Branch for a special release, e.g. release/3.0. |
+| Branch Name or Prefix | Meaning                                         |
+| --------------------- | ----------------------------------------------- |
+| master                | Main branch.                                    |
+| feature/              | New feature, e.g. feature/connection-manager.   |
+| bugfix/               | Bug fix, e.g. bugfix/division-by-zero.          |
+| release/              | Branch for a special release, e.g. release/3.0. |
 
 ### Pull Requests
 
@@ -57,10 +57,10 @@ After work on a feature is finished, a pull request based on the branch where th
 
 Every branch is automatically compiled and tested in Jenkins.
 
-| Test Name | Requirement |
-|--|--|
-| Compilation | All code must compile without errors. |
-| Unit Tests | All tests (prefixed with `#[cfg(test)]`) should pass. |
+| Test Name       | Requirement                                            |
+| --------------- | ------------------------------------------------------ |
+| Compilation     | All code must compile without errors.                  |
+| Unit Tests      | All tests (prefixed with `#[cfg(test)]`) should pass.  |
 | Code Formatting | All code must be formatted with rustfmt (`cargo fmt`). |
 
 ### Code Review and Merging
@@ -105,6 +105,10 @@ https://doc.rust-lang.org/1.0.0/style/README.html
 
 To enforce formatting, code should be formatted using rustfmt tool (https://github.com/rust-lang/rustfmt).
 To install it, run `rustup component add rustfmt` command. To format files in the working dictory, please run `cargo fmt` command.
+
+### Logging Guidelines
+
+The logging guidelines for Yagna component development can be found here: logging-guidelines.md.
 
 ### Code Repositories
 
