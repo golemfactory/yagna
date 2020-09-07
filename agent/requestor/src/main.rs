@@ -26,6 +26,8 @@ const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,
+    #[structopt(long, default_value = "wasmtime")]
+    runtime: String,
     #[structopt(long)]
     exe_script: PathBuf,
     /// Subnetwork identifier. You can set this value to filter nodes
@@ -172,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
     let agreement_allocation = Arc::new(Mutex::new(HashMap::new()));
     let my_demand = market::build_demand(
         &settings.node_name,
+        &settings.runtime,
         &settings.task_package,
         chrono::Duration::from_std(*settings.task_expiration)?,
         &settings.subnet,
