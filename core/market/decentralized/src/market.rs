@@ -1,18 +1,21 @@
+use chrono::Utc;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::db::model::SubscriptionId;
+use crate::config::Config;
+use crate::db::dao::AgreementDao;
+use crate::db::model::{AgreementId, SubscriptionId};
+use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
-use crate::negotiation::error::{NegotiationError, NegotiationInitError};
+use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
-
 use crate::rest_api;
 
-use ya_client::model::market::{Demand, Offer};
+use ya_client::model::market::{Agreement, Demand, Offer};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
@@ -21,6 +24,21 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
+
+pub struct EnvConfig<'a, T> {
+    pub name: &'a str,
+    pub default: T,
+    pub min: T,
+}
+
+impl<'a> EnvConfig<'a, u64> {
+    pub fn get_value(&self) -> u64 {
+        std::env::var(self.name)
+            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
+            .unwrap_or(self.default)
+            .max(self.min)
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum MarketError {
@@ -57,14 +75,22 @@ pub struct MarketService {
 }
 
 impl MarketService {
-    pub fn new(db: &DbExecutor) -> Result<Self, MarketInitError> {
+    pub fn new(
+        db: &DbExecutor,
+        identity_api: Arc<dyn IdentityApi>,
+        config: Arc<Config>,
+    ) -> Result<Self, MarketInitError> {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
-        let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(store.clone())?;
+        let store = SubscriptionStore::new(db.clone(), config.clone());
+        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config)?;
         let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
         let requestor_engine =
             RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
+        let cleaner_db = db.clone();
+        tokio::spawn(async move {
+            crate::db::dao::cleaner::clean_forever(cleaner_db).await;
+        });
 
         Ok(MarketService {
             db: db.clone(),
@@ -114,7 +140,11 @@ impl MarketService {
     }
 
     pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<Offer>, MarketError> {
-        Ok(self.matcher.store.get_offers(id).await?)
+        Ok(self
+            .matcher
+            .store
+            .get_client_offers(id.map(|identity| identity.identity))
+            .await?)
     }
 
     pub async fn subscribe_offer(
@@ -158,6 +188,26 @@ impl MarketService {
         // TODO: shouldn't remove precede negotiation unsubscribe?
         Ok(self.matcher.unsubscribe_demand(demand_id, id).await?)
     }
+
+    pub async fn get_agreement(
+        &self,
+        agreement_id: &AgreementId,
+        _id: &Identity,
+    ) -> Result<Agreement, AgreementError> {
+        // TODO: Authorization
+        match self
+            .db
+            .as_dao::<AgreementDao>()
+            .select(agreement_id, Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            Some(agreement) => Ok(agreement
+                .into_client()
+                .map_err(|e| AgreementError::InternalError(e.to_string()))?),
+            None => Err(AgreementError::NotFound(agreement_id.clone())),
+        }
+    }
 }
 
 impl Service for MarketService {
@@ -188,7 +238,9 @@ impl StaticMarket {
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
-            let market = Arc::new(MarketService::new(db)?);
+            let identity_api = IdentityGSB::new();
+            let config = Arc::new(Config::default());
+            let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

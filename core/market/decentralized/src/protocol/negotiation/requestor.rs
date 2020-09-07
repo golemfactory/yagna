@@ -18,6 +18,7 @@ use super::messages::{
     AgreementRejected, InitialProposalReceived, ProposalContent, ProposalReceived,
     ProposalRejected,
 };
+use crate::protocol::negotiation::error::ProposeAgreementError;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -127,16 +128,24 @@ impl NegotiationApi {
     }
 
     /// Sent to provider, when Requestor will call confirm Agreement.
-    pub async fn propose_agreement(&self, agreement: Agreement) -> Result<(), AgreementError> {
+    pub async fn propose_agreement(
+        &self,
+        agreement: &Agreement,
+    ) -> Result<(), ProposeAgreementError> {
         let requestor_id = agreement.requestor_id.clone();
         let provider_id = agreement.provider_id.clone();
         let agreement_id = agreement.id.clone();
-        let msg = AgreementReceived { agreement };
+        let msg = AgreementReceived {
+            agreement_id: agreement.id.clone(),
+            valid_to: agreement.valid_to.clone(),
+            creation_ts: agreement.creation_ts.clone(),
+            proposal_id: agreement.offer_proposal_id.clone(),
+        };
         net::from(requestor_id)
             .to(provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
-            .map_err(|e| AgreementError::GsbError(e.to_string(), agreement_id))
+            .map_err(|e| ProposeAgreementError::GsbError(e.to_string(), agreement_id))
             .await??;
         Ok(())
     }
@@ -204,7 +213,10 @@ impl NegotiationApi {
             &msg.agreement_id,
             &caller
         );
-        self.inner.agreement_approved.call(caller, msg).await
+        self.inner
+            .agreement_approved
+            .call(caller, msg.translate(OwnerType::Requestor))
+            .await
     }
 
     async fn on_agreement_rejected(
