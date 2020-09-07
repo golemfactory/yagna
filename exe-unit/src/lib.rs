@@ -73,18 +73,14 @@ impl<R: Runtime> ExeUnit<R> {
 
     pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate> {
         use crate::runtime::process::RuntimeProcess;
-        let mut template = RuntimeProcess::offer_template(binary)?;
 
-        template.add_property(
-            "golem.usage.vector",
-            format!("[{}]", MetricsService::usage_vector().join(", ")),
-        );
-        template.add_property(
-            "golem.activity.caps.transfer.protocol",
-            format!("[{}]", TransferService::schemes().join(", ")),
-        );
+        let runtime_template = RuntimeProcess::offer_template(binary)?;
+        let supervisor_template = OfferTemplate::new(serde_json::json!({
+            "golem.usage.vector": format!("[{}]", MetricsService::usage_vector().join(", ")),
+            "golem.activity.caps.transfer.protocol": format!("[{}]", TransferService::schemes().join(", ")),
+        }));
 
-        Ok(template)
+        Ok(supervisor_template.patch(runtime_template))
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {

@@ -87,27 +87,38 @@ impl TryFrom<&Agreement> for AgreementView {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct OfferTemplate {
-    pub properties: serde_json::Value,
+    pub properties: Value,
     pub constraints: String,
 }
 
 impl Default for OfferTemplate {
     fn default() -> Self {
         OfferTemplate {
-            properties: serde_json::Value::Object(serde_json::Map::new()),
+            properties: Value::Object(Map::new()),
             constraints: String::new(),
         }
     }
 }
 
 impl OfferTemplate {
-    pub fn add_property(&mut self, key: &str, value: impl Into<String>) {
-        let properties = self.properties.as_object_mut().unwrap();
-        properties.insert(key.to_string(), serde_json::Value::String(value.into()));
+    pub fn new(properties: Value) -> Self {
+        OfferTemplate {
+            properties,
+            constraints: String::new(),
+        }
     }
 
-    pub fn add_properties(&mut self, value: serde_json::Value) {
-        extend(&mut self.properties, value);
+    pub fn patch(self, template: Self) -> Self {
+        let mut this = self.flatten();
+        let template = template.flatten();
+        patch(&mut this.properties, template.properties);
+        this.add_constraints(template.constraints);
+        this
+    }
+
+    pub fn add_property(&mut self, key: &str, value: impl Into<String>) {
+        let properties = self.properties.as_object_mut().unwrap();
+        properties.insert(key.to_string(), Value::String(value.into()));
     }
 
     pub fn add_constraints(&mut self, constraints: String) {
@@ -116,6 +127,12 @@ impl OfferTemplate {
         } else {
             self.constraints = format!("(& {} {})", self.constraints, constraints);
         }
+    }
+
+    fn flatten(mut self) -> Self {
+        let properties = std::mem::replace(&mut self.properties, Value::Object(Map::new()));
+        self.properties = Value::Object(flatten(properties));
+        self
     }
 }
 
@@ -294,17 +311,13 @@ fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) 
     }
 }
 
-pub fn extend(a: &mut Value, b: Value) {
+pub fn patch(a: &mut Value, b: Value) {
     match (a, b) {
         (a @ &mut Value::Object(_), Value::Object(b)) => {
             let a = a.as_object_mut().unwrap();
             for (k, v) in b {
-                extend(a.entry(k).or_insert(Value::Null), v);
+                patch(a.entry(k).or_insert(Value::Null), v);
             }
-        }
-        (a @ &mut Value::Array(_), Value::Array(b)) => {
-            let a = a.as_array_mut().unwrap();
-            a.extend_from_slice(b.as_slice());
         }
         (a, b) => *a = b,
     }
@@ -547,7 +560,7 @@ constraints: |
     }
 
     #[test]
-    fn properties_json() {
+    fn flatten_json() {
         let source = serde_json::json!({
             "a": {
                 "b": {
@@ -565,7 +578,7 @@ constraints: |
     }
 
     #[test]
-    fn extend_json() {
+    fn patch_json() {
         let mut first = serde_json::json!({
           "string": "original",
           "unmodified": "unmodified",
@@ -593,10 +606,10 @@ constraints: |
             "second" : "second original value",
             "third": "third extended value"
           },
-          "entries": [ "first", "second", "third" ]
+          "entries": [ "third" ]
         });
 
-        extend(&mut first, second);
+        patch(&mut first, second);
         assert_eq!(first, expected);
     }
 }

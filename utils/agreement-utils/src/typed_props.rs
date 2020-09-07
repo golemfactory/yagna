@@ -1,4 +1,3 @@
-use crate::agreement::flatten;
 use crate::OfferTemplate;
 
 pub trait OfferBuilder {
@@ -14,17 +13,14 @@ pub struct OfferDefinition {
 }
 
 impl OfferDefinition {
-    pub fn into_json(mut self) -> serde_json::Value {
+    pub fn into_json(self) -> serde_json::Value {
         let mut base = serde_json::Map::new();
         self.node_info.write_json(&mut base);
         self.service.write_json(&mut base);
         self.com_info.write_json(&mut base);
 
-        let json = serde_json::json!({ "golem": base });
-        let value = serde_json::Value::Object(flatten(json));
-
-        self.offer.add_properties(value);
-        self.offer.properties
+        let template = OfferTemplate::new(serde_json::json!({ "golem": base }));
+        template.patch(self.offer).properties
     }
 }
 
