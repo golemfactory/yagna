@@ -6,7 +6,7 @@ The purpose of this article is to provide a set of prescriptive guidelines for d
 Execution logs serve two main purposes, depending on "audience":
 - **Core system developers** - Efficient troubleshooting and debugging during development of Golem modules.
 - **Integrator developers** - Troubleshooting and debugging of applications which use Golem as platform.
-- **Users** - Diagnostics of issues appearing on owned Golem nodes (eg. setup, infrastructural or maintenance-related issues).
+- **Users** (including **Node owners/administrators**) - Diagnostics of issues appearing on owned Golem nodes (eg. setup, infrastructural or maintenance-related issues).
 
 Ideal logs contain the right amount of information for the situation and audience. This implies that "too much logs" may be as useless as "no logs" - therefore focus is put on recording appropriate information at each log level.
 
@@ -41,7 +41,7 @@ The log entries should record following aspects/attributes:
 - **Grouping or correlating** attribute (attribute which allows to filter events related to a single command, activity, API request, etc.)
   - Thread id
   - Bespoke correlation id
-- Log entry **description** (human readable, no linebreaks)
+- Log entry **description** (human readable, preferably fit in one line, or properly laid-out if a multiline log entry is essential, eg. for message content)
 
 **Nice to have/where applicable:**
 
@@ -58,7 +58,7 @@ The log entries should record following aspects/attributes:
   ```
   do this:
   ```
-  [2020-08-27T07:56:22Z DEBUG yagna] Initializing GNT payment driver...
+  [2020-08-27T07:56:22Z DEBUG yagna] Initializing GNT payment driver
   ```
 
 ### Data confidentiality
@@ -98,7 +98,6 @@ Care must be taken when confidential or personal data need to be recorded in log
 
 **Audience:**
 - Users
-- Node owners/admins
 - Integrator developers
 - Core system developers
 
