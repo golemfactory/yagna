@@ -29,10 +29,7 @@ use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
 use crate::testing::mock_identity::MockIdentity;
-use crate::testing::mock_node::default::{
-    empty_on_get_offers, empty_on_offer_unsubscribed, empty_on_offers_ids_received,
-    empty_on_offers_received,
-};
+use crate::testing::mock_node::default::*;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
@@ -200,10 +197,10 @@ impl MarketsNetwork {
 
     pub fn discovery_builder() -> DiscoveryBuilder {
         DiscoveryBuilder::default()
-            .add_handler(empty_on_offers_received)
-            .add_handler(empty_on_offers_ids_received)
-            .add_handler(empty_on_offer_unsubscribed)
-            .add_handler(empty_on_get_offers)
+            .add_handler(empty_on_offers_retrieved)
+            .add_handler(empty_on_offers_bcast)
+            .add_handler(empty_on_offer_unsubscribed_bcast)
+            .add_handler(empty_on_retrieve_offers)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -518,28 +515,28 @@ pub mod default {
         ProposeAgreementError,
     };
 
-    pub async fn empty_on_offers_received(
+    pub async fn empty_on_offers_retrieved(
         _caller: String,
         _msg: OffersRetrieved,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
 
-    pub async fn empty_on_offers_ids_received(
+    pub async fn empty_on_offers_bcast(
         _caller: String,
         _msg: OffersBcast,
     ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
 
-    pub async fn empty_on_get_offers(
+    pub async fn empty_on_retrieve_offers(
         _caller: String,
         _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
         Ok(vec![])
     }
 
-    pub async fn empty_on_offer_unsubscribed(
+    pub async fn empty_on_offer_unsubscribed_bcast(
         _caller: String,
         _msg: UnsubscribedOffersBcast,
     ) -> Result<Vec<SubscriptionId>, ()> {

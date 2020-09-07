@@ -16,36 +16,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Compute deb package version
-        id: vars
-        env:
-          YAGNA_VERSION: $(cargo pkgid yagna | cut -d'#' -f2)
-          ROUTER_VERSION: $(cargo pkgid ya-sb-router | cut -d':' -f3)
-          COMMIT_SHA: $(echo ${{ github.sha }} | cut -c1-8)
+      - name: Set up environment
         run: |
-          echo "::set-output name=yagna_deb_version::$YAGNA_VERSION-$COMMIT_SHA"
-          echo "::set-output name=router_deb_version::$ROUTER_VERSION-$COMMIT_SHA"
+          echo "::set-env name=CONTAINER_OUTPUT_PATH::/src/target/debian"
+          echo "::set-env name=JOB_OUTPUT_PATH::${{ runner.temp }}/deb_packages"
+      - name: Build Docker image
+        run: docker build . -f build-deb.Dockerfile -t build-deb
 
-      - name: Build the Docker image
-        run: docker build . -f build-deb.Dockerfile -t build-deb --build-arg DEB_VERSION=${{ steps.vars.outputs.yagna_deb_version }}
+      - name: Build yagna.deb file
+        run: docker run --env PACKAGE_NAME=yagna -v $JOB_OUTPUT_PATH:$CONTAINER_OUTPUT_PATH build-deb 
 
-      - name: Copy yagna.deb file
-        run: docker run build-deb bash -c "cat /src/target/debian/yagna*.deb" > yagna.deb
+      - name: Commit built image
+        run: docker commit $(docker ps -aq --filter "ancestor=build-deb") build-deb
 
-      - name: Build the router
-        run: docker build . -f build-deb-router.Dockerfile -t build-deb-router --build-arg DEB_VERSION=${{ steps.vars.outputs.router_deb_version }}
+      - name: Build ya-sb-router.deb file
+        run: docker run --env PACKAGE_NAME=ya-sb-router -v $JOB_OUTPUT_PATH:$CONTAINER_OUTPUT_PATH build-deb
 
-      - name: Copy ya-sb-router.deb file
-        run: docker run build-deb-router bash -c "cat /src/target/debian/ya-sb-router*.deb" > ya-sb-router.deb
-
-      - name: Upload .deb
-        uses: actions/upload-artifact@v1
+      - name: Upload .deb packages
+        uses: kittaakos/upload-artifact-as-is@v0
         with:
-          name: yagna.deb
-          path: yagna.deb
-
-      - name: Upload .deb with router
-        uses: actions/upload-artifact@v1
-        with:
-          name: ya-sb-router.deb
-          path: ya-sb-router.deb
+          path: ${{ env.JOB_OUTPUT_PATH }}
