@@ -109,9 +109,11 @@ impl<R: Runtime> ExeUnit<R> {
                 break;
             }
 
-            let mut tx_ok = events.clone();
-            let mut tx_err = events.clone();
             let batch_id = exec.batch_id.clone();
+            let evt = RuntimeEvent::started(batch_id.clone(), idx, cmd.clone());
+            if let Err(e) = events.send(evt).await {
+                log::error!("Unable to report event: {:?}", e);
+            }
 
             let runtime_cmd = ExecuteCommand {
                 batch_id: exec.batch_id.clone(),
@@ -119,51 +121,30 @@ impl<R: Runtime> ExeUnit<R> {
                 command: cmd.clone(),
                 tx: events.clone(),
             };
+            let result = Self::exec_cmd(
+                runtime_cmd,
+                addr.clone(),
+                runtime.clone(),
+                transfers.clone(),
+            )
+            .await;
 
-            let result = events
-                .send(RuntimeEvent::started(batch_id.clone(), idx, cmd.clone()))
-                .map_err(|e| Error::RuntimeError(format!("Unable to report event: {:?}", e)))
-                .and_then(|_| {
-                    Self::exec_cmd(
-                        runtime_cmd,
-                        addr.clone(),
-                        runtime.clone(),
-                        transfers.clone(),
-                    )
-                })
-                .and_then(|code| async move {
-                    match code {
-                        0 => Ok(code),
-                        _ => Err(Error::CommandError(format!(
-                            "Process exited with code {}",
-                            code
-                        ))),
-                    }
-                })
-                .and_then(|code| {
-                    let batch_id = batch_id.clone();
-                    async move {
-                        let evt = RuntimeEvent::finished(batch_id, idx, code, None);
-                        if let Err(e) = tx_ok.send(evt).await {
-                            log::error!("Unable to report event: {:?}", e);
-                        }
-                        Ok(())
-                    }
-                })
-                .or_else(|err| {
-                    let batch_id = batch_id.clone();
-                    async move {
-                        let evt = RuntimeEvent::finished(batch_id, idx, -1, Some(err.to_string()));
-                        if let Err(e) = tx_err.send(evt).await {
-                            log::error!("Unable to report event: {:?}", e);
-                        }
-                        Err(err)
-                    }
-                })
-                .await;
+            let (return_code, message) = match result {
+                Ok(_) => (0, None),
+                Err(ref err) => match err {
+                    Error::CommandExitCodeError(c) => (*c, Some(err.to_string())),
+                    _ => (-1, Some(err.to_string())),
+                },
+            };
 
-            if let Err(error) = result {
-                log::warn!("Batch {} execution interrupted: {:?}", exec.batch_id, error);
+            let evt = RuntimeEvent::finished(batch_id.clone(), idx, return_code, message.clone());
+            if let Err(e) = events.send(evt).await {
+                log::error!("Unable to report event: {:?}", e);
+            }
+
+            if return_code != 0 {
+                let message = message.unwrap_or("reason unspecified".into());
+                log::warn!("Batch {} execution interrupted: {}", batch_id, message);
                 break;
             }
         }
@@ -174,13 +155,13 @@ impl<R: Runtime> ExeUnit<R> {
         addr: Addr<Self>,
         runtime: Addr<R>,
         transfer_service: Addr<TransferService>,
-    ) -> Result<i32> {
+    ) -> Result<()> {
         if let ExeScriptCommand::Terminate {} = &runtime_cmd.command {
             log::warn!("Terminating running ExeScripts");
             let exclude_batches = vec![runtime_cmd.batch_id];
             addr.send(Stop { exclude_batches }).await??;
             addr.send(SetState::from(State::Initialized)).await?;
-            return Ok(0);
+            return Ok(());
         }
 
         let state = addr.send(GetState {}).await?.0;
@@ -230,12 +211,9 @@ impl<R: Runtime> ExeUnit<R> {
             _ => (),
         }
 
-        let return_code = runtime.send(runtime_cmd.clone()).await??;
-        if return_code != 0 {
-            return Err(Error::CommandError(format!(
-                "Process exited with code {}",
-                return_code
-            )));
+        let exit_code = runtime.send(runtime_cmd.clone()).await??;
+        if exit_code != 0 {
+            return Err(Error::CommandExitCodeError(exit_code));
         }
 
         if let ExeScriptCommand::Deploy { .. } = &runtime_cmd.command {
@@ -270,7 +248,7 @@ impl<R: Runtime> ExeUnit<R> {
         }
 
         addr.send(SetState::from(state_pre.1.unwrap())).await?;
-        Ok(return_code)
+        Ok(())
     }
 }
 
@@ -378,6 +356,7 @@ async fn report_usage<R: Runtime>(
             }
             Err(err) => match err {
                 Error::UsageLimitExceeded(info) => {
+                    log::warn!("Usage limit exceeded: {}", info);
                     exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
                 }
                 error => log::warn!("Unable to retrieve metrics: {:?}", error),
