@@ -7,8 +7,8 @@ use ya_service_bus::RpcMessage;
 pub const BUS_ID: &str = "/public/market";
 
 /// Internal Market bus address.
-pub mod private {
-    pub const BUS_ID: &str = "/private/market";
+pub mod local {
+    pub const BUS_ID: &str = "/local/market";
 }
 
 /// Returns the Agreement.
