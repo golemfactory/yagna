@@ -44,7 +44,7 @@ pub struct DiscoveryImpl {
 
 impl Discovery {
     /// Broadcasts Offers to other nodes in network. Connected nodes will
-    /// get call to function bound at `OfferIdsBcast`.
+    /// get call to function bound at `OfferBcast`.
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
         let default_id = self.default_identity().await?;
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });

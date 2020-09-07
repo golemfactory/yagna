@@ -273,8 +273,8 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Discovery GetOffers gsb endpoint should return only existing Offers.
-/// Test sends GetOffers requesting existing and not existing subscription.
+/// Discovery `RetrieveOffers` GSB endpoint should return only existing Offers.
+/// Test sends RetrieveOffers requesting existing and not existing subscription.
 /// Market is expected to return only existing Offer without any error.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
