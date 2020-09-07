@@ -9,7 +9,7 @@ use bytes::BytesMut;
 use futures::future::ready;
 use futures::{SinkExt, StreamExt, TryFutureExt, TryStreamExt};
 use std::convert::TryFrom;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -59,12 +59,9 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
 
     fn destination(&self, url: &Url, _: &TransferArgs) -> TransferSink<TransferData, Error> {
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
-        let url = url.clone();
-        let url_f = url.clone();
-
+        let path = PathBuf::from(extract_file_url(&url));
+        let path_c = path.clone();
         tokio::task::spawn_local(async move {
-            let url_path = extract_file_url(&url_f);
-            let path = Path::new(url_path.as_str());
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
@@ -82,7 +79,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
             .map_err(|error| {
                 log::error!(
                     "Error opening destination file [{}]: {}",
-                    path.display(),
+                    path_c.display(),
                     error
                 );
                 Error::from(error)

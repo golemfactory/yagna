@@ -9,9 +9,9 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao, StateError},
+    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError, StateError},
     model::{Agreement, AgreementId, AgreementState, OwnerType},
-    model::{Demand as ModelDemand, Proposal, ProposalId, SubscriptionId},
+    model::{Demand as ModelDemand, IssuerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
@@ -28,11 +28,12 @@ use super::{
     notifier::NotifierError,
     EventNotifier,
 };
+use crate::negotiation::error::AgreementStateError;
 
-#[derive(Clone, derive_more::Display)]
+#[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
-    #[display(fmt = "Ok")]
-    Ok,
+    #[display(fmt = "Approved")]
+    Approved,
     #[display(fmt = "Cancelled")]
     Cancelled,
     #[display(fmt = "Rejected")]
@@ -89,9 +90,9 @@ impl RequestorBroker {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), NegotiationInitError> {
-        self.api.bind_gsb(public_prefix, private_prefix).await?;
+        self.api.bind_gsb(public_prefix, local_prefix).await?;
         Ok(())
     }
 
@@ -131,16 +132,16 @@ impl RequestorBroker {
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
     ) -> Result<ProposalId, ProposalError> {
-        let (new_proposal, is_initial) = self
+        let (new_proposal, is_first) = self
             .common
-            .counter_proposal(demand_id, prev_proposal_id, proposal)
+            .counter_proposal(demand_id, prev_proposal_id, proposal, OwnerType::Requestor)
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
         // Send Proposal to Provider. Note that it can be either our first communication with
         // Provider or we negotiated with him already, so we need to send different message in each
         // of these cases.
-        match is_initial {
+        match is_first {
             true => self.api.initial_proposal(new_proposal).await,
             false => self.api.counter_proposal(new_proposal).await,
         }
@@ -184,21 +185,24 @@ impl RequestorBroker {
     /// A successful call to `create_agreement` shall immediately be followed
     /// by a `confirm_agreement` and `wait_for_approval` call in order to listen
     /// for responses from the Provider.
-    ///
-    /// TODO: **Note**: Moves given Proposal to `Approved` state.
     pub async fn create_agreement(
         &self,
         _id: Identity,
         proposal_id: &ProposalId,
         valid_to: DateTime<Utc>,
     ) -> Result<AgreementId, AgreementError> {
-        // TODO: Check if we are owner of Proposal
         let offer_proposal_id = proposal_id;
         let offer_proposal = self
             .common
             .get_proposal(offer_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
+
+        // We can promote only Proposals, that we got from Provider.
+        // Can't promote our own Proposal.
+        if offer_proposal.body.issuer != IssuerType::Them {
+            return Err(AgreementError::OwnProposal(proposal_id.clone()));
+        }
 
         let demand_proposal_id = offer_proposal
             .body
@@ -223,7 +227,15 @@ impl RequestorBroker {
             .as_dao::<AgreementDao>()
             .save(agreement)
             .await
-            .map_err(|e| AgreementError::Save(proposal_id.clone(), e))?;
+            .map_err(|e| match e {
+                SaveAgreementError::DatabaseError(e) => {
+                    AgreementError::Save(proposal_id.clone(), e)
+                }
+                SaveAgreementError::ProposalCountered(id) => AgreementError::ProposalCountered(id),
+                SaveAgreementError::AgreementExists(agreement_id, proposal_id) => {
+                    AgreementError::AgreementExists(agreement_id, proposal_id)
+                }
+            })?;
         Ok(id)
     }
 
@@ -252,7 +264,7 @@ impl RequestorBroker {
                 .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
-                AgreementState::Approved => return Ok(ApprovalStatus::Ok),
+                AgreementState::Approved => return Ok(ApprovalStatus::Approved),
                 AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
                 AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
                 AgreementState::Expired => {
@@ -303,19 +315,19 @@ impl RequestorBroker {
                 // 1. this state check should be also `db.update_state`
                 // 2. `db.update_state` must be invoked after successful propose_agreement
                 agreement.state = AgreementState::Pending;
-                self.api.propose_agreement(agreement).await?;
+                self.api.propose_agreement(&agreement).await?;
                 dao.update_state(agreement_id, AgreementState::Pending)
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
                 return Ok(());
             }
-            AgreementState::Pending => AgreementError::Confirmed(agreement.id),
-            AgreementState::Cancelled => AgreementError::Cancelled(agreement.id),
-            AgreementState::Rejected => AgreementError::Rejected(agreement.id),
-            AgreementState::Approved => AgreementError::Approved(agreement.id),
-            AgreementState::Expired => AgreementError::Expired(agreement.id),
-            AgreementState::Terminated => AgreementError::Terminated(agreement.id),
-        })
+            AgreementState::Pending => AgreementStateError::Confirmed(agreement.id),
+            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
+            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
+            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
+        })?
     }
 }
 
@@ -325,6 +337,26 @@ async fn on_agreement_approved(
     msg: AgreementApproved,
     notifier: EventNotifier<AgreementId>,
 ) -> Result<(), ApproveAgreementError> {
+    let agreement_id = msg.agreement_id.clone();
+    let caller: NodeId =
+        caller
+            .parse()
+            .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
+                e: e.to_string(),
+                caller,
+                id: agreement_id.clone(),
+            })?;
+    agreement_approved(broker, caller, msg, notifier)
+        .await
+        .map_err(|e| ApproveAgreementError::Remote(e, agreement_id))
+}
+
+async fn agreement_approved(
+    broker: CommonBroker,
+    caller: NodeId,
+    msg: AgreementApproved,
+    notifier: EventNotifier<AgreementId>,
+) -> Result<(), RemoteAgreementError> {
     let agreement = broker
         .db
         .as_dao::<AgreementDao>()
@@ -333,15 +365,7 @@ async fn on_agreement_approved(
         .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
         .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
-    let caller_node_id: NodeId =
-        caller
-            .parse()
-            .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
-                e: e.to_string(),
-                caller,
-                id: agreement.id.clone(),
-            })?;
-    if agreement.provider_id != caller_node_id {
+    if agreement.provider_id != caller {
         // Don't reveal, that we know this Agreement id.
         Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
     }

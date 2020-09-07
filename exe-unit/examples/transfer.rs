@@ -346,5 +346,13 @@ async fn main() -> anyhow::Result<()> {
     verify_hash(&hash, &work_dir.join("vol-3"), "rnd-4");
     log::warn!("Checksum verified");
 
+    transfer(
+        &addr,
+        "https://www.rust-lang.org",
+        "http://127.0.0.1:8002/index.html",
+    )
+    .await
+    .expect("HTTPS transfer failed");
+
     Ok(())
 }

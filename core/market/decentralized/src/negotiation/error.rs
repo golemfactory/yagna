@@ -1,13 +1,14 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::common::GetProposalError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
-use crate::db::{dao::TakeEventsError, DbError};
+use crate::db::{dao::SaveProposalError, dao::TakeEventsError, DbError};
 use crate::protocol::negotiation::error::{
     AgreementError as ProtocolAgreementError, ApproveAgreementError,
-    CounterProposalError as ProtocolProposalError, NegotiationApiInitError,
+    CounterProposalError as ProtocolProposalError, NegotiationApiInitError, ProposeAgreementError,
 };
 
 #[derive(Error, Debug)]
@@ -19,22 +20,20 @@ pub enum NegotiationInitError {
     ApiInitError(#[from] NegotiationApiInitError),
 }
 
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum MatchValidationError {
+    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}].")]
+    NotMatching { new: ProposalId, prev: ProposalId },
+    #[error("Can't match Proposal [{new}] with previous Proposal [{prev}]. Error: {error}")]
+    MatchingFailed {
+        new: ProposalId,
+        prev: ProposalId,
+        error: String,
+    },
+}
+
 #[derive(Error, Debug)]
-pub enum AgreementError {
-    #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
-    ProposalNotFound(ProposalId, ProposalId),
-    #[error("Can't create Agreement for Proposal {0}. Failed to get Proposal {1}. Error: {2}")]
-    GetProposal(ProposalId, ProposalId, DbError),
-    #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
-    NoNegotiations(ProposalId),
-    #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
-    Save(ProposalId, DbError),
-    #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, DbError),
-    #[error("Failed to update Agreement [{0}]. Error: {1}")]
-    Update(AgreementId, DbError),
-    #[error("Agreement [{0}] not found.")]
-    NotFound(AgreementId),
+pub enum AgreementStateError {
     #[error("Agreement [{0}] proposed.")]
     Proposed(AgreementId),
     #[error("Agreement [{0}] already confirmed.")]
@@ -49,12 +48,42 @@ pub enum AgreementError {
     Expired(AgreementId),
     #[error("Agreement [{0}] terminated.")]
     Terminated(AgreementId),
+}
+
+#[derive(Error, Debug)]
+pub enum AgreementError {
+    #[error("Agreement [{0}] not found.")]
+    NotFound(AgreementId),
+    #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
+    ProposalNotFound(ProposalId, ProposalId),
+    #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
+    AgreementExists(AgreementId, ProposalId),
+    #[error("Can't create Agreement for Proposal {0}. Failed to get Proposal {1}. Error: {2}")]
+    GetProposal(ProposalId, ProposalId, DbError),
+    #[error("Can't create Agreement for already countered Proposal [{0}].")]
+    ProposalCountered(ProposalId),
+    #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
+    NoNegotiations(ProposalId),
+    #[error("Can't create Agreement for out own Proposal {0}. You can promote only provider's Proposals to Agreement.")]
+    OwnProposal(ProposalId),
+    #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
+    Save(ProposalId, DbError),
+    #[error("Failed to get Agreement [{0}]. Error: {1}")]
+    Get(AgreementId, DbError),
+    #[error("Failed to update Agreement [{0}]. Error: {1}")]
+    Update(AgreementId, DbError),
+    #[error("Invalid state {0}")]
+    InvalidState(#[from] AgreementStateError),
     #[error("Invalid proposal id. {0}")]
     InvalidSubscriptionId(#[from] ProposalIdParseError),
-    #[error("General protocol error: {0}")]
+    #[error("Protocol error: {0}")]
     Protocol(#[from] ProtocolAgreementError),
-    #[error("Approve protocol error: {0}")]
+    #[error("Protocol error: {0}")]
+    ProtocolCreate(#[from] ProposeAgreementError),
+    #[error("Protocol error while approving: {0}")]
     ProtocolApprove(#[from] ApproveAgreementError),
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 #[derive(Error, Debug)]
@@ -91,18 +120,28 @@ pub enum QueryEventsError {
 
 #[derive(Error, Debug)]
 pub enum ProposalError {
+    #[error("Subscription [{0}] wasn't found.")]
+    NoSubscription(SubscriptionId),
     #[error("Subscription [{0}] was already unsubscribed.")]
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
     SubscriptionExpired(SubscriptionId),
     #[error("Proposal [{0}] not found for subscription [{1}].")]
     ProposalNotFound(ProposalId, SubscriptionId),
+    #[error("Proposal [{0}] was already countered. Can't counter for the second time.")]
+    AlreadyCountered(ProposalId),
+    #[error("Can't counter own Proposal [{0}].")]
+    OwnProposal(ProposalId),
+    #[error(transparent)]
+    NotMatching(#[from] MatchValidationError),
     #[error("Failed to get Proposal [{0}] for subscription [{1}]. Error: [{2}]")]
     FailedGetProposal(ProposalId, SubscriptionId, DbError),
     #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]
-    FailedSaveProposal(ProposalId, DbError),
+    FailedSaveProposal(ProposalId, SaveProposalError),
     #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
     FailedSendProposal(ProposalId, ProtocolProposalError),
+    #[error("Can't counter Proposal [{0}]. Error: {1}.")]
+    InternalError(ProposalId, String),
 }
 
 impl AgreementError {

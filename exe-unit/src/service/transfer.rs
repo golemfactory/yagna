@@ -291,6 +291,7 @@ impl Handler<DeployImage> for TransferService {
                 .map_err(TransferError::from)??;
             address.send(RemoveAbortHandle(abort)).await?;
 
+            // TODO: missing sync before rename.
             std::fs::rename(temp_path, &cache_path)?;
             std::fs::copy(cache_path, &final_path)?;
 

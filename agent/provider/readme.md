@@ -19,7 +19,7 @@ It is rather straightforward and minimal:
   * requires `golem.srv.comp.expiration` to be set
   * if provided (via env or CLI) sets also `golem.node.debug.subnet`
 *  properties:
-  * linear pricing (see sample below: 0.01 GNT/sec + 1.2 GNT/CPUsec + 1.5 GNT const)
+  * linear pricing (see sample below: 0.01 NGNT/sec + 1.2 NGNT/CPUsec + 1.5 NGNT const)
   * hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
   * node name set via env or CLI
   * runtime (sample below: wasmtime)
@@ -198,9 +198,9 @@ Name:               default
 ExeUnit:            wasmtime
 Pricing model:      linear
 Coefficients:
-    Duration        0.1 GNT
-    CPU             0.2 GNT
-    Init price      1 GNT
+    Duration        0.1 NGNT
+    CPU             0.2 NGNT
+    Init price        1 NGNT
 
 ```
 
@@ -321,8 +321,8 @@ activate    Activate a profile
 
 ### Listing profiles
 
-```bash 
-cargo run -- profile list
+```bash
+cargo run -p ya-provider profile list
 ```
 
 will print an output similar to:
@@ -339,8 +339,8 @@ will print an output similar to:
 
 ### Display the active profile
 
-```bash 
-cargo run -- profile active
+```bash
+cargo run -p ya-provider profile active
 ```
 
 will print:
@@ -401,7 +401,7 @@ you can now start Provider Agent.
 
 At first, you need to register provider's payment account:
 ```bash
-cargo run payment init gnt -p
+cargo run payment init ngnt -p
 ```
 
 Then start the Provider Agent:
@@ -445,11 +445,11 @@ APP_KEY=`cargo run app-key create 'requestor-agent'`
 sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
 ```
 
-#### 3. Get some ETH and GNT
+#### 3. Get some ETH and NGNT
 1. We need to acquire funds from faucet on testnet (rinkeby).
 This can last a little bit long. Retry if not succeed at first.
 ```bash
-cargo run payment init gnt -r
+cargo run payment init ngnt -r
 ```
 2. Check if you got credit on your account:
 ```bash
@@ -466,12 +466,12 @@ cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json --o
 ```
 
 ## Central setup
-We have centrally deployed (ip: `34.244.4.185`) three independent standalone modules/apps:
- - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 34.244.4.185:7464 \
+We have centrally deployed (ip: `3.249.139.167`) three independent standalone modules/apps:
+ - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 3.249.139.167:7464 \
    (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router`)
- - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://34.244.4.185:8080/market-api/v1/ \
+ - [market Mk0](https://github.com/golemfactory/yagna/blob/master/docs/market-api/market-api-mk0-central-exchange.md) @ http://3.249.139.167:8080/market-api/v1/ \
    (can be run locally with `dotnet run --urls "http://0.0.0.0:5001" -p GolemClientMockAPI`)
- - simple "wasm store" @ 34.244.4.185:8000 \
+ - simple "wasm store" @ 3.249.139.167:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
 

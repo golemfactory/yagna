@@ -1,8 +1,8 @@
+use crate::accounts::{init_account, Account};
 use crate::DEFAULT_PAYMENT_PLATFORM;
 use structopt::*;
-use ya_core_model::driver::driver_bus_id;
-use ya_core_model::{driver, identity as id_api, payment::local as pay};
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_core_model::{identity as id_api, payment::local as pay};
+use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 /// Payment management.
@@ -21,6 +21,7 @@ pub enum PaymentCli {
         #[structopt(long, short)]
         platform: Option<String>,
     },
+    Accounts,
 }
 
 impl PaymentCli {
@@ -33,26 +34,53 @@ impl PaymentCli {
                 provider,
             } => {
                 let address = resolve_address(address).await?;
-                let mut mode = driver::AccountMode::NONE;
-                if requestor {
-                    mode |= driver::AccountMode::SEND;
-                }
-                if provider {
-                    mode |= driver::AccountMode::RECV;
-                }
-                bus::service(driver_bus_id(driver))
-                    .call(driver::Init::new(address, mode))
-                    .await??;
+                let driver = driver.to_lowercase();
+                let account = Account {
+                    driver,
+                    address,
+                    send: requestor,
+                    receive: provider,
+                };
+                init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
             PaymentCli::Status { address, platform } => {
                 let address = resolve_address(address).await?;
-                let platform = platform.unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned());
+                let platform = platform
+                    .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned())
+                    .to_uppercase();
                 CommandOutput::object(
                     bus::service(pay::BUS_ID)
                         .call(pay::GetStatus { address, platform })
                         .await??,
                 )
+            }
+            PaymentCli::Accounts => {
+                let accounts = bus::service(pay::BUS_ID)
+                    .call(pay::GetAccounts {})
+                    .await??;
+                Ok(ResponseTable {
+                    columns: vec![
+                        "platform".to_owned(),
+                        "address".to_owned(),
+                        "driver".to_owned(),
+                        "send".to_owned(),
+                        "recv".to_owned(),
+                    ],
+                    values: accounts
+                        .into_iter()
+                        .map(|account| {
+                            serde_json::json! {[
+                                account.platform,
+                                account.address,
+                                account.driver,
+                                if account.send { "X" } else { "" },
+                                if account.receive { "X" } else { "" }
+                            ]}
+                        })
+                        .collect(),
+                }
+                .into())
             }
         }
     }
