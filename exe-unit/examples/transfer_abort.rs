@@ -11,6 +11,7 @@ use std::time::Duration;
 use tempdir::TempDir;
 use tokio::time::delay_for;
 use ya_agreement_utils::AgreementView;
+use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::runtime::RuntimeArgs;
@@ -102,6 +103,7 @@ async fn interrupted_transfer(
         .send(TransferResource {
             from: src.to_owned(),
             to: dest.to_owned(),
+            args: TransferArgs::default(),
         })
         .await?;
 
