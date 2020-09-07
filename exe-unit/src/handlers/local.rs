@@ -152,7 +152,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         let reason = format!("{}: {}", msg.0, self.state.report());
 
         let fut = async move {
-            log::info!("Shutting down ...");
+            log::info!("Shutting down: {}", reason);
             let _ = address.send(SetState::from(state)).await;
             let _ = address.send(Stop::default()).await;
 

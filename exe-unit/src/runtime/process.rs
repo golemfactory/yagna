@@ -1,6 +1,8 @@
 use crate::error::Error;
 use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
-use crate::process::{ProcessTree, SystemError};
+use crate::process::kill;
+use crate::process::ProcessTree;
+use crate::process::SystemError;
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
 use crate::ExeUnitContext;
@@ -12,7 +14,7 @@ use futures::{FutureExt, SinkExt, TryFutureExt};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
@@ -41,57 +43,6 @@ pub struct RuntimeProcess {
     service: Option<ProcessService>,
     monitor: Option<EventMonitor>,
 }
-
-#[derive(Clone, Hash, Eq, PartialEq)]
-enum ChildProcess {
-    Tree(ProcessTree),
-    Service(ProcessService),
-}
-
-impl ChildProcess {
-    pub fn kill<'f>(self, timeout: i64) -> LocalBoxFuture<'f, Result<(), SystemError>> {
-        match self {
-            ChildProcess::Service(service) => async move {
-                service.control.kill();
-                Ok(())
-            }
-            .boxed_local(),
-            ChildProcess::Tree(tree) => tree.kill(timeout).boxed_local(),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct ProcessService {
-    service: Arc<dyn RuntimeService + Send + Sync + 'static>,
-    control: Arc<dyn ProcessControl + Send + Sync + 'static>,
-}
-
-impl ProcessService {
-    pub fn new<S>(service: S) -> Self
-    where
-        S: RuntimeService + ProcessControl + Clone + Send + Sync + 'static,
-    {
-        ProcessService {
-            service: Arc::new(service.clone()),
-            control: Arc::new(service),
-        }
-    }
-}
-
-impl Hash for ProcessService {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u32(self.control.id())
-    }
-}
-
-impl PartialEq for ProcessService {
-    fn eq(&self, other: &Self) -> bool {
-        self.control.id() == other.control.id()
-    }
-}
-
-impl Eq for ProcessService {}
 
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
@@ -176,14 +127,17 @@ impl RuntimeProcess {
                 RuntimeEvent::stderr(id.clone(), idx, out)
             });
 
-            let tree =
-                ProcessTree::try_new(child.id()).map_err(|e| Error::RuntimeError(e.to_string()))?;
+            let proc = if cfg!(feature = "sgx") {
+                ChildProcess::from(child.id())
+            } else {
+                let tree = ProcessTree::try_new(child.id())
+                    .map_err(|e| Error::RuntimeError(e.to_string()))?;
+                ChildProcess::from(tree)
+            };
 
-            address.do_send(AddChildProcess::from(tree.clone()));
-            let result = child.await;
-            address.do_send(RemoveChildProcess::from(tree));
-
-            Ok(result?.code().unwrap_or(-1))
+            let _guard = ChildProcessGuard::new(proc, address.clone());
+            let result = child.await?;
+            Ok(result.code().unwrap_or(-1))
         }
         .boxed_local()
     }
@@ -197,13 +151,16 @@ impl RuntimeProcess {
         match cmd.command {
             ExeScriptCommand::Start { args } => {
                 let monitor = self.monitor.get_or_insert_with(Default::default).clone();
+                let mut cmd_args = vec![OsString::from("start")];
+                cmd_args.extend(args.into_iter().map(OsString::from));
+                let args = self.args(cmd_args).unwrap_or_else(|_| Vec::new());
+
+                log::info!("Executing {:?} with {:?}", binary, args);
+
+                let mut command = Command::new(binary);
+                command.args(args);
 
                 async move {
-                    let mut cmd_args = vec![String::from("start")];
-                    cmd_args.extend(args);
-                    let mut command = Command::new(binary);
-                    command.args(cmd_args);
-
                     let service = spawn(command, monitor)
                         .map_err(|e| Error::RuntimeError(e.to_string()))
                         .await?;
@@ -218,17 +175,11 @@ impl RuntimeProcess {
                 }
                 .boxed_local()
             }
-            ExeScriptCommand::Run { entry_point, args } => {
-                let mut cmd_args = vec![
-                    String::from("run"),
-                    String::from("--entrypoint"),
-                    String::from(entry_point),
-                ];
-                cmd_args.extend(args);
-
-                let mut run_process = RunProcess::default();
-                run_process.bin = binary.display().to_string();
-                run_process.args = cmd_args;
+            ExeScriptCommand::Run {
+                entry_point,
+                mut args,
+            } => {
+                log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
 
                 let service = self.service.as_ref().unwrap().service.clone();
                 let mut monitor = self.monitor.as_ref().unwrap().clone();
@@ -237,6 +188,15 @@ impl RuntimeProcess {
                 let mut tx = cmd.tx.clone();
 
                 async move {
+                    let name = Path::new(&entry_point)
+                        .file_name()
+                        .ok_or_else(|| Error::RuntimeError("Invalid binary name".into()))?;
+                    args.insert(0, name.to_string_lossy().to_string());
+
+                    let mut run_process = RunProcess::default();
+                    run_process.bin = entry_point;
+                    run_process.args = args;
+
                     let process = match service.run_process(run_process).await {
                         Ok(result) => result,
                         Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
@@ -340,7 +300,8 @@ impl Handler<SetProcessService> for RuntimeProcess {
     type Result = <SetProcessService as Message>::Result;
 
     fn handle(&mut self, msg: SetProcessService, ctx: &mut Self::Context) -> Self::Result {
-        ctx.address().do_send(AddChildProcess::from(msg.0.clone()));
+        let add_child = AddChildProcess(ChildProcess::from(msg.0.clone()));
+        ctx.address().do_send(add_child);
         self.service = Some(msg.0);
     }
 }
@@ -377,6 +338,98 @@ impl Handler<Shutdown> for RuntimeProcess {
     }
 }
 
+#[derive(Clone, Hash, Eq, PartialEq)]
+enum ChildProcess {
+    Single { pid: u32 },
+    Tree(ProcessTree),
+    Service(ProcessService),
+}
+
+impl ChildProcess {
+    fn kill<'f>(self, timeout: i64) -> LocalBoxFuture<'f, Result<(), SystemError>> {
+        match self {
+            ChildProcess::Service(service) => async move {
+                service.control.kill();
+                Ok(())
+            }
+            .boxed_local(),
+            ChildProcess::Tree(tree) => tree.kill(timeout).boxed_local(),
+            ChildProcess::Single { pid } => kill(pid as i32, timeout).boxed_local(),
+        }
+    }
+}
+
+impl From<ProcessTree> for ChildProcess {
+    fn from(process: ProcessTree) -> Self {
+        ChildProcess::Tree(process)
+    }
+}
+
+impl From<ProcessService> for ChildProcess {
+    fn from(service: ProcessService) -> Self {
+        ChildProcess::Service(service)
+    }
+}
+
+impl From<u32> for ChildProcess {
+    fn from(pid: u32) -> Self {
+        ChildProcess::Single { pid }
+    }
+}
+
+struct ChildProcessGuard {
+    inner: ChildProcess,
+    addr: Addr<RuntimeProcess>,
+}
+
+impl ChildProcessGuard {
+    fn new(inner: ChildProcess, addr: Addr<RuntimeProcess>) -> Self {
+        addr.do_send(AddChildProcess(inner.clone()));
+        ChildProcessGuard {
+            inner,
+            addr: addr.clone(),
+        }
+    }
+}
+
+impl Drop for ChildProcessGuard {
+    fn drop(&mut self) {
+        self.addr.do_send(RemoveChildProcess(self.inner.clone()));
+    }
+}
+
+#[derive(Clone)]
+struct ProcessService {
+    service: Arc<dyn RuntimeService + Send + Sync + 'static>,
+    control: Arc<dyn ProcessControl + Send + Sync + 'static>,
+}
+
+impl ProcessService {
+    pub fn new<S>(service: S) -> Self
+    where
+        S: RuntimeService + ProcessControl + Clone + Send + Sync + 'static,
+    {
+        ProcessService {
+            service: Arc::new(service.clone()),
+            control: Arc::new(service),
+        }
+    }
+}
+
+impl Hash for ProcessService {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(self.control.id())
+    }
+}
+
+impl PartialEq for ProcessService {
+    fn eq(&self, other: &Self) -> bool {
+        self.control.id() == other.control.id()
+    }
+}
+
+impl Eq for ProcessService {}
+
 fn bytes_to_string<B: AsRef<[u8]>>(bytes: B) -> Option<String> {
     let bytes = bytes.as_ref();
     let string = String::from_utf8_lossy(bytes);
@@ -409,30 +462,6 @@ struct SetProcessService(ProcessService);
 #[rtype("()")]
 struct AddChildProcess(ChildProcess);
 
-impl From<ProcessTree> for AddChildProcess {
-    fn from(process: ProcessTree) -> Self {
-        AddChildProcess(ChildProcess::Tree(process))
-    }
-}
-
-impl From<ProcessService> for AddChildProcess {
-    fn from(service: ProcessService) -> Self {
-        AddChildProcess(ChildProcess::Service(service))
-    }
-}
-
 #[derive(Message)]
 #[rtype("()")]
 struct RemoveChildProcess(ChildProcess);
-
-impl From<ProcessTree> for RemoveChildProcess {
-    fn from(process: ProcessTree) -> Self {
-        RemoveChildProcess(ChildProcess::Tree(process))
-    }
-}
-
-impl From<ProcessService> for RemoveChildProcess {
-    fn from(service: ProcessService) -> Self {
-        RemoveChildProcess(ChildProcess::Service(service))
-    }
-}

@@ -14,8 +14,8 @@ use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails,
 };
 use ya_core_model::payment::local::{
-    NotifyPayment, RegisterAccount, RegisterAccountError, SchedulePayment, UnregisterAccount,
-    UnregisterAccountError,
+    Account, NotifyPayment, RegisterAccount, RegisterAccountError, SchedulePayment,
+    UnregisterAccount, UnregisterAccountError,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -95,6 +95,19 @@ impl DriverRegistry {
         }
     }
 
+    pub fn get_accounts(&self) -> Vec<Account> {
+        self.accounts
+            .iter()
+            .map(|((platform, address), (driver, mode))| Account {
+                platform: platform.clone(),
+                address: address.clone(),
+                driver: driver.clone(),
+                send: mode.contains(AccountMode::SEND),
+                receive: mode.contains(AccountMode::RECV),
+            })
+            .collect()
+    }
+
     pub fn driver(
         &self,
         platform: &str,
@@ -141,6 +154,10 @@ impl PaymentProcessor {
         msg: UnregisterAccount,
     ) -> Result<(), UnregisterAccountError> {
         self.registry.lock().await.unregister_account(msg)
+    }
+
+    pub async fn get_accounts(&self) -> Vec<Account> {
+        self.registry.lock().await.get_accounts()
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {

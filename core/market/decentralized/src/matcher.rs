@@ -1,19 +1,21 @@
+use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
 use ya_service_api_web::middleware::Identity;
 
+use crate::config::Config;
 use crate::db::model::{Demand, Offer, SubscriptionId};
-use crate::protocol::discovery::builder::DiscoveryBuilder;
-use crate::protocol::discovery::{
-    Discovery, OfferReceived, OfferUnsubscribed, Propagate, Reason, RetrieveOffers,
-};
+use crate::identity::IdentityApi;
+use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
 
+pub(crate) mod cyclic;
 pub mod error;
+pub(crate) mod handlers;
 pub(crate) mod resolver;
 pub(crate) mod store;
 
-use error::{MatcherError, MatcherInitError, ModifyOfferError, SaveOfferError};
+use error::{MatcherError, MatcherInitError, QueryOffersError};
 use resolver::Resolver;
 use store::SubscriptionStore;
 
@@ -30,48 +32,58 @@ pub struct EventsListeners {
 }
 
 /// Responsible for storing Offers and matching them with demands.
+#[derive(Clone)]
 pub struct Matcher {
     pub store: SubscriptionStore,
     pub resolver: Resolver,
     discovery: Discovery,
+    identity: Arc<dyn IdentityApi>,
+    config: Arc<Config>,
 }
 
 impl Matcher {
-    pub fn new(store: SubscriptionStore) -> Result<(Matcher, EventsListeners), MatcherInitError> {
+    pub fn new(
+        store: SubscriptionStore,
+        identity_api: Arc<dyn IdentityApi>,
+        config: Arc<Config>,
+    ) -> Result<(Matcher, EventsListeners), MatcherInitError> {
         let (proposal_sender, proposal_receiver) = unbounded_channel::<RawProposal>();
         let resolver = Resolver::new(store.clone(), proposal_sender);
 
         let discovery = DiscoveryBuilder::default()
-            .data(store.clone())
-            .data(resolver.clone())
-            .add_data_handler(on_offer_received)
-            .add_data_handler(on_offer_unsubscribed)
-            .add_handler(move |caller: String, _msg: RetrieveOffers| async move {
-                log::info!("Offers request received from: {}. Unimplemented.", caller);
-                Ok(vec![])
-            })
+            .add_data(identity_api.clone())
+            .add_data(store.clone())
+            .add_data(resolver.clone())
+            .add_data_handler(handlers::filter_out_known_offer_ids)
+            .add_data_handler(handlers::receive_remote_offers)
+            .add_data_handler(handlers::get_local_offers)
+            .add_data_handler(handlers::receive_remote_offer_unsubscribes)
             .build();
 
         let matcher = Matcher {
             store,
             resolver,
             discovery,
+            config,
+            identity: identity_api,
         };
 
         let listeners = EventsListeners { proposal_receiver };
-
         Ok((matcher, listeners))
     }
 
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), MatcherInitError> {
-        Ok(self
-            .discovery
-            .bind_gsb(public_prefix, private_prefix)
-            .await?)
+        self.discovery.bind_gsb(public_prefix, local_prefix).await?;
+
+        // We can't spawn broadcasts, before gsb is bound.
+        // That's why we don't spawn this in Matcher::new.
+        tokio::task::spawn_local(cyclic::bcast_offers(self.clone()));
+        tokio::task::spawn_local(cyclic::bcast_unsubscribes(self.clone()));
+        Ok(())
     }
 
     // =========================================== //
@@ -83,16 +95,24 @@ impl Matcher {
         offer: &ClientOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
-        // TODO: Handle broadcast errors. Maybe we should retry if it failed.
         let offer = self.store.create_offer(id, offer).await?;
         self.resolver.receive(&offer);
 
+        log::info!(
+            "Subscribed new Offer: [{}] using identity: {} [{}]",
+            &offer.id,
+            id.name,
+            id.identity
+        );
+
+        // Ignore error and don't retry to broadcast Offer. It will be broadcasted
+        // anyway during random broadcast, so nothing bad happens here in case of error.
         let _ = self
             .discovery
-            .broadcast_offer(offer.clone())
+            .bcast_offers(vec![offer.id.clone()])
             .await
             .map_err(|e| {
-                log::warn!("Failed to broadcast offer [{}]. Error: {}.", offer.id, e,);
+                log::warn!("Failed to bcast offer [{}]. Error: {}.", offer.id, e,);
             });
         Ok(offer)
     }
@@ -106,17 +126,24 @@ impl Matcher {
             .unsubscribe_offer(offer_id, true, Some(id.identity))
             .await?;
 
+        log::info!(
+            "Unsubscribed Offer: [{}] using identity: {} [{}]",
+            &offer_id,
+            id.name,
+            id.identity
+        );
+
         // Broadcast only, if no Error occurred in previous step.
         // We ignore broadcast errors. Unsubscribing was finished successfully, so:
-        // - We shouldn't bother agent with broadcasts
+        // - We shouldn't bother agent with broadcasts errors.
         // - Unsubscribe message probably will reach other markets, but later.
         let _ = self
             .discovery
-            .broadcast_unsubscribe(id.identity.to_string(), offer_id.clone())
+            .bcast_unsubscribes(vec![offer_id.clone()])
             .await
             .map_err(|e| {
                 log::warn!(
-                    "Failed to broadcast unsubscribe offer [{1}]. Error: {0}.",
+                    "Failed to bcast unsubscribe offer [{1}]. Error: {0}.",
                     e,
                     offer_id
                 );
@@ -130,8 +157,14 @@ impl Matcher {
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
-
         self.resolver.receive(&demand);
+
+        log::info!(
+            "Subscribed new Demand: [{}] using identity: {} [{}]",
+            &demand.id,
+            id.name,
+            id.identity
+        );
         Ok(demand)
     }
 
@@ -140,60 +173,29 @@ impl Matcher {
         demand_id: &SubscriptionId,
         id: &Identity,
     ) -> Result<(), MatcherError> {
-        Ok(self.store.remove_demand(demand_id, id).await?)
+        self.store.remove_demand(demand_id, id).await?;
+
+        log::info!(
+            "Unsubscribed Demand: [{}] using identity: {} [{}]",
+            &demand_id,
+            id.name,
+            id.identity
+        );
+        Ok(())
     }
-}
 
-pub(crate) async fn on_offer_received(
-    resolver: Resolver,
-    _caller: String,
-    msg: OfferReceived,
-) -> Result<Propagate, ()> {
-    // We shouldn't propagate Offer, if we already have it in our database.
-    // Note that when we broadcast our Offer, it will reach us too, so it concerns
-    // not only Offers from other nodes.
+    pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        let our_node_ids = self.identity.list().await?;
+        Ok(self.store.get_active_offer_ids(Some(our_node_ids)).await?)
+    }
 
-    resolver
-        .store
-        .save_offer(msg.offer)
-        .await
-        .map(|offer| {
-            resolver.receive(&offer);
-            Propagate::Yes
-        })
-        .or_else(|e| match e {
-            // Stop propagation for existing, unsubscribed and expired Offers to avoid infinite broadcast.
-            SaveOfferError::Exists(_) => Ok(Propagate::No(Reason::AlreadyExists)),
-            SaveOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
-            SaveOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
-            // Below errors are not possible to get from checked_store_offer
-            SaveOfferError::SaveError(_, _)
-            | SaveOfferError::SubscriptionValidation(_)
-            | SaveOfferError::WrongState { .. } => {
-                Ok(Propagate::No(Reason::Error(format!("{}", e))))
-            }
-        })
-}
-
-pub(crate) async fn on_offer_unsubscribed(
-    store: SubscriptionStore,
-    caller: String,
-    msg: OfferUnsubscribed,
-) -> Result<Propagate, ()> {
-    store
-        .unsubscribe_offer(&msg.offer_id, false, caller.parse().ok())
-        .await
-        .map(|_| Propagate::Yes)
-        .or_else(|e| match e {
-            ModifyOfferError::UnsubscribeError(_, _)
-            | ModifyOfferError::UnsubscribedNotRemoved(_)
-            | ModifyOfferError::RemoveError(_, _) => {
-                log::error!("Propagating Offer unsubscription, despite error: {}", e);
-                // TODO: how should we handle it locally?
-                Ok(Propagate::Yes)
-            }
-            ModifyOfferError::NotFound(_) => Ok(Propagate::No(Reason::NotFound)),
-            ModifyOfferError::Unsubscribed(_) => Ok(Propagate::No(Reason::Unsubscribed)),
-            ModifyOfferError::Expired(_) => Ok(Propagate::No(Reason::Expired)),
-        })
+    pub async fn get_our_unsubscribed_offer_ids(
+        &self,
+    ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        let our_node_ids = self.identity.list().await?;
+        Ok(self
+            .store
+            .get_unsubscribed_offer_ids(Some(our_node_ids))
+            .await?)
+    }
 }

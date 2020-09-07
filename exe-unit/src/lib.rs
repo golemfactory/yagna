@@ -214,10 +214,11 @@ impl<R: Runtime> ExeUnit<R> {
         addr.send(SetState::from(state_pre.clone())).await?;
 
         match &runtime_cmd.command {
-            ExeScriptCommand::Transfer { from, to } => {
+            ExeScriptCommand::Transfer { from, to, args } => {
                 let msg = TransferResource {
                     from: from.clone(),
                     to: to.clone(),
+                    args: args.clone(),
                 };
                 transfer_service.send(msg).await??;
             }

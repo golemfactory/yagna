@@ -35,7 +35,10 @@ pub struct Cli {
     #[structopt(long, default_value = "target/debug/exe-unit")]
     pub supervisor: PathBuf,
     /// Runtime binary
-    #[structopt(long, default_value = "target/debug/wasmtime-exeunit")]
+    #[structopt(
+        long,
+        default_value = "../ya-runtime-wasi/target/debug/ya-runtime-wasi"
+    )]
     pub runtime: PathBuf,
     /// Agreement file path (JSON)
     #[structopt(long, short, default_value = "exe-unit/examples/agreement.json")]
