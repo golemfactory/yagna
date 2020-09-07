@@ -10,6 +10,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[test]
+fn aaa_init_logger() {
+    let _ = env_logger::builder().try_init();
+    env_logger::Env::default().default_filter_or("debug,ya_market_decentralized=trace");
+}
+
 /// No events available for not existent subscription.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
@@ -75,9 +82,6 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
-    let _ = env_logger::builder().try_init();
-    env_logger::Env::default().default_filter_or("debug,ya_market_decentralized=trace");
-
     let start = Utc::now();
     let network = MarketsNetwork::new("test_query_multiple_events")
         .await

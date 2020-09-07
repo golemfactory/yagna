@@ -18,6 +18,13 @@ const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[test]
+fn aaa_init_logger() {
+    let _ = env_logger::builder().try_init();
+    env_logger::Env::default().default_filter_or("debug,ya_market_decentralized=trace");
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_gsb_get_agreement() -> Result<()> {
     let network = MarketsNetwork::new("test_gsb_get_agreement")
