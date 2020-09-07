@@ -18,6 +18,7 @@ use super::messages::{
     AgreementRejected, InitialProposalReceived, ProposalContent, ProposalReceived,
     ProposalRejected,
 };
+use crate::protocol::negotiation::error::ProposeAgreementError;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -202,13 +203,16 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementReceived,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ProposeAgreementError> {
         log::debug!(
             "Negotiation API: Agreement proposal [{}] sent by [{}].",
-            &msg.agreement.id,
+            &msg.agreement_id,
             &caller
         );
-        self.inner.agreement_received.call(caller, msg).await
+        self.inner
+            .agreement_received
+            .call(caller, msg.translate(OwnerType::Provider))
+            .await
     }
 
     async fn on_agreement_cancelled(

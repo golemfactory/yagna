@@ -1,7 +1,7 @@
 use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
@@ -19,7 +19,8 @@ use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
 use crate::config::Config;
-use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::db::dao::ProposalDao;
+use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
@@ -133,6 +134,7 @@ impl MarketsNetwork {
         };
 
         let node_id = node.mock_identity.default.clone().identity;
+        log::info!("Creating mock node {}: [{}].", name, &node_id);
         BCastService::default().register(&node_id, &self.test_name);
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
 
@@ -409,12 +411,18 @@ impl MarketsNetwork {
 }
 
 fn test_data_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test-workdir")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-workdir")
 }
 
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
     let test_dir: PathBuf = test_data_dir().join(dir_name);
 
+    log::info!(
+        "[MockNode] Preparing test directory: {}",
+        test_dir.display()
+    );
     if test_dir.exists() {
         fs::remove_dir_all(&test_dir)
             .with_context(|| format!("Removing test directory: {}", test_dir.display()))?;
@@ -453,6 +461,10 @@ macro_rules! assert_err_eq {
 pub trait MarketServiceExt {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+    async fn get_proposal_from_db(
+        &self,
+        proposal_id: &ProposalId,
+    ) -> Result<Proposal, anyhow::Error>;
     async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -471,6 +483,19 @@ impl MarketServiceExt for MarketService {
         self.matcher.store.get_demand(id).await
     }
 
+    async fn get_proposal_from_db(
+        &self,
+        proposal_id: &ProposalId,
+    ) -> Result<Proposal, anyhow::Error> {
+        let db = self.db.clone();
+        Ok(
+            match db.as_dao::<ProposalDao>().get_proposal(proposal_id).await? {
+                Some(proposal) => proposal,
+                None => bail!("Proposal [{}] not found", proposal_id),
+            },
+        )
+    }
+
     async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -487,6 +512,7 @@ pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
         AgreementError, ApproveAgreementError, CounterProposalError, ProposalError,
+        ProposeAgreementError,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -541,7 +567,7 @@ pub mod default {
     pub async fn empty_on_agreement_received(
         _caller: String,
         _msg: AgreementReceived,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ProposeAgreementError> {
         Ok(())
     }
 

@@ -1,10 +1,12 @@
 use chrono::{NaiveDateTime, Utc};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use ya_client::model::market::Proposal;
 
 use crate::db::model::{EventType, OwnerType, ProposalId, SubscriptionId};
 use crate::db::schema::market_event;
+use crate::MarketService;
 
 #[derive(Clone, Debug, Insertable, Queryable)]
 #[table_name = "market_event"]
@@ -32,8 +34,8 @@ pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
 }
 
 pub mod requestor {
+    use super::*;
     use ya_client::model::market::event::RequestorEvent;
-    use ya_client::model::market::Proposal;
 
     pub fn expect_proposal(events: Vec<RequestorEvent>, i: u8) -> anyhow::Result<Proposal> {
         assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
@@ -43,11 +45,23 @@ pub mod requestor {
             _ => anyhow::bail!("Invalid event Type. ProposalEvent expected"),
         })
     }
+
+    pub async fn query_proposal(
+        market: &Arc<MarketService>,
+        demand_id: &SubscriptionId,
+        i: u8,
+    ) -> anyhow::Result<Proposal> {
+        let events = market
+            .requestor_engine
+            .query_events(&demand_id, 2.2, Some(5))
+            .await?;
+        expect_proposal(events, i)
+    }
 }
 
 pub mod provider {
+    use super::*;
     use ya_client::model::market::event::ProviderEvent;
-    use ya_client::model::market::Proposal;
 
     pub fn expect_proposal(events: Vec<ProviderEvent>, i: u8) -> anyhow::Result<Proposal> {
         assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
@@ -56,6 +70,18 @@ pub mod provider {
             ProviderEvent::ProposalEvent { proposal, .. } => proposal,
             _ => anyhow::bail!("Invalid event Type. ProposalEvent expected"),
         })
+    }
+
+    pub async fn query_proposal(
+        market: &Arc<MarketService>,
+        offer_id: &SubscriptionId,
+        i: u8,
+    ) -> anyhow::Result<Proposal> {
+        let events = market
+            .provider_engine
+            .query_events(&offer_id, 2.2, Some(5))
+            .await?;
+        expect_proposal(events, i)
     }
 }
 

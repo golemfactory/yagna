@@ -5963,6 +5963,7 @@ dependencies = [
  "nix 0.17.0",
  "shared_child",
  "tokio 0.2.22",
+ "tokio-process-ns",
 ]
 
 [[package]]

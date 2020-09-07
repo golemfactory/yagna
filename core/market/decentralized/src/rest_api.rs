@@ -5,6 +5,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::model::{AgreementId, ProposalId, SubscriptionId};
 
+pub mod common;
 mod error;
 pub mod provider;
 pub mod requestor;

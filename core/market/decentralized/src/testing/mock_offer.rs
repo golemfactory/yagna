@@ -94,6 +94,25 @@ pub mod client {
     }
 
     #[allow(unused)]
+    pub fn not_matching_offer() -> Offer {
+        Offer::new(
+            serde_json::json!({
+                "golem": {
+                    "node.id.name": "its-test-provider",
+                    "node.debug.subnet": "blaa",
+                    "com.pricing.model": "linear"
+                },
+            }),
+            constraints![
+                "golem.node.debug.subnet" == "blaa",
+                "golem.srv.comp.expiration" > 0,
+                "custom.dontmatch" == "true",
+            ]
+            .to_string(),
+        )
+    }
+
+    #[allow(unused)]
     pub fn sample_demand() -> Demand {
         Demand::new(
             serde_json::json!({
@@ -107,6 +126,26 @@ pub mod client {
             constraints![
                 "golem.node.debug.subnet" == "blaa",
                 "golem.com.pricing.model" == "linear"
+            ]
+            .to_string(),
+        )
+    }
+
+    #[allow(unused)]
+    pub fn not_matching_demand() -> Demand {
+        Demand::new(
+            serde_json::json!({
+                "golem": {
+                    "node.id.name": "its-test-requestor",
+                    "node.debug.subnet": "blaa",
+                    "srv.comp.expiration": 3,
+                    "srv.comp.wasm.task_package": "test-package",
+                },
+            }),
+            constraints![
+                "golem.node.debug.subnet" == "blaa",
+                "golem.com.pricing.model" == "linear",
+                "custom.dontmatch" == "true",
             ]
             .to_string(),
         )

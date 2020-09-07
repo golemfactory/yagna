@@ -104,6 +104,9 @@ table! {
         offer_id -> Text,
         demand_id -> Text,
 
+        offer_proposal_id -> Text,
+        demand_proposal_id -> Text,
+
         provider_id -> Text,
         requestor_id -> Text,
 

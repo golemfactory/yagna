@@ -60,7 +60,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 
     // We expect, that after this time we, should get at least one broadcast
     // from each Node.
-    tokio::time::delay_for(Duration::from_millis(300)).await;
+    tokio::time::delay_for(Duration::from_millis(400)).await;
 
     let market3 = network.get_market("Node-3");
 
@@ -160,7 +160,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     // Immediate broadcast should be already lost.
     tokio::time::delay_for(Duration::from_millis(100)).await;
     network.enable_networking_for("Node-3")?;
-    tokio::time::delay_for(Duration::from_millis(300)).await;
+    tokio::time::delay_for(Duration::from_millis(400)).await;
 
     // Check if all expected Offers were unsubscribed.
     for subscription in subscriptions1[10..]
@@ -279,8 +279,8 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     let network = network.add_market_instance("Node-3").await?;
     let market3 = network.get_market("Node-3");
 
-    // We expect, that after this time Node-3 should get at least one broadcast.
-    tokio::time::delay_for(Duration::from_millis(300)).await;
+    // We expect, that after this time we, should get at least one broadcast.
+    tokio::time::delay_for(Duration::from_millis(400)).await;
 
     // Make sure Node-3 has all offers from both: Node-1 and Node-2.
     for subscription in subscriptions.into_iter() {
@@ -361,7 +361,7 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
     network.enable_networking_for("Node-3")?;
 
     // We expect that all unsubscribed will be shared with Node-3 after this delay.
-    tokio::time::delay_for(Duration::from_millis(300)).await;
+    tokio::time::delay_for(Duration::from_millis(400)).await;
     for subscription in subscriptions[30..].into_iter() {
         let expected_error = QueryOfferError::Unsubscribed(subscription.clone());
         assert_err_eq!(expected_error, market1.get_offer(&subscription).await);

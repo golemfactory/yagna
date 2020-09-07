@@ -55,7 +55,9 @@ impl MockNet {
         };
 
         let mut inner = self.inner.lock().unwrap();
-        inner.nodes.insert(node_id.clone(), prefix);
+        if let Some(_) = inner.nodes.insert(node_id.clone(), prefix) {
+            panic!("[MockNet] Node [{}] already existed.", &node_id);
+        }
     }
 
     pub fn unregister_node(&self, node_id: &NodeId) -> Result<()> {

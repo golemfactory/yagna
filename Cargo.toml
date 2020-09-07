@@ -141,6 +141,7 @@ ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev =
 
 ## OTHERS
 gftp = { path = "core/gftp" }
+tokio-process-ns = { path = "exe-unit/tokio-process-ns" }
 ya-agreement-utils = { path = "utils/agreement-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
