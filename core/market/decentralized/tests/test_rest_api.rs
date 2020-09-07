@@ -6,7 +6,7 @@ use serde_json::json;
 
 use chrono::Utc;
 use ya_client::model::market::Agreement;
-use ya_client::model::{market::Offer, ErrorMessage};
+use ya_client::model::{market::Demand, market::Offer, ErrorMessage};
 use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
 use ya_market_decentralized::testing::{
     client::{sample_demand, sample_offer},
@@ -60,6 +60,35 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     assert_eq!(resp.status(), StatusCode::OK);
     let result: Vec<Offer> = read_response_json(resp).await;
     assert_eq!(vec![offer_local.into_client_offer()?], result);
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_rest_get_demands")
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+
+    let market_local = network.get_market("Node-1");
+    let identity_local = network.get_default_id("Node-1");
+    let demand_local = Demand::new(json!({}), "()".to_string());
+    let subscription_id = market_local
+        .subscribe_demand(&demand_local, &identity_local)
+        .await?;
+    let demand_local = market_local.get_demand(&subscription_id).await?;
+
+    let mut app = network.get_rest_app("Node-1").await;
+
+    let req = test::TestRequest::get()
+        .uri("/market-api/v1/demands")
+        .to_request();
+    let resp = test::call_service(&mut app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let result: Vec<Demand> = read_response_json(resp).await;
+    assert_eq!(vec![demand_local.into_client_demand()?], result);
+
     Ok(())
 }
 

@@ -2,6 +2,7 @@ use chrono::{NaiveDateTime, Utc};
 use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
+use ya_client::model::NodeId;
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
@@ -43,19 +44,29 @@ impl<'c> DemandDao<'c> {
         .await
     }
 
-    pub async fn get_demands_before(
+    pub async fn get_demands(
         &self,
-        insertion_ts: NaiveDateTime,
+        node_id: Option<NodeId>,
+        insertion_ts: Option<NaiveDateTime>,
         validation_ts: NaiveDateTime,
     ) -> DbResult<Vec<Demand>> {
         readonly_transaction(self.pool, move |conn| {
-            Ok(dsl::market_demand
-                // we querying less then here and less equal in Offers
-                // not to duplicate pair subscribed at the very same moment
-                .filter(dsl::insertion_ts.lt(insertion_ts))
+            let mut query = dsl::market_demand
                 .filter(dsl::expiration_ts.ge(validation_ts))
                 .order_by(dsl::creation_ts.asc())
-                .load::<Demand>(conn)?)
+                .into_boxed();
+
+            if let Some(ts) = insertion_ts {
+                // we querying less then here and less equal in Offers
+                // not to duplicate pair subscribed at the very same moment
+                query = query.filter(dsl::insertion_ts.lt(ts));
+            };
+
+            if let Some(id) = node_id {
+                query = query.filter(dsl::node_id.eq(id));
+            };
+
+            Ok(query.load::<Demand>(conn)?)
         })
         .await
     }
