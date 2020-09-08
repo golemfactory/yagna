@@ -1,8 +1,11 @@
 use nix::libc;
 use nix::sys::signal;
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
-use nix::unistd::Pid;
+use nix::unistd::SysconfVar::CLK_TCK;
+use nix::unistd::{sysconf, Pid};
+use std::collections::HashSet;
 use std::hash::Hash;
+use std::io;
 use std::mem;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -11,7 +14,6 @@ use thiserror::Error;
 use libproc::libproc::bsd_info::BSDInfo;
 #[cfg(target_os = "macos")]
 use libproc::libproc::proc_pid::{listpids, pidinfo, ProcType};
-use std::collections::HashSet;
 
 #[derive(Clone, Debug, Error)]
 pub enum SystemError {
@@ -29,12 +31,17 @@ impl<T> From<std::sync::PoisonError<T>> for SystemError {
     }
 }
 
+impl From<io::Error> for SystemError {
+    fn from(e: io::Error) -> Self {
+        SystemError::Error(format!("IO error: {}", e.to_string()))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Process {
     pub pid: i32,
     pub ppid: i32,
     pub pgid: i32,
-    pub start_ts: u64,
 }
 
 #[cfg(target_os = "linux")]
@@ -52,29 +59,93 @@ impl Process {
     }
 
     pub fn info(pid: i32) -> Result<Process, SystemError> {
-        let proc = Self::stat(pid)?;
-
+        let stat = StatStub::read(pid)?;
         Ok(Process {
-            pid: proc.pid,
-            ppid: proc.stat.ppid,
-            pgid: proc.stat.pgrp,
-            start_ts: proc.stat.starttime,
+            pid: stat.pid,
+            ppid: stat.ppid,
+            pgid: stat.pgid,
         })
     }
 
     pub fn usage(pid: i32) -> Result<Usage, SystemError> {
-        let proc = Self::stat(pid)?;
+        let stat = StatStub::read(pid)?;
+        let tps = Self::ticks_per_second()?;
 
-        let tps = procfs::ticks_per_second().map_err(|e| SystemError::Error(e.to_string()))?;
-        let cpu_sec = Duration::from_secs((proc.stat.stime + proc.stat.utime) / tps as u64);
-        let rss_gib = proc.stat.rss as f64 / (1024. * 1024.);
+        let cpu_sec = Duration::from_secs((stat.stime + stat.utime) / tps as u64);
+        let rss_gib = stat.rss as f64 / (1024. * 1024.);
 
         Ok(Usage { cpu_sec, rss_gib })
     }
 
-    #[inline]
-    fn stat(pid: i32) -> Result<procfs::process::Process, SystemError> {
-        procfs::process::Process::new(pid).map_err(|e| SystemError::Error(e.to_string()).into())
+    fn ticks_per_second() -> Result<i64, SystemError> {
+        match sysconf(CLK_TCK) {
+            Ok(Some(tps)) => Ok(tps),
+            Ok(None) => Err(nix::Error::UnsupportedOperation.into()),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+struct StatStub {
+    pub pid: i32,
+    pub comm: String,
+    pub state: char,
+    pub ppid: i32,
+    pub pgid: i32,
+    pub sid: i32,
+    pub utime: u64,
+    pub stime: u64,
+    pub vsize: u64,
+    pub rss: i64,
+}
+
+#[cfg(target_os = "linux")]
+impl StatStub {
+    pub fn read(pid: i32) -> Result<StatStub, SystemError> {
+        let stat_bytes = std::fs::read(format!("/proc/{}/stat", pid))?;
+        let stat = String::from_utf8_lossy(&stat_bytes);
+        Self::parse_stat(stat.trim())
+    }
+
+    fn parse_stat(stat: &str) -> Result<StatStub, SystemError> {
+        #[inline(always)]
+        fn next<'l, T: std::str::FromStr, I: Iterator<Item = &'l str>>(
+            it: &mut I,
+        ) -> Result<T, SystemError> {
+            it.next()
+                .map(|s| s.parse().ok())
+                .flatten()
+                .ok_or_else(|| SystemError::Error("proc stat: invalid entry".into()))
+        }
+
+        let (cmd_start, cmd_end) = stat
+            .find('(')
+            .zip(stat.rfind(')'))
+            .ok_or_else(|| SystemError::Error("proc stat: tcomm not found".into()))?;
+
+        let mut stub = StatStub::default();
+        stub.pid = next(&mut std::iter::once(&stat[..cmd_start - 1]))?;
+        stub.comm = stat[cmd_start + 1..cmd_end].to_string();
+
+        let mut it = stat[cmd_end + 2..].split(' ');
+        stub.state = next(&mut it)?;
+        stub.ppid = next(&mut it)?;
+        stub.pgid = next(&mut it)?;
+        stub.sid = next(&mut it)?;
+
+        // tty_nr, tpgid, flags, minflt, cminflt, majflt, cmajflt
+        let mut it = it.skip(7);
+        stub.utime = next(&mut it)?;
+        stub.stime = next(&mut it)?;
+
+        // cutime, cstime, priority, nice, num_threads, itrealvalue, starttime
+        let mut it = it.skip(7);
+        stub.vsize = next(&mut it)?;
+        stub.rss = next(&mut it)?;
+
+        Ok(stub)
     }
 }
 
@@ -90,13 +161,10 @@ impl Process {
 
     pub fn info(pid: i32) -> Result<Process, SystemError> {
         let info = pidinfo::<BSDInfo>(pid, 0).map_err(SystemError::Error)?;
-        let start_ts = (info.pbi_start_tvsec + info.pbi_start_tvusec / 1_000_000_000) as u64;
-
         Ok(Process {
             pid: info.pbi_pid as i32,
             ppid: info.pbi_ppid as i32,
             pgid: info.pbi_pgid as i32,
-            start_ts,
         })
     }
 
@@ -238,4 +306,33 @@ fn parents(pid: i32) -> Result<HashSet<i32>, SystemError> {
         }
     }
     Ok(ancestors)
+}
+
+#[cfg(test)]
+mod test {
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parse_stat() {
+        let stat = "10220 (proc-name) S 7666 7832 7832 0 -1 4194304 2266 0 4 0 44 2 0 0 \
+        20 0 6 0 1601 816193536 1793 18446744073709551615 94873375535104 94873375567061 \
+        140731153968032 0 0 0 0 4096 0 0 0 0 17 6 0 0 0 0 0 94873375582256 94873375584384 \
+        94873398587392 140731153974918 140731153974959 140731153974959 140731153977295 0";
+
+        let parsed = super::StatStub::parse_stat(stat).unwrap();
+        let expected = super::StatStub {
+            pid: 10220,
+            comm: "proc-name".to_string(),
+            state: 'S',
+            ppid: 7666,
+            pgid: 7832,
+            sid: 7832,
+            utime: 44,
+            stime: 2,
+            vsize: 816193536,
+            rss: 1793,
+        };
+
+        assert_eq!(parsed, expected);
+    }
 }
