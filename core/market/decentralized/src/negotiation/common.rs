@@ -223,7 +223,8 @@ impl CommonBroker {
         // TODO: If creating Proposal succeeds, but event can't be added, provider
         // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
-        self.db
+        let proposal = self
+            .db
             .as_dao::<EventsDao>()
             .add_proposal_event(proposal, owner)
             .await
@@ -235,6 +236,13 @@ impl CommonBroker {
 
         // Send channel message to wake all query_events waiting for proposals.
         self.notifier.notify(&subscription_id).await;
+
+        log::info!(
+            "Received counter Proposal [{}] for Proposal [{}] from [{}].",
+            &proposal.body.id,
+            &msg.prev_proposal_id,
+            &caller
+        );
         Ok(())
     }
 
