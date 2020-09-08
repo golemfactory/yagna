@@ -595,7 +595,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
             );
         }
 
-        log::info!("Unsubscribing all active offers");
+        log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
 
         let myself = ctx.address();
         let subscriptions = std::mem::replace(&mut self.offer_subscriptions, HashMap::new());
