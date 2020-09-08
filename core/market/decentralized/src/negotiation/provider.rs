@@ -155,7 +155,7 @@ impl ProviderBroker {
 
     pub async fn approve_agreement(
         &self,
-        _id: Identity,
+        id: Identity,
         agreement_id: &AgreementId,
         timeout: f32,
     ) -> Result<(), AgreementError> {
@@ -180,6 +180,12 @@ impl ProviderBroker {
                 dao.update_state(agreement_id, AgreementState::Approved)
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+
+                log::info!(
+                    "Provider {} approved Agreement [{}].",
+                    DisplayIdentity(&id),
+                    &agreement_id,
+                );
                 return Ok(());
             }
             AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
@@ -270,7 +276,7 @@ async fn on_agreement_received(
 
 async fn agreement_received(
     broker: CommonBroker,
-    _caller: String,
+    caller: String,
     msg: AgreementReceived,
 ) -> Result<(), RemoteProposeAgreementError> {
     let offer_proposal = broker.get_proposal(&msg.proposal_id).await?;
@@ -336,6 +342,11 @@ async fn agreement_received(
     // Send channel message to wake all query_events waiting for proposals.
     broker.notifier.notify(&offer_id).await;
 
+    log::info!(
+        "Agreement proposal [{}] received from [{}].",
+        &msg.agreement_id,
+        &caller
+    );
     Ok(())
 }
 

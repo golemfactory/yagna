@@ -309,7 +309,7 @@ impl RequestorBroker {
     /// and sends it to the Provider.
     pub async fn confirm_agreement(
         &self,
-        _id: Identity,
+        id: Identity,
         agreement_id: &AgreementId,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
@@ -333,6 +333,12 @@ impl RequestorBroker {
                 dao.update_state(agreement_id, AgreementState::Pending)
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+
+                log::info!(
+                    "Requestor {} confirmed Agreement [{}] and sent to Provider.",
+                    DisplayIdentity(&id),
+                    &agreement_id,
+                );
                 return Ok(());
             }
             AgreementState::Pending => AgreementStateError::Confirmed(agreement.id),
@@ -410,6 +416,12 @@ async fn agreement_approved(
         })?;
 
     notifier.notify(&msg.agreement_id).await;
+
+    log::info!(
+        "Agreement [{}] approved by [{}].",
+        &msg.agreement_id,
+        &caller
+    );
     Ok(())
 }
 
