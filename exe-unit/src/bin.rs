@@ -67,9 +67,13 @@ struct RunArgs {
 }
 
 fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
-    let path = normalize_path(path)?;
-    std::fs::create_dir_all(&path)?;
-    Ok(path)
+    if let Err(error) = std::fs::create_dir_all(path) {
+        match &error.kind() {
+            std::io::ErrorKind::AlreadyExists => (),
+            _ => bail!("Can't create directory: {}, {}", path.display(), error),
+        }
+    }
+    Ok(normalize_path(path)?)
 }
 
 fn run() -> anyhow::Result<()> {

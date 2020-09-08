@@ -1,5 +1,6 @@
 use crate::utils;
 use crate::{GNTDriverError, GNTDriverResult};
+use actix_rt::Arbiter;
 use ethereum_types::Address;
 use std::{env, time};
 
@@ -24,7 +25,16 @@ impl EthFaucetConfig {
 
     pub async fn request_eth(&self, address: Address) -> GNTDriverResult<()> {
         log::debug!("request eth");
-        let client = awc::Client::new();
+        let (resolver, bg) = trust_dns_resolver::AsyncResolver::from_system_conf().unwrap();
+        Arbiter::spawn(bg);
+        let tcp_connector = actix_connect::new_connector(resolver);
+        let client = awc::Client::build()
+            .connector(
+                actix_http::client::Connector::new()
+                    .connector(tcp_connector)
+                    .finish(),
+            )
+            .finish();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
 
         async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {

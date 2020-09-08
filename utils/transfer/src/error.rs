@@ -53,6 +53,10 @@ pub enum Error {
     Gsb(String),
     #[error("gftp error: {0}")]
     Gftp(#[from] ya_core_model::gftp::Error),
+    #[error("Glob error: {0}")]
+    PathGlob(#[from] globset::Error),
+    #[error("Invalid output format: {0}")]
+    OutputFormat(String),
     #[error("URL parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
     #[error("Invalid url: {0}")]
@@ -65,8 +69,6 @@ pub enum Error {
     InvalidHashError { hash: String, expected: String },
     #[error("Hex error: {0}")]
     HexError(#[from] hex::FromHexError),
-    #[error("Interrupted: {0}")]
-    Interrupted(String),
     #[error("Net API error: {0}")]
     NetApiError(#[from] ya_net::NetApiError),
 }
@@ -75,7 +77,7 @@ impl ResponseError for Error {}
 
 impl From<Aborted> for Error {
     fn from(_: Aborted) -> Self {
-        Error::Interrupted("Action aborted".to_owned())
+        Error::IoError(std::io::Error::from(std::io::ErrorKind::Interrupted))
     }
 }
 
@@ -95,5 +97,14 @@ impl From<ya_service_bus::error::Error> for Error {
     fn from(e: ya_service_bus::error::Error) -> Self {
         log::debug!("ya_service_bus::error::Error: {:?}", e);
         Error::Gsb(e.to_string())
+    }
+}
+
+impl From<Error> for std::io::Error {
+    fn from(e: Error) -> Self {
+        match e {
+            Error::IoError(error) => error,
+            _ => std::io::Error::new(std::io::ErrorKind::Other, e),
+        }
     }
 }

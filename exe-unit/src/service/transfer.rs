@@ -15,17 +15,16 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
+use ya_client_model::activity::TransferArgs;
 use ya_transfer::error::Error as TransferError;
-use ya_transfer::{
-    transfer, FileTransferProvider, GftpTransferProvider, HashStream, HttpTransferProvider,
-    TransferData, TransferProvider, TransferSink, TransferStream, UrlExt,
-};
+use ya_transfer::*;
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct TransferResource {
     pub from: String,
     pub to: String,
+    pub args: TransferArgs,
 }
 
 #[derive(Message)]
@@ -56,15 +55,16 @@ struct RemoveAbortHandle(Abort);
 
 struct ContainerTransferProvider {
     file_tp: FileTransferProvider,
+    dir_tp: DirTransferProvider,
     work_dir: PathBuf,
     vols: Vec<ContainerVolume>,
 }
 
 impl ContainerTransferProvider {
     fn new(work_dir: PathBuf, vols: Vec<ContainerVolume>) -> Self {
-        let file_tp = Default::default();
         ContainerTransferProvider {
-            file_tp,
+            file_tp: Default::default(),
+            dir_tp: Default::default(),
             work_dir,
             vols,
         }
@@ -119,20 +119,36 @@ impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider
         vec!["container"]
     }
 
-    fn source(&self, url: &Url) -> TransferStream<TransferData, TransferError> {
+    fn source(
+        &self,
+        url: &Url,
+        args: &TransferArgs,
+    ) -> TransferStream<TransferData, TransferError> {
         let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferStream::err(e),
         };
-        self.file_tp.source(&file_url)
+
+        if args.format.is_some() {
+            return self.dir_tp.source(&file_url, args);
+        }
+        self.file_tp.source(&file_url, args)
     }
 
-    fn destination(&self, url: &Url) -> TransferSink<TransferData, TransferError> {
+    fn destination(
+        &self,
+        url: &Url,
+        args: &TransferArgs,
+    ) -> TransferSink<TransferData, TransferError> {
         let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferSink::err(e),
         };
-        self.file_tp.destination(&file_url)
+
+        if args.format.is_some() {
+            return self.dir_tp.destination(&file_url, args);
+        }
+        self.file_tp.destination(&file_url, args)
     }
 }
 
@@ -185,6 +201,7 @@ impl TransferService {
     fn source(
         &self,
         transfer_url: &TransferUrl,
+        args: &TransferArgs,
     ) -> Result<Box<dyn Stream<Item = std::result::Result<TransferData, TransferError>> + Unpin>>
     {
         let scheme = transfer_url.url.scheme();
@@ -193,7 +210,7 @@ impl TransferService {
             .get(scheme)
             .ok_or(TransferError::UnsupportedSchemeError(scheme.to_owned()))?;
 
-        let stream = provider.source(&transfer_url.url);
+        let stream = provider.source(&transfer_url.url, args);
         match &transfer_url.hash {
             Some(hash) => Ok(Box::new(HashStream::try_new(
                 stream,
@@ -207,6 +224,7 @@ impl TransferService {
     fn destination(
         &self,
         transfer_url: &TransferUrl,
+        args: &TransferArgs,
     ) -> Result<TransferSink<TransferData, TransferError>> {
         let scheme = transfer_url.url.scheme();
 
@@ -215,7 +233,7 @@ impl TransferService {
             .get(scheme)
             .ok_or(TransferError::UnsupportedSchemeError(scheme.to_owned()))?;
 
-        Ok(provider.destination(&transfer_url.url))
+        Ok(provider.destination(&transfer_url.url, args))
     }
 }
 
@@ -263,8 +281,9 @@ impl Handler<DeployImage> for TransferService {
             final_path.to_path_buf()
         );
 
-        let source = actor_try!(self.source(&source_url));
-        let dest = file_provider.destination(&temp_url);
+        let args = TransferArgs::default();
+        let source = actor_try!(self.source(&source_url, &args));
+        let dest = file_provider.destination(&temp_url, &args);
 
         let address = ctx.address();
         let (handle, reg) = AbortHandle::new_pair();
@@ -287,6 +306,7 @@ impl Handler<DeployImage> for TransferService {
                 .map_err(TransferError::from)??;
             address.send(RemoveAbortHandle(abort)).await?;
 
+            // TODO: missing sync before rename.
             std::fs::rename(temp_path, &cache_path)?;
             std::fs::copy(cache_path, &final_path)?;
 
@@ -308,8 +328,8 @@ impl Handler<TransferResource> for TransferService {
 
         log::info!("Transferring {:?} to {:?}", from.url, to.url);
 
-        let source = actor_try!(self.source(&from));
-        let dest = actor_try!(self.destination(&to));
+        let source = actor_try!(self.source(&from, &msg.args));
+        let dest = actor_try!(self.destination(&to, &msg.args));
 
         let (handle, reg) = AbortHandle::new_pair();
         let abort = Abort::from(handle);
