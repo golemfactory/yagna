@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -22,6 +23,7 @@ use crate::negotiation::{
 };
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::ProposalReceived;
+use ya_service_api_web::middleware::Identity;
 
 type IsFirst = bool;
 
@@ -293,4 +295,12 @@ pub enum GetProposalError {
     NotFound(ProposalId),
     #[error("Failed to get Proposal [{0}]. Error: [{1}]")]
     FailedGetFromDb(ProposalId, DbError),
+}
+
+pub struct DisplayIdentity<'a>(pub &'a Identity);
+
+impl<'a> fmt::Display for DisplayIdentity<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} [{}]", &self.0.name, &self.0.identity)
+    }
 }

@@ -22,7 +22,7 @@ use crate::protocol::negotiation::{
 };
 
 use super::{
-    common::CommonBroker,
+    common::{CommonBroker, DisplayIdentity},
     error::{AgreementError, WaitForApprovalError},
     error::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError},
     notifier::NotifierError,
@@ -131,6 +131,7 @@ impl RequestorBroker {
         demand_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
+        id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, is_first) = self
             .common
@@ -147,6 +148,12 @@ impl RequestorBroker {
         }
         .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.clone(), e))?;
 
+        log::info!(
+            "Requestor {} countered Proposal [{}] with [{}]",
+            DisplayIdentity(id),
+            &prev_proposal_id,
+            &proposal_id
+        );
         Ok(proposal_id)
     }
 
@@ -187,7 +194,7 @@ impl RequestorBroker {
     /// for responses from the Provider.
     pub async fn create_agreement(
         &self,
-        _id: Identity,
+        id: Identity,
         proposal_id: &ProposalId,
         valid_to: DateTime<Utc>,
     ) -> Result<AgreementId, AgreementError> {
@@ -221,7 +228,7 @@ impl RequestorBroker {
             valid_to.naive_utc(),
             OwnerType::Requestor,
         );
-        let id = agreement.id.clone();
+        let agreement_id = agreement.id.clone();
         self.common
             .db
             .as_dao::<AgreementDao>()
@@ -236,7 +243,14 @@ impl RequestorBroker {
                     AgreementError::AgreementExists(agreement_id, proposal_id)
                 }
             })?;
-        Ok(id)
+
+        log::info!(
+            "Requestor {} created Agreement [{}] from Proposal [{}].",
+            DisplayIdentity(&id),
+            &agreement_id,
+            &proposal_id
+        );
+        Ok(agreement_id)
     }
 
     pub async fn wait_for_approval(

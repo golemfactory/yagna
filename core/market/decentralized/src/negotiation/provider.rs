@@ -1,5 +1,3 @@
-// TODO: This is only temporary
-#![allow(dead_code)]
 use chrono::Utc;
 use futures::stream::StreamExt;
 use std::str::FromStr;
@@ -17,7 +15,7 @@ use crate::db::model::{
 };
 use crate::db::model::{OwnerType, Proposal, ProposalId};
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
-use crate::negotiation::common::{CommonBroker, GetProposalError};
+use crate::negotiation::common::{CommonBroker, DisplayIdentity, GetProposalError};
 use crate::negotiation::error::{
     AgreementError, AgreementStateError, ProposalError, QueryEventsError,
 };
@@ -104,6 +102,7 @@ impl ProviderBroker {
         subscription_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
+        id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
             .common
@@ -121,6 +120,12 @@ impl ProviderBroker {
             .await
             .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.clone(), e))?;
 
+        log::info!(
+            "Provider {} countered Proposal [{}] with [{}]",
+            DisplayIdentity(id),
+            &prev_proposal_id,
+            &proposal_id
+        );
         Ok(proposal_id)
     }
 

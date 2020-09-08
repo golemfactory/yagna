@@ -85,7 +85,7 @@ async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     body: Json<Proposal>,
-    _id: Identity,
+    id: Identity,
 ) -> impl Responder {
     let PathSubscriptionProposal {
         subscription_id,
@@ -94,7 +94,7 @@ async fn counter_proposal(
     let proposal = body.into_inner();
     market
         .provider_engine
-        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
