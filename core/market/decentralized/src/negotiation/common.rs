@@ -309,6 +309,6 @@ pub struct DisplayIdentity<'a>(pub &'a Identity);
 
 impl<'a> fmt::Display for DisplayIdentity<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} [{}]", &self.0.name, &self.0.identity)
+        write!(f, "'{}' [{}]", &self.0.name, &self.0.identity)
     }
 }
