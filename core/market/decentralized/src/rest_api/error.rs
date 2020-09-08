@@ -4,11 +4,13 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
 use crate::matcher::error::{QueryOffersError, SaveOfferError};
-use crate::negotiation::{AgreementError, ProposalError};
+use crate::negotiation::error::{
+    AgreementError, AgreementStateError, ProposalError, WaitForApprovalError,
+};
 use crate::{
     market::MarketError,
     matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
-    negotiation::{NegotiationError, QueryEventsError},
+    negotiation::error::{NegotiationError, QueryEventsError},
 };
 
 impl From<MarketError> for actix_web::HttpResponse {
@@ -134,10 +136,46 @@ impl ResponseError for AgreementError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
+            AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            AgreementError::AgreementExists(_, _) => HttpResponse::Conflict().json(msg),
+            AgreementError::InvalidState(e) => match e {
+                AgreementStateError::Confirmed(_)
+                | AgreementStateError::Cancelled(_)
+                | AgreementStateError::Approved(_)
+                | AgreementStateError::Proposed(_) => HttpResponse::Conflict().json(msg),
+                AgreementStateError::Rejected(_)
+                | AgreementStateError::Expired(_)
+                | AgreementStateError::Terminated(_) => HttpResponse::Gone().json(msg),
+            },
             AgreementError::NoNegotiations(_)
+            | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
+            | AgreementError::ProposalCountered(..)
             | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
-            AgreementError::FailedGetProposal(..) | AgreementError::FailedSaveAgreement(..) => {
+            AgreementError::GetProposal(..)
+            | AgreementError::Save(..)
+            | AgreementError::Get(..)
+            | AgreementError::Update(..)
+            | AgreementError::Protocol(_)
+            | AgreementError::ProtocolCreate(_)
+            | AgreementError::ProtocolApprove(_)
+            | AgreementError::InternalError(_) => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for WaitForApprovalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            WaitForApprovalError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            WaitForApprovalError::AgreementExpired(_) => HttpResponse::Gone().json(msg),
+            WaitForApprovalError::AgreementTerminated(_)
+            | WaitForApprovalError::AgreementNotConfirmed(_) => {
+                HttpResponse::BadRequest().json(msg)
+            }
+            WaitForApprovalError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
+            WaitForApprovalError::InternalError(_) | WaitForApprovalError::FailedGetFromDb(..) => {
                 HttpResponse::InternalServerError().json(msg)
             }
         }

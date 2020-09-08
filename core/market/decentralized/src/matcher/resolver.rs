@@ -3,7 +3,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use ya_market_resolver::{match_demand_offer, Match};
 
 use super::{error::ResolverError, RawProposal, SubscriptionStore};
-use crate::db::models::{Demand, Offer, SubscriptionId};
+use crate::db::model::{Demand, Offer, SubscriptionId};
 
 #[derive(Debug, Clone)]
 pub enum Subscription {

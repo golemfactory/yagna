@@ -27,18 +27,19 @@ pub struct ProviderAgent {
 
 impl ProviderAgent {
     pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+        let data_dir = config.data_dir.get_or_create()?.as_path().to_path_buf();
         let api = ProviderApi::try_from(&args.api)?;
         let registry = config.registry()?;
         registry.validate()?;
 
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.spawn_monitor(&config.presets_file)?;
-        let mut hardware = hardware::Manager::try_new(&config.hardware_file)?;
+        let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
 
         let market = ProviderMarket::new(api.market, "LimitAgreements").start();
         let payments = Payments::new(api.activity.clone(), api.payment).start();
-        let runner = TaskRunner::new(api.activity, args.runner_config.clone(), registry)?.start();
+        let runner = TaskRunner::new(api.activity, args.runner_config, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
         let node_info = ProviderAgent::create_node_info(&args.node).await;
 

@@ -1,22 +1,24 @@
 use std::sync::Arc;
+use std::time::Duration;
 
-use super::super::callbacks::{CallbackHandler, HandlerSlot};
-use super::errors::{AgreementError, NegotiationApiInitError, ProposalError};
-use super::messages::*;
-use super::messages::{
-    AgreementCancelled, AgreementReceived, AgreementRejected, InitialProposalReceived,
-    ProposalReceived, ProposalRejected,
-};
-
-use crate::db::models::{OwnerType, Proposal, ProposalId};
-use crate::protocol::negotiation::errors::CounterProposalError;
-
-use std::str::FromStr;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::RpcEndpoint;
+use ya_service_bus::{typed::ServiceBinder, RpcEndpoint};
+
+use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
+
+use super::super::callback::{CallbackHandler, HandlerSlot};
+use super::error::{
+    AgreementError, ApproveAgreementError, CounterProposalError, NegotiationApiInitError,
+    ProposalError,
+};
+use super::messages::{
+    provider, requestor, AgreementApproved, AgreementCancelled, AgreementReceived,
+    AgreementRejected, InitialProposalReceived, ProposalContent, ProposalReceived,
+    ProposalRejected,
+};
+use crate::protocol::negotiation::error::ProposeAgreementError;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -54,9 +56,10 @@ impl NegotiationApi {
     }
 
     pub async fn counter_proposal(&self, proposal: Proposal) -> Result<(), CounterProposalError> {
+        let proposal_id = proposal.body.id.clone();
         log::debug!(
             "Counter proposal [{}] sent by [{}].",
-            proposal.body.id.clone(),
+            proposal_id,
             proposal.negotiation.requestor_id
         );
 
@@ -76,7 +79,8 @@ impl NegotiationApi {
             .to(proposal.negotiation.requestor_id)
             .service(&requestor::proposal_addr(BUS_ID))
             .send(msg)
-            .await??;
+            .await
+            .map_err(|e| CounterProposalError::GsbError(e.to_string(), proposal_id))??;
         Ok(())
     }
 
@@ -84,52 +88,57 @@ impl NegotiationApi {
     pub async fn reject_proposal(
         &self,
         id: NodeId,
-        proposal_id: &str,
+        proposal_id: &ProposalId,
         owner: NodeId,
     ) -> Result<(), ProposalError> {
         let msg = ProposalRejected {
-            proposal_id: ProposalId::from_str(&proposal_id).unwrap(),
+            proposal_id: proposal_id.clone(),
         };
         net::from(id)
             .to(owner)
             .service(&requestor::proposal_addr(BUS_ID))
             .send(msg)
-            .await??;
+            .await
+            .map_err(|e| ProposalError::GsbError(e.to_string(), proposal_id.clone()))??;
         Ok(())
     }
 
     /// TODO: pass agreement signature.
     pub async fn approve_agreement(
         &self,
-        id: NodeId,
-        agreement_id: &str,
-        owner: NodeId,
-    ) -> Result<(), AgreementError> {
+        agreement: Agreement,
+        timeout: f32,
+    ) -> Result<(), ApproveAgreementError> {
+        let timeout = Duration::from_secs_f32(timeout.max(0.0));
         let msg = AgreementApproved {
-            agreement_id: agreement_id.to_string(),
+            agreement_id: agreement.id.clone(),
         };
-        net::from(id)
-            .to(owner)
+        let net_send_fut = net::from(agreement.provider_id)
+            .to(agreement.requestor_id)
             .service(&requestor::agreement_addr(BUS_ID))
-            .send(msg)
-            .await??;
+            .send(msg);
+        tokio::time::timeout(timeout, net_send_fut)
+            .await
+            .map_err(|_| ApproveAgreementError::Timeout(agreement.id.clone()))?
+            .map_err(|e| ApproveAgreementError::GsbError(e.to_string(), agreement.id))??;
         Ok(())
     }
 
     pub async fn reject_agreement(
         &self,
         id: NodeId,
-        agreement_id: &str,
+        agreement_id: AgreementId,
         owner: NodeId,
     ) -> Result<(), AgreementError> {
         let msg = AgreementRejected {
-            agreement_id: agreement_id.to_string(),
+            agreement_id: agreement_id.clone(),
         };
         net::from(id)
             .to(owner)
             .service(&requestor::agreement_addr(BUS_ID))
             .send(msg)
-            .await??;
+            .await
+            .map_err(|e| AgreementError::GsbError(e.to_string(), agreement_id))??;
         Ok(())
     }
 
@@ -194,13 +203,16 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementReceived,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ProposeAgreementError> {
         log::debug!(
             "Negotiation API: Agreement proposal [{}] sent by [{}].",
             &msg.agreement_id,
             &caller
         );
-        self.inner.agreement_received.call(caller, msg).await
+        self.inner
+            .agreement_received
+            .call(caller, msg.translate(OwnerType::Provider))
+            .await
     }
 
     async fn on_agreement_cancelled(
@@ -219,7 +231,7 @@ impl NegotiationApi {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        _private_prefix: &str,
+        _local_prefix: &str,
     ) -> Result<(), NegotiationApiInitError> {
         ServiceBinder::new(&provider::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(

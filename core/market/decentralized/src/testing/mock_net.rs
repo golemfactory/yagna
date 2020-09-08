@@ -1,4 +1,5 @@
 use actix_rt::Arbiter;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -54,10 +55,21 @@ impl MockNet {
         };
 
         let mut inner = self.inner.lock().unwrap();
-        inner.nodes.insert(node_id.clone(), prefix);
+        if let Some(_) = inner.nodes.insert(node_id.clone(), prefix) {
+            panic!("[MockNet] Node [{}] already existed.", &node_id);
+        }
     }
 
-    async fn translate_address(&self, address: String) -> Result<(NodeId, String), anyhow::Error> {
+    pub fn unregister_node(&self, node_id: &NodeId) -> Result<()> {
+        let mut inner = self.inner.lock().unwrap();
+        inner
+            .nodes
+            .remove(node_id)
+            .map(|_| ())
+            .ok_or(anyhow::anyhow!("node not registered: {}", node_id))
+    }
+
+    async fn translate_address(&self, address: String) -> Result<(NodeId, String)> {
         let (from_node, to_addr) = match parse_from_addr(&address) {
             Ok(v) => v,
             Err(e) => Err(Error::GsbBadRequest(e.to_string()))?,
@@ -82,6 +94,16 @@ impl MockNet {
                 &address
             )))?
         }
+    }
+
+    pub fn node_by_prefix(&self, address: &str) -> Option<NodeId> {
+        let inner = self.inner.lock().unwrap();
+        for (id, prefix) in inner.nodes.iter() {
+            if address.contains(prefix) {
+                return Some(id.clone());
+            }
+        }
+        None
     }
 }
 
@@ -110,6 +132,7 @@ impl MockNetInner {
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
         let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
         let _ = local_bus::subscribe(&addr, move |caller: &str, _addr: &str, msg: &[u8]| {
+            let mock_net = MockNet::default();
             let resp = resp.clone();
             let bcast = bcast.clone();
 
@@ -124,7 +147,26 @@ impl MockNetInner {
             log::debug!("BCasting on {} to {:?} from {}", topic, endpoints, caller);
             for endpoint in endpoints {
                 let addr = format!("{}/{}", endpoint, bcast_service_id);
-                log::debug!("BCasting on {} to {}", topic, addr);
+
+                let node_id = match mock_net.node_by_prefix(&addr) {
+                    Some(node_id) => node_id,
+                    None => {
+                        log::debug!(
+                            "Not broadcasting on topic {} to {}. Node not found on list. \
+                         Probably networking was disabled for this Node.",
+                            topic,
+                            addr
+                        );
+                        continue;
+                    }
+                };
+
+                log::debug!(
+                    "BCasting on {} to address: {}, node: [{}]",
+                    topic,
+                    addr,
+                    node_id
+                );
                 let caller = caller.clone();
                 let msg = msg.clone();
                 Arbiter::spawn(async move {
@@ -158,7 +200,7 @@ impl MockNetInner {
 }
 
 // Copied from core/net/api.rs
-pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
+pub(crate) fn parse_from_addr(from_addr: &str) -> Result<(NodeId, String)> {
     let mut it = from_addr.split("/").fuse();
     if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
         (it.next(), it.next(), it.next(), it.next(), it.next())

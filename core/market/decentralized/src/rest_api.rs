@@ -3,15 +3,15 @@ use serde::Deserialize;
 
 use ya_client::model::ErrorMessage;
 
-use crate::ProposalId;
-use crate::SubscriptionId;
+use crate::db::model::{AgreementId, ProposalId, SubscriptionId};
 
+pub mod common;
 mod error;
 pub mod provider;
 pub mod requestor;
 
-pub const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
-pub const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
+const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
+const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
 
 pub fn path_config() -> PathConfig {
     PathConfig::default().error_handler(|err, _req| {
@@ -25,7 +25,7 @@ pub fn path_config() -> PathConfig {
 
 #[derive(Deserialize)]
 pub struct PathAgreement {
-    pub agreement_id: String,
+    pub agreement_id: AgreementId,
 }
 
 #[derive(Deserialize)]

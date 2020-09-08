@@ -18,13 +18,16 @@ mod local {
     use ya_core_model::payment::local::*;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
-        log::debug!("Binding payment private service to service bus");
+        log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
             .bind_with_processor(schedule_payment)
-            .bind_with_processor(init)
-            .bind_with_processor(get_status);
-        log::debug!("Successfully bound payment private service to service bus");
+            .bind_with_processor(register_account)
+            .bind_with_processor(unregister_account)
+            .bind_with_processor(notify_payment)
+            .bind_with_processor(get_status)
+            .bind_with_processor(get_accounts);
+        log::debug!("Successfully bound payment local service to service bus");
     }
 
     async fn schedule_payment(
@@ -32,22 +35,46 @@ mod local {
         processor: PaymentProcessor,
         sender: String,
         msg: SchedulePayment,
-    ) -> Result<(), ScheduleError> {
+    ) -> Result<(), GenericError> {
         processor.schedule_payment(msg).await?;
         Ok(())
     }
 
-    async fn init(
-        _db: DbExecutor,
+    async fn register_account(
+        db: DbExecutor,
         processor: PaymentProcessor,
-        _caller: String,
-        msg: Init,
+        sender: String,
+        msg: RegisterAccount,
+    ) -> Result<(), RegisterAccountError> {
+        processor.register_account(msg).await
+    }
+
+    async fn unregister_account(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: UnregisterAccount,
+    ) -> Result<(), UnregisterAccountError> {
+        processor.unregister_account(msg).await
+    }
+
+    async fn get_accounts(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: GetAccounts,
+    ) -> Result<Vec<Account>, GenericError> {
+        Ok(processor.get_accounts().await)
+    }
+
+    async fn notify_payment(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: NotifyPayment,
     ) -> Result<(), GenericError> {
-        let addr = msg.identity.to_string();
-        processor
-            .init(addr, msg.requestor, msg.provider)
-            .await
-            .map_err(GenericError::new)
+        processor.notify_payment(msg).await?;
+        Ok(())
     }
 
     async fn get_status(
@@ -57,28 +84,35 @@ mod local {
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
         log::info!("get status: {:?}", msg);
+        let GetStatus { platform, address } = msg;
 
-        let db_stats_fut = async {
+        let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .status_report(msg.identity())
+                .incoming_transaction_summary(platform.clone(), address.clone())
+                .await
+        }
+        .map_err(GenericError::new);
+
+        let outgoing_fut = async {
+            db.as_dao::<AgreementDao>()
+                .outgoing_transaction_summary(platform.clone(), address.clone())
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(msg.identity())
+                .total_remaining_allocation(platform.clone(), address.clone())
                 .await
         }
         .map_err(GenericError::new);
 
-        let addr = hex::encode(msg.identity().into_array());
         let amount_fut = processor
-            .get_status(addr.as_str())
+            .get_status(platform.clone(), address.clone())
             .map_err(GenericError::new);
 
-        let ((incoming, outgoing), amount, reserved) =
-            future::try_join3(db_stats_fut, amount_fut, reserved_fut).await?;
+        let (incoming, outgoing, amount, reserved) =
+            future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
 
         Ok(StatusResult {
             amount,
@@ -93,9 +127,10 @@ mod public {
     use super::*;
 
     use crate::dao::*;
-    use crate::error::{DbError, Error, PaymentError};
+    use crate::error::DbError;
     use crate::utils::*;
 
+    use crate::error::processor::VerifyPaymentError;
     use ya_client_model::payment::*;
     use ya_client_model::NodeId;
     use ya_core_model::payment::public::*;
@@ -380,10 +415,36 @@ mod public {
 
     async fn cancel_invoice(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: CancelInvoice,
     ) -> Result<Ack, CancelError> {
-        unimplemented!() // TODO
+        let invoice_id = msg.invoice_id;
+
+        let dao: InvoiceDao = db.as_dao();
+        let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {
+            Ok(Some(invoice)) => invoice.into(),
+            Ok(None) => return Err(CancelError::ObjectNotFound),
+            Err(e) => return Err(CancelError::ServiceError(e.to_string())),
+        };
+
+        if sender_id != invoice.issuer_id.to_string() {
+            return Err(CancelError::Forbidden);
+        }
+
+        match invoice.status {
+            DocumentStatus::Issued => (),
+            DocumentStatus::Received => (),
+            DocumentStatus::Rejected => (),
+            DocumentStatus::Cancelled => return Ok(Ack {}),
+            DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
+                return Err(CancelError::Conflict)
+            }
+        }
+
+        match dao.cancel(invoice_id, invoice.recipient_id).await {
+            Ok(_) => Ok(Ack {}),
+            Err(e) => Err(CancelError::ServiceError(e.to_string())),
+        }
     }
 
     // *************************** PAYMENT ****************************
@@ -400,11 +461,14 @@ mod public {
         }
 
         match processor.verify_payment(payment).await {
-            Err(Error::Payment(PaymentError::Driver(e))) => return Err(SendError::ServiceError(e)),
-            Err(e) => return Err(SendError::BadRequest(e.to_string())),
-            Ok(_) => {}
+            Ok(_) => Ok(Ack {}),
+            Err(e) => match e {
+                VerifyPaymentError::ConfirmationEncoding => {
+                    Err(SendError::BadRequest(e.to_string()))
+                }
+                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+                _ => Err(SendError::ServiceError(e.to_string())),
+            },
         }
-
-        Ok(Ack {})
     }
 }

@@ -47,6 +47,7 @@ macro_rules! query {
                 agreement_dsl::peer_id,
                 agreement_dsl::payee_addr,
                 agreement_dsl::payer_addr,
+                agreement_dsl::payment_platform,
             ))
     };
 }
@@ -215,6 +216,30 @@ impl<'c> InvoiceDao<'c> {
             update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
             if let Role::Provider = role {
                 invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected, None, conn)?;
+            }
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn cancel(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+                .find((&invoice_id, &owner_id))
+                .select((dsl::agreement_id, dsl::amount, dsl::role))
+                .first(conn)?;
+
+            agreement::compute_amount_due(&agreement_id, &owner_id, conn)?;
+
+            update_status(&invoice_id, &owner_id, &DocumentStatus::Cancelled, conn)?;
+            if let Role::Requestor = role {
+                invoice_event::create::<()>(
+                    invoice_id,
+                    owner_id,
+                    EventType::Cancelled,
+                    None,
+                    conn,
+                )?;
             }
             Ok(())
         })

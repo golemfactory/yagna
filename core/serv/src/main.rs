@@ -6,7 +6,7 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -23,8 +23,8 @@ compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\"
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
-use ya_payment::PaymentService;
-use ya_payment_driver::PaymentDriverService;
+use ya_payment::{accounts as payment_accounts, PaymentService};
+
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -33,12 +33,14 @@ use ya_service_api_web::{
     middleware::{auth, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
+use ya_utils_path::data_dir::DataDir;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
 
-mod data_dir;
-use data_dir::DataDir;
+lazy_static::lazy_static! {
+    static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -58,7 +60,7 @@ struct CliArgs {
         long = "datadir",
         set = clap::ArgSettings::Global,
         env = "YAGNA_DATADIR",
-        default_value,
+        default_value = &*DEFAULT_DATA_DIR,
         hide_env_values = true,
     )]
     data_dir: DataDir,
@@ -157,7 +159,6 @@ impl ServiceContext {
             Self::make_entry::<MarketService>(path, "market")?,
             Self::make_entry::<ActivityService>(path, "activity")?,
             Self::make_entry::<PaymentService>(path, "payment")?,
-            Self::make_entry::<PaymentDriverService>(path, "gnt-driver")?,
         ]
         .iter()
         .cloned()
@@ -179,8 +180,22 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
-    #[enable(gsb)]
-    PaymentDriver(PaymentDriverService),
+}
+
+#[allow(unused)]
+async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
+    #[cfg(feature = "dummy-driver")]
+    {
+        use ya_dummy_driver::PaymentDriverService;
+        PaymentDriverService::gsb(&()).await?;
+    }
+    #[cfg(feature = "gnt-driver")]
+    {
+        use ya_gnt_driver::PaymentDriverService;
+        let db_executor = DbExecutor::from_data_dir(data_dir, "gnt-driver")?;
+        PaymentDriverService::gsb(&db_executor).await?;
+    }
+    Ok(())
 }
 
 #[derive(StructOpt, Debug)]
@@ -249,6 +264,16 @@ impl ServiceCommand {
 
                 let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
                 Services::gsb(&context).await?;
+                start_payment_drivers(&ctx.data_dir).await?;
+
+                payment_accounts::save_default_account()
+                    .await
+                    .unwrap_or_else(|e| {
+                        log::error!("Saving default payment account failed: {}", e)
+                    });
+                payment_accounts::init_accounts()
+                    .await
+                    .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 HttpServer::new(move || {

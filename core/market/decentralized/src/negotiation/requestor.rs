@@ -1,60 +1,86 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client::model::market::event::RequestorEvent;
-use ya_client::model::market::proposal::Proposal as ClientProposal;
+use ya_client::model::market::{event::RequestorEvent, proposal::Proposal as ClientProposal};
+use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao},
-    models::{
-        Agreement, AgreementId, Demand as ModelDemand, EventError, OwnerType, Proposal, ProposalId,
-        SubscriptionId,
-    },
+    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError, StateError},
+    model::{Agreement, AgreementId, AgreementState, OwnerType},
+    model::{Demand as ModelDemand, IssuerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
 };
-use crate::matcher::{RawProposal, SubscriptionStore};
-use crate::negotiation::errors::AgreementError;
-use crate::negotiation::{notifier::NotifierError, ProposalError};
+use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{
+    error::{ApproveAgreementError, RemoteAgreementError},
     messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
     requestor::NegotiationApi,
 };
 
-use super::common::get_proposal;
-use super::errors::{NegotiationError, NegotiationInitError, QueryEventsError};
-use super::EventNotifier;
+use super::{
+    common::CommonBroker,
+    error::{AgreementError, WaitForApprovalError},
+    error::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError},
+    notifier::NotifierError,
+    EventNotifier,
+};
+use crate::negotiation::error::AgreementStateError;
+
+#[derive(Clone, derive_more::Display, Debug)]
+pub enum ApprovalStatus {
+    #[display(fmt = "Approved")]
+    Approved,
+    #[display(fmt = "Cancelled")]
+    Cancelled,
+    #[display(fmt = "Rejected")]
+    Rejected,
+}
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
+    common: CommonBroker,
     api: NegotiationApi,
-    db: DbExecutor,
-    _store: SubscriptionStore,
-    pub notifier: EventNotifier,
+    agreement_notifier: EventNotifier<AgreementId>,
 }
 
 impl RequestorBroker {
     pub fn new(
         db: DbExecutor,
-        _store: SubscriptionStore,
+        store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
+        let agreement_notifier = EventNotifier::new();
+        let notifier = EventNotifier::new();
+        let broker = CommonBroker {
+            store,
+            db: db.clone(),
+            notifier: notifier.clone(),
+        };
+
+        let broker1 = broker.clone();
+        let broker2 = broker.clone();
+        let agreement_notifier2 = agreement_notifier.clone();
         let api = NegotiationApi::new(
-            move |_caller: String, _msg: ProposalReceived| async move { unimplemented!() },
+            move |caller: String, msg: ProposalReceived| {
+                broker1
+                    .clone()
+                    .on_proposal_received(caller, msg, OwnerType::Requestor)
+            },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
-            move |_caller: String, _msg: AgreementApproved| async move { unimplemented!() },
+            move |caller: String, msg: AgreementApproved| {
+                on_agreement_approved(broker2.clone(), caller, msg, agreement_notifier2.clone())
+            },
             move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
         );
 
-        let notifier = EventNotifier::new();
         let engine = RequestorBroker {
             api,
-            db: db.clone(),
-            _store,
-            notifier: notifier.clone(),
+            common: broker,
+            agreement_notifier,
         };
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
@@ -64,9 +90,9 @@ impl RequestorBroker {
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
-        private_prefix: &str,
+        local_prefix: &str,
     ) -> Result<(), NegotiationInitError> {
-        self.api.bind_gsb(public_prefix, private_prefix).await?;
+        self.api.bind_gsb(public_prefix, local_prefix).await?;
         Ok(())
     }
 
@@ -79,11 +105,12 @@ impl RequestorBroker {
         &self,
         demand_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.notifier.stop_notifying(demand_id).await;
+        self.common.notifier.stop_notifying(demand_id).await;
 
         // We can ignore error, if removing events failed, because they will be never
         // queried again and don't collide with other subscriptions.
         let _ = self
+            .common
             .db
             .as_dao::<EventsDao>()
             .remove_events(demand_id)
@@ -105,33 +132,16 @@ impl RequestorBroker {
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
     ) -> Result<ProposalId, ProposalError> {
-        // TODO: Everything should happen under transaction.
-        // TODO: Check if subscription is active
-        // TODO: Check if this proposal wasn't already countered.
-        let prev_proposal = get_proposal(&self.db, prev_proposal_id)
-            .await
-            .map_err(|e| ProposalError::from(&demand_id, e))?;
+        let (new_proposal, is_first) = self
+            .common
+            .counter_proposal(demand_id, prev_proposal_id, proposal, OwnerType::Requestor)
+            .await?;
 
-        if &prev_proposal.negotiation.subscription_id != demand_id {
-            Err(ProposalError::ProposalNotFound(
-                prev_proposal_id.clone(),
-                demand_id.clone(),
-            ))?
-        }
-
-        let is_initial = prev_proposal.body.prev_proposal_id.is_none();
-        let new_proposal = prev_proposal.counter_with(proposal);
         let proposal_id = new_proposal.body.id.clone();
-        self.db
-            .as_dao::<ProposalDao>()
-            .save_proposal(&new_proposal)
-            .await
-            .map_err(|e| ProposalError::FailedSaveProposal(prev_proposal_id.clone(), e))?;
-
         // Send Proposal to Provider. Note that it can be either our first communication with
         // Provider or we negotiated with him already, so we need to send different message in each
         // of these cases.
-        match is_initial {
+        match is_first {
             true => self.api.initial_proposal(new_proposal).await,
             false => self.api.counter_proposal(new_proposal).await,
         }
@@ -146,65 +156,62 @@ impl RequestorBroker {
         timeout: f32,
         max_events: Option<i32>,
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
-        let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
-        let stop_time = Instant::now() + timeout;
-        let max_events = max_events.unwrap_or(i32::max_value());
+        let events = self
+            .common
+            .query_events(demand_id, timeout, max_events, OwnerType::Requestor)
+            .await?;
 
-        if max_events < 0 {
-            Err(QueryEventsError::InvalidMaxEvents(max_events))?
-        } else if max_events == 0 {
-            return Ok(vec![]);
-        }
-
-        loop {
-            let events = get_events_from_db(&self.db, demand_id, max_events).await?;
-            if events.len() > 0 {
-                return Ok(events);
-            }
-
-            // Solves panic 'supplied instant is later than self'.
-            if stop_time < Instant::now() {
-                return Ok(vec![]);
-            }
-            timeout = stop_time - Instant::now();
-
-            if let Err(error) = self
-                .notifier
-                .wait_for_event_with_timeout(demand_id, timeout)
-                .await
-            {
-                return match error {
-                    NotifierError::Timeout(_) => Ok(vec![]),
-                    NotifierError::ChannelClosed(_) => {
-                        Err(QueryEventsError::InternalError(format!("{}", error)))
-                    }
-                    NotifierError::Unsubscribed(id) => Err(QueryEventsError::Unsubscribed(id)),
-                };
-            }
-            // Ok result means, that event with required subscription id was added.
-            // We can go to next loop to get this event from db. But still we aren't sure
-            // that list won't be empty, because other query_events calls can wait for the same event.
-        }
+        // Map model events to client RequestorEvent.
+        Ok(futures::stream::iter(events)
+            .then(|event| event.into_client_requestor_event(&self.common.db))
+            .inspect(|result| {
+                if let Err(error) = result {
+                    log::warn!("Error converting event to client type: {}", error);
+                }
+            })
+            .filter_map(|event| async move { event.ok() })
+            .collect::<Vec<RequestorEvent>>()
+            .await)
     }
 
+    /// Initiates the Agreement handshake phase.
+    ///
+    /// Formulates an Agreement artifact from the Proposal indicated by the
+    /// received Proposal Id.
+    ///
+    /// The Approval Expiry Date is added to Agreement artifact and implies
+    /// the effective timeout on the whole Agreement Confirmation sequence.
+    ///
+    /// A successful call to `create_agreement` shall immediately be followed
+    /// by a `confirm_agreement` and `wait_for_approval` call in order to listen
+    /// for responses from the Provider.
     pub async fn create_agreement(
         &self,
         _id: Identity,
         proposal_id: &ProposalId,
         valid_to: DateTime<Utc>,
     ) -> Result<AgreementId, AgreementError> {
-        // TODO: Check if we are owner of Proposal
         let offer_proposal_id = proposal_id;
-        let offer_proposal = get_proposal(&self.db, offer_proposal_id)
+        let offer_proposal = self
+            .common
+            .get_proposal(offer_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
+
+        // We can promote only Proposals, that we got from Provider.
+        // Can't promote our own Proposal.
+        if offer_proposal.body.issuer != IssuerType::Them {
+            return Err(AgreementError::OwnProposal(proposal_id.clone()));
+        }
 
         let demand_proposal_id = offer_proposal
             .body
             .prev_proposal_id
             .clone()
             .ok_or_else(|| AgreementError::NoNegotiations(offer_proposal_id.clone()))?;
-        let demand_proposal = get_proposal(&self.db, &demand_proposal_id)
+        let demand_proposal = self
+            .common
+            .get_proposal(&demand_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
 
@@ -215,47 +222,187 @@ impl RequestorBroker {
             OwnerType::Requestor,
         );
         let id = agreement.id.clone();
-        self.db
+        self.common
+            .db
             .as_dao::<AgreementDao>()
             .save(agreement)
             .await
-            .map_err(|e| AgreementError::FailedSaveAgreement(proposal_id.clone(), e))?;
+            .map_err(|e| match e {
+                SaveAgreementError::DatabaseError(e) => {
+                    AgreementError::Save(proposal_id.clone(), e)
+                }
+                SaveAgreementError::ProposalCountered(id) => AgreementError::ProposalCountered(id),
+                SaveAgreementError::AgreementExists(agreement_id, proposal_id) => {
+                    AgreementError::AgreementExists(agreement_id, proposal_id)
+                }
+            })?;
         Ok(id)
+    }
+
+    pub async fn wait_for_approval(
+        &self,
+        id: &AgreementId,
+        timeout: f32,
+    ) -> Result<ApprovalStatus, WaitForApprovalError> {
+        // TODO: Check if we are owner of Proposal
+        // TODO: What to do with 2 simultaneous calls to wait_for_approval??
+        //  should we reject one? And if so, how to discover, that two calls were made?
+        let timeout = Duration::from_secs_f32(timeout.max(0.0));
+        let mut notifier = self.agreement_notifier.listen(id);
+
+        // Loop will wait for events notifications only one time. It doesn't have to be loop at all,
+        // but it spares us doubled getting agreement and mapping statuses to return results.
+        // So I think this simplification is worth confusion, that it cause.
+        loop {
+            let agreement = self
+                .common
+                .db
+                .as_dao::<AgreementDao>()
+                .select(id, Utc::now().naive_utc())
+                .await
+                .map_err(|e| WaitForApprovalError::FailedGetFromDb(id.clone(), e))?
+                .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
+
+            match agreement.state {
+                AgreementState::Approved => return Ok(ApprovalStatus::Approved),
+                AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
+                AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
+                AgreementState::Expired => {
+                    return Err(WaitForApprovalError::AgreementExpired(id.clone()))
+                }
+                AgreementState::Proposal => {
+                    return Err(WaitForApprovalError::AgreementNotConfirmed(id.clone()))
+                }
+                AgreementState::Terminated => {
+                    return Err(WaitForApprovalError::AgreementTerminated(id.clone()))
+                }
+                AgreementState::Pending => (), // Still waiting for approval.
+            };
+
+            if let Err(error) = notifier.wait_for_event_with_timeout(timeout).await {
+                return match error {
+                    NotifierError::Timeout(_) => Err(WaitForApprovalError::Timeout(id.clone())),
+                    NotifierError::ChannelClosed(_) => {
+                        Err(WaitForApprovalError::InternalError(error.to_string()))
+                    }
+                    NotifierError::Unsubscribed(_) => Ok(ApprovalStatus::Cancelled),
+                };
+            }
+        }
+    }
+
+    /// Signs (not yet) Agreement self-created via `create_agreement`
+    /// and sends it to the Provider.
+    pub async fn confirm_agreement(
+        &self,
+        _id: Identity,
+        agreement_id: &AgreementId,
+    ) -> Result<(), AgreementError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+
+        let mut agreement = match dao
+            .select(agreement_id, Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            Some(agreement) => agreement,
+        };
+
+        Err(match agreement.state {
+            AgreementState::Proposal => {
+                // TODO : possible race condition here ISSUE#430
+                // 1. this state check should be also `db.update_state`
+                // 2. `db.update_state` must be invoked after successful propose_agreement
+                agreement.state = AgreementState::Pending;
+                self.api.propose_agreement(&agreement).await?;
+                dao.update_state(agreement_id, AgreementState::Pending)
+                    .await
+                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+                return Ok(());
+            }
+            AgreementState::Pending => AgreementStateError::Confirmed(agreement.id),
+            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
+            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
+            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
+        })?
     }
 }
 
-async fn get_events_from_db(
-    db: &DbExecutor,
-    demand_id: &SubscriptionId,
-    max_events: i32,
-) -> Result<Vec<RequestorEvent>, QueryEventsError> {
-    let events = db
-        .as_dao::<EventsDao>()
-        .take_events(demand_id, max_events, OwnerType::Requestor)
-        .await?;
+async fn on_agreement_approved(
+    broker: CommonBroker,
+    caller: String,
+    msg: AgreementApproved,
+    notifier: EventNotifier<AgreementId>,
+) -> Result<(), ApproveAgreementError> {
+    let agreement_id = msg.agreement_id.clone();
+    let caller: NodeId =
+        caller
+            .parse()
+            .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
+                e: e.to_string(),
+                caller,
+                id: agreement_id.clone(),
+            })?;
+    agreement_approved(broker, caller, msg, notifier)
+        .await
+        .map_err(|e| ApproveAgreementError::Remote(e, agreement_id))
+}
 
-    // Map model events to client RequestorEvent.
-    let results = futures::stream::iter(events)
-        .then(|event| event.into_client_requestor_event(&db))
-        .collect::<Vec<Result<RequestorEvent, EventError>>>()
-        .await;
+async fn agreement_approved(
+    broker: CommonBroker,
+    caller: NodeId,
+    msg: AgreementApproved,
+    notifier: EventNotifier<AgreementId>,
+) -> Result<(), RemoteAgreementError> {
+    let agreement = broker
+        .db
+        .as_dao::<AgreementDao>()
+        .select(&msg.agreement_id, Utc::now().naive_utc())
+        .await
+        .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+        .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
-    // Filter errors. Can we do something better with errors, than logging them?
-    Ok(results
-        .into_iter()
-        .inspect(|result| {
-            if let Err(error) = result {
-                log::warn!("Error converting event to client type: {}", error);
+    if agreement.provider_id != caller {
+        // Don't reveal, that we know this Agreement id.
+        Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+    }
+
+    // TODO: Validate agreement signature.
+    broker
+        .db
+        .as_dao::<AgreementDao>()
+        .approve(&msg.agreement_id)
+        .await
+        .map_err(|e| match e {
+            StateError::InvalidTransition { id, from, .. } => {
+                match from {
+                    // Expired Agreement could be InvalidState either, but we want to explicit
+                    // say to provider, that Agreement has expired.
+                    AgreementState::Expired => RemoteAgreementError::Expired(id),
+                    _ => RemoteAgreementError::InvalidState(id, from),
+                }
             }
-        })
-        .filter_map(|event| event.ok())
-        .collect::<Vec<RequestorEvent>>())
+            StateError::DbError(e) => {
+                // Log our internal error, but don't reveal error message to Provider.
+                log::warn!(
+                    "Internal error while updating Agreement state. Error: {}",
+                    e
+                );
+                RemoteAgreementError::InternalError(msg.agreement_id.clone())
+            }
+        })?;
+
+    notifier.notify(&msg.agreement_id).await;
+    Ok(())
 }
 
 pub async fn proposal_receiver_thread(
     db: DbExecutor,
     mut proposal_receiver: UnboundedReceiver<RawProposal>,
-    notifier: EventNotifier,
+    notifier: EventNotifier<SubscriptionId>,
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {
         let db = db.clone();
@@ -264,7 +411,7 @@ pub async fn proposal_receiver_thread(
             log::info!("Received proposal from matcher. Adding to events queue.");
 
             // Add proposal to database together with Negotiation record.
-            let proposal = Proposal::new_initial(proposal.demand, proposal.offer);
+            let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
             let proposal = db
                 .as_dao::<ProposalDao>()
                 .save_initial_proposal(proposal)

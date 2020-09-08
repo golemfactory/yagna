@@ -4,7 +4,7 @@ use thiserror::Error;
 use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &'static str = "/private/appkey";
+pub const BUS_ID: &'static str = "/local/appkey";
 
 pub const DEFAULT_ROLE: &str = "manager";
 

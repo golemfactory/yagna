@@ -6,7 +6,7 @@ use regex::Regex;
 use semver::Version;
 use std::collections::HashMap;
 
-use super::errors::ParseError;
+use super::error::ParseError;
 use super::prop_parser;
 use super::prop_parser::Literal;
 

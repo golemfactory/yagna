@@ -64,6 +64,7 @@ table! {
         id -> Text,
         prev_proposal_id -> Nullable<Text>,
 
+        issuer -> Integer,
         negotiation_id -> Text,
 
         properties -> Text,
@@ -83,7 +84,6 @@ table! {
         offer_id -> Text,
         demand_id -> Text,
 
-        identity_id -> Text,
         requestor_id -> Text,
         provider_id -> Text,
 
@@ -101,6 +101,12 @@ table! {
         demand_properties -> Text,
         demand_constraints -> Text,
 
+        offer_id -> Text,
+        demand_id -> Text,
+
+        offer_proposal_id -> Text,
+        demand_proposal_id -> Text,
+
         provider_id -> Text,
         requestor_id -> Text,
 
@@ -116,7 +122,9 @@ table! {
 }
 
 allow_tables_to_appear_in_same_query!(market_demand, market_offer, market_offer_unsubscribed);
+allow_tables_to_appear_in_same_query!(market_proposal, market_negotiation);
 
+joinable!(market_negotiation -> market_agreement (agreement_id));
 joinable!(market_offer -> market_offer_unsubscribed (id));
 joinable!(market_proposal -> market_proposal_state (state));
 joinable!(market_proposal -> market_negotiation (negotiation_id));

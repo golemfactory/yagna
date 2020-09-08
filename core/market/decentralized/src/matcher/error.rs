@@ -1,7 +1,8 @@
 use crate::db::DbError;
 
-use crate::db::models::{SubscriptionId, SubscriptionValidationError};
-use crate::protocol::DiscoveryInitError;
+use crate::db::model::{SubscriptionId, SubscriptionValidationError};
+use crate::identity::IdentityError;
+use crate::protocol::discovery::error::DiscoveryInitError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DemandError {
@@ -18,8 +19,12 @@ pub enum DemandError {
 }
 
 #[derive(thiserror::Error, Debug)]
-#[error("Failed to get Offers. Error: {0}.")]
-pub struct QueryOffersError(pub DbError);
+pub enum QueryOffersError {
+    #[error("Failed to get Offers. Error: {0}.")]
+    DbError(#[from] DbError),
+    #[error("Failed to list Offers based on identity. Error: {0}.")]
+    IdentityError(#[from] IdentityError),
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum QueryOfferError {

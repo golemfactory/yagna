@@ -1,5 +1,5 @@
 use super::super::{Demand, Offer};
-use super::errors::PrepareError;
+use super::error::PrepareError;
 use super::expression::{build_expression, Expression};
 use super::ldap_parser;
 use super::properties::PropertySet;

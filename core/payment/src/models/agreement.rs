@@ -1,4 +1,5 @@
 use crate::schema::pay_agreement;
+use crate::DEFAULT_PAYMENT_PLATFORM;
 use ya_client_model::market::Agreement;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
@@ -13,7 +14,7 @@ pub struct WriteObj {
     pub peer_id: NodeId,
     pub payee_addr: String,
     pub payer_addr: String,
-    pub payment_platform: Option<String>,
+    pub payment_platform: String,
     pub total_amount_due: BigDecimalField,
     pub total_amount_accepted: BigDecimalField,
     pub total_amount_paid: BigDecimalField,
@@ -35,7 +36,7 @@ impl WriteObj {
             peer_id,
             payee_addr: provider_id.to_string().to_lowercase(), // TODO: Allow to specify different account
             payer_addr: requestor_id.to_string().to_lowercase(), // TODO: Allow to specify different account
-            payment_platform: None,
+            payment_platform: DEFAULT_PAYMENT_PLATFORM.to_string(), // TODO: Allow to specify different platform
             total_amount_due: Default::default(),
             total_amount_accepted: Default::default(),
             total_amount_paid: Default::default(),
