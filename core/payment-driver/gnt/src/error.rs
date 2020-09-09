@@ -40,8 +40,6 @@ pub enum GNTDriverError {
     Conversion(String),
     #[error("Invalid address: {0}")]
     Address(String),
-    #[error("Missing environment variable: {0}")]
-    MissingEnvironmentVariable(&'static str),
     #[error("Unknown chain: {0}")]
     UnknownChain(String),
     #[error("Account is locked: {0}")]
