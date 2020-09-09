@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use ya_client::model::market::{AgreementProposal, Demand, Proposal};
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::ResultExt;
 
 use crate::market::MarketService;
 

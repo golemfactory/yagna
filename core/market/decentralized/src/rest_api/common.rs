@@ -1,31 +1,12 @@
 use actix_web::web::{Data, Path};
 use actix_web::{HttpResponse, Responder};
-use std::fmt::Display;
 use std::sync::Arc;
 
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::ResultExt;
 
 use super::PathAgreement;
 use crate::market::MarketService;
-
-pub trait ResultEnhancements<T, E> {
-    fn log_err(self) -> Result<T, E>;
-}
-
-impl<T, E> ResultEnhancements<T, E> for Result<T, E>
-where
-    E: Display,
-{
-    fn log_err(self) -> Result<T, E> {
-        match self {
-            Ok(content) => Ok(content),
-            Err(e) => {
-                log::error!("{}", &e);
-                Err(e)
-            }
-        }
-    }
-}
 
 #[actix_web::get("/agreements/{agreement_id}")]
 async fn get_agreement(
