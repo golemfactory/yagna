@@ -10,7 +10,8 @@ use crate::config::Config;
 use crate::db::dao::*;
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::matcher::error::{
-    DemandError, ModifyOfferError, QueryOfferError, QueryOffersError, SaveOfferError,
+    DemandError, ModifyOfferError, QueryDemandsError, QueryOfferError, QueryOffersError,
+    SaveOfferError,
 };
 use std::collections::HashSet;
 
@@ -250,6 +251,27 @@ impl SubscriptionStore {
         }
     }
 
+    pub async fn get_client_demands(
+        &self,
+        node_id: Option<NodeId>,
+    ) -> Result<Vec<ClientDemand>, QueryDemandsError> {
+        Ok(self
+            .db
+            .as_dao::<DemandDao>()
+            .get_demands(node_id, None, Utc::now().naive_utc())
+            .await
+            .map_err(QueryDemandsError::from)?
+            .into_iter()
+            .filter_map(|o| match o.into_client_demand() {
+                Err(e) => {
+                    log::error!("Skipping Demand because of: {}", e);
+                    None
+                }
+                Ok(o) => Some(o),
+            })
+            .collect())
+    }
+
     pub async fn get_demands_before(
         &self,
         insertion_ts: NaiveDateTime,
@@ -257,7 +279,7 @@ impl SubscriptionStore {
         Ok(self
             .db
             .as_dao::<DemandDao>()
-            .get_demands_before(insertion_ts, Utc::now().naive_utc())
+            .get_demands(None, Some(insertion_ts), Utc::now().naive_utc())
             .await
             .map_err(|e| DemandError::GetMany(e))?)
     }
