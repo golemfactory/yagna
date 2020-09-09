@@ -76,8 +76,8 @@ impl<R: Runtime> ExeUnit<R> {
 
         let runtime_template = RuntimeProcess::offer_template(binary)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
-            "golem.usage.vector": format!("[{}]", MetricsService::usage_vector().join(", ")),
-            "golem.activity.caps.transfer.protocol": format!("[{}]", TransferService::schemes().join(", ")),
+            "golem.usage.vector": MetricsService::usage_vector(),
+            "golem.activity.caps.transfer.protocol": TransferService::schemes(),
         }));
 
         Ok(supervisor_template.patch(runtime_template))
@@ -236,7 +236,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         addr.send(
             SetState::default()
-                .state(state_pre.clone())
+                .state(state_pre)
                 .cmd(Some(ctx.cmd.clone())),
         )
         .await?;
