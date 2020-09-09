@@ -273,7 +273,6 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
                 RuntimeMode::Service => self.handle_service_command(cmd, address),
             },
         }
-        .map(|code| Ok(code.unwrap_or(0)))
         .boxed_local()
     }
 }
