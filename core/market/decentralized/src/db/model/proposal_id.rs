@@ -65,6 +65,14 @@ impl ProposalId {
         self
     }
 
+    pub fn swap_owner(mut self) -> Self {
+        self.owner = match self.owner {
+            OwnerType::Provider => OwnerType::Requestor,
+            OwnerType::Requestor => OwnerType::Provider,
+        };
+        self
+    }
+
     pub fn validate(
         &self,
         offer_id: &SubscriptionId,
