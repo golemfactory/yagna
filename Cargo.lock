@@ -5402,7 +5402,6 @@ dependencies = [
  "flexi_logger",
  "futures 0.3.5",
  "hex",
- "itertools 0.9.0",
  "lazy_static",
  "libproc",
  "log 0.4.11",

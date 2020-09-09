@@ -76,7 +76,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         let runtime_template = RuntimeProcess::offer_template(binary)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
-            "golem.usage.vector": MetricsService::usage_vector(),
+            "golem.com.usage.vector": MetricsService::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
         }));
 
