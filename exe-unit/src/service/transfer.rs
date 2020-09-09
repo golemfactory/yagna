@@ -7,7 +7,6 @@ use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
 use actix::prelude::*;
 use futures::future::{AbortHandle, Abortable};
-use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::io;
@@ -177,7 +176,8 @@ impl TransferService {
             .values()
             .map(|p| p.schemes())
             .flatten()
-            .unique()
+            .collect::<HashSet<_>>()
+            .into_iter()
             .map(ToString::to_string)
             .collect()
     }

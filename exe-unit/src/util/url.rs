@@ -70,7 +70,7 @@ impl TransferUrl {
         Ok(self)
     }
 
-    pub fn map_path<'s, F>(mut self, f: F) -> Result<Self, TransferError>
+    pub fn map_path<F>(mut self, f: F) -> Result<Self, TransferError>
     where
         F: FnOnce(&str, &str) -> Result<String, TransferError>,
     {

@@ -39,7 +39,7 @@ impl MetricsService {
                 MemMetric::ID.to_string(),
                 MetricProvider::new(
                     MemMetric::default(),
-                    backlog_limit.clone(),
+                    backlog_limit,
                     caps(ctx, MemMetric::ID),
                 ),
             ),
@@ -47,7 +47,7 @@ impl MetricsService {
                 StorageMetric::ID.to_string(),
                 MetricProvider::new(
                     StorageMetric::new(ctx.work_dir.clone(), Duration::from_secs(60 * 5)),
-                    backlog_limit.clone(),
+                    backlog_limit,
                     caps(ctx, StorageMetric::ID),
                 ),
             ),
