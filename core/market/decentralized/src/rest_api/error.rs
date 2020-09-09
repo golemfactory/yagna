@@ -3,7 +3,7 @@ use actix_web::{HttpResponse, ResponseError};
 use ya_client::model::ErrorMessage;
 
 use crate::db::dao::TakeEventsError;
-use crate::matcher::error::{QueryOffersError, SaveOfferError};
+use crate::matcher::error::{QueryDemandsError, QueryOffersError, SaveOfferError};
 use crate::negotiation::error::{
     AgreementError, AgreementStateError, ProposalError, WaitForApprovalError,
 };
@@ -23,6 +23,7 @@ impl ResponseError for MarketError {
     fn error_response(&self) -> HttpResponse {
         match self {
             MarketError::Matcher(e) => e.error_response(),
+            MarketError::QueryDemandsError(e) => e.error_response(),
             MarketError::QueryOfferError(e) => e.error_response(),
             MarketError::QueryOffersError(e) => e.error_response(),
             MarketError::DemandError(e) => e.error_response(),
@@ -62,6 +63,12 @@ impl ResponseError for DemandError {
             }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
+    }
+}
+
+impl ResponseError for QueryDemandsError {
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
     }
 }
 
