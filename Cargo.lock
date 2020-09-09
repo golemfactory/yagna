@@ -5555,6 +5555,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-std-utils",
 ]
 
 [[package]]
@@ -5588,7 +5589,6 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
- "ya-std-utils",
 ]
 
 [[package]]
