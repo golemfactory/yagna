@@ -172,7 +172,7 @@ pub fn try_from_yaml<S: AsRef<str>>(contents: S) -> Result<Value, Error> {
     ))
 }
 
-fn expand(value: Value) -> Value {
+pub fn expand(value: Value) -> Value {
     match value {
         Value::Object(m) => {
             let mut new_map = Map::new();
