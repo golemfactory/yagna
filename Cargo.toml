@@ -138,8 +138,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "f23e6c5030771bddba859cd5515da337550e36af"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "f23e6c5030771bddba859cd5515da337550e36af"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "00a989a9630823fb88be11ffc56747d12d427a84"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "00a989a9630823fb88be11ffc56747d12d427a84"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }

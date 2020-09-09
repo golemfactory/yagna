@@ -33,7 +33,7 @@ ya-service-bus = "0.2"
 bigdecimal = { version = "0.1.0", optional = true }
 bitflags = { version = "1.2", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
-graphene = { git = "https://github.com/golemfactory/graphene-rust.git", rev = "57b0a366658a2d609d9c0cef209955760e363730", optional = true }
+graphene = { version = "0.3", git = "https://github.com/golemfactory/graphene-rust.git", optional = true }
 log = "0.4"
 serde = { version = "^1.0", features = ["derive"] }
 serde_bytes = "0.11.3"
