@@ -1842,7 +1842,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -1850,6 +1850,7 @@ dependencies = [
  "dotenv",
  "env_logger 0.7.1",
  "futures 0.3.5",
+ "git-version",
  "log 0.4.11",
  "rand 0.7.3",
  "serde",
@@ -1862,10 +1863,6 @@ dependencies = [
  "url 2.1.1",
  "ya-client-model",
  "ya-core-model",
- "ya-net",
- "ya-service-api",
- "ya-service-api-derive",
- "ya-service-api-interfaces",
  "ya-service-bus",
 ]
 
@@ -5355,7 +5352,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bigdecimal",
  "bitflags 1.2.1",
@@ -5813,16 +5810,14 @@ version = "0.1.0"
 name = "ya-sb-proto"
 version = "0.1.0"
 dependencies = [
- "bytes 0.4.12",
  "bytes 0.5.6",
- "prost 0.5.0",
+ "prost 0.6.1",
  "prost-build 0.5.0",
  "serial_test",
  "thiserror",
  "tokio 0.2.22",
  "tokio-util 0.2.0",
  "url 2.1.1",
- "ya-sb-util",
 ]
 
 [[package]]
@@ -6046,7 +6041,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.3.0"
+version = "0.3.4-alpha.0"
 dependencies = [
  "actix-rt",
  "actix-service",
