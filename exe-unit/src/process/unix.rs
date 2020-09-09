@@ -1,14 +1,18 @@
 use nix::libc;
 use nix::sys::signal;
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
-use nix::unistd::SysconfVar::CLK_TCK;
-use nix::unistd::{sysconf, Pid};
+use nix::unistd::Pid;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::io;
 use std::mem;
 use std::time::{Duration, Instant};
 use thiserror::Error;
+
+#[cfg(target_os = "linux")]
+use nix::unistd::sysconf;
+#[cfg(target_os = "linux")]
+use nix::unistd::SysconfVar::CLK_TCK;
 
 #[cfg(target_os = "macos")]
 use libproc::libproc::bsd_info::BSDInfo;
