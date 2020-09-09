@@ -5,6 +5,8 @@ on:
     branches:
       - master
       # - <your-branch>    # put your branch name here to test it @ GH Actions
+    tags:
+      - v*
 
 jobs:
 
