@@ -45,7 +45,7 @@ async fn subscribe(
     market
         .subscribe_demand(&body.into_inner(), &id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[SubscribeDemand] {}", e))
         .map(|id| HttpResponse::Created().json(id))
 }
 
@@ -64,7 +64,7 @@ async fn unsubscribe(
     market
         .unsubscribe_demand(&subscription_id, &id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[UnsubscribeDemand] {}", e))
         .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
@@ -82,7 +82,7 @@ async fn collect(
         .requestor_engine
         .query_events(&subscription_id, timeout, max_events)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[QueryEvents] {}", e))
         .map(|events| HttpResponse::Ok().json(events))
 }
 
@@ -102,7 +102,7 @@ async fn counter_proposal(
         .requestor_engine
         .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[CounterProposal] {}", e))
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
@@ -136,7 +136,7 @@ async fn create_agreement(
         .requestor_engine
         .create_agreement(id, &proposal_id, valid_to)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[CreateAgreement] {}", e))
         .map(|agreement_id| HttpResponse::Ok().json(agreement_id))
 }
 
@@ -151,7 +151,7 @@ async fn confirm_agreement(
         .requestor_engine
         .confirm_agreement(id, &agreement_id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[ConfirmAgreement] {}", e))
         .map(|_| HttpResponse::NoContent().finish())
 }
 
@@ -168,7 +168,7 @@ async fn wait_for_approval(
         .requestor_engine
         .wait_for_approval(&agreement_id, timeout)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[WaitForApproval] {}", e))
         .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 

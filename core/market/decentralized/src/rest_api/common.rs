@@ -18,6 +18,6 @@ async fn get_agreement(
     market
         .get_agreement(&agreement_id, &id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[GetAgreement] {}", e))
         .map(|agreement| HttpResponse::Ok().json(agreement))
 }

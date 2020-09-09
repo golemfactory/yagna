@@ -41,7 +41,7 @@ async fn subscribe(
     market
         .subscribe_offer(&body.into_inner(), &id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[SubscribeOffer] {}", e))
         .map(|id| HttpResponse::Created().json(id))
 }
 
@@ -50,7 +50,7 @@ async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> impl Resp
     market
         .get_offers(Some(id))
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[GetOffer] {}", e))
         .map(|offers| HttpResponse::Ok().json(offers))
 }
 
@@ -63,7 +63,7 @@ async fn unsubscribe(
     market
         .unsubscribe_offer(&path.into_inner().subscription_id, &id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[UnsubscribeOffer] {}", e))
         .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
@@ -81,7 +81,7 @@ async fn collect(
         .provider_engine
         .query_events(&subscription_id, timeout, max_events)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[QueryEvents] {}", e))
         .map(|events| HttpResponse::Ok().json(events))
 }
 
@@ -101,7 +101,7 @@ async fn counter_proposal(
         .provider_engine
         .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[CounterProposal] {}", e))
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
@@ -136,7 +136,7 @@ async fn approve_agreement(
         .provider_engine
         .approve_agreement(id, &agreement_id, timeout)
         .await
-        .log_err()
+        .inspect_err(|e| log::error!("[ApproveAgreement] {}", e))
         .map(|_| HttpResponse::NoContent().finish())
 }
 
