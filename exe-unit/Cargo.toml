@@ -14,7 +14,7 @@ path = "src/bin.rs"
 
 [features]
 default=['compat-deployment']
-sgx=['reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx']
+sgx=['reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx', 'openssl/vendored']
 compat-deployment=[]
 
 [target.'cfg(target_family = "unix")'.dependencies]
@@ -62,6 +62,8 @@ thiserror = "1.0.10"
 tokio = { version = "0.2.11", features = ["process", "signal", "time"] }
 tokio-util = { version = "0.2", features = ["codec"] }
 url = "2.1.1"
+openssl= { version = "0.10", optional = true }
+
 
 [dev-dependencies]
 ya-sb-router = "0.1"

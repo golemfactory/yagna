@@ -5688,6 +5688,7 @@ dependencies = [
  "libproc",
  "log 0.4.11",
  "nix 0.17.0",
+ "openssl",
  "procfs",
  "rand 0.6.5",
  "regex",
