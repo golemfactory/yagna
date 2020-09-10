@@ -19,15 +19,10 @@ pub trait ProcessGroupExt<T> {
 }
 
 impl ProcessGroupExt<Command> for Command {
-    #[cfg(target_os = "linux")]
+    #[cfg(unix)]
     fn new_process_group(&mut self) -> &mut Command {
-        use tokio_process_ns::{NsCommand, NsOptions};
+        // FIXME: Linux: refactor and use the tokio-process-ns crate
 
-        self.new_ns(NsOptions::new().procfs().kill_child())
-    }
-
-    #[cfg(target_os = "macos")]
-    fn new_process_group(&mut self) -> &mut Command {
         use nix::Error;
         use std::io;
         use std::os::unix::process::CommandExt;
@@ -44,7 +39,7 @@ impl ProcessGroupExt<Command> for Command {
         self
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(not(unix))]
     fn new_process_group(&mut self) -> &mut Command {
         self
     }

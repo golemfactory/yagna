@@ -71,7 +71,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             let endpoints = bcast.resolve(&topic);
             let msg: Rc<[u8]> = msg.into();
             Arbiter::spawn(async move {
-                log::debug!("Received broadcast to topic {} from [{}].", &topic, &caller);
+                log::trace!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
                     let addr = format!("{}/{}", endpoint, bcast_service_id);
                     let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
@@ -160,7 +160,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             // TODO: remove unwrap here.
             let ent: SendBroadcastMessage<serde_json::Value> = serde_json::from_slice(msg).unwrap();
 
-            log::debug!(
+            log::trace!(
                 "Broadcast msg related to topic {} from [{}].",
                 ent.topic(),
                 &caller

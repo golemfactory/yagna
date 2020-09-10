@@ -5312,7 +5312,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=1bfbcfa25694c1638b81f86774137b4bdf3abb37#1bfbcfa25694c1638b81f86774137b4bdf3abb37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=099944b74c2743457feb825ccc4b8b3d83f587c4#099944b74c2743457feb825ccc4b8b3d83f587c4"
 dependencies = [
  "awc",
  "backtrace",
@@ -5333,7 +5333,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=1bfbcfa25694c1638b81f86774137b4bdf3abb37#1bfbcfa25694c1638b81f86774137b4bdf3abb37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=099944b74c2743457feb825ccc4b8b3d83f587c4#099944b74c2743457feb825ccc4b8b3d83f587c4"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5555,6 +5555,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-std-utils",
 ]
 
 [[package]]
@@ -5957,6 +5958,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-std-utils"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.11",
+]
+
+[[package]]
 name = "ya-transfer"
 version = "0.1.0"
 dependencies = [
@@ -6029,7 +6037,6 @@ dependencies = [
  "nix 0.17.0",
  "shared_child",
  "tokio 0.2.22",
- "tokio-process-ns",
 ]
 
 [[package]]
