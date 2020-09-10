@@ -27,6 +27,12 @@ pub enum QueryOffersError {
 }
 
 #[derive(thiserror::Error, Debug)]
+pub enum QueryDemandsError {
+    #[error("Failed to get Demands. Error: {0}.")]
+    DbError(#[from] DbError),
+}
+
+#[derive(thiserror::Error, Debug)]
 pub enum QueryOfferError {
     #[error("Offer [{0}] not found.")]
     NotFound(SubscriptionId),
