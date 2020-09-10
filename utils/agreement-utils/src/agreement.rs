@@ -103,22 +103,24 @@ impl Default for OfferTemplate {
 impl OfferTemplate {
     pub fn new(properties: Value) -> Self {
         OfferTemplate {
-            properties,
+            properties: Value::Object(flatten(properties)),
             constraints: String::new(),
         }
     }
 
-    pub fn patch(self, template: Self) -> Self {
-        let mut this = self.flatten();
-        let template = template.flatten();
-        patch(&mut this.properties, template.properties);
-        this.add_constraints(template.constraints);
-        this
+    pub fn patch(mut self, template: Self) -> Self {
+        patch(&mut self.properties, template.properties);
+        self.add_constraints(template.constraints);
+        self
     }
 
-    pub fn add_property(&mut self, key: &str, value: impl Into<String>) {
+    pub fn property(&self, property: &str) -> Option<&Value> {
+        self.properties.as_object().unwrap().get(property)
+    }
+
+    pub fn set_property(&mut self, key: impl ToString, value: Value) {
         let properties = self.properties.as_object_mut().unwrap();
-        properties.insert(key.to_string(), Value::String(value.into()));
+        properties.insert(key.to_string(), value);
     }
 
     pub fn add_constraints(&mut self, constraints: String) {
@@ -127,12 +129,6 @@ impl OfferTemplate {
         } else {
             self.constraints = format!("(& {} {})", self.constraints, constraints);
         }
-    }
-
-    fn flatten(mut self) -> Self {
-        let properties = std::mem::replace(&mut self.properties, Value::Object(Map::new()));
-        self.properties = Value::Object(flatten(properties));
-        self
     }
 }
 
@@ -611,5 +607,35 @@ constraints: |
 
         patch(&mut first, second);
         assert_eq!(first, expected);
+    }
+
+    #[test]
+    fn offer_template() {
+        let mut offer = OfferTemplate::new(serde_json::json!({
+            "golem": {
+                "inf": {
+                    "mem.gib": 0.5,
+                    "storage.gib": 5
+                },
+            }
+        }));
+
+        assert_eq!(
+            serde_json::json!(0.5),
+            offer
+                .property("golem.inf.mem.gib")
+                .as_typed(Value::as_f64)
+                .unwrap()
+        );
+
+        offer.set_property("golem.inf.mem.gib", serde_json::json!(2.5));
+
+        assert_eq!(
+            serde_json::json!(2.5),
+            offer
+                .property("golem.inf.mem.gib")
+                .as_typed(Value::as_f64)
+                .unwrap()
+        );
     }
 }
