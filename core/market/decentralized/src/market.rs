@@ -8,7 +8,8 @@ use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
-    DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
+    DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
+    QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
 use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
@@ -44,6 +45,8 @@ impl<'a> EnvConfig<'a, u64> {
 pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
+    #[error(transparent)]
+    QueryDemandsError(#[from] QueryDemandsError),
     #[error(transparent)]
     QueryOfferError(#[from] QueryOfferError),
     #[error(transparent)]
@@ -144,6 +147,14 @@ impl MarketService {
             .matcher
             .store
             .get_client_offers(id.map(|identity| identity.identity))
+            .await?)
+    }
+
+    pub async fn get_demands(&self, id: Option<Identity>) -> Result<Vec<Demand>, MarketError> {
+        Ok(self
+            .matcher
+            .store
+            .get_client_demands(id.map(|identitty| identitty.identity))
             .await?)
     }
 

@@ -6037,7 +6037,6 @@ dependencies = [
  "nix 0.17.0",
  "shared_child",
  "tokio 0.2.22",
- "tokio-process-ns",
 ]
 
 [[package]]
@@ -6059,6 +6058,7 @@ dependencies = [
  "dotenv",
  "env_logger 0.7.1",
  "futures 0.3.5",
+ "gftp",
  "lazy_static",
  "log 0.4.11",
  "openssl",
