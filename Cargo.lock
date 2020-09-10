@@ -5555,6 +5555,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-std-utils",
 ]
 
 [[package]]
@@ -5954,6 +5955,13 @@ dependencies = [
  "url 2.1.1",
  "ya-sb-proto",
  "ya-sb-util",
+]
+
+[[package]]
+name = "ya-std-utils"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.11",
 ]
 
 [[package]]

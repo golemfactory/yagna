@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use ya_client::model::market::{Offer, Proposal};
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::ResultExt;
 
 use super::common::*;
 use crate::market::MarketService;
@@ -40,6 +41,7 @@ async fn subscribe(
     market
         .subscribe_offer(&body.into_inner(), &id)
         .await
+        .inspect_err(|e| log::error!("[SubscribeOffer] {}", e))
         .map(|id| HttpResponse::Created().json(id))
 }
 
@@ -48,6 +50,7 @@ async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> impl Resp
     market
         .get_offers(Some(id))
         .await
+        .inspect_err(|e| log::error!("[GetOffer] {}", e))
         .map(|offers| HttpResponse::Ok().json(offers))
 }
 
@@ -60,6 +63,7 @@ async fn unsubscribe(
     market
         .unsubscribe_offer(&path.into_inner().subscription_id, &id)
         .await
+        .inspect_err(|e| log::error!("[UnsubscribeOffer] {}", e))
         .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
@@ -77,6 +81,7 @@ async fn collect(
         .provider_engine
         .query_events(&subscription_id, timeout, max_events)
         .await
+        .inspect_err(|e| log::error!("[QueryEvents] {}", e))
         .map(|events| HttpResponse::Ok().json(events))
 }
 
@@ -85,7 +90,7 @@ async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     body: Json<Proposal>,
-    _id: Identity,
+    id: Identity,
 ) -> impl Responder {
     let PathSubscriptionProposal {
         subscription_id,
@@ -94,8 +99,9 @@ async fn counter_proposal(
     let proposal = body.into_inner();
     market
         .provider_engine
-        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
+        .inspect_err(|e| log::error!("[CounterProposal] {}", e))
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
@@ -130,6 +136,7 @@ async fn approve_agreement(
         .provider_engine
         .approve_agreement(id, &agreement_id, timeout)
         .await
+        .inspect_err(|e| log::error!("[ApproveAgreement] {}", e))
         .map(|_| HttpResponse::NoContent().finish())
 }
 

@@ -104,6 +104,7 @@ members = [
     "utils/compile-time-utils",
     "utils/path",
     "utils/process",
+    "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
 ]
@@ -144,6 +145,7 @@ ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev =
 gftp = { path = "core/gftp" }
 tokio-process-ns = { path = "exe-unit/tokio-process-ns" }
 ya-agreement-utils = { path = "utils/agreement-utils" }
+ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }

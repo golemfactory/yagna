@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use ya_client::model::market::{AgreementProposal, Demand, Proposal};
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::ResultExt;
 
 use crate::market::MarketService;
 
@@ -44,6 +45,7 @@ async fn subscribe(
     market
         .subscribe_demand(&body.into_inner(), &id)
         .await
+        .inspect_err(|e| log::error!("[SubscribeDemand] {}", e))
         .map(|id| HttpResponse::Created().json(id))
 }
 
@@ -65,6 +67,7 @@ async fn unsubscribe(
     market
         .unsubscribe_demand(&subscription_id, &id)
         .await
+        .inspect_err(|e| log::error!("[UnsubscribeDemand] {}", e))
         .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
@@ -82,6 +85,7 @@ async fn collect(
         .requestor_engine
         .query_events(&subscription_id, timeout, max_events)
         .await
+        .inspect_err(|e| log::error!("[QueryEvents] {}", e))
         .map(|events| HttpResponse::Ok().json(events))
 }
 
@@ -90,7 +94,7 @@ async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     body: Json<Proposal>,
-    _id: Identity,
+    id: Identity,
 ) -> impl Responder {
     let PathSubscriptionProposal {
         subscription_id,
@@ -99,8 +103,9 @@ async fn counter_proposal(
     let proposal = body.into_inner();
     market
         .requestor_engine
-        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
+        .inspect_err(|e| log::error!("[CounterProposal] {}", e))
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
@@ -134,6 +139,7 @@ async fn create_agreement(
         .requestor_engine
         .create_agreement(id, &proposal_id, valid_to)
         .await
+        .inspect_err(|e| log::error!("[CreateAgreement] {}", e))
         .map(|agreement_id| HttpResponse::Ok().json(agreement_id))
 }
 
@@ -148,6 +154,7 @@ async fn confirm_agreement(
         .requestor_engine
         .confirm_agreement(id, &agreement_id)
         .await
+        .inspect_err(|e| log::error!("[ConfirmAgreement] {}", e))
         .map(|_| HttpResponse::NoContent().finish())
 }
 
@@ -164,6 +171,7 @@ async fn wait_for_approval(
         .requestor_engine
         .wait_for_approval(&agreement_id, timeout)
         .await
+        .inspect_err(|e| log::error!("[WaitForApproval] {}", e))
         .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
