@@ -783,7 +783,7 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
     let our_proposal = proposal.counter_demand(sample_demand())?;
     let our_proposal_id = req_market
         .requestor_engine
-        .counter_proposal(&demand_id, &proposal_id, &our_proposal)
+        .counter_proposal(&demand_id, &proposal_id, &our_proposal, &req_id)
         .await?;
 
     // Requestor tries to promote his own Proposal to Agreement.
@@ -869,7 +869,7 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
     let our_proposal = proposal.counter_demand(sample_demand())?;
     req_market
         .requestor_engine
-        .counter_proposal(&demand_id, &proposal_id, &our_proposal)
+        .counter_proposal(&demand_id, &proposal_id, &our_proposal, &req_id)
         .await?;
 
     // Requestor tries to promote Proposal that was already followed by

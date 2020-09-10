@@ -23,10 +23,10 @@ pub struct SubscriptionConfig {
 impl Default for DiscoveryConfig {
     fn default() -> Self {
         DiscoveryConfig {
-            max_bcasted_offers: 50,
-            max_bcasted_unsubscribes: 50,
-            mean_cyclic_bcast_interval: Duration::from_secs(3),
-            mean_cyclic_unsubscribes_interval: Duration::from_secs(3),
+            max_bcasted_offers: 200,
+            max_bcasted_unsubscribes: 200,
+            mean_cyclic_bcast_interval: Duration::from_secs(60),
+            mean_cyclic_unsubscribes_interval: Duration::from_secs(60),
         }
     }
 }

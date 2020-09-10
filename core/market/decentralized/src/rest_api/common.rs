@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, Responder};
 use std::sync::Arc;
 
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::ResultExt;
 
 use super::PathAgreement;
 use crate::market::MarketService;
@@ -17,5 +18,6 @@ async fn get_agreement(
     market
         .get_agreement(&agreement_id, &id)
         .await
+        .inspect_err(|e| log::error!("[GetAgreement] {}", e))
         .map(|agreement| HttpResponse::Ok().json(agreement))
 }
