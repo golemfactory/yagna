@@ -61,14 +61,14 @@ pub struct NewMarketEvent {
 }
 
 impl MarketEvent {
-    pub fn from_proposal(proposal: Proposal, role: OwnerType) -> NewMarketEvent {
+    pub fn from_proposal(proposal: &Proposal, role: OwnerType) -> NewMarketEvent {
         NewMarketEvent {
-            subscription_id: proposal.negotiation.subscription_id,
+            subscription_id: proposal.negotiation.subscription_id.clone(),
             event_type: match role {
                 OwnerType::Requestor => EventType::RequestorProposal,
                 OwnerType::Provider => EventType::ProviderProposal,
             },
-            artifact_id: proposal.body.id,
+            artifact_id: proposal.body.id.clone(),
         }
     }
 

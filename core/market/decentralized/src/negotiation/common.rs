@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -22,6 +23,7 @@ use crate::negotiation::{
 };
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::ProposalReceived;
+use ya_service_api_web::middleware::Identity;
 
 type IsFirst = bool;
 
@@ -221,7 +223,8 @@ impl CommonBroker {
         // TODO: If creating Proposal succeeds, but event can't be added, provider
         // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
-        self.db
+        let proposal = self
+            .db
             .as_dao::<EventsDao>()
             .add_proposal_event(proposal, owner)
             .await
@@ -233,6 +236,13 @@ impl CommonBroker {
 
         // Send channel message to wake all query_events waiting for proposals.
         self.notifier.notify(&subscription_id).await;
+
+        log::info!(
+            "Received counter Proposal [{}] for Proposal [{}] from [{}].",
+            &proposal.body.id,
+            &msg.prev_proposal_id,
+            &caller
+        );
         Ok(())
     }
 
@@ -293,4 +303,12 @@ pub enum GetProposalError {
     NotFound(ProposalId),
     #[error("Failed to get Proposal [{0}]. Error: [{1}]")]
     FailedGetFromDb(ProposalId, DbError),
+}
+
+pub struct DisplayIdentity<'a>(pub &'a Identity);
+
+impl<'a> fmt::Display for DisplayIdentity<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "'{}' [{}]", &self.0.name, &self.0.identity)
+    }
 }

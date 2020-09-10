@@ -5312,7 +5312,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2c1776c268dd95f55b6064017834069062945b76#2c1776c268dd95f55b6064017834069062945b76"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=099944b74c2743457feb825ccc4b8b3d83f587c4#099944b74c2743457feb825ccc4b8b3d83f587c4"
 dependencies = [
  "awc",
  "backtrace",
@@ -5333,7 +5333,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2c1776c268dd95f55b6064017834069062945b76#2c1776c268dd95f55b6064017834069062945b76"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=099944b74c2743457feb825ccc4b8b3d83f587c4#099944b74c2743457feb825ccc4b8b3d83f587c4"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5555,6 +5555,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-std-utils",
 ]
 
 [[package]]
@@ -5954,6 +5955,13 @@ dependencies = [
  "url 2.1.1",
  "ya-sb-proto",
  "ya-sb-util",
+]
+
+[[package]]
+name = "ya-std-utils"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.11",
 ]
 
 [[package]]

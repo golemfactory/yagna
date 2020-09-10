@@ -81,6 +81,7 @@ pub async fn exchange_draft_proposals(
             &demand_id,
             &req_offer_proposal1.get_proposal_id()?,
             &req_demand_proposal1,
+            &req_id,
         )
         .await?;
 
@@ -94,7 +95,12 @@ pub async fn exchange_draft_proposals(
     let offer_proposal2 = prov_demand_proposal1.counter_offer(sample_offer())?;
     let _offer_proposal_id = prov_mkt
         .provider_engine
-        .counter_proposal(&offer_id, &prov_demand_proposal1_id, &offer_proposal2)
+        .counter_proposal(
+            &offer_id,
+            &prov_demand_proposal1_id,
+            &offer_proposal2,
+            &prov_id,
+        )
         .await?;
 
     // Requestor receives proposal.
