@@ -14,7 +14,7 @@ path = "src/bin.rs"
 
 [features]
 default=['compat-deployment']
-sgx=['reqwest', 'secp256k1/rand', 'ya-client-model/sgx']
+sgx=['reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx']
 compat-deployment=[]
 
 [target.'cfg(target_family = "unix")'.dependencies]
@@ -33,7 +33,7 @@ winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 ya-agreement-utils = "0.1"
 ya-client-model = "0.1"
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "0.1", features = ["activity", "appkey"] }
+ya-core-model = { version = "0.1", features = ["activity", "appkey"], path="../core/model" }
 ya-runtime-api = { version = "0.1", path = "runtime-api", features = ["server"] }
 ya-service-bus = "0.2"
 ya-transfer = "0.1"
