@@ -117,6 +117,37 @@ where
     }
 }
 
+impl<R: Runtime> Handler<SignExeScript> for ExeUnit<R> {
+    type Result = <SignExeScript as Message>::Result;
+
+    #[cfg(feature = "sgx")]
+    fn handle(&mut self, msg: SignExeScript, _: &mut Context<Self>) -> Self::Result {
+        let batch = self.state.batches.get(&msg.batch_id).ok_or_else(|| {
+            Error::RuntimeError(format!(
+                "signing an unknown ExeScript (batch [{}])",
+                msg.batch_id
+            ))
+        })?;
+
+        let script = batch.exe_script.clone();
+        let json = serde_json::to_string(&script)?;
+        let sig_vec = self.ctx.crypto.sign(json.as_bytes())?;
+
+        Ok(SignExeScriptResponse {
+            script,
+            digest: "sha3".to_string(),
+            sig: hex::encode(&sig_vec),
+        })
+    }
+
+    #[cfg(not(feature = "sgx"))]
+    fn handle(&mut self, _: SignExeScript, _: &mut Context<Self>) -> Self::Result {
+        Err(Error::Other(
+            "signing not supported: binary built without the 'sgx' feature".into(),
+        ))
+    }
+}
+
 impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
     type Result = ActorResponse<Self, (), Error>;
 
