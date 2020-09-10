@@ -1,13 +1,15 @@
 use actix_web::{
     body::MessageBody, dev::ServiceResponse, error::PathError, http::StatusCode, test,
 };
+use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use ya_client::model::{market::Offer, ErrorMessage};
+use ya_client::model::{market::Offer, market::Proposal, ErrorMessage};
 use ya_market_decentralized::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
+    proposal_util::exchange_draft_proposals,
     DemandError, MarketsNetwork, ModifyOfferError, SubscriptionId, SubscriptionParseError,
 };
 
@@ -215,6 +217,64 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
         DemandError::NotFound(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_rest_get_proposal() -> anyhow::Result<()> {
+    let network = MarketsNetwork::new("test_rest_get_proposal")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let market_local = network.get_market("Node-1");
+    // Not really remote, but in this scenario will treat it as remote
+    let identity_local = network.get_default_id("Node-1");
+    let subscription_id = SubscriptionId::generate_id(
+        "",
+        "",
+        &identity_local.identity,
+        &Utc::now().naive_utc(),
+        &Utc::now().naive_utc(),
+    );
+    let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+    let proposal = market_local
+        .get_proposal(&proposal_id, &identity_local)
+        .await
+        .unwrap();
+    let mut app = network.get_rest_app("Node-1").await;
+
+    let req_offers = test::TestRequest::get()
+        .uri(
+            format!(
+                "/market-api/v1/offers/{}/proposals/{}",
+                subscription_id, proposal_id
+            )
+            .as_str(),
+        )
+        .to_request();
+    let resp_offers = test::call_service(&mut app, req_offers).await;
+    assert_eq!(resp_offers.status(), StatusCode::OK);
+    let result_offers: Proposal = read_response_json(resp_offers).await;
+    assert_eq!(proposal, result_offers);
+
+    let req_demands = test::TestRequest::get()
+        .uri(
+            format!(
+                "/market-api/v1/demands/{}/proposals/{}",
+                subscription_id, proposal_id
+            )
+            .as_str(),
+        )
+        .to_request();
+    let resp_demands = test::call_service(&mut app, req_demands).await;
+
+    assert_eq!(resp_demands.status(), StatusCode::OK);
+    let result_demands: Proposal = read_response_json(resp_demands).await;
+    assert_eq!(proposal, result_demands);
     Ok(())
 }
 
