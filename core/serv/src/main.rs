@@ -6,6 +6,7 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
+    fs::File,
     path::{Path, PathBuf},
 };
 use structopt::{clap, StructOpt};
@@ -250,9 +251,7 @@ struct ServiceCommandOpts {
 
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
-        if !ctx.accept_terms {
-            prompt_terms()?;
-        }
+        ensure_terms_accepted(&ctx)?;
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
                 let name = clap::crate_name!();
@@ -297,6 +296,19 @@ impl ServiceCommand {
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
         }
     }
+}
+
+fn ensure_terms_accepted(ctx: &CliCtx) -> Result<()> {
+    let flag_path = ctx.data_dir.join("tos_accepted");
+    if flag_path.exists() {
+        log::info!("TOS already accepted");
+        return Ok(());
+    }
+    if !ctx.accept_terms {
+        prompt_terms()?;
+    }
+    File::create(flag_path)?;
+    Ok(())
 }
 
 fn prompt_terms() -> Result<()> {
