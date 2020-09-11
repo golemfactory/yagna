@@ -6,6 +6,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_std_utils::ResultExt;
 
 use super::PathAgreement;
+use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -14,7 +15,8 @@ async fn get_agreement(
     body: Path<PathAgreement>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = body.into_inner().agreement_id;
+    /// OwnerType::Requestor will be checked internally
+    let agreement_id = body.into_inner().to_id(OwnerType::Requestor)?;
     market
         .get_agreement(&agreement_id, &id)
         .await

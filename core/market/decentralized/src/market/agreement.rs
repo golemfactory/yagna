@@ -1,5 +1,4 @@
 use chrono;
-use std::str::FromStr;
 
 use ya_client::model::market::Agreement as ClientAgreement;
 use ya_core_model::market::{GetAgreement, RpcMessageError};
@@ -7,7 +6,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
 use crate::db::dao::AgreementDao;
-use crate::db::model::AgreementId;
+use crate::db::model::{AgreementId, OwnerType};
 
 pub async fn bind_gsb(db: DbExecutor, public_prefix: &str, _local_prefix: &str) {
     log::debug!("Binding market agreement public service to service bus");
@@ -20,8 +19,10 @@ async fn get_agreement(
     _sender_id: String,
     msg: GetAgreement,
 ) -> Result<ClientAgreement, RpcMessageError> {
-    let agreement_id = AgreementId::from_str(&msg.agreement_id)
+    // On GSB we don't know if Provider or Requestor is calling, so we will try both versions.
+    let agreement_id = AgreementId::from_client(&msg.agreement_id, OwnerType::Provider)
         .map_err(|e| RpcMessageError::Market(e.to_string()))?;
+
     let dao = db.as_dao::<AgreementDao>();
     Ok(match dao
         .select(&agreement_id, chrono::Utc::now().naive_utc())

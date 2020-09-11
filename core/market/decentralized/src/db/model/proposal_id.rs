@@ -23,12 +23,18 @@ pub enum OwnerType {
     Requestor,
 }
 
+const HASH_SUFFIX_LEN: usize = 64;
+
 #[derive(Error, Debug, PartialEq)]
 pub enum ProposalIdParseError {
-    #[error("Proposal id [{0}] has invalid format.")]
+    #[error("Id [{0}] has invalid format.")]
     InvalidFormat(String),
-    #[error("Proposal id [{0}] has invalid owner type.")]
+    #[error("Id [{0}] has invalid owner type.")]
     InvalidOwnerType(String),
+    #[error("Id [{0}] contains non hexadecimal characters.")]
+    NotHexadecimal(String),
+    #[error("Id [{0}] hash has invalid length. Should be |{}|", HASH_SUFFIX_LEN)]
+    InvalidLength(String),
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Serialize, Deserialize)]
@@ -85,6 +91,27 @@ impl ProposalId {
         }
         Ok(())
     }
+
+    /// Clients on both Requestor and Provider side should use the same id,
+    /// because the comunicate with each other and exchange this id.
+    pub fn to_client(&self) -> String {
+        self.id.clone()
+    }
+
+    pub fn from_client(s: &str, owner: OwnerType) -> Result<ProposalId, ProposalIdParseError> {
+        if !s.chars().all(|character| character.is_ascii_hexdigit()) {
+            Err(ProposalIdParseError::NotHexadecimal(s.to_string()))?;
+        }
+
+        if s.len() != HASH_SUFFIX_LEN {
+            Err(ProposalIdParseError::InvalidLength(s.to_string()))?;
+        }
+
+        Ok(ProposalId {
+            owner,
+            id: s.to_string(),
+        })
+    }
 }
 
 pub fn hash_proposal(
@@ -121,10 +148,7 @@ impl FromStr for ProposalId {
             _ => Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?,
         };
 
-        Ok(ProposalId {
-            owner,
-            id: elements[1].to_string(),
-        })
+        ProposalId::from_client(elements[1], owner)
     }
 }
 
