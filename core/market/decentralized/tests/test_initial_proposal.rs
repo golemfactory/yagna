@@ -382,7 +382,12 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
     let counter_proposal = init_proposal.counter_demand(sample_demand())?;
     let new_proposal_id = market1
         .requestor_engine
-        .counter_proposal(&subscription_id, &init_proposal_id, &counter_proposal)
+        .counter_proposal(
+            &subscription_id,
+            &init_proposal_id,
+            &counter_proposal,
+            &identity1,
+        )
         .await?;
     assert_ne!(&new_proposal_id, &init_proposal_id);
 

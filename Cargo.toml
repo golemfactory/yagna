@@ -10,7 +10,7 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['market-forwarding', 'gnt-driver']
+default = ['market-forwarding', 'gnt-driver', "gftp/bin"]
 static-openssl = ["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized']
@@ -22,6 +22,7 @@ name = "yagna"
 path = "core/serv/src/main.rs"
 
 [dependencies]
+gftp="0.1" # just to enable gftp build for cargo-deb
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
@@ -103,6 +104,7 @@ members = [
     "utils/compile-time-utils",
     "utils/path",
     "utils/process",
+    "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
 ]
@@ -136,13 +138,14 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2ad164216c1c25f8cd61da35a510d73ebe1e2678"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2ad164216c1c25f8cd61da35a510d73ebe1e2678"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "258861a4b20ff00b6f9383eec90013d77716b55f"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "258861a4b20ff00b6f9383eec90013d77716b55f"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }
 tokio-process-ns = { path = "exe-unit/tokio-process-ns" }
 ya-agreement-utils = { path = "utils/agreement-utils" }
+ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }
