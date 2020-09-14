@@ -108,6 +108,8 @@ impl MarketService {
         public_prefix: &str,
         local_prefix: &str,
     ) -> Result<(), MarketInitError> {
+        log::info!("Decentralized Market - binding GSB endpoints.");
+
         self.matcher.bind_gsb(public_prefix, local_prefix).await?;
         self.provider_engine
             .bind_gsb(public_prefix, local_prefix)
@@ -135,6 +137,8 @@ impl MarketService {
     }
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
+        log::info!("Decentralized Market - binding REST endpoints.");
+
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
             .data(myself)
             .app_data(rest_api::path_config())

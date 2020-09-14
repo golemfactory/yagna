@@ -237,6 +237,11 @@ impl NegotiationApi {
         public_prefix: &str,
         _local_prefix: &str,
     ) -> Result<(), NegotiationApiInitError> {
+        log::info!(
+            "Initializing Requestor gsb endpoints for mk1 Negotiation protocol at '{}'.",
+            &public_prefix
+        );
+
         ServiceBinder::new(&requestor::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
                 let myself = myself.clone();

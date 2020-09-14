@@ -94,6 +94,8 @@ impl Discovery {
         public_prefix: &str,
         local_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
+        log::info!("Initializing gsb endpoints for mk1 Discovery protocol.");
+
         let myself = self.clone();
         // /local/market/market-protocol-mk1-offer
         let bcast_address = format!("{}/{}", local_prefix, OffersBcast::TOPIC);
