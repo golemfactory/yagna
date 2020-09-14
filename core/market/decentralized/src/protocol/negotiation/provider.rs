@@ -233,6 +233,8 @@ impl NegotiationApi {
         public_prefix: &str,
         _local_prefix: &str,
     ) -> Result<(), NegotiationApiInitError> {
+        log::info!("Negotiation (Provider) protocol version: mk1");
+
         ServiceBinder::new(&provider::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(
                 move |_, myself, caller: String, msg: InitialProposalReceived| {
