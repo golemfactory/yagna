@@ -2,9 +2,36 @@ use crate::hardware::{ProfileError, Profiles, Resources, UpdateResources};
 use crate::market::presets::Coefficient;
 use crate::market::{Preset, PresetManager};
 use crate::preset_cli::PresetUpdater;
+use crate::provider_agent;
 use crate::startup_config::{PresetNoInteractive, ProviderConfig, UpdateNames};
 use anyhow::{anyhow, bail};
 use std::convert::TryFrom;
+
+pub fn config_get(config: ProviderConfig, name: Option<String>) -> anyhow::Result<()> {
+    let state = serde_json::to_value(provider_agent::GlobalsState::load(&config.globals_file)?)?;
+    match name {
+        None => {
+            if config.json {
+                println!("{}", serde_json::to_string_pretty(&state)?);
+            } else {
+                for var in state.as_object().unwrap().iter() {
+                    println!("{}: {}", var.0, var.1.as_str().unwrap());
+                }
+            }
+        }
+        Some(name) => {
+            let value = state
+                .get(name)
+                .ok_or_else(|| anyhow::anyhow!("invalid name"))?;
+            if config.json {
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            } else {
+                println!("{}", value.as_str().unwrap());
+            }
+        }
+    }
+    Ok(())
+}
 
 pub fn list_exeunits(config: ProviderConfig) -> anyhow::Result<()> {
     let registry = config.registry()?;

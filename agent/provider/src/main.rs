@@ -19,7 +19,9 @@ use crate::hardware::Profiles;
 use crate::provider_agent::{Initialize, Shutdown};
 use crate::signal::SignalMonitor;
 use provider_agent::ProviderAgent;
-use startup_config::{Commands, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig};
+use startup_config::{
+    Commands, ConfigConfig, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig,
+};
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -28,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
     let cli_args = StartupConfig::from_args();
     let mut config = cli_args.config;
     let data_dir = config.data_dir.get_or_create()?;
+    config.globals_file = data_dir.join(config.globals_file);
     config.presets_file = data_dir.join(config.presets_file);
     config.hardware_file = data_dir.join(config.hardware_file);
 
@@ -52,6 +55,14 @@ async fn main() -> anyhow::Result<()> {
             agent.send(Shutdown).await??;
             Ok(())
         }
+        Commands::Config(config_cmd) => match config_cmd {
+            ConfigConfig::Get { name } => cli::config_get(config, name),
+            ConfigConfig::Set(node_config) => {
+                let mut state = provider_agent::GlobalsState::load_or_create(&config.globals_file)?;
+                state.update_and_save(node_config, &config.globals_file)?;
+                Ok(())
+            }
+        },
         Commands::Preset(presets_cmd) => match presets_cmd {
             PresetsConfig::List => cli::list_presets(config),
             PresetsConfig::Active => cli::active_presets(config),

@@ -35,6 +35,8 @@ pub struct ProviderConfig {
         default_value = &*DEFAULT_DATA_DIR,
     )]
     pub data_dir: DataDir,
+    #[structopt(skip = "globals.json")]
+    pub globals_file: PathBuf,
     #[structopt(skip = "presets.json")]
     pub presets_file: PathBuf,
     #[structopt(skip = "hardware.json")]
@@ -77,7 +79,7 @@ impl ProviderConfig {
 pub struct NodeConfig {
     /// Your human readable identity in the network.
     #[structopt(long, env = "NODE_NAME", hide_env_values = true)]
-    pub node_name: String,
+    pub node_name: Option<String>,
     /// Subnetwork identifier. You can set this value to filter nodes
     /// with other identifiers than selected. Useful for test purposes.
     #[structopt(long, env = "SUBNET")]
@@ -92,6 +94,15 @@ pub struct RunConfig {
     pub node: NodeConfig,
     #[structopt(flatten)]
     pub runner_config: TaskRunnerConfig,
+}
+
+#[derive(StructOpt)]
+pub enum ConfigConfig {
+    Get {
+        /// 'node_name' or 'subnet'. If unspecified all config is printed.
+        name: Option<String>,
+    },
+    Set(NodeConfig),
 }
 
 #[derive(StructOpt, Clone)]
@@ -200,6 +211,8 @@ pub struct StartupConfig {
 pub enum Commands {
     /// Run provider agent
     Run(RunConfig),
+    /// Configure provider agent
+    Config(ConfigConfig),
     /// Manage offer presets
     Preset(PresetsConfig),
     /// Manage hardware profiles
