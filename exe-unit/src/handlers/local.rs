@@ -75,6 +75,7 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
             Ok::<_, Error>({
                 {
                     use graphene::sgx::SgxQuote;
+                    use sha3::{Digest, Sha3_256};
                     use std::env;
                     use ya_core_model::activity::local::Credentials;
                     use ya_core_model::sgx::local::VerifyAttestationEvidence;
@@ -101,10 +102,16 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                         .map_err(|e| Error::Attestation(e.to_string()))?;
 
                     log::debug!("IAS report: {}", &evidence.report);
+                    let mut hasher = Sha3_256::new();
+                    hasher.input(task_package.as_bytes());
+
+                    let mut payload_hash = [0u8; 32];
+                    payload_hash.copy_from_slice(hasher.result().as_ref());
 
                     Some(Credentials::Sgx {
                         requestor: crypto.requestor_pub_key.serialize().to_vec(),
                         enclave: crypto.pub_key.serialize().to_vec(),
+                        payload_sha3: payload_hash,
                         enclave_hash: mr_enclave,
                         ias_report: evidence.report,
                         ias_sig: evidence.signature,

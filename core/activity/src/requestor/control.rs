@@ -221,6 +221,7 @@ fn convert_credentials(
         ya_core_model::activity::local::Credentials::Sgx {
             requestor,
             enclave,
+            payload_sha3,
             enclave_hash,
             ias_report,
             ias_sig,
@@ -228,6 +229,7 @@ fn convert_credentials(
             SgxCredentials::try_with(
                 enclave,
                 requestor,
+                hex::encode(&payload_sha3),
                 hex::encode(&enclave_hash),
                 ias_report,
                 ias_sig,
