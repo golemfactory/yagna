@@ -2,13 +2,16 @@ use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
 
-use crate::db::dao::TakeEventsError;
-use crate::matcher::error::{QueryOffersError, SaveOfferError};
-use crate::negotiation::error::{AgreementError, ProposalError, WaitForApprovalError};
 use crate::{
+    db::dao::TakeEventsError,
     market::MarketError,
-    matcher::error::{DemandError, MatcherError, ModifyOfferError, QueryOfferError, ResolverError},
-    negotiation::error::{GetProposalError, NegotiationError, QueryEventsError},
+    matcher::error::{
+        DemandError, MatcherError, ModifyOfferError, QueryOfferError, QueryOffersError,
+        ResolverError, SaveOfferError,
+    },
+    negotiation::error::{
+        AgreementError, NegotiationError, ProposalError, QueryEventsError, WaitForApprovalError,
+    },
 };
 
 impl From<MarketError> for actix_web::HttpResponse {
@@ -25,8 +28,6 @@ impl ResponseError for MarketError {
             MarketError::QueryOffersError(e) => e.error_response(),
             MarketError::DemandError(e) => e.error_response(),
             MarketError::Negotiation(e) => e.error_response(),
-            MarketError::GetProposal(e) => e.error_response(),
-            MarketError::InternalError(e) => HttpResponse::InternalServerError().json(e),
         }
     }
 }
@@ -126,6 +127,11 @@ impl ResponseError for ProposalError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
+            ProposalError::NotFound(..)
+            | ProposalError::QueryOfferError(QueryOfferError::NotFound(..))
+            | ProposalError::DemandError(DemandError::NotFound(..)) => {
+                HttpResponse::NotFound().json(msg)
+            }
             _ => HttpResponse::InternalServerError().json(msg),
         }
     }
@@ -161,25 +167,12 @@ impl ResponseError for WaitForApprovalError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             WaitForApprovalError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            WaitForApprovalError::AgreementExpired(_) => HttpResponse::Gone().json(msg),
-            WaitForApprovalError::AgreementTerminated(_)
-            | WaitForApprovalError::AgreementNotConfirmed(_) => {
+            WaitForApprovalError::Expired(_) => HttpResponse::Gone().json(msg),
+            WaitForApprovalError::Terminated(_) | WaitForApprovalError::NotConfirmed(_) => {
                 HttpResponse::BadRequest().json(msg)
             }
             WaitForApprovalError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
-            WaitForApprovalError::InternalError(_) | WaitForApprovalError::FailedGetFromDb(..) => {
-                HttpResponse::InternalServerError().json(msg)
-            }
-        }
-    }
-}
-
-impl ResponseError for GetProposalError {
-    fn error_response(&self) -> HttpResponse {
-        let msg = ErrorMessage::new(self.to_string());
-        match self {
-            GetProposalError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            GetProposalError::FailedGetFromDb { .. } => {
+            WaitForApprovalError::InternalError(_) | WaitForApprovalError::Get(..) => {
                 HttpResponse::InternalServerError().json(msg)
             }
         }

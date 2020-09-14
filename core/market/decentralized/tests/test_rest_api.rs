@@ -10,7 +10,8 @@ use ya_market_decentralized::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
     proposal_util::exchange_draft_proposals,
-    DemandError, MarketsNetwork, ModifyOfferError, SubscriptionId, SubscriptionParseError,
+    DemandError, MarketsNetwork, ModifyOfferError, OwnerType, SubscriptionId,
+    SubscriptionParseError,
 };
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -225,27 +226,26 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
 async fn test_rest_get_proposal() -> anyhow::Result<()> {
     let network = MarketsNetwork::new("test_rest_get_proposal")
         .await
-        .add_market_instance("Node-1")
+        .add_market_instance("Provider")
         .await?
-        .add_market_instance("Node-2")
+        .add_market_instance("Requestor")
         .await?;
 
-    let market_local = network.get_market("Node-1");
+    let prov_mkt = network.get_market("Provider");
+    let proposal_id = exchange_draft_proposals(&network, "Requestor", "Provider")
+        .await?
+        .translate(OwnerType::Provider);
+
     // Not really remote, but in this scenario will treat it as remote
-    let identity_local = network.get_default_id("Node-1");
-    let subscription_id = SubscriptionId::generate_id(
-        "",
-        "",
-        &identity_local.identity,
-        &Utc::now().naive_utc(),
-        &Utc::now().naive_utc(),
-    );
-    let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
-    let proposal = market_local
-        .get_proposal(&proposal_id, &identity_local)
+    let identity_local = network.get_default_id("Provider");
+    let offers = prov_mkt.get_offers(Some(identity_local)).await?;
+    let subscription_id = offers.first().unwrap().offer_id()?;
+    let proposal = prov_mkt
+        .get_proposal(&proposal_id)
         .await
-        .unwrap();
-    let mut app = network.get_rest_app("Node-1").await;
+        .unwrap()
+        .into_client()?;
+    let mut app = network.get_rest_app("Provider").await;
 
     let req_offers = test::TestRequest::get()
         .uri(
@@ -271,10 +271,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
         )
         .to_request();
     let resp_demands = test::call_service(&mut app, req_demands).await;
-
-    assert_eq!(resp_demands.status(), StatusCode::OK);
-    let result_demands: Proposal = read_response_json(resp_demands).await;
-    assert_eq!(proposal, result_demands);
+    assert_eq!(resp_demands.status(), StatusCode::NOT_FOUND);
     Ok(())
 }
 

@@ -17,7 +17,7 @@ pub enum CounterProposalError {
     #[error("Countering Proposal [{1}] GSB error: {0}.")]
     GsbError(String, ProposalId),
     #[error("Countering Proposal [{0}] without previous Proposal id set.")]
-    NoPreviousProposal(ProposalId),
+    NoPrevious(ProposalId),
     #[error("Countering Proposal [{1}] remote error: {0}")]
     Remote(RemoteProposalError, ProposalId),
 }
@@ -29,7 +29,7 @@ pub enum RemoteProposalError {
     #[error("Offer/Demand [{0}] expired.")]
     Expired(SubscriptionId),
     #[error("Trying to counter not existing Proposal [{0}].")]
-    ProposalNotFound(ProposalId),
+    NotFound(ProposalId),
     #[error("Error: {0}.")]
     Unexpected(String),
 }

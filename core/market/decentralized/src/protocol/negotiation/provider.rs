@@ -64,9 +64,7 @@ impl NegotiationApi {
 
         let prev_proposal_id = proposal.body.prev_proposal_id.clone();
         if prev_proposal_id.is_none() {
-            Err(CounterProposalError::NoPreviousProposal(
-                proposal.body.id.clone(),
-            ))?
+            Err(CounterProposalError::NoPrevious(proposal.body.id.clone()))?
         }
 
         let content = ProposalContent::from(proposal.body);

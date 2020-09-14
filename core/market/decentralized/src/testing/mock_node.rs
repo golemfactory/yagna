@@ -19,11 +19,11 @@ use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
 use crate::config::Config;
-use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
-use crate::negotiation::error::QueryEventsError;
+use crate::negotiation::error::{ProposalError, QueryEventsError};
 use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
@@ -456,6 +456,7 @@ macro_rules! assert_err_eq {
 pub trait MarketServiceExt {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, ProposalError>;
     async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -472,6 +473,10 @@ impl MarketServiceExt for MarketService {
 
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError> {
         self.matcher.store.get_demand(id).await
+    }
+
+    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, ProposalError> {
+        self.provider_engine.common.get_proposal(None, id).await
     }
 
     async fn query_events(

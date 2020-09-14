@@ -1,12 +1,15 @@
+use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
-use ya_market_decentralized::testing::{GetProposalError, MarketsNetwork, OwnerType};
+use ya_market_decentralized::testing::{
+    MarketServiceExt, MarketsNetwork, OwnerType, ProposalError,
+};
 
 use ya_client::model::market::proposal::State;
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
-async fn test_get_proposal_rest() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_get_proposal_rest")
+async fn test_get_proposal() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new("test_get_proposal")
         .await
         .add_market_instance("Requestor1")
         .await?
@@ -14,16 +17,15 @@ async fn test_get_proposal_rest() -> Result<(), anyhow::Error> {
         .await?;
 
     let req_market = network.get_market("Requestor1");
-    let req_id = network.get_default_id("Requestor1");
     let prov_market = network.get_market("Provider1");
     let prov_id = network.get_default_id("Provider1");
 
     // Requestor side
     let proposal_id = exchange_draft_proposals(&network, "Requestor1", "Provider1").await?;
-    let result = req_market.get_proposal(&proposal_id, &req_id).await;
+    let result = req_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_ok());
-    let proposal = result.unwrap();
+    let proposal = result.unwrap().into_client()?;
 
     assert_eq!(proposal.state()?, &State::Draft);
     assert_eq!(proposal.proposal_id()?, &proposal_id.to_string());
@@ -32,10 +34,10 @@ async fn test_get_proposal_rest() -> Result<(), anyhow::Error> {
 
     // Provider side
     let proposal_id = proposal_id.translate(OwnerType::Provider);
-    let result = prov_market.get_proposal(&proposal_id, &req_id).await;
+    let result = prov_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_ok());
-    let proposal = result.unwrap();
+    let proposal = result.unwrap().into_client()?;
 
     assert_eq!(proposal.state()?, &State::Draft);
     assert_eq!(proposal.proposal_id()?, &proposal_id.to_string());
@@ -48,7 +50,7 @@ async fn test_get_proposal_rest() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_get_proposal_rest")
+    let network = MarketsNetwork::new("test_get_proposal_not_found")
         .await
         .add_market_instance("Requestor1")
         .await?
@@ -56,7 +58,6 @@ async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
         .await?;
 
     let req_market = network.get_market("Requestor1");
-    let req_id = network.get_default_id("Requestor1");
 
     // Create some Proposals, that will be unused.
     exchange_draft_proposals(&network, "Requestor1", "Provider1").await?;
@@ -65,12 +66,9 @@ async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
     let proposal_id = "P-0000000000000000000000000000000000000000000000000000000000000003"
         .parse()
         .unwrap();
-    let result = req_market.get_proposal(&proposal_id, &req_id).await;
+    let result = req_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        GetProposalError::NotFound(proposal_id).to_string(),
-    );
+    assert_err_eq!(ProposalError::NotFound(proposal_id, None), result);
     Ok(())
 }

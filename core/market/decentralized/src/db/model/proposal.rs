@@ -101,6 +101,7 @@ pub struct DbProposal {
 }
 
 /// Proposal together with Negotiation object related with it.
+#[derive(Debug)]
 pub struct Proposal {
     pub negotiation: Negotiation,
     pub body: DbProposal,

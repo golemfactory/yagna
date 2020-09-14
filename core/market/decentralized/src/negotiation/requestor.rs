@@ -41,7 +41,7 @@ pub enum ApprovalStatus {
 
 /// Requestor part of negotiation logic.
 pub struct RequestorBroker {
-    pub common: CommonBroker,
+    pub(crate) common: CommonBroker,
     api: NegotiationApi,
     agreement_notifier: EventNotifier<AgreementId>,
 }
@@ -144,7 +144,7 @@ impl RequestorBroker {
             true => self.api.initial_proposal(new_proposal).await,
             false => self.api.counter_proposal(new_proposal).await,
         }
-        .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.clone(), e))?;
+        .map_err(|e| ProposalError::Send(prev_proposal_id.clone(), e))?;
 
         Ok(proposal_id)
     }
@@ -196,7 +196,7 @@ impl RequestorBroker {
         let offer_proposal_id = proposal_id;
         let offer_proposal = self
             .common
-            .get_proposal(offer_proposal_id)
+            .get_proposal(None, offer_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
 
@@ -207,7 +207,7 @@ impl RequestorBroker {
             .ok_or_else(|| AgreementError::NoNegotiations(offer_proposal_id.clone()))?;
         let demand_proposal = self
             .common
-            .get_proposal(&demand_proposal_id)
+            .get_proposal(None, &demand_proposal_id)
             .await
             .map_err(|e| AgreementError::from(proposal_id, e))?;
 
@@ -248,21 +248,19 @@ impl RequestorBroker {
                 .as_dao::<AgreementDao>()
                 .select(id, Utc::now().naive_utc())
                 .await
-                .map_err(|e| WaitForApprovalError::FailedGetFromDb(id.clone(), e))?
+                .map_err(|e| WaitForApprovalError::Get(id.clone(), e))?
                 .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
                 AgreementState::Approved => return Ok(ApprovalStatus::Approved),
                 AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
                 AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
-                AgreementState::Expired => {
-                    return Err(WaitForApprovalError::AgreementExpired(id.clone()))
-                }
+                AgreementState::Expired => return Err(WaitForApprovalError::Expired(id.clone())),
                 AgreementState::Proposal => {
-                    return Err(WaitForApprovalError::AgreementNotConfirmed(id.clone()))
+                    return Err(WaitForApprovalError::NotConfirmed(id.clone()))
                 }
                 AgreementState::Terminated => {
-                    return Err(WaitForApprovalError::AgreementTerminated(id.clone()))
+                    return Err(WaitForApprovalError::Terminated(id.clone()))
                 }
                 AgreementState::Pending => (), // Still waiting for approval.
             };

@@ -102,12 +102,23 @@ async fn counter_proposal(
 async fn get_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
-    id: Identity,
+    _id: Identity,
 ) -> impl Responder {
-    let PathSubscriptionProposal { proposal_id, .. } = path.into_inner();
+    // TODO: Authorization
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+
+    // check subscription
+    market.matcher.store.get_offer(&subscription_id).await?;
+
     market
-        .get_proposal(&proposal_id, &id)
+        .provider_engine
+        .common
+        .get_proposal(Some(subscription_id), &proposal_id)
         .await
+        .and_then(|proposal| proposal.into_client().map_err(From::from))
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 

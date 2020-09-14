@@ -31,7 +31,7 @@ use ya_service_api_web::middleware::Identity;
 /// Provider part of negotiation logic.
 #[derive(Clone)]
 pub struct ProviderBroker {
-    common: CommonBroker,
+    pub(crate) common: CommonBroker,
     api: NegotiationApi,
 }
 
@@ -109,7 +109,7 @@ impl ProviderBroker {
         self.api
             .counter_proposal(new_proposal)
             .await
-            .map_err(|e| ProposalError::FailedSendProposal(prev_proposal_id.clone(), e))?;
+            .map_err(|e| ProposalError::Send(prev_proposal_id.clone(), e))?;
 
         Ok(proposal_id)
     }
