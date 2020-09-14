@@ -19,6 +19,7 @@ pub mod builder;
 pub mod error;
 pub mod message;
 
+use crate::DISCOVERY_VERSION;
 use error::*;
 use message::*;
 
@@ -68,9 +69,7 @@ impl Discovery {
         Ok(net::from(self.default_identity().await?)
             .to(target_node)
             .service(&get_offers_addr(BUS_ID))
-            .send(RetrieveOffers {
-                offer_ids: offer_ids,
-            })
+            .send(RetrieveOffers { offer_ids })
             .await??)
     }
 
@@ -94,7 +93,7 @@ impl Discovery {
         public_prefix: &str,
         local_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
-        log::info!("Discovery protocol version: mk1");
+        log::info!("Discovery protocol version: {}", DISCOVERY_VERSION!());
 
         let myself = self.clone();
         // /local/market/market-protocol-mk1-offer
