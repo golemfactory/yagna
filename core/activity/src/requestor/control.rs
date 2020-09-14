@@ -207,6 +207,7 @@ fn stream_results(
         });
 
     Ok(HttpResponse::Ok()
+        .keep_alive()
         .content_type(mime::TEXT_EVENT_STREAM.essence_str())
         .streaming(stream))
 }
