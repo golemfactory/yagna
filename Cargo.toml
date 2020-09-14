@@ -10,10 +10,10 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['market-forwarding', 'gnt-driver', "gftp/bin"]
+default = ['market-forwarding', 'gnt-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
-market-decentralized = ['ya-market-decentralized']
+market-decentralized = ['ya-market-decentralized', 'gftp/bin']
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
 
