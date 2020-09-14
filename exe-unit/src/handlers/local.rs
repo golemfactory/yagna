@@ -65,26 +65,58 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
 impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
     type Result = ResponseActFuture<Self, <Initialize as Message>::Result>;
 
+    #[cfg(feature = "sgx")]
     fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
-        #[cfg(feature = "sgx")]
         let crypto = self.ctx.crypto.clone();
+        let nonce = self.ctx.activity_id.to_owned();
+        let task_package = self.ctx.agreement.task_package.to_owned();
+
         let fut = async move {
             Ok::<_, Error>({
-                #[cfg(feature = "sgx")]
                 {
+                    use graphene::sgx::SgxQuote;
+                    use sha3::{Digest, Sha3_256};
+                    use std::env;
                     use ya_core_model::activity::local::Credentials;
-                    // TODO: attestation
+                    use ya_core_model::sgx::local::VerifyAttestationEvidence;
+
+                    let quote = SgxQuote::hasher()
+                        .data(&crypto.requestor_pub_key.serialize())
+                        .data(&crypto.pub_key.serialize())
+                        .data(task_package.as_bytes())
+                        .build()?;
+
+                    let mr_enclave = quote.body.report_body.mr_enclave;
+                    log::debug!("Enclave quote: {:?}", &quote);
+
+                    let evidence = ya_service_bus::typed::service("/local/sgx")
+                        .call(VerifyAttestationEvidence {
+                            enclave_quote: quote.into(),
+                            ias_api_key: env::var("IAS_API_KEY").map_err(|_| {
+                                Error::Attestation("IAS_API_KEY variable not set".to_owned())
+                            })?,
+                            ias_nonce: nonce,
+                            production: false,
+                        })
+                        .await?
+                        .map_err(|e| Error::Attestation(e.to_string()))?;
+
+                    log::debug!("IAS report: {}", &evidence.report);
+                    let mut hasher = Sha3_256::new();
+                    hasher.input(task_package.as_bytes());
+
+                    let mut payload_hash = [0u8; 32];
+                    payload_hash.copy_from_slice(hasher.result().as_ref());
+
                     Some(Credentials::Sgx {
                         requestor: crypto.requestor_pub_key.serialize().to_vec(),
                         enclave: crypto.pub_key.serialize().to_vec(),
-                        payload_sha3: [0u8; 32],
-                        enclave_hash: [0u8; 32],
-                        ias_report: String::new(),
-                        ias_sig: Vec::new(),
+                        payload_sha3: payload_hash,
+                        enclave_hash: mr_enclave,
+                        ias_report: evidence.report,
+                        ias_sig: evidence.signature,
                     })
                 }
-                #[cfg(not(feature = "sgx"))]
-                None
             })
         }
         .into_actor(self)
@@ -94,6 +126,11 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
         });
 
         Box::new(fut)
+    }
+
+    #[cfg(not(feature = "sgx"))]
+    fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
+        Box::new(futures::future::ok(()).into_actor(self))
     }
 }
 

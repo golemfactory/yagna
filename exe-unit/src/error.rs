@@ -64,6 +64,9 @@ pub enum Error {
     #[cfg(feature = "sgx")]
     #[error("Crypto error: {0:?}")]
     Crypto(#[from] secp256k1::Error),
+    #[cfg(feature = "sgx")]
+    #[error("Attestation error: {0}")]
+    Attestation(String),
 }
 
 impl Error {
@@ -123,6 +126,8 @@ impl From<Error> for RpcError {
             Error::Other(e) => RpcError::Service(e),
             #[cfg(feature = "sgx")]
             Error::Crypto(e) => RpcError::Service(e.to_string()),
+            #[cfg(feature = "sgx")]
+            Error::Attestation(e) => RpcError::Service(e.to_string()),
         }
     }
 }

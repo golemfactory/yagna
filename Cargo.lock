@@ -1908,12 +1908,13 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "graphene"
-version = "0.2.0"
-source = "git+https://github.com/golemfactory/graphene-rust.git?rev=57b0a366658a2d609d9c0cef209955760e363730#57b0a366658a2d609d9c0cef209955760e363730"
+version = "0.3.1"
+source = "git+https://github.com/golemfactory/graphene-rust.git#e5a78fffd40901142fc191ef8d08f88734802ae7"
 dependencies = [
  "anyhow",
  "base64 0.11.0",
  "byteorder",
+ "chrono",
  "hex",
  "http 0.2.1",
  "hyper 0.13.7",
@@ -5590,7 +5591,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=f23e6c5030771bddba859cd5515da337550e36af#f23e6c5030771bddba859cd5515da337550e36af"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=c5c3ad90725c418945666bf1f755c626b0023062#c5c3ad90725c418945666bf1f755c626b0023062"
 dependencies = [
  "awc",
  "backtrace",
@@ -5599,6 +5600,7 @@ dependencies = [
  "envy",
  "failure",
  "futures 0.3.5",
+ "hex",
  "log 0.4.11",
  "rand 0.6.5",
  "serde",
@@ -5612,7 +5614,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=f23e6c5030771bddba859cd5515da337550e36af#f23e6c5030771bddba859cd5515da337550e36af"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=c5c3ad90725c418945666bf1f755c626b0023062#c5c3ad90725c418945666bf1f755c626b0023062"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5683,6 +5685,7 @@ dependencies = [
  "env_logger 0.7.1",
  "flexi_logger",
  "futures 0.3.5",
+ "graphene",
  "hex",
  "lazy_static",
  "libproc",
