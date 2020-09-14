@@ -23,7 +23,7 @@ pub fn path_config() -> PathConfig {
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct PathAgreement {
     pub agreement_id: String,
 }

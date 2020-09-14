@@ -23,14 +23,20 @@ async fn get_agreement(
     let agreement_id = AgreementId::from_client(&msg.agreement_id, OwnerType::Provider)
         .map_err(|e| RpcMessageError::Market(e.to_string()))?;
 
+    // TODO: We should check Agreement owner, like in REST get_agreement implementation, but
+    //  I'm not sure we can trust `sender_id` value from gsb now.
     let dao = db.as_dao::<AgreementDao>();
     Ok(match dao
-        .select(&agreement_id, chrono::Utc::now().naive_utc())
+        .select(&agreement_id, None, chrono::Utc::now().naive_utc())
         .await
         .map_err(|e| RpcMessageError::Market(e.to_string()))?
     {
         None => dao
-            .select(&agreement_id.swap_owner(), chrono::Utc::now().naive_utc())
+            .select(
+                &agreement_id.swap_owner(),
+                None,
+                chrono::Utc::now().naive_utc(),
+            )
             .await
             .map_err(|e| RpcMessageError::Market(e.to_string()))?,
         Some(agreement) => Some(agreement),

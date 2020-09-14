@@ -203,13 +203,13 @@ impl MarketService {
     pub async fn get_agreement(
         &self,
         agreement_id: &AgreementId,
-        _id: &Identity,
+        id: &Identity,
     ) -> Result<Agreement, AgreementError> {
         // TODO: Authorization
         match self
             .db
             .as_dao::<AgreementDao>()
-            .select(agreement_id, Utc::now().naive_utc())
+            .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
         {
