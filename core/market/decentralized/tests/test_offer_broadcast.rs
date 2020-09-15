@@ -68,7 +68,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_validation")
+    let network = MarketsNetwork::new("test_broadcast_offer_callbacks")
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -105,7 +105,7 @@ async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_validation")
+    let network = MarketsNetwork::new("test_broadcast_offer_id_validation")
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -144,7 +144,7 @@ async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_validation")
+    let network = MarketsNetwork::new("test_broadcast_expired_offer")
         .await
         .add_market_instance("Node-1")
         .await?;

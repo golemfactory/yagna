@@ -6,12 +6,13 @@ use ya_client::model::market::{Offer, Proposal};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::ResultExt;
 
-use super::common::*;
 use crate::market::MarketService;
 
+use super::common::*;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
 };
+use crate::db::model::OwnerType;
 
 // This file contains market REST endpoints. Responsibility of these functions
 // is calling respective functions in market modules and mapping return values
@@ -130,7 +131,7 @@ async fn approve_agreement(
     query: Query<QueryTimeout>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().agreement_id;
+    let agreement_id = path.into_inner().to_id(OwnerType::Provider)?;
     let timeout = query.timeout;
     market
         .provider_engine

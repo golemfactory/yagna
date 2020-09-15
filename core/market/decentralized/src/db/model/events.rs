@@ -109,14 +109,14 @@ impl MarketEvent {
     }
 
     async fn into_client_agreement(self, db: DbExecutor) -> Result<ClientAgreement, EventError> {
-        let prop = db
+        let agreement = db
             .as_dao::<AgreementDao>()
-            .select(&self.artifact_id, Utc::now().naive_utc())
+            .select(&self.artifact_id, None, Utc::now().naive_utc())
             .await
             .map_err(|error| EventError::FailedGetProposal(error))?
             .ok_or(EventError::AgreementNotFound(self.artifact_id.clone()))?;
 
-        Ok(prop.into_client()?)
+        Ok(agreement.into_client()?)
     }
 
     pub async fn into_client_provider_event(

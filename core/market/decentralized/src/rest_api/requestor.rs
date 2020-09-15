@@ -14,6 +14,7 @@ use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, ProposalId, QueryTimeout,
     QueryTimeoutMaxEvents,
 };
+use crate::db::model::OwnerType;
 
 // This file contains market REST endpoints. Responsibility of these functions
 // is calling respective functions in market modules and mapping return values
@@ -140,7 +141,7 @@ async fn create_agreement(
         .create_agreement(id, &proposal_id, valid_to)
         .await
         .inspect_err(|e| log::error!("[CreateAgreement] {}", e))
-        .map(|agreement_id| HttpResponse::Ok().json(agreement_id))
+        .map(|agreement_id| HttpResponse::Ok().json(agreement_id.into_client()))
 }
 
 #[actix_web::post("/agreements/{agreement_id}/confirm")]
@@ -149,7 +150,7 @@ async fn confirm_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().agreement_id;
+    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     market
         .requestor_engine
         .confirm_agreement(id, &agreement_id)
@@ -165,7 +166,7 @@ async fn wait_for_approval(
     query: Query<QueryTimeout>,
     _id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().agreement_id;
+    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     let timeout = query.timeout;
     market
         .requestor_engine

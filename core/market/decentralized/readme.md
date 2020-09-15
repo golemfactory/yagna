@@ -32,3 +32,19 @@ add `env_logger::init();` on the beginning.
 ```
 RUST_LOG=debug cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite 
 ```
+
+### Building .deb
+Prerequisites: 
+- You need cargo-deb installed (`cargo install cargo-deb`).
+- Build .deb on the oldest operating system version, you want to support.
+Otherwise linking with GLIBC will fail.
+
+Build yagna with all binaries needed in .deb:
+```
+cargo build --release --no-default-features --features market-decentralized --features gnt-driver --workspace
+```
+
+Run cargo-deb using binaries compiled in previous step:
+```
+cargo deb --no-build
+```
