@@ -129,15 +129,18 @@ impl<R: Runtime> Handler<SignExeScript> for ExeUnit<R> {
             ))
         })?;
 
-        let script = batch.exe_script.clone();
-        let json = serde_json::to_string(&script)?;
-        let sig_vec = self.ctx.crypto.sign(json.as_bytes())?;
-
-        Ok(SignExeScriptResponse {
-            script,
+        let mut response = SignExeScriptResponse {
+            script: batch.exe_script.clone(),
+            results: self.state.batch_results(&msg.batch_id),
             digest: "sha3".to_string(),
-            sig: hex::encode(&sig_vec),
-        })
+            sig: None,
+        };
+
+        let json = serde_json::to_string(&response)?;
+        let sig_vec = self.ctx.crypto.sign(json.as_bytes())?;
+        response.sig = Some(hex::encode(&sig_vec));
+
+        Ok(response)
     }
 
     #[cfg(not(feature = "sgx"))]

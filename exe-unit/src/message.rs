@@ -180,8 +180,11 @@ pub struct SignExeScript {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignExeScriptResponse {
     pub script: Vec<ExeScriptCommand>,
+    pub results: Vec<ExeScriptCommandResult>,
     pub digest: String,
-    pub sig: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub sig: Option<String>,
 }
 
 #[derive(Clone, Debug, Message)]
