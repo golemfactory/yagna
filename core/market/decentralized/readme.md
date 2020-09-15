@@ -35,13 +35,13 @@ RUST_LOG=debug cargo test -p ya-market-decentralized --features ya-market-decent
 
 ### Building .deb
 Prerequisites: 
-- You need cargo-deb installed.
+- You need cargo-deb installed (`cargo install cargo-deb`).
 - Build .deb on the oldest operating system version, you want to support.
 Otherwise linking with GLIBC will fail.
 
 Build yagna with all binaries needed in .deb:
 ```
-cargo build --release --no-default-features --features market-decentralized --features gnt-driver -p yagna -p gftp -p ya-requestor -p ya-provider -p ya-exe-unit
+cargo build --release --no-default-features --features market-decentralized --features gnt-driver --workspace
 ```
 
 Run cargo-deb using binaries compiled in previous step:

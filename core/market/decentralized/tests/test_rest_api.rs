@@ -276,14 +276,14 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
     let req = test::TestRequest::get()
         .uri(&format!(
             "/market-api/v1/agreements/{}",
-            agreement_id.to_client()
+            agreement_id.into_client()
         ))
         .to_request();
     let resp = test::call_service(&mut app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let agreement: Agreement = read_response_json(resp).await;
-    assert_eq!(agreement.agreement_id, agreement_id.to_client());
+    assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(
         agreement.demand.requestor_id.unwrap(),
         req_id.identity.to_string()

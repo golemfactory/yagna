@@ -141,7 +141,7 @@ async fn create_agreement(
         .create_agreement(id, &proposal_id, valid_to)
         .await
         .inspect_err(|e| log::error!("[CreateAgreement] {}", e))
-        .map(|agreement_id| HttpResponse::Ok().json(agreement_id.to_client()))
+        .map(|agreement_id| HttpResponse::Ok().json(agreement_id.into_client()))
 }
 
 #[actix_web::post("/agreements/{agreement_id}/confirm")]

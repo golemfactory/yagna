@@ -74,7 +74,7 @@ pub enum AgreementError {
     Update(AgreementId, DbError),
     #[error("Invalid state {0}")]
     InvalidState(#[from] AgreementStateError),
-    #[error("Invalid agreement id. {0}")]
+    #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
     #[error("Protocol error: {0}")]
     Protocol(#[from] ProtocolAgreementError),

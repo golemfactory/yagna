@@ -94,7 +94,7 @@ impl ProposalId {
 
     /// Clients on both Requestor and Provider side should use the same id,
     /// because they communicate with each other and exchange this id.
-    pub fn to_client(&self) -> String {
+    pub fn into_client(&self) -> String {
         self.id.clone()
     }
 

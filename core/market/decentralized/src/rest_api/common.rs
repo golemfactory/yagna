@@ -13,15 +13,15 @@ use crate::negotiation::error::AgreementError;
 #[actix_web::get("/agreements/{agreement_id}")]
 async fn get_agreement(
     market: Data<Arc<MarketService>>,
-    body: Path<PathAgreement>,
+    path: Path<PathAgreement>,
     id: Identity,
 ) -> impl Responder {
     // We don't know, if we are requestor or provider. Try to get Agreement for both sides
     // and check, if any will be returned. Note that we won't get Agreement if we aren't
     // owner, so here is no danger, that Provider gets Requestor's Offer and opposite.
-    let body = body.into_inner();
-    let r_agreement_id = body.clone().to_id(OwnerType::Requestor)?;
-    let p_agreement_id = body.to_id(OwnerType::Provider)?;
+    let path = path.into_inner();
+    let r_agreement_id = path.clone().to_id(OwnerType::Requestor)?;
+    let p_agreement_id = path.to_id(OwnerType::Provider)?;
 
     let r_result = market.get_agreement(&r_agreement_id, &id).await;
     let p_result = market.get_agreement(&p_agreement_id, &id).await;

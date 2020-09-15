@@ -157,7 +157,7 @@ impl Agreement {
             offer_id: None, // Using self.offer_id would be misleading because properties and constraints were taken from latest proposal.
         };
         Ok(ClientAgreement {
-            agreement_id: self.id.to_client(),
+            agreement_id: self.id.into_client(),
             demand,
             offer,
             valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),

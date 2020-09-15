@@ -205,7 +205,6 @@ impl MarketService {
         agreement_id: &AgreementId,
         id: &Identity,
     ) -> Result<Agreement, AgreementError> {
-        // TODO: Authorization
         match self
             .db
             .as_dao::<AgreementDao>()
