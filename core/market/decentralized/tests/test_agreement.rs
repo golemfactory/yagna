@@ -226,7 +226,7 @@ async fn second_creation_should_fail() -> Result<()> {
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::AgreementExists(agreement_id, proposal_id).to_string()
+        AgreementError::AlreadyExists(agreement_id, proposal_id).to_string()
     );
 
     Ok(())
@@ -353,7 +353,7 @@ async fn agreement_expired_before_approval() -> Result<()> {
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        WaitForApprovalError::AgreementExpired(agreement_id).to_string()
+        WaitForApprovalError::Expired(agreement_id).to_string()
     );
 
     Ok(())
@@ -390,7 +390,7 @@ async fn waiting_wo_confirmation_should_fail() -> Result<()> {
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        WaitForApprovalError::AgreementNotConfirmed(agreement_id).to_string()
+        WaitForApprovalError::NotConfirmed(agreement_id).to_string()
     );
 
     Ok(())

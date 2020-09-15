@@ -6,17 +6,12 @@ use ya_client::model::market::{Offer, Proposal};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::ResultExt;
 
+use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
-use super::common::*;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
 };
-use crate::db::model::OwnerType;
-
-// This file contains market REST endpoints. Responsibility of these functions
-// is calling respective functions in market modules and mapping return values
-// to http responses. No market logic is allowed here.
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -30,7 +25,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(approve_agreement)
         .service(reject_agreement)
         .service(terminate_agreement)
-        .service(get_agreement)
 }
 
 #[actix_web::post("/offers")]
@@ -110,11 +104,18 @@ async fn counter_proposal(
 async fn get_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
-    id: Identity,
+    _id: Identity,
 ) -> impl Responder {
-    let PathSubscriptionProposal { proposal_id, .. } = path.into_inner();
+    // TODO: Authorization
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+
     market
-        .get_proposal(&proposal_id, &id)
+        .provider_engine
+        .common
+        .get_client_proposal(Some(subscription_id), &proposal_id)
         .await
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }

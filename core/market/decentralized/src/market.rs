@@ -5,21 +5,18 @@ use thiserror::Error;
 
 use crate::config::Config;
 use crate::db::dao::AgreementDao;
-use crate::db::model::{AgreementId, ProposalId, SubscriptionId};
+use crate::db::model::{AgreementId, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
     QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
-use crate::negotiation::error::{
-    AgreementError, GetProposalError, NegotiationError, NegotiationInitError,
-};
+use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
-use ya_client::model::market::{Agreement, Demand, Offer, Proposal};
-use ya_client::model::ErrorMessage;
+use ya_client::model::market::{Agreement, Demand, Offer};
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
@@ -57,10 +54,6 @@ pub enum MarketError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
-    #[error(transparent)]
-    GetProposal(#[from] GetProposalError),
-    #[error("Internal error: {0}.")]
-    InternalError(#[from] ErrorMessage),
 }
 
 #[derive(Error, Debug)]
@@ -142,10 +135,12 @@ impl MarketService {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
             .data(myself)
             .app_data(rest_api::path_config())
+            .extend(rest_api::common::register_endpoints)
             .extend(rest_api::provider::register_endpoints)
             .extend(rest_api::requestor::register_endpoints)
     }
 
+    // TODO: (re)move this
     pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<Offer>, MarketError> {
         Ok(self
             .matcher
@@ -204,22 +199,6 @@ impl MarketService {
         Ok(self.matcher.unsubscribe_demand(demand_id, id).await?)
     }
 
-    pub async fn get_proposal(
-        &self,
-        proposal_id: &ProposalId,
-        _id: &Identity,
-    ) -> Result<Proposal, MarketError> {
-        // TODO: Autorization
-        // This could be both `requestor_engine` and `provider_engine`,
-        // because CommonBroker has the same implementation.
-        Ok(self
-            .requestor_engine
-            .common
-            .get_proposal(proposal_id)
-            .await?
-            .into_client()?)
-    }
-
     pub async fn get_agreement(
         &self,
         agreement_id: &AgreementId,
@@ -234,7 +213,7 @@ impl MarketService {
         {
             Some(agreement) => Ok(agreement
                 .into_client()
-                .map_err(|e| AgreementError::InternalError(e.to_string()))?),
+                .map_err(|e| AgreementError::Internal(e.to_string()))?),
             None => Err(AgreementError::NotFound(agreement_id.clone())),
         }
     }
