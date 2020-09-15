@@ -10,15 +10,10 @@ use ya_std_utils::ResultExt;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
-use super::common::*;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, ProposalId, QueryTimeout,
     QueryTimeoutMaxEvents,
 };
-
-// This file contains market REST endpoints. Responsibility of these functions
-// is calling respective functions in market modules and mapping return values
-// to http responses. No market logic is allowed here.
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -30,7 +25,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(get_proposal)
         .service(reject_proposal)
         .service(create_agreement)
-        .service(get_agreement)
         .service(confirm_agreement)
         .service(wait_for_approval)
         .service(cancel_agreement)

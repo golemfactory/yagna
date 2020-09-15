@@ -1,5 +1,5 @@
 use actix_web::web::{Data, Path};
-use actix_web::{HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
 use ya_service_api_web::middleware::Identity;
@@ -10,8 +10,12 @@ use crate::db::model::OwnerType;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
 
+pub fn register_endpoints(scope: Scope) -> Scope {
+    scope.service(get_agreement)
+}
+
 #[actix_web::get("/agreements/{agreement_id}")]
-pub(super) async fn get_agreement(
+async fn get_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
     id: Identity,

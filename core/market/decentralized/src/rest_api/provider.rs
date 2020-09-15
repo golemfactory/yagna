@@ -9,14 +9,9 @@ use ya_std_utils::ResultExt;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
-use super::common::*;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
 };
-
-// This file contains market REST endpoints. Responsibility of these functions
-// is calling respective functions in market modules and mapping return values
-// to http responses. No market logic is allowed here.
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -30,7 +25,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(approve_agreement)
         .service(reject_agreement)
         .service(terminate_agreement)
-        .service(get_agreement)
 }
 
 #[actix_web::post("/offers")]

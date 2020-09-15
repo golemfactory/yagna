@@ -135,6 +135,7 @@ impl MarketService {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
             .data(myself)
             .app_data(rest_api::path_config())
+            .extend(rest_api::common::register_endpoints)
             .extend(rest_api::provider::register_endpoints)
             .extend(rest_api::requestor::register_endpoints)
     }
