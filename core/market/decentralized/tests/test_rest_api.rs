@@ -275,6 +275,56 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
     Ok(())
 }
 
+// #[cfg_attr(not(feature = "market-test-suite"), ignore)]
+// #[actix_rt::test]
+// async fn test_rest_get_proposal_wrong_subscription() -> anyhow::Result<()> {
+//     let network = MarketsNetwork::new("test_rest_get_proposal")
+//         .await
+//         .add_market_instance("Node-1")
+//         .await?
+//         .add_market_instance("Node-2")
+//         .await?;
+//
+//     let identity_local = network.get_default_id("Node-1");
+//     let fake_subscription_id = SubscriptionId::generate_id(
+//         "",
+//         "",
+//         &identity_local.identity,
+//         &Utc::now().naive_utc(),
+//         &Utc::now().naive_utc(),
+//     );
+//     let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+//     let mut app = network.get_rest_app("Node-1").await;
+//
+//     let req_offers = test::TestRequest::get()
+//         .uri(
+//             format!(
+//                 "/market-api/v1/offers/{}/proposals/{}",
+//                 fake_subscription_id, proposal_id
+//             )
+//             .as_str(),
+//         )
+//         .to_request();
+//     let resp_offers = test::call_service(&mut app, req_offers).await;
+//     assert_eq!(resp_offers.status(), StatusCode::NOT_FOUND);
+//
+//     let req_demands = test::TestRequest::get()
+//         .uri(
+//             format!(
+//                 "/market-api/v1/demands/{}/proposals/{}",
+//                 fake_subscription_id, proposal_id
+//             )
+//             .as_str(),
+//         )
+//         .to_request();
+//     let resp_demands = test::call_service(&mut app, req_demands).await;
+//
+//     assert_eq!(resp_demands.status(), StatusCode::OK);
+//     assert_eq!(resp_offers.status(), StatusCode::NOT_FOUND);
+//
+//     Ok(())
+// }
+
 pub async fn read_response_json<B: MessageBody, T: DeserializeOwned>(
     resp: ServiceResponse<B>,
 ) -> T {
