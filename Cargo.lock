@@ -5719,7 +5719,6 @@ dependencies = [
  "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
- "ya-net",
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
