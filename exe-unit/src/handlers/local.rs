@@ -77,8 +77,10 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                     use graphene::sgx::SgxQuote;
                     use sha3::{Digest, Sha3_256};
                     use std::env;
+                    use ya_client_model::node_id::{NodeId, ParseError};
                     use ya_core_model::activity::local::Credentials;
-                    use ya_core_model::sgx::local::VerifyAttestationEvidence;
+                    use ya_core_model::net::RemoteEndpoint;
+                    use ya_core_model::sgx::VerifyAttestationEvidence;
 
                     let quote = SgxQuote::hasher()
                         .data(&crypto.requestor_pub_key.serialize())
@@ -89,12 +91,17 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                     let mr_enclave = quote.body.report_body.mr_enclave;
                     log::debug!("Enclave quote: {:?}", &quote);
 
-                    let evidence = ya_service_bus::typed::service("/local/sgx")
+                    let remote: NodeId = env::var("IAS_SERVICE_ADDRESS")
+                        .map_err(|_| {
+                            Error::Attestation("IAS_SERVICE_ADDRESS variable not found".into())
+                        })?
+                        .parse()
+                        .map_err(|e: ParseError| Error::Attestation(e.to_string()))?;
+
+                    let evidence = remote
+                        .service("/public/sgx")
                         .call(VerifyAttestationEvidence {
                             enclave_quote: quote.into(),
-                            ias_api_key: env::var("IAS_API_KEY").map_err(|_| {
-                                Error::Attestation("IAS_API_KEY variable not set".to_owned())
-                            })?,
                             ias_nonce: nonce,
                             production: false,
                         })
