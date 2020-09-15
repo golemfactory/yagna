@@ -94,7 +94,7 @@ mod test {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
     use crate::testing::mock_identity::{generate_identity, MockIdentity};
-    use crate::testing::mock_offer::sample_get_offer_received;
+    use crate::testing::mock_offer::sample_retrieve_offers;
 
     use super::super::*;
     use super::*;
@@ -185,7 +185,7 @@ mod test {
         // when
         let node_id = generate_identity("caller").identity.to_string();
         discovery
-            .on_get_remote_offers(node_id, sample_get_offer_received())
+            .on_get_remote_offers(node_id, sample_retrieve_offers())
             .await
             .unwrap();
 

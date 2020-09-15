@@ -32,7 +32,7 @@ impl ExeUnitInstance {
             .with_context(|| format!("Failed to spawn [{}].", binary_path.display()))?;
 
         let mut command = Command::new(&binary_path);
-        // new_process_group is a no-op on non-Unix systems
+        // new_process_group is a no-op on Windows
         command
             .args(args)
             .current_dir(working_dir)

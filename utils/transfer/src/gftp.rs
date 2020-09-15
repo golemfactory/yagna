@@ -1,7 +1,6 @@
 use crate::error::Error;
-use crate::{
-    abortable_sink, abortable_stream, TransferData, TransferProvider, TransferSink, TransferStream,
-};
+use crate::{abortable_sink, abortable_stream};
+use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
 use actix_rt::System;
 use bytes::Bytes;
 use futures::future::ready;
@@ -11,6 +10,7 @@ use sha3::{Digest, Sha3_256};
 use std::cmp::min;
 use std::thread;
 use url::Url;
+use ya_client_model::activity::TransferArgs;
 use ya_core_model::gftp as model;
 use ya_core_model::gftp::Error as GftpError;
 use ya_core_model::gftp::GftpChunk;
@@ -32,7 +32,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
         vec!["gftp"]
     }
 
-    fn source(&self, url: &Url) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &Url, _: &TransferArgs) -> TransferStream<TransferData, Error> {
         let url = url.clone();
         let buffer_sz = self.rx_buffer_sz;
         let chunk_size = DEFAULT_CHUNK_SIZE;
@@ -76,7 +76,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
         stream
     }
 
-    fn destination(&self, url: &Url) -> TransferSink<TransferData, Error> {
+    fn destination(&self, url: &Url, _: &TransferArgs) -> TransferSink<TransferData, Error> {
         let url = url.clone();
         let chunk_size = DEFAULT_CHUNK_SIZE as usize;
 
@@ -91,7 +91,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                 let mut digest = Sha3_256::default();
                 let mut offset: usize = 0;
                 while let Some(result) = rx.next().await {
-                    let bytes = result?.into_bytes();
+                    let bytes = Bytes::from(result?);
                     let n = (bytes.len() + chunk_size - 1) / chunk_size;
                     for i in 0..n {
                         let start = i * chunk_size;

@@ -21,6 +21,8 @@ pub trait ProcessGroupExt<T> {
 impl ProcessGroupExt<Command> for Command {
     #[cfg(unix)]
     fn new_process_group(&mut self) -> &mut Command {
+        // FIXME: Linux: refactor and use the tokio-process-ns crate
+
         use nix::Error;
         use std::io;
         use std::os::unix::process::CommandExt;

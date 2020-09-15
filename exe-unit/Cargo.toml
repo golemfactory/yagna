@@ -19,9 +19,6 @@ compat-deployment = []
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"
 
-[target.'cfg(target_os = "linux")'.dependencies]
-procfs = "0.7.8"
-
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = "0.7.1"
 
@@ -36,6 +33,7 @@ ya-core-model = { version = "0.1", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.1", path = "runtime-api", features = ["server"] }
 ya-service-bus = "0.2"
 ya-transfer = "0.1"
+ya-utils-path = "0.1"
 
 actix = "0.9"
 anyhow = "1.0.19"

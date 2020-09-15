@@ -7,14 +7,16 @@ use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
+use ya_core_model::payment::local::{GetAccounts, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
-    CancelError, CancelInvoice, SendDebitNote, SendError, SendInvoice, BUS_ID,
+    CancelError, CancelInvoice, SendDebitNote, SendError, SendInvoice, BUS_ID as PUBLIC_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -46,6 +48,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/invoiceEvents", get().to(get_invoice_events))
         .route("/payments", get().to(get_payments))
         .route("/payments/{payment_id}", get().to(get_payment))
+        .route("/accounts", get().to(get_accounts))
 }
 
 // ************************** DEBIT NOTE **************************
@@ -147,7 +150,7 @@ async fn send_debit_note(
         match async move {
             ya_net::from(node_id)
                 .to(debit_note.recipient_id)
-                .service(BUS_ID)
+                .service(PUBLIC_SERVICE)
                 .call(SendDebitNote(debit_note))
                 .await??;
             dao.mark_received(debit_note_id, node_id).await?;
@@ -306,7 +309,7 @@ async fn send_invoice(
         match async move {
             ya_net::from(node_id)
                 .to(invoice.recipient_id)
-                .service(BUS_ID)
+                .service(PUBLIC_SERVICE)
                 .call(SendInvoice(invoice))
                 .await??;
             dao.mark_received(invoice_id, node_id).await?;
@@ -353,7 +356,7 @@ async fn cancel_invoice(
         match async move {
             ya_net::from(node_id)
                 .to(invoice.recipient_id)
-                .service(BUS_ID)
+                .service(PUBLIC_SERVICE)
                 .call(CancelInvoice {
                     invoice_id: invoice_id.clone(),
                     recipient_id: invoice.recipient_id,
@@ -434,4 +437,25 @@ async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) 
 
 async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
     response::not_implemented() // TODO
+}
+
+// *************************** ACCOUNTS ****************************
+
+async fn get_accounts(id: Identity) -> HttpResponse {
+    let node_id = id.identity.to_string();
+    let all_accounts = match bus::service(LOCAL_SERVICE).send(GetAccounts {}).await {
+        Ok(Ok(accounts)) => accounts,
+        Ok(Err(e)) => return response::server_error(&e),
+        Err(e) => return response::server_error(&e),
+    };
+    let recv_accounts: Vec<Account> = all_accounts
+        .into_iter()
+        .filter(|account| account.receive)
+        .filter(|account| account.address == node_id) // TODO: Implement proper account permission system
+        .map(|account| Account {
+            platform: account.platform,
+            address: account.address,
+        })
+        .collect();
+    response::ok(recv_accounts)
 }

@@ -1,23 +1,29 @@
+use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
+use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
 
-use crate::db::dao::{EventsDao, ProposalDao};
-use crate::db::model::{MarketEvent, OwnerType, Proposal};
+use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
+use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
 use crate::db::model::{ProposalId, SubscriptionId};
-use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
+use crate::matcher::{
+    error::{DemandError, QueryOfferError},
+    store::SubscriptionStore,
+};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
-    error::{GetProposalError, ProposalError, QueryEventsError},
+    error::{GetProposalError, MatchValidationError, ProposalError, QueryEventsError},
     EventNotifier,
 };
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::ProposalReceived;
+use ya_service_api_web::middleware::Identity;
 
-type IsInitial = bool;
+type IsFirst = bool;
 
 #[derive(Clone)]
 pub struct CommonBroker {
@@ -32,21 +38,43 @@ impl CommonBroker {
         subscription_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
-    ) -> Result<(Proposal, IsInitial), ProposalError> {
-        // TODO: Everything should happen under transaction.
-        // TODO: Check if subscription is active
-        // TODO: Check if this proposal wasn't already countered.
-        log::debug!("Fetching proposal [{}].", &prev_proposal_id);
+        owner: OwnerType,
+    ) -> Result<(Proposal, IsFirst), ProposalError> {
+        // Check if subscription is still active.
+        // Note that subscription can be unsubscribed, before we get to saving
+        // Proposal to database. This seems like race conditions, but there's no
+        // danger of data inconsistency. If we won't reject countering Proposal here,
+        // it will be sent to Provider and his counter Proposal will be rejected later.
+        // TODO: We should use validate_subscription function to do this stuff.
+        if owner == OwnerType::Provider {
+            self.store
+                .get_offer(&subscription_id)
+                .await
+                .map_err(|e| match e {
+                    QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
+                    QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
+                    QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
+                    QueryOfferError::Get(..) => {
+                        ProposalError::InternalError(prev_proposal_id.clone(), e.to_string())
+                    }
+                })?;
+        } else {
+            self.store
+                .get_demand(&subscription_id)
+                .await
+                .map_err(|e| match e {
+                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
+                    _ => ProposalError::InternalError(prev_proposal_id.clone(), e.to_string()),
+                })?;
+        }
+
         let prev_proposal = self
             .get_proposal(prev_proposal_id)
             .await
             .map_err(|e| ProposalError::from(&subscription_id, e))?;
 
-        log::debug!(
-            "Expected subscription id [{}], but found [{}].",
-            subscription_id,
-            prev_proposal.negotiation.subscription_id
-        );
+        // We use ProposalNotFound, because we don't want to leak information,
+        // that such Proposal exists, but for different subscription_id.
         if &prev_proposal.negotiation.subscription_id != subscription_id {
             Err(ProposalError::ProposalNotFound(
                 prev_proposal_id.clone(),
@@ -54,15 +82,25 @@ impl CommonBroker {
             ))?
         }
 
-        let is_initial = prev_proposal.body.prev_proposal_id.is_none();
+        if prev_proposal.body.issuer == IssuerType::Us {
+            return Err(ProposalError::OwnProposal(prev_proposal_id.clone()));
+        }
+
+        let is_first = prev_proposal.body.prev_proposal_id.is_none();
         let new_proposal = prev_proposal.from_client(proposal);
         let proposal_id = new_proposal.body.id.clone();
+
+        validate_match(&new_proposal, &prev_proposal)?;
+
         self.db
             .as_dao::<ProposalDao>()
             .save_proposal(&new_proposal)
             .await
-            .map_err(|e| ProposalError::FailedSaveProposal(proposal_id.clone(), e))?;
-        Ok((new_proposal, is_initial))
+            .map_err(|e| match e {
+                SaveProposalError::AlreadyCountered(id) => ProposalError::AlreadyCountered(id),
+                _ => ProposalError::FailedSaveProposal(proposal_id.clone(), e),
+            })?;
+        Ok((new_proposal, is_first))
     }
 
     pub async fn query_events(
@@ -87,7 +125,7 @@ impl CommonBroker {
             let events = self
                 .db
                 .as_dao::<EventsDao>()
-                .take_events(subscription_id, max_events, owner.clone())
+                .take_events(subscription_id, max_events, owner)
                 .await?;
 
             if events.len() > 0 {
@@ -128,6 +166,9 @@ impl CommonBroker {
             .ok_or_else(|| GetProposalError::NotFound(proposal_id.clone()))?)
     }
 
+    // TODO: We need more elegant solution than this. This function still returns
+    //  CounterProposalError, which should be hidden in negotiation API and implementations
+    //  of handlers should return RemoteProposalError.
     pub async fn on_proposal_received(
         self,
         caller: String,
@@ -151,13 +192,64 @@ impl CommonBroker {
             .get_proposal(&msg.prev_proposal_id)
             .await
             .map_err(|_e| RemoteProposalError::ProposalNotFound(msg.prev_proposal_id.clone()))?;
+        let proposal = prev_proposal.from_draft(msg.proposal);
+        proposal.validate_id().map_err(RemoteProposalError::from)?;
 
-        // Check subscription.
-        if let Err(e) = self
-            .store
-            .get_offer(&prev_proposal.negotiation.offer_id)
+        // TODO: do auth
+        let _owner_id = NodeId::from_str(&caller)
+            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
+
+        self.validate_subscription(&prev_proposal, owner).await?;
+        validate_match(&proposal, &prev_proposal).map_err(RemoteProposalError::NotMatching)?;
+
+        self.db
+            .as_dao::<ProposalDao>()
+            .save_proposal(&proposal)
             .await
-        {
+            .map_err(|e| match e {
+                SaveProposalError::AlreadyCountered(id) => {
+                    RemoteProposalError::AlreadyCountered(id)
+                }
+                _ => {
+                    // TODO: Don't leak our database error, but send meaningful message as response.
+                    log::warn!("[ProposalReceived] Error saving Proposal: {}", e);
+                    RemoteProposalError::Unexpected(e.to_string())
+                }
+            })?;
+
+        // Create Proposal Event and add it to queue (database).
+        // TODO: If creating Proposal succeeds, but event can't be added, provider
+        // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
+        let subscription_id = proposal.negotiation.subscription_id.clone();
+        let proposal = self
+            .db
+            .as_dao::<EventsDao>()
+            .add_proposal_event(proposal, owner)
+            .await
+            .map_err(|e| {
+                // TODO: Don't leak our database error, but send meaningful message as response.
+                log::warn!("[ProposalReceived] Error adding Proposal event: {}", e);
+                RemoteProposalError::Unexpected(e.to_string())
+            })?;
+
+        // Send channel message to wake all query_events waiting for proposals.
+        self.notifier.notify(&subscription_id).await;
+
+        log::info!(
+            "Received counter Proposal [{}] for Proposal [{}] from [{}].",
+            &proposal.body.id,
+            &msg.prev_proposal_id,
+            &caller
+        );
+        Ok(())
+    }
+
+    pub async fn validate_subscription(
+        &self,
+        proposal: &Proposal,
+        owner: OwnerType,
+    ) -> Result<(), RemoteProposalError> {
+        if let Err(e) = self.store.get_offer(&proposal.negotiation.offer_id).await {
             match e {
                 QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
                 QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
@@ -165,28 +257,48 @@ impl CommonBroker {
             }
         };
 
-        // TODO: do auth
-        let _owner_id = NodeId::from_str(&caller)
-            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-
-        let proposal = prev_proposal.from_draft(msg.proposal);
-
-        self.db
-            .as_dao::<ProposalDao>()
-            .save_proposal(&proposal)
-            .await
-            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-
-        // Create Proposal Event and add it to queue (database).
-        let subscription_id = proposal.negotiation.subscription_id.clone();
-        self.db
-            .as_dao::<EventsDao>()
-            .add_proposal_event(proposal, owner)
-            .await
-            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-
-        // Send channel message to wake all query_events waiting for proposals.
-        self.notifier.notify(&subscription_id).await;
+        // On Requestor side we have both Offer and Demand, but Provider has only Offers.
+        if owner == OwnerType::Requestor {
+            if let Err(e) = self.store.get_demand(&proposal.negotiation.demand_id).await {
+                match e {
+                    DemandError::NotFound(id) => Err(RemoteProposalError::Unsubscribed(id))?,
+                    _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
+                }
+            };
+        }
         Ok(())
+    }
+}
+
+pub fn validate_match(
+    new_proposal: &Proposal,
+    prev_proposal: &Proposal,
+) -> Result<(), MatchValidationError> {
+    match match_demand_offer(
+        &new_proposal.body.properties,
+        &new_proposal.body.constraints,
+        &prev_proposal.body.properties,
+        &prev_proposal.body.constraints,
+    )
+    .map_err(|e| MatchValidationError::MatchingFailed {
+        new: new_proposal.body.id.clone(),
+        prev: prev_proposal.body.id.clone(),
+        error: e.to_string(),
+    })? {
+        Match::Yes => Ok(()),
+        _ => {
+            return Err(MatchValidationError::NotMatching {
+                new: new_proposal.body.id.clone(),
+                prev: prev_proposal.body.id.clone(),
+            })
+        }
+    }
+}
+
+pub struct DisplayIdentity<'a>(pub &'a Identity);
+
+impl<'a> fmt::Display for DisplayIdentity<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "'{}' [{}]", &self.0.name, &self.0.identity)
     }
 }

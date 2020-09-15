@@ -1,19 +1,24 @@
+use chrono::Utc;
 use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 use crate::config::Config;
-use crate::db::model::{ProposalId, SubscriptionId};
+use crate::db::dao::AgreementDao;
+use crate::db::model::{AgreementId, ProposalId, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
-    DemandError, MatcherError, MatcherInitError, QueryOfferError, QueryOffersError,
+    DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
+    QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
-use crate::negotiation::error::{GetProposalError, NegotiationError, NegotiationInitError};
+use crate::negotiation::error::{
+    AgreementError, GetProposalError, NegotiationError, NegotiationInitError,
+};
 use crate::negotiation::{ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
-use ya_client::model::market::{Demand, Offer, Proposal};
+use ya_client::model::market::{Agreement, Demand, Offer, Proposal};
 use ya_client::model::ErrorMessage;
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
@@ -42,6 +47,8 @@ impl<'a> EnvConfig<'a, u64> {
 pub enum MarketError {
     #[error(transparent)]
     Matcher(#[from] MatcherError),
+    #[error(transparent)]
+    QueryDemandsError(#[from] QueryDemandsError),
     #[error(transparent)]
     QueryOfferError(#[from] QueryOfferError),
     #[error(transparent)]
@@ -147,6 +154,14 @@ impl MarketService {
             .await?)
     }
 
+    pub async fn get_demands(&self, id: Option<Identity>) -> Result<Vec<Demand>, MarketError> {
+        Ok(self
+            .matcher
+            .store
+            .get_client_demands(id.map(|identitty| identitty.identity))
+            .await?)
+    }
+
     pub async fn subscribe_offer(
         &self,
         offer: &Offer,
@@ -203,6 +218,25 @@ impl MarketService {
             .get_proposal(proposal_id)
             .await?
             .into_client()?)
+    }
+
+    pub async fn get_agreement(
+        &self,
+        agreement_id: &AgreementId,
+        id: &Identity,
+    ) -> Result<Agreement, AgreementError> {
+        match self
+            .db
+            .as_dao::<AgreementDao>()
+            .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            Some(agreement) => Ok(agreement
+                .into_client()
+                .map_err(|e| AgreementError::InternalError(e.to_string()))?),
+            None => Err(AgreementError::NotFound(agreement_id.clone())),
+        }
     }
 }
 

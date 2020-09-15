@@ -19,6 +19,7 @@ pub mod builder;
 pub mod error;
 pub mod message;
 
+use crate::DISCOVERY_VERSION;
 use error::*;
 use message::*;
 
@@ -44,7 +45,7 @@ pub struct DiscoveryImpl {
 
 impl Discovery {
     /// Broadcasts Offers to other nodes in network. Connected nodes will
-    /// get call to function bound at `OfferIdsBcast`.
+    /// get call to function bound at `OfferBcast`.
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
         let default_id = self.default_identity().await?;
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
@@ -68,9 +69,7 @@ impl Discovery {
         Ok(net::from(self.default_identity().await?)
             .to(target_node)
             .service(&get_offers_addr(BUS_ID))
-            .send(RetrieveOffers {
-                offer_ids: offer_ids,
-            })
+            .send(RetrieveOffers { offer_ids })
             .await??)
     }
 
@@ -94,6 +93,8 @@ impl Discovery {
         public_prefix: &str,
         local_prefix: &str,
     ) -> Result<(), DiscoveryInitError> {
+        log::info!("Discovery protocol version: {}", DISCOVERY_VERSION!());
+
         let myself = self.clone();
         // /local/market/market-protocol-mk1-offer
         let bcast_address = format!("{}/{}", local_prefix, OffersBcast::TOPIC);
