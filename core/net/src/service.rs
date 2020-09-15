@@ -140,12 +140,12 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             let (is_new, id) = bcast.add(subscribe);
             let central_bus = central_bus.clone();
             async move {
-                log::debug!("Subscribe topic {} on central bus.", topic);
+                log::info!("Subscribe topic {} on central bus.", topic);
                 if is_new {
                     if let Err(e) = central_bus.subscribe(topic.clone()).await {
                         log::error!("fail to subscribe to: {}, {}", topic, e);
                     }
-                    log::debug!("Created new topic: {}", topic);
+                    log::info!("Created new topic: {}", topic);
                 }
                 Ok(id)
             }
