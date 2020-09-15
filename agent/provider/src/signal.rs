@@ -65,9 +65,9 @@ fn register_signal(tx: mpsc::Sender<Signal>, signal: i32) -> signal_hook::SigId 
     let action = move || {
         let mut tx = tx.clone();
         tokio::spawn(async move {
-            let signal = (signal, signal_to_str(signal));
-            if let Err(e) = tx.send(signal).await {
-                log::error!("Unable to notify about signal {:?}: {}", signal, e);
+            let signal_pair = (signal, signal_to_str(signal));
+            if let Err(e) = tx.send(signal_pair).await {
+                log::error!("Unable to notify about signal {:?}: {}", signal_pair, e);
             }
         });
     };
