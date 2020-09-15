@@ -272,7 +272,7 @@ impl RequestorBroker {
                 .common
                 .db
                 .as_dao::<AgreementDao>()
-                .select(id, Utc::now().naive_utc())
+                .select(id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|e| WaitForApprovalError::FailedGetFromDb(id.clone(), e))?
                 .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
@@ -315,7 +315,11 @@ impl RequestorBroker {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
         let mut agreement = match dao
-            .select(agreement_id, Utc::now().naive_utc())
+            .select(
+                agreement_id,
+                Some(id.identity.clone()),
+                Utc::now().naive_utc(),
+            )
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
         {
@@ -380,7 +384,7 @@ async fn agreement_approved(
     let agreement = broker
         .db
         .as_dao::<AgreementDao>()
-        .select(&msg.agreement_id, Utc::now().naive_utc())
+        .select(&msg.agreement_id, None, Utc::now().naive_utc())
         .await
         .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
         .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
