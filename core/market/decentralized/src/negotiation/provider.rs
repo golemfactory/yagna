@@ -162,7 +162,7 @@ impl ProviderBroker {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
         let agreement = match dao
-            .select(agreement_id, Utc::now().naive_utc())
+            .select(agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
         {

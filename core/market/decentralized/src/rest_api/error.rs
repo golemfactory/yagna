@@ -158,7 +158,7 @@ impl ResponseError for AgreementError {
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
-            | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
+            | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
@@ -178,9 +178,8 @@ impl ResponseError for WaitForApprovalError {
             WaitForApprovalError::NotFound(_) => HttpResponse::NotFound().json(msg),
             WaitForApprovalError::AgreementExpired(_) => HttpResponse::Gone().json(msg),
             WaitForApprovalError::AgreementTerminated(_)
-            | WaitForApprovalError::AgreementNotConfirmed(_) => {
-                HttpResponse::BadRequest().json(msg)
-            }
+            | WaitForApprovalError::AgreementNotConfirmed(_)
+            | WaitForApprovalError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             WaitForApprovalError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
             WaitForApprovalError::InternalError(_) | WaitForApprovalError::FailedGetFromDb(..) => {
                 HttpResponse::InternalServerError().json(msg)
