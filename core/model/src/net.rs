@@ -173,7 +173,7 @@ pub trait RemoteEndpoint {
 impl RemoteEndpoint for NodeId {
     fn service(&self, bus_addr: &str) -> bus::Endpoint {
         bus::service(format!(
-            "{}/{}",
+            "{}{}",
             net_service(self),
             extract_exported_part(bus_addr)
         ))

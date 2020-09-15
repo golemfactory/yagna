@@ -5599,7 +5599,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=9cdc79ef45fd7f26cb4314bf3dffc5afc765bf0d#9cdc79ef45fd7f26cb4314bf3dffc5afc765bf0d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=8f369a35058b7ea2bbc708ec19d3a7e7496e0a13#8f369a35058b7ea2bbc708ec19d3a7e7496e0a13"
 dependencies = [
  "awc",
  "backtrace",
@@ -5608,9 +5608,13 @@ dependencies = [
  "envy",
  "failure",
  "futures 0.3.5",
+ "graphene",
  "hex",
+ "lazy_static",
  "log 0.4.11",
+ "openssl",
  "rand 0.6.5",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "structopt",
@@ -5622,7 +5626,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=9cdc79ef45fd7f26cb4314bf3dffc5afc765bf0d#9cdc79ef45fd7f26cb4314bf3dffc5afc765bf0d"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=8f369a35058b7ea2bbc708ec19d3a7e7496e0a13#8f369a35058b7ea2bbc708ec19d3a7e7496e0a13"
 dependencies = [
  "bigdecimal",
  "chrono",
