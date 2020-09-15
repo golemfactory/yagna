@@ -10,12 +10,14 @@ mod market;
 mod payments;
 mod preset_cli;
 mod provider_agent;
+mod signal;
 mod startup_config;
 mod task_manager;
 mod task_state;
 
 use crate::hardware::Profiles;
 use crate::provider_agent::{Initialize, Shutdown};
+use crate::signal::SignalMonitor;
 use provider_agent::ProviderAgent;
 use startup_config::{Commands, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig};
 
@@ -41,8 +43,12 @@ async fn main() -> anyhow::Result<()> {
             let agent = ProviderAgent::new(args, config).await?.start();
             agent.send(Initialize).await??;
 
-            let _ = tokio::signal::ctrl_c().await;
-            log::info!("SIGINT received, Shutting down {}...", clap::crate_name!());
+            let (_, signal) = SignalMonitor::default().await;
+            log::info!(
+                "{} received, Shutting down {}...",
+                signal,
+                clap::crate_name!()
+            );
             agent.send(Shutdown).await??;
             Ok(())
         }
