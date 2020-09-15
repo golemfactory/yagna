@@ -46,5 +46,5 @@ cargo build --release --no-default-features --features market-decentralized --fe
 
 Run cargo-deb using binaries compiled in previous step:
 ```
-cargo-deb --no-build
+cargo deb --no-build
 ```
