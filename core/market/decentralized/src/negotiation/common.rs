@@ -14,6 +14,7 @@ use crate::matcher::{
     error::{DemandError, QueryOfferError},
     store::SubscriptionStore,
 };
+use crate::negotiation::error::GetProposalError;
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
     error::{MatchValidationError, ProposalError, QueryEventsError},
@@ -55,7 +56,7 @@ impl CommonBroker {
                     QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
                     QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
                     QueryOfferError::Get(..) => {
-                        ProposalError::InternalError(prev_proposal_id.clone(), e.to_string())
+                        ProposalError::Internal(prev_proposal_id.clone(), e.to_string())
                     }
                 })?;
         } else {
@@ -64,7 +65,7 @@ impl CommonBroker {
                 .await
                 .map_err(|e| match e {
                     DemandError::NotFound(id) => ProposalError::NoSubscription(id),
-                    _ => ProposalError::InternalError(prev_proposal_id.clone(), e.to_string()),
+                    _ => ProposalError::Internal(prev_proposal_id.clone(), e.to_string()),
                 })?;
         }
 
@@ -132,7 +133,7 @@ impl CommonBroker {
                 return match error {
                     NotifierError::Timeout(_) => Ok(vec![]),
                     NotifierError::ChannelClosed(_) => {
-                        Err(QueryEventsError::InternalError(error.to_string()))
+                        Err(QueryEventsError::Internal(error.to_string()))
                     }
                     NotifierError::Unsubscribed(id) => Err(QueryEventsError::Unsubscribed(id)),
                 };
@@ -147,13 +148,15 @@ impl CommonBroker {
         &self,
         subscription_id: Option<SubscriptionId>,
         id: &ProposalId,
-    ) -> Result<Proposal, ProposalError> {
+    ) -> Result<Proposal, GetProposalError> {
         Ok(self
             .db
             .as_dao::<ProposalDao>()
             .get_proposal(&id)
             .await
-            .map_err(|e| ProposalError::Get(id.clone(), subscription_id.clone(), e))?
+            .map_err(|e| {
+                GetProposalError::Internal(id.clone(), subscription_id.clone(), e.to_string())
+            })?
             .filter(|proposal| {
                 if subscription_id.is_none() {
                     return true;
@@ -162,7 +165,7 @@ impl CommonBroker {
                 if &proposal.negotiation.subscription_id == subscription_id {
                     return true;
                 }
-                log::debug!(
+                log::warn!(
                     "Getting Proposal [{}] subscription mismatch; actual: [{}] expected: [{}].",
                     id,
                     proposal.negotiation.subscription_id,
@@ -172,20 +175,20 @@ impl CommonBroker {
                 // that such Proposal exists, but for different subscription_id.
                 false
             })
-            .ok_or(ProposalError::NotFound(id.clone(), subscription_id))?)
+            .ok_or(GetProposalError::NotFound(id.clone(), subscription_id))?)
     }
 
     pub async fn get_client_proposal(
         &self,
         subscription_id: Option<SubscriptionId>,
         id: &ProposalId,
-    ) -> Result<ClientProposal, ProposalError> {
+    ) -> Result<ClientProposal, GetProposalError> {
         self.get_proposal(subscription_id, id)
             .await
             .and_then(|proposal| {
                 proposal
                     .into_client()
-                    .map_err(|e| ProposalError::InternalError(id.clone(), e.to_string()))
+                    .map_err(|e| GetProposalError::Internal(id.clone(), None, e.to_string()))
             })
     }
 

@@ -22,9 +22,9 @@ pub enum SaveAgreementError {
     #[error("Can't create Agreement for already countered Proposal [{0}].")]
     ProposalCountered(ProposalId),
     #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
-    AgreementExists(AgreementId, ProposalId),
-    #[error("Failed to save Agreement to database. Error: {0}.")]
-    DatabaseError(DbError),
+    Exists(AgreementId, ProposalId),
+    #[error("Saving Agreement internal error: {0}.")]
+    Internal(DbError),
 }
 
 pub struct AgreementDao<'c> {
@@ -97,7 +97,7 @@ impl<'c> AgreementDao<'c> {
             }
 
             if let Some(agreement) = find_agreement_for_proposal(conn, &proposal_id)? {
-                return Err(SaveAgreementError::AgreementExists(
+                return Err(SaveAgreementError::Exists(
                     agreement.id,
                     proposal_id.clone(),
                 ));
@@ -173,7 +173,7 @@ impl<ErrorType: Into<DbError>> From<ErrorType> for StateError {
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
     fn from(err: ErrorType) -> Self {
-        SaveAgreementError::DatabaseError(err.into())
+        SaveAgreementError::Internal(err.into())
     }
 }
 

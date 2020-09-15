@@ -10,8 +10,8 @@ use crate::{
         QueryOffersError, ResolverError, SaveOfferError,
     },
     negotiation::error::{
-        AgreementError, AgreementStateError, NegotiationError, ProposalError, QueryEventsError,
-        WaitForApprovalError,
+        AgreementError, AgreementStateError, GetProposalError, NegotiationError, ProposalError,
+        QueryEventsError, WaitForApprovalError,
     },
 };
 
@@ -119,8 +119,8 @@ impl ResponseError for QueryEventsError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             QueryEventsError::Unsubscribed(_)
-            | QueryEventsError::TakeEventsError(TakeEventsError::SubscriptionNotFound(_))
-            | QueryEventsError::TakeEventsError(TakeEventsError::SubscriptionExpired(_)) => {
+            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionNotFound(_))
+            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionExpired(_)) => {
                 HttpResponse::NotFound().json(msg)
             }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(_) => {
@@ -135,7 +135,23 @@ impl ResponseError for ProposalError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            ProposalError::NotFound(..) => HttpResponse::NotFound().json(msg),
+            ProposalError::NoSubscription(..)
+            | ProposalError::SubscriptionExpired(..)
+            | ProposalError::Unsubscribed(..) => HttpResponse::NotFound().json(msg),
+            ProposalError::AlreadyCountered(..) | ProposalError::NotMatching(..) => {
+                HttpResponse::Gone().json(msg)
+            }
+            ProposalError::Get(e) => e.error_response(),
+            _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for GetProposalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            GetProposalError::NotFound(..) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
     }
@@ -146,7 +162,7 @@ impl ResponseError for AgreementError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            AgreementError::AgreementExists(_, _) => HttpResponse::Conflict().json(msg),
+            AgreementError::AlreadyExists(_, _) => HttpResponse::Conflict().json(msg),
             AgreementError::InvalidState(e) => match e {
                 AgreementStateError::Confirmed(_)
                 | AgreementStateError::Cancelled(_)
@@ -165,10 +181,10 @@ impl ResponseError for AgreementError {
             | AgreementError::Save(..)
             | AgreementError::Get(..)
             | AgreementError::Update(..)
-            | AgreementError::Protocol(_)
+            | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)
-            | AgreementError::InternalError(_) => HttpResponse::InternalServerError().json(msg),
+            | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }
@@ -183,7 +199,7 @@ impl ResponseError for WaitForApprovalError {
             | WaitForApprovalError::NotConfirmed(_)
             | WaitForApprovalError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             WaitForApprovalError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
-            WaitForApprovalError::InternalError(_) | WaitForApprovalError::Get(..) => {
+            WaitForApprovalError::Internal(_) | WaitForApprovalError::Get(..) => {
                 HttpResponse::InternalServerError().json(msg)
             }
         }

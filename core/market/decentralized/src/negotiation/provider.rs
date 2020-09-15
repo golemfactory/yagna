@@ -2,34 +2,22 @@ use chrono::Utc;
 use futures::stream::StreamExt;
 use std::str::FromStr;
 
-use ya_client::model::{
-    market::{event::ProviderEvent, Proposal as ClientProposal},
-    NodeId,
-};
+use ya_client::model::market::{event::ProviderEvent, Proposal as ClientProposal};
+use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
-
-use super::error::{NegotiationError, NegotiationInitError};
-use crate::db::dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError};
-use crate::db::model::{
-    Agreement, AgreementId, AgreementState, IssuerType, Offer as ModelOffer, SubscriptionId,
-};
-use crate::db::model::{OwnerType, Proposal, ProposalId};
-use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
-use crate::negotiation::common::{CommonBroker, DisplayIdentity};
-use crate::negotiation::error::{
-    AgreementError, AgreementStateError, ProposalError, QueryEventsError,
-};
-use crate::negotiation::notifier::EventNotifier;
-use crate::protocol::negotiation::error::{
-    CounterProposalError, ProposeAgreementError, RemoteProposalError, RemoteProposeAgreementError,
-    RemoteSensitiveError,
-};
-use crate::protocol::negotiation::messages::{
-    AgreementCancelled, AgreementReceived, InitialProposalReceived, ProposalReceived,
-    ProposalRejected,
-};
-use crate::protocol::negotiation::provider::NegotiationApi;
 use ya_service_api_web::middleware::Identity;
+
+use crate::db::{
+    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError},
+    model::{Agreement, AgreementId, AgreementState},
+    model::{IssuerType, Offer, OwnerType, Proposal, ProposalId, SubscriptionId},
+};
+use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
+use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationApi};
+
+use super::common::{CommonBroker, DisplayIdentity};
+use super::error::*;
+use super::notifier::EventNotifier;
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -84,7 +72,7 @@ impl ProviderBroker {
         Ok(self.api.bind_gsb(public_prefix, local_prefix).await?)
     }
 
-    pub async fn subscribe_offer(&self, _offer: &ModelOffer) -> Result<(), NegotiationError> {
+    pub async fn subscribe_offer(&self, _offer: &Offer) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }
@@ -262,16 +250,7 @@ async fn on_agreement_received(
     let id = msg.agreement_id.clone();
     agreement_received(broker, caller, msg)
         .await
-        .map_err(|e| match e {
-            RemoteProposeAgreementError::Unexpected { .. } => {
-                log::warn!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
-                ProposeAgreementError::Remote(e.hide_sensitive_info(), id)
-            }
-            e => {
-                log::info!("[AgreementReceived] Agreement [{}]: {}", id, e.to_string());
-                ProposeAgreementError::Remote(e, id)
-            }
-        })
+        .map_err(|e| ProposeAgreementError::Remote(e.hide_sensitive_info(), id))
 }
 
 async fn agreement_received(
@@ -284,7 +263,7 @@ async fn agreement_received(
     let offer_id = &offer_proposal.negotiation.offer_id.clone();
 
     if offer_proposal.body.issuer != IssuerType::Us {
-        return Err(RemoteProposeAgreementError::RequestorProposal(
+        return Err(RemoteProposeAgreementError::RequestorOwn(
             offer_proposal_id.clone(),
         ));
     }
@@ -319,7 +298,7 @@ async fn agreement_received(
         .await
         .map_err(|e| match e {
             SaveAgreementError::ProposalCountered(id) => {
-                RemoteProposeAgreementError::ProposalCountered(id)
+                RemoteProposeAgreementError::AlreadyCountered(id)
             }
             _ => RemoteProposeAgreementError::Unexpected {
                 public_msg: format!("Failed to save Agreement."),
@@ -350,15 +329,16 @@ async fn agreement_received(
     Ok(())
 }
 
-impl From<ProposalError> for RemoteProposeAgreementError {
-    fn from(e: ProposalError) -> Self {
+impl From<GetProposalError> for RemoteProposeAgreementError {
+    fn from(e: GetProposalError) -> Self {
         match e {
-            ProposalError::NotFound(id, ..) => RemoteProposeAgreementError::ProposalNotFound(id),
-            ProposalError::Get(id, _, db_error) => RemoteProposeAgreementError::Unexpected {
-                public_msg: format!("Failed to get proposal from db [{}].", id.to_string()),
-                original_msg: db_error.to_string(),
-            },
-            _ => panic!("converting {} into RemoteProposeAgreementError", e),
+            GetProposalError::NotFound(id, ..) => RemoteProposeAgreementError::NotFound(id),
+            GetProposalError::Internal(id, _, original_msg) => {
+                RemoteProposeAgreementError::Unexpected {
+                    public_msg: format!("Failed to get proposal from db [{}].", id.to_string()),
+                    original_msg,
+                }
+            }
         }
     }
 }

@@ -10,8 +10,8 @@ use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{
-    AgreementError, ApproveAgreementError, CounterProposalError, NegotiationApiInitError,
-    ProposalError,
+    ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
+    NegotiationApiInitError,
 };
 use super::messages::{
     provider, requestor, AgreementApproved, AgreementCancelled, AgreementReceived,
@@ -73,7 +73,7 @@ impl NegotiationApi {
             .service(&provider::proposal_addr(BUS_ID))
             .send(msg)
             .await
-            .map_err(|e| CounterProposalError::GsbError(e.to_string(), proposal_id))??;
+            .map_err(|e| GsbProposalError(e.to_string(), proposal_id))??;
         Ok(())
     }
 
@@ -102,7 +102,7 @@ impl NegotiationApi {
             .service(&provider::proposal_addr(BUS_ID))
             .send(msg)
             .await
-            .map_err(|e| CounterProposalError::GsbError(e.to_string(), proposal_id))??;
+            .map_err(|e| GsbProposalError(e.to_string(), proposal_id))??;
         Ok(())
     }
 
@@ -112,7 +112,7 @@ impl NegotiationApi {
         id: NodeId,
         proposal_id: &ProposalId,
         owner: NodeId,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), GsbProposalError> {
         let msg = ProposalRejected {
             proposal_id: proposal_id.clone(),
         };
@@ -121,7 +121,7 @@ impl NegotiationApi {
             .service(&provider::proposal_addr(BUS_ID))
             .send(msg)
             .await
-            .map_err(|e| ProposalError::GsbError(e.to_string(), proposal_id.clone()))??;
+            .map_err(|e| GsbProposalError(e.to_string(), proposal_id.clone()))??;
         Ok(())
     }
 
@@ -143,7 +143,7 @@ impl NegotiationApi {
             .to(provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
-            .map_err(|e| ProposeAgreementError::GsbError(e.to_string(), agreement_id))
+            .map_err(|e| GsbAgreementError(e.to_string(), agreement_id))
             .await??;
         Ok(())
     }
@@ -156,7 +156,7 @@ impl NegotiationApi {
         id: NodeId,
         agreement_id: AgreementId,
         owner: NodeId,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), GsbAgreementError> {
         let msg = AgreementCancelled {
             agreement_id: agreement_id.clone(),
         };
@@ -165,7 +165,7 @@ impl NegotiationApi {
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .await
-            .map_err(|e| AgreementError::GsbError(e.to_string(), agreement_id))??;
+            .map_err(|e| GsbAgreementError(e.to_string(), agreement_id))??;
         Ok(())
     }
 
@@ -189,7 +189,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: ProposalRejected,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), GsbProposalError> {
         log::debug!(
             "Negotiation API: Proposal [{}] rejected by [{}].",
             &msg.proposal_id,
@@ -221,7 +221,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementRejected,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), GsbAgreementError> {
         log::debug!(
             "Negotiation API: Agreement [{}] rejected by [{}].",
             &msg.agreement_id,

@@ -17,15 +17,13 @@ pub trait RemoteSensitiveError {
 pub enum NegotiationApiInitError {}
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum ProposalError {
-    #[error("Proposal [{1}] GSB error: {0}.")]
-    GsbError(String, ProposalId),
-}
+#[error("Proposal [{1}] GSB error: {0}.")]
+pub struct GsbProposalError(pub String, pub ProposalId);
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum CounterProposalError {
-    #[error("Countering Proposal [{1}] GSB error: {0}.")]
-    GsbError(String, ProposalId),
+    #[error("Countering {0}.")]
+    Gsb(#[from] GsbProposalError),
     #[error("Countering Proposal [{0}] without previous Proposal id set.")]
     NoPrevious(ProposalId),
     #[error("Countering Proposal [{1}] remote error: {0}")]
@@ -51,19 +49,13 @@ pub enum RemoteProposalError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum AgreementError {
-    #[error("Agreement [{1}] GSB error: {0}.")]
-    GsbError(String, AgreementId),
-    #[error("Saving Agreement [{1}] error: {0}.")]
-    Saving(String, AgreementId),
-    #[error("Agreement [{1}] remote error: {0}")]
-    Remote(RemoteAgreementError, AgreementId),
-}
+#[error("Agreement [{1}] GSB error: {0}.")]
+pub struct GsbAgreementError(pub String, pub AgreementId);
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum ProposeAgreementError {
-    #[error("Agreement [{1}] GSB error: {0}.")]
-    GsbError(String, AgreementId),
+    #[error("Propose {0}.")]
+    Gsb(#[from] GsbAgreementError),
     #[error("Agreement [{1}] remote error: {0}")]
     Remote(RemoteProposeAgreementError, AgreementId),
 }
@@ -71,13 +63,13 @@ pub enum ProposeAgreementError {
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum RemoteProposeAgreementError {
     #[error("Proposal [{0}] not found.")]
-    ProposalNotFound(ProposalId),
+    NotFound(ProposalId),
     #[error("Requestor can't promote his own Proposal [{0}] to Agreement.")]
-    RequestorProposal(ProposalId),
+    RequestorOwn(ProposalId),
     #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
     NoNegotiations(ProposalId),
     #[error("Can't create Agreement for already countered Proposal [{0}].")]
-    ProposalCountered(ProposalId),
+    AlreadyCountered(ProposalId),
     #[error("Agreement id [{0}] is invalid.")]
     InvalidId(AgreementId),
     /// We should hide `original_msg`, since we don't want to reveal our details to
@@ -92,10 +84,10 @@ pub enum RemoteProposeAgreementError {
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum ApproveAgreementError {
-    #[error("Approving Agreement [{1}] GSB error: {0}.")]
-    GsbError(String, AgreementId),
-    #[error("Approving Agreement [{1}] remote error: {0}")]
-    Remote(RemoteAgreementError, AgreementId),
+    #[error("Approve {0}.")]
+    Gsb(#[from] GsbAgreementError),
+    #[error("Remote Approve: {0}")]
+    Remote(#[from] RemoteAgreementError),
     #[error("Can't parse {caller} for Agreement [{id}]: {e}")]
     CallerParseError {
         e: String,

@@ -1,7 +1,7 @@
 use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
 use ya_market_decentralized::testing::{
-    MarketServiceExt, MarketsNetwork, OwnerType, ProposalError,
+    GetProposalError, MarketServiceExt, MarketsNetwork, OwnerType, ProposalError,
 };
 
 use ya_client::model::market::proposal::State;
@@ -71,6 +71,9 @@ async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
     let result = req_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_err());
-    assert_err_eq!(ProposalError::NotFound(proposal_id, None), result);
+    assert_err_eq!(
+        ProposalError::Get(GetProposalError::NotFound(proposal_id, None)),
+        result
+    );
     Ok(())
 }

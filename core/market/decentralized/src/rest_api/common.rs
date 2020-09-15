@@ -39,6 +39,6 @@ async fn get_agreement(
         r_result.map(|agreement| HttpResponse::Ok().json(agreement))
     } else {
         // Both calls shouldn't return Agreement.
-        Err(AgreementError::InternalError(format!("We found ")))
+        Err(AgreementError::Internal(format!("We found ")))
     }
 }

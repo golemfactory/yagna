@@ -213,7 +213,7 @@ impl MarketService {
         {
             Some(agreement) => Ok(agreement
                 .into_client()
-                .map_err(|e| AgreementError::InternalError(e.to_string()))?),
+                .map_err(|e| AgreementError::Internal(e.to_string()))?),
             None => Err(AgreementError::NotFound(agreement_id.clone())),
         }
     }

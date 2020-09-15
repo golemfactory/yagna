@@ -6,18 +6,16 @@ use crate::db::model::{
 };
 use crate::db::{dao::SaveProposalError, dao::TakeEventsError, DbError};
 use crate::protocol::negotiation::error::{
-    AgreementError as ProtocolAgreementError, ApproveAgreementError,
-    CounterProposalError as ProtocolProposalError, NegotiationApiInitError, ProposeAgreementError,
+    ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
+    NegotiationApiInitError, ProposeAgreementError,
 };
 
 #[derive(Error, Debug)]
 pub enum NegotiationError {}
 
 #[derive(Error, Debug)]
-pub enum NegotiationInitError {
-    #[error("Failed to initialize Negotiation interface. Error: {0}.")]
-    ApiInitError(#[from] NegotiationApiInitError),
-}
+#[error("Failed to initialize Negotiation interface. Error: {0}.")]
+pub struct NegotiationInitError(#[from] NegotiationApiInitError);
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum MatchValidationError {
@@ -56,9 +54,9 @@ pub enum AgreementError {
     #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
     ProposalNotFound(ProposalId, ProposalId),
     #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
-    AgreementExists(AgreementId, ProposalId),
+    AlreadyExists(AgreementId, ProposalId),
     #[error("Can't create Agreement for Proposal {0}. Failed to get Proposal {1}. Error: {2}")]
-    GetProposal(ProposalId, ProposalId, DbError),
+    GetProposal(ProposalId, ProposalId, String),
     #[error("Can't create Agreement for already countered Proposal [{0}].")]
     ProposalCountered(ProposalId),
     #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
@@ -75,14 +73,14 @@ pub enum AgreementError {
     InvalidState(#[from] AgreementStateError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
-    #[error("Protocol error: {0}")]
-    Protocol(#[from] ProtocolAgreementError),
+    #[error(transparent)]
+    Gsb(#[from] GsbAgreementError),
     #[error("Protocol error: {0}")]
     ProtocolCreate(#[from] ProposeAgreementError),
     #[error("Protocol error while approving: {0}")]
     ProtocolApprove(#[from] ApproveAgreementError),
     #[error("Internal error: {0}")]
-    InternalError(String),
+    Internal(String),
 }
 
 #[derive(Error, Debug)]
@@ -102,7 +100,7 @@ pub enum WaitForApprovalError {
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
     Get(AgreementId, DbError),
     #[error("Waiting for approval failed. Error: {0}.")]
-    InternalError(String),
+    Internal(String),
 }
 
 #[derive(Error, Debug)]
@@ -112,11 +110,19 @@ pub enum QueryEventsError {
     #[error("Invalid subscription id. {0}")]
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error(transparent)]
-    TakeEventsError(#[from] TakeEventsError),
+    TakeEvents(#[from] TakeEventsError),
     #[error("Invalid maxEvents '{0}', should be greater from 0.")]
     InvalidMaxEvents(i32),
     #[error("Can't query events. Error: {0}.")]
-    InternalError(String),
+    Internal(String),
+}
+
+#[derive(Error, Debug)]
+pub enum GetProposalError {
+    #[error("Proposal [{0}] not found (subscription [{1:?}]).")]
+    NotFound(ProposalId, Option<SubscriptionId>),
+    #[error("Get Proposal [{0}] (subscription [{1:?}]) internal error: [{2}]")]
+    Internal(ProposalId, Option<SubscriptionId>, String),
 }
 
 #[derive(Error, Debug)]
@@ -127,35 +133,31 @@ pub enum ProposalError {
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
     SubscriptionExpired(SubscriptionId),
-    #[error("Proposal [{0}] not found for subscription [{1:?}].")]
-    NotFound(ProposalId, Option<SubscriptionId>),
     #[error("Proposal [{0}] was already countered. Can't counter for the second time.")]
     AlreadyCountered(ProposalId),
     #[error("Can't counter own Proposal [{0}].")]
     OwnProposal(ProposalId),
     #[error(transparent)]
     NotMatching(#[from] MatchValidationError),
-    #[error("Failed to get Proposal [{0}] for subscription [{1:?}]. Error: [{2}]")]
-    Get(ProposalId, Option<SubscriptionId>, DbError),
+    #[error(transparent)]
+    Get(#[from] GetProposalError),
     #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]
     Save(ProposalId, SaveProposalError),
     #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
     Send(ProposalId, ProtocolProposalError),
     #[error("Can't counter Proposal [{0}]. Error: {1}.")]
-    InternalError(ProposalId, String),
-    // InternalError(#[from] ErrorMessage),
+    Internal(ProposalId, String),
 }
 
 impl AgreementError {
-    pub fn from(promoted_proposal: &ProposalId, e: ProposalError) -> AgreementError {
+    pub fn from_proposal(promoted_proposal: &ProposalId, e: GetProposalError) -> AgreementError {
         match e {
-            ProposalError::NotFound(proposal_id, ..) => {
+            GetProposalError::NotFound(proposal_id, ..) => {
                 AgreementError::ProposalNotFound(promoted_proposal.clone(), proposal_id)
             }
-            ProposalError::Get(proposal_id, _, db_error) => {
-                AgreementError::GetProposal(promoted_proposal.clone(), proposal_id, db_error)
+            GetProposalError::Internal(proposal_id, _, err_msg) => {
+                AgreementError::GetProposal(promoted_proposal.clone(), proposal_id, err_msg)
             }
-            _ => panic!("invalid conversion from {:?} to AgreementError"),
         }
     }
 }

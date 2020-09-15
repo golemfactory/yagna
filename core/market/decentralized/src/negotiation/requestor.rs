@@ -10,25 +10,14 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
     dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError, StateError},
-    model::{Agreement, AgreementId, AgreementState, OwnerType},
-    model::{Demand as ModelDemand, IssuerType, Proposal, ProposalId, SubscriptionId},
+    model::{Agreement, AgreementId, AgreementState},
+    model::{Demand, IssuerType, OwnerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
-use crate::protocol::negotiation::{
-    error::{ApproveAgreementError, RemoteAgreementError},
-    messages::{AgreementApproved, AgreementRejected, ProposalReceived, ProposalRejected},
-    requestor::NegotiationApi,
-};
+use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
 
-use super::{
-    common::{CommonBroker, DisplayIdentity},
-    error::{AgreementError, WaitForApprovalError},
-    error::{NegotiationError, NegotiationInitError, ProposalError, QueryEventsError},
-    notifier::NotifierError,
-    EventNotifier,
-};
-use crate::negotiation::error::AgreementStateError;
+use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 
 #[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
@@ -96,7 +85,7 @@ impl RequestorBroker {
         Ok(())
     }
 
-    pub async fn subscribe_demand(&self, _demand: &ModelDemand) -> Result<(), NegotiationError> {
+    pub async fn subscribe_demand(&self, _demand: &Demand) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
     }
@@ -203,7 +192,7 @@ impl RequestorBroker {
             .common
             .get_proposal(None, offer_proposal_id)
             .await
-            .map_err(|e| AgreementError::from(proposal_id, e))?;
+            .map_err(|e| AgreementError::from_proposal(proposal_id, e))?;
 
         // We can promote only Proposals, that we got from Provider.
         // Can't promote our own Proposal.
@@ -220,7 +209,7 @@ impl RequestorBroker {
             .common
             .get_proposal(None, &demand_proposal_id)
             .await
-            .map_err(|e| AgreementError::from(proposal_id, e))?;
+            .map_err(|e| AgreementError::from_proposal(proposal_id, e))?;
 
         let agreement = Agreement::new(
             demand_proposal,
@@ -235,12 +224,10 @@ impl RequestorBroker {
             .save(agreement)
             .await
             .map_err(|e| match e {
-                SaveAgreementError::DatabaseError(e) => {
-                    AgreementError::Save(proposal_id.clone(), e)
-                }
+                SaveAgreementError::Internal(e) => AgreementError::Save(proposal_id.clone(), e),
                 SaveAgreementError::ProposalCountered(id) => AgreementError::ProposalCountered(id),
-                SaveAgreementError::AgreementExists(agreement_id, proposal_id) => {
-                    AgreementError::AgreementExists(agreement_id, proposal_id)
+                SaveAgreementError::Exists(agreement_id, proposal_id) => {
+                    AgreementError::AlreadyExists(agreement_id, proposal_id)
                 }
             })?;
 
@@ -295,7 +282,7 @@ impl RequestorBroker {
                 return match error {
                     NotifierError::Timeout(_) => Err(WaitForApprovalError::Timeout(id.clone())),
                     NotifierError::ChannelClosed(_) => {
-                        Err(WaitForApprovalError::InternalError(error.to_string()))
+                        Err(WaitForApprovalError::Internal(error.to_string()))
                     }
                     NotifierError::Unsubscribed(_) => Ok(ApprovalStatus::Cancelled),
                 };
@@ -359,18 +346,15 @@ async fn on_agreement_approved(
     msg: AgreementApproved,
     notifier: EventNotifier<AgreementId>,
 ) -> Result<(), ApproveAgreementError> {
-    let agreement_id = msg.agreement_id.clone();
     let caller: NodeId =
         caller
             .parse()
             .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
                 e: e.to_string(),
                 caller,
-                id: agreement_id.clone(),
+                id: msg.agreement_id.clone(),
             })?;
-    agreement_approved(broker, caller, msg, notifier)
-        .await
-        .map_err(|e| ApproveAgreementError::Remote(e, agreement_id))
+    Ok(agreement_approved(broker, caller, msg, notifier).await?)
 }
 
 async fn agreement_approved(

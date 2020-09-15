@@ -226,7 +226,7 @@ async fn second_creation_should_fail() -> Result<()> {
 
     assert_eq!(
         result.unwrap_err().to_string(),
-        AgreementError::AgreementExists(agreement_id, proposal_id).to_string()
+        AgreementError::AlreadyExists(agreement_id, proposal_id).to_string()
     );
 
     Ok(())

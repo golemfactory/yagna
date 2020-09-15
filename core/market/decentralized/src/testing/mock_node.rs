@@ -24,7 +24,7 @@ use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
-use crate::negotiation::error::{ProposalError, QueryEventsError};
+use crate::negotiation::error::*;
 use crate::protocol::callback::*;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
@@ -461,7 +461,7 @@ macro_rules! assert_err_eq {
 pub trait MarketServiceExt {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
-    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, ProposalError>;
+    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError>;
     async fn get_proposal_from_db(
         &self,
         proposal_id: &ProposalId,
@@ -484,7 +484,7 @@ impl MarketServiceExt for MarketService {
         self.matcher.store.get_demand(id).await
     }
 
-    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, ProposalError> {
+    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError> {
         self.provider_engine.common.get_proposal(None, id).await
     }
 
@@ -516,7 +516,7 @@ impl MarketServiceExt for MarketService {
 pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
-        AgreementError, ApproveAgreementError, CounterProposalError, ProposalError,
+        ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
         ProposeAgreementError,
     };
 
@@ -565,7 +565,7 @@ pub mod default {
     pub async fn empty_on_proposal_rejected(
         _caller: String,
         _msg: ProposalRejected,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), GsbProposalError> {
         Ok(())
     }
 
@@ -586,14 +586,14 @@ pub mod default {
     pub async fn empty_on_agreement_rejected(
         _caller: String,
         _msg: AgreementRejected,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), GsbAgreementError> {
         Ok(())
     }
 
     pub async fn empty_on_agreement_cancelled(
         _caller: String,
         _msg: AgreementCancelled,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), GsbAgreementError> {
         Ok(())
     }
 }
