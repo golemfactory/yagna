@@ -40,20 +40,24 @@ impl<'c> AsDao<'c> for EventsDao<'c> {
 }
 
 impl<'c> EventsDao<'c> {
-    pub async fn add_proposal_event(&self, proposal: Proposal, owner: OwnerType) -> DbResult<()> {
+    pub async fn add_proposal_event(
+        &self,
+        proposal: Proposal,
+        owner: OwnerType,
+    ) -> DbResult<Proposal> {
         do_with_transaction(self.pool, move |conn| {
-            let event = MarketEvent::from_proposal(proposal, owner);
+            let event = MarketEvent::from_proposal(&proposal, owner);
             diesel::insert_into(dsl::market_event)
                 .values(event)
                 .execute(conn)?;
-            Ok(())
+            Ok(proposal)
         })
         .await
     }
 
-    pub async fn add_agreement_event(&self, agreement: Agreement) -> DbResult<()> {
+    pub async fn add_agreement_event(&self, agreement: &Agreement) -> DbResult<()> {
+        let event = MarketEvent::from_agreement(agreement);
         do_with_transaction(self.pool, move |conn| {
-            let event = MarketEvent::from_agreement(agreement);
             diesel::insert_into(dsl::market_event)
                 .values(event)
                 .execute(conn)?;

@@ -2,12 +2,24 @@
 use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 
-use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId};
+use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId, ProposalState};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
 use crate::db::{DbError, DbResult};
+
+#[derive(thiserror::Error, Debug)]
+pub enum SaveProposalError {
+    #[error("Proposal [{0}] already has counter proposal. Can't counter for the second time.")]
+    AlreadyCountered(ProposalId),
+    #[error("Failed to save proposal to database. Error: {0}.")]
+    DatabaseError(DbError),
+    #[error("Proposal [{0}] has no previous proposal. This should not happened when calling save_proposal.")]
+    NoPreviousProposal(ProposalId),
+}
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,
@@ -34,9 +46,18 @@ impl<'c> ProposalDao<'c> {
         .await
     }
 
-    pub async fn save_proposal(&self, proposal: &Proposal) -> DbResult<()> {
+    pub async fn save_proposal(&self, proposal: &Proposal) -> Result<(), SaveProposalError> {
         let proposal = proposal.body.clone();
         do_with_transaction(self.pool, move |conn| {
+            let prev_proposal = proposal
+                .prev_proposal_id
+                .clone()
+                .ok_or(SaveProposalError::NoPreviousProposal(proposal.id.clone()))?;
+
+            if has_counter_proposal(conn, &prev_proposal)? {
+                return Err(SaveProposalError::AlreadyCountered(prev_proposal));
+            }
+
             diesel::insert_into(dsl::market_proposal)
                 .values(&proposal)
                 .execute(conn)?;
@@ -66,18 +87,6 @@ impl<'c> ProposalDao<'c> {
                 negotiation,
                 body: proposal,
             }))
-        })
-        .await
-    }
-
-    pub async fn has_counter_proposal(&self, proposal_id: &ProposalId) -> DbResult<bool> {
-        let proposal_id = proposal_id.to_string();
-        readonly_transaction(self.pool, move |conn| {
-            let proposal: Option<DbProposal> = dsl::market_proposal
-                .filter(dsl::prev_proposal_id.eq(&proposal_id))
-                .first(conn)
-                .optional()?;
-            Ok(proposal.is_some())
         })
         .await
     }
@@ -125,5 +134,35 @@ impl<'c> ProposalDao<'c> {
         }
         log::debug!("Clean market proposals: done");
         Ok(())
+    }
+}
+
+pub(super) fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<bool> {
+    let proposal: Option<DbProposal> = dsl::market_proposal
+        .filter(dsl::prev_proposal_id.eq(&proposal_id))
+        .first(conn)
+        .optional()?;
+    Ok(proposal.is_some())
+}
+
+pub(super) fn set_proposal_accepted(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<()> {
+    // TODO: Check if we can do transition to this state.
+    update_proposal_state(conn, proposal_id, ProposalState::Accepted)
+}
+
+fn update_proposal_state(
+    conn: &ConnType,
+    proposal_id: &ProposalId,
+    new_state: ProposalState,
+) -> DbResult<()> {
+    diesel::update(dsl::market_proposal.filter(dsl::id.eq(&proposal_id)))
+        .set(dsl::state.eq(new_state))
+        .execute(conn)?;
+    Ok(())
+}
+
+impl<ErrorType: Into<DbError>> From<ErrorType> for SaveProposalError {
+    fn from(err: ErrorType) -> Self {
+        SaveProposalError::DatabaseError(err.into())
     }
 }

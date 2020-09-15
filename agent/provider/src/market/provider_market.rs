@@ -583,7 +583,7 @@ impl Handler<CreateOffer> for ProviderMarket {
 impl Handler<AgreementFinalized> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: AgreementFinalized, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: AgreementFinalized, ctx: &mut Context<Self>) -> Self::Result {
         if let Err(error) = self
             .negotiator
             .agreement_finalized(&msg.agreement_id, msg.result)
@@ -594,6 +594,38 @@ impl Handler<AgreementFinalized> for ProviderMarket {
                 error,
             );
         }
+
+        log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
+
+        let myself = ctx.address();
+        let subscriptions = std::mem::replace(&mut self.offer_subscriptions, HashMap::new());
+        let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
+        let market_api = self.market_api.clone();
+
+        let fut = async move {
+            if let Err(e) = ProviderMarket::unsubscribe(market_api.clone(), subscription_ids).await
+            {
+                log::warn!("Failed to unsubscribe offers from the market: {:?}", e);
+            }
+
+            for (_, sub) in subscriptions {
+                let offer = sub.offer;
+                let preset = sub.preset;
+                let preset_name = preset.name.clone();
+
+                if let Err(e) =
+                    Self::create_offer(myself.clone(), market_api.clone(), offer, preset).await
+                {
+                    log::warn!(
+                        "Unable to create subscription for preset {:?}: {:?}",
+                        preset_name,
+                        e
+                    );
+                }
+            }
+        };
+        ctx.spawn(fut.into_actor(self));
+
         // Don't forward error.
         ActorResponse::reply(Ok(()))
     }

@@ -5,9 +5,12 @@ use std::sync::Arc;
 
 use ya_client::model::market::{AgreementProposal, Demand, Proposal};
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::ResultExt;
 
+use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
+use super::common::*;
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, ProposalId, QueryTimeout,
     QueryTimeoutMaxEvents,
@@ -43,12 +46,16 @@ async fn subscribe(
     market
         .subscribe_demand(&body.into_inner(), &id)
         .await
+        .inspect_err(|e| log::error!("[SubscribeDemand] {}", e))
         .map(|id| HttpResponse::Created().json(id))
 }
 
 #[actix_web::get("/demands")]
-async fn get_demands(_market: Data<Arc<MarketService>>, _id: Identity) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+async fn get_demands(market: Data<Arc<MarketService>>, id: Identity) -> impl Responder {
+    market
+        .get_demands(Some(id))
+        .await
+        .map(|demands| HttpResponse::Ok().json(demands))
 }
 
 #[actix_web::delete("/demands/{subscription_id}")]
@@ -61,6 +68,7 @@ async fn unsubscribe(
     market
         .unsubscribe_demand(&subscription_id, &id)
         .await
+        .inspect_err(|e| log::error!("[UnsubscribeDemand] {}", e))
         .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
@@ -78,6 +86,7 @@ async fn collect(
         .requestor_engine
         .query_events(&subscription_id, timeout, max_events)
         .await
+        .inspect_err(|e| log::error!("[QueryEvents] {}", e))
         .map(|events| HttpResponse::Ok().json(events))
 }
 
@@ -86,7 +95,7 @@ async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     body: Json<Proposal>,
-    _id: Identity,
+    id: Identity,
 ) -> impl Responder {
     let PathSubscriptionProposal {
         subscription_id,
@@ -95,8 +104,9 @@ async fn counter_proposal(
     let proposal = body.into_inner();
     market
         .requestor_engine
-        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
+        .inspect_err(|e| log::error!("[CounterProposal] {}", e))
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
@@ -112,15 +122,11 @@ async fn get_proposal(
         proposal_id,
     } = path.into_inner();
 
-    // check if subscription exists
-    market.matcher.store.get_demand(&subscription_id).await?;
-
     market
         .requestor_engine
         .common
-        .get_proposal(Some(subscription_id), &proposal_id)
+        .get_client_proposal(Some(subscription_id), &proposal_id)
         .await
-        .and_then(|proposal| proposal.into_client().map_err(From::from))
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 
@@ -145,16 +151,8 @@ async fn create_agreement(
         .requestor_engine
         .create_agreement(id, &proposal_id, valid_to)
         .await
-        .map(|agreement_id| HttpResponse::Ok().json(agreement_id))
-}
-
-#[actix_web::get("/agreements/{agreement_id}")]
-async fn get_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+        .inspect_err(|e| log::error!("[CreateAgreement] {}", e))
+        .map(|agreement_id| HttpResponse::Ok().json(agreement_id.into_client()))
 }
 
 #[actix_web::post("/agreements/{agreement_id}/confirm")]
@@ -163,11 +161,12 @@ async fn confirm_agreement(
     path: Path<PathAgreement>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().agreement_id;
+    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     market
         .requestor_engine
         .confirm_agreement(id, &agreement_id)
         .await
+        .inspect_err(|e| log::error!("[ConfirmAgreement] {}", e))
         .map(|_| HttpResponse::NoContent().finish())
 }
 
@@ -178,12 +177,13 @@ async fn wait_for_approval(
     query: Query<QueryTimeout>,
     _id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().agreement_id;
+    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     let timeout = query.timeout;
     market
         .requestor_engine
         .wait_for_approval(&agreement_id, timeout)
         .await
+        .inspect_err(|e| log::error!("[WaitForApproval] {}", e))
         .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 

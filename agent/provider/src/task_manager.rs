@@ -385,20 +385,20 @@ impl Handler<BreakAgreement> for TaskManager {
                 msg.reason
             );
 
-            let msg1 = msg.clone();
             let result = async move {
-                runner.send(AgreementBroken::from(msg1.clone())).await??;
-                payments.send(AgreementBroken::from(msg1.clone())).await??;
+                let msg = AgreementBroken::from(msg.clone());
+                runner.send(msg.clone()).await??;
+                // Notify market, but we don't care about result.
+                // TODO: Breaking agreement shouldn't fail at anytime. But in current code we can
+                //       return early, before we notify market.
+                market.do_send(msg.clone());
 
-                finish_transition(&myself, &msg1.agreement_id, new_state).await?;
+                payments.send(msg.clone()).await??;
+
+                finish_transition(&myself, &msg.agreement_id, new_state).await?;
                 Ok(())
             }
             .await;
-
-            // Notify market, but we don't care about result.
-            // TODO: Breaking agreement shouldn't fail at anytime. But in current code we can
-            //       return early, before we notify market.
-            market.do_send(AgreementBroken::from(msg.clone()));
 
             result
         }
@@ -422,16 +422,13 @@ impl Handler<CloseAgreement> for TaskManager {
         let future = async move {
             start_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
 
-            runner.do_send(AgreementClosed::new(&msg.agreement_id));
-            //.await??;
-            payments
-                .send(AgreementClosed::new(&msg.agreement_id))
-                .await??;
+            let msg = AgreementClosed::new(&msg.agreement_id);
+            runner.do_send(msg.clone());
+            market.do_send(msg.clone());
+            payments.send(msg.clone()).await??;
 
             finish_transition(&myself, &msg.agreement_id, AgreementState::Closed).await?;
 
-            // Notify market, but we don't care about result.
-            market.do_send(AgreementClosed::new(&msg.agreement_id));
             Ok(())
         }
         .map_err(move |error: Error| log::error!("Can't close agreement. Error: {}", error));

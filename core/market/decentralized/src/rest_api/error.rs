@@ -6,11 +6,12 @@ use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
     matcher::error::{
-        DemandError, MatcherError, ModifyOfferError, QueryOfferError, QueryOffersError,
-        ResolverError, SaveOfferError,
+        DemandError, MatcherError, ModifyOfferError, QueryDemandsError, QueryOfferError,
+        QueryOffersError, ResolverError, SaveOfferError,
     },
     negotiation::error::{
-        AgreementError, NegotiationError, ProposalError, QueryEventsError, WaitForApprovalError,
+        AgreementError, AgreementStateError, NegotiationError, ProposalError, QueryEventsError,
+        WaitForApprovalError,
     },
 };
 
@@ -24,6 +25,7 @@ impl ResponseError for MarketError {
     fn error_response(&self) -> HttpResponse {
         match self {
             MarketError::Matcher(e) => e.error_response(),
+            MarketError::QueryDemandsError(e) => e.error_response(),
             MarketError::QueryOfferError(e) => e.error_response(),
             MarketError::QueryOffersError(e) => e.error_response(),
             MarketError::DemandError(e) => e.error_response(),
@@ -62,6 +64,12 @@ impl ResponseError for DemandError {
             }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
+    }
+}
+
+impl ResponseError for QueryDemandsError {
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
     }
 }
 
@@ -127,11 +135,7 @@ impl ResponseError for ProposalError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            ProposalError::NotFound(..)
-            | ProposalError::QueryOfferError(QueryOfferError::NotFound(..))
-            | ProposalError::DemandError(DemandError::NotFound(..)) => {
-                HttpResponse::NotFound().json(msg)
-            }
+            ProposalError::NotFound(..) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
     }
@@ -142,22 +146,29 @@ impl ResponseError for AgreementError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            AgreementError::Confirmed(_)
-            | AgreementError::Cancelled(_)
-            | AgreementError::Approved(_)
-            | AgreementError::Proposed(_) => HttpResponse::Conflict().json(msg),
-            AgreementError::Rejected(_)
-            | AgreementError::Expired(_)
-            | AgreementError::Terminated(_) => HttpResponse::Gone().json(msg),
+            AgreementError::AgreementExists(_, _) => HttpResponse::Conflict().json(msg),
+            AgreementError::InvalidState(e) => match e {
+                AgreementStateError::Confirmed(_)
+                | AgreementStateError::Cancelled(_)
+                | AgreementStateError::Approved(_)
+                | AgreementStateError::Proposed(_) => HttpResponse::Conflict().json(msg),
+                AgreementStateError::Rejected(_)
+                | AgreementStateError::Expired(_)
+                | AgreementStateError::Terminated(_) => HttpResponse::Gone().json(msg),
+            },
             AgreementError::NoNegotiations(_)
+            | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
-            | AgreementError::InvalidSubscriptionId(..) => HttpResponse::BadRequest().json(msg),
+            | AgreementError::ProposalCountered(..)
+            | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
             | AgreementError::Update(..)
             | AgreementError::Protocol(_)
-            | AgreementError::ProtocolApprove(_) => HttpResponse::InternalServerError().json(msg),
+            | AgreementError::ProtocolCreate(_)
+            | AgreementError::ProtocolApprove(_)
+            | AgreementError::InternalError(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }
@@ -168,9 +179,9 @@ impl ResponseError for WaitForApprovalError {
         match self {
             WaitForApprovalError::NotFound(_) => HttpResponse::NotFound().json(msg),
             WaitForApprovalError::Expired(_) => HttpResponse::Gone().json(msg),
-            WaitForApprovalError::Terminated(_) | WaitForApprovalError::NotConfirmed(_) => {
-                HttpResponse::BadRequest().json(msg)
-            }
+            WaitForApprovalError::Terminated(_)
+            | WaitForApprovalError::NotConfirmed(_)
+            | WaitForApprovalError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             WaitForApprovalError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
             WaitForApprovalError::InternalError(_) | WaitForApprovalError::Get(..) => {
                 HttpResponse::InternalServerError().json(msg)

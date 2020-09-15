@@ -68,7 +68,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_validation")
+    let network = MarketsNetwork::new("test_broadcast_offer_callbacks")
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -105,7 +105,7 @@ async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_validation")
+    let network = MarketsNetwork::new("test_broadcast_offer_id_validation")
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -144,7 +144,7 @@ async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_validation")
+    let network = MarketsNetwork::new("test_broadcast_expired_offer")
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -273,8 +273,8 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Discovery GetOffers gsb endpoint should return only existing Offers.
-/// Test sends GetOffers requesting existing and not existing subscription.
+/// Discovery `RetrieveOffers` GSB endpoint should return only existing Offers.
+/// Test sends RetrieveOffers requesting existing and not existing subscription.
 /// Market is expected to return only existing Offer without any error.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]

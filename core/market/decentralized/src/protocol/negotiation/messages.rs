@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 
 use ya_service_bus::RpcMessage;
 
-use crate::db::model::{Agreement, AgreementId};
+use crate::db::model::AgreementId;
 use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
 
 use super::super::callback::CallbackMessage;
 use super::error::{AgreementError, ApproveAgreementError, CounterProposalError, ProposalError};
+use crate::protocol::negotiation::error::ProposeAgreementError;
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -82,13 +83,17 @@ impl RpcMessage for ProposalRejected {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementReceived {
-    pub agreement: Agreement,
+    pub proposal_id: ProposalId,
+    pub agreement_id: AgreementId,
+    pub creation_ts: NaiveDateTime,
+    pub valid_to: NaiveDateTime,
+    // TODO: We should send here signature.
 }
 
 impl RpcMessage for AgreementReceived {
     const ID: &'static str = "AgreementReceived";
     type Item = ();
-    type Error = AgreementError;
+    type Error = ProposeAgreementError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -148,7 +153,7 @@ impl ProposalContent {
 
 impl ProposalReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
-        self.prev_proposal_id = self.prev_proposal_id.translate(owner.clone());
+        self.prev_proposal_id = self.prev_proposal_id.translate(owner);
         self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
         self
     }
@@ -170,7 +175,15 @@ impl ProposalRejected {
 
 impl AgreementApproved {
     pub fn translate(mut self, owner: OwnerType) -> Self {
-        self.agreement_id = self.agreement_id.translate(owner.clone());
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementReceived {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
+        self.proposal_id = self.proposal_id.translate(owner);
         self
     }
 }

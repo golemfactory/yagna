@@ -21,7 +21,9 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
     let prov_id = network.get_default_id("Provider1");
 
     // Requestor side
-    let proposal_id = exchange_draft_proposals(&network, "Requestor1", "Provider1").await?;
+    let proposal_id = exchange_draft_proposals(&network, "Requestor1", "Provider1")
+        .await?
+        .proposal_id;
     let result = req_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_ok());
