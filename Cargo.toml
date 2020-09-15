@@ -22,7 +22,7 @@ name = "yagna"
 path = "core/serv/src/main.rs"
 
 [dependencies]
-gftp="0.1" # just to enable gftp build for cargo-deb
+gftp = "0.1" # just to enable gftp build for cargo-deb
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
