@@ -24,6 +24,7 @@ pub fn sample_offer() -> Offer {
         creation_ts,
         expiration_ts,
     )
+    .unwrap()
 }
 
 pub fn sample_offer_with_expiration(expiration_ts: NaiveDateTime) -> Offer {
@@ -34,6 +35,7 @@ pub fn sample_offer_with_expiration(expiration_ts: NaiveDateTime) -> Offer {
         creation_ts,
         expiration_ts,
     )
+    .unwrap()
 }
 
 pub fn generate_offer(id: &str, expiration_ts: NaiveDateTime) -> Offer {
@@ -57,6 +59,7 @@ pub fn sample_demand() -> Demand {
         creation_ts,
         expiration_ts,
     )
+    .unwrap()
 }
 
 pub fn generate_demand(id: &str, expiration_ts: NaiveDateTime) -> Demand {

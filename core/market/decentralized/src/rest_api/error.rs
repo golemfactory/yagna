@@ -37,11 +37,11 @@ impl ResponseError for MarketError {
 impl ResponseError for MatcherError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            MatcherError::DemandError(e) => e.error_response(),
-            MatcherError::QueryOffersError(e) => e.error_response(),
-            MatcherError::QueryOfferError(e) => e.error_response(),
-            MatcherError::SaveOfferError(e) => e.error_response(),
-            MatcherError::ModifyOfferError(e) => e.error_response(),
+            MatcherError::Demand(e) => e.error_response(),
+            MatcherError::QueryOffers(e) => e.error_response(),
+            MatcherError::QueryOffer(e) => e.error_response(),
+            MatcherError::SaveOffer(e) => e.error_response(),
+            MatcherError::ModifyOffer(e) => e.error_response(),
         }
     }
 }
@@ -106,7 +106,7 @@ impl ResponseError for ModifyOfferError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             ModifyOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            ModifyOfferError::Unsubscribed(_) | ModifyOfferError::Expired(_) => {
+            ModifyOfferError::AlreadyUnsubscribed(_) | ModifyOfferError::Expired(_) => {
                 HttpResponse::Gone().json(msg)
             }
             _ => HttpResponse::InternalServerError().json(msg),
