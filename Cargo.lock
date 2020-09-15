@@ -350,12 +350,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee2a4ec343196209d6594e19543ae87a39f96d5534d7174822a3ad825dd6ed7e"
 
 [[package]]
-name = "adler32"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
-
-[[package]]
 name = "aes"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1848,7 +1842,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -1856,6 +1850,7 @@ dependencies = [
  "dotenv",
  "env_logger 0.7.1",
  "futures 0.3.5",
+ "git-version",
  "log 0.4.11",
  "rand 0.7.3",
  "serde",
@@ -1868,10 +1863,6 @@ dependencies = [
  "url 2.1.1",
  "ya-client-model",
  "ya-core-model",
- "ya-net",
- "ya-service-api",
- "ya-service-api-derive",
- "ya-service-api-interfaces",
  "ya-service-bus",
 ]
 
@@ -2352,24 +2343,6 @@ name = "libc"
 version = "0.2.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "755456fae044e6fa1ebbbd1b3e902ae19e73097ed4ed87bb79934a867c007bc3"
-
-[[package]]
-name = "libflate"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9bac9023e1db29c084f9f8cd9d3852e5e8fddf98fb47c4964a0ea4663d95949"
-dependencies = [
- "adler32",
- "crc32fast",
- "libflate_lz77",
- "rle-decode-fast",
-]
-
-[[package]]
-name = "libflate_lz77"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3286f09f7d4926fc486334f28d8d2e6ebe4f7f9994494b6dab27ddfad2c9b11b"
 
 [[package]]
 name = "libproc"
@@ -3232,21 +3205,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "procfs"
-version = "0.7.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c434e93ef69c216e68e4f417c927b4f31502c3560b72cfdb6827e2321c5c6b3e"
-dependencies = [
- "bitflags 1.2.1",
- "byteorder",
- "chrono",
- "hex",
- "lazy_static",
- "libc",
- "libflate",
-]
-
-[[package]]
 name = "promptly"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3671,12 +3629,6 @@ dependencies = [
  "digest 0.8.1",
  "opaque-debug 0.2.3",
 ]
-
-[[package]]
-name = "rle-decode-fast"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cabe4fa914dec5870285fa7f71f602645da47c486e68486d2b4ceb4a343e90ac"
 
 [[package]]
 name = "rlp"
@@ -5360,7 +5312,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=1bfbcfa25694c1638b81f86774137b4bdf3abb37#1bfbcfa25694c1638b81f86774137b4bdf3abb37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=099944b74c2743457feb825ccc4b8b3d83f587c4#099944b74c2743457feb825ccc4b8b3d83f587c4"
 dependencies = [
  "awc",
  "backtrace",
@@ -5381,7 +5333,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=1bfbcfa25694c1638b81f86774137b4bdf3abb37#1bfbcfa25694c1638b81f86774137b4bdf3abb37"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=099944b74c2743457feb825ccc4b8b3d83f587c4#099944b74c2743457feb825ccc4b8b3d83f587c4"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -5400,7 +5352,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bigdecimal",
  "bitflags 1.2.1",
@@ -5451,7 +5403,6 @@ dependencies = [
  "libproc",
  "log 0.4.11",
  "nix 0.17.0",
- "procfs",
  "rand 0.7.3",
  "regex",
  "serde",
@@ -5482,6 +5433,8 @@ name = "ya-gnt-driver"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-connect",
+ "actix-http",
  "actix-rt",
  "anyhow",
  "awc",
@@ -5508,6 +5461,7 @@ dependencies = [
  "sha3 0.9.1",
  "thiserror",
  "tokio 0.2.22",
+ "trust-dns-resolver",
  "uint",
  "ureq",
  "uuid 0.8.1",
@@ -5601,6 +5555,7 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
+ "ya-std-utils",
 ]
 
 [[package]]
@@ -5856,16 +5811,14 @@ version = "0.1.0"
 name = "ya-sb-proto"
 version = "0.1.0"
 dependencies = [
- "bytes 0.4.12",
  "bytes 0.5.6",
- "prost 0.5.0",
+ "prost 0.6.1",
  "prost-build 0.5.0",
  "serial_test",
  "thiserror",
  "tokio 0.2.22",
  "tokio-util 0.2.0",
  "url 2.1.1",
- "ya-sb-util",
 ]
 
 [[package]]
@@ -6005,6 +5958,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-std-utils"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.11",
+]
+
+[[package]]
 name = "ya-transfer"
 version = "0.1.0"
 dependencies = [
@@ -6077,7 +6037,6 @@ dependencies = [
  "nix 0.17.0",
  "shared_child",
  "tokio 0.2.22",
- "tokio-process-ns",
 ]
 
 [[package]]
@@ -6089,7 +6048,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.3.0"
+version = "0.3.4-alpha.0"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -6099,6 +6058,7 @@ dependencies = [
  "dotenv",
  "env_logger 0.7.1",
  "futures 0.3.5",
+ "gftp",
  "lazy_static",
  "log 0.4.11",
  "openssl",

@@ -5,7 +5,7 @@
 You can enable decentralized market using cargo features.
 Run yagna daemon with flags:
 ```
-cargo run --no-default-features --features market-decentralized service run
+cargo run --no-default-features --features market-decentralized --features gnt-driver service run
 ```
 
 ## Running decentralized market test suite
