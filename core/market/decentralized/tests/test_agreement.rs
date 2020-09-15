@@ -40,10 +40,10 @@ async fn test_gsb_get_agreement() -> Result<()> {
         .await?;
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
         .send(market::GetAgreement {
-            agreement_id: agreement_id.to_string(),
+            agreement_id: agreement_id.into_client(),
         })
         .await??;
-    assert_eq!(agreement.agreement_id, agreement_id.to_string());
+    assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(
         agreement.demand.requestor_id.unwrap(),
         req_id.identity.to_string()
@@ -78,7 +78,7 @@ async fn test_get_agreement() -> Result<()> {
         .await?;
 
     let agreement = req_market.get_agreement(&agreement_id, &req_id).await?;
-    assert_eq!(agreement.agreement_id, agreement_id.to_string());
+    assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(
         agreement.demand.requestor_id.unwrap(),
         req_id.identity.to_string()
