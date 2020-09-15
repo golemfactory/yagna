@@ -81,7 +81,8 @@ struct CliArgs {
 
     /// Accept the disclaimer and privacy warning found at
     /// {n}https://handbook.golem.network/see-also/terms
-    #[structopt(long, set = clap::ArgSettings::Global)]
+    #[cfg_attr(not(feature = "tos-accepted"), structopt(long, set = clap::ArgSettings::Global))]
+    #[cfg_attr(feature = "tos-accepted", structopt(skip = true))]
     accept_terms: bool,
 
     /// Enter interactive mode
