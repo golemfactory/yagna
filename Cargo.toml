@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.3.0"
+version = "0.3.4-alpha.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,8 +10,8 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default=['market-forwarding', 'gnt-driver']
-static-openssl=["openssl/vendored"]
+default = ['market-forwarding', 'gnt-driver', "gftp/bin"]
+static-openssl = ["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized']
 dummy-driver = ['ya-dummy-driver']
@@ -22,6 +22,7 @@ name = "yagna"
 path = "core/serv/src/main.rs"
 
 [dependencies]
+gftp="0.1" # just to enable gftp build for cargo-deb
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
@@ -52,7 +53,7 @@ env_logger = "0.7"
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
-openssl="0.10"
+openssl = "0.10"
 structopt = "0.3"
 url = "2.1.1"
 
@@ -94,6 +95,7 @@ members = [
     "core/sgx",
     "exe-unit",
     "exe-unit/runtime-api",
+    "exe-unit/tokio-process-ns",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
@@ -104,6 +106,7 @@ members = [
     "utils/compile-time-utils",
     "utils/path",
     "utils/process",
+    "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
 ]
@@ -138,12 +141,14 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "c1d9d9e5faba4a5a975b813193e1ec2b1caf3fb6"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "c1d9d9e5faba4a5a975b813193e1ec2b1caf3fb6"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "9cdc79ef45fd7f26cb4314bf3dffc5afc765bf0d" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "9cdc79ef45fd7f26cb4314bf3dffc5afc765bf0d" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
+tokio-process-ns = { path = "exe-unit/tokio-process-ns" }
 ya-agreement-utils = { path = "utils/agreement-utils" }
+ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }

@@ -15,7 +15,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::model::SubscriptionId;
 
-#[derive(Display, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Display, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum OwnerType {
     #[display(fmt = "P")]
     Provider,
@@ -30,6 +30,10 @@ pub enum ProposalIdParseError {
     #[error("Proposal id [{0}] has invalid owner type.")]
     InvalidOwnerType(String),
 }
+
+#[derive(thiserror::Error, Debug, PartialEq, Serialize, Deserialize)]
+#[error("Proposal id [{0}] has unexpected hash [{1}].")]
+pub struct ProposalIdValidationError(ProposalId, String);
 
 #[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", owner, id)]
@@ -59,6 +63,27 @@ impl ProposalId {
     pub fn translate(mut self, new_owner: OwnerType) -> Self {
         self.owner = new_owner;
         self
+    }
+
+    pub fn swap_owner(mut self) -> Self {
+        self.owner = match self.owner {
+            OwnerType::Provider => OwnerType::Requestor,
+            OwnerType::Requestor => OwnerType::Provider,
+        };
+        self
+    }
+
+    pub fn validate(
+        &self,
+        offer_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
+        creation_ts: &NaiveDateTime,
+    ) -> Result<(), ProposalIdValidationError> {
+        let hash = hash_proposal(&offer_id, &demand_id, &creation_ts);
+        if self.id != hash {
+            return Err(ProposalIdValidationError(self.clone(), hash));
+        }
+        Ok(())
     }
 }
 

@@ -2,6 +2,7 @@ use actix_rt::Arbiter;
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
 use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult};
+use git_version::*;
 use std::mem;
 use structopt::{clap, StructOpt};
 use tokio::io;
@@ -9,6 +10,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::time::Duration;
 
 #[derive(StructOpt)]
+#[structopt(version = git_version!(prefix = concat!(env!("CARGO_PKG_VERSION"), "-")))]
 struct Args {
     #[structopt(flatten)]
     command: Command,

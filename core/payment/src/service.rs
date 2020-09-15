@@ -18,7 +18,7 @@ mod local {
     use ya_core_model::payment::local::*;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
-        log::debug!("Binding payment private service to service bus");
+        log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
             .bind_with_processor(schedule_payment)
@@ -27,7 +27,7 @@ mod local {
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_status)
             .bind_with_processor(get_accounts);
-        log::debug!("Successfully bound payment private service to service bus");
+        log::debug!("Successfully bound payment local service to service bus");
     }
 
     async fn schedule_payment(

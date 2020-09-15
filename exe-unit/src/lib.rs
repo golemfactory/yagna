@@ -245,10 +245,11 @@ impl<R: Runtime> RuntimeRef<R> {
         .await?;
 
         match &ctx.cmd {
-            ExeScriptCommand::Transfer { from, to } => {
+            ExeScriptCommand::Transfer { from, to, args } => {
                 let msg = TransferResource {
                     from: from.clone(),
                     to: to.clone(),
+                    args: args.clone(),
                 };
                 transfer_service.send(msg).await??;
             }
