@@ -9,29 +9,45 @@ use std::convert::TryFrom;
 pub fn list_exeunits(config: ProviderConfig) -> anyhow::Result<()> {
     let registry = config.registry()?;
     if let Err(errors) = registry.validate() {
-        println!("Encountered errors while checking ExeUnits:\n{}", errors);
+        eprintln!("Encountered errors while checking ExeUnits:\n{}", errors);
     }
 
-    println!("Available ExeUnits:");
+    if config.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&registry.list_exeunits())?
+        );
+    } else {
+        println!("Available ExeUnits:");
 
-    let exeunits = registry.list_exeunits();
-    for exeunit in exeunits.iter() {
-        println!("\n{}", exeunit);
+        let exeunits = registry.list_exeunits();
+        for exeunit in exeunits.iter() {
+            println!("\n{}", exeunit);
+        }
     }
     Ok(())
 }
 
 pub fn list_presets(config: ProviderConfig) -> anyhow::Result<()> {
     let presets = PresetManager::load_or_create(&config.presets_file)?;
-    println!("Available Presets:");
 
-    for preset in presets.list().iter() {
-        println!("\n{}", preset);
+    if config.json {
+        println!("{}", serde_json::to_string_pretty(&presets.list())?);
+    } else {
+        println!("Available Presets:");
+
+        for preset in presets.list().iter() {
+            println!("\n{}", preset);
+        }
     }
     Ok(())
 }
 
-pub fn list_metrics(_: ProviderConfig) -> anyhow::Result<()> {
+pub fn list_metrics(config: ProviderConfig) -> anyhow::Result<()> {
+    if config.json {
+        anyhow::bail!("json output not implemented");
+    }
+
     for entry in Coefficient::variants() {
         if let Some(property) = entry.to_property() {
             println!("{:15}{}", entry.to_readable(), property);
@@ -53,6 +69,10 @@ fn validate_preset(config: &ProviderConfig, preset: &Preset) -> anyhow::Result<(
 }
 
 pub fn create_preset(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Result<()> {
+    if config.json {
+        anyhow::bail!("json output not implemented");
+    }
+
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
 
     let mut preset = Preset::default();
@@ -80,6 +100,10 @@ pub fn create_preset(config: ProviderConfig, params: PresetNoInteractive) -> any
 }
 
 pub fn create_preset_interactive(config: ProviderConfig) -> anyhow::Result<()> {
+    if config.json {
+        anyhow::bail!("json output not implemented");
+    }
+
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
     let registry = config.registry()?;
 
@@ -109,8 +133,12 @@ pub fn remove_preset(config: ProviderConfig, name: String) -> anyhow::Result<()>
 
 pub fn active_presets(config: ProviderConfig) -> anyhow::Result<()> {
     let presets = PresetManager::load_or_create(&config.presets_file)?;
-    for preset in presets.active() {
-        println!("\n{}", preset);
+    if config.json {
+        println!("{}", serde_json::to_string_pretty(&presets.active())?);
+    } else {
+        for preset in presets.active() {
+            println!("\n{}", preset);
+        }
     }
     Ok(())
 }
@@ -128,6 +156,10 @@ pub fn deactivate_preset(config: ProviderConfig, name: String) -> anyhow::Result
 }
 
 pub fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Result<()> {
+    if config.json {
+        anyhow::bail!("json output not implemented");
+    }
+
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
     let registry = config.registry()?;
 
@@ -155,6 +187,10 @@ pub fn update_presets(
     names: UpdateNames,
     params: PresetNoInteractive,
 ) -> anyhow::Result<()> {
+    if config.json {
+        anyhow::bail!("json output not implemented");
+    }
+
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
 
     let names = if names.all {

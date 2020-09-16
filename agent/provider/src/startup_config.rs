@@ -60,6 +60,9 @@ pub struct ProviderConfig {
         env = "YA_RT_STORAGE")
     ]
     pub rt_storage: Option<f64>,
+
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    pub json: bool,
 }
 
 impl ProviderConfig {
