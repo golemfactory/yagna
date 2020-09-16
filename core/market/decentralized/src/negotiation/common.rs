@@ -85,8 +85,7 @@ impl CommonBroker {
         self.db
             .as_dao::<ProposalDao>()
             .save_proposal(&new_proposal)
-            .await
-            .map_err(|e| ProposalError::Save(e))?;
+            .await?;
         Ok((new_proposal, is_first))
     }
 
