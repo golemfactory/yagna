@@ -44,7 +44,7 @@ Build yagna with all binaries needed in .deb:
 cargo build --release --no-default-features --features market-decentralized --features gnt-driver --workspace
 ```
 
-Run cargo-deb using binaries compiled in previous step:
+Run cargo-deb using binaries compiled in the previous step:
 ```
-cargo deb --no-build
+cargo deb --deb-version $(git rev-parse --short HEAD) --no-build
 ```

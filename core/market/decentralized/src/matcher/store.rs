@@ -35,7 +35,7 @@ impl SubscriptionStore {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts);
+        let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts)?;
         self.insert_offer(offer).await
     }
 
@@ -66,7 +66,7 @@ impl SubscriptionStore {
                 inserted,
                 id,
             }),
-            Err(e) => Err(SaveOfferError::SaveError(e, id)),
+            Err(e) => Err(SaveOfferError::Save(e, id)),
         }
     }
 
@@ -181,11 +181,13 @@ impl SubscriptionStore {
             .as_dao::<OfferDao>()
             .unsubscribe(id, Utc::now().naive_utc())
             .await
-            .map_err(|e| ModifyOfferError::UnsubscribeError(e.into(), id.clone()))
+            .map_err(|e| ModifyOfferError::Unsubscribe(e.into(), id.clone()))
             .and_then(|state| match state {
                 OfferState::Active(_) => Ok(()),
                 OfferState::NotFound => Err(ModifyOfferError::NotFound(id.clone())),
-                OfferState::Unsubscribed(_) => Err(ModifyOfferError::Unsubscribed(id.clone())),
+                OfferState::Unsubscribed(_) => {
+                    Err(ModifyOfferError::AlreadyUnsubscribed(id.clone()))
+                }
                 OfferState::Expired(_) => Err(ModifyOfferError::Expired(id.clone())),
             })
     }
@@ -222,7 +224,7 @@ impl SubscriptionStore {
         match self.db.as_dao::<OfferDao>().delete(&offer_id).await {
             Ok(true) => Ok(()),
             Ok(false) => Err(ModifyOfferError::UnsubscribedNotRemoved(offer_id.clone())),
-            Err(e) => Err(ModifyOfferError::RemoveError(e, offer_id.clone())),
+            Err(e) => Err(ModifyOfferError::Remove(e, offer_id.clone())),
         }
     }
 
@@ -234,12 +236,12 @@ impl SubscriptionStore {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts);
+        let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts)?;
         self.db
             .as_dao::<DemandDao>()
             .insert(&demand)
             .await
-            .map_err(|e| DemandError::SaveError(e))?;
+            .map_err(|e| DemandError::Save(e))?;
         Ok(demand)
     }
 
@@ -299,7 +301,7 @@ impl SubscriptionStore {
             .as_dao::<DemandDao>()
             .delete(&demand_id)
             .await
-            .map_err(|e| DemandError::RemoveError(e, demand_id.clone()))?
+            .map_err(|e| DemandError::Remove(e, demand_id.clone()))?
         {
             true => Ok(()),
             false => Err(DemandError::NotFound(demand_id.clone())),
