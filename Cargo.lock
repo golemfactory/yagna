@@ -5996,6 +5996,7 @@ dependencies = [
 name = "ya-std-utils"
 version = "0.1.0"
 dependencies = [
+ "backtrace",
  "log 0.4.11",
 ]
 

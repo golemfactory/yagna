@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use ya_client::model::market::{AgreementProposal, Demand, Proposal};
 use ya_service_api_web::middleware::Identity;
-use ya_std_utils::ResultExt;
+use ya_std_utils::LogErr;
 
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
@@ -40,7 +40,7 @@ async fn subscribe(
     market
         .subscribe_demand(&body.into_inner(), &id)
         .await
-        .inspect_err(|e| log::error!("[SubscribeDemand] {}", e))
+        .log_err()
         .map(|id| HttpResponse::Created().json(id))
 }
 
@@ -62,7 +62,7 @@ async fn unsubscribe(
     market
         .unsubscribe_demand(&subscription_id, &id)
         .await
-        .inspect_err(|e| log::error!("[UnsubscribeDemand] {}", e))
+        .log_err()
         .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
@@ -80,7 +80,7 @@ async fn collect(
         .requestor_engine
         .query_events(&subscription_id, timeout, max_events)
         .await
-        .inspect_err(|e| log::error!("[QueryEvents] {}", e))
+        .log_err()
         .map(|events| HttpResponse::Ok().json(events))
 }
 
@@ -100,7 +100,7 @@ async fn counter_proposal(
         .requestor_engine
         .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
-        .inspect_err(|e| log::error!("[CounterProposal] {}", e))
+        .log_err()
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
@@ -145,7 +145,7 @@ async fn create_agreement(
         .requestor_engine
         .create_agreement(id, &proposal_id, valid_to)
         .await
-        .inspect_err(|e| log::error!("[CreateAgreement] {}", e))
+        .log_err()
         .map(|agreement_id| HttpResponse::Ok().json(agreement_id.into_client()))
 }
 
@@ -160,7 +160,7 @@ async fn confirm_agreement(
         .requestor_engine
         .confirm_agreement(id, &agreement_id)
         .await
-        .inspect_err(|e| log::error!("[ConfirmAgreement] {}", e))
+        .log_err()
         .map(|_| HttpResponse::NoContent().finish())
 }
 
@@ -177,7 +177,7 @@ async fn wait_for_approval(
         .requestor_engine
         .wait_for_approval(&agreement_id, timeout)
         .await
-        .inspect_err(|e| log::error!("[WaitForApproval] {}", e))
+        .log_err()
         .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
