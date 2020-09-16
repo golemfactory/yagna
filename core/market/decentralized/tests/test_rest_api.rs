@@ -14,6 +14,7 @@ use ya_market_decentralized::testing::{
     DemandError, MarketsNetwork, ModifyOfferError, OwnerType, SubscriptionId,
     SubscriptionParseError,
 };
+use ya_market_resolver::flatten::flatten_json;
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
@@ -154,6 +155,7 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
     let id = network.get_default_id("Node-1");
     client_offer.offer_id = Some(subscription_id.to_string());
     client_offer.provider_id = Some(id.identity.to_string());
+    client_offer.properties = flatten_json(&client_offer.properties).unwrap();
     let market = network.get_market("Node-1");
     // when get from subscription store
     let offer = market.get_offer(&subscription_id).await.unwrap();
@@ -217,6 +219,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
     let id = network.get_default_id("Node-1");
     client_demand.demand_id = Some(subscription_id.to_string());
     client_demand.requestor_id = Some(id.identity.to_string());
+    client_demand.properties = flatten_json(&client_demand.properties).unwrap();
     let market = network.get_market("Node-1");
     // when
     let demand = market.get_demand(&subscription_id).await.unwrap();

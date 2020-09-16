@@ -1,3 +1,4 @@
+use ya_client::model::market::proposal::State;
 use ya_market_decentralized::testing::events_helper::{provider, requestor, ClientProposalHelper};
 use ya_market_decentralized::testing::mock_offer::client::{
     not_matching_demand, not_matching_offer, sample_demand, sample_offer,
@@ -8,8 +9,7 @@ use ya_market_decentralized::testing::proposal_util::{
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::OwnerType;
 use ya_market_decentralized::testing::ProposalError;
-
-use ya_client::model::market::proposal::State;
+use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
@@ -36,7 +36,10 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
 
     // Expect events generated on requestor market.
     let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
-    assert_eq!(proposal0.properties, offer.properties);
+    assert_eq!(
+        proposal0.properties,
+        flatten_json(&offer.properties).unwrap()
+    );
     assert_eq!(proposal0.constraints, offer.constraints);
     assert!(proposal0.proposal_id.is_some());
     assert_eq!(proposal0.issuer_id, Some(identity2.identity.to_string()));
