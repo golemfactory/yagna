@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use ya_market_resolver::flatten::JsonObjectExpected;
+
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
@@ -133,16 +135,16 @@ pub enum ProposalError {
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
     SubscriptionExpired(SubscriptionId),
-    #[error("Proposal [{0}] was already countered. Can't counter for the second time.")]
-    AlreadyCountered(ProposalId),
     #[error("Can't counter own Proposal [{0}].")]
     OwnProposal(ProposalId),
     #[error(transparent)]
     NotMatching(#[from] MatchValidationError),
     #[error(transparent)]
     Get(#[from] GetProposalError),
-    #[error("Failed to save counter Proposal for Proposal [{0}]. Error: {1}")]
-    Save(ProposalId, SaveProposalError),
+    #[error(transparent)]
+    JsonObjectExpected(#[from] JsonObjectExpected),
+    #[error(transparent)]
+    Save(#[from] SaveProposalError),
     #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
     Send(ProposalId, ProtocolProposalError),
     #[error("Can't counter Proposal [{0}]. Error: {1}.")]
