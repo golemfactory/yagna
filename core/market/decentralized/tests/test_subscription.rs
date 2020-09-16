@@ -1,12 +1,7 @@
+use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::client::{sample_demand, sample_offer};
 use ya_market_decentralized::testing::{DemandError, QueryOfferError};
 use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
-
-macro_rules! assert_err_eq {
-    ($expected:expr, $actual:expr $(,)*) => {
-        assert_eq!($expected.to_string(), $actual.unwrap_err().to_string())
-    };
-}
 
 /// Test subscribes offers, checks if offer is available
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
