@@ -58,6 +58,7 @@ async fn test_gsb_get_agreement() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_get_agreement() -> Result<()> {
     let network = MarketsNetwork::new("test_get_agreement")
         .await
@@ -93,6 +94,7 @@ async fn test_get_agreement() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_rest_get_not_existing_agreement() -> Result<()> {
     let network = MarketsNetwork::new("test_rest_get_not_existing_agreement")
         .await
@@ -775,6 +777,7 @@ async fn net_err_while_approving() -> Result<()> {
 /// He can turn his own Proposal into Agreement.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn cant_promote_requestor_proposal() -> Result<()> {
     let network = MarketsNetwork::new("cant_promote_requestor_proposal")
         .await
@@ -819,6 +822,7 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
 /// of negotiations must happen, before he can create Agreement.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn cant_promote_initial_proposal() -> Result<()> {
     let network = MarketsNetwork::new("cant_promote_initial_proposal")
         .await
@@ -861,6 +865,7 @@ async fn cant_promote_initial_proposal() -> Result<()> {
 /// If negotiations were more advanced, `create_agreement` will end with error.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn cant_promote_not_last_proposal() -> Result<()> {
     let network = MarketsNetwork::new("cant_promote_not_last_proposal")
         .await

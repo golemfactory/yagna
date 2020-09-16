@@ -67,6 +67,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 /// works correctly.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new("test_broadcast_offer_callbacks")
@@ -144,6 +145,7 @@ async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
 /// Node should reject Offer, that already expired.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new("test_broadcast_expired_offer")
@@ -281,6 +283,7 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 /// Market is expected to return only existing Offer without any error.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new("test_network_error_while_subscribing")

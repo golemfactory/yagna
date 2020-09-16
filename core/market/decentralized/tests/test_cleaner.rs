@@ -22,6 +22,7 @@ fn past() -> NaiveDateTime {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_agreement() -> Result<()> {
     let valid_agreement = generate_agreement(1, future());
     let expired_agreement = generate_agreement(2, past());
@@ -45,6 +46,7 @@ async fn test_agreement() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_demand() -> Result<()> {
     // insert two demands (expired & active) with negotiations
     let valid_demand = generate_demand(
@@ -75,6 +77,7 @@ async fn test_demand() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_offer() -> Result<()> {
     // insert two offers with negotiations
     let valid_offer = generate_offer(
@@ -110,6 +113,7 @@ async fn test_offer() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_events() -> Result<()> {
     // insert two events
     let db = MarketsNetwork::new("market-cleaner-event")
@@ -135,6 +139,7 @@ async fn test_events() -> Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_proposal() -> Result<()> {
     let _ = env_logger::builder().try_init();
     let db = MarketsNetwork::new("market-cleaner-proposal")

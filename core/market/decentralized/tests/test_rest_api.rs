@@ -68,6 +68,7 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_rest_get_demands")
         .await
@@ -260,6 +261,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_rest_get_proposal() -> anyhow::Result<()> {
     let network = MarketsNetwork::new("test_rest_get_proposal")
         .await
@@ -317,6 +319,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
 
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_rest_get_agreement() -> anyhow::Result<()> {
     let network = MarketsNetwork::new("test_rest_get_agreement")
         .await
@@ -362,6 +365,7 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
 
 // #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 // #[actix_rt::test]
+// #[serial_test::serial]
 // async fn test_rest_get_proposal_wrong_subscription() -> anyhow::Result<()> {
 //     let network = MarketsNetwork::new("test_rest_get_proposal")
 //         .await
