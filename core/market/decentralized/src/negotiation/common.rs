@@ -78,8 +78,7 @@ impl CommonBroker {
         }
 
         let is_first = prev_proposal.body.prev_proposal_id.is_none();
-        let new_proposal = prev_proposal.from_client(proposal);
-        let proposal_id = new_proposal.body.id.clone();
+        let new_proposal = prev_proposal.from_client(proposal)?;
 
         validate_match(&new_proposal, &prev_proposal)?;
 
@@ -87,10 +86,7 @@ impl CommonBroker {
             .as_dao::<ProposalDao>()
             .save_proposal(&new_proposal)
             .await
-            .map_err(|e| match e {
-                SaveProposalError::AlreadyCountered(id) => ProposalError::AlreadyCountered(id),
-                _ => ProposalError::Save(proposal_id.clone(), e),
-            })?;
+            .map_err(|e| ProposalError::Save(e))?;
         Ok((new_proposal, is_first))
     }
 

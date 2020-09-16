@@ -2,6 +2,7 @@ use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
 
+use crate::db::dao::SaveProposalError;
 use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
@@ -138,9 +139,8 @@ impl ResponseError for ProposalError {
             ProposalError::NoSubscription(..)
             | ProposalError::SubscriptionExpired(..)
             | ProposalError::Unsubscribed(..) => HttpResponse::NotFound().json(msg),
-            ProposalError::AlreadyCountered(..) | ProposalError::NotMatching(..) => {
-                HttpResponse::Gone().json(msg)
-            }
+            ProposalError::Save(SaveProposalError::AlreadyCountered(..))
+            | ProposalError::NotMatching(..) => HttpResponse::Gone().json(msg),
             ProposalError::Get(e) => e.error_response(),
             _ => HttpResponse::InternalServerError().json(msg),
         }

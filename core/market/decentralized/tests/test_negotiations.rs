@@ -8,7 +8,7 @@ use ya_market_decentralized::testing::proposal_util::{
 };
 use ya_market_decentralized::testing::MarketsNetwork;
 use ya_market_decentralized::testing::OwnerType;
-use ya_market_decentralized::testing::ProposalError;
+use ya_market_decentralized::testing::{ProposalError, SaveProposalError};
 use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
@@ -64,7 +64,10 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal1_prov.constraints, proposal1_req.constraints);
-    assert_eq!(proposal1_prov.properties, proposal1_req.properties);
+    assert_eq!(
+        proposal1_prov.properties,
+        flatten_json(&proposal1_req.properties).unwrap()
+    );
     assert_eq!(
         proposal1_prov.proposal_id,
         Some(proposal1_prov_id.to_string()),
@@ -90,7 +93,10 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let proposal2_req_id = proposal2_id.clone().translate(OwnerType::Requestor);
 
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
-    assert_eq!(proposal2_req.properties, proposal2_prov.properties);
+    assert_eq!(
+        proposal2_req.properties,
+        flatten_json(&proposal2_prov.properties).unwrap()
+    );
     assert_eq!(
         proposal2_req.proposal_id,
         Some(proposal2_req_id.to_string()),
@@ -122,7 +128,10 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let proposal3_prov_id = proposal3_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal3_prov.constraints, proposal3_req.constraints);
-    assert_eq!(proposal3_prov.properties, proposal3_req.properties);
+    assert_eq!(
+        proposal3_prov.properties,
+        flatten_json(&proposal3_req.properties).unwrap()
+    );
     assert_eq!(
         proposal3_prov.proposal_id,
         Some(proposal3_prov_id.to_string()),
@@ -193,8 +202,10 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::AlreadyCountered(id) => assert_eq!(id, proposal0_id),
-        _ => panic!("Expected ProposalError::AlreadyCountered."),
+        ProposalError::Save(SaveProposalError::AlreadyCountered(id)) => {
+            assert_eq!(id, proposal0_id);
+        }
+        _ => panic!("Expected AlreadyCountered error."),
     }
 
     // PROVIDER side
@@ -227,8 +238,10 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::AlreadyCountered(id) => assert_eq!(id, proposal0_id),
-        _ => panic!("Expected ProposalError::AlreadyCountered."),
+        ProposalError::Save(SaveProposalError::AlreadyCountered(id)) => {
+            assert_eq!(id, proposal0_id)
+        }
+        _ => panic!("Expected AlreadyCountered error."),
     }
 
     Ok(())
