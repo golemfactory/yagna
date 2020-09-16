@@ -21,6 +21,7 @@ use crate::db::model::Demand as ModelDemand;
 use crate::db::model::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
 use crate::protocol::negotiation::messages::ProposalContent;
+use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
@@ -191,7 +192,7 @@ impl Proposal {
         }
     }
 
-    pub fn from_client(&self, proposal: &ClientProposal) -> Proposal {
+    pub fn from_client(&self, proposal: &ClientProposal) -> Result<Proposal, JsonObjectExpected> {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
@@ -208,17 +209,17 @@ impl Proposal {
             prev_proposal_id: Some(self.body.id.clone()),
             issuer: IssuerType::Us,
             negotiation_id: self.negotiation.id.clone(),
-            properties: proposal.properties.to_string(),
+            properties: flatten_json(&proposal.properties)?.to_string(),
             constraints: proposal.constraints.clone(),
             state: ProposalState::Draft,
             creation_ts,
             expiration_ts,
         };
 
-        Proposal {
+        Ok(Proposal {
             body: proposal,
             negotiation: self.negotiation.clone(),
-        }
+        })
     }
 
     pub fn into_client(self) -> Result<ClientProposal, ErrorMessage> {

@@ -1,6 +1,7 @@
-use crate::db::DbError;
+use ya_market_resolver::flatten::JsonObjectExpected;
 
 use crate::db::model::{SubscriptionId, SubscriptionValidationError};
+use crate::db::DbError;
 use crate::identity::IdentityError;
 use crate::protocol::discovery::error::DiscoveryInitError;
 
@@ -11,9 +12,11 @@ pub enum DemandError {
     #[error("Failed to get Demand [{1}]. Error: {0}.")]
     GetSingle(DbError, SubscriptionId),
     #[error("Failed to save Demand. Error: {0}.")]
-    SaveError(DbError),
+    Save(DbError),
+    #[error(transparent)]
+    JsonObjectExpected(#[from] JsonObjectExpected),
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
-    RemoveError(DbError, SubscriptionId),
+    Remove(DbError, SubscriptionId),
     #[error("Demand [{0}] not found.")]
     NotFound(SubscriptionId),
 }
@@ -47,7 +50,7 @@ pub enum QueryOfferError {
 #[derive(thiserror::Error, Debug)]
 pub enum SaveOfferError {
     #[error("Failed to save Offer [{1}]. Error: {0}.")]
-    SaveError(DbError, SubscriptionId),
+    Save(DbError, SubscriptionId),
     #[error("Failed to save already existing Offer [{0}].")]
     Exists(SubscriptionId),
     #[error("Offer [{0}] already unsubscribed.")]
@@ -56,6 +59,8 @@ pub enum SaveOfferError {
     Expired(SubscriptionId),
     #[error(transparent)]
     SubscriptionValidation(#[from] SubscriptionValidationError),
+    #[error(transparent)]
+    JsonObjectExpected(#[from] JsonObjectExpected),
     #[error("Wrong Offer [{id}] state {state:?} after inserted: {inserted}.")]
     WrongState {
         state: String,
@@ -69,13 +74,13 @@ pub enum ModifyOfferError {
     #[error("Offer [{0}] not found.")]
     NotFound(SubscriptionId),
     #[error("Offer [{0}] already unsubscribed.")]
-    Unsubscribed(SubscriptionId),
+    AlreadyUnsubscribed(SubscriptionId),
     #[error("Can't unsubscribe expired Offer [{0}].")]
     Expired(SubscriptionId),
     #[error("Failed to unsubscribe Offer [{1}]. Error: {0}")]
-    UnsubscribeError(DbError, SubscriptionId),
+    Unsubscribe(DbError, SubscriptionId),
     #[error("Failed to remove Offer [{1}]. Error: {0}.")]
-    RemoveError(DbError, SubscriptionId),
+    Remove(DbError, SubscriptionId),
     #[error("Offer [{0}] marked as unsubscribed, but not removed")]
     UnsubscribedNotRemoved(SubscriptionId),
 }
@@ -86,7 +91,7 @@ impl From<QueryOfferError> for ModifyOfferError {
             QueryOfferError::NotFound(id) | QueryOfferError::Get(_, id) => {
                 ModifyOfferError::NotFound(id)
             }
-            QueryOfferError::Unsubscribed(id) => ModifyOfferError::Unsubscribed(id),
+            QueryOfferError::Unsubscribed(id) => ModifyOfferError::AlreadyUnsubscribed(id),
             QueryOfferError::Expired(id) => ModifyOfferError::Expired(id),
         }
     }
@@ -95,15 +100,15 @@ impl From<QueryOfferError> for ModifyOfferError {
 #[derive(thiserror::Error, Debug)]
 pub enum MatcherError {
     #[error(transparent)]
-    DemandError(#[from] DemandError),
+    Demand(#[from] DemandError),
     #[error(transparent)]
-    QueryOffersError(#[from] QueryOffersError),
+    QueryOffers(#[from] QueryOffersError),
     #[error(transparent)]
-    QueryOfferError(#[from] QueryOfferError),
+    QueryOffer(#[from] QueryOfferError),
     #[error(transparent)]
-    SaveOfferError(#[from] SaveOfferError),
+    SaveOffer(#[from] SaveOfferError),
     #[error(transparent)]
-    ModifyOfferError(#[from] ModifyOfferError),
+    ModifyOffer(#[from] ModifyOfferError),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -115,19 +120,19 @@ pub enum MatcherInitError {
 #[derive(thiserror::Error, Debug)]
 pub enum ResolverError {
     #[error(transparent)]
-    QueryOfferError(#[from] QueryOfferError),
+    QueryOffer(#[from] QueryOfferError),
     #[error(transparent)]
-    QueryOffersError(#[from] QueryOffersError),
+    QueryOffers(#[from] QueryOffersError),
     #[error(transparent)]
-    DemandError(#[from] DemandError),
+    Demand(#[from] DemandError),
 }
 
 impl From<ResolverError> for MatcherError {
     fn from(e: ResolverError) -> Self {
         match e {
-            ResolverError::QueryOfferError(e) => MatcherError::QueryOfferError(e),
-            ResolverError::QueryOffersError(e) => MatcherError::QueryOffersError(e),
-            ResolverError::DemandError(e) => MatcherError::DemandError(e),
+            ResolverError::QueryOffer(e) => MatcherError::QueryOffer(e),
+            ResolverError::QueryOffers(e) => MatcherError::QueryOffers(e),
+            ResolverError::Demand(e) => MatcherError::Demand(e),
         }
     }
 }
