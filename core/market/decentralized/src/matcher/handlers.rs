@@ -1,5 +1,6 @@
 //! Discovery protocol messages handlers
 use futures::StreamExt;
+use metrics::counter;
 
 use crate::db::model::{DisplayVec, Offer, SubscriptionId};
 
@@ -56,6 +57,7 @@ pub(super) async fn receive_remote_offers(
         .collect::<Vec<SubscriptionId>>()
         .await;
 
+    counter!("market.offers.incoming", added_offers_ids.len() as u64);
     log::info!(
         "Received new Offers from [{}]: \n{}",
         caller,
