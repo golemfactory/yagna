@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
+use metrics::counter;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -244,6 +245,7 @@ impl RequestorBroker {
                 }
             })?;
 
+        counter!("market.agreements.created", 1);
         log::info!(
             "Requestor {} created Agreement [{}] from Proposal [{}].",
             DisplayIdentity(&id),

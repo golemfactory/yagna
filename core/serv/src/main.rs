@@ -1,5 +1,6 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
+use futures::lock::Mutex;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -25,6 +26,7 @@ use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 
+use ya_metrics_utils::Statistics;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -37,6 +39,7 @@ use ya_utils_path::data_dir::DataDir;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
+use std::sync::Arc;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -258,6 +261,8 @@ impl ServiceCommand {
                 let name = clap::crate_name!();
                 log::info!("Starting {} service!", name);
 
+                let stats = Statistics::new()?;
+
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
                     .context("binding service bus router")?;
@@ -277,10 +282,16 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 HttpServer::new(move || {
+                    let stats_rest = actix_web::web::scope("v1/")
+                        .data(stats.clone())
+                        .service(expose_metrics);
+
                     let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .route("/me", web::get().to(me));
+                        .route("/me", web::get().to(me))
+                        .service(stats_rest);
+
                     Services::rest(app, &context)
                 })
                 .bind(api_host_port.clone())
@@ -331,6 +342,14 @@ https://handbook.golem.network/see-also/terms
 
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
+}
+
+#[actix_web::get("/metrics")]
+pub async fn expose_metrics(stats_holder: web::Data<Arc<Mutex<Statistics>>>) -> impl Responder {
+    let metrics = stats_holder.lock().await.query_metrics();
+    //info!("{}", metrics);
+
+    return metrics;
 }
 
 #[actix_rt::main]
