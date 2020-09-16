@@ -1,7 +1,7 @@
 use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
@@ -16,28 +16,33 @@ use super::bcast::BCast;
 #[cfg(not(feature = "bcast-singleton"))]
 use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
-use super::mock_offer::generate_identity;
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
-use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::config::Config;
+use crate::db::dao::ProposalDao;
+use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
+use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
-use crate::negotiation::error::QueryEventsError;
+use crate::negotiation::error::*;
 use crate::protocol::callback::*;
-use crate::protocol::discovery::{builder::DiscoveryBuilder, *};
+use crate::protocol::discovery::{builder::DiscoveryBuilder, error::*, message::*, Discovery};
 use crate::protocol::negotiation::messages::*;
+use crate::testing::mock_identity::MockIdentity;
+use crate::testing::mock_node::default::*;
 
 /// Instantiates market test nodes inside one process.
 pub struct MarketsNetwork {
     nodes: Vec<MockNode>,
     test_dir: PathBuf,
     test_name: String,
+    config: Arc<Config>,
 }
 
 pub struct MockNode {
     pub name: String,
     /// For now only mock default Identity.
-    pub id: Identity,
+    pub mock_identity: Arc<MockIdentity>,
     pub kind: MockNodeKind,
 }
 
@@ -95,24 +100,43 @@ impl MarketsNetwork {
 
         MockNet::default().bind_gsb();
 
+        // Disable cyclic broadcasts by default.
+        let mut config = Config::default();
+        config.discovery.max_bcasted_offers = 0;
+        config.discovery.max_bcasted_unsubscribes = 0;
+
         MarketsNetwork {
             nodes: vec![],
             test_dir,
             test_name: test_name.to_string(),
+            config: Arc::new(config),
         }
     }
 
-    async fn add_node(mut self, name: &str, node_kind: MockNodeKind) -> Result<MarketsNetwork> {
+    /// Config will be used to initialize all consecutive Nodes.
+    pub fn with_config(mut self, config: Arc<Config>) -> Self {
+        self.config = config;
+        self
+    }
+
+    async fn add_node(
+        mut self,
+        name: &str,
+        identity_api: Arc<MockIdentity>,
+        node_kind: MockNodeKind,
+    ) -> Result<MarketsNetwork> {
         let public_gsb_prefix = node_kind.bind_gsb(&self.test_name, name).await?;
 
         let node = MockNode {
             name: name.to_string(),
-            id: generate_identity(name),
+            mock_identity: identity_api,
             kind: node_kind,
         };
 
-        BCastService::default().register(&node.id.identity, &self.test_name);
-        MockNet::default().register_node(&node.id.identity, &public_gsb_prefix);
+        let node_id = node.mock_identity.default.clone().identity;
+        log::info!("Creating mock node {}: [{}].", name, &node_id);
+        BCastService::default().register(&node_id, &self.test_name);
+        MockNet::default().register_node(&node_id, &public_gsb_prefix);
 
         self.nodes.push(node);
         Ok(self)
@@ -123,37 +147,60 @@ impl MarketsNetwork {
         MockNet::default().unregister_node(&id.identity)
     }
 
+    pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
+        let id = self.get_default_id(node_name);
+        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
+
+        MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        Ok(())
+    }
+
     pub async fn add_market_instance(self, name: &str) -> Result<Self> {
-        let db = self.init_database(name)?;
-        let market = Arc::new(MarketService::new(&db)?);
-        self.add_node(name, MockNodeKind::Market(market)).await
+        let db = self.create_database(name)?;
+        let identity_api = MockIdentity::new(name);
+        let market = Arc::new(MarketService::new(
+            &db,
+            identity_api.clone() as Arc<dyn IdentityApi>,
+            self.config.clone(),
+        )?);
+        self.add_node(name, identity_api, MockNodeKind::Market(market))
+            .await
     }
 
     pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
         let db = self.init_database(name)?;
-        db.apply_migration(crate::db::migrations::run_with_output)?;
 
-        let store = SubscriptionStore::new(db.clone());
-        let (matcher, listeners) = Matcher::new(store)?;
-        self.add_node(name, MockNodeKind::Matcher { matcher, listeners })
-            .await
+        let store = SubscriptionStore::new(db.clone(), self.config.clone());
+        let identity_api = MockIdentity::new(name);
+
+        let (matcher, listeners) = Matcher::new(store, identity_api.clone(), self.config.clone())?;
+        self.add_node(
+            name,
+            identity_api,
+            MockNodeKind::Matcher { matcher, listeners },
+        )
+        .await
     }
 
     pub async fn add_discovery_instance(
         self,
         name: &str,
-        offer_received: impl CallbackHandler<OfferReceived>,
-        offer_unsubscribed: impl CallbackHandler<OfferUnsubscribed>,
-        retrieve_offers: impl CallbackHandler<RetrieveOffers>,
+        builder: DiscoveryBuilder,
     ) -> Result<Self> {
-        let discovery = DiscoveryBuilder::default()
-            .add_handler(offer_received)
-            .add_handler(offer_unsubscribed)
-            .add_handler(retrieve_offers)
+        let identity_api = MockIdentity::new(name);
+        let discovery = builder
+            .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
             .build();
-
-        self.add_node(name, MockNodeKind::Discovery(discovery))
+        self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
             .await
+    }
+
+    pub fn discovery_builder() -> DiscoveryBuilder {
+        DiscoveryBuilder::default()
+            .add_handler(empty_on_offers_retrieved)
+            .add_handler(empty_on_offers_bcast)
+            .add_handler(empty_on_offer_unsubscribed_bcast)
+            .add_handler(empty_on_retrieve_offers)
     }
 
     pub async fn add_provider_negotiation_api(
@@ -231,8 +278,11 @@ impl MarketsNetwork {
             req_agreement_rejected,
         );
 
+        let identity_api = MockIdentity::new(name);
+
         self.add_node(
             name,
+            identity_api,
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
@@ -311,8 +361,10 @@ impl MarketsNetwork {
         self.nodes
             .iter()
             .find(|node| &node.name == node_name)
-            .map(|node| node.id.clone())
+            .map(|node| node.mock_identity.clone())
             .unwrap()
+            .default
+            .clone()
     }
 
     pub async fn get_rest_app(
@@ -334,10 +386,16 @@ impl MarketsNetwork {
         .await
     }
 
-    fn init_database(&self, name: &str) -> Result<DbExecutor> {
+    fn create_database(&self, name: &str) -> Result<DbExecutor> {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))?;
+        Ok(db)
+    }
+
+    pub fn init_database(&self, name: &str) -> Result<DbExecutor> {
+        let db = self.create_database(name)?;
+        db.apply_migration(crate::db::migrations::run_with_output)?;
         Ok(db)
     }
 
@@ -353,12 +411,18 @@ impl MarketsNetwork {
 }
 
 fn test_data_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/test-workdir")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("test-workdir")
 }
 
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
     let test_dir: PathBuf = test_data_dir().join(dir_name);
 
+    log::info!(
+        "[MockNode] Preparing test directory: {}",
+        test_dir.display()
+    );
     if test_dir.exists() {
         fs::remove_dir_all(&test_dir)
             .with_context(|| format!("Removing test directory: {}", test_dir.display()))?;
@@ -386,10 +450,22 @@ pub async fn wait_for_bcast(
     }
 }
 
+#[macro_export]
+macro_rules! assert_err_eq {
+    ($expected:expr, $actual:expr $(,)*) => {
+        assert_eq!($expected.to_string(), $actual.unwrap_err().to_string())
+    };
+}
+
 #[async_trait::async_trait]
 pub trait MarketServiceExt {
     async fn get_offer(&self, id: &SubscriptionId) -> Result<Offer, QueryOfferError>;
     async fn get_demand(&self, id: &SubscriptionId) -> Result<Demand, DemandError>;
+    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError>;
+    async fn get_proposal_from_db(
+        &self,
+        proposal_id: &ProposalId,
+    ) -> Result<Proposal, anyhow::Error>;
     async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -408,6 +484,23 @@ impl MarketServiceExt for MarketService {
         self.matcher.store.get_demand(id).await
     }
 
+    async fn get_proposal(&self, id: &ProposalId) -> Result<Proposal, GetProposalError> {
+        self.provider_engine.common.get_proposal(None, id).await
+    }
+
+    async fn get_proposal_from_db(
+        &self,
+        proposal_id: &ProposalId,
+    ) -> Result<Proposal, anyhow::Error> {
+        let db = self.db.clone();
+        Ok(
+            match db.as_dao::<ProposalDao>().get_proposal(proposal_id).await? {
+                Some(proposal) => proposal,
+                None => bail!("Proposal [{}] not found", proposal_id),
+            },
+        )
+    }
+
     async fn query_events(
         &self,
         subscription_id: &SubscriptionId,
@@ -423,27 +516,35 @@ impl MarketServiceExt for MarketService {
 pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
-        AgreementError, ApproveAgreementError, CounterProposalError, ProposalError,
+        ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
+        ProposeAgreementError,
     };
 
-    pub async fn empty_on_offer_received(
+    pub async fn empty_on_offers_retrieved(
         _caller: String,
-        _msg: OfferReceived,
-    ) -> Result<Propagate, ()> {
-        Ok(Propagate::No(Reason::AlreadyExists))
+        _msg: OffersRetrieved,
+    ) -> Result<Vec<SubscriptionId>, ()> {
+        Ok(vec![])
     }
 
-    pub async fn empty_on_offer_unsubscribed(
+    pub async fn empty_on_offers_bcast(
         _caller: String,
-        _msg: OfferUnsubscribed,
-    ) -> Result<Propagate, ()> {
-        Ok(Propagate::No(Reason::Unsubscribed))
+        _msg: OffersBcast,
+    ) -> Result<Vec<SubscriptionId>, ()> {
+        Ok(vec![])
     }
 
     pub async fn empty_on_retrieve_offers(
         _caller: String,
         _msg: RetrieveOffers,
     ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
+        Ok(vec![])
+    }
+
+    pub async fn empty_on_offer_unsubscribed_bcast(
+        _caller: String,
+        _msg: UnsubscribedOffersBcast,
+    ) -> Result<Vec<SubscriptionId>, ()> {
         Ok(vec![])
     }
 
@@ -464,14 +565,14 @@ pub mod default {
     pub async fn empty_on_proposal_rejected(
         _caller: String,
         _msg: ProposalRejected,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), GsbProposalError> {
         Ok(())
     }
 
     pub async fn empty_on_agreement_received(
         _caller: String,
         _msg: AgreementReceived,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), ProposeAgreementError> {
         Ok(())
     }
 
@@ -485,14 +586,14 @@ pub mod default {
     pub async fn empty_on_agreement_rejected(
         _caller: String,
         _msg: AgreementRejected,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), GsbAgreementError> {
         Ok(())
     }
 
     pub async fn empty_on_agreement_cancelled(
         _caller: String,
         _msg: AgreementCancelled,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<(), GsbAgreementError> {
         Ok(())
     }
 }

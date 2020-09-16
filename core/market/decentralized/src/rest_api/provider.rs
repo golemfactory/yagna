@@ -4,16 +4,14 @@ use std::sync::Arc;
 
 use ya_client::model::market::{Offer, Proposal};
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::LogErr;
 
+use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
 use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
 };
-
-// This file contains market REST endpoints. Responsibility of these functions
-// is calling respective functions in market modules and mapping return values
-// to http responses. No market logic is allowed here.
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -27,7 +25,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(approve_agreement)
         .service(reject_agreement)
         .service(terminate_agreement)
-        .service(get_agreement)
 }
 
 #[actix_web::post("/offers")]
@@ -39,6 +36,7 @@ async fn subscribe(
     market
         .subscribe_offer(&body.into_inner(), &id)
         .await
+        .log_err()
         .map(|id| HttpResponse::Created().json(id))
 }
 
@@ -47,6 +45,7 @@ async fn get_offers(market: Data<Arc<MarketService>>, id: Identity) -> impl Resp
     market
         .get_offers(Some(id))
         .await
+        .log_err()
         .map(|offers| HttpResponse::Ok().json(offers))
 }
 
@@ -59,6 +58,7 @@ async fn unsubscribe(
     market
         .unsubscribe_offer(&path.into_inner().subscription_id, &id)
         .await
+        .log_err()
         .map(|_| HttpResponse::Ok().json("Ok"))
 }
 
@@ -76,6 +76,7 @@ async fn collect(
         .provider_engine
         .query_events(&subscription_id, timeout, max_events)
         .await
+        .log_err()
         .map(|events| HttpResponse::Ok().json(events))
 }
 
@@ -84,7 +85,7 @@ async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     body: Json<Proposal>,
-    _id: Identity,
+    id: Identity,
 ) -> impl Responder {
     let PathSubscriptionProposal {
         subscription_id,
@@ -93,18 +94,30 @@ async fn counter_proposal(
     let proposal = body.into_inner();
     market
         .provider_engine
-        .counter_proposal(&subscription_id, &proposal_id, &proposal)
+        .counter_proposal(&subscription_id, &proposal_id, &proposal, &id)
         .await
+        .log_err()
         .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
 #[actix_web::get("/offers/{subscription_id}/proposals/{proposal_id}")]
 async fn get_proposal(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathSubscriptionProposal>,
+    market: Data<Arc<MarketService>>,
+    path: Path<PathSubscriptionProposal>,
     _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+) -> impl Responder {
+    // TODO: Authorization
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+
+    market
+        .provider_engine
+        .common
+        .get_client_proposal(Some(subscription_id), &proposal_id)
+        .await
+        .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 
 #[actix_web::delete("/offers/{subscription_id}/proposals/{proposal_id}")]
@@ -123,12 +136,13 @@ async fn approve_agreement(
     query: Query<QueryTimeout>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().agreement_id;
+    let agreement_id = path.into_inner().to_id(OwnerType::Provider)?;
     let timeout = query.timeout;
     market
         .provider_engine
         .approve_agreement(id, &agreement_id, timeout)
         .await
+        .log_err()
         .map(|_| HttpResponse::NoContent().finish())
 }
 
@@ -143,15 +157,6 @@ async fn reject_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/terminate")]
 async fn terminate_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
-}
-
-#[actix_web::get("/agreements/{agreement_id}")]
-async fn get_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
     _id: Identity,

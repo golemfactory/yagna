@@ -61,22 +61,22 @@ pub struct NewMarketEvent {
 }
 
 impl MarketEvent {
-    pub fn from_proposal(proposal: Proposal, role: OwnerType) -> NewMarketEvent {
+    pub fn from_proposal(proposal: &Proposal, role: OwnerType) -> NewMarketEvent {
         NewMarketEvent {
-            subscription_id: proposal.negotiation.subscription_id,
+            subscription_id: proposal.negotiation.subscription_id.clone(),
             event_type: match role {
                 OwnerType::Requestor => EventType::RequestorProposal,
                 OwnerType::Provider => EventType::ProviderProposal,
             },
-            artifact_id: proposal.body.id,
+            artifact_id: proposal.body.id.clone(),
         }
     }
 
-    pub fn from_agreement(agreement: Agreement) -> NewMarketEvent {
+    pub fn from_agreement(agreement: &Agreement) -> NewMarketEvent {
         NewMarketEvent {
-            subscription_id: agreement.offer_id,
+            subscription_id: agreement.offer_id.clone(),
             event_type: EventType::ProviderAgreement,
-            artifact_id: agreement.id,
+            artifact_id: agreement.id.clone(),
         }
     }
 
@@ -109,14 +109,14 @@ impl MarketEvent {
     }
 
     async fn into_client_agreement(self, db: DbExecutor) -> Result<ClientAgreement, EventError> {
-        let prop = db
+        let agreement = db
             .as_dao::<AgreementDao>()
-            .select(&self.artifact_id, Utc::now().naive_utc())
+            .select(&self.artifact_id, None, Utc::now().naive_utc())
             .await
             .map_err(|error| EventError::FailedGetProposal(error))?
             .ok_or(EventError::AgreementNotFound(self.artifact_id.clone()))?;
 
-        Ok(prop.into_client()?)
+        Ok(agreement.into_client()?)
     }
 
     pub async fn into_client_provider_event(

@@ -1,20 +1,17 @@
+use chrono::Utc;
 use futures::{channel::mpsc, prelude::*};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use tokio::time::Duration;
 
-use ya_market_decentralized::testing::discovery::*;
-use ya_market_decentralized::testing::mock_node::default::*;
-use ya_market_decentralized::testing::mock_offer::{client, sample_offer};
+use ya_market_decentralized::assert_err_eq;
+use ya_market_decentralized::testing::discovery::{message::*, Discovery};
+use ya_market_decentralized::testing::mock_offer::{
+    client, sample_offer, sample_offer_with_expiration,
+};
 use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
-
-macro_rules! assert_err_eq {
-    ($expected:expr, $actual:expr $(,)*) => {
-        assert_eq!($expected.to_string(), $actual.unwrap_err().to_string())
-    };
-}
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.
@@ -60,41 +57,127 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// This test checks, if Discovery interface calls expected sequence of callbacks.
+/// In result Offer should be available on Node, that received broadcast.
+/// Note: We don't need this test to check, if broadcasting works. test_broadcast_offer
+/// is better, and higher level test for this purpose.
+///
+/// We check here, if valid Offer isn't rejected by market for some unknown reason.
+/// If it is rejected, we can't trust other tests, that check if broadcasts validation
+/// works correctly.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new("test_broadcast_offer_callbacks")
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+
+    let offer = sample_offer();
+    let offer_clone = offer.clone();
+    let offer_id = offer.id.clone();
+
+    let network = network
+        .add_discovery_instance(
+            "Node-2",
+            MarketsNetwork::discovery_builder().add_handler(move |_: String, _: RetrieveOffers| {
+                let offer = offer.clone();
+                async move { Ok(vec![offer]) }
+            }),
+        )
+        .await?;
+    let discovery2: Discovery = network.get_discovery("Node-2");
+
+    discovery2.bcast_offers(vec![offer_id.clone()]).await?;
+    tokio::time::delay_for(Duration::from_millis(50)).await;
+
+    let offer = market1.get_offer(&offer_id).await?;
+    assert_eq!(offer_clone, offer);
+    Ok(())
+}
+
 /// Offer subscription id should be validated on reception. If Offer
 /// id hash doesn't match hash computed from Offer fields, Market should
 /// reject such an Offer since it could be some kind of attack.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_broadcast_offer_validation() -> Result<(), anyhow::Error> {
+async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_validation")
+    let network = MarketsNetwork::new("test_broadcast_offer_id_validation")
         .await
         .add_market_instance("Node-1")
-        .await?
-        .add_discovery_instance(
-            "Node-2",
-            empty_on_offer_received,
-            empty_on_offer_unsubscribed,
-            empty_on_retrieve_offers,
-        )
         .await?;
 
     let market1 = network.get_market("Node-1");
-    let discovery2: Discovery = network.get_discovery("Node-2");
 
     // Prepare Offer with subscription id changed to invalid.
     let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
     let mut offer = sample_offer();
     offer.id = invalid_id.clone();
 
+    let network = network
+        .add_discovery_instance(
+            "Node-2",
+            MarketsNetwork::discovery_builder().add_handler(move |_: String, _: RetrieveOffers| {
+                let offer = offer.clone();
+                async move { Ok(vec![offer]) }
+            }),
+        )
+        .await?;
+    let discovery2: Discovery = network.get_discovery("Node-2");
+
     // Offer should be propagated to market1, but he should reject it.
-    discovery2.broadcast_offer(offer).await?;
+    discovery2.bcast_offers(vec![invalid_id.clone()]).await?;
     tokio::time::delay_for(Duration::from_millis(50)).await;
 
     assert_err_eq!(
         QueryOfferError::NotFound(invalid_id.clone()),
         market1.get_offer(&invalid_id).await,
+    );
+    Ok(())
+}
+
+/// Node should reject Offer, that already expired.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new("test_broadcast_expired_offer")
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+
+    // Prepare expired Offer to send.
+    let expiration = Utc::now().naive_utc() - chrono::Duration::hours(1);
+    let offer = sample_offer_with_expiration(expiration);
+    let offer_id = offer.id.clone();
+
+    let network = network
+        .add_discovery_instance(
+            "Node-2",
+            MarketsNetwork::discovery_builder().add_handler(move |_: String, _: RetrieveOffers| {
+                let offer = offer.clone();
+                async move { Ok(vec![offer]) }
+            }),
+        )
+        .await?;
+    let discovery2: Discovery = network.get_discovery("Node-2");
+
+    // Offer should be propagated to market1, but he should reject it.
+    discovery2.bcast_offers(vec![offer_id.clone()]).await?;
+    tokio::time::delay_for(Duration::from_millis(50)).await;
+
+    // This should return NotFound, because Market shouldn't add this Offer
+    // to database at all.
+    assert_err_eq!(
+        QueryOfferError::NotFound(offer_id.clone()),
+        market1.get_offer(&offer_id).await,
     );
     Ok(())
 }
@@ -151,26 +234,25 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     let (tx, mut rx) = mpsc::channel::<()>(1);
     let offers_counter = Arc::new(AtomicUsize::new(0));
     let counter = offers_counter.clone();
+
+    let discovery_builder = MarketsNetwork::discovery_builder().add_handler(
+        move |_caller: String, _msg: OffersBcast| {
+            let offers_counter = counter.clone();
+            let mut tx = tx.clone();
+            async move {
+                offers_counter.fetch_add(1, Ordering::SeqCst);
+                tx.send(()).await.unwrap();
+                Ok(vec![])
+            }
+        },
+    );
     let network = network
-        .add_discovery_instance(
-            "Node-3",
-            move |_caller: String, _msg: OfferReceived| {
-                let offers_counter = counter.clone();
-                let mut tx = tx.clone();
-                async move {
-                    offers_counter.fetch_add(1, Ordering::SeqCst);
-                    tx.send(()).await.unwrap();
-                    Ok(Propagate::No(Reason::AlreadyExists))
-                }
-            },
-            empty_on_offer_unsubscribed,
-            empty_on_retrieve_offers,
-        )
+        .add_discovery_instance("Node-3", discovery_builder)
         .await?;
 
     // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
     let discovery3: Discovery = network.get_discovery("Node-3");
-    discovery3.broadcast_offer(offer).await?;
+    discovery3.bcast_offers(vec![offer.id]).await?;
 
     // Wait for broadcast.
     tokio::time::timeout(Duration::from_millis(150), rx.next()).await?;
@@ -191,5 +273,40 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
         market2.get_offer(&subscription_id).await,
     );
 
+    Ok(())
+}
+
+/// Discovery `RetrieveOffers` GSB endpoint should return only existing Offers.
+/// Test sends RetrieveOffers requesting existing and not existing subscription.
+/// Market is expected to return only existing Offer without any error.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new("test_network_error_while_subscribing")
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_discovery_instance("Node-2", MarketsNetwork::discovery_builder())
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let id1 = network.get_default_id("Node-1");
+    let discovery2 = network.get_discovery("Node-2");
+
+    let subscription_id = market1
+        .subscribe_offer(&client::sample_offer(), &id1)
+        .await?;
+    let invalid_subscription = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
+
+    let offers = discovery2
+        .get_remote_offers(
+            id1.identity.to_string(),
+            vec![subscription_id.clone(), invalid_subscription],
+        )
+        .await?;
+
+    assert_eq!(offers.len(), 1);
+    assert_eq!(offers[0].id, subscription_id);
     Ok(())
 }
