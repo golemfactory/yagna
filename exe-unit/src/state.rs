@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::notify::Notify;
+use crate::output::CapturedOutput;
 use actix::Arbiter;
 use futures::channel::oneshot;
 use futures::StreamExt;
@@ -9,7 +10,8 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::{
-    CommandResult, ExeScriptCommandResult, ExeScriptCommandState, RuntimeEvent,
+    Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
+    ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
 };
 use ya_core_model::activity::Exec;
 
@@ -26,7 +28,7 @@ pub enum StateError {
     },
 }
 
-pub struct ExeUnitState {
+pub(crate) struct ExeUnitState {
     pub inner: StatePair,
     pub last_batch: Option<String>,
     pub batches: HashMap<String, Batch>,
@@ -64,27 +66,27 @@ impl Default for ExeUnitState {
     }
 }
 
-pub struct Batch {
-    pub script: Exec,
-    pub control: Option<oneshot::Sender<()>>,
+pub(crate) struct Batch {
+    pub exec: Exec,
     pub results: Vec<CommandState>,
+    pub control: Option<oneshot::Sender<()>>,
     pub notifier: Notify<usize>,
     pub stream: Broadcast<RuntimeEvent>,
 }
 
 impl Batch {
-    pub fn new(script: Exec, control: oneshot::Sender<()>) -> Self {
+    pub fn new(exec: Exec, control: oneshot::Sender<()>) -> Self {
         Batch {
-            script,
-            control: Some(control),
+            exec,
             results: Default::default(),
+            control: Some(control),
             notifier: Default::default(),
             stream: Default::default(),
         }
     }
 
     pub fn total(&self) -> usize {
-        self.script.exe_script.len()
+        self.exec.exe_script.len()
     }
 
     pub fn done(&self) -> usize {
@@ -96,57 +98,72 @@ impl Batch {
 }
 
 impl Batch {
-    pub fn started(&mut self, idx: usize) -> Result<(), Error> {
-        self.result(idx)?;
-        Ok(())
-    }
+    pub fn handle_event(&mut self, event: RuntimeEvent) -> Result<(), Error> {
+        let idx = event.index;
+        let stream_event = match event.kind.clone() {
+            RuntimeEventKind::Started { command: _ } => {
+                self.state(idx).map(|_| ())?;
+                Some(event)
+            }
+            RuntimeEventKind::Finished {
+                return_code,
+                message,
+            } => {
+                let state = self.state(idx)?;
+                state.message = message.clone();
+                state.result = Some(match return_code {
+                    0 => CommandResult::Ok,
+                    _ => CommandResult::Error,
+                });
+                self.notifier.notify(idx as usize);
+                Some(event)
+            }
+            RuntimeEventKind::StdOut(out) => {
+                let state = self.state(idx)?;
+                let output = state.stdout.write(output_bytes(&out));
+                output
+                    .filter(|_| state.stdout.stream)
+                    .map(|o| RuntimeEvent {
+                        kind: RuntimeEventKind::StdOut(o),
+                        ..event
+                    })
+            }
+            RuntimeEventKind::StdErr(out) => {
+                let state = self.state(idx)?;
+                let output = state.stderr.write(output_bytes(&out));
+                output
+                    .filter(|_| state.stderr.stream)
+                    .map(|o| RuntimeEvent {
+                        kind: RuntimeEventKind::StdErr(o),
+                        ..event
+                    })
+            }
+        };
 
-    pub fn finished(
-        &mut self,
-        idx: usize,
-        code: i32,
-        message: Option<String>,
-    ) -> Result<(), Error> {
-        let cmd_result = self.result(idx)?;
-        cmd_result.result = Some(match code {
-            0 => CommandResult::Ok,
-            _ => CommandResult::Error,
-        });
-        if message.is_some() {
-            cmd_result.stderr = message;
+        if let Some(evt) = stream_event {
+            if self.stream.initialized() {
+                self.stream
+                    .sender()
+                    .send(evt)
+                    .map_err(|e| Error::runtime(format!("output stream error: {:?}", e)))?;
+            }
         }
-        self.notifier.notify(idx as usize);
         Ok(())
     }
+}
 
-    pub fn push_stdout(&mut self, idx: usize, out: String) -> Result<(), Error> {
-        let cmd_result = self.result(idx)?;
-        match &mut cmd_result.stdout {
-            Some(stdout) => stdout.push_str(&out),
-            _ => cmd_result.stdout = Some(out),
-        }
-        Ok(())
-    }
-
-    pub fn push_stderr(&mut self, idx: usize, out: String) -> Result<(), Error> {
-        let cmd_result = self.result(idx)?;
-        match &mut cmd_result.stderr {
-            Some(stderr) => stderr.push_str(&out),
-            _ => cmd_result.stderr = Some(out),
-        }
-        Ok(())
-    }
-
-    pub fn running_cmd(&self) -> Option<ExeScriptCommandState> {
+impl Batch {
+    pub fn running_command(&self) -> Option<ExeScriptCommandState> {
         let result = self
             .results
             .iter()
             .enumerate()
-            .filter(|(_, r)| r.result.is_none())
+            .filter(|(_, s)| s.result.is_none())
             .next()
-            .map(|(i, r)| (i, r.message()));
+            .map(|(i, s)| (i, s.message.clone()));
+
         match result {
-            Some((idx, msg)) => self.script.exe_script.get(idx).map(|c| {
+            Some((idx, msg)) => self.exec.exe_script.get(idx).map(|c| {
                 let mut state = ExeScriptCommandState::from(c.clone());
                 state.progress = msg;
                 state
@@ -156,33 +173,49 @@ impl Batch {
     }
 
     pub fn results(&self) -> Vec<ExeScriptCommandResult> {
-        let batch_size = self.script.exe_script.len();
+        let last_idx = self.exec.exe_script.len() - 1;
         self.results
             .iter()
             .enumerate()
-            .take_while(|(_, r)| r.result.is_some())
-            .map(|(i, r)| {
-                let result = r.result.clone().unwrap();
+            .take_while(|(_, s)| s.result.is_some())
+            .map(|(idx, s)| {
+                let result = s.result.clone().unwrap();
+                let is_batch_finished = idx == last_idx || result == CommandResult::Error;
                 ExeScriptCommandResult {
-                    index: i as u32,
+                    index: idx as u32,
                     result,
-                    is_batch_finished: i == batch_size - 1 || result == CommandResult::Error,
-                    message: r.message(),
+                    stdout: s.stdout.output(),
+                    stderr: s.stderr.output(),
+                    message: s.message.clone(),
+                    is_batch_finished,
                 }
             })
             .collect::<Vec<_>>()
     }
 
     #[inline]
-    fn result(&mut self, idx: usize) -> Result<&mut CommandState, Error> {
-        while self.results.len() < idx + 1 {
-            self.results.push(Default::default());
+    fn state(&mut self, idx: usize) -> Result<&mut CommandState, Error> {
+        let exe_script = &self.exec.exe_script;
+        let available = self.results.len();
+
+        if idx >= exe_script.len() {
+            return Err(Error::runtime(format!("unknown command index: {}", idx)));
+        } else if idx >= available {
+            let iter = exe_script
+                .iter()
+                .skip(available)
+                .take(idx - available + 1)
+                .map(|cmd| match cmd {
+                    ExeScriptCommand::Run { capture, .. } => CommandState::from(capture),
+                    _ => CommandState::all(),
+                });
+            self.results.extend(iter);
         }
         Ok(self.results.get_mut(idx).unwrap())
     }
 }
 
-pub struct Broadcast<T: Clone> {
+pub(crate) struct Broadcast<T: Clone> {
     sender: Option<broadcast::Sender<T>>,
 }
 
@@ -215,35 +248,55 @@ impl<T: Clone> Default for Broadcast<T> {
     }
 }
 
-pub struct CommandState {
+pub(crate) struct CommandState {
     pub result: Option<CommandResult>,
-    pub stdout: Option<String>,
-    pub stderr: Option<String>,
+    pub stdout: CapturedOutput,
+    pub stderr: CapturedOutput,
+    pub message: Option<String>,
 }
 
 impl CommandState {
-    pub fn message(&self) -> Option<String> {
-        match (&self.stdout, &self.stderr) {
-            (None, None) => None,
-            (Some(stdout), None) => Some(format!("stdout: {}", stdout)),
-            (None, Some(stderr)) => Some(format!("stderr: {}", stderr)),
-            (Some(stdout), Some(stderr)) => Some(format!("stdout: {}\nstderr: {}", stdout, stderr)),
+    pub fn all() -> Self {
+        CommandState {
+            result: None,
+            stdout: CapturedOutput::all(),
+            stderr: CapturedOutput::all(),
+            message: None,
+        }
+    }
+
+    pub fn discard() -> Self {
+        CommandState {
+            result: None,
+            stdout: CapturedOutput::discard(),
+            stderr: CapturedOutput::discard(),
+            message: None,
         }
     }
 }
 
-impl Default for CommandState {
-    fn default() -> Self {
+impl<'c> From<&'c Option<Capture>> for CommandState {
+    fn from(capture: &'c Option<Capture>) -> Self {
+        capture
+            .as_ref()
+            .map(CommandState::from)
+            .unwrap_or_else(CommandState::discard)
+    }
+}
+
+impl<'c> From<&'c Capture> for CommandState {
+    fn from(capture: &'c Capture) -> Self {
         CommandState {
             result: None,
-            stdout: None,
-            stderr: None,
+            stdout: CapturedOutput::from(capture.stdout.clone()),
+            stderr: CapturedOutput::from(capture.stderr.clone()),
+            message: None,
         }
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ExeUnitReport {
+pub(crate) struct ExeUnitReport {
     batches_done: usize,
     batches_pending: usize,
     cmds_done: usize,
@@ -264,5 +317,12 @@ impl ExeUnitReport {
 impl std::fmt::Display for ExeUnitReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&serde_json::to_string(self).unwrap())
+    }
+}
+
+fn output_bytes(output: &CommandOutput) -> &[u8] {
+    match output {
+        CommandOutput::Bin(vec) => vec.as_slice(),
+        CommandOutput::Str(string) => string.as_bytes(),
     }
 }

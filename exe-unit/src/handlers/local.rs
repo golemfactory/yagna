@@ -6,38 +6,22 @@ use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
 use futures::FutureExt;
-use ya_client_model::activity::{ActivityState, RuntimeEvent, RuntimeEventKind};
+use ya_client_model::activity::{ActivityState, RuntimeEvent};
 use ya_core_model::activity::local::SetState as SetActivityState;
 
 impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
-    fn handle(&mut self, update: RuntimeEvent, _: &mut Context<Self>) {
-        let batch = match self.state.batches.get_mut(&update.batch_id) {
-            Some(batch) => batch,
-            _ => return log::warn!("Batch event error: unknown batch {}", update.batch_id),
-        };
+    fn handle(&mut self, event: RuntimeEvent, _: &mut Context<Self>) {
+        match self.state.batches.get_mut(&event.batch_id) {
+            Some(batch) => {
+                let batch_id = event.batch_id.clone();
+                self.state.last_batch = Some(batch_id.clone());
 
-        self.state.last_batch = Some(update.batch_id.clone());
-
-        if let Err(err) = match &update.kind {
-            RuntimeEventKind::Started { command: _ } => batch.started(update.index),
-            RuntimeEventKind::StdOut(out) => batch.push_stdout(update.index, out.clone()),
-            RuntimeEventKind::StdErr(out) => batch.push_stderr(update.index, out.clone()),
-            RuntimeEventKind::Finished {
-                return_code,
-                message,
-            } => batch.finished(update.index, *return_code, message.clone()),
-        } {
-            log::error!("Batch {} event error: {}", update.batch_id, err);
-        }
-
-        if batch.stream.initialized() {
-            if let Err(err) = batch.stream.sender().send(update) {
-                log::warn!(
-                    "Batch {} event stream interrupted: the receiver is gone",
-                    err.0.batch_id
-                );
+                if let Err(err) = batch.handle_event(event) {
+                    log::error!("Batch {} event error: {}", batch_id, err);
+                }
             }
-        }
+            _ => log::error!("Batch {} event error: unknown batch", event.batch_id),
+        };
     }
 }
 
@@ -87,7 +71,12 @@ impl<R: Runtime> Handler<GetStdOut> for ExeUnit<R> {
         self.state
             .batches
             .get(&msg.batch_id)
-            .map(|b| b.results.get(msg.idx).map(|r| r.stdout.clone()).flatten())
+            .map(|b| {
+                b.results
+                    .get(msg.idx)
+                    .map(|r| r.stdout.output_string())
+                    .flatten()
+            })
             .flatten()
     }
 }

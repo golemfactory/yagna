@@ -102,7 +102,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
             self.state
                 .batches
                 .get(self.state.last_batch.as_ref()?)?
-                .running_cmd()
+                .running_command()
         })() {
             return Ok(cmd);
         }
@@ -133,7 +133,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
                 return ActorResponse::reply(Err(err));
             }
         };
-        let idx = match batch.script.exe_script.len() {
+        let idx = match batch.exec.exe_script.len() {
             0 => return ActorResponse::reply(Ok(Vec::new())),
             len => msg.command_index.unwrap_or(len - 1),
         };

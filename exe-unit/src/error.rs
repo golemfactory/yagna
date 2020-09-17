@@ -68,6 +68,10 @@ impl Error {
     {
         Error::from(LocalServiceError::from(err))
     }
+
+    pub fn runtime(err: impl ToString) -> Self {
+        Error::RuntimeError(err.to_string())
+    }
 }
 
 impl From<MetricError> for Error {
