@@ -8,6 +8,7 @@ use ya_market_resolver::flatten::flatten_json;
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_subscribe_offer")
         .await
@@ -53,6 +54,7 @@ async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_subscribe_demand() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_subscribe_demand")
         .await

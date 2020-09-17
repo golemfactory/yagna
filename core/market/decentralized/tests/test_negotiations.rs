@@ -14,6 +14,7 @@ use ya_market_resolver::flatten::flatten_json;
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_exchanging_draft_proposals")
         .await
@@ -153,6 +154,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
 /// Market should reject such attempts.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_countered_proposal")
         .await
@@ -250,6 +252,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
 /// Can't counter own proposal.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_own_proposal")
         .await
@@ -333,6 +336,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
 /// Requestor can't counter Proposal, for which he has unsubscribed Demand.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_unsubscribed")
         .await
@@ -378,6 +382,7 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
 /// Provider can't counter Proposal, for which he has unsubscribed Offer.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_unsubscribed_offer")
         .await
@@ -437,6 +442,7 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_initial_unsubscribed_remote_offer")
         .await
@@ -485,6 +491,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_initial_unsubscribed_remote_offer")
         .await
@@ -527,6 +534,7 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Er
 /// Negotiation attempt should be rejected by Requestor Node.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_counter_draft_unsubscribed_remote_demand")
         .await
@@ -579,6 +587,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
 /// should reject such Proposal. Error should occur on Requestor side.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_not_matching_counter_demand")
         .await
@@ -615,6 +624,7 @@ async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
 /// should reject such Proposal. Error should occur on Provider side.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_not_matching_counter_offer")
         .await

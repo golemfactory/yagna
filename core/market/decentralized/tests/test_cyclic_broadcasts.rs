@@ -13,6 +13,7 @@ use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
 /// get all Offers from them, if cyclic broadcasting works properly.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
@@ -79,6 +80,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 /// After networking will be reenabled, we expect, that 3rd Node will get all unsubscribes.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
@@ -187,6 +189,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 /// later during cyclic broadcasts. The same applies to unsubscribes.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new("test_network_error_while_subscribing")
@@ -222,6 +225,7 @@ async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
 /// from other Nodes either.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
@@ -293,6 +297,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
 /// from other Nodes either.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
 
