@@ -29,6 +29,17 @@ pub fn bind_service() {
     log::debug!("Successfully bound payment driver service to service bus");
 }
 
+pub async fn subscribe_to_identity_events() {
+    if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
+        .send(ya_core_model::identity::Subscribe {
+            endpoint: driver_bus_id(DRIVER_NAME),
+        })
+        .await
+    {
+        log::error!("init app-key listener error: {}", e)
+    }
+}
+
 async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> {
     log::info!("init: {:?}", msg);
 
