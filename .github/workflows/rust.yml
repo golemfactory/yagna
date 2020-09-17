@@ -133,8 +133,13 @@ jobs:
           name: Yagna ${{ runner.os }}
           path: build
 
-#    - name: Clippy
-#      uses: actions-rs/clippy-check@v1
-#      with:
-#        token: ${{ secrets.GITHUB_TOKEN }}
-#        args: --all-features
+      - name: Clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Cannot use "--all-features", because ya-market-forwarding and ya-market-decentralized are mutually exclusive.
+          # "-W clippy::all" converts all errors into warnings.
+          args: --workspace --all-targets -- -W clippy::all
+        env:
+          # Remove "-D warnings", which converts all warnings to errors. This flag is stronger than "-W clippy::all" above.
+          RUSTFLAGS: ""
