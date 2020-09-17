@@ -124,6 +124,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
         .await;
 
     if !new_unsubscribes.is_empty() {
+        counter!("market.offers.unsubscribes.incoming", new_unsubscribes.len() as u64);
         log::info!(
             "Received new Offers to unsubscribe from [{}]: \n{}",
             caller,

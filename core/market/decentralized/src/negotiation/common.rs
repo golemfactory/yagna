@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use metrics::counter;
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
@@ -102,6 +103,8 @@ impl CommonBroker {
                 SaveProposalError::AlreadyCountered(id) => ProposalError::AlreadyCountered(id),
                 _ => ProposalError::FailedSaveProposal(proposal_id.clone(), e),
             })?;
+
+        counter!("market.proposals.countered", 1);
         Ok((new_proposal, is_first))
     }
 
@@ -131,6 +134,7 @@ impl CommonBroker {
                 .await?;
 
             if events.len() > 0 {
+                counter!("market.events.queried", events.len() as u64);
                 return Ok(events);
             }
 

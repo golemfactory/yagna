@@ -280,9 +280,18 @@ impl RequestorBroker {
                 .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
-                AgreementState::Approved => return Ok(ApprovalStatus::Approved),
-                AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
-                AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
+                AgreementState::Approved => {
+                    counter!("market.agreements.approved", 1);
+                    return Ok(ApprovalStatus::Approved)
+                },
+                AgreementState::Rejected => {
+                    counter!("market.agreements.rejected", 1);
+                    return Ok(ApprovalStatus::Rejected)
+                },
+                AgreementState::Cancelled => {
+                    counter!("market.agreements.cancelled", 1);
+                    return Ok(ApprovalStatus::Cancelled)
+                },
                 AgreementState::Expired => {
                     return Err(WaitForApprovalError::AgreementExpired(id.clone()))
                 }
@@ -340,6 +349,7 @@ impl RequestorBroker {
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
 
+                counter!("market.agreements.confirmed", 1);
                 log::info!(
                     "Requestor {} confirmed Agreement [{}] and sent to Provider.",
                     DisplayIdentity(&id),
@@ -456,6 +466,7 @@ pub async fn proposal_receiver_thread(
                 .await?;
 
             // Send channel message to wake all query_events waiting for proposals.
+            counter!("market.proposals.initial", 1);
             notifier.notify(&subscription_id).await;
             DbResult::<()>::Ok(())
         }
