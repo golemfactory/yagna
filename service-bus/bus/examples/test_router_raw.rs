@@ -100,9 +100,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::from_args();
     let mut sys = System::new("");
     sys.block_on(async move {
-        let tcp_transport = connection::tcp(bus_addr).await?;
-        let connection = connection::connect::<_, DebugHandler>(tcp_transport);
-
+        let connection = connection::connect::<_, DebugHandler>(connection::tcp(bus_addr).await?);
         match args {
             Args::EventListener { time } => {
                 connection.subscribe(BAST_TOPIC).await?;
@@ -127,10 +125,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             Args::Send { script } => {
                 let data = std::fs::read(script)?;
-                let msg = connection.call("me", SERVICE_ADDR, data.clone()).await?;
-                eprintln!("1: body={}", String::from_utf8_lossy(msg.as_ref()));
                 let msg = connection.call("me", SERVICE_ADDR, data).await?;
-                eprintln!("2: body={}", String::from_utf8_lossy(msg.as_ref()));
+                eprintln!("body={}", String::from_utf8_lossy(msg.as_ref()));
                 Ok(())
             }
             Args::Broadcast { script } => {

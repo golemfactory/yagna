@@ -524,7 +524,7 @@ where
                     router.lock().await.handle_message(addr.clone(), msg)
                 })
                 .await
-                .unwrap_or_else(|e| log::error!("Error handling messages: {:?}", e.root_cause()));
+                .unwrap_or_else(|e| log::error!("Error handling messages: {:?}", e));
 
             router.lock().await.disconnect(&addr);
         });

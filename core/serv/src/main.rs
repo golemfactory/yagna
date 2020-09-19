@@ -215,8 +215,6 @@ enum CliCommand {
 
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
-        log::info!("CliCommand run_command {:?}, {:?}", self, ctx);
-
         match self {
             CliCommand::Commands(command) => command.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),

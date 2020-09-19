@@ -926,6 +926,12 @@ pub async fn tcp(addr: std::net::SocketAddr) -> Result<TcpTransport, std::io::Er
     ))
 }
 
+///
+/// Implementing a wrapper for tokio::net::TcpStream including Drop trait.
+/// The drop() function includes an explicit call to TcpStream::shutdown() -
+/// so that the connection is gracefully closed on process stop.
+///
+
 pub struct SafeTcpStream {
     tcp_stream: TcpStream,
 }
