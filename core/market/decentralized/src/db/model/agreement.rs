@@ -66,6 +66,9 @@ pub struct Agreement {
     pub offer_id: SubscriptionId,
     pub demand_id: SubscriptionId,
 
+    pub offer_proposal_id: ProposalId,
+    pub demand_proposal_id: ProposalId,
+
     pub provider_id: NodeId,
     pub requestor_id: NodeId,
 
@@ -90,6 +93,22 @@ impl Agreement {
         owner: OwnerType,
     ) -> Agreement {
         let creation_ts = Utc::now().naive_utc();
+        Agreement::new_with_ts(
+            demand_proposal,
+            offer_proposal,
+            valid_to,
+            creation_ts,
+            owner,
+        )
+    }
+
+    pub fn new_with_ts(
+        demand_proposal: Proposal,
+        offer_proposal: Proposal,
+        valid_to: NaiveDateTime,
+        creation_ts: NaiveDateTime,
+        owner: OwnerType,
+    ) -> Agreement {
         let agreement_id = ProposalId::generate_id(
             &offer_proposal.negotiation.offer_id,
             &offer_proposal.negotiation.demand_id,
@@ -105,6 +124,8 @@ impl Agreement {
             demand_constraints: demand_proposal.body.constraints,
             offer_id: offer_proposal.negotiation.offer_id,
             demand_id: demand_proposal.negotiation.demand_id,
+            offer_proposal_id: offer_proposal.body.id,
+            demand_proposal_id: demand_proposal.body.id,
             provider_id: offer_proposal.negotiation.provider_id, // TODO: should be == demand_proposal.negotiation.provider_id
             requestor_id: demand_proposal.negotiation.requestor_id,
             creation_ts,
@@ -136,7 +157,7 @@ impl Agreement {
             offer_id: None, // Using self.offer_id would be misleading because properties and constraints were taken from latest proposal.
         };
         Ok(ClientAgreement {
-            agreement_id: self.id.to_string(),
+            agreement_id: self.id.into_client(),
             demand,
             offer,
             valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),

@@ -5,16 +5,15 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-nom = "2.0"
 asnom = { git = "https://github.com/dequbed/asnom.git" }
 chrono = "0.4"
-log = "0.4.8"
-regex = "1"
-semver = "0.9.0"
 decimal = "2.0"
+log = "0.4.8"
+nom = "2.0"
+regex = "1"
+semver = "0.10.0"
 serde_json = "1.0.55"
 thiserror = "1.0.20"
 
 [dev-dependencies]
 env_logger = "0.7"
-
