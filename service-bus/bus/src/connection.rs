@@ -1,4 +1,5 @@
 use actix::prelude::*;
+use bytes;
 use futures::{
     channel::{mpsc, oneshot},
     prelude::*,
@@ -20,6 +21,11 @@ use ya_sb_proto::{
 use crate::local_router::router;
 use crate::Error;
 use crate::{ResponseChunk, RpcRawCall, RpcRawStreamCall};
+use futures::io::IoSliceMut;
+use futures::task::Poll;
+use std::mem::MaybeUninit;
+use std::net::Shutdown;
+use tokio::net::{TcpStream, ToSocketAddrs};
 
 fn gen_id() -> u64 {
     use rand::Rng;
@@ -913,12 +919,108 @@ where
 }
 
 pub type TcpTransport =
-    tokio_util::codec::Framed<tokio::net::TcpStream, ya_sb_proto::codec::GsbMessageCodec>;
+    tokio_util::codec::Framed<SafeTcpStream, ya_sb_proto::codec::GsbMessageCodec>;
 
 pub async fn tcp(addr: std::net::SocketAddr) -> Result<TcpTransport, std::io::Error> {
-    let s = tokio::net::TcpStream::connect(addr).await?;
+    let s = SafeTcpStream::connect(addr).await?;
     Ok(tokio_util::codec::Framed::new(
         s,
         ya_sb_proto::codec::GsbMessageCodec::default(),
     ))
+}
+
+/*
+pub struct SafeTcpStream<'a> {
+    tcp_stream: TcpStream,
+    tcp_stream_pin : Pin<&'a mut TcpStream>
+}
+*/
+
+pub struct SafeTcpStream {
+    tcp_stream: TcpStream
+}
+
+impl SafeTcpStream {
+    pub async fn connect<A: ToSocketAddrs>(addr: A) -> std::io::Result<SafeTcpStream> {
+        match tokio::net::TcpStream::connect(addr).await {
+            Ok(mut s) => Ok(SafeTcpStream {
+                tcp_stream: s,
+//                tcp_stream_pin: Pin::new(&mut s)
+            }),
+            Err(e) => Err(e),
+        }
+    }
+}
+
+impl Drop for SafeTcpStream {
+    fn drop(&mut self) {
+        log::trace!("SafeTcpStream shutdown...");
+        self.tcp_stream.shutdown(Shutdown::Both);
+    }
+}
+
+impl tokio::io::AsyncRead for SafeTcpStream {
+    unsafe fn prepare_uninitialized_buffer(&self, buf: &mut [MaybeUninit<u8>]) -> bool {
+        self.tcp_stream.prepare_uninitialized_buffer(buf)
+    }
+
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> core::task::Poll<std::io::Result<usize>> {
+        let pin = Pin::new(&mut self.get_mut().tcp_stream);
+        pin.poll_read(cx, buf)
+    }
+
+    fn poll_read_buf<B: bytes::buf::BufMut>(
+        self: Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+        buf: &mut B,
+    ) -> core::task::Poll<std::io::Result<usize>>
+    where
+        Self: Sized,
+    {
+        let pin = Pin::new(&mut self.get_mut().tcp_stream);
+        pin.poll_read_buf(cx, buf)
+    }
+}
+
+impl tokio::io::AsyncWrite for SafeTcpStream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+        buf: &[u8],
+    ) -> core::task::Poll<std::io::Result<usize>> {
+        let pin = Pin::new(&mut self.get_mut().tcp_stream);
+        pin.poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        self: Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<std::io::Result<()>> {
+        let pin = Pin::new(&mut self.get_mut().tcp_stream);
+        pin.poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<std::io::Result<()>> {
+        let pin = Pin::new(&mut self.get_mut().tcp_stream);
+        pin.poll_shutdown(cx)
+    }
+
+    fn poll_write_buf<B: bytes::buf::Buf>(
+        self: Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+        buf: &mut B,
+    ) -> core::task::Poll<std::io::Result<usize>>
+    where
+        Self: Sized,
+    {
+        let pin = Pin::new(&mut self.get_mut().tcp_stream);
+        pin.poll_write_buf(cx, buf)
+    }
 }

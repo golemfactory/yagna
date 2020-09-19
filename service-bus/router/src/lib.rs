@@ -452,6 +452,8 @@ where
     }
 
     pub fn handle_message(&mut self, addr: A, msg: GsbMessage) -> anyhow::Result<()> {
+        log::info!("Handling message: {:?}", msg);
+
         self.update_last_seen(&addr)?;
         match msg {
             GsbMessage::RegisterRequest(msg) => self.register_endpoint(&addr, msg),
@@ -521,7 +523,9 @@ where
                     router.lock().await.handle_message(addr.clone(), msg)
                 })
                 .await
-                .unwrap_or_else(|e| log::error!("Error handling messages: {:?}", e));
+                .unwrap_or_else(|e|
+                    log::error!("Error handling messages: {:?}", e.root_cause())
+                );
 
             router.lock().await.disconnect(&addr);
         });

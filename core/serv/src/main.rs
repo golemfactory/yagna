@@ -203,6 +203,8 @@ enum CliCommand {
 
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
+        log::info!("CliCommand run_command {:?}, {:?}", self, ctx);
+
         match self {
             CliCommand::Commands(command) => command.run_command(ctx).await,
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -297,6 +299,8 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
+
+    log::error!("Args: {:?}", args);
 
     args.run_command().await
 }
