@@ -2,7 +2,6 @@ use actix::prelude::*;
 use futures::prelude::*;
 
 use std::error::Error;
-use std::net::Shutdown;
 use std::{env, path::PathBuf, time::Duration};
 use structopt::StructOpt;
 use ya_service_bus::connection::CallRequestHandler;

@@ -21,10 +21,7 @@ use ya_sb_proto::{
 use crate::local_router::router;
 use crate::Error;
 use crate::{ResponseChunk, RpcRawCall, RpcRawStreamCall};
-use futures::io::IoSliceMut;
-use futures::task::Poll;
 use std::mem::MaybeUninit;
-use std::net::Shutdown;
 use tokio::net::{TcpStream, ToSocketAddrs};
 
 fn gen_id() -> u64 {
@@ -929,24 +926,14 @@ pub async fn tcp(addr: std::net::SocketAddr) -> Result<TcpTransport, std::io::Er
     ))
 }
 
-/*
-pub struct SafeTcpStream<'a> {
-    tcp_stream: TcpStream,
-    tcp_stream_pin : Pin<&'a mut TcpStream>
-}
-*/
-
 pub struct SafeTcpStream {
-    tcp_stream: TcpStream
+    tcp_stream: TcpStream,
 }
 
 impl SafeTcpStream {
     pub async fn connect<A: ToSocketAddrs>(addr: A) -> std::io::Result<SafeTcpStream> {
         match tokio::net::TcpStream::connect(addr).await {
-            Ok(mut s) => Ok(SafeTcpStream {
-                tcp_stream: s,
-//                tcp_stream_pin: Pin::new(&mut s)
-            }),
+            Ok(s) => Ok(SafeTcpStream { tcp_stream: s }),
             Err(e) => Err(e),
         }
     }
@@ -955,7 +942,10 @@ impl SafeTcpStream {
 impl Drop for SafeTcpStream {
     fn drop(&mut self) {
         log::trace!("SafeTcpStream shutdown...");
-        self.tcp_stream.shutdown(Shutdown::Both);
+        match self.tcp_stream.shutdown(std::net::Shutdown::Both) {
+            Ok(_) => (),
+            Err(e) => log::trace!("TcpStream shutdown error: {:?}", e),
+        }
     }
 }
 

@@ -344,8 +344,5 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
-
-    log::error!("Args: {:?}", args);
-
     args.run_command().await
 }
