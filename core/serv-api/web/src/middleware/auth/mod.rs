@@ -80,6 +80,12 @@ where
         let cache = self.cache.clone();
         let service = self.service.clone();
 
+        // TODO: remove this hack; possibly by enabling creation of arbitrary appkey from CLI
+        if req.uri() == "/v1/metrics" {
+            log::debug!("skipping authorization for uri={}", req.uri());
+            return Box::pin(service.borrow_mut().call(req));
+        }
+
         Box::pin(async move {
             match header {
                 Some(key) => {
