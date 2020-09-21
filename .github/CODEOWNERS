@@ -11,4 +11,5 @@ core/model/src/market.rs        @golemfactory/ya-market
 service-bus/                    @golemfactory/ya-net
 core/net/                       @golemfactory/ya-net
 
-
+core/payment-driver             @golemfactory/ya-payment
+core/payment                    @golemfactory/ya-payment
