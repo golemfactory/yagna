@@ -4,6 +4,7 @@ use crate::error::{DbError, Error};
 use crate::utils::{listen_for_events, response, with_timeout};
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use metrics::counter;
 use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{GetAccounts, SchedulePayment, BUS_ID as LOCAL_SERVICE};
@@ -160,6 +161,8 @@ async fn accept_debit_note(
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
             dao.accept(debit_note_id, node_id).await?;
+
+            counter!("payment.debit_notes.accepted", 1);
             Ok(())
         }
         .await
@@ -307,6 +310,8 @@ async fn accept_invoice(
                 .await??;
             bus::service(LOCAL_SERVICE).send(schedule_msg).await??;
             dao.accept(invoice_id, node_id).await?;
+
+            counter!("payment.invoices.accepted", 1);
             Ok(())
         }
         .await

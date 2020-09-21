@@ -1141,7 +1141,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39858aa5bac06462d4dd4b9164848eb81ffc4aa5c479746393598fd193afa227"
 dependencies = [
  "quote 1.0.7",
- "syn 1.0.39",
+ "syn 1.0.41",
 ]
 
 [[package]]
@@ -5584,6 +5584,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.11",
+ "metrics",
  "r2d2",
  "serde",
  "serde_json",
@@ -5858,7 +5859,6 @@ dependencies = [
  "ya-core-model",
  "ya-market-decentralized",
  "ya-market-resolver",
- "ya-metrics-utils",
  "ya-net",
  "ya-persistence",
  "ya-service-api",
@@ -5971,6 +5971,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.11",
+ "metrics",
  "num-bigint",
  "r2d2",
  "serde",

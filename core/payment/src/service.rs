@@ -1,5 +1,6 @@
 use crate::processor::PaymentProcessor;
 use futures::prelude::*;
+use metrics::counter;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -202,6 +203,8 @@ mod public {
             db.as_dao::<DebitNoteDao>()
                 .insert_received(debit_note)
                 .await?;
+
+            counter!("payment.debit_notes.received", 1);
             Ok(())
         }
         .await
@@ -252,7 +255,10 @@ mod public {
         }
 
         match dao.accept(debit_note_id, node_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.debit_notes.received-accept", 1);
+                Ok(Ack {})
+            }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
@@ -349,6 +355,8 @@ mod public {
             }
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
+
+            counter!("payment.invoices.received", 1);
             Ok(())
         }
         .await
@@ -399,7 +407,10 @@ mod public {
         }
 
         match dao.accept(invoice_id, node_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.invoices.received-accept", 1);
+                Ok(Ack {})
+            }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
@@ -442,7 +453,10 @@ mod public {
         }
 
         match dao.cancel(invoice_id, invoice.recipient_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.invoices.received-cancel", 1);
+                Ok(Ack {})
+            }
             Err(e) => Err(CancelError::ServiceError(e.to_string())),
         }
     }
