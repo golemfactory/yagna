@@ -71,7 +71,10 @@ pub(super) async fn get_local_offers(
     _caller: String,
     msg: RetrieveOffers,
 ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
-    value!("market.offers.retrieved_by_remotes", msg.offer_ids.len() as u64);
+    value!(
+        "market.offers.retrieved_by_remotes",
+        msg.offer_ids.len() as u64
+    );
 
     match store.get_offers(msg.offer_ids).await {
         Ok(offers) => Ok(offers),
@@ -107,7 +110,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
                     .map(|_| offer_id.clone())
                     .map_err(|e| match e {
                         // We don't want to warn about normal situations.
-                        ModifyOfferError::Unsubscribed(..)
+                        ModifyOfferError::AlreadyUnsubscribed(..)
                         | ModifyOfferError::Expired(..)
                         | ModifyOfferError::NotFound(..) => e,
                         _ => {

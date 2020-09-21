@@ -1,3 +1,3 @@
 mod result;
 
-pub use result::ResultExt;
+pub use result::LogErr;
