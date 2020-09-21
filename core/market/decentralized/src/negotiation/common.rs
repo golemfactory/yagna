@@ -1,8 +1,8 @@
+use metrics::counter;
 use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use metrics::counter;
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;

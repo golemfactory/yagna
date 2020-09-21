@@ -84,6 +84,19 @@ impl RequestorBroker {
             agreement_notifier,
         };
 
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("market.agreements.created", 0);
+        counter!("market.agreements.confirmed", 0);
+        counter!("market.agreements.approved", 0);
+        counter!("market.agreements.rejected", 0);
+        counter!("market.agreements.cancelled", 0);
+        counter!("market.proposals.initial", 0);
+
+        // Initialize counters from CommonBroker.
+        counter!("market.proposals.countered", 0);
+        counter!("market.events.queried", 0);
+
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
         Ok(engine)
     }
@@ -282,16 +295,16 @@ impl RequestorBroker {
             match agreement.state {
                 AgreementState::Approved => {
                     counter!("market.agreements.approved", 1);
-                    return Ok(ApprovalStatus::Approved)
-                },
+                    return Ok(ApprovalStatus::Approved);
+                }
                 AgreementState::Rejected => {
                     counter!("market.agreements.rejected", 1);
-                    return Ok(ApprovalStatus::Rejected)
-                },
+                    return Ok(ApprovalStatus::Rejected);
+                }
                 AgreementState::Cancelled => {
                     counter!("market.agreements.cancelled", 1);
-                    return Ok(ApprovalStatus::Cancelled)
-                },
+                    return Ok(ApprovalStatus::Cancelled);
+                }
                 AgreementState::Expired => {
                     return Err(WaitForApprovalError::AgreementExpired(id.clone()))
                 }

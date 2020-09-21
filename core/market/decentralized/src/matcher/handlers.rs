@@ -1,6 +1,6 @@
 //! Discovery protocol messages handlers
 use futures::StreamExt;
-use metrics::counter;
+use metrics::{counter, value};
 
 use crate::db::model::{DisplayVec, Offer, SubscriptionId};
 
@@ -71,6 +71,8 @@ pub(super) async fn get_local_offers(
     _caller: String,
     msg: RetrieveOffers,
 ) -> Result<Vec<Offer>, DiscoveryRemoteError> {
+    value!("market.offers.retrieved_by_remotes", msg.offer_ids.len() as u64);
+
     match store.get_offers(msg.offer_ids).await {
         Ok(offers) => Ok(offers),
         Err(e) => {
@@ -124,7 +126,10 @@ pub(super) async fn receive_remote_offer_unsubscribes(
         .await;
 
     if !new_unsubscribes.is_empty() {
-        counter!("market.offers.unsubscribes.incoming", new_unsubscribes.len() as u64);
+        counter!(
+            "market.offers.unsubscribes.incoming",
+            new_unsubscribes.len() as u64
+        );
         log::info!(
             "Received new Offers to unsubscribe from [{}]: \n{}",
             caller,

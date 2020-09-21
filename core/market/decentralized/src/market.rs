@@ -1,8 +1,8 @@
 use chrono::Utc;
 use lazy_static::lazy_static;
+use metrics::counter;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
-use metrics::counter;
 
 use crate::config::Config;
 use crate::db::dao::AgreementDao;
