@@ -6,8 +6,6 @@ pub trait Provider<Service, Component> {
     fn component(&self) -> Component;
 }
 
-impl<Service, Component: Clone> Provider<Service, Component> for Component {
-    fn component(&self) -> Component {
-        self.clone()
-    }
+impl<Service: 'static, Component> Provider<Service, ()> for Component {
+    fn component(&self) -> () {}
 }
