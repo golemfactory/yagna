@@ -5918,7 +5918,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-metrics-utils"
+name = "ya-metrics"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -6395,7 +6395,7 @@ dependencies = [
  "ya-identity",
  "ya-market-decentralized",
  "ya-market-forwarding",
- "ya-metrics-utils",
+ "ya-metrics",
  "ya-net",
  "ya-payment",
  "ya-persistence",

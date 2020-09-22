@@ -41,7 +41,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 ya-utils-path = "0.1"
-ya-metrics-utils = "0.1"
+ya-metrics = "0.1"
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -154,4 +154,4 @@ ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
-ya-metrics-utils = { path = "core/metrics" }
+ya-metrics = { path = "core/metrics" }
