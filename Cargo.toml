@@ -108,7 +108,7 @@ members = [
     "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
-    "utils/metrics"
+    "core/metrics"
 ]
 
 [patch.crates-io]
@@ -154,4 +154,4 @@ ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
-ya-metrics-utils = { path = "utils/metrics"}
+ya-metrics-utils = { path = "core/metrics" }
