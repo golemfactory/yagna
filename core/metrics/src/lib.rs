@@ -1,4 +1,5 @@
 mod exporter;
-mod statistics;
+mod metrics;
+mod service;
 
-pub use statistics::Statistics;
+pub use service::MetricsService;
