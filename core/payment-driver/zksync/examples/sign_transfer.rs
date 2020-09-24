@@ -11,12 +11,9 @@ use num::BigUint;
 use client::wallet::{ETH_SIGN_MESSAGE, Wallet, Address, PackedEthSignature};
 use client::rpc_client::RpcClient;
 
-use ethkey::{EthAccount, Password};
+use ethkey::EthAccount;
 use futures3::Future;
-use ya_client_model::NodeId;
-use ya_core_model::identity;
 use tiny_keccak::keccak256;
-// use ya_zksync_driver::utils::get_sign_tx;
 
 #[tokio::main]
 async fn main() {
@@ -32,7 +29,7 @@ async fn main() {
 
     let input_to = "d0670f5eA3218bB6A95dD7FAcdCfAC3f19ECAd36";
     let input_token = "GNT";
-    let input_amount = "6000000000000000000";
+    let input_amount = "1000000000000000000";
     //let input_pk_seed = "6cae8ce3aaf356922b54a0564dbd7075314183e7cfc4fe8478a9bb7b5f7726a31a189146d53997726b9d77f4edf376280cc3609327705b0b175c8423eb6c59261c";
     //let pk_seed_hex = hex::decode(input_pk_seed).unwrap();
 
@@ -50,9 +47,12 @@ async fn main() {
 //    let msg_as_bytes = msg_as_bytes.to_vec();
     info!("msg_hex={}", hex::encode(&msg_as_bytes));
     info!("creating zksync wallet from message {:?}", hex::encode(&msg_as_bytes));
-    let seed_eth_signature = sign_tx(msg_as_bytes).await;
+    let seed_signature = sign_tx(msg_as_bytes).await;
+    info!("seed_signature {:?}", hex::encode(&seed_signature));
+    let seed_eth_signature = convert_to_eth_byte_order(seed_signature);
+
     info!("creating zksync wallet from seed {:?}", hex::encode(&seed_eth_signature));
-    let wallet = Wallet::from_seed(&seed_eth_signature, pub_key_addr, provider);
+    let wallet = Wallet::from_seed(seed_eth_signature, pub_key_addr, provider);
     //info!("wallet: {:?}", wallet);
 
     let to = Address::from_str(input_to).unwrap();
@@ -74,6 +74,8 @@ async fn main() {
     info!("eth_sig_hex {:?}", hex::encode(&eth_sign_hex));
     let eth_sign_hex = sign_tx(eth_sign_hex).await;
     info!("eth_sig_hex: {:?}", hex::encode(&eth_sign_hex));
+    let eth_sign_hex = convert_to_eth_byte_order(eth_sign_hex);
+    info!("eth_sig_hex: {:?}", hex::encode(&eth_sign_hex));
     //let eth_sig_hex = hex::decode("79c2b93604ef97e8ab4cce6bd64b67f9a2cbdef02d7a2cc6bb063acb7e07d1cf77c430759180015161fa8010a178901678a0ffa5f871ac8a4dc8d646421a3f0e1b").expect("failed to decode hex");
     let eth_signature = PackedEthSignature::deserialize_packed(&eth_sign_hex).unwrap();
 
@@ -93,7 +95,18 @@ fn message_to_signed_bytes(msg: &[u8], include_prefix: bool) -> Vec<u8> {
     else {
         msg.into()
     };
-    tiny_keccak::keccak256(&bytes).into()
+    keccak256(&bytes).into()
+}
+
+fn convert_to_eth_byte_order(signature: Vec<u8>) -> Vec<u8> {
+    let v = &signature[0];
+    let r = &signature[1..33];
+    let s = &signature[33..65];
+    let mut result = Vec::with_capacity(65);
+    result.extend_from_slice(&r);
+    result.extend_from_slice(&s);
+    result.push(if v % 2 == 1 { 0x1c } else { 0x1b });
+    result
 }
 
 fn get_sign_tx(
@@ -107,10 +120,9 @@ fn get_sign_tx(
             let signature = account.sign(&msg).unwrap();
             info!("Signature: {:?}", signature);
             let mut v = Vec::with_capacity(65);
-            //v.push(signature.v);
+            v.push(signature.v);
             v.extend_from_slice(&signature.r);
             v.extend_from_slice(&signature.s);
-            v.push(if signature.v % 2 == 1 { 0x1c } else { 0x1b });
             v
         };
         Box::pin(fut)

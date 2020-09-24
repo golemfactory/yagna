@@ -1,8 +1,11 @@
 // #[macro_use]
 // extern crate diesel;
+#[macro_use]
+extern crate log;
 
 mod service;
-pub mod utils;
+pub mod zksync;
+mod utils;
 
 pub const PLATFORM_NAME: &'static str = "ZK-NGNT";
 pub const DRIVER_NAME: &'static str = "zksync";

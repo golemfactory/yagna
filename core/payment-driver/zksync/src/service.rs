@@ -1,17 +1,22 @@
-use crate::{DRIVER_NAME, PLATFORM_NAME};
+// External crates
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
+use client::rpc_client::RpcClient;
+use client::wallet::{Wallet, BalanceState};
+use web3::types::Address;
+
+// Workspace uses
 use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-use client::rpc_client::RpcClient;
-use client::wallet::{Wallet, BalanceState};
-
-use web3::types::Address;
+// Local uses
+use crate::{DRIVER_NAME, PLATFORM_NAME};
+use crate::zksync::{get_zksync_seed, eth_sign_transfer, PackedEthSignature};
 
 const ZKSYNC_RPC_ADDRESS: &'static str = "https://rinkeby-api.zksync.io/jsrpc";
 const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
@@ -99,6 +104,24 @@ async fn schedule_payment(
         amount: msg.amount(),
         date: Some(Utc::now()),
     };
+
+    let pub_address = Address::from_str(&details.sender[2..]).unwrap();
+    let seed = get_zksync_seed(pub_address).await;
+    let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
+    let wallet = Wallet::from_seed(seed, pub_address, provider);
+
+    let recepient = Address::from_str(&details.recipient).unwrap();
+    let amount = BigUint::from_str(&details.amount.to_string()).unwrap();
+    let (tx, msg) = wallet.prepare_sync_transfer(
+        &recepient,
+        ZKSYNC_TOKEN_NAME.to_string(),
+        amount,
+        None
+    ).await;
+    let signed_msg = eth_sign_transfer(pub_address, msg).await;
+    let packed_sig = PackedEthSignature::deserialize_packed(&signed_msg).unwrap();
+    wallet.sync_transfer(tx, packed_sig).await;
+
     let confirmation = serde_json::to_string(&details)
         .map_err(GenericError::new)?
         .into_bytes();
