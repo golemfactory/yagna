@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - master
+      - release/*
 
 jobs:
   build:
@@ -17,9 +18,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        #commented bc of too much spend on Macos which is counted 10x, Windows is 2x
-        # os: [macos-latest, windows-latest, ubuntu-latest]
-        os: [windows-latest, ubuntu-latest]
+        # was commented bc of too much spend on Macos which is counted 10x, Windows is 2x
+        #os: [windows-latest, ubuntu-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
       - name: Checkout
@@ -29,9 +30,11 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          components: rustfmt, clippy
 
       - name: Cache cargo registry
         uses: actions/cache@v1
+        if: matrix.os != 'macos-latest'
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -40,6 +43,7 @@ jobs:
 
       - name: Cache cargo index
         uses: actions/cache@v1
+        if: matrix.os != 'macos-latest'
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
@@ -48,6 +52,7 @@ jobs:
 
       - name: Cache cargo build
         uses: actions/cache@v1
+        if: matrix.os != 'macos-latest'
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
@@ -97,8 +102,8 @@ jobs:
           #   --tests -p ya-market-decentralized
           # because the latter needs separate compilation of lots of dependant crates again.
           #
-          # we use single thread, because GSB Router is a singleton shared among tests
-          args: --tests --workspace --features ya-market-decentralized/market-test-suite --features market-decentralized --no-default-features -- --test-threads=1
+          # we use single thread (via macro), because GSB Router is a singleton shared among tests
+          args: --tests --workspace --features ya-market-decentralized/market-test-suite --features market-decentralized --no-default-features
 
       - name: cargo build
         uses: actions-rs/cargo@v1

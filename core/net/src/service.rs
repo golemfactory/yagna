@@ -11,10 +11,10 @@ use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
 
-use crate::api::{self, net_service, parse_from_addr};
+use crate::api::{net_service, parse_from_addr};
 
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
-pub const DEFAULT_CENTRAL_ADDR: &str = "34.244.4.185:7464";
+pub const DEFAULT_CENTRAL_ADDR: &str = "3.249.139.167:7464";
 
 pub fn central_net_addr() -> std::io::Result<SocketAddr> {
     Ok(std::env::var(CENTRAL_ADDR_ENV_VAR)
@@ -71,7 +71,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             let endpoints = bcast.resolve(&topic);
             let msg: Rc<[u8]> = msg.into();
             Arbiter::spawn(async move {
-                log::debug!("Received broadcast to topic {} from [{}].", &topic, &caller);
+                log::trace!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
                     let addr = format!("{}/{}", endpoint, bcast_service_id);
                     let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
@@ -111,29 +111,24 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     {
         let central_bus = central_bus.clone();
 
-        local_bus::subscribe(
-            api::FROM_BUS_ID,
-            move |_caller: &str, addr: &str, msg: &[u8]| {
-                let (from_node, to_addr) = match parse_from_addr(addr) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return future::err(Error::GsbBadRequest(e.to_string())).left_future()
-                    }
-                };
-                log::debug!("{} is calling {}", from_node, to_addr);
-                if !nodes.contains(&from_node) {
-                    return future::err(Error::GsbBadRequest(format!(
-                        "caller: {:?} is not on src list: {:?}",
-                        from_node, nodes,
-                    )))
-                    .left_future();
-                }
+        local_bus::subscribe("/from", move |_caller: &str, addr: &str, msg: &[u8]| {
+            let (from_node, to_addr) = match parse_from_addr(addr) {
+                Ok(v) => v,
+                Err(e) => return future::err(Error::GsbBadRequest(e.to_string())).left_future(),
+            };
+            log::debug!("{} is calling {}", from_node, to_addr);
+            if !nodes.contains(&from_node) {
+                return future::err(Error::GsbBadRequest(format!(
+                    "caller: {:?} is not on src list: {:?}",
+                    from_node, nodes,
+                )))
+                .left_future();
+            }
 
-                central_bus
-                    .call(from_node.to_string(), to_addr, Vec::from(msg))
-                    .right_future()
-            },
-        );
+            central_bus
+                .call(from_node.to_string(), to_addr, Vec::from(msg))
+                .right_future()
+        });
     }
 
     {
@@ -145,12 +140,12 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             let (is_new, id) = bcast.add(subscribe);
             let central_bus = central_bus.clone();
             async move {
-                log::info!("Subscribe topic {} on central bus.", topic);
+                log::debug!("Subscribe topic {} on central bus.", topic);
                 if is_new {
                     if let Err(e) = central_bus.subscribe(topic.clone()).await {
                         log::error!("fail to subscribe to: {}, {}", topic, e);
                     }
-                    log::info!("Created new topic: {}", topic);
+                    log::debug!("Created new topic: {}", topic);
                 }
                 Ok(id)
             }
@@ -165,7 +160,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             // TODO: remove unwrap here.
             let ent: SendBroadcastMessage<serde_json::Value> = serde_json::from_slice(msg).unwrap();
 
-            log::debug!(
+            log::trace!(
                 "Broadcast msg related to topic {} from [{}].",
                 ent.topic(),
                 &caller

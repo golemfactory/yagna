@@ -15,7 +15,7 @@ mod market;
 mod payment;
 
 const DEFAULT_NODE_NAME: &str = "test1";
-const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://34.244.4.185:8000/rust-wasi-tutorial.zip";
+const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://3.249.139.167:8000/rust-wasi-tutorial.zip";
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
@@ -26,6 +26,8 @@ const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:D5E31B2EED628572A5898BF8C3444764
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,
+    #[structopt(long, default_value = "wasmtime")]
+    runtime: String,
     #[structopt(long)]
     exe_script: PathBuf,
     /// Subnetwork identifier. You can set this value to filter nodes
@@ -172,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
     let agreement_allocation = Arc::new(Mutex::new(HashMap::new()));
     let my_demand = market::build_demand(
         &settings.node_name,
+        &settings.runtime,
         &settings.task_package,
         chrono::Duration::from_std(*settings.task_expiration)?,
         &settings.subnet,

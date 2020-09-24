@@ -6,7 +6,7 @@ use std::{
     convert::{TryFrom, TryInto},
     env,
     fmt::Debug,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -25,10 +25,6 @@ use ya_identity::service::Identity as IdentityService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 
-#[cfg(feature = "dummy-driver")]
-use ya_dummy_driver::PaymentDriverService;
-#[cfg(not(feature = "dummy-driver"))]
-use ya_zksync_driver::PaymentDriverService;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -37,18 +33,26 @@ use ya_service_api_web::{
     middleware::{auth, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
+use ya_utils_path::data_dir::DataDir;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
 
-mod data_dir;
-use data_dir::DataDir;
+lazy_static::lazy_static! {
+    static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 #[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+/// Golem network server.
+///
+/// By running this software you declare that you have read,
+/// understood and hereby accept the disclaimer and
+/// privacy warning found at https://handbook.golem.network/see-also/terms
+///
 struct CliArgs {
     /// Service data dir
     #[structopt(
@@ -56,7 +60,7 @@ struct CliArgs {
         long = "datadir",
         set = clap::ArgSettings::Global,
         env = "YAGNA_DATADIR",
-        default_value,
+        default_value = &*DEFAULT_DATA_DIR,
         hide_env_values = true,
     )]
     data_dir: DataDir,
@@ -74,6 +78,11 @@ struct CliArgs {
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
+
+    /// Accept the disclaimer and privacy warning found at
+    /// {n}https://handbook.golem.network/see-also/terms
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    accept_terms: bool,
 
     /// Enter interactive mode
     #[structopt(short, long)]
@@ -118,6 +127,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
+            accept_terms: args.accept_terms,
             interactive: args.interactive,
         })
     }
@@ -149,7 +159,6 @@ impl ServiceContext {
             Self::make_entry::<MarketService>(path, "market")?,
             Self::make_entry::<ActivityService>(path, "activity")?,
             Self::make_entry::<PaymentService>(path, "payment")?,
-            Self::make_entry::<PaymentDriverService>(path, "gnt-driver")?,
         ]
         .iter()
         .cloned()
@@ -171,8 +180,22 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
-    #[enable(gsb)]
-    PaymentDriver(PaymentDriverService),
+}
+
+#[allow(unused)]
+async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
+    #[cfg(feature = "dummy-driver")]
+    {
+        use ya_dummy_driver::PaymentDriverService;
+        PaymentDriverService::gsb(&()).await?;
+    }
+    #[cfg(feature = "gnt-driver")]
+    {
+        use ya_gnt_driver::PaymentDriverService;
+        let db_executor = DbExecutor::from_data_dir(data_dir, "gnt-driver")?;
+        PaymentDriverService::gsb(&db_executor).await?;
+    }
+    Ok(())
 }
 
 #[derive(StructOpt, Debug)]
@@ -227,6 +250,9 @@ struct ServiceCommandOpts {
 
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        if !ctx.accept_terms {
+            prompt_terms()?;
+        }
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
                 let name = clap::crate_name!();
@@ -238,6 +264,7 @@ impl ServiceCommand {
 
                 let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
                 Services::gsb(&context).await?;
+                start_payment_drivers(&ctx.data_dir).await?;
 
                 payment_accounts::save_default_account()
                     .await
@@ -268,6 +295,36 @@ impl ServiceCommand {
                 ))?)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
+        }
+    }
+}
+
+fn prompt_terms() -> Result<()> {
+    use std::io::Write;
+
+    let header = r#"
+By running this software you declare that you have read, understood
+and hereby accept the disclaimer and privacy warning found at
+https://handbook.golem.network/see-also/terms
+
+"#;
+
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+
+    stdout.write(header.as_bytes())?;
+    stdout.flush()?;
+
+    loop {
+        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        stdout.flush()?;
+
+        let mut buffer = String::new();
+        stdin.read_line(&mut buffer)?;
+        match buffer.to_lowercase().trim() {
+            "yes" => return Ok(()),
+            "no" => std::process::exit(1),
+            _ => (),
         }
     }
 }

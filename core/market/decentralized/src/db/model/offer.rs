@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
+use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
@@ -29,7 +30,7 @@ pub struct Offer {
 /// We don't need to keep whole unsubscribed Offer, it is enough to keep it's
 /// subscription id.
 /// This entry must exist in database at least until Offer expiration time.
-/// Otherwise we will add this Offer for the second time, when someone will broadcast it.
+/// Otherwise we will add this Offer for the second time, when someone will bcast it.
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_offer_unsubscribed"]
 pub struct OfferUnsubscribed {
@@ -50,8 +51,8 @@ impl Offer {
         id: &Identity,
         creation_ts: NaiveDateTime,
         expiration_ts: NaiveDateTime,
-    ) -> Offer {
-        let properties = offer.properties.to_string();
+    ) -> Result<Offer, JsonObjectExpected> {
+        let properties = flatten_json(&offer.properties)?.to_string();
         let constraints = offer.constraints.clone();
         let node_id = id.identity;
 
@@ -65,7 +66,7 @@ impl Offer {
             &expiration_ts,
         );
 
-        Offer {
+        Ok(Offer {
             id,
             properties,
             constraints,
@@ -73,7 +74,7 @@ impl Offer {
             creation_ts,
             insertion_ts: None, // Database will insert this timestamp.
             expiration_ts,
-        }
+        })
     }
 
     pub fn into_client_offer(&self) -> Result<ClientOffer, ErrorMessage> {
