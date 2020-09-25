@@ -21,3 +21,15 @@ pub mod proposal_util;
 
 pub use mock_node::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 pub use mock_offer::{client, sample_demand, sample_offer};
+
+pub fn generate_backtraced_name() -> String {
+    let bt = backtrace::Backtrace::new();
+    // 0th element should be this function. We'd like to know the caller
+    let frame = &bt.frames()[1];
+    for symbol in frame.symbols().iter() {
+        if let Some(name) = symbol.name() {
+            return name.to_string().to_string();
+        }
+    }
+    uuid::Uuid::new_v4().to_string().to_string()
+}

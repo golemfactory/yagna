@@ -1,5 +1,6 @@
 use ya_client::model::market::proposal::State;
 use ya_market_decentralized::testing::events_helper::{provider, requestor, ClientProposalHelper};
+use ya_market_decentralized::testing::generate_backtraced_name;
 use ya_market_decentralized::testing::mock_offer::client::{
     not_matching_demand, not_matching_offer, sample_demand, sample_offer,
 };
@@ -16,7 +17,7 @@ use ya_market_resolver::flatten::flatten_json;
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_exchanging_draft_proposals")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -156,7 +157,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_countered_proposal")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -254,7 +255,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_own_proposal")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -338,7 +339,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_unsubscribed")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -384,7 +385,7 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_unsubscribed_offer")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -444,7 +445,7 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_initial_unsubscribed_remote_offer")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -493,7 +494,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_initial_unsubscribed_remote_offer")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -536,7 +537,7 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Er
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_draft_unsubscribed_remote_demand")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -589,7 +590,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_not_matching_counter_demand")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -626,7 +627,7 @@ async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_not_matching_counter_offer")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?

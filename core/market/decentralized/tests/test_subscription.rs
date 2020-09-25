@@ -1,6 +1,6 @@
 use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::client::{sample_demand, sample_offer};
-use ya_market_decentralized::testing::{DemandError, QueryOfferError};
+use ya_market_decentralized::testing::{generate_backtraced_name, DemandError, QueryOfferError};
 use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
 use ya_market_resolver::flatten::flatten_json;
 
@@ -10,7 +10,7 @@ use ya_market_resolver::flatten::flatten_json;
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_subscribe_offer")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -56,7 +56,7 @@ async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_subscribe_demand() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_subscribe_demand")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;

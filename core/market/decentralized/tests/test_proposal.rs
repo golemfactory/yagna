@@ -1,7 +1,8 @@
 use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
 use ya_market_decentralized::testing::{
-    GetProposalError, MarketServiceExt, MarketsNetwork, OwnerType, ProposalError,
+    generate_backtraced_name, GetProposalError, MarketServiceExt, MarketsNetwork, OwnerType,
+    ProposalError,
 };
 
 use ya_client::model::market::proposal::State;
@@ -10,7 +11,7 @@ use ya_client::model::market::proposal::State;
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_get_proposal")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Requestor1")
         .await?
@@ -54,7 +55,7 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_get_proposal_not_found")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Requestor1")
         .await?

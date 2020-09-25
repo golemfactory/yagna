@@ -1,5 +1,6 @@
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::proposal::State;
+use ya_market_decentralized::testing::generate_backtraced_name;
 use ya_market_decentralized::testing::mock_offer::client::{sample_demand, sample_offer};
 use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork, OwnerType, ProposalId};
 use ya_market_decentralized::testing::{QueryEventsError, TakeEventsError};
@@ -14,7 +15,7 @@ use std::time::Duration;
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_events_non_existent_subscription")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -39,7 +40,7 @@ async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Err
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_initial_proposal")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -77,7 +78,7 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_multiple_events")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -123,7 +124,7 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_events_timeout")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -160,7 +161,7 @@ async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_events_unsubscribe_notification")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -203,7 +204,7 @@ async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Erro
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_events_edge_cases")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -262,7 +263,7 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_query_events_for_multiple_subscriptions")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -300,7 +301,7 @@ async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Er
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_simultaneous_query_events")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -363,7 +364,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_counter_initial_proposal")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;

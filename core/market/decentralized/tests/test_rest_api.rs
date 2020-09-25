@@ -9,6 +9,7 @@ use ya_client::model::market::Agreement;
 use ya_client::model::{market::Demand, market::Offer, market::Proposal, ErrorMessage};
 use ya_market_decentralized::testing::{
     client::{sample_demand, sample_offer},
+    generate_backtraced_name,
     mock_node::{wait_for_bcast, MarketServiceExt},
     proposal_util::exchange_draft_proposals,
     DemandError, MarketsNetwork, ModifyOfferError, OwnerType, SubscriptionId,
@@ -20,7 +21,7 @@ use ya_market_resolver::flatten::flatten_json;
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_rest_get_offers")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -70,7 +71,7 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_rest_get_demands")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -101,7 +102,7 @@ async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result<()> {
     // given
-    let network = MarketsNetwork::new("test_rest_invalid_subscription_id_should_return_400")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -134,7 +135,7 @@ async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
     // given
-    let network = MarketsNetwork::new("test_rest_subscribe_unsubscribe_offer")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -199,7 +200,7 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
     // given
-    let network = MarketsNetwork::new("test_rest_subscribe_unsubscribe_offer")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -263,7 +264,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_proposal() -> anyhow::Result<()> {
-    let network = MarketsNetwork::new("test_rest_get_proposal")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Provider")
         .await?
@@ -321,7 +322,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_agreement() -> anyhow::Result<()> {
-    let network = MarketsNetwork::new("test_rest_get_agreement")
+    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_market_instance("Node-1")
         .await?
@@ -367,7 +368,7 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
 // #[actix_rt::test]
 // #[serial_test::serial]
 // async fn test_rest_get_proposal_wrong_subscription() -> anyhow::Result<()> {
-//     let network = MarketsNetwork::new("test_rest_get_proposal")
+//     let network = MarketsNetwork::new(generate_backtraced_name().as_str())
 //         .await
 //         .add_market_instance("Node-1")
 //         .await?

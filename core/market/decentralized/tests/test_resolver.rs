@@ -3,7 +3,7 @@ use tokio::time::{timeout, Timeout};
 
 use ya_market_decentralized::testing::{
     client::{sample_demand, sample_offer},
-    MarketsNetwork,
+    generate_backtraced_name, MarketsNetwork,
 };
 
 /// Test adds Offer on single node. Resolver should not emit Proposal.
@@ -13,7 +13,7 @@ use ya_market_decentralized::testing::{
 async fn test_single_not_resolve_offer() -> Result<(), anyhow::Error> {
     // given
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new("test_single_not_resolve_offer")
+    let mut network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_matcher_instance("Node-1")
         .await?;
@@ -82,7 +82,7 @@ async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
 async fn test_single_not_resolve_demand() -> Result<(), anyhow::Error> {
     // given
     let _ = env_logger::builder().try_init();
-    let mut network = MarketsNetwork::new("test_single_not_resolve_demand")
+    let mut network = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .add_matcher_instance("Node-1")
         .await?;

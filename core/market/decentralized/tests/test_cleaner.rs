@@ -3,6 +3,7 @@ use chrono::{Duration, NaiveDateTime, Utc};
 use ya_market_decentralized::testing::cleaner::clean;
 use ya_market_decentralized::testing::dao::TestingDao;
 use ya_market_decentralized::testing::events_helper::{generate_event, TestMarketEvent};
+use ya_market_decentralized::testing::generate_backtraced_name;
 use ya_market_decentralized::testing::mock_agreement::generate_agreement;
 use ya_market_decentralized::testing::mock_offer::{generate_demand, generate_offer};
 use ya_market_decentralized::testing::proposal_util::{generate_negotiation, generate_proposal};
@@ -24,9 +25,10 @@ fn past() -> NaiveDateTime {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement() -> Result<()> {
+    let _ = env_logger::builder().try_init();
     let valid_agreement = generate_agreement(1, future());
     let expired_agreement = generate_agreement(2, past());
-    let db = MarketsNetwork::new("market-cleaner-agreement")
+    let db = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .init_database("testnode")?;
     let agreement_dao = db.as_dao::<AgreementDao>();
@@ -57,7 +59,7 @@ async fn test_demand() -> Result<()> {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new("market-cleaner-demand")
+    let db = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .init_database("testnode")?;
     let demand_dao = db.as_dao::<DemandDao>();
@@ -88,7 +90,7 @@ async fn test_offer() -> Result<()> {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new("market-cleaner-offer")
+    let db = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .init_database("testnode")?;
     let offer_dao = db.as_dao::<OfferDao>();
@@ -116,7 +118,7 @@ async fn test_offer() -> Result<()> {
 #[serial_test::serial]
 async fn test_events() -> Result<()> {
     // insert two events
-    let db = MarketsNetwork::new("market-cleaner-event")
+    let db = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .init_database("testnode")?;
     let valid_event = generate_event(1, future());
@@ -142,7 +144,7 @@ async fn test_events() -> Result<()> {
 #[serial_test::serial]
 async fn test_proposal() -> Result<()> {
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new("market-cleaner-proposal")
+    let db = MarketsNetwork::new(generate_backtraced_name().as_str())
         .await
         .init_database("testnode")?;
     let valid_negotiation = generate_negotiation(None);
