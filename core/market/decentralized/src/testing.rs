@@ -31,5 +31,6 @@ pub fn generate_backtraced_name() -> String {
             return name.to_string().to_string();
         }
     }
+    log::debug!("No backtrace support. Generating default name from UUIDv4");
     uuid::Uuid::new_v4().to_string().to_string()
 }
