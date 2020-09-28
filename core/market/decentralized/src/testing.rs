@@ -52,7 +52,7 @@ fn get_symbol_at_level(bt: &backtrace::Backtrace, lvl: usize) -> Option<String> 
                     "Wrong start index from backtrace lib. Adjusting. current_level={}",
                     current_level
                 );
-            },
+            }
             _ => return None,
         };
     }
