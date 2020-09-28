@@ -5918,14 +5918,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-metrics-utils"
+name = "ya-metrics"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
  "anyhow",
  "futures 0.3.5",
+ "lazy_static",
  "metrics",
  "metrics-core",
  "metrics-runtime",
+ "ya-service-api-interfaces",
 ]
 
 [[package]]
@@ -6395,7 +6398,7 @@ dependencies = [
  "ya-identity",
  "ya-market-decentralized",
  "ya-market-forwarding",
- "ya-metrics-utils",
+ "ya-metrics",
  "ya-net",
  "ya-payment",
  "ya-persistence",

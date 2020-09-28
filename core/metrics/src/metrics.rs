@@ -1,36 +1,37 @@
 use futures::lock::Mutex;
+use metrics_runtime::{observers::PrometheusBuilder, Controller, Receiver, Sink};
 use std::sync::Arc;
 
 use crate::exporter::StringExporter;
-use metrics_runtime::{observers::PrometheusBuilder, Controller, Receiver, Sink};
 
-pub struct Statistics {
+pub struct Metrics {
     //pub receiver: Receiver,
     pub root_sink: Sink,
     pub exporter: StringExporter<Controller, PrometheusBuilder>,
 }
 
-impl Statistics {
-    pub fn new() -> Result<Arc<Mutex<Statistics>>, anyhow::Error> {
-        let receiver = Receiver::builder().build()?;
-        let sink = receiver.sink();
-
+impl Metrics {
+    pub fn new() -> Arc<Mutex<Metrics>> {
+        let receiver = Receiver::builder()
+            .build()
+            .expect("Metrics initialization failure");
+        let root_sink = receiver.sink();
         let exporter = StringExporter::new(receiver.controller(), PrometheusBuilder::new());
-
         receiver.install();
-        let stats = Statistics {
+
+        Arc::new(Mutex::new(Self {
             //receiver,
-            root_sink: sink,
+            root_sink,
             exporter,
-        };
-        return Ok(Arc::new(Mutex::new(stats)));
+        }))
     }
 
+    #[allow(dead_code)]
     pub fn create_sink(&mut self, name: &str) -> std::sync::Mutex<Sink> {
         std::sync::Mutex::new(self.root_sink.scoped(name))
     }
 
-    pub fn query_metrics(&mut self) -> String {
+    pub fn export(&mut self) -> String {
         return self.exporter.turn();
     }
 }
