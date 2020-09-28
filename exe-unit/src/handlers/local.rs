@@ -13,7 +13,7 @@ impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
     type Result = <GetState as Message>::Result;
 
     fn handle(&mut self, _: GetState, _: &mut Context<Self>) -> Self::Result {
-        GetStateResponse(self.state.inner.clone())
+        GetStateResponse(self.state.inner)
     }
 }
 

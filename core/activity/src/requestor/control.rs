@@ -29,31 +29,64 @@ pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         .service(encrypted)
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum CreateActivityJson {
+    Agreement(String),
+    Request(CreateActivityRequest),
+}
+
+impl CreateActivityJson {
+    fn agreement_id(&self) -> &str {
+        match self {
+            Self::Agreement(agreement_id) => agreement_id.as_ref(),
+            Self::Request(request) => request.agreement_id.as_ref(),
+        }
+    }
+
+    fn pub_key(&self) -> Result<Option<Vec<u8>>> {
+        match self {
+            Self::Request(CreateActivityRequest {
+                requestor_pub_key: Some(pub_key),
+                ..
+            }) => {
+                let bytes = hex::decode(pub_key)
+                    .map_err(|e| Error::BadRequest(format!("Invalid requestor pub key: {}", e)))?;
+
+                Ok(Some(bytes))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn to_response(&self, result: CreateActivityResult) -> serde_json::Value {
+        match self {
+            Self::Agreement(_) => serde_json::json!(result.activity_id),
+            Self::Request(_) => serde_json::json!(result),
+        }
+    }
+}
+
 /// Creates new Activity based on given Agreement.
 #[actix_web::post("/activity")]
 async fn create_activity(
     db: web::Data<DbExecutor>,
     query: web::Query<QueryTimeout>,
-    body: web::Json<CreateActivityRequest>,
+    body: web::Json<CreateActivityJson>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = &body.agreement_id;
+    let agreement_id = body.agreement_id();
     authorize_agreement_initiator(id.identity, agreement_id).await?;
 
     let agreement = get_agreement(&agreement_id).await?;
-    log::trace!("agreement: {:#?}", agreement);
+    log::info!("agreement: {:#?}", agreement);
 
     let provider_id = agreement.provider_id()?.parse()?;
     let msg = activity::Create {
         provider_id,
-        agreement_id: agreement_id.clone(),
+        agreement_id: agreement_id.to_string(),
         timeout: query.timeout.clone(),
-        requestor_pub_key: body
-            .requestor_pub_key
-            .as_ref()
-            .map(hex::decode)
-            .transpose()
-            .map_err(|e| Error::BadRequest(format!("Invalid requestor pub key: {}", e)))?,
+        requestor_pub_key: body.pub_key()?,
     };
 
     let create_resp = net::from(id.identity)
@@ -63,20 +96,20 @@ async fn create_activity(
         .timeout(query.timeout)
         .await???;
 
-    log::debug!("activity created: {}, inserting", create_resp.activity_id);
+    log::debug!("activity created: {}, inserting", create_resp.activity_id());
     db.as_dao::<ActivityDao>()
-        .create_if_not_exists(&create_resp.activity_id, agreement_id)
+        .create_if_not_exists(&create_resp.activity_id(), agreement_id)
         .await?;
 
     let create_result = CreateActivityResult {
-        activity_id: create_resp.activity_id,
+        activity_id: create_resp.activity_id().into(),
         credentials: create_resp
-            .credentials
+            .credentials()
             .map(convert_credentials)
             .transpose()?,
     };
 
-    Ok::<_, Error>(web::Json(create_result))
+    Ok::<_, Error>(web::Json(body.to_response(create_result)))
 }
 
 /// Destroys given Activity.
@@ -215,7 +248,7 @@ struct PathActivityBatch {
 }
 
 fn convert_credentials(
-    credentials: ya_core_model::activity::local::Credentials,
+    credentials: &ya_core_model::activity::local::Credentials,
 ) -> Result<Credentials> {
     let cred = match credentials {
         ya_core_model::activity::local::Credentials::Sgx {
@@ -227,15 +260,26 @@ fn convert_credentials(
             ias_sig,
         } => Credentials::Sgx(
             SgxCredentials::try_with(
-                enclave,
-                requestor,
-                hex::encode(&payload_sha3),
-                hex::encode(&enclave_hash),
-                ias_report,
-                ias_sig,
+                enclave.clone(),
+                requestor.clone(),
+                hex::encode(payload_sha3),
+                hex::encode(enclave_hash),
+                ias_report.clone(),
+                ias_sig.clone(),
             )
             .map_err(|e| Error::Service(format!("Unable to convert SGX credentials: {}", e)))?,
         ),
     };
     Ok(cred)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_create_activity() {
+        let _v: CreateActivityJson =
+            serde_json::from_str("\"88c612ff10c44380ae37d939232bbf60\"").unwrap();
+    }
 }

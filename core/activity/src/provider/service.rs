@@ -102,7 +102,8 @@ async fn create_activity_gsb(
     Ok(activity::CreateResponse {
         activity_id,
         credentials,
-    })
+    }
+    .into())
 }
 
 async fn activity_credentials(

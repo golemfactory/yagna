@@ -201,10 +201,11 @@ fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
 }
 
 fn main() {
-    if let Err(_) = configure_logger(flexi_logger::Logger::with_env())
+    if configure_logger(flexi_logger::Logger::with_env())
         .log_to_file()
         .directory("logs")
         .start()
+        .is_err()
     {
         configure_logger(flexi_logger::Logger::with_env())
             .start()

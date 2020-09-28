@@ -239,7 +239,7 @@ impl<R: Runtime> RuntimeRef<R> {
 
         self.send(
             SetState::default()
-                .state(state_pre.clone())
+                .state(state_pre)
                 .cmd(Some(ctx.cmd.clone())),
         )
         .await?;

@@ -40,7 +40,7 @@ pub struct Create {
 
 impl RpcMessage for Create {
     const ID: &'static str = "CreateActivity";
-    type Item = CreateResponse;
+    type Item = CreateResponseCompat;
     type Error = RpcMessageError;
 }
 
@@ -49,6 +49,47 @@ impl RpcMessage for Create {
 pub struct CreateResponse {
     pub activity_id: String,
     pub credentials: Option<local::Credentials>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CreateResponseCompat {
+    ActivityId(String),
+    Response(CreateResponse),
+}
+
+impl CreateResponseCompat {
+    pub fn activity_id(&self) -> &str {
+        match self {
+            Self::ActivityId(v) => v.as_ref(),
+            Self::Response(r) => r.activity_id.as_ref(),
+        }
+    }
+
+    pub fn credentials(&self) -> Option<&local::Credentials> {
+        match self {
+            Self::ActivityId(_) => None,
+            Self::Response(r) => r.credentials.as_ref(),
+        }
+    }
+}
+
+impl From<CreateResponseCompat> for CreateResponse {
+    fn from(compat: CreateResponseCompat) -> Self {
+        match compat {
+            CreateResponseCompat::ActivityId(activity_id) => CreateResponse {
+                activity_id,
+                credentials: None,
+            },
+            CreateResponseCompat::Response(response) => response,
+        }
+    }
+}
+
+impl From<CreateResponse> for CreateResponseCompat {
+    fn from(response: CreateResponse) -> Self {
+        CreateResponseCompat::Response(response)
+    }
 }
 
 /// Destroy activity.

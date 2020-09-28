@@ -341,7 +341,7 @@ impl Handler<TransferResource> for TransferService {
         let (handle, reg) = AbortHandle::new_pair();
         let abort = Abort::from(handle);
 
-        return ActorResponse::r#async(
+        ActorResponse::r#async(
             async move {
                 address.send(AddAbortHandle(abort.clone())).await?;
                 Abortable::new(transfer(source, dest), reg)
@@ -352,7 +352,7 @@ impl Handler<TransferResource> for TransferService {
                 Ok(())
             }
             .into_actor(self),
-        );
+        )
     }
 }
 
