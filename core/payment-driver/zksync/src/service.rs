@@ -48,6 +48,12 @@ pub async fn subscribe_to_identity_events() {
 async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> {
     log::info!("init: {:?}", msg);
 
+    // Hacks required to use zksync/core/model
+    let account_depth = std::env::var("ACCOUNT_TREE_DEPTH").unwrap_or("32".to_owned());
+    std::env::set_var("ACCOUNT_TREE_DEPTH", account_depth);
+    let balance_depth = std::env::var("BALANCE_TREE_DEPTH").unwrap_or("11".to_owned());
+    std::env::set_var("BALANCE_TREE_DEPTH", balance_depth);
+
     let address = msg.address();
     let mode = msg.mode();
 
@@ -112,7 +118,7 @@ async fn schedule_payment(
     let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
     let wallet = Wallet::from_seed(seed, pub_address, provider);
 
-    let recepient = Address::from_str(&details.recipient).unwrap();
+    let recepient = Address::from_str(&details.recipient[2..]).unwrap();
     let amount = BigUint::from_str(&details.amount.to_string()).unwrap();
     let (tx, msg) = wallet
         .prepare_sync_transfer(&recepient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
