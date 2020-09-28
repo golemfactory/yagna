@@ -148,6 +148,12 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     }
 }
 
+impl<S: 'static> Provider<S, ()> for ServiceContext {
+    fn component(&self) -> () {
+        ()
+    }
+}
+
 impl ServiceContext {
     fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
@@ -268,12 +274,12 @@ impl ServiceCommand {
                 Services::gsb(&context).await?;
                 start_payment_drivers(&ctx.data_dir).await?;
 
-                payment_accounts::save_default_account()
+                payment_accounts::save_default_account(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| {
                         log::error!("Saving default payment account failed: {}", e)
                     });
-                payment_accounts::init_accounts()
+                payment_accounts::init_accounts(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
