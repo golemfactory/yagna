@@ -60,6 +60,13 @@ pub fn bind_gsb(db: &DbExecutor) {
         .bind(get_activity_state_gsb)
         .bind(get_activity_usage_gsb);
 
+    // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+    // until first change to value will be made.
+    counter!("activity.provider.created", 0);
+    counter!("activity.provider.destroyed", 0);
+    counter!("activity.provider.destroyed.by_requestor", 0);
+    counter!("activity.provider.destroyed.unresponsive", 0);
+
     local::bind_gsb(db);
 }
 
@@ -147,7 +154,7 @@ async fn destroy_activity_gsb(
         .await
         .map(|_| ())?;
 
-    counter!("activity.provider.destroyed", 1);
+    counter!("activity.provider.destroyed.by_requestor", 1);
     Ok(result)
 }
 
@@ -230,6 +237,8 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
             if dt > limit_s {
                 log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
                 enqueue_destroy_evt(db, &activity_id, &provider_id).await;
+
+                counter!("activity.provider.destroyed.unresponsive", 1);
                 break;
             } else if state.state.0 != State::Unresponsive && dt >= unresp_s {
                 log::warn!("activity {} unresponsive after {}s", activity_id, dt);
@@ -253,6 +262,10 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
         tokio::time::delay_for(delay).await;
     }
 
+    // If we got here, we can be sure, that activity was already destroyed.
+    // Counting activities in all other places can result with duplicated
+    // DestroyActivity events.
+    counter!("activity.provider.destroyed", 1);
     log::debug!("Stopping activity monitor: {}", activity_id);
 }
 
