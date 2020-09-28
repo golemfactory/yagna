@@ -1,11 +1,12 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
+use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
 use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
 use crate::db::dao::sql_functions::datetime;
-use crate::db::model::{Agreement, AgreementId, AgreementState, ProposalId};
+use crate::db::model::{Agreement, AgreementId, AgreementState, OwnerType, ProposalId};
 use crate::db::schema::market_agreement::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
@@ -21,9 +22,9 @@ pub enum SaveAgreementError {
     #[error("Can't create Agreement for already countered Proposal [{0}].")]
     ProposalCountered(ProposalId),
     #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
-    AgreementExists(AgreementId, ProposalId),
-    #[error("Failed to save Agreement to database. Error: {0}.")]
-    DatabaseError(DbError),
+    Exists(AgreementId, ProposalId),
+    #[error("Saving Agreement internal error: {0}.")]
+    Internal(DbError),
 }
 
 pub struct AgreementDao<'c> {
@@ -52,15 +53,21 @@ impl<'c> AgreementDao<'c> {
     pub async fn select(
         &self,
         id: &AgreementId,
+        node_id: Option<NodeId>,
         validation_ts: NaiveDateTime,
     ) -> DbResult<Option<Agreement>> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            let mut agreement = match dsl::market_agreement
-                .filter(dsl::id.eq(&id))
-                .first::<Agreement>(conn)
-                .optional()?
-            {
+            let mut query = dsl::market_agreement.filter(dsl::id.eq(&id)).into_boxed();
+
+            if let Some(node_id) = node_id {
+                query = match id.owner() {
+                    OwnerType::Provider => query.filter(dsl::provider_id.eq(node_id)),
+                    OwnerType::Requestor => query.filter(dsl::requestor_id.eq(node_id)),
+                }
+            };
+
+            let mut agreement = match query.first::<Agreement>(conn).optional()? {
                 None => return Ok(None),
                 Some(agreement) => agreement,
             };
@@ -90,7 +97,7 @@ impl<'c> AgreementDao<'c> {
             }
 
             if let Some(agreement) = find_agreement_for_proposal(conn, &proposal_id)? {
-                return Err(SaveAgreementError::AgreementExists(
+                return Err(SaveAgreementError::Exists(
                     agreement.id,
                     proposal_id.clone(),
                 ));
@@ -166,7 +173,7 @@ impl<ErrorType: Into<DbError>> From<ErrorType> for StateError {
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
     fn from(err: ErrorType) -> Self {
-        SaveAgreementError::DatabaseError(err.into())
+        SaveAgreementError::Internal(err.into())
     }
 }
 

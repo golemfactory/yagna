@@ -12,11 +12,11 @@ cargo run --no-default-features --features market-decentralized --features gnt-d
 
 To test market-test-suite run:
 ```
-RUST_TEST_THREADS=1 cargo test --workspace --features ya-market-decentralized/market-test-suite
+cargo test --workspace --features ya-market-decentralized/market-test-suite
 ```
 or for market crate only
 ```
-RUST_TEST_THREADS=1 cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite
+cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite
 ```
 
 Note that market tests should be run in single thread.
@@ -31,4 +31,20 @@ add `env_logger::init();` on the beginning.
 
 ```
 RUST_LOG=debug cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite 
+```
+
+### Building .deb
+Prerequisites: 
+- You need cargo-deb installed (`cargo install cargo-deb`).
+- Build .deb on the oldest operating system version, you want to support.
+Otherwise linking with GLIBC will fail.
+
+Build yagna with all binaries needed in .deb:
+```
+cargo build --release --no-default-features --features market-decentralized --features gnt-driver --workspace
+```
+
+Run cargo-deb using binaries compiled in the previous step:
+```
+cargo deb --deb-version $(git rev-parse --short HEAD) --no-build
 ```

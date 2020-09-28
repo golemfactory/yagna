@@ -269,12 +269,12 @@ impl ServiceCommand {
                 Services::gsb(&context).await?;
                 start_payment_drivers(&ctx.data_dir).await?;
 
-                payment_accounts::save_default_account()
+                payment_accounts::save_default_account(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| {
                         log::error!("Saving default payment account failed: {}", e)
                     });
-                payment_accounts::init_accounts()
+                payment_accounts::init_accounts(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 

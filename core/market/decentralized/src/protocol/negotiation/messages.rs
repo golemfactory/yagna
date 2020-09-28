@@ -7,7 +7,9 @@ use crate::db::model::AgreementId;
 use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
 
 use super::super::callback::CallbackMessage;
-use super::error::{AgreementError, ApproveAgreementError, CounterProposalError, ProposalError};
+use super::error::{
+    ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
+};
 use crate::protocol::negotiation::error::ProposeAgreementError;
 
 pub mod provider {
@@ -77,7 +79,7 @@ pub struct ProposalRejected {
 impl RpcMessage for ProposalRejected {
     const ID: &'static str = "ProposalRejected";
     type Item = ();
-    type Error = ProposalError;
+    type Error = GsbProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -118,7 +120,7 @@ pub struct AgreementRejected {
 impl RpcMessage for AgreementRejected {
     const ID: &'static str = "AgreementRejected";
     type Item = ();
-    type Error = AgreementError;
+    type Error = GsbAgreementError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -130,7 +132,7 @@ pub struct AgreementCancelled {
 impl RpcMessage for AgreementCancelled {
     const ID: &'static str = "AgreementCancelled";
     type Item = ();
-    type Error = AgreementError;
+    type Error = GsbAgreementError;
 }
 
 /// The same messaged will be used on GSB and as messages in callbacks.
