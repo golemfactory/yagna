@@ -32,28 +32,38 @@ fn get_backtrace_symbol(fm: &backtrace::BacktraceFrame) -> Option<String> {
 }
 
 fn get_symbol_at_level(bt: &backtrace::Backtrace, lvl: usize) -> Option<String> {
-    let frame = &bt.frames()[lvl];
-    get_backtrace_symbol(frame)
+    let mut current_level = lvl;
+    let frames = &bt.frames();
+    while current_level < frames.len() {
+        let frame = &frames[current_level];
+        match get_backtrace_symbol(frame) {
+            Some(name) => {
+                // Handle Backtrace.actual_start_index set incorrectly
+                if name.starts_with("backtrace::capture::Backtrace::new::") {
+                    // We're at the last frame from backtrace lib - the creation of Backtrace.
+                    current_level = current_level + lvl;
+                } else if name.starts_with("backtrace::") {
+                    // We haven't reached the last frame from backtrace lib yet.
+                    current_level += 1;
+                } else {
+                    return Some(name);
+                }
+                log::warn!(
+                    "Wrong start index from backtrace lib. Adjusting. current_level={}",
+                    current_level
+                );
+            },
+            _ => return None,
+        };
+    }
+    None
 }
 
-pub fn generate_backtraced_name(level_o: Option<usize>) -> String {
+pub fn generate_backtraced_name(level: Option<usize>) -> String {
     let bt = backtrace::Backtrace::new();
     // 0th element should be this function. We'd like to know the caller
-    let level = level_o.unwrap_or(1);
-    if let Some(name) = get_symbol_at_level(&bt, level) {
-        // Special case for Mac
-        if name.starts_with("backtrace::capture::Backtrace::new::") {
-            let adjusted_level = level + level;
-            log::warn!(
-                "Wrong start index from backtrace lib. Adjusting. adjusted_level={}",
-                adjusted_level
-            );
-            if let Some(adjusted_name) = get_symbol_at_level(&bt, adjusted_level) {
-                return adjusted_name;
-            }
-        } else {
-            return name;
-        }
+    if let Some(name) = get_symbol_at_level(&bt, level.unwrap_or(1)) {
+        return name;
     }
     log::debug!("No backtrace support. Generating default name from UUIDv4");
     uuid::Uuid::new_v4().to_string().to_string()

@@ -423,8 +423,13 @@ fn test_data_dir() -> PathBuf {
         .join("test-workdir")
 }
 
+fn escape_path(path: &str) -> String {
+    // Windows can't handle colons
+    path.replace("::", "_").to_string()
+}
+
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
-    let test_dir: PathBuf = test_data_dir().join(dir_name);
+    let test_dir: PathBuf = test_data_dir().join(escape_path(dir_name).as_str());
 
     log::info!(
         "[MockNode] Preparing test directory: {}",
