@@ -16,7 +16,6 @@ use ya_dummy_driver::{
     PaymentDriverService as DummyDriverService, DRIVER_NAME as DUMMY_DRIVER_NAME,
 };
 use ya_gnt_driver::{PaymentDriverService as GntDriverService, DRIVER_NAME as GNT_DRIVER_NAME};
-use ya_zksync_driver::{PaymentDriverService as ZksyncDriverService, DRIVER_NAME as ZKSYNC_DRIVER_NAME};
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
@@ -24,12 +23,15 @@ use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 use ya_service_bus::typed as bus;
+use ya_zksync_driver::{
+    PaymentDriverService as ZksyncDriverService, DRIVER_NAME as ZKSYNC_DRIVER_NAME,
+};
 
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
     Ngnt,
-    Zksync
+    Zksync,
 }
 
 impl FromStr for Driver {

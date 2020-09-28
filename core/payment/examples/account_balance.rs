@@ -13,7 +13,6 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("account_list: {:?}", account_list);
 
     for account in account_list.into_iter() {
-
         let payer_status = bus::service(pay::BUS_ID)
             .call(pay::GetStatus {
                 platform: account.platform.to_string(),

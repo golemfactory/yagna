@@ -2,11 +2,11 @@
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use client::rpc_client::RpcClient;
+use client::wallet::{BalanceState, Wallet};
 use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
-use client::rpc_client::RpcClient;
-use client::wallet::{Wallet, BalanceState};
 use web3::types::Address;
 
 // Workspace uses
@@ -15,8 +15,8 @@ use ya_core_model::payment::local as payment_srv;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
 use crate::{DRIVER_NAME, PLATFORM_NAME};
-use crate::zksync::{get_zksync_seed, eth_sign_transfer, PackedEthSignature};
 
 const ZKSYNC_RPC_ADDRESS: &'static str = "https://rinkeby-api.zksync.io/jsrpc";
 const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
@@ -75,7 +75,9 @@ async fn get_account_balance(
     let pub_address = Address::from_str(&msg.address()[2..]).unwrap();
     let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
     let wallet = Wallet::from_public_address(pub_address, provider);
-    let balance_com = wallet.get_balance(ZKSYNC_TOKEN_NAME, BalanceState::Committed).await;
+    let balance_com = wallet
+        .get_balance(ZKSYNC_TOKEN_NAME, BalanceState::Committed)
+        .await;
 
     log::debug!("balance: {}", balance_com);
     Ok(BigDecimal::from_str(&balance_com.to_string()).unwrap())
@@ -112,12 +114,9 @@ async fn schedule_payment(
 
     let recepient = Address::from_str(&details.recipient).unwrap();
     let amount = BigUint::from_str(&details.amount.to_string()).unwrap();
-    let (tx, msg) = wallet.prepare_sync_transfer(
-        &recepient,
-        ZKSYNC_TOKEN_NAME.to_string(),
-        amount,
-        None
-    ).await;
+    let (tx, msg) = wallet
+        .prepare_sync_transfer(&recepient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
+        .await;
     let signed_msg = eth_sign_transfer(pub_address, msg).await;
     let packed_sig = PackedEthSignature::deserialize_packed(&signed_msg).unwrap();
     wallet.sync_transfer(tx, packed_sig).await;

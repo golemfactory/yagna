@@ -1,8 +1,8 @@
 use client::rpc_client::RpcClient;
-use client::wallet::{Wallet, BalanceState};
+use client::wallet::{BalanceState, Wallet};
 
-use web3::types::{Address};
 use std::str::FromStr;
+use web3::types::Address;
 
 #[macro_use]
 extern crate log;

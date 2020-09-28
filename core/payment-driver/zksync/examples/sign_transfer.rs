@@ -2,14 +2,14 @@
 extern crate log;
 
 use std::convert::TryInto;
-use std::str::FromStr;
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use num::BigUint;
 
-use client::wallet::{ETH_SIGN_MESSAGE, Wallet, Address, PackedEthSignature};
 use client::rpc_client::RpcClient;
+use client::wallet::{Address, PackedEthSignature, Wallet, ETH_SIGN_MESSAGE};
 
 use ethkey::EthAccount;
 use futures3::Future;
@@ -44,14 +44,20 @@ async fn main() {
     let msg_as_bytes = ETH_SIGN_MESSAGE.as_bytes();
     info!("msg_hex={}", hex::encode(&msg_as_bytes));
     let msg_as_bytes = message_to_signed_bytes(msg_as_bytes, true);
-//    let msg_as_bytes = msg_as_bytes.to_vec();
+    //    let msg_as_bytes = msg_as_bytes.to_vec();
     info!("msg_hex={}", hex::encode(&msg_as_bytes));
-    info!("creating zksync wallet from message {:?}", hex::encode(&msg_as_bytes));
+    info!(
+        "creating zksync wallet from message {:?}",
+        hex::encode(&msg_as_bytes)
+    );
     let seed_signature = sign_tx(msg_as_bytes).await;
     info!("seed_signature {:?}", hex::encode(&seed_signature));
     let seed_eth_signature = convert_to_eth_byte_order(seed_signature);
 
-    info!("creating zksync wallet from seed {:?}", hex::encode(&seed_eth_signature));
+    info!(
+        "creating zksync wallet from seed {:?}",
+        hex::encode(&seed_eth_signature)
+    );
     let wallet = Wallet::from_seed(seed_eth_signature, pub_key_addr, provider);
     //info!("wallet: {:?}", wallet);
 
@@ -59,12 +65,9 @@ async fn main() {
     let token = input_token;
     let amount = BigUint::from_str(input_amount).unwrap();
 
-    let (transfer, transfer_eth_sign_message) = wallet.prepare_sync_transfer(
-        &to,
-        token.to_string(),
-        amount,
-        None
-    ).await;
+    let (transfer, transfer_eth_sign_message) = wallet
+        .prepare_sync_transfer(&to, token.to_string(), amount, None)
+        .await;
     info!("transfer: {:?}", transfer);
     info!("transfer_eth_sign_message: {:?}", transfer_eth_sign_message);
 
@@ -91,8 +94,7 @@ fn message_to_signed_bytes(msg: &[u8], include_prefix: bool) -> Vec<u8> {
         b.extend_from_slice(prefix.as_bytes());
         b.extend_from_slice(msg);
         b
-    }
-    else {
+    } else {
         msg.into()
     };
     keccak256(&bytes).into()

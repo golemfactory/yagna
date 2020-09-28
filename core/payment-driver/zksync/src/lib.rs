@@ -4,8 +4,8 @@
 extern crate log;
 
 mod service;
-pub mod zksync;
 mod utils;
+pub mod zksync;
 
 pub const PLATFORM_NAME: &'static str = "ZK-NGNT";
 pub const DRIVER_NAME: &'static str = "zksync";
