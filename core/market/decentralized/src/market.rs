@@ -114,6 +114,11 @@ impl MarketService {
             .bind_gsb(public_prefix, local_prefix)
             .await?;
         agreement::bind_gsb(self.db.clone(), public_prefix, local_prefix).await;
+
+        counter!("market.offers.subscribed", 0);
+        counter!("market.offers.unsubscribed", 0);
+        counter!("market.demands.subscribed", 0);
+        counter!("market.demands.unsubscribed", 0);
         Ok(())
     }
 
