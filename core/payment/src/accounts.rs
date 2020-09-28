@@ -1,7 +1,6 @@
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
 use ya_core_model::identity;
@@ -9,9 +8,11 @@ use ya_service_bus::typed as bus;
 
 pub const DEFAULT_PAYMENT_DRIVER: &str = "ngnt";
 
-lazy_static! {
-    pub static ref ACCOUNT_LIST_PATH: String =
-        env::var("ACCOUNT_LIST").unwrap_or("accounts.json".to_string());
+fn accounts_path(data_dir: &Path) -> PathBuf {
+    match env::var("ACCOUNT_LIST").ok() {
+        Some(path) => PathBuf::from(path),
+        None => data_dir.join("accounts.json"),
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -35,12 +36,13 @@ pub(crate) async fn init_account(account: Account) -> anyhow::Result<()> {
 }
 
 /// Read payment accounts information from `ACCOUNT_LIST` file and initialize them.
-pub async fn init_accounts() -> anyhow::Result<()> {
+pub async fn init_accounts(data_dir: &Path) -> anyhow::Result<()> {
+    let accounts_path = accounts_path(data_dir);
     log::debug!(
         "Initializing payment accounts from file {} ...",
-        &*ACCOUNT_LIST_PATH
+        accounts_path.display()
     );
-    let text = fs::read(&*ACCOUNT_LIST_PATH).await?;
+    let text = fs::read(accounts_path).await?;
     let accounts: Vec<Account> = serde_json::from_slice(&text)?;
 
     for account in accounts {
@@ -52,15 +54,16 @@ pub async fn init_accounts() -> anyhow::Result<()> {
 
 /// Get default node ID from identity service and save it in `ACCOUNT_LIST` file as default payment account.
 /// If `ACCOUNT_LIST` file already exists, do nothing.
-pub async fn save_default_account() -> anyhow::Result<()> {
-    if Path::new(&*ACCOUNT_LIST_PATH).exists() {
-        log::debug!("Accounts file {} already exists.", &*ACCOUNT_LIST_PATH);
+pub async fn save_default_account(data_dir: &Path) -> anyhow::Result<()> {
+    let accounts_path = accounts_path(data_dir);
+    if accounts_path.exists() {
+        log::debug!("Accounts file {} already exists.", accounts_path.display());
         return Ok(());
     }
 
     log::debug!(
         "Saving default payment account to file {} ...",
-        &*ACCOUNT_LIST_PATH
+        accounts_path.display()
     );
     let default_node_id = bus::service(identity::BUS_ID)
         .call(identity::Get::ByDefault)
@@ -74,7 +77,7 @@ pub async fn save_default_account() -> anyhow::Result<()> {
         receive: true,
     }];
     let text = serde_json::to_string(&default_account)?;
-    fs::write(&*ACCOUNT_LIST_PATH, text).await?;
+    fs::write(accounts_path, text).await?;
     log::debug!("Default payment account saved successfully.");
     Ok(())
 }
