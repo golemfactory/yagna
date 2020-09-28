@@ -12,8 +12,7 @@ actix = "0.9"
 anyhow = "1.0"
 num = { version = "0.2", features = ["serde"] }
 bigdecimal = { version = "0.1.0" }
-#client = { git = "https://github.com/golemfactory/zksync", branch = "mwu/simple-transfer"}
-client = { path = "../../../../zksync/core/client"}
+client = { git = "https://github.com/golemfactory/zksync", branch = "pay/client-crate"}
 chrono = { version = "0.4", features = ["serde"] }
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 hex = "0.4"
