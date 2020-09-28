@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::generate_backtraced_name;
 use ya_market_decentralized::testing::mock_offer::client;
 use ya_market_decentralized::testing::Config;
 use ya_market_decentralized::testing::QueryOfferError;
@@ -23,7 +22,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
     config.discovery.max_bcasted_offers = 50;
 
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .with_config(Arc::new(config))
         .add_market_instance("Node-1")
@@ -92,7 +91,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
     config.discovery.max_bcasted_offers = 50;
     config.discovery.max_bcasted_unsubscribes = 50;
 
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .with_config(Arc::new(config))
         .add_market_instance("Node-1")
@@ -193,7 +192,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?
@@ -235,7 +234,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
     config.discovery.max_bcasted_offers = 50;
 
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .with_config(Arc::new(config))
         .add_market_instance("Node-1")
@@ -309,7 +308,7 @@ async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> 
     config.discovery.max_bcasted_offers = 50;
     config.discovery.max_bcasted_unsubscribes = 50;
 
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .with_config(Arc::new(config))
         .add_market_instance("Node-1")

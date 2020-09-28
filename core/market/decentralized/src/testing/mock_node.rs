@@ -94,9 +94,16 @@ impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new(test_name: &str) -> Self {
+    pub async fn new(test_name: Option<&str>) -> Self {
         let _ = env_logger::builder().try_init();
-        let test_dir = prepare_test_dir(&test_name).unwrap();
+        // level 1 is this function.
+        // level 2 is <core::future::from_generator::GenFuture<T> as
+        // core::future::future::Future>::poll::XXX> (async)
+        // We want to know the caller.
+        let bn = crate::testing::generate_backtraced_name(Some(3));
+        let tn = test_name.unwrap_or(bn.as_str());
+        log::info!("Intializing MarketsNetwork. tn={}", tn);
+        let test_dir = prepare_test_dir(&tn).unwrap();
 
         MockNet::default().bind_gsb();
 
@@ -108,7 +115,7 @@ impl MarketsNetwork {
         MarketsNetwork {
             nodes: vec![],
             test_dir,
-            test_name: test_name.to_string(),
+            test_name: tn.to_string(),
             config: Arc::new(config),
         }
     }

@@ -10,9 +10,7 @@ use ya_market_decentralized::testing::discovery::{message::*, Discovery};
 use ya_market_decentralized::testing::mock_offer::{
     client, sample_offer, sample_offer_with_expiration,
 };
-use ya_market_decentralized::testing::{
-    generate_backtraced_name, wait_for_bcast, MarketServiceExt, MarketsNetwork,
-};
+use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
 use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
@@ -22,7 +20,7 @@ use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
 #[serial_test::serial]
 async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?
@@ -72,7 +70,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -110,7 +108,7 @@ async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -150,7 +148,7 @@ async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -195,7 +193,7 @@ async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?
@@ -288,7 +286,7 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(generate_backtraced_name().as_str())
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?
