@@ -95,7 +95,7 @@ async fn issue_debit_note(
         let debit_note_id = dao.create_new(debit_note, node_id).await?;
         let debit_note = dao.get(debit_note_id, node_id).await?;
 
-        counter!("payment.debit_notes.issued", 1);
+        counter!("payment.debit_notes.provider.issued", 1);
         Ok(debit_note)
     }
     .await
@@ -158,7 +158,7 @@ async fn send_debit_note(
                 .call(SendDebitNote(debit_note))
                 .await??;
             dao.mark_received(debit_note_id, node_id).await?;
-            counter!("payment.debit_notes.sent", 1);
+            counter!("payment.debit_notes.provider.sent", 1);
             Ok(())
         }
         .await
@@ -262,7 +262,7 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
         let invoice_id = dao.create_new(invoice, node_id).await?;
         let invoice = dao.get(invoice_id, node_id).await?;
 
-        counter!("payment.invoices.issued", 1);
+        counter!("payment.invoices.provider.issued", 1);
         Ok(invoice)
     }
     .await
@@ -322,7 +322,7 @@ async fn send_invoice(
                 .await??;
             dao.mark_received(invoice_id, node_id).await?;
 
-            counter!("payment.invoices.sent", 1);
+            counter!("payment.invoices.provider.sent", 1);
             Ok(())
         }
         .await
@@ -374,7 +374,7 @@ async fn cancel_invoice(
                 .await??;
             dao.cancel(invoice_id, node_id).await?;
 
-            counter!("payment.invoices.cancelled", 1);
+            counter!("payment.invoices.provider.cancelled", 1);
             Ok(())
         }
         .await

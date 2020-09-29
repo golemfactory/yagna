@@ -162,7 +162,7 @@ async fn accept_debit_note(
             }
             dao.accept(debit_note_id, node_id).await?;
 
-            counter!("payment.debit_notes.accepted", 1);
+            counter!("payment.debit_notes.requestor.accepted", 1);
             Ok(())
         }
         .await
@@ -311,7 +311,7 @@ async fn accept_invoice(
             bus::service(LOCAL_SERVICE).send(schedule_msg).await??;
             dao.accept(invoice_id, node_id).await?;
 
-            counter!("payment.invoices.accepted", 1);
+            counter!("payment.invoices.requestor.accepted", 1);
             Ok(())
         }
         .await

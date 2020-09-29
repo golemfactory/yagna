@@ -8,6 +8,7 @@ use bigdecimal::{BigDecimal, Zero};
 use futures::lock::Mutex;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use metrics::counter;
 use std::sync::Arc;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
 use ya_core_model::driver::{
@@ -237,6 +238,7 @@ impl PaymentProcessor {
 
         // TODO: Implement re-sending mechanism in case SendPayment fails
 
+        counter!("payment.invoices.requestor.paid", 1);
         Ok(())
     }
 
@@ -358,7 +360,6 @@ impl PaymentProcessor {
         // Insert payment into database (this operation creates and updates all related entities)
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         payment_dao.insert_received(payment, payee_id).await?;
-
         Ok(())
     }
 
