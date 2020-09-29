@@ -6,9 +6,9 @@ use crate::error::processor::{
 use crate::models::order::ReadObj as DbOrder;
 use bigdecimal::{BigDecimal, Zero};
 use futures::lock::Mutex;
+use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use metrics::counter;
 use std::sync::Arc;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
 use ya_core_model::driver::{

@@ -495,7 +495,7 @@ mod public {
             Ok(_) => {
                 counter!("payment.invoices.provider.paid", 1);
                 Ok(Ack {})
-            },
+            }
             Err(e) => match e {
                 VerifyPaymentError::ConfirmationEncoding => {
                     Err(SendError::BadRequest(e.to_string()))
