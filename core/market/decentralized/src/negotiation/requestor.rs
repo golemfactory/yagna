@@ -81,6 +81,7 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.rejected", 0);
         counter!("market.agreements.requestor.cancelled", 0);
         counter!("market.proposals.requestor.generated", 0);
+        counter!("market.proposals.requestor.received", 0);
         counter!("market.proposals.requestor.countered", 0);
         counter!("market.events.requestor.queried", 0);
 

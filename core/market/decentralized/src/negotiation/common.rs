@@ -257,7 +257,10 @@ impl CommonBroker {
         // Send channel message to wake all query_events waiting for proposals.
         self.notifier.notify(&subscription_id).await;
 
-        counter!("market.proposals.received", 1);
+        match owner {
+            OwnerType::Requestor => counter!("market.proposals.requestor.received", 1),
+            OwnerType::Provider => counter!("market.proposals.provider.received", 1),
+        };
         log::info!(
             "Received counter Proposal [{}] for Proposal [{}] from [{}].",
             &proposal.body.id,

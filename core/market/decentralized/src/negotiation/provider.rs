@@ -62,6 +62,7 @@ impl ProviderBroker {
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
         counter!("market.events.provider.queried", 0);
+        counter!("market.proposals.provider.received", 0);
         counter!("market.proposals.provider.countered", 0);
         counter!("market.proposals.provider.init-negotiation", 0);
         counter!("market.agreements.provider.proposed", 0);
