@@ -6,7 +6,7 @@ where
     B: Builder,
 {
     controller: C,
-    observer: B::Output,
+    builder: B,
 }
 
 impl<C, B> StringExporter<C, B>
@@ -21,13 +21,14 @@ where
     pub fn new(controller: C, builder: B) -> Self {
         StringExporter {
             controller,
-            observer: builder.build(),
+            builder,
         }
     }
 
     /// Run this exporter, logging output only once.
     pub fn turn(&mut self) -> String {
-        self.controller.observe(&mut self.observer);
-        return self.observer.drain();
+        let mut observer = self.builder.build();
+        self.controller.observe(&mut observer);
+        return observer.drain();
     }
 }

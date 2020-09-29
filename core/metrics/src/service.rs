@@ -21,6 +21,8 @@ lazy_static! {
 impl MetricsService {
     // currently just to produce log entry that service is activated
     pub async fn gsb<C: Provider<Self, ()>>(_ctx: &C) -> anyhow::Result<()> {
+        // This should initialize Metrics. We need to do this before all other services will start.
+        let _ = METRICS.clone();
         Ok(())
     }
 

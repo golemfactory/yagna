@@ -176,6 +176,10 @@ impl ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
+    // Metrics service must be activated first, to allow all
+    // other services to initialize counters and other metrics.
+    #[enable(gsb, rest)]
+    Metrics(MetricsService),
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
     #[enable(gsb)]
@@ -186,8 +190,6 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
-    #[enable(gsb, rest)]
-    Metrics(MetricsService),
 }
 
 #[allow(unused)]
