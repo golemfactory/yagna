@@ -7,6 +7,7 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
 use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
+use ya_service_api_web::middleware::Identity;
 
 use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
 use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
@@ -23,7 +24,6 @@ use crate::negotiation::{
 };
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::ProposalReceived;
-use ya_service_api_web::middleware::Identity;
 
 type IsFirst = bool;
 
@@ -87,8 +87,6 @@ impl CommonBroker {
             .as_dao::<ProposalDao>()
             .save_proposal(&new_proposal)
             .await?;
-
-        counter!("market.proposals.countered", 1);
         Ok((new_proposal, is_first))
     }
 
@@ -118,7 +116,6 @@ impl CommonBroker {
                 .await?;
 
             if events.len() > 0 {
-                counter!("market.events.queried", events.len() as u64);
                 return Ok(events);
             }
 
@@ -260,6 +257,7 @@ impl CommonBroker {
         // Send channel message to wake all query_events waiting for proposals.
         self.notifier.notify(&subscription_id).await;
 
+        counter!("market.proposals.received", 1);
         log::info!(
             "Received counter Proposal [{}] for Proposal [{}] from [{}].",
             &proposal.body.id,
