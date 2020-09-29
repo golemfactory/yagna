@@ -5,6 +5,7 @@ use chrono::Utc;
 use client::rpc_client::RpcClient;
 use client::wallet::{BalanceState, Wallet};
 use num::BigUint;
+use num::pow::pow;
 use std::str::FromStr;
 use uuid::Uuid;
 use web3::types::Address;
@@ -120,6 +121,7 @@ async fn schedule_payment(
 
     let recepient = Address::from_str(&details.recipient[2..]).unwrap();
     let amount = BigUint::from_str(&details.amount.to_string()).unwrap();
+    let amount = amount * pow(BigUint::from(10u32), 18);
     let (tx, msg) = wallet
         .prepare_sync_transfer(&recepient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
         .await;
