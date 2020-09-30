@@ -164,7 +164,7 @@ main() {
     fi
 
     say "Register provider's payment account"
-    ensure ../target/debug/yagna payment init ngnt -p
+    ensure ../target/debug/yagna payment init -p
 
     sleep 10s # wait for other nodes (optional)
 
