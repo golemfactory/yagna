@@ -13,23 +13,22 @@ const DEFAULT_ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:40
 
 // Hack required on windows to bypass failing trust_dns resolution on windows 10
 // Remove when https://github.com/actix/actix-web/issues/1047 is resolved
-async fn resolve_ip_manually(request_url: String) -> String {
+async fn resolve_host(request_url: String) -> GNTDriverResult<String> {
     let uri: awc::http::Uri = request_url.parse().unwrap();
-    let request_host = uri
-        .host()
-        .expect("Env variable 'ETH_FAUCET_ADDRESS' is not a valid URI.");
+    let request_host = uri.host().ok_or(GNTDriverError::LibraryError(
+        "Env variable 'ETH_FAUCET_ADDRESS' is not a valid URI.".to_string(),
+    ))?;
 
     let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())
         .await
-        .expect("failed to connect resolver");
+        .map_err(|e| GNTDriverError::LibraryError(format!("failed to connect resolver: {}", e)))?;
 
     let response = resolver.lookup_ip(request_host).await.unwrap();
-    let address = response
-        .iter()
-        .next()
-        .expect("Env variable 'ETH_FAUCET_ADDRESS' does not resolve in DNS.");
+    let address = response.iter().next().ok_or(GNTDriverError::LibraryError(
+        "Env variable 'ETH_FAUCET_ADDRESS' does not resolve in DNS.".to_string(),
+    ))?;
 
-    request_url.replace(request_host, &address.to_string())
+    Ok(request_url.replace(request_host, &address.to_string()))
 }
 
 pub struct EthFaucetConfig {
@@ -51,7 +50,7 @@ impl EthFaucetConfig {
         log::debug!("request eth");
         let client = awc::Client::new();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
-        let request_url = resolve_ip_manually(request_url).await;
+        let request_url = resolve_host(request_url).await?;
 
         async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {
             let body = client
