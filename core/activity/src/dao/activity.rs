@@ -114,4 +114,15 @@ impl<'c> ActivityDao<'c> {
         })
         .await
     }
+
+    pub async fn get_activity_ids(&self) -> Result<Vec<String>> {
+        use schema::activity::dsl;
+        do_with_transaction(self.pool, |conn| {
+            dsl::activity
+                .select(dsl::natural_id)
+                .get_results(conn)
+                .map_err(|e| e.into())
+        })
+        .await
+    }
 }
