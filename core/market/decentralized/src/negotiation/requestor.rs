@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
+use metrics::counter;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -72,6 +73,18 @@ impl RequestorBroker {
             agreement_notifier,
         };
 
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("market.agreements.requestor.created", 0);
+        counter!("market.agreements.requestor.confirmed", 0);
+        counter!("market.agreements.requestor.approved", 0);
+        counter!("market.agreements.requestor.rejected", 0);
+        counter!("market.agreements.requestor.cancelled", 0);
+        counter!("market.proposals.requestor.generated", 0);
+        counter!("market.proposals.requestor.received", 0);
+        counter!("market.proposals.requestor.countered", 0);
+        counter!("market.events.requestor.queried", 0);
+
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
         Ok(engine)
     }
@@ -137,6 +150,7 @@ impl RequestorBroker {
         }
         .map_err(|e| ProposalError::Send(prev_proposal_id.clone(), e))?;
 
+        counter!("market.proposals.requestor.countered", 1);
         log::info!(
             "Requestor {} countered Proposal [{}] with [{}]",
             DisplayIdentity(id),
@@ -158,7 +172,7 @@ impl RequestorBroker {
             .await?;
 
         // Map model events to client RequestorEvent.
-        Ok(futures::stream::iter(events)
+        let events = futures::stream::iter(events)
             .then(|event| event.into_client_requestor_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
@@ -167,7 +181,10 @@ impl RequestorBroker {
             })
             .filter_map(|event| async move { event.ok() })
             .collect::<Vec<RequestorEvent>>()
-            .await)
+            .await;
+
+        counter!("market.events.requestor.queried", events.len() as u64);
+        Ok(events)
     }
 
     /// Initiates the Agreement handshake phase.
@@ -231,6 +248,7 @@ impl RequestorBroker {
                 }
             })?;
 
+        counter!("market.agreements.requestor.created", 1);
         log::info!(
             "Requestor {} created Agreement [{}] from Proposal [{}].",
             DisplayIdentity(&id),
@@ -265,9 +283,18 @@ impl RequestorBroker {
                 .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
-                AgreementState::Approved => return Ok(ApprovalStatus::Approved),
-                AgreementState::Rejected => return Ok(ApprovalStatus::Rejected),
-                AgreementState::Cancelled => return Ok(ApprovalStatus::Cancelled),
+                AgreementState::Approved => {
+                    counter!("market.agreements.requestor.approved", 1);
+                    return Ok(ApprovalStatus::Approved);
+                }
+                AgreementState::Rejected => {
+                    counter!("market.agreements.requestor.rejected", 1);
+                    return Ok(ApprovalStatus::Rejected);
+                }
+                AgreementState::Cancelled => {
+                    counter!("market.agreements.requestor.cancelled", 1);
+                    return Ok(ApprovalStatus::Cancelled);
+                }
                 AgreementState::Expired => return Err(WaitForApprovalError::Expired(id.clone())),
                 AgreementState::Proposal => {
                     return Err(WaitForApprovalError::NotConfirmed(id.clone()))
@@ -323,6 +350,7 @@ impl RequestorBroker {
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
 
+                counter!("market.agreements.requestor.confirmed", 1);
                 log::info!(
                     "Requestor {} confirmed Agreement [{}] and sent to Provider.",
                     DisplayIdentity(&id),
@@ -436,6 +464,7 @@ pub async fn proposal_receiver_thread(
                 .await?;
 
             // Send channel message to wake all query_events waiting for proposals.
+            counter!("market.proposals.requestor.generated", 1);
             notifier.notify(&subscription_id).await;
             DbResult::<()>::Ok(())
         }

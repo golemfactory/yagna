@@ -1,4 +1,5 @@
 use actix_web::{web, Responder};
+use metrics::counter;
 use serde::Deserialize;
 
 use ya_client_model::activity::{ActivityState, ExeScriptCommand, ExeScriptRequest, State};
@@ -57,6 +58,7 @@ async fn create_activity(
         .create_if_not_exists(&activity_id, &agreement_id)
         .await?;
 
+    counter!("activity.requestor.created", 1);
     Ok::<_, Error>(web::Json(activity_id))
 }
 
@@ -91,7 +93,10 @@ async fn destroy_activity(
         },
     )
     .await
-    .map(|_| web::Json(()))
+    .map(|_| {
+        counter!("activity.requestor.destroyed", 1);
+        web::Json(())
+    })
 }
 
 /// Executes an ExeScript batch within a given Activity.
@@ -123,6 +128,7 @@ async fn exec(
         .timeout(query.timeout)
         .await???;
 
+    counter!("activity.requestor.run-exescript", 1);
     Ok::<_, Error>(web::Json(batch_id))
 }
 
