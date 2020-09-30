@@ -2,7 +2,7 @@ use actix_rt::Arbiter;
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
-use metrics::counter;
+use metrics::{counter, gauge};
 use std::convert::From;
 use std::time::Duration;
 
@@ -305,6 +305,13 @@ mod local {
         _caller: String,
         msg: activity::local::SetUsage,
     ) -> RpcMessageResult<activity::local::SetUsage> {
+        if let Some(usage_vec) = &msg.usage.current_usage {
+            let activity_id = msg.activity_id.clone();
+            for (idx, value) in usage_vec.iter().enumerate() {
+                gauge!(format!("activity.provider.usage.{}", idx), *value as i64, "activity_id" => activity_id.clone());
+            }
+        }
+
         set_persisted_usage(&db, &msg.activity_id, msg.usage).await?;
         Ok(())
     }
