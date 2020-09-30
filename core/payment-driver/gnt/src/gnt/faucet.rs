@@ -19,7 +19,7 @@ async fn resolve_host(request_url: String) -> GNTDriverResult<String> {
         "Env variable 'ETH_FAUCET_ADDRESS' is not a valid URI.".to_string(),
     ))?;
 
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())
         .await
         .map_err(|e| GNTDriverError::LibraryError(format!("failed to connect resolver: {}", e)))?;
 
