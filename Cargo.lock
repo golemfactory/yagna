@@ -5923,6 +5923,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "anyhow",
+ "bigdecimal",
  "futures 0.3.5",
  "lazy_static",
  "metrics",
@@ -5989,6 +5990,7 @@ dependencies = [
  "ya-core-model",
  "ya-dummy-driver",
  "ya-gnt-driver",
+ "ya-metrics",
  "ya-net",
  "ya-persistence",
  "ya-sb-router",
