@@ -53,6 +53,7 @@ generate_asset() {
     echo "::set-output name=${asset_type}Artifact::golem-${asset_type}-${OS_NAME}-${TAG_NAME}.tar.gz"
     echo "::set-output name=${asset_type}Media::application/tar+gzip"
     (cd releases && tar czf "golem-${asset_type}-${OS_NAME}-${TAG_NAME}.tar.gz" "golem-${asset_type}-${OS_NAME}-${TAG_NAME}")
+    du -h "releases/golem-${asset_type}-${OS_NAME}-${TAG_NAME}.tar.gz"
   fi
 }
 
