@@ -6,6 +6,7 @@ use crate::error::processor::{
 use crate::models::order::ReadObj as DbOrder;
 use bigdecimal::{BigDecimal, Zero};
 use futures::lock::Mutex;
+use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -245,6 +246,7 @@ impl PaymentProcessor {
 
         // TODO: Implement re-sending mechanism in case SendPayment fails
 
+        counter!("payment.invoices.requestor.paid", 1);
         Ok(())
     }
 
@@ -366,7 +368,6 @@ impl PaymentProcessor {
         // Insert payment into database (this operation creates and updates all related entities)
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         payment_dao.insert_received(payment, payee_id).await?;
-
         Ok(())
     }
 

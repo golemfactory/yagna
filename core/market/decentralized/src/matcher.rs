@@ -1,3 +1,4 @@
+use metrics::counter;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
@@ -69,6 +70,14 @@ impl Matcher {
         };
 
         let listeners = EventsListeners { proposal_receiver };
+
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("market.offers.incoming", 0);
+        counter!("market.offers.broadcasts", 0);
+        counter!("market.offers.unsubscribes.incoming", 0);
+        counter!("market.offers.unsubscribes.broadcasts", 0);
+
         Ok((matcher, listeners))
     }
 

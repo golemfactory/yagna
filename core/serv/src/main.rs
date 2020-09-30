@@ -22,9 +22,9 @@ compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\"
 
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
+use ya_metrics::MetricsService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
-
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -153,6 +153,12 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     }
 }
 
+impl<S: 'static> Provider<S, ()> for ServiceContext {
+    fn component(&self) -> () {
+        ()
+    }
+}
+
 impl ServiceContext {
     fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
@@ -175,6 +181,10 @@ impl ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
+    // Metrics service must be activated first, to allow all
+    // other services to initialize counters and other metrics.
+    #[enable(gsb, rest)]
+    Metrics(MetricsService),
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
     #[enable(gsb)]
@@ -286,6 +296,7 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
+
                     Services::rest(app, &context)
                 })
                 .bind(api_host_port.clone())
