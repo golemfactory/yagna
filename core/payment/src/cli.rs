@@ -1,5 +1,5 @@
 use crate::accounts::{init_account, Account};
-use crate::DEFAULT_PAYMENT_PLATFORM;
+use crate::{DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
 use structopt::*;
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
@@ -9,12 +9,13 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
     Init {
-        driver: String,
         address: Option<String>,
         #[structopt(long, short)]
         requestor: bool,
         #[structopt(long, short)]
         provider: bool,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
     },
     Status {
         address: Option<String>,
