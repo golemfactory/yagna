@@ -14,21 +14,37 @@ use crate::protocol::negotiation::error::ProposeAgreementError;
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/provider/proposal", prefix)
+        format!(
+            "{}/protocol/{}/negotiation/provider/proposal",
+            prefix,
+            PROTOCOL_VERSION!()
+        )
     }
 
     pub fn agreement_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/provider/agreement", prefix)
+        format!(
+            "{}/protocol/{}/negotiation/provider/agreement",
+            prefix,
+            PROTOCOL_VERSION!()
+        )
     }
 }
 
 pub mod requestor {
     pub fn proposal_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/requestor/proposal", prefix)
+        format!(
+            "{}/protocol/{}/negotiation/requestor/proposal",
+            prefix,
+            PROTOCOL_VERSION!()
+        )
     }
 
     pub fn agreement_addr(prefix: &str) -> String {
-        format!("{}/protocol/negotiation/requestor/agreement", prefix)
+        format!(
+            "{}/protocol/{}/negotiation/requestor/agreement",
+            prefix,
+            PROTOCOL_VERSION!()
+        )
     }
 }
 
