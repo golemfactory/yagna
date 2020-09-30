@@ -81,8 +81,8 @@ struct CliArgs {
 
     /// Accept the disclaimer and privacy warning found at
     /// {n}https://handbook.golem.network/see-also/terms
-    #[cfg_attr(not(feature = "tos-accepted"), structopt(long, set = clap::ArgSettings::Global))]
-    #[cfg_attr(feature = "tos-accepted", structopt(skip = true))]
+    #[structopt(long)]
+    #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
 
     /// Enter interactive mode
@@ -128,7 +128,11 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
-            accept_terms: args.accept_terms,
+            accept_terms: if cfg!(feature = "tos") {
+                args.accept_terms
+            } else {
+                true
+            },
             interactive: args.interactive,
         })
     }
