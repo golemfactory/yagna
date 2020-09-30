@@ -36,10 +36,11 @@ pub struct EthFaucetConfig {
 }
 
 impl EthFaucetConfig {
-    pub fn from_env() -> GNTDriverResult<Self> {
+    pub async fn from_env() -> GNTDriverResult<Self> {
         let faucet_address_str = env::var(ETH_FAUCET_ADDRESS_ENV_VAR)
             .ok()
             .unwrap_or_else(|| DEFAULT_ETH_FAUCET_ADDRESS.to_string());
+        let faucet_address_str = resolve_host(faucet_address_str).await?;
         let faucet_address = faucet_address_str
             .parse()
             .map_err(|e| GNTDriverError::LibraryError(format!("invalid faucet address: {}", e)))?;
@@ -50,7 +51,6 @@ impl EthFaucetConfig {
         log::debug!("request eth");
         let client = awc::Client::new();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
-        let request_url = resolve_host(request_url).await?;
 
         async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {
             let body = client
