@@ -80,8 +80,16 @@ impl DriverRegistry {
         }
 
         match self.accounts.entry((msg.platform, msg.address)) {
-            Entry::Occupied(_) => return Err(RegisterAccountError::AlreadyRegistered),
-            Entry::Vacant(entry) => entry.insert((msg.driver, msg.mode)),
+            Entry::Occupied(mut entry) => {
+                let (driver, mode) = entry.get_mut();
+                if driver != &msg.driver {
+                    return Err(RegisterAccountError::AlreadyRegistered);
+                }
+                *mode |= msg.mode;
+            }
+            Entry::Vacant(entry) => {
+                entry.insert((msg.driver, msg.mode));
+            }
         };
         Ok(())
     }
