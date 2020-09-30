@@ -2,7 +2,6 @@ use anyhow::{bail, Context, Result};
 use std::io;
 use tokio::{net::TcpStream, process::Command, time};
 use url::Url;
-use ya_service_api_web::{DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR};
 
 pub async fn get_command_raw_output(program: &str, args: &[&str]) -> Result<Vec<u8>> {
     let mut command = Command::new(program);
@@ -67,7 +66,7 @@ async fn wait_for_socket(addr: std::net::SocketAddr) -> Result<()> {
 
 fn yagna_addr() -> Result<std::net::SocketAddr> {
     Ok(Url::parse(
-        &std::env::var(YAGNA_API_URL_ENV_VAR).unwrap_or_else(|_| DEFAULT_YAGNA_API_URL.to_string()),
+        &std::env::var("YAGNA_API_URL").unwrap_or_else(|_| "http://127.0.0.1:7465".to_string()),
     )
     .context("Failed to parse yagna API URL")?
     .socket_addrs(|| None)

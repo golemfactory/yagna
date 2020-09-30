@@ -1,56 +1,12 @@
-use crate::{
-    appkey,
-    settings_show::{get_provider_config, show_prices, show_resources},
-    utils::wait_for_yagna,
-};
+use crate::setup::RunConfig;
+use crate::{appkey, utils::wait_for_yagna};
 use anyhow::{bail, Context, Result};
 use futures::{future::FutureExt, select};
 use std::{io, process::Stdio};
-use structopt::StructOpt;
-use tokio::{io::AsyncBufReadExt, process::Command};
 
-#[derive(StructOpt)]
-pub struct RunConfig {
-    #[structopt(long)]
-    node_name: Option<String>,
-}
-
-async fn is_node_name_already_configured() -> bool {
-    match get_provider_config().await {
-        Ok(config) => !config.node_name.is_empty(),
-        Err(_) => false,
-    }
-}
-
-async fn interactive_setup(config: &mut RunConfig) -> Result<()> {
-    let mut was_user_asked = false;
-    // TODO: Ethereum receiving address
-
-    if !is_node_name_already_configured().await && config.node_name.is_none() {
-        println!("Set the name of your Golem Node. It will be visible to other users:");
-        let stdin = std::io::stdin();
-        loop {
-            let mut buffer = String::new();
-            stdin.read_line(&mut buffer)?;
-            let name = buffer.trim();
-            if !name.is_empty() {
-                config.node_name = Some(name.to_string());
-                break;
-            }
-            println!("Try again:");
-        }
-        was_user_asked = true;
-    }
-
-    if was_user_asked {
-        println!("You can start using the Golem Provider!");
-        println!("Your Golem Node will use the following config:");
-        show_resources().await?;
-        show_prices().await?;
-    }
-
-    Ok(())
-}
+use crate::utils::is_yagna_running;
+use tokio::prelude::*;
+use tokio::process::Command;
 
 async fn reader_to_log<T: tokio::io::AsyncRead + Unpin>(name: String, reader: T) {
     let mut reader = tokio::io::BufReader::new(reader);
@@ -122,7 +78,10 @@ fn handle_subprocess(
 }
 
 pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
-    interactive_setup(&mut config).await?;
+    crate::setup::setup(&mut config, false).await?;
+    if is_yagna_running().await? {
+        bail!("service already running")
+    }
 
     let service = spawn(
         "yagna service",
@@ -132,7 +91,7 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
 
     let app_key = appkey::get_app_key().await?;
     let mut provider_args = vec!["run", "--app-key", &app_key];
-    if let Some(node_name) = &config.node_name {
+    if let Some(node_name) = config.node_name.as_ref() {
         provider_args.push("--node-name");
         provider_args.push(&node_name);
     }

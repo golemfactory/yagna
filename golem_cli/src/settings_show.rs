@@ -2,6 +2,7 @@ use crate::utils::{get_command_json_output, move_string_out_of_json};
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::env;
 
 #[derive(Deserialize)]
 pub struct ProviderConfig {
@@ -9,14 +10,20 @@ pub struct ProviderConfig {
     // pub subnet: Option<String>,
 }
 
-pub async fn get_provider_config() -> Result<ProviderConfig> {
-    let output = get_command_json_output("ya-provider", &["config", "get", "--json"]).await?;
-    Ok(serde_json::from_value::<ProviderConfig>(output)?)
+#[derive(Deserialize)]
+pub struct RuntimeInfo {
+    pub name: String,
+    pub description: Option<String>,
+}
+
+pub async fn get_runtimes() -> Result<Vec<RuntimeInfo>> {
+    Ok(serde_json::from_value(
+        get_command_json_output("ya-provider", &["exe-unit", "list", "--json"]).await?,
+    )?)
 }
 
 async fn show_provider_config() -> Result<()> {
-    let provider_config = get_provider_config().await?;
-    println!("node name: {}", provider_config.node_name);
+    println!("node name: {:?}", env::var("NODE_NAME").unwrap_or_default());
     Ok(())
 }
 
@@ -88,10 +95,10 @@ async fn get_prices() -> Result<Prices> {
 
 pub async fn show_prices() -> Result<()> {
     let prices = get_prices().await?;
-    println!("Pricing:");
-    println!("\tStarting fee:\t{}", prices.initial);
-    println!("\tEnv per hour:\t{}", prices.duration);
-    println!("\tCpu per hour:\t{}", prices.cpu);
+    println!("\n\nPricing:\n");
+    println!("\t{:5} NGNT for start", prices.initial);
+    println!("\t{:5} NGNT per hour", prices.duration * 3600.0);
+    println!("\t{:5} NGNT per cpu hour", prices.cpu * 3600.0);
     Ok(())
 }
 
