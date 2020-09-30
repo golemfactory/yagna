@@ -56,6 +56,7 @@ table! {
         remaining_amount -> Text,
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
+        released -> Bool,
     }
 }
 
