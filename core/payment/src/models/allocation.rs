@@ -18,6 +18,7 @@ pub struct WriteObj {
     pub remaining_amount: BigDecimalField,
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
+    pub released: bool,
 }
 
 impl WriteObj {
@@ -34,6 +35,7 @@ impl WriteObj {
             remaining_amount: allocation.total_amount.into(),
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
+            released: false,
         }
     }
 }
