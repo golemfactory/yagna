@@ -64,6 +64,7 @@ impl<'c> AllocationDao<'c> {
         readonly_transaction(self.pool, move |conn| {
             let allocation: Option<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::released.eq(false))
                 .find(allocation_id)
                 .first(conn)
                 .optional()?;
@@ -76,21 +77,24 @@ impl<'c> AllocationDao<'c> {
         readonly_transaction(self.pool, move |conn| {
             let allocations: Vec<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::released.eq(false))
                 .load(conn)?;
             Ok(allocations.into_iter().map(Into::into).collect())
         })
         .await
     }
 
-    pub async fn delete(&self, allocation_id: String, owner_id: NodeId) -> DbResult<bool> {
+    pub async fn release(&self, allocation_id: String, owner_id: NodeId) -> DbResult<bool> {
         do_with_transaction(self.pool, move |conn| {
-            let num_deleted = diesel::delete(
+            let num_released = diesel::update(
                 dsl::pay_allocation
                     .filter(dsl::id.eq(allocation_id))
-                    .filter(dsl::owner_id.eq(owner_id)),
+                    .filter(dsl::owner_id.eq(owner_id))
+                    .filter(dsl::released.eq(false)),
             )
+            .set(dsl::released.eq(true))
             .execute(conn)?;
-            Ok(num_deleted > 0)
+            Ok(num_released > 0)
         })
         .await
     }
@@ -105,6 +109,7 @@ impl<'c> AllocationDao<'c> {
                 .select(dsl::remaining_amount)
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::address.eq(address))
+                .filter(dsl::released.eq(false))
                 .get_results::<BigDecimalField>(conn)?
                 .sum();
 
