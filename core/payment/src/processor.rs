@@ -177,7 +177,7 @@ impl PaymentProcessor {
         let orders = self
             .db_executor
             .as_dao::<OrderDao>()
-            .get_many(msg.order_ids, msg.driver)
+            .get_many(msg.order_ids, msg.driver.clone())
             .await?;
         validate_orders(
             &orders,
@@ -221,7 +221,7 @@ impl PaymentProcessor {
                 payer_addr,
                 payee_addr,
                 payment_platform,
-                msg.amount,
+                msg.amount.clone(),
                 msg.confirmation.confirmation,
                 activity_payments,
                 agreement_payments,
@@ -237,6 +237,7 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
+        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "driver" => msg.driver);
         let msg = SendPayment(payment);
         ya_net::from(payer_id)
             .to(payee_id)
