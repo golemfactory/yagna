@@ -205,7 +205,8 @@ impl GntDriver {
                 let address = utils::str_to_addr(address).unwrap();
                 let req = self.request_gnt_from_faucet(address);
                 let fut = async move {
-                    faucet::EthFaucetConfig::from_env()?
+                    faucet::EthFaucetConfig::from_env()
+                        .await?
                         .request_eth(address)
                         .await?;
                     req.await?;
