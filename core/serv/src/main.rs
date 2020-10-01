@@ -191,7 +191,7 @@ enum Services {
     Net(NetService),
     #[enable(gsb, rest)]
     Market(MarketService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
