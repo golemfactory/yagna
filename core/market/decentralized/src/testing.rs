@@ -31,31 +31,32 @@ fn get_backtrace_symbol(fm: &backtrace::BacktraceFrame) -> Option<String> {
     None
 }
 
-fn get_symbol_at_level(bt: &backtrace::Backtrace, lvl: usize) -> Option<String> {
-    let mut current_level = lvl;
-    let frames = &bt.frames();
-    while current_level < frames.len() {
-        let frame = &frames[current_level];
-        match get_backtrace_symbol(frame) {
-            Some(name) => {
-                // Handle Backtrace.actual_start_index set incorrectly
-                if name.starts_with("backtrace::capture::Backtrace::new::") {
-                    // We're at the last frame from backtrace lib - the creation of Backtrace.
-                    current_level = current_level + lvl;
-                } else if name.starts_with("backtrace::") {
-                    // We haven't reached the last frame from backtrace lib yet.
-                    current_level += 1;
-                } else {
-                    return Some(name);
-                }
-                log::warn!(
-                    "Wrong start index from backtrace lib. Adjusting. current_level={}",
-                    current_level
-                );
+fn adjust_backtrace_level(frames: &[backtrace::BacktraceFrame]) -> Option<usize> {
+    // On some systems backtrace lib doesn't properly set actual_start_index
+    let mut idx = 0;
+    for frame in frames.iter() {
+        if let Some(name) = get_backtrace_symbol(frame) {
+            // Note: On windows there is no "::<hash>" suffix
+            if name.starts_with("ya_market_decentralized::testing::generate_backtraced_name") {
+                return Some(idx);
             }
-            _ => return None,
-        };
+        }
+        idx += 1;
     }
+    None
+}
+
+fn get_symbol_at_level(bt: &backtrace::Backtrace, lvl: usize) -> Option<String> {
+    let frames = &bt.frames();
+    match adjust_backtrace_level(&frames) {
+        Some(adjustment) => {
+            let frame = &frames[lvl + adjustment];
+            return get_backtrace_symbol(frame);
+        }
+        _ => {
+            log::trace!("Cannot find adjustment for symbol. lvl={}", lvl);
+        }
+    };
     None
 }
 
@@ -63,8 +64,14 @@ pub fn generate_backtraced_name(level: Option<usize>) -> String {
     let bt = backtrace::Backtrace::new();
     // 0th element should be this function. We'd like to know the caller
     if let Some(name) = get_symbol_at_level(&bt, level.unwrap_or(1)) {
+        log::debug!("Generated name: {} level: {:?} BT: {:#?}", name, level, bt);
         return name;
     }
-    log::debug!("No backtrace support. Generating default name from UUIDv4");
-    uuid::Uuid::new_v4().to_string().to_string()
+    let u4 = uuid::Uuid::new_v4().to_string().to_string();
+    log::error!(
+        "No backtrace support. Generating default name from UUIDv4. uuid4={}, bt={:#?}",
+        u4,
+        bt
+    );
+    u4
 }

@@ -100,7 +100,11 @@ impl MarketsNetwork {
         // level 2 is <core::future::from_generator::GenFuture<T> as
         // core::future::future::Future>::poll::XXX> (async)
         // We want to know the caller.
-        let bn = crate::testing::generate_backtraced_name(Some(3));
+        let mut bn = crate::testing::generate_backtraced_name(Some(3));
+        // Special case for mac&windows
+        if !bn.starts_with("test_") {
+            bn = crate::testing::generate_backtraced_name(Some(2));
+        }
         let tn = test_name.unwrap_or(bn.as_str());
         log::info!("Intializing MarketsNetwork. tn={}", tn);
         let test_dir = prepare_test_dir(&tn).unwrap();
