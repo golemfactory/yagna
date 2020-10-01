@@ -3,6 +3,7 @@ on:
   push:
     tags:
       - v*
+      - pre-rel-*
 
 jobs:
   create-release:
@@ -38,13 +39,16 @@ jobs:
     needs: create-release
     runs-on: ${{ matrix.os }}-latest
     strategy:
+      fail-fast: false
       matrix:
         os:
           - ubuntu
           - windows
           - macos
+
     env:
       X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows-static
+      MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
 
     steps:
@@ -87,6 +91,9 @@ jobs:
         run: |
           cargo build --release --features static-openssl
           cargo build --bin gftp -p gftp --release
+          cargo build --bin golem -p golem --release
+          cargo build --bin ya-provider -p ya-provider --release
+          cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored
       - name: Build windows
         if: matrix.os == 'windows'
         run: |
@@ -95,11 +102,18 @@ jobs:
 
           cargo build --release
           cargo build --bin gftp -p gftp --release
+          cargo build --bin golem -p golem --release
+          cargo build --bin ya-provider -p ya-provider --release
+          cargo build --bin exe-unit -p ya-exe-unit --release
+
       - name: Build linux
         if: matrix.os == 'ubuntu'
         run: |
           cargo build --release --features openssl/vendored --target x86_64-unknown-linux-musl
           cargo build --bin gftp -p gftp --release --target x86_64-unknown-linux-musl
+          cargo build --bin golem -p golem --release --target x86_64-unknown-linux-musl
+          cargo build --bin ya-provider -p ya-provider --release --target x86_64-unknown-linux-musl
+          cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored --target x86_64-unknown-linux-musl
       - name: Pack
         id: pack
         shell: bash
@@ -107,44 +121,26 @@ jobs:
           OS_NAME: ${{ matrix.os }}
           GITHUB_REF: ${{ github.ref }}
         run: |
-          TAG_NAME="${GITHUB_REF##*/}"
-          target=
-          if [ "$OS_NAME" = "ubuntu" ]; then
-            OS_NAME=linux
-            target=x86_64-unknown-linux-musl/
-          elif [ "$OS_NAME" == "macos" ]; then
-            OS_NAME=osx
-          fi
-          TARGET_DIR=releases/golem-${OS_NAME}-${TAG_NAME}
-          mkdir -p "$TARGET_DIR"
-          if [ "$OS_NAME" = "windows" ]; then
-              cp target/release/yagna.exe target/release/gftp.exe "$TARGET_DIR/"
-              strip "$TARGET_DIR/yagna.exe"
-              strip "$TARGET_DIR/gftp.exe"
-          else
-              cp target/${target}release/yagna target/${target}release/gftp "$TARGET_DIR/"
-              strip "$TARGET_DIR/yagna"
-              strip "$TARGET_DIR/gftp"
-          fi
-          ls -al "$TARGET_DIR"
-          if [ "$OS_NAME" = "windows" ]; then
-              echo "::set-output name=artifact::golem-${OS_NAME}-${TAG_NAME}.zip"
-              echo "::set-output name=media::application/zip"
-              (cd "$TARGET_DIR" && 7z a "../golem-${OS_NAME}-${TAG_NAME}.zip" * )
-          else
-              echo "::set-output name=artifact::golem-${OS_NAME}-${TAG_NAME}.tar.gz"
-              echo "::set-output name=media::application/tar+gzip"
-              (cd releases && tar czvf "golem-${OS_NAME}-${TAG_NAME}.tar.gz" "golem-${OS_NAME}-${TAG_NAME}")
-          fi
-      - name: Upload Release Asset
-        id: upload-release-asset
+          bash .ci/pack-build.sh
+      - name: Upload Release Asset [Requestor]
+        id: upload-release-asset-req
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
-          asset_path: ./releases/${{ steps.pack.outputs.artifact }}
-          asset_name: ${{ steps.pack.outputs.artifact }}
-          asset_content_type: ${{ steps.pack.outputs.media }}
+          asset_path: ./releases/${{ steps.pack.outputs.reqArtifact }}
+          asset_name: ${{ steps.pack.outputs.reqArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.reqMedia }}
+      - name: Upload Release Asset [Provider]
+        id: upload-release-asset-prov
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ./releases/${{ steps.pack.outputs.provArtifact }}
+          asset_name: ${{ steps.pack.outputs.provArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.provMedia }}
 
 

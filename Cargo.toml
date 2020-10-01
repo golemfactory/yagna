@@ -16,6 +16,7 @@ market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized', 'gftp/bin']
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
+tos = []
 
 [[bin]]
 name = "yagna"
@@ -63,6 +64,7 @@ assets = [
     ["target/release/ya-requestor", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
     ["target/release/gftp", "usr/bin/", "755"],
+    ["target/release/golem", "usr/bin/", "755"],
     ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
     ["README.md", "usr/share/doc/yagna/", "644"],
     ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
@@ -95,6 +97,7 @@ members = [
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
+    "golem_cli",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
@@ -140,8 +143,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "099944b74c2743457feb825ccc4b8b3d83f587c4" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "099944b74c2743457feb825ccc4b8b3d83f587c4" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a21af6d6dabfe21a2ad0417d68f94eb09381303c" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a21af6d6dabfe21a2ad0417d68f94eb09381303c" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }

@@ -71,7 +71,7 @@ impl LinearPricingOffer {
     ) -> Result<&mut LinearPricingOffer> {
         let property = coefficient
             .to_property()
-            .ok_or_else(|| anyhow!("Invalid coefficient: {}", coefficient))?
+            .ok_or_else(|| anyhow!("Invalid coefficient: {}", coefficient.to_readable()))?
             .to_string();
         self.usage_params.push(property);
         self.usage_coeffs.push(value);

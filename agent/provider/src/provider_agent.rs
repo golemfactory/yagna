@@ -4,25 +4,104 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments};
-use crate::startup_config::{NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::task_manager::{InitializeTaskManager, TaskManager};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_utils_actix::actix_handler::send_message;
+use ya_utils_path::SwapSave;
 
 pub struct ProviderAgent {
+    globals: GlobalsManager,
     market: Addr<ProviderMarket>,
     runner: Addr<TaskRunner>,
     task_manager: Addr<TaskManager>,
-    node_info: NodeInfo,
     presets: PresetManager,
     hardware: hardware::Manager,
+}
+
+struct GlobalsManager {
+    state: Arc<Mutex<GlobalsState>>,
+    monitor: Option<FileMonitor>,
+}
+
+impl GlobalsManager {
+    fn try_new(globals_file: &Path, node_config: NodeConfig) -> anyhow::Result<Self> {
+        let mut state = GlobalsState::load_or_create(globals_file)?;
+        state.update_and_save(node_config, globals_file)?;
+
+        Ok(Self {
+            state: Arc::new(Mutex::new(state)),
+            monitor: None,
+        })
+    }
+
+    fn spawn_monitor(&mut self, globals_file: &Path) -> anyhow::Result<()> {
+        let state = self.state.clone();
+        let handler = move |p: PathBuf| match GlobalsState::load(&p) {
+            Ok(new_state) => {
+                *state.lock().unwrap() = new_state;
+            }
+            Err(e) => log::warn!("Error updating global configuration from {:?}: {:?}", p, e),
+        };
+        let monitor = FileMonitor::spawn(globals_file, FileMonitor::on_modified(handler))?;
+        self.monitor = Some(monitor);
+        Ok(())
+    }
+
+    fn get_state(&self) -> GlobalsState {
+        self.state.lock().unwrap().clone()
+    }
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct GlobalsState {
+    pub node_name: String,
+    pub subnet: Option<String>,
+}
+
+impl GlobalsState {
+    pub fn load(path: &Path) -> anyhow::Result<Self> {
+        let contents = std::fs::read_to_string(path)?;
+        Ok(serde_json::from_str(&contents)?)
+    }
+
+    pub fn load_or_create(path: &Path) -> anyhow::Result<Self> {
+        if path.exists() {
+            Self::load(path)
+        } else {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::File::create(&path)?;
+            let state = Self::default();
+            state.save(path)?;
+            Ok(state)
+        }
+    }
+
+    pub fn update_and_save(&mut self, node_config: NodeConfig, path: &Path) -> anyhow::Result<()> {
+        if let Some(node_name) = node_config.node_name {
+            self.node_name = node_name;
+        }
+        if node_config.subnet.is_some() {
+            self.subnet = node_config.subnet;
+        }
+        self.save(path)
+    }
+
+    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
+    }
 }
 
 impl ProviderAgent {
@@ -32,6 +111,8 @@ impl ProviderAgent {
         let registry = config.registry()?;
         registry.validate()?;
 
+        let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
+        globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
@@ -41,13 +122,12 @@ impl ProviderAgent {
         let payments = Payments::new(api.activity.clone(), api.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner_config, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
-        let node_info = ProviderAgent::create_node_info(&args.node).await;
 
         Ok(ProviderAgent {
+            globals,
             market,
             runner,
             task_manager,
-            node_info,
             presets,
             hardware,
         })
@@ -120,12 +200,14 @@ impl ProviderAgent {
         send_message(self.market.clone(), UpdateMarket);
     }
 
-    async fn create_node_info(config: &NodeConfig) -> NodeInfo {
+    fn create_node_info(&self) -> NodeInfo {
+        let globals = self.globals.get_state();
+
         // TODO: Get node name from identity API.
-        let mut node_info = NodeInfo::with_name(&config.node_name);
+        let mut node_info = NodeInfo::with_name(globals.node_name);
 
         // Debug subnet to filter foreign nodes.
-        if let Some(subnet) = config.subnet.clone() {
+        if let Some(subnet) = &globals.subnet {
             log::info!("Using subnet: {}", subnet);
             node_info.with_subnet(subnet.clone());
         }
@@ -240,7 +322,7 @@ impl Handler<CreateOffers> for ProviderAgent {
     fn handle(&mut self, msg: CreateOffers, _: &mut Context<Self>) -> Self::Result {
         let runner = self.runner.clone();
         let market = self.market.clone();
-        let node_info = self.node_info.clone();
+        let node_info = self.create_node_info();
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),
