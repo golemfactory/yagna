@@ -112,7 +112,7 @@ pub mod processor {
     use ya_core_model::payment::public::SendError;
 
     #[derive(thiserror::Error, Debug)]
-    #[error("Account not registered. platform={platform} address={address} mode={mode:?}")]
+    #[error("Account not registered. Hint: Did you run `yagna payment init -r` after restarting? platform={platform} address={address} mode={mode:?}")]
     pub struct AccountNotRegistered {
         platform: String,
         address: String,
