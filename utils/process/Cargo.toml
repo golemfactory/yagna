@@ -8,8 +8,11 @@ edition = "2018"
 actix = "0.9"
 anyhow = "1.0"
 derive_more = "0.99.5"
-libc = "0.2"
 futures = "0.3"
 futures-util = "0.3.4"
+libc = "0.2"
 shared_child = "0.3.4"
 tokio = { version = "0.2.10", features = ["process", "signal"] }
+
+[target.'cfg(target_family = "unix")'.dependencies]
+nix = "0.17.0"

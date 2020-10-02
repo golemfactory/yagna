@@ -6,7 +6,7 @@ use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
+use ya_core_model::payment::local::{GetAccounts, SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE,
 };
@@ -52,6 +52,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         )
         .route("/payments", get().to(get_payments))
         .route("/payments/{payment_id}", get().to(get_payment))
+        .route("/accounts", get().to(get_accounts))
 }
 
 // ************************** DEBIT NOTE **************************
@@ -414,8 +415,7 @@ async fn release_allocation(
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
     let dao: AllocationDao = db.as_dao();
-    // TODO: Introduce 'released' flag instead of deleting
-    match dao.delete(allocation_id, node_id).await {
+    match dao.release(allocation_id, node_id).await {
         Ok(true) => response::ok(Null),
         Ok(false) => response::not_found(),
         Err(e) => response::server_error(&e),
@@ -462,4 +462,25 @@ async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) 
 
 async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
     response::not_implemented() // TODO
+}
+
+// *************************** ACCOUNTS ****************************
+
+async fn get_accounts(id: Identity) -> HttpResponse {
+    let node_id = id.identity.to_string();
+    let all_accounts = match bus::service(LOCAL_SERVICE).send(GetAccounts {}).await {
+        Ok(Ok(accounts)) => accounts,
+        Ok(Err(e)) => return response::server_error(&e),
+        Err(e) => return response::server_error(&e),
+    };
+    let recv_accounts: Vec<Account> = all_accounts
+        .into_iter()
+        .filter(|account| account.send)
+        .filter(|account| account.address == node_id) // TODO: Implement proper account permission system
+        .map(|account| Account {
+            platform: account.platform,
+            address: account.address,
+        })
+        .collect();
+    response::ok(recv_accounts)
 }
