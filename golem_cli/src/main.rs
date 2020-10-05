@@ -4,11 +4,13 @@ use std::env;
 use structopt::{clap, StructOpt};
 
 mod appkey;
+mod command;
 mod service;
 mod settings;
 mod settings_show;
 mod setup;
 mod status;
+mod terminal;
 mod utils;
 
 #[derive(StructOpt, Debug)]
@@ -72,12 +74,13 @@ async fn my_main() -> Result</*exit code*/ i32> {
 }
 
 pub fn banner() {
-    eprintln!(
+    terminal::fade_in(&format!(
         include_str!("banner.txt"),
         version = env!("CARGO_PKG_VERSION"),
         git_commit = option_env!("GITHUB_SHA").unwrap_or("-"),
         build = option_env!("GITHUB_RUN_NUMBER").unwrap_or("-")
-    )
+    ))
+    .unwrap();
 }
 
 #[actix_rt::main]

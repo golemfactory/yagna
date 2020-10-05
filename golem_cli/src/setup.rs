@@ -1,10 +1,15 @@
+use crate::command::UsageDef;
 use crate::settings_show::get_runtimes;
+use crate::terminal::clear_stdin;
 use anyhow::Result;
-use directories::{BaseDirs, ProjectDirs};
+use directories::ProjectDirs;
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::process::Command;
-use std::{env, fs};
+
+use std::fs;
 use structopt::StructOpt;
+
+const DEFAULT_SUBNET: &str = "community";
 
 #[derive(StructOpt)]
 pub struct RunConfig {
@@ -49,38 +54,58 @@ fn config_file() -> PathBuf {
 
 pub fn init() -> Result<()> {
     dotenv::from_path(config_file()).ok();
-    if env::var("EXE_UNIT_PATH").is_err() {
-        let exe_unit_path = BaseDirs::new()
-            .unwrap()
-            .home_dir()
-            .join(".local/lib/yagna/plugins/ya-runtime-*.json");
-        eprintln!("path={}", exe_unit_path.display());
-        env::set_var("EXE_UNIT_PATH", exe_unit_path);
-    }
     Ok(())
 }
 
-pub async fn setup(config: &mut RunConfig, force: bool) -> Result<i32> {
+pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
     if force {
         super::banner();
         eprintln!("Initial node setup");
+        let _ = clear_stdin().await;
     }
+    let cmd = crate::command::YaCommand::new()?;
+    let mut config = cmd.ya_provider()?.get_config().await?;
+
+    if config.node_name.is_none() {
+        config.node_name = run_config.node_name.clone();
+    }
+    if config.subnet.is_none() {
+        config.subnet = run_config.subnet.clone();
+    }
+
     if config.node_name.is_none() || force {
         let node_name = promptly::prompt_default(
-            "Node name",
+            "Node name ",
             config
                 .node_name
                 .clone()
                 .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
         )?;
-        let subnet = promptly::prompt_default("Subnet", "u-testnet".to_string())?;
+        let subnet = promptly::prompt_default(
+            "Subnet ",
+            config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string()),
+        )?;
         config.node_name = Some(node_name);
         config.subnet = Some(subnet);
-        config.save()?;
+        cmd.ya_provider()?.set_config(&config).await?;
     }
-    if force && !config.prices_configured {
+
+    if force && !run_config.prices_configured {
         let runtimes = get_runtimes().await?;
+        let presets: HashSet<String> = cmd
+            .ya_provider()?
+            .list_presets()
+            .await?
+            .into_iter()
+            .map(|p| p.name)
+            .collect();
         let ngnt_per_h = promptly::prompt_default("Price NGNT per hour", 5.0)?;
+
+        let usage = UsageDef {
+            cpu: ngnt_per_h / 3600.0,
+            duration: ngnt_per_h / 3600.0 / 5.0,
+            initial: 0.0,
+        };
 
         for runtime in &runtimes {
             eprintln!(
@@ -92,36 +117,33 @@ pub async fn setup(config: &mut RunConfig, force: bool) -> Result<i32> {
                     .map(AsRef::as_ref)
                     .unwrap_or("")
             );
-            let _ = Command::new("ya-provider")
-                .arg("preset")
-                .arg("create")
-                .arg("--preset-name")
-                .arg(&runtime.name)
-                .arg("--exe-unit")
-                .arg(&runtime.name)
-                .arg("--no-interactive")
-                .arg("--pricing")
-                .arg("linear")
-                .arg("--price")
-                .arg(format!("CPU={}", ngnt_per_h / 3600.0))
-                .arg("--price")
-                .arg(format!("Duration={}", ngnt_per_h / 3600.0 / 5.0))
-                .arg("--price")
-                .arg(format!("Init price=0"))
-                .status()?;
-            let _ = Command::new("ya-provider")
-                .arg("preset")
-                .arg("activate")
-                .arg(&runtime.name)
-                .status()?;
+            if presets.contains(&runtime.name) {
+                cmd.ya_provider()?
+                    .update_preset(&runtime.name, &runtime.name, &usage)
+                    .await?;
+            } else {
+                cmd.ya_provider()?
+                    .create_preset(&runtime.name, &runtime.name, &usage)
+                    .await?;
+            }
+            cmd.ya_provider()?
+                .set_profile_activity(&runtime.name, true)
+                .await?;
         }
-        let _ = Command::new("ya-provider")
-            .arg("preset")
-            .arg("deactivate")
-            .arg("default")
-            .status()?;
-        config.prices_configured = true;
-        config.save()?;
+
+        if cmd
+            .ya_provider()?
+            .active_presets()
+            .await?
+            .into_iter()
+            .any(|p| p == "default")
+        {
+            cmd.ya_provider()?
+                .set_profile_activity("default", false)
+                .await?;
+        }
+        run_config.prices_configured = true;
+        run_config.save()?;
     }
 
     Ok(0)

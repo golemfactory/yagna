@@ -7,7 +7,7 @@ use std::env;
 #[derive(Deserialize)]
 pub struct ProviderConfig {
     pub node_name: String,
-    // pub subnet: Option<String>,
+    pub subnet: Option<String>,
 }
 
 #[derive(Deserialize)]

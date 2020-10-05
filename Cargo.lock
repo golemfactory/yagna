@@ -197,7 +197,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "log 0.4.11",
- "mio",
+ "mio 0.6.22",
  "mio-uds",
  "num_cpus",
  "slab 0.4.2",
@@ -444,6 +444,15 @@ name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee49baf6cb617b853aa8d93bf420db2383fab46d314482ca2803b40d5fde979b"
+dependencies = [
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "ansi_term"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d52a9bb7ec0cf484c551830a7ce27bd20d67eac647e1befb56b0be4ee39a55d2"
 dependencies = [
  "winapi 0.3.9",
 ]
@@ -914,7 +923,7 @@ version = "2.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37e58ac78573c40708d45522f0d80fa2f01cc4f9b4e2bf749807255454312002"
 dependencies = [
- "ansi_term",
+ "ansi_term 0.11.0",
  "atty",
  "bitflags 1.2.1",
  "strsim 0.8.0",
@@ -1093,6 +1102,31 @@ dependencies = [
  "autocfg 1.0.1",
  "cfg-if",
  "lazy_static",
+]
+
+[[package]]
+name = "crossterm"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2fcdc3c9cf8ee446222e8ee8691a6d21b563b8fe1a64b1873080db7b5b23cf0"
+dependencies = [
+ "bitflags 1.2.1",
+ "crossterm_winapi",
+ "lazy_static",
+ "libc",
+ "mio 0.7.2",
+ "parking_lot 0.11.0",
+ "signal-hook",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "crossterm_winapi"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "057b7146d02fb50175fd7dbe5158f6097f33d02831f43b4ee8ae4ddf67b68f5c"
+dependencies = [
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -2026,17 +2060,21 @@ name = "golem"
 version = "0.1.0"
 dependencies = [
  "actix-rt",
+ "ansi_term 0.12.1",
  "anyhow",
  "bigdecimal",
  "byte-unit",
  "chrono",
+ "crossterm",
  "directories",
  "dotenv",
  "env_logger 0.7.1",
  "futures 0.3.5",
  "log 0.4.11",
  "names",
+ "prettytable-rs",
  "promptly 0.3.0",
+ "rustyline 6.3.0",
  "serde",
  "serde_json",
  "strip-ansi-escapes",
@@ -2849,6 +2887,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mio"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d5fc35678fa91ff960494e4bd72a0e1f8e72e035460887a2005de51915993cd"
+dependencies = [
+ "libc",
+ "log 0.4.11",
+ "miow 0.3.5",
+ "ntapi",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "mio-extras"
 version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2856,7 +2907,7 @@ checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
 dependencies = [
  "lazycell",
  "log 0.4.11",
- "mio",
+ "mio 0.6.22",
  "slab 0.4.2",
 ]
 
@@ -2867,7 +2918,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
 dependencies = [
  "log 0.4.11",
- "mio",
+ "mio 0.6.22",
  "miow 0.3.5",
  "winapi 0.3.9",
 ]
@@ -2880,7 +2931,7 @@ checksum = "afcb699eb26d4332647cc848492bbc15eafb26f08d0304550d5aa1f612e066f0"
 dependencies = [
  "iovec",
  "libc",
- "mio",
+ "mio 0.6.22",
 ]
 
 [[package]]
@@ -3037,9 +3088,18 @@ dependencies = [
  "fsevent-sys",
  "inotify",
  "libc",
- "mio",
+ "mio 0.6.22",
  "mio-extras",
  "walkdir",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "ntapi"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a31937dea023539c72ddae0e3571deadc1414b300483fa7aaec176168cfa9d2"
+dependencies = [
  "winapi 0.3.9",
 ]
 
@@ -4467,7 +4527,8 @@ checksum = "604508c1418b99dfe1925ca9224829bb2a8a9a04dda655cc01fcad46f4ab05ed"
 dependencies = [
  "futures 0.1.29",
  "libc",
- "mio",
+ "mio 0.6.22",
+ "mio 0.7.2",
  "signal-hook-registry",
  "tokio-reactor",
 ]
@@ -4836,7 +4897,7 @@ checksum = "5a09c0b5bb588872ab2f09afa13ee6e9dac11e10a0ec9e8e3ba39a5a5d530af6"
 dependencies = [
  "bytes 0.4.12",
  "futures 0.1.29",
- "mio",
+ "mio 0.6.22",
  "num_cpus",
  "tokio-codec",
  "tokio-current-thread",
@@ -4865,7 +4926,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "memchr",
- "mio",
+ "mio 0.6.22",
  "mio-named-pipes",
  "mio-uds",
  "num_cpus",
@@ -4918,7 +4979,7 @@ dependencies = [
  "futures 0.1.29",
  "iovec",
  "log 0.4.11",
- "mio",
+ "mio 0.6.22",
  "scoped-tls",
  "tokio 0.1.22",
  "tokio-executor",
@@ -5009,7 +5070,7 @@ dependencies = [
  "futures 0.1.29",
  "lazy_static",
  "log 0.4.11",
- "mio",
+ "mio 0.6.22",
  "num_cpus",
  "parking_lot 0.9.0",
  "slab 0.4.2",
@@ -5051,7 +5112,7 @@ dependencies = [
  "bytes 0.4.12",
  "futures 0.1.29",
  "iovec",
- "mio",
+ "mio 0.6.22",
  "tokio-io",
  "tokio-reactor",
 ]
@@ -5115,7 +5176,7 @@ dependencies = [
  "bytes 0.4.12",
  "futures 0.1.29",
  "log 0.4.11",
- "mio",
+ "mio 0.6.22",
  "tokio-codec",
  "tokio-io",
  "tokio-reactor",
@@ -5132,7 +5193,7 @@ dependencies = [
  "iovec",
  "libc",
  "log 0.3.9",
- "mio",
+ "mio 0.6.22",
  "mio-uds",
  "tokio-core",
  "tokio-io",
@@ -5149,7 +5210,7 @@ dependencies = [
  "iovec",
  "libc",
  "log 0.4.11",
- "mio",
+ "mio 0.6.22",
  "mio-uds",
  "tokio-codec",
  "tokio-io",
@@ -6567,7 +6628,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.4.0-alpha.1"
+version = "0.4.0-alpha.5"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -6582,6 +6643,7 @@ dependencies = [
  "log 0.4.11",
  "openssl",
  "structopt",
+ "tokio 0.2.22",
  "url 2.1.1",
  "ya-activity",
  "ya-compile-time-utils",
