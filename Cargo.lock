@@ -5843,7 +5843,7 @@ dependencies = [
  "sha3 0.9.1",
  "thiserror",
  "tokio 0.2.22",
- "trust-dns-resolver 0.18.0-alpha.2",
+ "trust-dns-resolver 0.19.5",
  "uint",
  "ureq",
  "uuid 0.8.1",
