@@ -1,91 +1,98 @@
+use crate::command::YaCommand;
 use crate::utils::is_yagna_running;
-use anyhow::{bail, Result};
-
-use std::process::Command;
-
-/*async fn get_activity(api: &ProviderApi, id: String) -> Result<Activity> {
-    let state = api.activity.get_activity_state(&id).await?;
-    let usage = api.activity.get_activity_usage(&id).await?;
-    Ok(Activity {
-        /*id,*/
-        state,
-        usage,
-    })
-}*/
-
-/*async fn activities(api: &ProviderApi) -> Result<()> {
-    let activities = stream::iter(api.activity.get_activity_ids().await?)
-        .filter_map(|id| async { get_activity(&api, id).await.ok() })
-        .collect::<Vec<_>>()
-        .await;
-    let all_jobs = activities.len();
-    let jobs_computing = activities
-        .iter()
-        .filter(|activity| activity.state.alive())
-        .count();
-    let last_job = activities
-        .iter()
-        .max_by(|a1, a2| a1.usage.timestamp.cmp(&a2.usage.timestamp));
-
-    println!(
-        "computing:\t{}",
-        if jobs_computing > 0 {
-            format!("yes ({} jobs)", jobs_computing)
-        } else {
-            "no".to_string()
-        }
-    );
-    println!("jobs computed:\t{}", all_jobs - jobs_computing);
-    println!(
-        "last job:\t{}",
-        match last_job {
-            Some(activity) =>
-                DateTime::<Local>::from(Utc.timestamp(activity.usage.timestamp, 0)).to_string(),
-            None => "Unknown".to_string(),
-        }
-    );
-
-    Ok(())
-}*/
-
-/*async fn payments(api: &ProviderApi) -> Result<()> {
-    let recv_accounts = stream::iter(api.payment.get_accounts().await?)
-        .filter_map(|account| async {
-            match get_payment_status(&account.address, &account.platform).await {
-                Ok(payment_status) => Some((account, payment_status)),
-                Err(_) => None,
-            }
-        })
-        .collect::<Vec<_>>()
-        .await;
-
-    for (account, payment_status) in recv_accounts {
-        println!("wallet:\t{} {}", account.address, account.platform);
-        println!("\tamount:\t{}", payment_status.amount);
-        println!("\trequested:\t{}", payment_status.incoming.requested);
-        println!("\taccepted:\t{}", payment_status.incoming.accepted);
-        println!("\tconfirmed:\t{}", payment_status.incoming.confirmed);
-    }
-
-    Ok(())
-}*/
+use ansi_term::{Colour, Style};
+use anyhow::Result;
+use futures::prelude::*;
+use prettytable::{cell, format, row, Table};
 
 pub async fn run() -> Result</*exit code*/ i32> {
-    if !is_yagna_running().await? {
-        bail!("Cannot connect to golem!");
+    let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
+    let cmd = YaCommand::new()?;
+    let _top = ['\u{256d}', '\u{2500}', '\u{256e}'];
+    let _mid = ['\u{2502}'];
+
+    let (config, is_running) =
+        future::try_join(cmd.ya_provider()?.get_config(), is_yagna_running()).await?;
+
+    let status = {
+        let mut table = Table::new();
+        let format = format::FormatBuilder::new().padding(1, 1).build();
+        table.set_format(format);
+        table.add_row(row![Style::new()
+            .fg(Colour::Yellow)
+            .underline()
+            .paint("Status")]);
+        table.add_empty_row();
+        if is_running {
+            table.add_row(row![
+                "Service",
+                Style::new().fg(Colour::Green).paint("is running")
+            ]);
+        } else {
+            table.add_row(row![
+                "Service",
+                Style::new().fg(Colour::Red).paint("is not running")
+            ]);
+        }
+        table.add_empty_row();
+        table.add_row(row!["Node Name", &config.node_name.unwrap_or_default()]);
+        table.add_row(row!["Subnet", &config.subnet.unwrap_or_default()]);
+        table
+    };
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_BOX_CHARS);
+
+    if is_running {
+        let payments = {
+            let (id, payment_status) =
+                future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.payment_status()).await?;
+
+            let mut table = Table::new();
+            let format = format::FormatBuilder::new().padding(1, 1).build();
+            table.set_format(format);
+            table.add_row(row![Style::new()
+                .fg(Colour::Yellow)
+                .underline()
+                .paint("Wallet")]);
+            table.add_empty_row();
+            table.add_row(row!["address", &id.node_id]);
+            table.add_row(row!["amount", format!("{} NGNT", &payment_status.amount)]);
+            table.add_row(row![
+                "pending",
+                format!("{} NGNT", &payment_status.incoming.total_pending())
+            ]);
+
+            table
+        };
+
+        let activity = {
+            let status = cmd.yagna()?.activity_status().await?;
+            let mut table = Table::new();
+            let format = format::FormatBuilder::new().padding(1, 1).build();
+            table.set_format(format);
+            table.add_row(row![Style::new()
+                .fg(Colour::Yellow)
+                .underline()
+                .paint("Tasks")]);
+            table.add_empty_row();
+            table.add_row(row!["last 1h processed", status.last1h_processed()]);
+            table.add_row(row!["last 1h in progress", status.in_progress()]);
+            table.add_row(row!["total processed", status.total_processed()]);
+
+            table
+        };
+
+        if size.0 > 120 {
+            table.add_row(row![status, payments, activity]);
+        } else {
+            table.add_row(row![status]);
+            table.add_row(row![payments]);
+            table.add_row(row![activity]);
+        }
+    } else {
+        table.add_row(row![status]);
     }
-
-    let _ = Command::new("yagna")
-        .arg("payment")
-        .arg("status")
-        .env("RUST_LOG", "error")
-        .status()?;
-
-    let _ = Command::new("yagna")
-        .arg("activity")
-        .arg("status")
-        .env("RUST_LOG", "error")
-        .status()?;
+    table.printstd();
 
     Ok(0)
 }

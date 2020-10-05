@@ -58,7 +58,7 @@ generate_asset() {
 }
 
 generate_asset "req" "yagna gftp"
-generate_asset "prov" "golem yagna ya-provider" "exe-unit"
+generate_asset "prov" "golemsp yagna ya-provider" "exe-unit"
 
 
 
