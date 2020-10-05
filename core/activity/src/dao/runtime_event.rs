@@ -69,8 +69,6 @@ impl<'c> RuntimeEventDao<'c> {
                             return_code: _,
                             message,
                         } => message.as_ref(),
-                        RuntimeEventKind::StdOut(msg) => Some(msg),
-                        RuntimeEventKind::StdErr(msg) => Some(msg),
                         _ => None,
                     }),
                 ))
