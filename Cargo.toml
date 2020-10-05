@@ -57,6 +57,7 @@ log = "0.4"
 openssl = "0.10"
 structopt = "0.3"
 url = "2.1.1"
+tokio = {version = "0.2.22", features=["uds"]}
 
 [package.metadata.deb]
 assets = [

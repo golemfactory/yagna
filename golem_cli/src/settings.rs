@@ -95,10 +95,10 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
             cmd.arg(format!("Init price={}", starting_fee));
         }
         if let Some(env_per_hour) = settings.env_per_hour {
-            cmd.arg(format!("Duration={}", env_per_hour));
+            cmd.arg(format!("Duration={}", env_per_hour / 3600.0));
         }
         if let Some(cpu_per_hour) = settings.cpu_per_hour {
-            cmd.arg(format!("CPU={}", cpu_per_hour));
+            cmd.arg(format!("CPU={}", cpu_per_hour / 3600.0));
         }
 
         let exit_status = cmd.status().await.context("Failed to spawn ya-provider")?;

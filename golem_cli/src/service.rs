@@ -1,59 +1,12 @@
+use crate::appkey;
 use crate::setup::RunConfig;
-use crate::{appkey, utils::wait_for_yagna};
 use anyhow::{bail, Context, Result};
 use futures::{future::FutureExt, select};
-use std::{io, process::Stdio};
+use std::io;
 
 use crate::utils::is_yagna_running;
-use tokio::prelude::*;
-use tokio::process::Command;
 
-async fn reader_to_log<T: tokio::io::AsyncRead + Unpin>(name: String, reader: T) {
-    let mut reader = tokio::io::BufReader::new(reader);
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_until(b'\n', &mut buf).await {
-            Ok(len) => {
-                if len > 0 {
-                    eprintln!(
-                        "{}: {}",
-                        name,
-                        String::from_utf8_lossy(&strip_ansi_escapes::strip(&buf).unwrap())
-                            .trim_end()
-                    );
-                    buf.clear();
-                } else {
-                    break;
-                }
-            }
-            Err(e) => {
-                log::error!("{} output error: {}", name, e);
-            }
-        }
-    }
-}
-
-fn spawn(name: &str, command: &mut Command) -> Result<tokio::process::Child> {
-    let mut child = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .with_context(|| format!("Failed to spawn {}", name))?;
-
-    // TODO: redirect output to files or something
-    tokio::spawn(reader_to_log(
-        format!("{} stdout", name),
-        child.stdout.take().unwrap(),
-    ));
-    tokio::spawn(reader_to_log(
-        format!("{} stderr", name),
-        child.stderr.take().unwrap(),
-    ));
-
-    Ok(child)
-}
+use crate::command::YaCommand;
 
 fn handle_ctrl_c(result: io::Result<()>) -> Result</*exit code*/ i32> {
     if result.is_ok() {
@@ -82,23 +35,12 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     if is_yagna_running().await? {
         bail!("service already running")
     }
+    let cmd = YaCommand::new()?;
 
-    let service = spawn(
-        "yagna service",
-        Command::new("yagna").arg("service").arg("run"),
-    )?;
-    wait_for_yagna().await?;
+    let service = cmd.yagna()?.service_run().await?;
 
     let app_key = appkey::get_app_key().await?;
-    let mut provider_args = vec!["run", "--app-key", &app_key];
-    if let Some(node_name) = config.node_name.as_ref() {
-        provider_args.push("--node-name");
-        provider_args.push(&node_name);
-    }
-    let provider = spawn(
-        "ya-provider",
-        Command::new("ya-provider").args(&provider_args),
-    )?;
+    let provider = cmd.ya_provider()?.spawn(&app_key).await?;
 
     let ctrl_c = tokio::signal::ctrl_c();
 
