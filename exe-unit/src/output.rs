@@ -113,7 +113,7 @@ impl From<Option<CaptureMode>> for CapturedOutput {
                             CaptureBuffer::ring(tail_limit),
                         )
                     }
-                    None => (CaptureBuffer::discard(), CaptureBuffer::discard()),
+                    None => (CaptureBuffer::all(), CaptureBuffer::discard()),
                 };
 
                 CapturedOutput {
