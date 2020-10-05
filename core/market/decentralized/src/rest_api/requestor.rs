@@ -140,7 +140,7 @@ async fn reject_proposal(
         .reject_proposal(&subscription_id, &proposal_id, &id)
         .await
         .log_err()
-        .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
+        .map(|_| HttpResponse::NoContent().finish())
 }
 
 #[actix_web::post("/agreements")]
