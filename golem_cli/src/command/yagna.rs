@@ -56,7 +56,7 @@ impl ActivityStatus {
     }
 
     pub fn total_processed(&self) -> u64 {
-        self.last1h.get("Terminated").copied().unwrap_or_default()
+        self.total.get("Terminated").copied().unwrap_or_default()
     }
 }
 

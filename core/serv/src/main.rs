@@ -282,7 +282,7 @@ async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> 
 }
 
 #[cfg(not(unix))]
-async fn sd_notify(_unset_environment: bool, _state: &str) -> anyhow::Result<()> {
+async fn sd_notify(_unset_environment: bool, _state: &str) -> std::io::Result<()> {
     // ignore for windows.
     Ok(())
 }

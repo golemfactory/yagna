@@ -6,6 +6,7 @@ use futures::prelude::*;
 use prettytable::{cell, format, row, Table};
 
 pub async fn run() -> Result</*exit code*/ i32> {
+    let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
     let cmd = YaCommand::new()?;
     let _top = ['\u{256d}', '\u{2500}', '\u{256e}'];
     let _mid = ['\u{2502}'];
@@ -81,7 +82,13 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table
         };
 
-        table.add_row(row![status, payments, activity]);
+        if size.0 > 120 {
+            table.add_row(row![status, payments, activity]);
+        } else {
+            table.add_row(row![status]);
+            table.add_row(row![payments]);
+            table.add_row(row![activity]);
+        }
     } else {
         table.add_row(row![status]);
     }

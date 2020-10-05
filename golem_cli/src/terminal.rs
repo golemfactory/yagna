@@ -21,6 +21,7 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
         seed = (seed * 13 + 7) & 0xFFFF;
         noise[n]
     };
+    let (w, _h) = crossterm::terminal::size()?;
 
     queue!(stderr, cursor::Hide)?;
     for frame in 0.. {
@@ -35,10 +36,12 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
 
             let (pre, post) = if line.len() > offset {
                 next_frame = true;
-                (&line[..offset], &line[offset..])
+
+                (&line[..offset], &line[offset..min(line.len(), w as usize)])
             } else {
                 (line, "")
             };
+
             let post = if post.is_empty() {
                 ("", "")
             } else {
