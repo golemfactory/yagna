@@ -75,7 +75,7 @@ async fn get_prices(cmd: &YaCommand) -> Result<Prices> {
         .into_iter()
         .collect();
 
-    for preset in presets.iter().filter(|&p| active_presets.contains(&p.name)) {
+    if let Some(preset) = presets.iter().find(|&p| active_presets.contains(&p.name)) {
         return Ok(Prices {
             duration: preset.usage_coeffs.duration,
             cpu: preset.usage_coeffs.cpu,
@@ -96,20 +96,8 @@ pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
 
 pub async fn run() -> Result</*exit code*/ i32> {
     let cmd = YaCommand::new()?;
-    Ok([
-        show_provider_config(&cmd).await,
-        show_resources().await,
-        show_prices(&cmd).await,
-    ]
-    .iter()
-    .map(|result| {
-        if let Err(e) = result {
-            log::error!("{}", e);
-            1
-        } else {
-            0
-        }
-    })
-    .max()
-    .unwrap())
+    show_provider_config(&cmd).await?;
+    show_resources().await?;
+    show_prices(&cmd).await?;
+    Ok(0)
 }

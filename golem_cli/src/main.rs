@@ -76,7 +76,7 @@ async fn my_main() -> Result</*exit code*/ i32> {
 
 pub fn banner() {
     let mut ref_string = option_env!("GITHUB_REF").unwrap_or(env!("CARGO_PKG_VERSION"));
-    if let Some(pos) = ref_string.rfind("/") {
+    if let Some(pos) = ref_string.rfind('/') {
         ref_string = &ref_string[pos + 1..];
     }
 
