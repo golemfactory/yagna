@@ -126,11 +126,21 @@ async fn get_proposal(
 
 #[actix_web::delete("/demands/{subscription_id}/proposals/{proposal_id}")]
 async fn reject_proposal(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathSubscriptionProposal>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    path: Path<PathSubscriptionProposal>,
+    id: Identity,
+) -> impl Responder {
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+
+    market
+        .requestor_engine
+        .reject_proposal(&subscription_id, &proposal_id, &id)
+        .await
+        .log_err()
+        .map(|proposal_id| HttpResponse::Ok().json(proposal_id))
 }
 
 #[actix_web::post("/agreements")]
