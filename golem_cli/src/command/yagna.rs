@@ -48,7 +48,7 @@ impl ActivityStatus {
     pub fn in_progress(&self) -> u64 {
         let mut in_progress = 0;
         for (k, v) in &self.last1h {
-            if k != "Terminated" {
+            if k != "Terminated" && k != "New" {
                 in_progress += *v;
             }
         }

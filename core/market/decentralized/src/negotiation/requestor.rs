@@ -160,6 +160,31 @@ impl RequestorBroker {
         Ok(proposal_id)
     }
 
+    // TODO: this is only mock implementation not to throw 501
+    pub async fn reject_proposal(
+        &self,
+        _demand_id: &SubscriptionId,
+        proposal_id: &ProposalId,
+        id: &Identity,
+    ) -> Result<(), ProposalError> {
+        // self.common
+        //     .reject_proposal(demand_id, proposal_id, OwnerType::Requestor)
+        //     .await?;
+        //
+        // self.api
+        //     .reject_proposal(id, proposal_id, TODO: provider_id)
+        //     .await
+        //     .map_err(|e| ProposalError::Send(proposal_id.clone(), e))?;
+
+        counter!("market.proposals.requestor.rejected", 1);
+        log::info!(
+            "Requestor {} rejected Proposal [{}]",
+            DisplayIdentity(id),
+            &proposal_id,
+        );
+        Ok(())
+    }
+
     pub async fn query_events(
         &self,
         demand_id: &SubscriptionId,
