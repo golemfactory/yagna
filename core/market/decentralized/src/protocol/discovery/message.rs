@@ -8,15 +8,6 @@ use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use super::super::callback::CallbackMessage;
 use super::DiscoveryRemoteError;
 
-/// This can't be constant, because rust doesn't allow to concat! 'static &str
-/// even if they are const variable.
-#[macro_export]
-macro_rules! DISCOVERY_VERSION {
-    () => {
-        "mk1"
-    };
-}
-
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OffersBcast {
@@ -31,18 +22,15 @@ impl CallbackMessage for OffersBcast {
 }
 
 impl BroadcastMessage for OffersBcast {
-    const TOPIC: &'static str = concat!(
-        "market-protocol-discovery-",
-        DISCOVERY_VERSION!(),
-        "-offers"
-    );
+    const TOPIC: &'static str =
+        concat!("market-protocol-discovery-", PROTOCOL_VERSION!(), "-offers");
 }
 
 pub(super) fn get_offers_addr(prefix: &str) -> String {
     format!(
-        "{}/protocol/discovery/{}/offers",
+        "{}/protocol/{}/discovery/offers",
         prefix,
-        DISCOVERY_VERSION!()
+        PROTOCOL_VERSION!()
     )
 }
 
@@ -87,7 +75,7 @@ impl CallbackMessage for UnsubscribedOffersBcast {
 impl BroadcastMessage for UnsubscribedOffersBcast {
     const TOPIC: &'static str = concat!(
         "market-protocol-discovery-",
-        DISCOVERY_VERSION!(),
+        PROTOCOL_VERSION!(),
         "market-protocol-discovery-mk1-offers-unsubscribe"
     );
 }

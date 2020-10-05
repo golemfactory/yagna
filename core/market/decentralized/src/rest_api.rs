@@ -1,3 +1,9 @@
+//! Market REST endpoints.
+//!
+//! Responsibility of these functions is calling respective functions from
+//! within market modules and mapping return values to http responses.
+//! No market logic is allowed here.
+
 use actix_web::{error::InternalError, http::StatusCode, web::PathConfig};
 use serde::Deserialize;
 
@@ -5,10 +11,10 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::model::{AgreementId, OwnerType, ProposalId, ProposalIdParseError, SubscriptionId};
 
-mod common;
+pub(crate) mod common;
 mod error;
-pub mod provider;
-pub mod requestor;
+pub(crate) mod provider;
+pub(crate) mod requestor;
 
 const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
 const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;

@@ -16,9 +16,9 @@ pub enum SaveProposalError {
     #[error("Proposal [{0}] already has counter proposal. Can't counter for the second time.")]
     AlreadyCountered(ProposalId),
     #[error("Failed to save proposal to database. Error: {0}.")]
-    DatabaseError(DbError),
+    DbError(DbError),
     #[error("Proposal [{0}] has no previous proposal. This should not happened when calling save_proposal.")]
-    NoPreviousProposal(ProposalId),
+    NoPrevious(ProposalId),
 }
 
 pub struct ProposalDao<'c> {
@@ -52,7 +52,7 @@ impl<'c> ProposalDao<'c> {
             let prev_proposal = proposal
                 .prev_proposal_id
                 .clone()
-                .ok_or(SaveProposalError::NoPreviousProposal(proposal.id.clone()))?;
+                .ok_or(SaveProposalError::NoPrevious(proposal.id.clone()))?;
 
             if has_counter_proposal(conn, &prev_proposal)? {
                 return Err(SaveProposalError::AlreadyCountered(prev_proposal));
@@ -163,6 +163,6 @@ fn update_proposal_state(
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for SaveProposalError {
     fn from(err: ErrorType) -> Self {
-        SaveProposalError::DatabaseError(err.into())
+        SaveProposalError::DbError(err.into())
     }
 }

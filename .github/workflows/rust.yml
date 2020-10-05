@@ -102,8 +102,8 @@ jobs:
           #   --tests -p ya-market-decentralized
           # because the latter needs separate compilation of lots of dependant crates again.
           #
-          # we use single thread, because GSB Router is a singleton shared among tests
-          args: --tests --workspace --features ya-market-decentralized/market-test-suite --features market-decentralized --no-default-features -- --test-threads=1
+          # we use single thread (via macro), because GSB Router is a singleton shared among tests
+          args: --tests --workspace --features ya-market-decentralized/market-test-suite --features market-decentralized --no-default-features
 
       - name: cargo build
         uses: actions-rs/cargo@v1

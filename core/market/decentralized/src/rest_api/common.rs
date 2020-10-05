@@ -1,14 +1,18 @@
 use actix_web::web::{Data, Path};
-use actix_web::{HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
 use ya_service_api_web::middleware::Identity;
-use ya_std_utils::ResultExt;
+use ya_std_utils::LogErr;
 
 use super::PathAgreement;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
+
+pub fn register_endpoints(scope: Scope) -> Scope {
+    scope.service(get_agreement)
+}
 
 #[actix_web::get("/agreements/{agreement_id}")]
 async fn get_agreement(
@@ -27,14 +31,13 @@ async fn get_agreement(
     let p_result = market.get_agreement(&p_agreement_id, &id).await;
 
     if p_result.is_err() && r_result.is_err() {
-        Err(AgreementError::NotFound(r_agreement_id))
-            .inspect_err(|e| log::error!("[GetAgreement] {}", e))
+        Err(AgreementError::NotFound(r_agreement_id)).log_err()
     } else if r_result.is_err() {
         p_result.map(|agreement| HttpResponse::Ok().json(agreement))
     } else if p_result.is_err() {
         r_result.map(|agreement| HttpResponse::Ok().json(agreement))
     } else {
         // Both calls shouldn't return Agreement.
-        Err(AgreementError::InternalError(format!("We found ")))
+        Err(AgreementError::Internal(format!("We found ")))
     }
 }

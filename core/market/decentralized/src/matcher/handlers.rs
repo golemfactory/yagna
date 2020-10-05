@@ -103,7 +103,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
                     .map(|_| offer_id.clone())
                     .map_err(|e| match e {
                         // We don't want to warn about normal situations.
-                        ModifyOfferError::Unsubscribed(..)
+                        ModifyOfferError::AlreadyUnsubscribed(..)
                         | ModifyOfferError::Expired(..)
                         | ModifyOfferError::NotFound(..) => e,
                         _ => {
