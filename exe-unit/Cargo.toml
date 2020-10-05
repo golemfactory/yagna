@@ -20,8 +20,8 @@ sgx=['graphene', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'sha
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"
 
-[target.'cfg(target_family = "macos")'.dependencies]
-procfs = "0.7.8"
+[target.'cfg(target_os = "macos")'.dependencies]
+libproc = "0.7"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
