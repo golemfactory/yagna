@@ -1,8 +1,9 @@
 use crate::utils::{get_command_json_output, move_string_out_of_json};
 use anyhow::{anyhow, bail, Result};
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::env;
+use std::collections::{HashMap, HashSet};
+
+use crate::command::YaCommand;
 
 #[derive(Deserialize)]
 pub struct ProviderConfig {
@@ -22,8 +23,9 @@ pub async fn get_runtimes() -> Result<Vec<RuntimeInfo>> {
     )?)
 }
 
-async fn show_provider_config() -> Result<()> {
-    println!("node name: {:?}", env::var("NODE_NAME").unwrap_or_default());
+async fn show_provider_config(cmd: &YaCommand) -> Result<()> {
+    let config = cmd.ya_provider()?.get_config().await?;
+    println!("node name: {:?}", config.node_name.unwrap_or_default());
     Ok(())
 }
 
@@ -57,15 +59,6 @@ pub async fn show_resources() -> Result<()> {
     Ok(())
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct Preset {
-    // name: String,
-    // exeunit_name: String,
-    // pricing_model: String,
-    usage_coeffs: Prices,
-}
-
 #[derive(Copy, Clone, PartialEq, Deserialize)]
 struct Prices {
     duration: f64,
@@ -73,28 +66,27 @@ struct Prices {
     initial: f64,
 }
 
-async fn get_prices() -> Result<Prices> {
-    let profiles = get_command_json_output("ya-provider", &["preset", "list", "--json"]).await?;
-    let mut profiles = serde_json::from_value::<Vec<Preset>>(profiles)?;
-    let prices = profiles
-        .drain(..)
-        .map(|preset| preset.usage_coeffs)
-        .collect::<Vec<_>>();
+async fn get_prices(cmd: &YaCommand) -> Result<Prices> {
+    let presets = cmd.ya_provider()?.list_presets().await?;
+    let active_presets: HashSet<String> = cmd
+        .ya_provider()?
+        .active_presets()
+        .await?
+        .into_iter()
+        .collect();
 
-    if prices.is_empty() {
-        bail!("No preset defined");
+    for preset in presets.iter().filter(|&p| active_presets.contains(&p.name)) {
+        return Ok(Prices {
+            duration: preset.usage_coeffs.duration,
+            cpu: preset.usage_coeffs.cpu,
+            initial: preset.usage_coeffs.initial,
+        });
     }
-
-    let are_all_the_same = prices.windows(2).all(|w| w[0] == w[1]);
-    if !are_all_the_same {
-        bail!("Inconsistend pricing. Please use \"ya-provider preset list\" comand to see the prices. Use \"golem settings set\" to set consistent pricing.");
-    }
-
-    Ok(prices[0])
+    bail!("No preset defined");
 }
 
-pub async fn show_prices() -> Result<()> {
-    let prices = get_prices().await?;
+pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
+    let prices = get_prices(cmd).await?;
     println!("\n\nPricing:\n");
     println!("\t{:5} NGNT for start", prices.initial);
     println!("\t{:5} NGNT per hour", prices.duration * 3600.0);
@@ -103,10 +95,11 @@ pub async fn show_prices() -> Result<()> {
 }
 
 pub async fn run() -> Result</*exit code*/ i32> {
+    let cmd = YaCommand::new()?;
     Ok([
-        show_provider_config().await,
+        show_provider_config(&cmd).await,
         show_resources().await,
-        show_prices().await,
+        show_prices(&cmd).await,
     ]
     .iter()
     .map(|result| {

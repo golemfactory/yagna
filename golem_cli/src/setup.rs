@@ -66,7 +66,13 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
     let cmd = crate::command::YaCommand::new()?;
     let mut config = cmd.ya_provider()?.get_config().await?;
 
-    if config.node_name.is_none() {
+    if config.node_name.is_none()
+        || config
+            .node_name
+            .as_ref()
+            .map(String::is_empty)
+            .unwrap_or_default()
+    {
         config.node_name = run_config.node_name.clone();
     }
     if config.subnet.is_none() {

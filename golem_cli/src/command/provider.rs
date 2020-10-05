@@ -2,7 +2,7 @@ use anyhow::Context;
 
 use serde::Deserialize;
 use std::process::Stdio;
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
@@ -189,6 +189,17 @@ impl YaProviderCommand {
             ))
             .with_context(|| format!("activating profile {:?}", profile_name))?
         }
+    }
+
+    pub async fn spawn(self, app_key: &str) -> anyhow::Result<Child> {
+        let mut cmd = self.cmd;
+        Ok(cmd
+            .arg("run")
+            .env("YAGNA_APPKEY", app_key)
+            .stdin(Stdio::null())
+            .stderr(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .spawn()?)
     }
 }
 

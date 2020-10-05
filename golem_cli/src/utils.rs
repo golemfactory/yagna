@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
-use std::io;
-use tokio::{net::TcpStream, process::Command, time};
+
+use tokio::{net::TcpStream, process::Command};
 use url::Url;
 
 pub async fn get_command_raw_output(program: &str, args: &[&str]) -> Result<Vec<u8>> {
@@ -39,6 +39,7 @@ pub fn move_string_out_of_json(value: serde_json::Value) -> Option<String> {
     }
 }
 
+#[cfg(not(unix))]
 async fn wait_for_socket(addr: std::net::SocketAddr) -> Result<()> {
     let mut timeout_remaining = 10;
 
@@ -76,6 +77,7 @@ fn yagna_addr() -> Result<std::net::SocketAddr> {
     .unwrap())
 }
 
+#[cfg(not(unix))]
 pub async fn wait_for_yagna() -> Result<()> {
     wait_for_socket(yagna_addr()?).await
 }

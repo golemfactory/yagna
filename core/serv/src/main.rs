@@ -269,7 +269,6 @@ async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> 
     let addr = match env::var_os("NOTIFY_SOCKET") {
         Some(v) => v,
         None => {
-            eprintln!("NO NOTIFY!");
             return Ok(());
         }
     };

@@ -24,6 +24,7 @@ enum SettingsCommand {
 #[allow(clippy::large_enum_variant)]
 #[derive(StructOpt)]
 enum Commands {
+    #[structopt(setting = clap::AppSettings::Hidden)]
     Setup(setup::RunConfig),
 
     /// Run the golem provider
@@ -74,9 +75,14 @@ async fn my_main() -> Result</*exit code*/ i32> {
 }
 
 pub fn banner() {
+    let mut ref_string = option_env!("GITHUB_REF").unwrap_or(env!("CARGO_PKG_VERSION"));
+    if let Some(pos) = ref_string.rfind("/") {
+        ref_string = &ref_string[pos + 1..];
+    }
+
     terminal::fade_in(&format!(
         include_str!("banner.txt"),
-        version = env!("CARGO_PKG_VERSION"),
+        version = ref_string,
         git_commit = option_env!("GITHUB_SHA").unwrap_or("-"),
         build = option_env!("GITHUB_RUN_NUMBER").unwrap_or("-")
     ))

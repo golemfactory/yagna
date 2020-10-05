@@ -1,6 +1,7 @@
 use crossterm::style::Colorize;
 use crossterm::*;
 
+use crossterm::tty::IsTty;
 use std::cmp::min;
 use std::io::{stderr, Write};
 use tokio::time::Duration;
@@ -11,8 +12,23 @@ fn pack_into<F: FnMut() -> u8>(buf: &mut [u8], f: &mut F) {
     }
 }
 
+#[inline]
+fn safe_split(s: &str, offset: usize) -> &str {
+    if offset < s.len() {
+        &s[offset..]
+    } else {
+        ""
+    }
+}
+
 pub fn fade_in(banner: &str) -> anyhow::Result<()> {
     let mut stderr = stderr();
+
+    if !stderr.is_tty() {
+        eprintln!("{}", banner);
+        return Ok(());
+    }
+
     let noise = b"@Oo*.";
     let mut seed = 1000usize;
     let mut noise_buf = [b' '; 5];
@@ -28,8 +44,8 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
         let mut nlines = 0;
         let mut next_frame: bool = false;
         for line in banner.lines() {
-            let offset = if 5 + (frame / 3) > nlines {
-                5 + (frame / 3) - nlines
+            let offset = if 5 + (frame * 2 / 3) > nlines {
+                5 + (frame * 2 / 3) - nlines
             } else {
                 0
             };
@@ -46,10 +62,8 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
                 ("", "")
             } else {
                 pack_into(noise_buf.as_mut(), &mut next_noise_char);
-                (
-                    std::str::from_utf8(&noise_buf[..min(noise_buf.len(), post.len())])?,
-                    &post[1..],
-                )
+                let noise = std::str::from_utf8(&noise_buf[..min(noise_buf.len(), post.len())])?;
+                (noise, safe_split(post, noise.len()))
             };
             queue!(
                 stderr,

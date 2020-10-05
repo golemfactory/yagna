@@ -15,6 +15,7 @@ use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::{fs, io};
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_utils_actix::actix_handler::send_message;
@@ -71,8 +72,13 @@ pub struct GlobalsState {
 
 impl GlobalsState {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
-        let contents = std::fs::read_to_string(path)?;
-        Ok(serde_json::from_str(&contents)?)
+        if path.exists() {
+            Ok(serde_json::from_reader(io::BufReader::new(
+                fs::OpenOptions::new().read(true).open(path)?,
+            ))?)
+        } else {
+            Ok(Self::default())
+        }
     }
 
     pub fn load_or_create(path: &Path) -> anyhow::Result<Self> {
