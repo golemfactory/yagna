@@ -1,5 +1,5 @@
 [package]
-name = "golem"
+name = "golemsp"
 description = "User friedly CLI for running provider"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
