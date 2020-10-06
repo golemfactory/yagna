@@ -100,7 +100,7 @@ impl Batch {
 impl Batch {
     pub fn handle_event(&mut self, event: RuntimeEvent) -> Result<(), Error> {
         let idx = event.index;
-        let stream_event = match event.kind.clone() {
+        let stream_event = match &event.kind {
             RuntimeEventKind::Started { command: _ } => {
                 self.state(idx).map(|_| ())?;
                 Some(event)
@@ -120,7 +120,7 @@ impl Batch {
             }
             RuntimeEventKind::StdOut(out) => {
                 let state = self.state(idx)?;
-                let output = state.stdout.write(output_bytes(&out));
+                let output = state.stdout.write(output_bytes(out));
                 output
                     .filter(|_| state.stdout.stream)
                     .map(|o| RuntimeEvent {
@@ -130,7 +130,7 @@ impl Batch {
             }
             RuntimeEventKind::StdErr(out) => {
                 let state = self.state(idx)?;
-                let output = state.stderr.write(output_bytes(&out));
+                let output = state.stderr.write(output_bytes(out));
                 output
                     .filter(|_| state.stderr.stream)
                     .map(|o| RuntimeEvent {
