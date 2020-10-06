@@ -97,6 +97,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         let central_bus = central_bus.clone();
         let default_caller = default_node_id.to_string();
         local_bus::subscribe(net::BUS_ID, move |_caller: &str, addr: &str, msg: &[u8]| {
+            let addr = addr.to_string();
             log::debug!(
                 "Sending message to hub. Called by: {}, addr: {}.",
                 my_net_node_id,
@@ -104,8 +105,8 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             );
             // `_caller` here is usually "local", so we replace it with our default node id
             central_bus
-                .call(default_caller.clone(), addr.to_string(), Vec::from(msg))
-                .map_err(|e| Error::RemoteError(addr.to_string(), e.to_string()))
+                .call(default_caller.clone(), addr.clone(), Vec::from(msg))
+                .map_err(|e| Error::RemoteError(addr, e.to_string()))
         });
     }
 
