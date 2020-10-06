@@ -103,7 +103,9 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
                 addr
             );
             // `_caller` here is usually "local", so we replace it with our default node id
-            central_bus.call(default_caller.clone(), addr.to_string(), Vec::from(msg))
+            central_bus
+                .call(default_caller.clone(), addr.to_string(), Vec::from(msg))
+                .map_err(|e| Error::RemoteError(addr.to_string(), e.to_string()))
         });
     }
 
@@ -126,11 +128,13 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             }
 
             central_bus
-                .call(from_node.to_string(), to_addr, Vec::from(msg))
+                .call(from_node.to_string(), to_addr.clone(), Vec::from(msg))
+                .map_err(|e| Error::RemoteError(to_addr, e.to_string()))
                 .right_future()
         });
     }
 
+    // Subscribe broadcast on remote
     {
         let bcast = bcast.clone();
         let central_bus = central_bus.clone();
@@ -152,6 +156,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         });
     }
 
+    // Send broadcast to remote
     {
         let central_bus = central_bus.clone();
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
