@@ -22,23 +22,23 @@ mod common {
 
     use crate::common::{
         agreement_provider_service, authorize_activity_executor, authorize_activity_initiator,
-        get_activities, get_activity_agreement, get_persisted_state, get_persisted_usage,
-        set_persisted_state, set_persisted_usage, PathActivity, QueryTimeout,
+        get_activity_agreement, get_persisted_state, get_persisted_usage, set_persisted_state,
+        set_persisted_usage, PathActivity, QueryTimeout,
     };
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
-            .service(get_activities_web)
+            // .service(get_activities_web)
             .service(get_activity_state_web)
             .service(get_activity_usage_web)
     }
 
-    #[actix_web::get("/activity")]
-    async fn get_activities_web(db: web::Data<DbExecutor>) -> impl Responder {
-        log::debug!("get_activities_web");
-        get_activities(&db).await.map(web::Json)
-    }
-
+    // TODO this endpoint needs authorization via Identity, otherwise is vulnerable for attacks.
+    // #[actix_web::get("/activity")]
+    // async fn get_activities_web(db: web::Data<DbExecutor>) -> impl Responder {
+    //     log::debug!("get_activities_web");
+    //     get_activities(&db).await.map(web::Json)
+    // }
     #[actix_web::get("/activity/{activity_id}/state")]
     async fn get_activity_state_web(
         db: web::Data<DbExecutor>,
