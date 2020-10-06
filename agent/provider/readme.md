@@ -401,7 +401,7 @@ you can now start Provider Agent.
 
 At first, you need to register provider's payment account:
 ```bash
-cargo run payment init ngnt -p
+cargo run payment init -p
 ```
 
 Then start the Provider Agent:
@@ -449,7 +449,7 @@ sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
 1. We need to acquire funds from faucet on testnet (rinkeby).
 This can last a little bit long. Retry if not succeed at first.
 ```bash
-cargo run payment init ngnt -r
+cargo run payment init -r
 ```
 2. Check if you got credit on your account:
 ```bash
