@@ -11,18 +11,6 @@ pub struct ProviderConfig {
     pub subnet: Option<String>,
 }
 
-#[derive(Deserialize)]
-pub struct RuntimeInfo {
-    pub name: String,
-    pub description: Option<String>,
-}
-
-pub async fn get_runtimes() -> Result<Vec<RuntimeInfo>> {
-    Ok(serde_json::from_value(
-        get_command_json_output("ya-provider", &["exe-unit", "list", "--json"]).await?,
-    )?)
-}
-
 async fn show_provider_config(cmd: &YaCommand) -> Result<()> {
     let config = cmd.ya_provider()?.get_config().await?;
     println!("node name: {:?}", config.node_name.unwrap_or_default());

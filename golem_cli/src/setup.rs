@@ -1,5 +1,4 @@
 use crate::command::UsageDef;
-use crate::settings_show::get_runtimes;
 use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
@@ -97,7 +96,7 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
     }
 
     if force && !run_config.prices_configured {
-        let runtimes = get_runtimes().await?;
+        let runtimes = cmd.ya_provider()?.list_runtimes().await?;
         let presets: HashSet<String> = cmd
             .ya_provider()?
             .list_presets()

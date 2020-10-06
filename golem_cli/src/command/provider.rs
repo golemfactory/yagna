@@ -33,6 +33,12 @@ pub struct UsageDef {
     pub duration: f64,
 }
 
+#[derive(Deserialize)]
+pub struct RuntimeInfo {
+    pub name: String,
+    pub description: Option<String>,
+}
+
 impl YaProviderCommand {
     pub async fn get_config(mut self) -> anyhow::Result<ProviderConfig> {
         let output = self
@@ -89,6 +95,22 @@ impl YaProviderCommand {
             .context("failed to get ya-provider presets")?;
 
         serde_json::from_slice(output.stdout.as_slice()).context("parsing ya-provider preset list")
+    }
+
+    pub async fn list_runtimes(self) -> anyhow::Result<Vec<RuntimeInfo>> {
+        let mut cmd = self.cmd;
+
+        let output = cmd
+            .args(&["--json", "exe-unit", "list"])
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .output()
+            .await
+            .context("failed to get ya-provider exe-unit")?;
+
+        serde_json::from_slice(output.stdout.as_slice())
+            .context("parsing ya-provider exe-unit list")
     }
 
     pub async fn create_preset(
