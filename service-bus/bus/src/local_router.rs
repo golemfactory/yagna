@@ -1,5 +1,5 @@
 use actix::{prelude::*, Actor, SystemService};
-use futures::{prelude::*, StreamExt};
+use futures::{prelude::*, FutureExt, StreamExt};
 use std::any::Any;
 use std::io::Cursor;
 use std::pin::Pin;
@@ -42,8 +42,11 @@ trait RawEndpoint: Any {
 // Implementation for non-streaming service
 impl<T: RpcMessage> RawEndpoint for Recipient<RpcEnvelope<T>> {
     fn send(&self, msg: RpcRawCall) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>>>> {
-        // TODO: do not panic with unwrap, but rather return Error
-        let body: T = crate::serialization::from_read(msg.body.as_slice()).unwrap();
+        let body: T =
+            match crate::serialization::from_read(msg.body.as_slice()).map_err(Error::from) {
+                Ok(v) => v,
+                Err(e) => return future::err(e).boxed_local(),
+            };
         Box::pin(
             Recipient::send(self, RpcEnvelope::with_caller(&msg.caller, body))
                 .map_err(|e| e.into())
@@ -55,7 +58,11 @@ impl<T: RpcMessage> RawEndpoint for Recipient<RpcEnvelope<T>> {
         &self,
         msg: RpcRawCall,
     ) -> Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>> {
-        let body: T = crate::serialization::from_read(msg.body.as_slice()).unwrap();
+        let body: T =
+            match crate::serialization::from_read(msg.body.as_slice()).map_err(Error::from) {
+                Ok(v) => v,
+                Err(e) => return Box::pin(stream::once(async { Err::<ResponseChunk, Error>(e) })),
+            };
 
         Box::pin(
             Recipient::send(self, RpcEnvelope::with_caller(&msg.caller, body))

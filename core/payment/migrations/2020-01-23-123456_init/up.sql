@@ -90,7 +90,8 @@ CREATE TABLE pay_allocation(
     spent_amount VARCHAR(32) NOT NULL,
     remaining_amount VARCHAR(32) NOT NULL,
     timeout DATETIME NULL,
-    make_deposit BOOLEAN NOT NULL
+    make_deposit BOOLEAN NOT NULL,
+    released BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE pay_payment(

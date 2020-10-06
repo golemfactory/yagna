@@ -1,14 +1,20 @@
+//! Market REST endpoints.
+//!
+//! Responsibility of these functions is calling respective functions from
+//! within market modules and mapping return values to http responses.
+//! No market logic is allowed here.
+
 use actix_web::{error::InternalError, http::StatusCode, web::PathConfig};
 use serde::Deserialize;
 
 use ya_client::model::ErrorMessage;
 
-use crate::db::model::{AgreementId, ProposalId, SubscriptionId};
+use crate::db::model::{AgreementId, OwnerType, ProposalId, ProposalIdParseError, SubscriptionId};
 
-pub mod common;
+pub(crate) mod common;
 mod error;
-pub mod provider;
-pub mod requestor;
+pub(crate) mod provider;
+pub(crate) mod requestor;
 
 const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
 const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
@@ -23,9 +29,9 @@ pub fn path_config() -> PathConfig {
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct PathAgreement {
-    pub agreement_id: AgreementId,
+    pub agreement_id: String,
 }
 
 #[derive(Deserialize)]
@@ -71,4 +77,10 @@ pub(crate) fn default_query_timeout() -> f32 {
 #[inline(always)]
 pub(crate) fn default_event_timeout() -> f32 {
     DEFAULT_EVENT_TIMEOUT
+}
+
+impl PathAgreement {
+    pub fn to_id(self, owner: OwnerType) -> Result<AgreementId, ProposalIdParseError> {
+        AgreementId::from_client(&self.agreement_id, owner)
+    }
 }
