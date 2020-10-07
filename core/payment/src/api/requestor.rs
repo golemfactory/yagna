@@ -420,8 +420,7 @@ async fn release_allocation(
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
     let dao: AllocationDao = db.as_dao();
-    // TODO: Introduce 'released' flag instead of deleting
-    match dao.delete(allocation_id, node_id).await {
+    match dao.release(allocation_id, node_id).await {
         Ok(true) => response::ok(Null),
         Ok(false) => response::not_found(),
         Err(e) => response::server_error(&e),
