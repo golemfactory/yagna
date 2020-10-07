@@ -10,12 +10,6 @@ jobs:
     name: "Create Release"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v3.0
-        with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            let tag = context.payload.ref.replace(/.*\//, '');
-            console.log("pl", JSON.stringify(context, null, 2));
       - name: Create Release
         uses: actions/github-script@v3.0
         with:
@@ -43,7 +37,7 @@ jobs:
                   tag_name: tag,
                   prerelease: true,
                   body: body,
-                  name: `versionName #${buildNo}`
+                  name: `${versionName} #${buildNo}`
                 }
               });
               console.log(release.data.upload_url);
