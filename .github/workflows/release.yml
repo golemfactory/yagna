@@ -182,12 +182,22 @@ jobs:
           variants: default provider
           pkgName: yagna
       - name: Upload Release Deb [Core]
-        id: upload-release-asset-prov
+        id: upload-release-asset-core
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
           asset_path: ${{ steps.deb.outputs.deb }}
-          asset_name: yagna_${{ steps.version.outputs.version }}.deb
+          asset_name: yagna_${{ steps.version.outputs.version }}_amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
+      - name: Upload Release Deb [Prov]
+        id: upload-release-asset-prov
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ${{ steps.deb.outputs.deb.provider }}
+          asset_name: yagna-provider_${{ steps.version.outputs.version }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
