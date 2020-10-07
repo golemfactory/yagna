@@ -63,7 +63,7 @@ impl EthFaucetConfig {
                 .await
                 .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?;
             let resp = std::string::String::from_utf8_lossy(body.as_ref());
-            log::debug!("resp: {}", resp);
+            log::debug!("raw faucet response: {}", resp);
             if resp.contains("sufficient funds") || resp.contains("txhash") {
                 return Ok(());
             }
@@ -82,7 +82,7 @@ impl EthFaucetConfig {
                     );
                 } else {
                     log::warn!(
-                        "Failed to request Eth from Faucet, retrying ({}/{}): {:?}",
+                        "Retrying ({}/{}) to request Eth from Faucet after failure: {:?}",
                         i + 1,
                         MAX_ETH_FAUCET_REQUESTS,
                         e
