@@ -1,7 +1,12 @@
 use crate::utils;
 use crate::{GNTDriverError, GNTDriverResult};
+use bigdecimal::BigDecimal;
+use chrono::Utc;
+use core::num::TryFromIntError;
 use ethereum_types::Address;
-use std::{env, time};
+use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
+use std::{cmp::min, env, time};
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 
@@ -29,6 +34,13 @@ async fn resolve_host(request_url: String) -> GNTDriverResult<String> {
     ))?;
 
     Ok(request_url.replace(request_host, &address.to_string()))
+}
+
+#[derive(Serialize, Deserialize)]
+struct FaucetResponse {
+    paydate: u64,
+    address: String,
+    amount: BigDecimal,
 }
 
 pub struct EthFaucetConfig {
@@ -66,6 +78,29 @@ impl EthFaucetConfig {
             log::debug!("raw faucet response: {}", resp);
             if resp.contains("sufficient funds") || resp.contains("txhash") {
                 return Ok(());
+            } else if resp.contains("paydate") {
+                let resp_obj: FaucetResponse = serde_json::from_str(&resp)
+                    .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?;
+                // Convert miliseconds timestamp to seconds
+                let sleep_till = resp_obj.paydate / 1000;
+                let current: u64 = Utc::now()
+                    .timestamp()
+                    .try_into()
+                    .map_err(|e: TryFromIntError| GNTDriverError::LibraryError(e.to_string()))?;
+                // Ignore times in the past
+                if sleep_till <= current {
+                    // Cap max seconds to wait at 60
+                    let capped_seconds = min(sleep_till - current, 60);
+                    log::info!(
+                        "Waiting for Eth faucet next donation in {}s",
+                        capped_seconds
+                    );
+                    let capped_seconds = time::Duration::from_secs(capped_seconds);
+                    tokio::time::delay_for(capped_seconds).await;
+                    return Err(GNTDriverError::LibraryError(
+                        "faucet request is queued, try again".to_string(),
+                    ));
+                };
             }
 
             Err(GNTDriverError::LibraryError(resp.into_owned()))
