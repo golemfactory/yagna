@@ -48,9 +48,10 @@ impl EthFaucetConfig {
     }
 
     pub async fn request_eth(&self, address: Address) -> GNTDriverResult<()> {
-        log::debug!("request eth");
+        log::info!("Requesting Eth from faucet");
         let client = awc::Client::new();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
+        log::debug!("faucet request url: {}", request_url);
 
         async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {
             let body = client
@@ -62,20 +63,36 @@ impl EthFaucetConfig {
                 .await
                 .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?;
             let resp = std::string::String::from_utf8_lossy(body.as_ref());
+            log::debug!("raw faucet response: {}", resp);
             if resp.contains("sufficient funds") || resp.contains("txhash") {
-                log::debug!("resp: {}", resp);
                 return Ok(());
             }
 
             Err(GNTDriverError::LibraryError(resp.into_owned()))
         }
 
-        for _ in 0..MAX_ETH_FAUCET_REQUESTS {
+        for i in 0..MAX_ETH_FAUCET_REQUESTS {
             if let Err(e) = try_request_eth(&client, &request_url).await {
-                log::error!("Failed to request Eth from Faucet: {:?}", e);
-                tokio::time::delay_for(ETH_FAUCET_SLEEP).await;
+                // Do not warn nor sleep at the last try.
+                if i >= MAX_ETH_FAUCET_REQUESTS - 1 {
+                    log::error!(
+                        "Failed to request Eth from Faucet, tried {} times.: {:?}",
+                        MAX_ETH_FAUCET_REQUESTS,
+                        e
+                    );
+                } else {
+                    log::warn!(
+                        "Retrying ({}/{}) to request Eth from Faucet after failure: {:?}",
+                        i + 1,
+                        MAX_ETH_FAUCET_REQUESTS,
+                        e
+                    );
+                    tokio::time::delay_for(ETH_FAUCET_SLEEP).await;
+                }
             } else {
+                log::info!("Succesfully requested Eth, waiting...");
                 tokio::time::delay_for(INIT_ETH_SLEEP).await;
+                log::info!("Finished requesting Eth from faucet");
                 return Ok(());
             }
         }

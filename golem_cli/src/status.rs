@@ -1,4 +1,5 @@
 use crate::command::YaCommand;
+use crate::platform::Status as KvmStatus;
 use crate::utils::is_yagna_running;
 use ansi_term::{Colour, Style};
 use anyhow::Result;
@@ -8,8 +9,7 @@ use prettytable::{cell, format, row, Table};
 pub async fn run() -> Result</*exit code*/ i32> {
     let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
     let cmd = YaCommand::new()?;
-    let _top = ['\u{256d}', '\u{2500}', '\u{256e}'];
-    let _mid = ['\u{2502}'];
+    let kvm_status = crate::platform::kvm_status();
 
     let (config, is_running) =
         future::try_join(cmd.ya_provider()?.get_config(), is_yagna_running()).await?;
@@ -17,6 +17,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
     let status = {
         let mut table = Table::new();
         let format = format::FormatBuilder::new().padding(1, 1).build();
+
         table.set_format(format);
         table.add_row(row![Style::new()
             .fg(Colour::Yellow)
@@ -37,6 +38,17 @@ pub async fn run() -> Result</*exit code*/ i32> {
         table.add_empty_row();
         table.add_row(row!["Node Name", &config.node_name.unwrap_or_default()]);
         table.add_row(row!["Subnet", &config.subnet.unwrap_or_default()]);
+        if kvm_status.is_implemented() {
+            let status = match kvm_status {
+                KvmStatus::Valid => Style::new().fg(Colour::Green).paint("valid"),
+                KvmStatus::Permission(_) => Style::new().fg(Colour::Red).paint("no access"),
+                KvmStatus::NotImplemented => Style::new().paint(""),
+                KvmStatus::InvalidEnv(_) => {
+                    Style::new().fg(Colour::Red).paint("invalid environment")
+                }
+            };
+            table.add_row(row!["VM", status]);
+        }
         table
     };
     let mut table = Table::new();
@@ -60,6 +72,10 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table.add_row(row![
                 "pending",
                 format!("{} NGNT", &payment_status.incoming.total_pending())
+            ]);
+            table.add_row(row![
+                "unconfirmed",
+                format!("{} NGNT", &payment_status.incoming.unconfirmed())
             ]);
 
             table
@@ -93,6 +109,8 @@ pub async fn run() -> Result</*exit code*/ i32> {
         table.add_row(row![status]);
     }
     table.printstd();
-
+    if let Some(msg) = kvm_status.problem() {
+        println!("\n VM problem: {}", msg);
+    }
     Ok(0)
 }

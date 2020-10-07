@@ -5,6 +5,7 @@ use structopt::{clap, StructOpt};
 
 mod appkey;
 mod command;
+mod platform;
 mod service;
 mod settings;
 mod settings_show;

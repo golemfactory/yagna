@@ -137,9 +137,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
-          asset_path: ./releases/${{ steps.pack.outputs.reqArtifact }}
-          asset_name: ${{ steps.pack.outputs.reqArtifact }}
-          asset_content_type: ${{ steps.pack.outputs.reqMedia }}
+          asset_path: ./releases/${{ steps.pack.outputs.requestorArtifact }}
+          asset_name: ${{ steps.pack.outputs.requestorArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.requestorMedia }}
       - name: Upload Release Asset [Provider]
         id: upload-release-asset-prov
         uses: actions/upload-release-asset@v1
@@ -147,9 +147,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
-          asset_path: ./releases/${{ steps.pack.outputs.provArtifact }}
-          asset_name: ${{ steps.pack.outputs.provArtifact }}
-          asset_content_type: ${{ steps.pack.outputs.provMedia }}
+          asset_path: ./releases/${{ steps.pack.outputs.providerArtifact }}
+          asset_name: ${{ steps.pack.outputs.providerArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.providerMedia }}
   build-deb:
     needs: create-release
     runs-on: ubuntu-latest
