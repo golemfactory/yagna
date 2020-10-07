@@ -32,7 +32,7 @@ impl AbortableChild {
                 future::Either::Left((result, _)) => {
                     log::error!("child {} exited too early: {:?}", name, result);
                     if kill_cmd.send(()).await.is_err() {
-                        log::warn!("unable to send end-of-process notyfication");
+                        log::warn!("unable to send end-of-process notification");
                     }
                 }
                 future::Either::Right((
