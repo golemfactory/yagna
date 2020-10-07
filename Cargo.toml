@@ -60,6 +60,7 @@ url = "2.1.1"
 tokio = {version = "0.2.22", features=["uds"]}
 
 [package.metadata.deb]
+name="golem-requestor"
 assets = [
     ["target/release/yagna", "usr/bin/", "755"],
     ["target/release/gftp", "usr/bin/", "755"],
@@ -77,8 +78,8 @@ An open platform and marketplace for distributed computations.
 
 
 [package.metadata.deb.variants.provider]
-name="ya-provider"
-replaces="yagna"
+name="golem-provider"
+replaces="golem-requestor"
 maintainer-scripts="debian/core"
 features=["static-openssl"]
 depends="libgcc1, libc6 (>= 2.23)"
@@ -91,7 +92,6 @@ assets = [
     ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
     ["agent/provider/readme.md", "usr/share/doc/yagna/run-provider.md", "644"],
 ]
-
 
 
 [workspace]

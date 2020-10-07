@@ -180,15 +180,16 @@ jobs:
           GITHUB_REF: ${{ github.ref }}
         run: |
           TAG_NAME="${GITHUB_REF##*/}"
-          TAG_NAME="${TAG_NAME#pre-rel-}"
-          VERSION=${TAG_NAME#v}
+          TAGV_NAME="${TAG_NAME#pre-rel-}"
+          VERSION=${TAGV_NAME#v}
+          echo "::set-output name=tagv::${TAG_NAME}"
           echo "::set-output name=version::${VERSION}"
       - uses: golemfactory/build-deb-action@main
         id: deb
         with:
           debVersion: ${{ steps.version.outputs.version }}
           variants: default provider
-          pkgName: yagna
+          pkgName: golem
       - name: Upload Release Deb [Core]
         id: upload-release-asset-core
         uses: actions/upload-release-asset@v1
@@ -197,7 +198,7 @@ jobs:
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
           asset_path: ${{ steps.deb.outputs.deb }}
-          asset_name: yagna_${{ steps.version.outputs.version }}_amd64.deb
+          asset_name: golem-requestor_${{ steps.version.outputs.tagv }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
       - name: Upload Release Deb [Prov]
         id: upload-release-asset-prov
@@ -207,5 +208,5 @@ jobs:
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
           asset_path: ${{ steps.deb.outputs.deb_provider }}
-          asset_name: yagna-provider_${{ steps.version.outputs.version }}_amd64.deb
+          asset_name: golem-provider_${{ steps.version.outputs.tagv }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
