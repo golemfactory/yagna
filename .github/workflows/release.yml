@@ -10,12 +10,20 @@ jobs:
     name: "Create Release"
     runs-on: ubuntu-latest
     steps:
-      - name: Create Release
-        uses: actions/github-script@0.9.0
+      - uses: actions/github-script@v3.0
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             let tag = context.payload.ref.replace(/.*\//, '');
+            console.log("pl", JSON.stringify(context, null, 2));
+      - name: Create Release
+        uses: actions/github-script@v3.0
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            let tag = context.payload.ref.replace(/.*\//, '');
+            let buildNo = context.runNumber;
+            let versionName = tag.replace(/^pre-rel-/,'');
             try {
               let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
                 owner: context.repo.owner,
@@ -24,12 +32,18 @@ jobs:
               });
             }
             catch(e) {
+              let body = ["By installing & running this software you declare that you have read",
+                "understood and hereby accept the disclaimer and",
+                "privacy warning found at https://handbook.golem.network/see-also/terms"].join("\n");
+
               let release =  await github.request("POST /repos/:owner/:repo/releases", {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 data: {
                   tag_name: tag,
-                  prerelease: true
+                  prerelease: true,
+                  body: body,
+                  name: `versionName #${buildNo}`
                 }
               });
               console.log(release.data.upload_url);
@@ -198,6 +212,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
-          asset_path: ${{ steps.deb.outputs.deb.provider }}
+          asset_path: ${{ steps.deb.outputs.deb_provider }}
           asset_name: yagna-provider_${{ steps.version.outputs.version }}_amd64.deb
           asset_content_type: application/vnd.debian.binary-package
