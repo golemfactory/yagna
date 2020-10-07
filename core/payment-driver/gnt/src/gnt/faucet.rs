@@ -51,9 +51,9 @@ impl EthFaucetConfig {
         log::info!("Requesting Eth from faucet");
         let client = awc::Client::new();
         let request_url = format!("{}/{}", &self.faucet_address, utils::addr_to_str(address));
+        log::debug!("faucet request url: {}", request_url);
 
         async fn try_request_eth(client: &awc::Client, url: &str) -> GNTDriverResult<()> {
-            log::debug!("url: {}", url);
             let body = client
                 .get(url)
                 .send()
