@@ -2,7 +2,7 @@ use crossterm::style::Colorize;
 use crossterm::*;
 
 use crossterm::tty::IsTty;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::io::{stderr, Write};
 use tokio::time::Duration;
 
@@ -21,10 +21,22 @@ fn safe_split(s: &str, offset: usize) -> &str {
     }
 }
 
+fn find_size(banner: &str) -> (usize, usize) {
+    banner
+        .lines()
+        .fold((0, 0), |(w, h), line| (max(w, line.len()), h + 1))
+}
+
 pub fn fade_in(banner: &str) -> anyhow::Result<()> {
     let mut stderr = stderr();
 
     if !stderr.is_tty() {
+        eprintln!("{}", banner);
+        return Ok(());
+    }
+    let (w, h) = crossterm::terminal::size()?;
+    let (bw, bh) = find_size(banner);
+    if (w as usize) < bw + 2 || (h as usize) < bh + 1 {
         eprintln!("{}", banner);
         return Ok(());
     }
@@ -37,7 +49,6 @@ pub fn fade_in(banner: &str) -> anyhow::Result<()> {
         seed = (seed * 13 + 7) & 0xFFFF;
         noise[n]
     };
-    let (w, _h) = crossterm::terminal::size()?;
 
     queue!(stderr, cursor::Hide)?;
     for frame in 0.. {

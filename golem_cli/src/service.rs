@@ -11,6 +11,7 @@ use crate::command::YaCommand;
 use std::process::ExitStatus;
 use tokio::process::Child;
 use tokio::stream::StreamExt;
+use tokio::time::Duration;
 
 fn handle_ctrl_c(result: io::Result<()>) -> Result<()> {
     if result.is_ok() {
@@ -64,6 +65,33 @@ impl AbortableChild {
     }
 }
 
+pub async fn watch_for_vm() -> anyhow::Result<()> {
+    let cmd = YaCommand::new()?;
+    let presets = cmd.ya_provider()?.list_presets().await?;
+    if !presets.iter().any(|p| p.exeunit_name == "vm") {
+        return Ok(());
+    }
+    let mut status = crate::platform::kvm_status();
+
+    cmd.ya_provider()?
+        .set_profile_activity("vm", status.is_valid())
+        .await
+        .ok();
+
+    loop {
+        tokio::time::delay_for(Duration::from_secs(60)).await;
+        let new_status = crate::platform::kvm_status();
+        if new_status.is_valid() != status.is_valid() {
+            cmd.ya_provider()?
+                .set_profile_activity("vm", new_status.is_valid())
+                .await
+                .ok();
+            log::info!("Changed vm status to {:?}", new_status.is_valid());
+        }
+        status = new_status
+    }
+}
+
 pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     crate::setup::setup(&mut config, false).await?;
     if is_yagna_running().await? {
@@ -86,6 +114,11 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
 
     futures::pin_mut!(ctrl_c);
     //futures::pin_mut!(event_rx);
+    tokio::task::spawn_local(async move {
+        if let Err(e) = watch_for_vm().await {
+            log::error!("vm checker failed: {:?}", e)
+        }
+    });
 
     if let future::Either::Left((r, _)) =
         future::select(ctrl_c, StreamExt::next(&mut event_rx)).await

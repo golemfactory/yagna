@@ -77,6 +77,13 @@ impl PaymentSummary {
 
         accepted + confirmed
     }
+
+    pub fn unconfirmed(&self) -> BigDecimal {
+        self.requested
+            .as_ref()
+            .and_then(|v| BigDecimal::from_str(v).ok())
+            .unwrap_or_default()
+    }
 }
 
 pub struct YagnaCommand {
