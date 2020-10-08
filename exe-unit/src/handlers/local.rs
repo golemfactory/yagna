@@ -74,7 +74,7 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
         let fut = async move {
             Ok::<_, Error>({
                 {
-                    use graphene::sgx::SgxQuote;
+                    use graphene_sgx::sgx::SgxQuote;
                     use sha3::{Digest, Sha3_256};
                     use std::env;
                     use ya_client_model::node_id::{NodeId, ParseError};

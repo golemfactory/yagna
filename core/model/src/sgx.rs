@@ -1,4 +1,4 @@
-pub use graphene::AttestationResponse;
+pub use graphene_sgx::AttestationResponse;
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 

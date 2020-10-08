@@ -1,5 +1,5 @@
 use anyhow::Result;
-use graphene::IasClient;
+use graphene_sgx::IasClient;
 use std::env;
 use ya_core_model::sgx::Error;
 use ya_core_model::sgx::{AttestationResponse, VerifyAttestationEvidence, BUS_ID};

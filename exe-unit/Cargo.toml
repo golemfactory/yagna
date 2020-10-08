@@ -15,7 +15,7 @@ path = "src/bin.rs"
 [features]
 default = ['compat-deployment']
 compat-deployment = []
-sgx=['graphene', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'sha3', 'ya-client-model/sgx', 'ya-core-model/sgx']
+sgx=['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'sha3', 'ya-client-model/sgx', 'ya-core-model/sgx']
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"
@@ -44,7 +44,7 @@ derivative = "2.1"
 dotenv = "0.15.0"
 flexi_logger = { version = "0.15", features = ["colors"] }
 futures = "0.3"
-graphene = { version = "0.3.2", git = "https://github.com/golemfactory/graphene-rust", optional = true }
+graphene-sgx = { version = "0.3", optional = true }
 hex = "0.4.2"
 lazy_static = "1.4.0"
 log = "0.4.8"
