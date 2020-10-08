@@ -137,9 +137,6 @@ members = [
 ]
 
 [patch.crates-io]
-## EXTERNAL
-actix-web = { git = "https://github.com/tworec/actix-web.git", branch = "middleware-logger-debug-level"  }
-
 ## SERVICES
 ya-activity = { path = "core/activity" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }

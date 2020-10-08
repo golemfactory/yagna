@@ -378,7 +378,13 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     let args: CliArgs = CliArgs::from_args();
 
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or(format!(
+            "{},actix_web::middleware::logger=warn",
+            args.log_level()
+        )),
+    );
     env_logger::init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
