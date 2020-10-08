@@ -317,7 +317,15 @@ impl ServiceCommand {
 
                 let server = HttpServer::new(move || {
                     let app = App::new()
-                        .wrap(middleware::Logger::default())
+                        .wrap(
+                            middleware::Logger::default()
+                                // .exclude("/market-api/v1/offers")
+                                // .exclude("/market-api/v1/demands")
+                                .exclude("/activity-api/v1/events")
+                                .exclude("/metrics-api/v1/expose")
+                                .exclude("/payment-api/v1/provider/invoiceEvents")
+                                .exclude("/payment-api/v1/provider/debitNoteEvents"),
+                        )
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
 
