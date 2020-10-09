@@ -17,7 +17,6 @@ use crate::negotiation::{ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
 use ya_client::model::market::{Agreement, Demand, Offer};
-use ya_client::model::ErrorMessage;
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
@@ -55,8 +54,6 @@ pub enum MarketError {
     DemandError(#[from] DemandError),
     #[error(transparent)]
     Negotiation(#[from] NegotiationError),
-    #[error("Internal error: {0}.")]
-    InternalError(#[from] ErrorMessage),
 }
 
 #[derive(Error, Debug)]
@@ -138,10 +135,12 @@ impl MarketService {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
             .data(myself)
             .app_data(rest_api::path_config())
+            .extend(rest_api::common::register_endpoints)
             .extend(rest_api::provider::register_endpoints)
             .extend(rest_api::requestor::register_endpoints)
     }
 
+    // TODO: (re)move this
     pub async fn get_offers(&self, id: Option<Identity>) -> Result<Vec<Offer>, MarketError> {
         Ok(self
             .matcher
@@ -203,19 +202,18 @@ impl MarketService {
     pub async fn get_agreement(
         &self,
         agreement_id: &AgreementId,
-        _id: &Identity,
+        id: &Identity,
     ) -> Result<Agreement, AgreementError> {
-        // TODO: Authorization
         match self
             .db
             .as_dao::<AgreementDao>()
-            .select(agreement_id, Utc::now().naive_utc())
+            .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
         {
             Some(agreement) => Ok(agreement
                 .into_client()
-                .map_err(|e| AgreementError::InternalError(e.to_string()))?),
+                .map_err(|e| AgreementError::Internal(e.to_string()))?),
             None => Err(AgreementError::NotFound(agreement_id.clone())),
         }
     }

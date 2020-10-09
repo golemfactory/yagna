@@ -180,7 +180,7 @@ impl<R: Runtime> Handler<RpcStreamCall<StreamExecBatchResults>> for ExeUnit<R> {
             }
         };
 
-        let rx = batch.stream.receiver().into_stream().map(|r| match r {
+        let rx = batch.stream.receiver().map(|r| match r {
             Ok(v) => Ok::<_, RpcError>(Ok(v)),
             Err(e) => Ok::<_, RpcError>(Err(RpcMessageError::Service(e.to_string()))),
         });

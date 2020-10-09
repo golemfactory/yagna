@@ -2,8 +2,8 @@ use crate::error::Error;
 use crate::notify::Notify;
 use crate::output::CapturedOutput;
 use actix::Arbiter;
-use futures::channel::oneshot;
-use futures::StreamExt;
+use futures::channel::{mpsc, oneshot};
+use futures::{SinkExt, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -231,12 +231,29 @@ impl<T: Clone + 'static> Broadcast<T> {
         self.sender.as_mut().unwrap()
     }
 
-    pub fn receiver(&mut self) -> broadcast::Receiver<T> {
-        self.sender().subscribe()
+    pub fn receiver(&mut self) -> mpsc::UnboundedReceiver<Result<T, Error>> {
+        let (tx, rx) = mpsc::unbounded::<Result<T, _>>();
+        let mut txc = tx.clone();
+        let receiver = self.sender().subscribe();
+        Arbiter::spawn(async move {
+            if let Err(e) = receiver
+                .map_err(Error::runtime)
+                .forward(
+                    tx.sink_map_err(Error::runtime)
+                        .with(|v| futures::future::ready(Ok(Ok(v)))),
+                )
+                .await
+            {
+                let msg = format!("stream error: {}", e);
+                log::error!("Broadcast output error: {}", msg);
+                let _ = txc.send(Err::<T, _>(Error::runtime(msg))).await;
+            }
+        });
+        rx
     }
 
     fn initialize(&mut self) {
-        let (tx, rx) = broadcast::channel(4);
+        let (tx, rx) = broadcast::channel(16);
         Arbiter::spawn(rx.for_each(|_| async { () }));
         self.sender = Some(tx);
     }

@@ -22,11 +22,16 @@ impl CallbackMessage for OffersBcast {
 }
 
 impl BroadcastMessage for OffersBcast {
-    const TOPIC: &'static str = "market-protocol-discovery-mk1-offers";
+    const TOPIC: &'static str =
+        concat!("market-protocol-discovery-", PROTOCOL_VERSION!(), "-offers");
 }
 
 pub(super) fn get_offers_addr(prefix: &str) -> String {
-    format!("{}/protocol/discovery/mk1/offers", prefix)
+    format!(
+        "{}/protocol/{}/discovery/offers",
+        prefix,
+        PROTOCOL_VERSION!()
+    )
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -68,5 +73,9 @@ impl CallbackMessage for UnsubscribedOffersBcast {
 }
 
 impl BroadcastMessage for UnsubscribedOffersBcast {
-    const TOPIC: &'static str = "market-protocol-discovery-mk1-offers-unsubscribe";
+    const TOPIC: &'static str = concat!(
+        "market-protocol-discovery-",
+        PROTOCOL_VERSION!(),
+        "market-protocol-discovery-mk1-offers-unsubscribe"
+    );
 }

@@ -1,29 +1,39 @@
 use serde_json::{json, Map, Value};
 
 #[derive(thiserror::Error, Debug)]
+#[error("Flattened JSON should be object, but found: {0}")]
+pub struct JsonObjectExpected(String);
+
+#[derive(thiserror::Error, Debug)]
 pub enum FlattenError {
     #[error("JSON error: {0}")]
     SerdeJsonError(#[from] serde_json::error::Error),
-    #[error("Properties should be object, found something else: {0:?}")]
-    ObjectExpected(Value),
+    #[error(transparent)]
+    JsonObjectExpected(#[from] JsonObjectExpected),
 }
 
 pub fn flatten_properties(str_json_properties: &str) -> Result<Vec<String>, FlattenError> {
     let json_properties: Value = serde_json::from_str(str_json_properties)?;
-    let mut flat_properties: Value = json!({});
-    if let Some(obj_properties) = json_properties.as_object() {
-        flatten_object(obj_properties, &None, &mut flat_properties);
-    } else {
-        return Err(FlattenError::ObjectExpected(json_properties));
-    }
 
     let mut properties = vec![];
-    for (k, v) in flat_properties.as_object().unwrap().iter() {
+    for (k, v) in flatten_json(&json_properties)?.as_object().unwrap().iter() {
         properties.push(format!("{}={}", k, serde_json::to_string(v).unwrap()))
     }
 
     Ok(properties)
 }
+
+pub fn flatten_json(json: &Value) -> Result<Value, JsonObjectExpected> {
+    let mut flat_json: Value = json!({});
+    if let Some(obj) = json.as_object() {
+        flatten_object(obj, &None, &mut flat_json);
+    } else {
+        return Err(JsonObjectExpected(json.to_string()));
+    }
+
+    Ok(flat_json)
+}
+
 fn flatten_object(
     obj_input: &Map<String, Value>,
     key_prefix: &Option<String>,
