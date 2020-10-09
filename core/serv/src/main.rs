@@ -317,15 +317,7 @@ impl ServiceCommand {
 
                 let server = HttpServer::new(move || {
                     let app = App::new()
-                        .wrap(
-                            middleware::Logger::default()
-                                // .exclude("/market-api/v1/offers")
-                                // .exclude("/market-api/v1/demands")
-                                .exclude("/activity-api/v1/events")
-                                .exclude("/metrics-api/v1/expose")
-                                .exclude("/payment-api/v1/provider/invoiceEvents")
-                                .exclude("/payment-api/v1/provider/debitNoteEvents"),
-                        )
+                        .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
 
@@ -386,7 +378,13 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     let args: CliArgs = CliArgs::from_args();
 
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or(format!(
+            "{},actix_web::middleware::logger=warn",
+            args.log_level()
+        )),
+    );
     env_logger::init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME

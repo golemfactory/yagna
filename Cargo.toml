@@ -137,7 +137,6 @@ members = [
 ]
 
 [patch.crates-io]
-
 ## SERVICES
 ya-activity = { path = "core/activity" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
