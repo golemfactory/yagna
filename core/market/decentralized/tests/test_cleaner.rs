@@ -226,8 +226,7 @@ async fn test_proposal_lotsa_negotiations() -> Result<()> {
     clean(db.clone()).await;
     for n in expired_negotiations {
         assert_eq!(
-            <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, n.id)
-                .await,
+            <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, n.id).await,
             false
         );
     }
