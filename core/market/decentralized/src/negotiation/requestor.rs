@@ -473,7 +473,7 @@ pub async fn proposal_receiver_thread(
         let db = db.clone();
         let notifier = notifier.clone();
         match async move {
-            log::info!("Received proposal from matcher. Adding to events queue.");
+            log::info!("Got matching Offer. Emitting new Proposal to Requestor.");
 
             // Add proposal to database together with Negotiation record.
             let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
