@@ -102,7 +102,7 @@ impl MarketsNetwork {
         // We want to know the caller.
         let mut bn = crate::testing::backtrace_util::generate_backtraced_name(Some(3));
         // Special case for mac&windows. Tests are run in adifferent way on those systems and we
-        // have to dive one less level down the stack.
+        // have to dive one less level down the stack to find the caller (test_* module).
         if !bn.starts_with("test_") {
             bn = crate::testing::backtrace_util::generate_backtraced_name(Some(2));
         }
