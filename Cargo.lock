@@ -5911,6 +5911,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "backtrace",
  "chrono",
  "derive_more 0.99.11",
  "diesel",
