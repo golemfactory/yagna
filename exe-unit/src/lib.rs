@@ -196,17 +196,35 @@ impl<R: Runtime> RuntimeRef<R> {
         transfer_service: Addr<TransferService>,
         ctx: ExeCtx,
     ) -> Result<()> {
-        if let ExeScriptCommand::Terminate {} = &ctx.cmd {
-            log::warn!("Terminating running ExeScripts");
+        match &ctx.cmd {
+            ExeScriptCommand::Sign {} => {
+                let batch_id = ctx.batch_id.clone();
+                let signature = self.send(SignExeScript { batch_id }).await??;
 
-            let exclude_batches = vec![ctx.batch_id];
-            let set_state = SetState::default()
-                .state(StatePair(State::Initialized, None))
-                .cmd(None);
+                let stdout = serde_json::to_string(&signature)?;
+                let cmd_result =
+                    ctx.convert_runtime_result(RuntimeCommandResult::ok_with_output(stdout));
+                let set_state = SetState::default().result(ctx.batch_id, cmd_result);
 
-            self.send(Stop { exclude_batches }).await??;
-            self.send(set_state).await?;
-            return Ok(());
+                self.send(set_state).await?;
+                return Ok(());
+            }
+            ExeScriptCommand::Terminate {} => {
+                log::warn!("Terminating running ExeScripts");
+
+                let exclude_batches = vec![ctx.batch_id.clone()];
+                self.send(Stop { exclude_batches }).await??;
+
+                let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::ok());
+                let set_state = SetState::default()
+                    .state(StatePair(State::Initialized, None))
+                    .cmd(None)
+                    .result(ctx.batch_id, cmd_result);
+
+                self.send(set_state).await?;
+                return Ok(());
+            }
+            _ => (),
         }
 
         let state = self.send(GetState {}).await?.0;

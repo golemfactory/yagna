@@ -125,6 +125,14 @@ impl RuntimeCommandResult {
         }
     }
 
+    pub fn ok_with_output(stdout: String) -> Self {
+        RuntimeCommandResult {
+            result: CommandResult::Ok,
+            stdout: Some(stdout),
+            stderr: None,
+        }
+    }
+
     pub fn error(err: impl ToString) -> Self {
         RuntimeCommandResult {
             result: CommandResult::Error,
@@ -162,6 +170,25 @@ pub struct Initialize;
 pub struct Register<Svc>(pub Addr<Svc>)
 where
     Svc: Actor<Context = Context<Svc>> + Handler<Shutdown>;
+
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<SignExeScriptResponse>")]
+pub struct SignExeScript {
+    pub batch_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignExeScriptResponse {
+    pub output: String,
+    pub sig: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignatureStub {
+    pub script: Vec<ExeScriptCommand>,
+    pub results: Vec<ExeScriptCommandResult>,
+    pub digest: String,
+}
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
