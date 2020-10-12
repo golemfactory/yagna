@@ -327,12 +327,17 @@ impl Handler<Shutdown> for RuntimeProcess {
 
     fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
         let timeout = process_kill_timeout_seconds();
-        let futs = self.children.drain().map(move |t| t.kill(timeout));
+        let service = self.service.take();
+        let mut children = std::mem::replace(&mut self.children, HashSet::new());
 
-        self.mode = RuntimeMode::default();
-        self.service.take();
-
-        future::join_all(futs).map(|_| Ok(())).boxed_local()
+        async move {
+            if let Some(svc) = service {
+                let _ = svc.service.shutdown().await;
+            }
+            let _ = future::join_all(children.drain().map(move |t| t.kill(timeout))).await;
+            Ok(())
+        }
+        .boxed_local()
     }
 }
 
