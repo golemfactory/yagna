@@ -15,7 +15,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::model::SubscriptionId;
 
-#[derive(Display, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Display, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum OwnerType {
     #[display(fmt = "P")]
     Provider,
@@ -23,13 +23,23 @@ pub enum OwnerType {
     Requestor,
 }
 
+const HASH_SUFFIX_LEN: usize = 64;
+
 #[derive(Error, Debug, PartialEq)]
 pub enum ProposalIdParseError {
-    #[error("Proposal id [{0}] has invalid format.")]
+    #[error("Id [{0}] has invalid format.")]
     InvalidFormat(String),
-    #[error("Proposal id [{0}] has invalid owner type.")]
+    #[error("Id [{0}] has invalid owner type.")]
     InvalidOwnerType(String),
+    #[error("Id [{0}] contains non hexadecimal characters.")]
+    NotHexadecimal(String),
+    #[error("Id [{0}] hash has invalid length. Should be |{}|", HASH_SUFFIX_LEN)]
+    InvalidLength(String),
 }
+
+#[derive(thiserror::Error, Debug, PartialEq, Serialize, Deserialize)]
+#[error("Proposal id [{0}] has unexpected hash [{1}].")]
+pub struct ProposalIdValidationError(ProposalId, String);
 
 #[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", owner, id)]
@@ -59,6 +69,48 @@ impl ProposalId {
     pub fn translate(mut self, new_owner: OwnerType) -> Self {
         self.owner = new_owner;
         self
+    }
+
+    pub fn swap_owner(mut self) -> Self {
+        self.owner = match self.owner {
+            OwnerType::Provider => OwnerType::Requestor,
+            OwnerType::Requestor => OwnerType::Provider,
+        };
+        self
+    }
+
+    pub fn validate(
+        &self,
+        offer_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
+        creation_ts: &NaiveDateTime,
+    ) -> Result<(), ProposalIdValidationError> {
+        let hash = hash_proposal(&offer_id, &demand_id, &creation_ts);
+        if self.id != hash {
+            return Err(ProposalIdValidationError(self.clone(), hash));
+        }
+        Ok(())
+    }
+
+    /// Clients on both Requestor and Provider side should use the same id,
+    /// because they communicate with each other and exchange this id.
+    pub fn into_client(&self) -> String {
+        self.id.clone()
+    }
+
+    pub fn from_client(s: &str, owner: OwnerType) -> Result<ProposalId, ProposalIdParseError> {
+        if !s.chars().all(|character| character.is_ascii_hexdigit()) {
+            Err(ProposalIdParseError::NotHexadecimal(s.to_string()))?;
+        }
+
+        if s.len() != HASH_SUFFIX_LEN {
+            Err(ProposalIdParseError::InvalidLength(s.to_string()))?;
+        }
+
+        Ok(ProposalId {
+            owner,
+            id: s.to_string(),
+        })
     }
 }
 
@@ -96,10 +148,7 @@ impl FromStr for ProposalId {
             _ => Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?,
         };
 
-        Ok(ProposalId {
-            owner,
-            id: elements[1].to_string(),
-        })
+        ProposalId::from_client(elements[1], owner)
     }
 }
 

@@ -1,17 +1,14 @@
+use ya_market_decentralized::assert_err_eq;
 use ya_market_decentralized::testing::client::{sample_demand, sample_offer};
 use ya_market_decentralized::testing::{DemandError, QueryOfferError};
 use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
-
-macro_rules! assert_err_eq {
-    ($expected:expr, $actual:expr $(,)*) => {
-        assert_eq!($expected.to_string(), $actual.unwrap_err().to_string())
-    };
-}
+use ya_market_resolver::flatten::flatten_json;
 
 /// Test subscribes offers, checks if offer is available
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_subscribe_offer")
         .await
@@ -27,6 +24,7 @@ async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
     // Fill expected values for further comparison.
     offer.provider_id = Some(identity1.identity.to_string());
     offer.offer_id = Some(subscription_id.to_string());
+    offer.properties = flatten_json(&offer.properties).unwrap();
 
     // Offer should be available in database after subscribe.
     let got_offer = market1.get_offer(&subscription_id).await?;
@@ -56,6 +54,7 @@ async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_subscribe_demand() -> Result<(), anyhow::Error> {
     let network = MarketsNetwork::new("test_subscribe_demand")
         .await
@@ -71,6 +70,7 @@ async fn test_subscribe_demand() -> Result<(), anyhow::Error> {
     // Fill expected values for further comparison.
     demand.requestor_id = Some(identity1.identity.to_string());
     demand.demand_id = Some(subscription_id.to_string());
+    demand.properties = flatten_json(&demand.properties).unwrap();
 
     // Offer should be available in database after subscribe.
     let got_demand = market1.get_demand(&subscription_id).await?;

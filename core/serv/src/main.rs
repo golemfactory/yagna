@@ -48,6 +48,12 @@ lazy_static::lazy_static! {
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 #[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+/// Golem network server.
+///
+/// By running this software you declare that you have read,
+/// understood and hereby accept the disclaimer and
+/// privacy warning found at https://handbook.golem.network/see-also/terms
+///
 struct CliArgs {
     /// Service data dir
     #[structopt(
@@ -73,6 +79,11 @@ struct CliArgs {
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
+
+    /// Accept the disclaimer and privacy warning found at
+    /// {n}https://handbook.golem.network/see-also/terms
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    accept_terms: bool,
 
     /// Enter interactive mode
     #[structopt(short, long)]
@@ -117,6 +128,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
+            accept_terms: args.accept_terms,
             interactive: args.interactive,
         })
     }
@@ -241,6 +253,9 @@ struct ServiceCommandOpts {
 
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
+        if !ctx.accept_terms {
+            prompt_terms()?;
+        }
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
                 let name = clap::crate_name!();
@@ -254,12 +269,12 @@ impl ServiceCommand {
                 Services::gsb(&context).await?;
                 start_payment_drivers(&ctx.data_dir).await?;
 
-                payment_accounts::save_default_account()
+                payment_accounts::save_default_account(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| {
                         log::error!("Saving default payment account failed: {}", e)
                     });
-                payment_accounts::init_accounts()
+                payment_accounts::init_accounts(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
@@ -283,6 +298,36 @@ impl ServiceCommand {
                 ))?)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
+        }
+    }
+}
+
+fn prompt_terms() -> Result<()> {
+    use std::io::Write;
+
+    let header = r#"
+By running this software you declare that you have read, understood
+and hereby accept the disclaimer and privacy warning found at
+https://handbook.golem.network/see-also/terms
+
+"#;
+
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+
+    stdout.write(header.as_bytes())?;
+    stdout.flush()?;
+
+    loop {
+        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        stdout.flush()?;
+
+        let mut buffer = String::new();
+        stdin.read_line(&mut buffer)?;
+        match buffer.to_lowercase().trim() {
+            "yes" => return Ok(()),
+            "no" => std::process::exit(1),
+            _ => (),
         }
     }
 }

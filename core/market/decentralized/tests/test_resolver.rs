@@ -9,6 +9,7 @@ use ya_market_decentralized::testing::{
 /// Test adds Offer on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_single_not_resolve_offer() -> Result<(), anyhow::Error> {
     // given
     let _ = env_logger::builder().try_init();
@@ -36,6 +37,7 @@ async fn test_single_not_resolve_offer() -> Result<(), anyhow::Error> {
 /// Test adds Offer and Demand. Resolver should emit Proposal on Demand node.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
     // given
     let _ = env_logger::builder().try_init();
@@ -76,6 +78,7 @@ async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
 /// Test adds Demand on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_single_not_resolve_demand() -> Result<(), anyhow::Error> {
     // given
     let _ = env_logger::builder().try_init();
@@ -103,6 +106,7 @@ async fn test_single_not_resolve_demand() -> Result<(), anyhow::Error> {
 /// Test adds Offer on two nodes and Demand third. Resolver should emit two Proposals on Demand node.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
+#[serial_test::serial]
 async fn test_resolve_2xoffer_demand() -> Result<(), anyhow::Error> {
     // given
     let _ = env_logger::builder().try_init();
@@ -131,16 +135,21 @@ async fn test_resolve_2xoffer_demand() -> Result<(), anyhow::Error> {
 
     // then: It should be resolved on Requestor two times
     let listener = network.get_event_listeners("Requestor-1");
-    let proposal = timeout200ms(listener.proposal_receiver.recv())
+    let proposal1 = timeout200ms(listener.proposal_receiver.recv())
         .await?
         .unwrap();
-    assert_eq!(proposal.offer, offer1);
-    assert_eq!(proposal.demand, demand);
-    let proposal = timeout200ms(listener.proposal_receiver.recv())
+    let proposal2 = timeout200ms(listener.proposal_receiver.recv())
         .await?
         .unwrap();
-    assert_eq!(proposal.offer, offer2);
-    assert_eq!(proposal.demand, demand);
+
+    assert_eq!(proposal1.demand, demand);
+    assert_eq!(proposal2.demand, demand);
+
+    // Check if we got Proposals for both Offers. This check should be
+    // order independent, since we don't force any ordering rules on Proposals.
+    let proposals = vec![proposal1, proposal2];
+    assert!(proposals.iter().any(|proposal| proposal.offer == offer1));
+    assert!(proposals.iter().any(|proposal| proposal.offer == offer2));
 
     // and: but not resolved on Provider-1
     let listener = network.get_event_listeners("Provider-1");

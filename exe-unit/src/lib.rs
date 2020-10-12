@@ -257,16 +257,17 @@ impl<R: Runtime> RuntimeRef<R> {
 
         self.send(
             SetState::default()
-                .state(state_pre.clone())
+                .state(state_pre)
                 .cmd(Some(ctx.cmd.clone())),
         )
         .await?;
 
         match &ctx.cmd {
-            ExeScriptCommand::Transfer { from, to } => {
+            ExeScriptCommand::Transfer { from, to, args } => {
                 let msg = TransferResource {
                     from: from.clone(),
                     to: to.clone(),
+                    args: args.clone(),
                 };
                 transfer_service.send(msg).await??;
             }

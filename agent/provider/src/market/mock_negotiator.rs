@@ -6,7 +6,9 @@ use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, AgreementResult, ProposalResponse};
 
 use anyhow::Result;
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use std::collections::HashSet;
+use ya_agreement_utils::agreement::expand;
 
 #[derive(Debug)]
 pub struct AcceptAllNegotiator;
@@ -78,7 +80,17 @@ impl Negotiator for LimitAgreementsNegotiator {
     }
 
     fn react_to_proposal(&mut self, _offer: &Offer, demand: &Proposal) -> Result<ProposalResponse> {
-        if self.has_free_slot() {
+        let expiration = proposal_expiration_from(&demand)?;
+        let min_expiration = Utc::now() + Duration::minutes(5);
+        let max_expiration = Utc::now() + Duration::minutes(30);
+
+        if expiration > max_expiration || expiration < min_expiration {
+            log::info!(
+                "Negotiator: Reject proposal [{:?}] due to expiration limits.",
+                demand.proposal_id
+            );
+            Ok(ProposalResponse::RejectProposal)
+        } else if self.has_free_slot() {
             Ok(ProposalResponse::AcceptProposal)
         } else {
             log::info!(
@@ -102,4 +114,14 @@ impl Negotiator for LimitAgreementsNegotiator {
             Ok(AgreementResponse::RejectAgreement)
         }
     }
+}
+
+fn proposal_expiration_from(proposal: &Proposal) -> Result<DateTime<Utc>> {
+    let expiration_key_str = "/golem/srv/comp/expiration";
+    let value = expand(proposal.properties.clone())
+        .pointer(expiration_key_str)
+        .ok_or_else(|| anyhow::anyhow!("Missing expiration key"))?
+        .clone();
+    let timestamp: i64 = serde_json::from_value(value)?;
+    Ok(Utc.timestamp_millis(timestamp))
 }

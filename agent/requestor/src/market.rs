@@ -16,6 +16,7 @@ use crate::payment::allocate_funds;
 
 pub(crate) fn build_demand(
     node_name: &str,
+    runtime: &str,
     task_package: &str,
     expires: chrono::Duration,
     subnet: &Option<String>,
@@ -30,6 +31,7 @@ pub(crate) fn build_demand(
     });
 
     let mut cnts = constraints![
+        "golem.runtime.name" == runtime,
         "golem.inf.mem.gib" > 0.5,
         "golem.inf.storage.gib" > 1,
         "golem.com.pricing.model" == "linear",

@@ -1,11 +1,13 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
 
 use super::{Discovery, DiscoveryImpl};
+use crate::protocol::discovery::OfferHandlers;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {
@@ -14,7 +16,7 @@ pub struct DiscoveryBuilder {
 }
 
 impl DiscoveryBuilder {
-    pub fn data<T: Clone + Send + Sync + 'static>(mut self, data: T) -> Self {
+    pub fn add_data<T: Clone + Send + Sync + 'static>(mut self, data: T) -> Self {
         self.data.insert(TypeId::of::<T>(), Box::new(data));
         self
     }
@@ -23,13 +25,7 @@ impl DiscoveryBuilder {
         mut self,
         mut f: impl DataCallbackHandler<M, T>,
     ) -> Self {
-        let boxed = self
-            .data
-            .get(&TypeId::of::<T>())
-            .expect("data handler needs data");
-
-        let data: &T = (&**boxed as &(dyn Any + 'static)).downcast_ref().unwrap();
-        let data = data.clone();
+        let data = self.get_data::<T>();
         self.handlers.insert(
             TypeId::of::<M>(),
             Box::new(HandlerSlot::new(move |caller, msg| {
@@ -39,23 +35,39 @@ impl DiscoveryBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn add_handler<M: CallbackMessage>(mut self, f: impl CallbackHandler<M>) -> Self {
         self.handlers
             .insert(TypeId::of::<M>(), Box::new(HandlerSlot::new(f)));
         self
     }
 
-    fn get<M: CallbackMessage>(&mut self) -> HandlerSlot<M> {
+    fn get_handler<M: CallbackMessage>(&mut self) -> HandlerSlot<M> {
         let boxed = self.handlers.remove(&TypeId::of::<M>()).unwrap();
         *(boxed as Box<dyn Any + 'static>).downcast().unwrap()
     }
 
+    fn get_data<T: Clone + Send + Sync + 'static>(&mut self) -> T {
+        let boxed = self
+            .data
+            .get(&TypeId::of::<T>())
+            .expect("[DiscoveryBuilder] Can't find data of required type.");
+
+        let data: &T = (&**boxed as &(dyn Any + 'static)).downcast_ref().unwrap();
+        data.clone()
+    }
+
     pub fn build(mut self) -> Discovery {
+        let offer_handlers = Mutex::new(OfferHandlers {
+            filter_out_known_ids: self.get_handler(),
+            receive_remote_offers: self.get_handler(),
+        });
         Discovery {
             inner: Arc::new(DiscoveryImpl {
-                offer_received: self.get(),
-                offer_unsubscribed: self.get(),
-                _retrieve_offers: self.get(),
+                identity: self.get_data(),
+                offer_handlers,
+                get_local_offers_handler: self.get_handler(),
+                offer_unsubscribe_handler: self.get_handler(),
             }),
         }
     }
@@ -81,7 +93,8 @@ impl<
 mod test {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-    use crate::testing::mock_offer::sample_offer_received;
+    use crate::testing::mock_identity::{generate_identity, MockIdentity};
+    use crate::testing::mock_offer::sample_retrieve_offers;
 
     use super::super::*;
     use super::*;
@@ -96,15 +109,17 @@ mod test {
     #[should_panic]
     fn build_with_single_handler_should_fail() {
         DiscoveryBuilder::default()
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
     #[test]
-    #[should_panic(expected = "data handler needs data")]
+    #[should_panic(expected = "[DiscoveryBuilder] Can't find data of required type.")]
     fn setting_db_handler_wo_db_should_fail() {
         DiscoveryBuilder::default()
-            .add_data_handler(|_: u8, _, _: OfferReceived| async { Ok(Propagate::Yes) })
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data_handler(|_: u8, _, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
@@ -112,16 +127,19 @@ mod test {
     #[should_panic]
     fn build_from_with_missing_handler_should_fail() {
         DiscoveryBuilder::default()
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
-            .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
+            .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .build();
     }
 
     #[test]
-    fn build_from_with_three_handlers_should_pass() {
+    fn build_from_with_four_handlers_should_pass() {
         DiscoveryBuilder::default()
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
-            .add_handler(|_, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
+            .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
             .build();
     }
@@ -129,14 +147,17 @@ mod test {
     #[test]
     fn build_from_with_mixed_handlers_should_pass() {
         DiscoveryBuilder::default()
-            .data("mock data")
-            .add_handler(|_, _: OfferReceived| async { Ok(Propagate::Yes) })
-            .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
-            .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data("mock data")
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
+            .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
+            .add_data_handler(|_: &str, _, _: RetrieveOffers| async { Ok(vec![]) })
             .build();
     }
 
     #[actix_rt::test]
+    #[serial_test::serial]
     async fn build_from_with_overwritten_handlers_should_pass() {
         // given
         let _ = env_logger::builder().try_init();
@@ -144,25 +165,28 @@ mod test {
         let cnt = counter.clone();
 
         let discovery = DiscoveryBuilder::default()
-            .data(7 as usize)
-            .data("mock data")
-            .add_handler(|_, _: OfferReceived| async { panic!("should not be invoked") })
-            .add_data_handler(|_: &str, _, _: OfferUnsubscribed| async { Ok(Propagate::Yes) })
-            .add_data_handler(move |data: usize, _, _: OfferReceived| {
+            .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
+            .add_data(7 as usize)
+            .add_data("mock data")
+            .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
+            .add_handler(|_, _: RetrieveOffers| async { panic!("should not be invoked") })
+            .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
+            .add_data_handler(move |data: usize, _, _: RetrieveOffers| {
                 let cnt = cnt.clone();
                 async move {
                     cnt.fetch_add(data, SeqCst);
-                    Ok(Propagate::No(Reason::AlreadyExists))
+                    Ok(vec![])
                 }
             })
-            .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .build();
 
         assert_eq!(0, counter.load(SeqCst));
 
         // when
+        let node_id = generate_identity("caller").identity.to_string();
         discovery
-            .on_offer_received("caller".into(), sample_offer_received())
+            .on_get_remote_offers(node_id, sample_retrieve_offers())
             .await
             .unwrap();
 

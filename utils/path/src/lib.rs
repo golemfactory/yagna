@@ -129,4 +129,18 @@ mod tests {
             PathBuf::from("/abc/efg/attack")
         );
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_remove_verbatim_prefix() {
+        let path = Path::new(r"c:\windows\System32")
+            .to_path_buf()
+            .canonicalize()
+            .expect("should canonicalize: c:\\");
+
+        assert_eq!(
+            PathBuf::from(r"C:\Windows\System32"),
+            normalize_path(path).unwrap()
+        );
+    }
 }

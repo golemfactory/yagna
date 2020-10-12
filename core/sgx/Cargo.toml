@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-graphene = { git = "https://github.com/golemfactory/graphene-rust.git", rev = "57b0a366658a2d609d9c0cef209955760e363730", features = ["ias"] }
+graphene-sgx = { version = "0.3", features = [ "ias" ] }
 ya-client-model = "0.1"
 ya-core-model = { version = "0.1", features = ["sgx"] }
 ya-service-bus = "0.2"
