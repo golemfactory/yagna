@@ -107,6 +107,7 @@ impl<'c> ProposalDao<'c> {
                                 .select(dsl::negotiation_id),
                         ),
                     )
+                    .limit(500)
                     .select(dsl_negotiation::id)
                     .load::<String>(conn)?;
                 let ndp = diesel::delete(
