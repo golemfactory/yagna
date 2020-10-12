@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.3.4-alpha.0"
+version = "0.4.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,7 +10,7 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['market-forwarding', 'gnt-driver', 'gftp/bin']
+default = ['market-decentralized', 'gnt-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized', 'gftp/bin']
@@ -122,7 +122,6 @@ ya-market-forwarding = { path = "core/market/forwarding" }
 ya-market-resolver = { path = "core/market/resolver" }
 ya-net = { path = "core/net" }
 ya-payment = { path = "core/payment" }
-
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }

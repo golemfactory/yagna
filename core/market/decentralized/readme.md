@@ -1,13 +1,5 @@
 # Decentralized market Mk1
 
-## Running yagna with decentralized market
-
-You can enable decentralized market using cargo features.
-Run yagna daemon with flags:
-```
-cargo run --no-default-features --features market-decentralized --features gnt-driver service run --accept-terms
-```
-
 ## Running decentralized market test suite
 
 To test market-test-suite run:
@@ -31,20 +23,4 @@ add `env_logger::init();` on the beginning.
 
 ```
 RUST_LOG=debug cargo test -p ya-market-decentralized --features ya-market-decentralized/market-test-suite 
-```
-
-### Building .deb
-Prerequisites: 
-- You need cargo-deb installed (`cargo install cargo-deb`).
-- Build .deb on the oldest operating system version, you want to support.
-Otherwise linking with GLIBC will fail.
-
-Build yagna with all binaries needed in .deb:
-```
-cargo build --release --no-default-features --features market-decentralized --features gnt-driver --workspace
-```
-
-Run cargo-deb using binaries compiled in the previous step:
-```
-cargo deb --deb-version $(git rev-parse --short HEAD) --no-build
 ```

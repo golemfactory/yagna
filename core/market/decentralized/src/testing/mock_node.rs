@@ -94,9 +94,21 @@ impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
-    pub async fn new(test_name: &str) -> Self {
+    pub async fn new(test_name: Option<&str>) -> Self {
         let _ = env_logger::builder().try_init();
-        let test_dir = prepare_test_dir(&test_name).unwrap();
+        // level 1 is this function.
+        // level 2 is <core::future::from_generator::GenFuture<T> as
+        // core::future::future::Future>::poll::XXX> (async)
+        // We want to know the caller.
+        let mut bn = crate::testing::backtrace_util::generate_backtraced_name(Some(3));
+        // Special case for mac&windows. Tests are run in adifferent way on those systems and we
+        // have to dive one less level down the stack to find the caller (test_* module).
+        if !bn.starts_with("test_") {
+            bn = crate::testing::backtrace_util::generate_backtraced_name(Some(2));
+        }
+        let tn = test_name.unwrap_or(bn.as_str());
+        log::info!("Intializing MarketsNetwork. tn={}", tn);
+        let test_dir = prepare_test_dir(&tn).unwrap();
 
         MockNet::default().bind_gsb();
 
@@ -108,7 +120,7 @@ impl MarketsNetwork {
         MarketsNetwork {
             nodes: vec![],
             test_dir,
-            test_name: test_name.to_string(),
+            test_name: tn.to_string(),
             config: Arc::new(config),
         }
     }
@@ -416,8 +428,13 @@ fn test_data_dir() -> PathBuf {
         .join("test-workdir")
 }
 
+fn escape_path(path: &str) -> String {
+    // Windows can't handle colons
+    path.replace("::", "_").to_string()
+}
+
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
-    let test_dir: PathBuf = test_data_dir().join(dir_name);
+    let test_dir: PathBuf = test_data_dir().join(escape_path(dir_name).as_str());
 
     log::info!(
         "[MockNode] Preparing test directory: {}",
