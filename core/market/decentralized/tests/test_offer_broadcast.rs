@@ -20,7 +20,7 @@ use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
 #[serial_test::serial]
 async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?
@@ -70,7 +70,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_callbacks")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -108,7 +108,7 @@ async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_offer_id_validation")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -148,7 +148,7 @@ async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_expired_offer")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?;
@@ -193,7 +193,7 @@ async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_broadcast_stop_conditions")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?
@@ -286,7 +286,7 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 #[serial_test::serial]
 async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
     let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new("test_network_error_while_subscribing")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
         .await?
