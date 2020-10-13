@@ -137,30 +137,79 @@ impl YaProviderCommand {
         }
     }
 
-    pub async fn update_preset(
-        self,
+    pub async fn update_profile(
+        mut self,
         name: &str,
-        exeunit_name: &str,
-        usage_coeffs: &UsageDef,
+        cores: Option<usize>,
+        memory: Option<f64>,
+        disk: Option<f64>,
     ) -> anyhow::Result<()> {
-        let mut cmd = self.cmd;
-        cmd.args(&["preset", "update", "--no-interactive"]);
-        preset_command(&mut cmd, name, exeunit_name, usage_coeffs);
-        cmd.arg("--").arg(name);
+        let cmd = &mut self.cmd;
+        cmd.arg("profile").arg("update").arg(name);
+        if let Some(cores) = cores {
+            cmd.arg("--cpu-threads").arg(cores.to_string());
+        }
+        if let Some(memory) = memory {
+            cmd.arg("--mem-gib").arg(memory.to_string());
+        }
+        if let Some(disk) = disk {
+            cmd.arg("--disk").arg(disk.to_string());
+        }
+        self.exec_no_output().await
+    }
 
+    pub async fn update_all_presets(
+        mut self,
+        starting_fee: Option<f64>,
+        env_per_hour: Option<f64>,
+        cpu_per_hour: Option<f64>,
+    ) -> anyhow::Result<()> {
+        let cmd = &mut self.cmd;
+        cmd.args(&["preset", "update", "--no-interactive"]);
+        cmd.arg("--pricing").arg("linear");
+        if let Some(cpu) = cpu_per_hour {
+            cmd.arg("--price").arg(format!("CPU={}", cpu));
+        }
+        if let Some(duration) = env_per_hour {
+            cmd.arg("--price").arg(format!("Duration={}", duration));
+        }
+        if let Some(initial) = starting_fee {
+            cmd.arg("--price").arg(format!("Init price={}", initial));
+        }
+        cmd.arg("--all");
+        self.exec_no_output().await
+    }
+
+    async fn exec_no_output(self) -> anyhow::Result<()> {
+        let mut cmd = self.cmd;
         let output = cmd
             .stderr(Stdio::piped())
             .stdin(Stdio::null())
-            .stdout(Stdio::piped())
+            .stdout(Stdio::null())
             .output()
             .await
-            .with_context(|| format!("update preset {:?}", name))?;
+            .context("exec ya-provider")?;
         if output.status.success() {
             Ok(())
         } else {
             let output = String::from_utf8_lossy(&output.stderr);
-            Err(anyhow::anyhow!("{}", output)).with_context(|| format!("update preset {:?}", name))
+            Err(anyhow::anyhow!("{}", output)).context("exec ya-provider")
         }
+    }
+
+    pub async fn update_preset(
+        mut self,
+        name: &str,
+        exeunit_name: &str,
+        usage_coeffs: &UsageDef,
+    ) -> anyhow::Result<()> {
+        let mut cmd = &mut self.cmd;
+        cmd.args(&["preset", "update", "--no-interactive"]);
+        preset_command(&mut cmd, name, exeunit_name, usage_coeffs);
+        cmd.arg("--").arg(name);
+        self.exec_no_output()
+            .await
+            .with_context(|| format!("update preset {}", name))
     }
 
     pub async fn active_presets(self) -> anyhow::Result<Vec<String>> {
@@ -225,9 +274,18 @@ impl YaProviderCommand {
     }
 }
 
-fn preset_command(cmd: &mut Command, name: &str, exeunit_name: &str, usage_coeffs: &UsageDef) {
-    cmd.arg("--preset-name").arg(name);
-    cmd.arg("--exe-unit").arg(exeunit_name);
+fn preset_command<'a, 'b>(
+    cmd: &mut Command,
+    name: impl Into<Option<&'a str>>,
+    exeunit_name: impl Into<Option<&'b str>>,
+    usage_coeffs: &UsageDef,
+) {
+    if let Some(name) = name.into() {
+        cmd.arg("--preset-name").arg(name);
+    }
+    if let Some(exeunit_name) = exeunit_name.into() {
+        cmd.arg("--exe-unit").arg(exeunit_name);
+    }
     cmd.arg("--pricing").arg("linear");
     cmd.arg("--price").arg(format!("CPU={}", &usage_coeffs.cpu));
     cmd.arg("--price")
