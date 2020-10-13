@@ -87,8 +87,9 @@ impl EthFaucetConfig {
                     .timestamp()
                     .try_into()
                     .map_err(|e: TryFromIntError| GNTDriverError::LibraryError(e.to_string()))?;
+                log::debug!("faucet paydate={}, current={}", sleep_till, current);
                 // Ignore times in the past
-                if sleep_till <= current {
+                if sleep_till >= current {
                     // Cap max seconds to wait at 60
                     let capped_seconds = min(sleep_till - current, 60);
                     log::info!(
