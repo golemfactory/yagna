@@ -164,10 +164,6 @@ ya-sb-proto = { path = "service-bus/proto" }
 ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
-## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2e2f0d8cca0e0b2585baa446977733cee7137595" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2e2f0d8cca0e0b2585baa446977733cee7137595" }
-
 ## OTHERS
 gftp = { path = "core/gftp" }
 tokio-process-ns = { path = "exe-unit/tokio-process-ns" }
