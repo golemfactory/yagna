@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - mwu/test-release    # put your branch name here to test it @ GH Actions
   pull_request:
     branches:
       - master
@@ -32,30 +33,30 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
-      - name: Cache cargo registry
-        uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-
-      - name: Cache cargo index
-        uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-index-
-
-      - name: Cache cargo build
-        uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
+      # - name: Cache cargo registry
+      #   uses: actions/cache@v1
+      #   if: matrix.os != 'macos-latest'
+      #   with:
+      #     path: ~/.cargo/registry
+      #     key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-cargo-registry-
+      #
+      # - name: Cache cargo index
+      #   uses: actions/cache@v1
+      #   if: matrix.os != 'macos-latest'
+      #   with:
+      #     path: ~/.cargo/git
+      #     key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-cargo-index-
+      #
+      # - name: Cache cargo build
+      #   uses: actions/cache@v1
+      #   if: matrix.os != 'macos-latest'
+      #   with:
+      #     path: target
+      #     key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
 
       - name: cargo fmt
         uses: actions-rs/cargo@v1
@@ -63,14 +64,14 @@ jobs:
           command: fmt
           args: --all -- --check
 
-      - name: Cache vcpkg's artifacts
-        uses: actions/cache@v1
-        if: matrix.os == 'windows-latest'
-        with:
-          path: c:/vcpkg/installed
-          key: vcpkg-${{ runner.os }}-v0
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
+      # - name: Cache vcpkg's artifacts
+      #   uses: actions/cache@v1
+      #   if: matrix.os == 'windows-latest'
+      #   with:
+      #     path: c:/vcpkg/installed
+      #     key: vcpkg-${{ runner.os }}-v0
+      #     restore-keys: |
+      #       vcpkg-${{ runner.os }}-
 
       - name: Install openssl
         if: matrix.os == 'windows-latest'
