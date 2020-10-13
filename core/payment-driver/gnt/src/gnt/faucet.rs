@@ -12,7 +12,6 @@ use trust_dns_resolver::TokioAsyncResolver;
 
 const MAX_ETH_FAUCET_REQUESTS: u32 = 6;
 const ETH_FAUCET_SLEEP: time::Duration = time::Duration::from_secs(2);
-const INIT_ETH_SLEEP: time::Duration = time::Duration::from_secs(15);
 const ETH_FAUCET_ADDRESS_ENV_VAR: &str = "ETH_FAUCET_ADDRESS";
 const DEFAULT_ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
 
@@ -126,9 +125,7 @@ impl EthFaucetConfig {
                     tokio::time::delay_for(ETH_FAUCET_SLEEP).await;
                 }
             } else {
-                log::info!("Succesfully requested Eth, waiting...");
-                tokio::time::delay_for(INIT_ETH_SLEEP).await;
-                log::info!("Finished requesting Eth from faucet");
+                log::info!("Successfully requested Eth.");
                 return Ok(());
             }
         }
