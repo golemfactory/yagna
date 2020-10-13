@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use structopt::{clap, StructOpt};
 
 use std::convert::TryFrom;
+use ya_client::model::payment::Account;
 use ya_client::{cli::ApiOpts, cli::RequestorApi, Error};
 
 mod activity;
@@ -172,12 +173,18 @@ async fn main() -> anyhow::Result<()> {
 
     let activities = Arc::new(Mutex::new(HashSet::new()));
     let agreement_allocation = Arc::new(Mutex::new(HashMap::new()));
+
+    log::info!("Loading payment accounts...");
+    let accounts: Vec<Account> = api.payment.get_accounts().await?;
+    log::info!("Payment accounts: {:#?}", accounts);
+
     let my_demand = market::build_demand(
         &settings.node_name,
         &settings.runtime,
         &settings.task_package,
         chrono::Duration::from_std(*settings.task_expiration)?,
         &settings.subnet,
+        accounts,
     );
 
     log::debug!(
