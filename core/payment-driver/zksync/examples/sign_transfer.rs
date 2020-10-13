@@ -43,7 +43,7 @@ async fn main() {
     info!("sign message={}", ETH_SIGN_MESSAGE);
     let msg_as_bytes = ETH_SIGN_MESSAGE.as_bytes();
     info!("msg_hex={}", hex::encode(&msg_as_bytes));
-    let msg_as_bytes = message_to_signed_bytes(msg_as_bytes, true);
+    let msg_as_bytes = message_to_signable_bytes(msg_as_bytes, true);
     //    let msg_as_bytes = msg_as_bytes.to_vec();
     info!("msg_hex={}", hex::encode(&msg_as_bytes));
     info!(
@@ -73,7 +73,7 @@ async fn main() {
 
     //
     //
-    let eth_sign_hex = message_to_signed_bytes(transfer_eth_sign_message.as_bytes(), true);
+    let eth_sign_hex = message_to_signable_bytes(transfer_eth_sign_message.as_bytes(), true);
     info!("eth_sig_hex {:?}", hex::encode(&eth_sign_hex));
     let eth_sign_hex = sign_tx(eth_sign_hex).await;
     info!("eth_sig_hex: {:?}", hex::encode(&eth_sign_hex));
@@ -87,7 +87,7 @@ async fn main() {
     info!("tx_hash= {}.", hex::encode(tx_hash));
 }
 
-fn message_to_signed_bytes(msg: &[u8], include_prefix: bool) -> Vec<u8> {
+fn message_to_signable_bytes(msg: &[u8], include_prefix: bool) -> Vec<u8> {
     let bytes = if include_prefix {
         let prefix = format!("\x19Ethereum Signed Message:\n{}", msg.len());
         let mut b = Vec::with_capacity(prefix.len() + msg.len());

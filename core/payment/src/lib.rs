@@ -23,7 +23,10 @@ pub mod migrations {
     struct _Dummy;
 }
 
-pub const DEFAULT_PAYMENT_PLATFORM: &str = "ZK-NGNT";
+// // Uncomment zksync and comment ngnt, to test zksync invoice flow
+// pub const DEFAULT_PAYMENT_PLATFORM: &str = "ZK-NGNT";
+// pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
+pub const DEFAULT_PAYMENT_PLATFORM: &str = "NGNT";
 pub const DEFAULT_PAYMENT_DRIVER: &str = "ngnt";
 
 pub struct PaymentService;

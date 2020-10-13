@@ -4,8 +4,8 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use client::rpc_client::RpcClient;
 use client::wallet::{BalanceState, Wallet};
-use num::BigUint;
 use num::pow::pow;
+use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
 use web3::types::Address;
@@ -114,20 +114,26 @@ async fn schedule_payment(
         date: Some(Utc::now()),
     };
 
-    let pub_address = Address::from_str(&details.sender[2..]).unwrap();
+    let pub_address = Address::from_str(&details.sender[2..]).map_err(GenericError::new)?;
     let seed = get_zksync_seed(pub_address).await;
     let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
     let wallet = Wallet::from_seed(seed, pub_address, provider);
 
     let recepient = Address::from_str(&details.recipient[2..]).unwrap();
     let amount = BigUint::from_str(&details.amount.to_string()).unwrap();
+    // TODO: Get token decimals from zksync-provider / wallet
     let amount = amount * pow(BigUint::from(10u32), 18);
     let (tx, msg) = wallet
         .prepare_sync_transfer(&recepient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
         .await;
     let signed_msg = eth_sign_transfer(pub_address, msg).await;
     let packed_sig = PackedEthSignature::deserialize_packed(&signed_msg).unwrap();
-    wallet.sync_transfer(tx, packed_sig).await;
+    let tx_hash = wallet.sync_transfer(tx, packed_sig).await;
+
+    log::info!(
+        "Created zksync transaction with hash={}",
+        hex::encode(tx_hash)
+    );
 
     let confirmation = serde_json::to_string(&details)
         .map_err(GenericError::new)?
