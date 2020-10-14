@@ -32,6 +32,7 @@ impl AbortableChild {
     ) -> Self {
         let (tx, rx) = oneshot::channel();
 
+        #[allow(unused)]
         async fn wait_and_kill(child: Child, send_term: bool) -> io::Result<ExitStatus> {
             #[cfg(target_os = "linux")]
             if send_term {

@@ -1,6 +1,5 @@
 use actix::prelude::*;
 use futures::channel::oneshot;
-use futures::TryFutureExt;
 use std::path::PathBuf;
 use std::time::Duration;
 

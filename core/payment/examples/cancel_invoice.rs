@@ -21,7 +21,7 @@ async fn assert_requested_amount(
             address: payer_addr.to_string(),
         })
         .await??;
-    assert_eq!(&payer_status.outgoing.requested, amount);
+    assert_eq!(&payer_status.outgoing.requested.value, amount);
 
     let payee_status = bus::service(pay::BUS_ID)
         .call(pay::GetStatus {
@@ -29,7 +29,7 @@ async fn assert_requested_amount(
             address: payee_addr.to_string(),
         })
         .await??;
-    assert_eq!(&payee_status.incoming.requested, amount);
+    assert_eq!(&payee_status.incoming.requested.value, amount);
     Ok(())
 }
 
