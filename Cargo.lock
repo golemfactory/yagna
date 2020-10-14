@@ -2006,7 +2006,7 @@ dependencies = [
  "tokio 0.2.22",
  "url 2.1.1",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-service-bus",
 ]
 
@@ -5859,7 +5859,7 @@ dependencies = [
  "tokio 0.2.22",
  "uuid 0.8.1",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-net",
  "ya-persistence",
  "ya-sb-router",
@@ -5926,6 +5926,21 @@ dependencies = [
 [[package]]
 name = "ya-core-model"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81461a798d3616e5748724406e9f3359d856c773a262949c9a035b86b3c6d3d5"
+dependencies = [
+ "chrono",
+ "log 0.4.11",
+ "serde",
+ "serde_bytes",
+ "thiserror",
+ "ya-client-model",
+ "ya-service-bus",
+]
+
+[[package]]
+name = "ya-core-model"
+version = "0.2.0"
 dependencies = [
  "bigdecimal",
  "bitflags 1.2.1",
@@ -5950,7 +5965,7 @@ dependencies = [
  "log 0.4.11",
  "serde_json",
  "uuid 0.8.1",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-persistence",
  "ya-service-api-interfaces",
  "ya-service-bus",
@@ -5993,7 +6008,7 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client-model",
  "ya-compile-time-utils",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
@@ -6040,7 +6055,7 @@ dependencies = [
  "uuid 0.8.1",
  "web3",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-persistence",
  "ya-service-api-interfaces",
  "ya-service-bus",
@@ -6076,7 +6091,7 @@ dependencies = [
  "tokio 0.2.22",
  "uuid 0.8.1",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-persistence",
  "ya-sb-router",
  "ya-service-api",
@@ -6121,7 +6136,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-agreement-utils",
  "ya-client",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-market-decentralized",
  "ya-market-resolver",
  "ya-net",
@@ -6157,7 +6172,7 @@ dependencies = [
  "tokio 0.2.22",
  "url 2.1.1",
  "ya-client",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-net",
  "ya-persistence",
  "ya-service-api",
@@ -6211,7 +6226,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
@@ -6252,7 +6267,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-client",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.2.0",
  "ya-dummy-driver",
  "ya-gnt-driver",
  "ya-metrics",
@@ -6281,7 +6296,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.22",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.1.1",
 ]
 
 [[package]]
@@ -6327,7 +6342,7 @@ dependencies = [
  "ya-client",
  "ya-client-model",
  "ya-compile-time-utils",
- "ya-core-model",
+ "ya-core-model 0.1.1",
  "ya-utils-actix",
  "ya-utils-path",
  "ya-utils-process",
@@ -6515,7 +6530,7 @@ dependencies = [
  "structopt",
  "url 2.1.1",
  "ya-client",
- "ya-core-model",
+ "ya-core-model 0.1.1",
  "ya-identity",
  "ya-persistence",
  "ya-sb-router",
@@ -6592,7 +6607,7 @@ dependencies = [
  "url 2.1.1",
  "walkdir",
  "ya-client-model",
- "ya-core-model",
+ "ya-core-model 0.1.1",
  "ya-net",
  "ya-service-bus",
  "ya-utils-path",
