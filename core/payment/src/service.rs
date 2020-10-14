@@ -491,9 +491,10 @@ mod public {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
 
+        let num_paid_invoices = payment.agreement_payments.len() as u64;
         match processor.verify_payment(payment).await {
             Ok(_) => {
-                counter!("payment.invoices.provider.paid", 1);
+                counter!("payment.invoices.provider.paid", num_paid_invoices);
                 Ok(Ack {})
             }
             Err(e) => match e {
