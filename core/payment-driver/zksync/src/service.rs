@@ -120,9 +120,9 @@ async fn schedule_payment(
     let wallet = Wallet::from_seed(seed, pub_address, provider);
 
     let recepient = Address::from_str(&details.recipient[2..]).unwrap();
-    let amount = BigUint::from_str(&details.amount.to_string()).unwrap();
     // TODO: Get token decimals from zksync-provider / wallet
-    let amount = amount * pow(BigUint::from(10u32), 18);
+    let amount = &details.amount * pow(BigDecimal::from(10u32), 18);
+    let amount = amount.to_bigint().unwrap().to_biguint().unwrap();
     let (tx, msg) = wallet
         .prepare_sync_transfer(&recepient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
         .await;
