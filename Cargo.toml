@@ -16,6 +16,7 @@ market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized', 'gftp/bin']
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
+tos = []
 
 [[bin]]
 name = "yagna"
@@ -41,6 +42,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 ya-utils-path = "0.1"
+ya-metrics = "0.1"
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -55,11 +57,34 @@ log = "0.4"
 openssl = "0.10"
 structopt = "0.3"
 url = "2.1.1"
+tokio = {version = "0.2.22", features=["uds"]}
 
 [package.metadata.deb]
+name="golem-requestor"
 assets = [
     ["target/release/yagna", "usr/bin/", "755"],
-    ["target/release/ya-requestor", "usr/bin/", "755"],
+    ["target/release/gftp", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/yagna/", "644"],
+    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
+]
+conflicts="ya-provider"
+features=["static-openssl"]
+maintainer-scripts="debian/core"
+depends="libgcc1, libc6 (>= 2.23)"
+extended-description="""The Next Golem Milestone.
+
+An open platform and marketplace for distributed computations.
+"""
+
+
+[package.metadata.deb.variants.provider]
+name="golem-provider"
+replaces="golem-requestor"
+maintainer-scripts="debian/core"
+features=["static-openssl"]
+depends="libgcc1, libc6 (>= 2.23)"
+assets = [
+    ["target/release/yagna", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
     ["target/release/gftp", "usr/bin/", "755"],
     ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
@@ -67,7 +92,7 @@ assets = [
     ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
     ["agent/provider/readme.md", "usr/share/doc/yagna/run-provider.md", "644"],
 ]
-features=["static-openssl"]
+
 
 [workspace]
 members = [
@@ -94,6 +119,7 @@ members = [
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
+    "golem_cli",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
@@ -107,6 +133,7 @@ members = [
     "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
+    "core/metrics"
 ]
 
 [patch.crates-io]
@@ -137,8 +164,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "099944b74c2743457feb825ccc4b8b3d83f587c4" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "099944b74c2743457feb825ccc4b8b3d83f587c4" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2e2f0d8cca0e0b2585baa446977733cee7137595" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2e2f0d8cca0e0b2585baa446977733cee7137595" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -151,3 +178,4 @@ ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
+ya-metrics = { path = "core/metrics" }

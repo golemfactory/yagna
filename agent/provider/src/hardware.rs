@@ -7,7 +7,7 @@ use std::io;
 use std::ops::{Add, Not, Sub};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use structopt::StructOpt;
+use structopt::{clap, StructOpt};
 use tokio::sync::watch;
 use ya_agreement_utils::{CpuInfo, InfNodeInfo};
 use ya_utils_path::SwapSave;
@@ -62,6 +62,21 @@ pub struct Resources {
     /// Free partition space
     #[structopt(long)]
     pub storage_gib: f64,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+#[structopt(group = clap::ArgGroup::with_name("up-res").multiple(true).required(true))]
+pub struct UpdateResources {
+    /// Number of CPU logical cores
+    #[structopt(long, group = "up-res")]
+    pub cpu_threads: Option<i32>,
+    /// Total amount of RAM
+    #[structopt(long, group = "up-res")]
+    pub mem_gib: Option<f64>,
+    /// Free partition space
+    #[structopt(long, group = "up-res")]
+    pub storage_gib: Option<f64>,
 }
 
 impl Resources {

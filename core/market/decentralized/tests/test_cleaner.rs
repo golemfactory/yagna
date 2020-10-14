@@ -190,3 +190,36 @@ async fn test_proposal() -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_proposal_lotsa_negotiations() -> Result<()> {
+    // Due to diesel limitations we have to take care of processing
+    // big amount of negotiations (manually) #672
+    let _ = env_logger::builder().try_init();
+    let db = MarketsNetwork::new("market-cleaner-proposal-lotsa-negotiations")
+        .await
+        .init_database("testnode")?;
+    let mut expired_negotiations: Vec<Negotiation> = vec![];
+    for i in 1..1500 {
+        let expired_negotiation = generate_negotiation(None);
+        <PoolType as TestingDao<Negotiation>>::raw_insert(
+            &db.clone().pool,
+            expired_negotiation.clone(),
+        )
+        .await?;
+        let proposal = generate_proposal(i, past(), expired_negotiation.id.clone());
+        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.clone().pool, proposal.clone())
+            .await?;
+        expired_negotiations.push(expired_negotiation);
+    }
+    clean(db.clone()).await;
+    for n in expired_negotiations {
+        assert_eq!(
+            <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, n.id).await,
+            false
+        );
+    }
+    Ok(())
+}
