@@ -73,8 +73,8 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
         cmd.ya_provider()?
             .update_all_presets(
                 settings.starting_fee,
-                settings.env_per_hour,
-                settings.cpu_per_hour,
+                settings.env_per_hour.map(|p| p / 3600.0),
+                settings.cpu_per_hour.map(|p| p / 3600.0),
             )
             .await?;
     }

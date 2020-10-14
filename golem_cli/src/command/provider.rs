@@ -161,16 +161,16 @@ impl YaProviderCommand {
     pub async fn update_all_presets(
         mut self,
         starting_fee: Option<f64>,
-        env_per_hour: Option<f64>,
-        cpu_per_hour: Option<f64>,
+        env_per_sec: Option<f64>,
+        cpu_per_sec: Option<f64>,
     ) -> anyhow::Result<()> {
         let cmd = &mut self.cmd;
         cmd.args(&["preset", "update", "--no-interactive"]);
         cmd.arg("--pricing").arg("linear");
-        if let Some(cpu) = cpu_per_hour {
+        if let Some(cpu) = cpu_per_sec {
             cmd.arg("--price").arg(format!("CPU={}", cpu));
         }
-        if let Some(duration) = env_per_hour {
+        if let Some(duration) = env_per_sec {
             cmd.arg("--price").arg(format!("Duration={}", duration));
         }
         if let Some(initial) = starting_fee {
