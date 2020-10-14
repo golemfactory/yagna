@@ -248,17 +248,12 @@ impl<'a> AgreementDao<'a> {
 }
 
 fn make_summary(agreements: Vec<ReadObj>) -> StatusNotes {
-    let s = agreements
+    agreements
         .into_iter()
         .map(|agreement| StatusNotes {
             requested: StatValue::new(agreement.total_amount_due),
             accepted: StatValue::new(agreement.total_amount_accepted),
             confirmed: StatValue::new(agreement.total_amount_paid),
         })
-        .inspect(|f| {
-            eprintln!("{:?}", f);
-        })
-        .sum();
-    eprintln!("sum={:?}", s);
-    s
+        .sum()
 }

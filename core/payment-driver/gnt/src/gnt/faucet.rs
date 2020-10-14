@@ -12,7 +12,6 @@ use trust_dns_resolver::TokioAsyncResolver;
 
 const MAX_ETH_FAUCET_REQUESTS: u32 = 6;
 const ETH_FAUCET_SLEEP: time::Duration = time::Duration::from_secs(2);
-const INIT_ETH_SLEEP: time::Duration = time::Duration::from_secs(15);
 const ETH_FAUCET_ADDRESS_ENV_VAR: &str = "ETH_FAUCET_ADDRESS";
 const DEFAULT_ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
 
@@ -87,8 +86,9 @@ impl EthFaucetConfig {
                     .timestamp()
                     .try_into()
                     .map_err(|e: TryFromIntError| GNTDriverError::LibraryError(e.to_string()))?;
+                log::debug!("faucet paydate={}, current={}", sleep_till, current);
                 // Ignore times in the past
-                if sleep_till <= current {
+                if sleep_till >= current {
                     // Cap max seconds to wait at 60
                     let capped_seconds = min(sleep_till - current, 60);
                     log::info!(
@@ -125,9 +125,7 @@ impl EthFaucetConfig {
                     tokio::time::delay_for(ETH_FAUCET_SLEEP).await;
                 }
             } else {
-                log::info!("Succesfully requested Eth, waiting...");
-                tokio::time::delay_for(INIT_ETH_SLEEP).await;
-                log::info!("Finished requesting Eth from faucet");
+                log::info!("Successfully requested Eth.");
                 return Ok(());
             }
         }
