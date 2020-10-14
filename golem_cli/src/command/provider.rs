@@ -153,7 +153,7 @@ impl YaProviderCommand {
             cmd.arg("--mem-gib").arg(memory.to_string());
         }
         if let Some(disk) = disk {
-            cmd.arg("--disk").arg(disk.to_string());
+            cmd.arg("--storage-gib").arg(disk.to_string());
         }
         self.exec_no_output().await
     }

@@ -49,7 +49,12 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                             timeout: None,
                         },
                     );
-                    ctx.spawn(fut.into_actor(self));
+                    ctx.spawn(
+                        async move {
+                            fut.await;
+                        }
+                        .into_actor(self),
+                    );
                 }
             }
         }

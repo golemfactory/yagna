@@ -69,13 +69,15 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table.add_empty_row();
             table.add_row(row!["address", &id.node_id]);
             table.add_row(row!["amount", format!("{} NGNT", &payment_status.amount)]);
+            table.add_empty_row();
             table.add_row(row![
                 "pending",
-                format!("{} NGNT", &payment_status.incoming.total_pending())
+                format!("{} NGNT", &payment_status.incoming.total_pending().0)
             ]);
+            let (unconfirmed, unconfirmed_cnt) = &payment_status.incoming.unconfirmed();
             table.add_row(row![
                 "unconfirmed",
-                format!("{} NGNT", &payment_status.incoming.unconfirmed())
+                format!("{} NGNT ({})", unconfirmed, unconfirmed_cnt)
             ]);
 
             table

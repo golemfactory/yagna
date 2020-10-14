@@ -17,7 +17,7 @@ pub enum RpcMessageError {
 pub mod local {
     use super::*;
     use crate::driver::{AccountMode, PaymentConfirmation};
-    use bigdecimal::BigDecimal;
+    use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
     use ya_client_model::NodeId;
@@ -200,11 +200,37 @@ pub mod local {
         pub outgoing: StatusNotes,
         pub incoming: StatusNotes,
     }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    pub struct StatValue {
+        pub value: BigDecimal,
+        pub count: u64,
+    }
+
+    impl StatValue {
+        pub fn new(v: impl Into<BigDecimal>) -> Self {
+            let value = v.into();
+            let count = if value.is_zero() { 0 } else { 1 };
+            Self { value, count }
+        }
+    }
+
+    impl std::ops::Add for StatValue {
+        type Output = Self;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            Self {
+                value: self.value + rhs.value,
+                count: self.count + rhs.count,
+            }
+        }
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct StatusNotes {
-        pub requested: BigDecimal,
-        pub accepted: BigDecimal,
-        pub confirmed: BigDecimal,
+        pub requested: StatValue,
+        pub accepted: StatValue,
+        pub confirmed: StatValue,
     }
 
     impl std::ops::Add for StatusNotes {

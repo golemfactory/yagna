@@ -346,15 +346,20 @@ impl ExeUnitContext {
     }
 }
 
-pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: String, msg: M) {
-    let result = ya_service_bus::typed::service(&url)
-        .send(msg)
-        .map_err(Error::from)
-        .await;
+pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: String, msg: M) -> bool {
+    let result = match ya_service_bus::typed::service(&url).send(msg).await {
+        Err(ya_service_bus::Error::Closed(_)) => {
+            log::error!("{}", "Reporting endpoint is not available");
+            return false;
+        }
+        v => v,
+    }
+    .map_err(Error::from);
 
     if let Err(e) = result {
         log::warn!("Error reporting to {}: {:?}", url, e);
     }
+    true
 }
 
 async fn report_usage<R: Runtime>(
@@ -374,7 +379,11 @@ async fn report_usage<R: Runtime>(
                     },
                     timeout: None,
                 };
-                report(report_url, msg).await;
+                if !report(report_url, msg).await {
+                    exe_unit.do_send(Shutdown(ShutdownReason::Error(
+                        "Reporting endpoint is not available".to_string(),
+                    )));
+                }
             }
             Err(err) => match err {
                 Error::UsageLimitExceeded(info) => {

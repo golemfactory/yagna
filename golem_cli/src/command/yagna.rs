@@ -22,15 +22,29 @@ pub struct PaymentStatus {
     pub incoming: PaymentSummary,
 }
 
+#[derive(Deserialize)]
+pub struct SummaryValue {
+    pub value: String,
+    pub count: u64,
+}
+
+impl SummaryValue {
+    fn extract(&self) -> Option<(BigDecimal, u64)> {
+        BigDecimal::from_str(&self.value)
+            .ok()
+            .map(|v| (v, self.count))
+    }
+}
+
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PaymentSummary {
     #[serde(default)]
-    accepted: Option<String>,
+    accepted: Option<SummaryValue>,
     #[serde(default)]
-    confirmed: Option<String>,
+    confirmed: Option<SummaryValue>,
     #[serde(default)]
-    requested: Option<String>,
+    requested: Option<SummaryValue>,
 }
 
 #[derive(Deserialize, Default)]
@@ -62,27 +76,34 @@ impl ActivityStatus {
 }
 
 impl PaymentSummary {
-    pub fn total_pending(&self) -> BigDecimal {
-        let accepted = self
+    pub fn total_pending(&self) -> (BigDecimal, u64) {
+        let (accepted, accepted_cnt) = self
             .accepted
             .as_ref()
-            .and_then(|v| BigDecimal::from_str(&v).ok())
+            .and_then(SummaryValue::extract)
             .unwrap_or_default();
-        let confirmed = self
+        let (confirmed, confirmed_cnt) = self
             .confirmed
             .as_ref()
-            .and_then(|v| BigDecimal::from_str(&v).ok())
+            .and_then(SummaryValue::extract)
             .unwrap_or_default();
         //let requested = self.requested.as_ref().and_then(|v| BigDecimal::from_str(&v).ok()).unwrap_or_default();
 
-        accepted + confirmed
+        (accepted - confirmed, accepted_cnt - confirmed_cnt)
     }
 
-    pub fn unconfirmed(&self) -> BigDecimal {
-        self.requested
+    pub fn unconfirmed(&self) -> (BigDecimal, u64) {
+        let (requested, requested_cnt) = self
+            .requested
             .as_ref()
-            .and_then(|v| BigDecimal::from_str(v).ok())
-            .unwrap_or_default()
+            .and_then(SummaryValue::extract)
+            .unwrap_or_default();
+        let (accepted, accepted_cnt) = self
+            .accepted
+            .as_ref()
+            .and_then(SummaryValue::extract)
+            .unwrap_or_default();
+        (requested - accepted, requested_cnt - accepted_cnt)
     }
 }
 
@@ -132,6 +153,19 @@ impl YagnaCommand {
         cmd.stdin(Stdio::null())
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit());
+
+        #[cfg(target_os = "linux")]
+        unsafe {
+            use ::nix::libc::{prctl, PR_SET_PDEATHSIG};
+            use ::nix::sys::signal::*;
+            use std::io;
+
+            cmd.pre_exec(|| {
+                ::nix::unistd::setsid().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let _ = prctl(PR_SET_PDEATHSIG, SIGTERM);
+                Ok(())
+            });
+        }
 
         let mut tracker = tracker::Tracker::new(&mut cmd)?;
         cmd.kill_on_drop(true);

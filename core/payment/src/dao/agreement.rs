@@ -9,7 +9,7 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::{DocumentStatus, EventType};
 use ya_client_model::NodeId;
-use ya_core_model::payment::local::StatusNotes;
+use ya_core_model::payment::local::{StatValue, StatusNotes};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -248,12 +248,17 @@ impl<'a> AgreementDao<'a> {
 }
 
 fn make_summary(agreements: Vec<ReadObj>) -> StatusNotes {
-    agreements
+    let s = agreements
         .into_iter()
         .map(|agreement| StatusNotes {
-            requested: agreement.total_amount_due.into(),
-            accepted: agreement.total_amount_accepted.into(),
-            confirmed: agreement.total_amount_paid.into(),
+            requested: StatValue::new(agreement.total_amount_due),
+            accepted: StatValue::new(agreement.total_amount_accepted),
+            confirmed: StatValue::new(agreement.total_amount_paid),
         })
-        .sum()
+        .inspect(|f| {
+            eprintln!("{:?}", f);
+        })
+        .sum();
+    eprintln!("sum={:?}", s);
+    s
 }
