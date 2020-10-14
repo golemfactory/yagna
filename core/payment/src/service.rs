@@ -1,5 +1,6 @@
 use crate::processor::PaymentProcessor;
 use futures::prelude::*;
+use metrics::counter;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -27,6 +28,23 @@ mod local {
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_status)
             .bind_with_processor(get_accounts);
+
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("payment.invoices.requestor.accepted", 0);
+        counter!("payment.invoices.requestor.received", 0);
+        counter!("payment.invoices.requestor.cancelled", 0);
+        counter!("payment.invoices.requestor.paid", 0);
+        counter!("payment.debit_notes.requestor.accepted", 0);
+        counter!("payment.debit_notes.provider.issued", 0);
+        counter!("payment.debit_notes.provider.sent", 0);
+        counter!("payment.debit_notes.provider.accepted", 0);
+        counter!("payment.invoices.provider.issued", 0);
+        counter!("payment.invoices.provider.sent", 0);
+        counter!("payment.invoices.provider.cancelled", 0);
+        counter!("payment.invoices.provider.paid", 0);
+        counter!("payment.invoices.provider.accepted", 0);
+
         log::debug!("Successfully bound payment local service to service bus");
     }
 
@@ -202,6 +220,8 @@ mod public {
             db.as_dao::<DebitNoteDao>()
                 .insert_received(debit_note)
                 .await?;
+
+            counter!("payment.debit_notes.received", 1);
             Ok(())
         }
         .await
@@ -252,7 +272,10 @@ mod public {
         }
 
         match dao.accept(debit_note_id, node_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.debit_notes.provider.accepted", 1);
+                Ok(Ack {})
+            }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
@@ -349,6 +372,8 @@ mod public {
             }
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
+
+            counter!("payment.invoices.requestor.received", 1);
             Ok(())
         }
         .await
@@ -399,7 +424,10 @@ mod public {
         }
 
         match dao.accept(invoice_id, node_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.invoices.provider.accepted", 1);
+                Ok(Ack {})
+            }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
@@ -442,7 +470,10 @@ mod public {
         }
 
         match dao.cancel(invoice_id, invoice.recipient_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.invoices.requestor.cancelled", 1);
+                Ok(Ack {})
+            }
             Err(e) => Err(CancelError::ServiceError(e.to_string())),
         }
     }
@@ -460,8 +491,12 @@ mod public {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
 
+        let num_paid_invoices = payment.agreement_payments.len() as u64;
         match processor.verify_payment(payment).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.invoices.provider.paid", num_paid_invoices);
+                Ok(Ack {})
+            }
             Err(e) => match e {
                 VerifyPaymentError::ConfirmationEncoding => {
                     Err(SendError::BadRequest(e.to_string()))
