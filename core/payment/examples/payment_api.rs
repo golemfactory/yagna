@@ -2,6 +2,7 @@ use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
 use ethkey::{EthAccount, Password};
 use futures::Future;
+use serde_json;
 use std::convert::TryInto;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -12,10 +13,8 @@ use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
 use ya_core_model::identity;
-use ya_dummy_driver::{
-    PaymentDriverService as DummyDriverService, DRIVER_NAME as DUMMY_DRIVER_NAME,
-};
-use ya_gnt_driver::{PaymentDriverService as GntDriverService, DRIVER_NAME as GNT_DRIVER_NAME};
+use ya_dummy_driver as dummy;
+use ya_gnt_driver as gnt;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
@@ -59,16 +58,20 @@ struct Args {
     provider_key_path: String,
     #[structopt(long, default_value = "")]
     provider_pass: String,
+    #[structopt(long)]
+    provider_addr: Option<String>,
     #[structopt(long, default_value = "requestor.key")]
     requestor_key_path: String,
     #[structopt(long, default_value = "")]
     requestor_pass: String,
+    #[structopt(long)]
+    requestor_addr: Option<String>,
     #[structopt(long, default_value = "agreement_id")]
     agreement_id: String,
 }
 
 pub async fn start_dummy_driver() -> anyhow::Result<()> {
-    DummyDriverService::gsb(&()).await?;
+    dummy::PaymentDriverService::gsb(&()).await?;
     Ok(())
 }
 
@@ -80,7 +83,7 @@ pub async fn start_gnt_driver(
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    GntDriverService::gsb(db).await?;
+    gnt::PaymentDriverService::gsb(db).await?;
 
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
@@ -150,15 +153,21 @@ async fn main() -> anyhow::Result<()> {
     let args: Args = Args::from_args();
 
     let provider_pass: Password = args.provider_pass.clone().into();
-    let requestor_pass: Password = args.requestor_pass.clone().into();
     let provider_account = EthAccount::load_or_generate(&args.provider_key_path, provider_pass)?;
-    let requestor_account = EthAccount::load_or_generate(&args.requestor_key_path, requestor_pass)?;
     let provider_id = provider_account.address().to_string();
+    let provider_addr = args.provider_addr.unwrap_or(provider_id.clone());
+
+    let requestor_pass: Password = args.requestor_pass.clone().into();
+    let requestor_account = EthAccount::load_or_generate(&args.requestor_key_path, requestor_pass)?;
     let requestor_id = requestor_account.address().to_string();
+    let requestor_addr = args.requestor_addr.unwrap_or(requestor_id.clone());
+
     log::info!(
-        "Provider ID: {}\nRequestor ID: {}",
+        "Provider ID: {}\nProvider address: {}\nRequestor ID: {}\nRequestor address: {}",
         provider_id,
-        requestor_id
+        provider_addr,
+        requestor_id,
+        requestor_addr,
     );
 
     let database_url = "file:payment.db";
@@ -167,14 +176,14 @@ async fn main() -> anyhow::Result<()> {
 
     ya_sb_router::bind_gsb_router(None).await?;
 
-    let driver_name = match args.driver {
+    let (driver_name, platform) = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
-            DUMMY_DRIVER_NAME
+            (dummy::DRIVER_NAME, dummy::PLATFORM_NAME)
         }
         Driver::Ngnt => {
             start_gnt_driver(&db, requestor_account).await?;
-            GNT_DRIVER_NAME
+            (gnt::DRIVER_NAME, gnt::PLATFORM_NAME)
         }
     };
 
@@ -188,16 +197,37 @@ async fn main() -> anyhow::Result<()> {
         .call(Init::new(requestor_id.clone(), AccountMode::SEND))
         .await??;
 
+    let address_property = format!("platform.{}.address", platform);
+    let demand_properties = serde_json::json!({
+        "golem.com.payment": {
+            "chosen-platform": &platform,
+            &address_property: &requestor_addr,
+        }
+    });
+    log::info!(
+        "Demand properties: {}",
+        serde_json::to_string(&demand_properties)?
+    );
+    let offer_properties = serde_json::json!({
+        "golem.com.payment": {
+            &address_property: &provider_addr,
+        }
+    });
+    log::info!(
+        "Offer properties: {}",
+        serde_json::to_string(&offer_properties)?
+    );
+
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
         demand: market::Demand {
-            properties: Default::default(),
+            properties: demand_properties,
             constraints: "".to_string(),
             demand_id: None,
             requestor_id: Some(requestor_id.clone()),
         },
         offer: market::Offer {
-            properties: Default::default(),
+            properties: offer_properties,
             constraints: "".to_string(),
             offer_id: None,
             provider_id: Some(provider_id.clone()),
