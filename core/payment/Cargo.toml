@@ -8,6 +8,7 @@ edition = "2018"
 default = []
 
 [dependencies]
+ya-agreement-utils = "0.1"
 ya-client-model = { version = "0.1", features = ["with-diesel"] }
 ya-core-model = { version = "0.1", features = [
     "activity",

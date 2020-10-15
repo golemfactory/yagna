@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::{fs, io};
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
+use ya_client_model::payment::Account;
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
 
@@ -28,6 +29,7 @@ pub struct ProviderAgent {
     task_manager: Addr<TaskManager>,
     presets: PresetManager,
     hardware: hardware::Manager,
+    accounts: Vec<Account>,
 }
 
 struct GlobalsManager {
@@ -114,6 +116,11 @@ impl ProviderAgent {
     pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let data_dir = config.data_dir.get_or_create()?.as_path().to_path_buf();
         let api = ProviderApi::try_from(&args.api)?;
+
+        log::info!("Loading payment accounts...");
+        let accounts: Vec<Account> = api.payment.get_accounts().await?;
+        log::info!("Payment accounts: {:#?}", accounts);
+
         let registry = config.registry()?;
         registry.validate()?;
 
@@ -136,6 +143,7 @@ impl ProviderAgent {
             task_manager,
             presets,
             hardware,
+            accounts,
         })
     }
 
@@ -145,6 +153,7 @@ impl ProviderAgent {
         inf_node_info: InfNodeInfo,
         runner: Addr<TaskRunner>,
         market: Addr<ProviderMarket>,
+        accounts: Vec<Account>,
     ) -> anyhow::Result<()> {
         if presets.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
@@ -157,7 +166,7 @@ impl ProviderAgent {
             let com_info = match preset.pricing_model.as_str() {
                 "linear" => LinearPricingOffer::from_preset(&preset)?
                     .interval(6.0)
-                    .build(),
+                    .build(&accounts),
                 _ => {
                     return Err(anyhow!(
                         "Unsupported pricing model: {}.",
@@ -187,6 +196,7 @@ impl ProviderAgent {
                     constraints: Self::build_constraints(node_info.subnet.clone())?,
                 },
             };
+
             market.send(create_offer_message).await??;
         }
         Ok(())
@@ -329,6 +339,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let runner = self.runner.clone();
         let market = self.market.clone();
         let node_info = self.create_node_info();
+        let accounts = self.accounts.clone();
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),
@@ -336,8 +347,10 @@ impl Handler<CreateOffers> for ProviderAgent {
         };
 
         let presets = self.presets.list_matching(&preset_names);
-        async move { Self::create_offers(presets?, node_info, inf_node_info, runner, market).await }
-            .boxed_local()
+        async move {
+            Self::create_offers(presets?, node_info, inf_node_info, runner, market, accounts).await
+        }
+        .boxed_local()
     }
 }
 
