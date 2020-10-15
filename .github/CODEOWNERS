@@ -1,15 +1,17 @@
 
-.github/			@prekucki
+.github/                                @prekucki
 
-core/activity/                  @golemfactory/exe-unit
-core/model/src/activity.rs      @golemfactory/exe-unit
-exe-unit/                       @golemfactory/exe-unit
+.github/workflows/build-deb.yml         @golemfactory/ya-integration
 
-core/market/                    @golemfactory/ya-market
-core/model/src/market.rs        @golemfactory/ya-market
+core/activity/                          @golemfactory/exe-unit
+core/model/src/activity.rs              @golemfactory/exe-unit
+exe-unit/                               @golemfactory/exe-unit
 
-service-bus/                    @golemfactory/ya-net
-core/net/                       @golemfactory/ya-net
+core/market/                            @golemfactory/ya-market
+core/model/src/market.rs                @golemfactory/ya-market
 
-core/payment-driver             @golemfactory/ya-payment
-core/payment                    @golemfactory/ya-payment
+service-bus/                            @golemfactory/ya-net
+core/net/                               @golemfactory/ya-net
+
+core/payment-driver                     @golemfactory/ya-payment
+core/payment                            @golemfactory/ya-payment
