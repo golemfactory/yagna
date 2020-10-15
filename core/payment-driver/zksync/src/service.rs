@@ -4,11 +4,13 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use client::rpc_client::RpcClient;
 use client::wallet::{BalanceState, Wallet};
+use num::bigint::ToBigInt;
 use num::pow::pow;
 use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
 use web3::types::Address;
+use zksync::utils::{closest_packable_token_amount, is_token_amount_packable};
 
 // Workspace uses
 use ya_core_model::driver::*;
@@ -119,12 +121,13 @@ async fn schedule_payment(
     let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
     let wallet = Wallet::from_seed(seed, pub_address, provider);
 
-    let recepient = Address::from_str(&details.recipient[2..]).unwrap();
+    let recipient = Address::from_str(&details.recipient[2..]).unwrap();
     // TODO: Get token decimals from zksync-provider / wallet
     let amount = &details.amount * pow(BigDecimal::from(10u32), 18);
     let amount = amount.to_bigint().unwrap().to_biguint().unwrap();
+    let amount = pack_up(&amount);
     let (tx, msg) = wallet
-        .prepare_sync_transfer(&recepient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
+        .prepare_sync_transfer(&recipient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
         .await;
     let signed_msg = eth_sign_transfer(pub_address, msg).await;
     let packed_sig = PackedEthSignature::deserialize_packed(&signed_msg).unwrap();
@@ -171,4 +174,47 @@ async fn verify_payment(
     let json_str = std::str::from_utf8(confirmation.confirmation.as_slice()).unwrap();
     let details = serde_json::from_str(&json_str).unwrap();
     Ok(details)
+}
+
+fn increase_least_significant_digit(amount: &BigUint) -> BigUint {
+    let digits = amount.to_radix_le(10);
+    for i in 0..(digits.len()) {
+        if digits[i] != 0 {
+            return amount + pow(BigUint::from(10u32), i);
+        }
+    }
+    amount.clone() // zero
+}
+
+/// Find the closest **bigger** packable amount
+fn pack_up(amount: &BigUint) -> BigUint {
+    let mut packable_amount = closest_packable_token_amount(&amount);
+    while (&packable_amount < amount) || !is_token_amount_packable(&packable_amount) {
+        packable_amount = increase_least_significant_digit(&packable_amount);
+    }
+    packable_amount
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_increase_least_significant_digit() {
+        let amount = BigUint::from_str("999000").unwrap();
+        let increased = increase_least_significant_digit(&amount);
+        let expected = BigUint::from_str("1000000").unwrap();
+        assert_eq!(increased, expected);
+    }
+
+    #[test]
+    fn test_pack_up() {
+        let amount = BigUint::from_str("12300285190700000000").unwrap();
+        let packable = pack_up(&amount);
+        assert!(
+            zksync::utils::is_token_amount_packable(&packable),
+            "Not packable!"
+        );
+        assert!(packable >= amount, "To little!");
+    }
 }
