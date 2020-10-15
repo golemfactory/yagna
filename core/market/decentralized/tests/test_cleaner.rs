@@ -198,9 +198,7 @@ async fn test_proposal_lotsa_negotiations() -> Result<()> {
     // Due to diesel limitations we have to take care of processing
     // big amount of negotiations (manually) #672
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new("market-cleaner-proposal-lotsa-negotiations")
-        .await
-        .init_database("testnode")?;
+    let db = MarketsNetwork::new(None).await.init_database("testnode")?;
     let mut expired_negotiations: Vec<Negotiation> = vec![];
     for i in 1..1500 {
         let expired_negotiation = generate_negotiation(None);
