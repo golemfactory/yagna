@@ -273,12 +273,37 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
 mod local {
     use super::*;
     use crate::common::{set_persisted_state, set_persisted_usage};
+    use ya_core_model::activity::local::StatsResult;
 
     pub fn bind_gsb(db: &DbExecutor) {
         ServiceBinder::new(activity::local::BUS_ID, db, ())
             .bind(set_activity_state_gsb)
             .bind(set_activity_usage_gsb)
-            .bind(get_agreement_id_gsb);
+            .bind(get_agreement_id_gsb)
+            .bind(activity_status);
+    }
+
+    async fn activity_status(
+        db: DbExecutor,
+        _caller: String,
+        _msg: activity::local::Stats,
+    ) -> RpcMessageResult<activity::local::Stats> {
+        let total = db
+            .as_dao::<ActivityStateDao>()
+            .stats()
+            .await
+            .map_err(Error::from)?;
+        let last_1h = db
+            .as_dao::<ActivityStateDao>()
+            .stats_1h()
+            .await
+            .map_err(Error::from)?;
+
+        Ok(StatsResult {
+            total,
+            last_1h,
+            last_activity_ts: None,
+        })
     }
 
     /// Pass activity state (which may include error details).

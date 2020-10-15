@@ -6,7 +6,7 @@ use crate::{api, db::migrations, provider};
 pub struct Activity;
 
 impl Service for Activity {
-    type Cli = ();
+    type Cli = crate::cli::ActivityCli;
 }
 
 impl Activity {

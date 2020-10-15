@@ -97,19 +97,14 @@ impl ProviderBroker {
 
     pub async fn counter_proposal(
         &self,
-        subscription_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
         id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
             .common
-            .counter_proposal(
-                subscription_id,
-                prev_proposal_id,
-                proposal,
-                OwnerType::Provider,
-            )
+            .counter_proposal(offer_id, prev_proposal_id, proposal, OwnerType::Provider)
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
@@ -126,6 +121,31 @@ impl ProviderBroker {
             &proposal_id
         );
         Ok(proposal_id)
+    }
+
+    // TODO: this is only mock implementation not to throw 501
+    pub async fn reject_proposal(
+        &self,
+        _offer_id: &SubscriptionId,
+        proposal_id: &ProposalId,
+        id: &Identity,
+    ) -> Result<(), ProposalError> {
+        // self.common
+        //     .reject_proposal(offer_id, proposal_id, OwnerType::Provider)
+        //     .await?;
+        //
+        // self.api
+        //     .reject_proposal(id, proposal_id, TODO: requestor_id)
+        //     .await
+        //     .map_err(|e| ProposalError::Send(proposal_id.clone(), e))?;
+
+        counter!("market.proposals.provider.rejected", 1);
+        log::info!(
+            "Provider {} rejected Proposal [{}]",
+            DisplayIdentity(id),
+            &proposal_id,
+        );
+        Ok(())
     }
 
     pub async fn query_events(

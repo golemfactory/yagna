@@ -184,6 +184,11 @@ impl EthereumClient {
             .await?;
         Ok(tx_receipt)
     }
+
+    pub async fn get_balance(&self, address: Address) -> EthereumClientResult<U256> {
+        let balance = self.web3.eth().balance(address, None).compat().await?;
+        Ok(balance)
+    }
 }
 
 #[cfg(test)]
