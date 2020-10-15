@@ -1,5 +1,6 @@
 use chrono::Utc;
 use futures::stream::StreamExt;
+use metrics::counter;
 use std::str::FromStr;
 
 use ya_client::model::market::{event::ProviderEvent, Proposal as ClientProposal};
@@ -58,6 +59,15 @@ impl ProviderBroker {
             move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
         );
 
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("market.events.provider.queried", 0);
+        counter!("market.proposals.provider.received", 0);
+        counter!("market.proposals.provider.countered", 0);
+        counter!("market.proposals.provider.init-negotiation", 0);
+        counter!("market.agreements.provider.proposed", 0);
+        counter!("market.agreements.provider.approved", 0);
+
         Ok(ProviderBroker {
             api,
             common: broker,
@@ -87,19 +97,14 @@ impl ProviderBroker {
 
     pub async fn counter_proposal(
         &self,
-        subscription_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &ClientProposal,
         id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
             .common
-            .counter_proposal(
-                subscription_id,
-                prev_proposal_id,
-                proposal,
-                OwnerType::Provider,
-            )
+            .counter_proposal(offer_id, prev_proposal_id, proposal, OwnerType::Provider)
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
@@ -108,6 +113,7 @@ impl ProviderBroker {
             .await
             .map_err(|e| ProposalError::Send(prev_proposal_id.clone(), e))?;
 
+        counter!("market.proposals.provider.countered", 1);
         log::info!(
             "Provider {} countered Proposal [{}] with [{}]",
             DisplayIdentity(id),
@@ -115,6 +121,31 @@ impl ProviderBroker {
             &proposal_id
         );
         Ok(proposal_id)
+    }
+
+    // TODO: this is only mock implementation not to throw 501
+    pub async fn reject_proposal(
+        &self,
+        _offer_id: &SubscriptionId,
+        proposal_id: &ProposalId,
+        id: &Identity,
+    ) -> Result<(), ProposalError> {
+        // self.common
+        //     .reject_proposal(offer_id, proposal_id, OwnerType::Provider)
+        //     .await?;
+        //
+        // self.api
+        //     .reject_proposal(id, proposal_id, TODO: requestor_id)
+        //     .await
+        //     .map_err(|e| ProposalError::Send(proposal_id.clone(), e))?;
+
+        counter!("market.proposals.provider.rejected", 1);
+        log::info!(
+            "Provider {} rejected Proposal [{}]",
+            DisplayIdentity(id),
+            &proposal_id,
+        );
+        Ok(())
     }
 
     pub async fn query_events(
@@ -129,7 +160,7 @@ impl ProviderBroker {
             .await?;
 
         // Map model events to client RequestorEvent.
-        Ok(futures::stream::iter(events)
+        let events = futures::stream::iter(events)
             .then(|event| event.into_client_provider_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
@@ -138,7 +169,10 @@ impl ProviderBroker {
             })
             .filter_map(|event| async move { event.ok() })
             .collect::<Vec<ProviderEvent>>()
-            .await)
+            .await;
+
+        counter!("market.events.provider.queried", events.len() as u64);
+        Ok(events)
     }
 
     pub async fn approve_agreement(
@@ -148,7 +182,6 @@ impl ProviderBroker {
         timeout: f32,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
-
         let agreement = match dao
             .select(agreement_id, None, Utc::now().naive_utc())
             .await
@@ -169,6 +202,7 @@ impl ProviderBroker {
                     .await
                     .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
 
+                counter!("market.agreements.provider.approved", 1);
                 log::info!(
                     "Provider {} approved Agreement [{}].",
                     DisplayIdentity(&id),
@@ -239,7 +273,10 @@ async fn initial_proposal(
     };
     broker
         .proposal_received(caller, received_msg, OwnerType::Provider)
-        .await
+        .await?;
+
+    counter!("market.proposals.provider.init-negotiation", 1);
+    Ok(())
 }
 
 async fn on_agreement_received(
@@ -321,6 +358,7 @@ async fn agreement_received(
     // Send channel message to wake all query_events waiting for proposals.
     broker.notifier.notify(&offer_id).await;
 
+    counter!("market.agreements.provider.proposed", 1);
     log::info!(
         "Agreement proposal [{}] received from [{}].",
         &msg.agreement_id,
