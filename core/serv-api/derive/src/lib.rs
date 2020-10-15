@@ -163,9 +163,8 @@ fn define_gsb_services(
         let path = &service.path;
         let service_name = format!("{}", &service.name);
         inner.extend(quote! {
-            log::info!("activating {} service", #service_name);
             #path::gsb(context).await?;
-            log::info!("{} service successfully activated", #service_name);
+            log::info!("{} GSB service successfully activated", #service_name);
         });
     }
 
@@ -187,8 +186,10 @@ fn define_rest_services(
         .filter(|service| service.supports(Component::Rest))
     {
         let path = &service.path;
+        let service_name = format!("{}", &service.name);
         inner.extend(quote! {
             let app = app.service(#path::rest(context));
+            log::debug!("{} REST scope successfully installed", #service_name);
         });
     }
 

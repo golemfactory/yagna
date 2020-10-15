@@ -1,5 +1,6 @@
 use chrono::Utc;
 use lazy_static::lazy_static;
+use metrics::counter;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
@@ -113,6 +114,11 @@ impl MarketService {
             .bind_gsb(public_prefix, local_prefix)
             .await?;
         agreement::bind_gsb(self.db.clone(), public_prefix, local_prefix).await;
+
+        counter!("market.offers.subscribed", 0);
+        counter!("market.offers.unsubscribed", 0);
+        counter!("market.demands.subscribed", 0);
+        counter!("market.demands.unsubscribed", 0);
         Ok(())
     }
 
@@ -164,6 +170,8 @@ impl MarketService {
     ) -> Result<SubscriptionId, MarketError> {
         let offer = self.matcher.subscribe_offer(offer, id).await?;
         self.provider_engine.subscribe_offer(&offer).await?;
+
+        counter!("market.offers.subscribed", 1);
         Ok(offer.id)
     }
 
@@ -174,7 +182,10 @@ impl MarketService {
     ) -> Result<(), MarketError> {
         // TODO: Authorize unsubscribe caller.
         self.provider_engine.unsubscribe_offer(offer_id).await?;
-        Ok(self.matcher.unsubscribe_offer(offer_id, id).await?)
+        self.matcher.unsubscribe_offer(offer_id, id).await?;
+
+        counter!("market.offers.unsubscribed", 1);
+        Ok(())
     }
 
     pub async fn subscribe_demand(
@@ -184,6 +195,8 @@ impl MarketService {
     ) -> Result<SubscriptionId, MarketError> {
         let demand = self.matcher.subscribe_demand(demand, id).await?;
         self.requestor_engine.subscribe_demand(&demand).await?;
+
+        counter!("market.demands.subscribed", 1);
         Ok(demand.id)
     }
 
@@ -196,7 +209,10 @@ impl MarketService {
 
         self.requestor_engine.unsubscribe_demand(demand_id).await?;
         // TODO: shouldn't remove precede negotiation unsubscribe?
-        Ok(self.matcher.unsubscribe_demand(demand_id, id).await?)
+        self.matcher.unsubscribe_demand(demand_id, id).await?;
+
+        counter!("market.demands.unsubscribed", 1);
+        Ok(())
     }
 
     pub async fn get_agreement(
