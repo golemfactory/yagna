@@ -131,71 +131,79 @@ impl MockNetInner {
 
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
         let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
-        let _ = local_bus::subscribe(&addr, move |caller: &str, _addr: &str, msg: &[u8]| {
-            let mock_net = MockNet::default();
-            let resp = resp.clone();
-            let bcast = bcast.clone();
+        let _ = local_bus::subscribe(
+            &addr,
+            move |caller: &str, _addr: &str, msg: &[u8]| {
+                let mock_net = MockNet::default();
+                let resp = resp.clone();
+                let bcast = bcast.clone();
 
-            let msg_json: SendBroadcastMessage<serde_json::Value> =
-                serde_json::from_slice(msg).unwrap();
-            let caller = caller.to_string();
+                let msg_json: SendBroadcastMessage<serde_json::Value> =
+                    serde_json::from_slice(msg).unwrap();
+                let caller = caller.to_string();
 
-            let msg = serde_json::to_vec(&msg_json).unwrap();
-            let topic = msg_json.topic().to_owned();
-            let endpoints = bcast.resolve(&caller, &topic);
+                let msg = serde_json::to_vec(&msg_json).unwrap();
+                let topic = msg_json.topic().to_owned();
+                let endpoints = bcast.resolve(&caller, &topic);
 
-            log::debug!("BCasting on {} to {:?} from {}", topic, endpoints, caller);
-            for endpoint in endpoints {
-                let addr = format!("{}/{}", endpoint, bcast_service_id);
+                log::debug!("BCasting on {} to {:?} from {}", topic, endpoints, caller);
+                for endpoint in endpoints {
+                    let addr = format!("{}/{}", endpoint, bcast_service_id);
 
-                let node_id = match mock_net.node_by_prefix(&addr) {
-                    Some(node_id) => node_id,
-                    None => {
-                        log::debug!(
-                            "Not broadcasting on topic {} to {}. Node not found on list. \
+                    let node_id = match mock_net.node_by_prefix(&addr) {
+                        Some(node_id) => node_id,
+                        None => {
+                            log::debug!(
+                                "Not broadcasting on topic {} to {}. Node not found on list. \
                          Probably networking was disabled for this Node.",
-                            topic,
-                            addr
-                        );
-                        continue;
-                    }
-                };
+                                topic,
+                                addr
+                            );
+                            continue;
+                        }
+                    };
 
-                log::debug!(
-                    "BCasting on {} to address: {}, node: [{}]",
-                    topic,
-                    addr,
-                    node_id
-                );
-                let caller = caller.clone();
-                let msg = msg.clone();
-                Arbiter::spawn(async move {
-                    let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
-                });
-            }
-            async move { Ok(Vec::from(resp.as_ref())) }
-        });
+                    log::debug!(
+                        "BCasting on {} to address: {}, node: [{}]",
+                        topic,
+                        addr,
+                        node_id
+                    );
+                    let caller = caller.clone();
+                    let msg = msg.clone();
+                    Arbiter::spawn(async move {
+                        let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
+                    });
+                }
+                async move { Ok(Vec::from(resp.as_ref())) }
+            },
+            (),
+        );
 
-        local_bus::subscribe(FROM_BUS_ID, move |caller: &str, addr: &str, msg: &[u8]| {
-            let mock_net = MockNet::default();
-            let data = Vec::from(msg);
-            let caller = caller.to_string();
-            let addr = addr.to_string();
+        local_bus::subscribe(
+            FROM_BUS_ID,
+            move |caller: &str, addr: &str, msg: &[u8]| {
+                let mock_net = MockNet::default();
+                let data = Vec::from(msg);
+                let caller = caller.to_string();
+                let addr = addr.to_string();
 
-            async move {
-                let (from, local_addr) = mock_net
-                    .translate_address(addr)
-                    .await
-                    .map_err(|e| Error::GsbBadRequest(e.to_string()))?;
+                async move {
+                    let (from, local_addr) = mock_net
+                        .translate_address(addr)
+                        .await
+                        .map_err(|e| Error::GsbBadRequest(e.to_string()))?;
 
-                log::debug!(
-                    "[MockNet] Sending message from [{}], to address [{}].",
-                    &caller,
-                    &local_addr
-                );
-                Ok(local_bus::send(&local_addr, &from.to_string(), &data).await?)
-            }
-        });
+                    log::debug!(
+                        "[MockNet] Sending message from [{}], to address [{}].",
+                        &caller,
+                        &local_addr
+                    );
+                    Ok(local_bus::send(&local_addr, &from.to_string(), &data).await?)
+                }
+            },
+            (),
+        );
     }
 }
 

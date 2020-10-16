@@ -5,6 +5,7 @@ use crate::utils::provider::*;
 use crate::utils::*;
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use metrics::counter;
 use serde_json::value::Value::Null;
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{GetAccounts, BUS_ID as LOCAL_SERVICE};
@@ -92,7 +93,10 @@ async fn issue_debit_note(
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note_id = dao.create_new(debit_note, node_id).await?;
-        Ok(dao.get(debit_note_id, node_id).await?)
+        let debit_note = dao.get(debit_note_id, node_id).await?;
+
+        counter!("payment.debit_notes.provider.issued", 1);
+        Ok(debit_note)
     }
     .await
     {
@@ -154,6 +158,7 @@ async fn send_debit_note(
                 .call(SendDebitNote(debit_note))
                 .await??;
             dao.mark_received(debit_note_id, node_id).await?;
+            counter!("payment.debit_notes.provider.sent", 1);
             Ok(())
         }
         .await
@@ -255,7 +260,10 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
 
         let dao: InvoiceDao = db.as_dao();
         let invoice_id = dao.create_new(invoice, node_id).await?;
-        Ok(dao.get(invoice_id, node_id).await?)
+        let invoice = dao.get(invoice_id, node_id).await?;
+
+        counter!("payment.invoices.provider.issued", 1);
+        Ok(invoice)
     }
     .await
     {
@@ -313,6 +321,8 @@ async fn send_invoice(
                 .call(SendInvoice(invoice))
                 .await??;
             dao.mark_received(invoice_id, node_id).await?;
+
+            counter!("payment.invoices.provider.sent", 1);
             Ok(())
         }
         .await
@@ -363,6 +373,8 @@ async fn cancel_invoice(
                 })
                 .await??;
             dao.cancel(invoice_id, node_id).await?;
+
+            counter!("payment.invoices.provider.cancelled", 1);
             Ok(())
         }
         .await

@@ -24,11 +24,10 @@ fn past() -> NaiveDateTime {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement() -> Result<()> {
+    let _ = env_logger::builder().try_init();
     let valid_agreement = generate_agreement(1, future());
     let expired_agreement = generate_agreement(2, past());
-    let db = MarketsNetwork::new("market-cleaner-agreement")
-        .await
-        .init_database("testnode")?;
+    let db = MarketsNetwork::new(None).await.init_database("testnode")?;
     let agreement_dao = db.as_dao::<AgreementDao>();
     agreement_dao.save(valid_agreement.clone()).await?;
     agreement_dao.save(expired_agreement.clone()).await?;
@@ -57,9 +56,7 @@ async fn test_demand() -> Result<()> {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new("market-cleaner-demand")
-        .await
-        .init_database("testnode")?;
+    let db = MarketsNetwork::new(None).await.init_database("testnode")?;
     let demand_dao = db.as_dao::<DemandDao>();
     demand_dao.insert(&valid_demand).await?;
     demand_dao.insert(&expired_demand).await?;
@@ -88,9 +85,7 @@ async fn test_offer() -> Result<()> {
         "c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a54",
         past(),
         );
-    let db = MarketsNetwork::new("market-cleaner-offer")
-        .await
-        .init_database("testnode")?;
+    let db = MarketsNetwork::new(None).await.init_database("testnode")?;
     let offer_dao = db.as_dao::<OfferDao>();
     let validation_ts = (Utc::now() - Duration::days(100)).naive_utc();
     offer_dao
@@ -116,9 +111,7 @@ async fn test_offer() -> Result<()> {
 #[serial_test::serial]
 async fn test_events() -> Result<()> {
     // insert two events
-    let db = MarketsNetwork::new("market-cleaner-event")
-        .await
-        .init_database("testnode")?;
+    let db = MarketsNetwork::new(None).await.init_database("testnode")?;
     let valid_event = generate_event(1, future());
     let expired_event = generate_event(2, past());
     <PoolType as TestingDao<TestMarketEvent>>::raw_insert(&db.clone().pool, valid_event.clone())
@@ -142,9 +135,7 @@ async fn test_events() -> Result<()> {
 #[serial_test::serial]
 async fn test_proposal() -> Result<()> {
     let _ = env_logger::builder().try_init();
-    let db = MarketsNetwork::new("market-cleaner-proposal")
-        .await
-        .init_database("testnode")?;
+    let db = MarketsNetwork::new(None).await.init_database("testnode")?;
     let valid_negotiation = generate_negotiation(None);
     let expired_negotiation = generate_negotiation(None);
     <PoolType as TestingDao<Negotiation>>::raw_insert(&db.clone().pool, valid_negotiation.clone())
@@ -194,6 +185,37 @@ async fn test_proposal() -> Result<()> {
     for proposal in expired_proposals.into_iter() {
         assert_eq!(
             <PoolType as TestingDao<DbProposal>>::exists(&db.clone().pool, proposal.id).await,
+            false
+        );
+    }
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_proposal_lotsa_negotiations() -> Result<()> {
+    // Due to diesel limitations we have to take care of processing
+    // big amount of negotiations (manually) #672
+    let _ = env_logger::builder().try_init();
+    let db = MarketsNetwork::new(None).await.init_database("testnode")?;
+    let mut expired_negotiations: Vec<Negotiation> = vec![];
+    for i in 1..1500 {
+        let expired_negotiation = generate_negotiation(None);
+        <PoolType as TestingDao<Negotiation>>::raw_insert(
+            &db.clone().pool,
+            expired_negotiation.clone(),
+        )
+        .await?;
+        let proposal = generate_proposal(i, past(), expired_negotiation.id.clone());
+        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.clone().pool, proposal.clone())
+            .await?;
+        expired_negotiations.push(expired_negotiation);
+    }
+    clean(db.clone()).await;
+    for n in expired_negotiations {
+        assert_eq!(
+            <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, n.id).await,
             false
         );
     }

@@ -3,6 +3,7 @@ use bigdecimal::BigDecimal;
 use serde_json::json;
 
 use ya_agreement_utils::ComInfo;
+use ya_client_model::payment::Account;
 
 use super::model::{PaymentDescription, PaymentModel};
 use crate::market::presets::{Coefficient, Preset};
@@ -71,7 +72,7 @@ impl LinearPricingOffer {
     ) -> Result<&mut LinearPricingOffer> {
         let property = coefficient
             .to_property()
-            .ok_or_else(|| anyhow!("Invalid coefficient: {}", coefficient))?
+            .ok_or_else(|| anyhow!("Invalid coefficient: {}", coefficient.to_readable()))?
             .to_string();
         self.usage_params.push(property);
         self.usage_coeffs.push(value);
@@ -89,11 +90,11 @@ impl LinearPricingOffer {
         return self;
     }
 
-    pub fn build(&self) -> ComInfo {
+    pub fn build(&self, accounts: &Vec<Account>) -> ComInfo {
         let mut coeffs = self.usage_coeffs.clone();
         coeffs.push(self.initial_cost);
 
-        let params = json!({
+        let mut params = json!({
             "scheme": "payu".to_string(),
             "scheme.payu": json!({
                 "interval_sec": self.interval
@@ -108,6 +109,15 @@ impl LinearPricingOffer {
                 "vector": self.usage_params.clone()
             })
         });
+
+        for account in accounts {
+            params.as_object_mut().unwrap().insert(
+                format!("payment.platform.{}", account.platform),
+                json!({
+                    "address".to_string(): account.address,
+                }),
+            );
+        }
 
         ComInfo { params }
     }

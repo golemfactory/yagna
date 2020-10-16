@@ -83,7 +83,7 @@ impl RuntimeProcess {
                 cmd_args
             }
             ExeScriptCommand::Start { args } => {
-                let mut cmd_args = vec![OsString::from("start")];
+                let mut cmd_args = vec![OsString::from("start"), OsString::from("--")];
                 cmd_args.extend(args.into_iter().map(OsString::from));
                 cmd_args
             }
@@ -94,6 +94,7 @@ impl RuntimeProcess {
                     OsString::from("run"),
                     OsString::from("--entrypoint"),
                     OsString::from(entry_point),
+                    OsString::from("--"),
                 ];
                 cmd_args.extend(args.into_iter().map(OsString::from));
                 cmd_args

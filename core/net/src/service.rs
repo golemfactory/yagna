@@ -104,7 +104,10 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
             let caller = default_caller_rpc.clone();
             log_message("rpc", &caller, addr);
-            central_bus_rpc.call(caller, addr.to_string(), Vec::from(msg))
+            let addr = addr.to_string();
+            central_bus_rpc
+                .call(caller, addr.clone(), Vec::from(msg))
+                .map_err(|e| Error::RemoteError(addr, e.to_string()))
         };
 
         let central_bus_stream = central_bus.clone();
@@ -112,10 +115,13 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
             let caller = default_caller_stream.clone();
             log_message("stream", &caller, addr);
-            central_bus_stream.call_streaming(caller, addr.to_string(), Vec::from(msg))
+            let addr = addr.to_string();
+            central_bus_stream
+                .call_streaming(caller, addr.clone(), Vec::from(msg))
+                .map_err(move |e| Error::RemoteError(addr.clone(), e.to_string()))
         };
 
-        local_bus::subscribe_both(net::BUS_ID, rpc, stream);
+        local_bus::subscribe(net::BUS_ID, rpc, stream);
     }
 
     // bind /from/<caller>/to/<addr> on my local bus and forward all calls to remote bus under /net
@@ -137,7 +143,8 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             }
 
             central_bus_rpc
-                .call(from_node.to_string(), to_addr, Vec::from(msg))
+                .call(from_node.to_string(), to_addr.clone(), Vec::from(msg))
+                .map_err(|e| Error::RemoteError(to_addr, e.to_string()))
                 .right_future()
         };
 
@@ -169,9 +176,10 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
                 .right_stream()
         };
 
-        local_bus::subscribe_both("/from", rpc, stream);
+        local_bus::subscribe("/from", rpc, stream);
     }
 
+    // Subscribe broadcast on remote
     {
         let bcast = bcast.clone();
         let central_bus = central_bus.clone();
@@ -193,30 +201,37 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         });
     }
 
+    // Send broadcast to remote
     {
         let central_bus = central_bus.clone();
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
         let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
-        let _ = local_bus::subscribe(&addr, move |caller: &str, _addr: &str, msg: &[u8]| {
-            // TODO: remove unwrap here.
-            let ent: SendBroadcastMessage<serde_json::Value> = serde_json::from_slice(msg).unwrap();
+        let _ = local_bus::subscribe(
+            &addr,
+            move |caller: &str, _addr: &str, msg: &[u8]| {
+                // TODO: remove unwrap here.
+                let ent: SendBroadcastMessage<serde_json::Value> =
+                    serde_json::from_slice(msg).unwrap();
 
-            log::trace!(
-                "Broadcast msg related to topic {} from [{}].",
-                ent.topic(),
-                &caller
-            );
+                log::trace!(
+                    "Broadcast msg related to topic {} from [{}].",
+                    ent.topic(),
+                    &caller
+                );
 
-            let fut = central_bus.broadcast(caller.to_owned(), ent.topic().to_owned(), msg.into());
-            let resp = resp.clone();
-            async move {
-                if let Err(e) = fut.await {
-                    Err(Error::GsbFailure(format!("broadcast send failure {}", e)))
-                } else {
-                    Ok(Vec::from(resp.as_ref()))
+                let fut =
+                    central_bus.broadcast(caller.to_owned(), ent.topic().to_owned(), msg.into());
+                let resp = resp.clone();
+                async move {
+                    if let Err(e) = fut.await {
+                        Err(Error::GsbFailure(format!("broadcast send failure {}", e)))
+                    } else {
+                        Ok(Vec::from(resp.as_ref()))
+                    }
                 }
-            }
-        });
+            },
+            (),
+        );
     }
 
     Ok(())

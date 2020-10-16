@@ -1,10 +1,12 @@
 //! Cyclic methods for Matcher spawned after binding to GSB
+use metrics::{counter, timing};
 use rand::seq::IteratorRandom;
 use rand::Rng;
 use std::collections::HashSet;
 use std::hash::Hash;
 
 use super::Matcher;
+use std::time::Instant;
 
 pub(super) async fn bcast_offers(matcher: Matcher) {
     if matcher.config.discovery.max_bcasted_offers <= 0 {
@@ -16,6 +18,8 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
         let matcher = matcher.clone();
         async move {
             wait_random_interval(bcast_interval).await;
+
+            let start = Instant::now();
 
             // We always broadcast our own Offers.
             let our_ids = matcher.get_our_active_offer_ids().await?;
@@ -34,6 +38,11 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
             );
 
             matcher.discovery.bcast_offers(our_and_random_ids).await?;
+
+            let end = Instant::now();
+            counter!("market.offers.broadcasts", 1);
+            timing!("market.offers.broadcasts.time", start, end);
+
             Result::<(), anyhow::Error>::Ok(())
         }
         .await
@@ -52,6 +61,8 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
         let matcher = matcher.clone();
         async move {
             wait_random_interval(bcast_interval).await;
+
+            let start = Instant::now();
 
             // We always broadcast our own Offer unsubscribes.
             let our_ids = matcher.get_our_unsubscribed_offer_ids().await?;
@@ -73,6 +84,11 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
                 .discovery
                 .bcast_unsubscribes(our_and_random_ids)
                 .await?;
+
+            let end = Instant::now();
+            counter!("market.offers.unsubscribes.broadcasts", 1);
+            timing!("market.offers.unsubscribes.broadcasts.time", start, end);
+
             Result::<(), anyhow::Error>::Ok(())
         }
         .await
