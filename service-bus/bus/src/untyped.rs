@@ -136,11 +136,7 @@ mod raw_actor {
     }
 }
 
-pub fn subscribe(addr: &str, rpc: impl RawHandler + Unpin + 'static) -> Handle {
-    subscribe_both(addr, rpc, ())
-}
-
-pub fn subscribe_both(
+pub fn subscribe(
     addr: &str,
     rpc: impl RawHandler + Unpin + 'static,
     stream: impl RawStreamHandler + Unpin + 'static,
