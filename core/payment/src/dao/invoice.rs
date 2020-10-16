@@ -1,16 +1,19 @@
 use crate::dao::{agreement, invoice_event};
-use crate::error::DbResult;
+use crate::error::{DbError, DbResult};
 use crate::models::invoice::{InvoiceXActivity, ReadObj, WriteObj};
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
 use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::convert::TryFrom;
 use ya_client_model::payment::{DocumentStatus, EventType, Invoice, NewInvoice};
 use ya_client_model::NodeId;
+use ya_core_model::payment::local::StatValue;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -174,6 +177,33 @@ impl<'c> InvoiceDao<'c> {
             join_invoices_with_activities(invoices, activities)
         })
         .await
+    }
+
+    pub async fn last_invoice_stats(
+        &self,
+        node_id: NodeId,
+        since: DateTime<Utc>,
+    ) -> DbResult<BTreeMap<(Role, DocumentStatus), StatValue>> {
+        let results = readonly_transaction(self.pool, move |conn| {
+            let invoices: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(node_id))
+                .filter(dsl::timestamp.gt(since.naive_utc()))
+                .load(conn)?;
+            Ok::<_, DbError>(invoices)
+        })
+        .await?;
+        let mut stats = BTreeMap::<(Role, DocumentStatus), StatValue>::new();
+        for invoice in results {
+            let key = (invoice.role, DocumentStatus::try_from(invoice.status)?);
+            let entry = stats.entry(key).or_default();
+            let total_amount = invoice.amount.0;
+            *entry = entry.clone()
+                + StatValue {
+                    total_amount,
+                    agreements_count: 1,
+                };
+        }
+        Ok(stats)
     }
 
     pub async fn get_for_provider(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
