@@ -202,16 +202,20 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "camelCase")]
     pub struct StatValue {
-        pub value: BigDecimal,
-        pub count: u64,
+        pub total_amount: BigDecimal,
+        pub agreements_count: u64,
     }
 
     impl StatValue {
         pub fn new(v: impl Into<BigDecimal>) -> Self {
-            let value = v.into();
-            let count = if value.is_zero() { 0 } else { 1 };
-            Self { value, count }
+            let total_amount = v.into();
+            let agreements_count = if total_amount.is_zero() { 0 } else { 1 };
+            Self {
+                total_amount,
+                agreements_count,
+            }
         }
     }
 
@@ -220,8 +224,8 @@ pub mod local {
 
         fn add(self, rhs: Self) -> Self::Output {
             Self {
-                value: self.value + rhs.value,
-                count: self.count + rhs.count,
+                agreements_count: self.agreements_count + rhs.agreements_count,
+                total_amount: self.total_amount + rhs.total_amount,
             }
         }
     }

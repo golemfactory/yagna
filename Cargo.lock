@@ -2086,6 +2086,7 @@ dependencies = [
  "tokio 0.2.22",
  "url 2.1.1",
  "ya-compile-time-utils",
+ "ya-core-model",
 ]
 
 [[package]]

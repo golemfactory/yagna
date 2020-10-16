@@ -6,8 +6,9 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Stdio;
-use std::str::FromStr;
+
 use tokio::process::{Child, Command};
+use ya_core_model::payment::local::{StatusNotes, StatusResult};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,36 +16,9 @@ pub struct Id {
     pub node_id: String,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentStatus {
-    pub amount: String,
-    pub incoming: PaymentSummary,
-}
-
-#[derive(Deserialize)]
-pub struct SummaryValue {
-    pub value: String,
-    pub count: u64,
-}
-
-impl SummaryValue {
-    fn extract(&self) -> Option<(BigDecimal, u64)> {
-        BigDecimal::from_str(&self.value)
-            .ok()
-            .map(|v| (v, self.count))
-    }
-}
-
-#[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentSummary {
-    #[serde(default)]
-    accepted: Option<SummaryValue>,
-    #[serde(default)]
-    confirmed: Option<SummaryValue>,
-    #[serde(default)]
-    requested: Option<SummaryValue>,
+pub trait PaymentSummary {
+    fn total_pending(&self) -> (BigDecimal, u64);
+    fn unconfirmed(&self) -> (BigDecimal, u64);
 }
 
 #[derive(Deserialize, Default)]
@@ -74,36 +48,19 @@ impl ActivityStatus {
         self.total.get("Terminated").copied().unwrap_or_default()
     }
 }
-
-impl PaymentSummary {
-    pub fn total_pending(&self) -> (BigDecimal, u64) {
-        let (accepted, accepted_cnt) = self
-            .accepted
-            .as_ref()
-            .and_then(SummaryValue::extract)
-            .unwrap_or_default();
-        let (confirmed, confirmed_cnt) = self
-            .confirmed
-            .as_ref()
-            .and_then(SummaryValue::extract)
-            .unwrap_or_default();
-        //let requested = self.requested.as_ref().and_then(|v| BigDecimal::from_str(&v).ok()).unwrap_or_default();
-
-        (accepted - confirmed, accepted_cnt - confirmed_cnt)
+impl PaymentSummary for StatusNotes {
+    fn total_pending(&self) -> (BigDecimal, u64) {
+        (
+            &self.accepted.total_amount - &self.confirmed.total_amount,
+            self.accepted.agreements_count - self.confirmed.agreements_count,
+        )
     }
 
-    pub fn unconfirmed(&self) -> (BigDecimal, u64) {
-        let (requested, requested_cnt) = self
-            .requested
-            .as_ref()
-            .and_then(SummaryValue::extract)
-            .unwrap_or_default();
-        let (accepted, accepted_cnt) = self
-            .accepted
-            .as_ref()
-            .and_then(SummaryValue::extract)
-            .unwrap_or_default();
-        (requested - accepted, requested_cnt - accepted_cnt)
+    fn unconfirmed(&self) -> (BigDecimal, u64) {
+        (
+            &self.requested.total_amount - &self.accepted.total_amount,
+            self.requested.agreements_count - self.accepted.agreements_count,
+        )
     }
 }
 
@@ -136,7 +93,7 @@ impl YagnaCommand {
         output.map_err(anyhow::Error::msg)
     }
 
-    pub async fn payment_status(mut self) -> anyhow::Result<PaymentStatus> {
+    pub async fn payment_status(mut self) -> anyhow::Result<StatusResult> {
         self.cmd.args(&["--json", "payment", "status"]);
         self.run().await
     }

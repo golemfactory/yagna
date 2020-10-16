@@ -1,3 +1,4 @@
+use crate::command::PaymentSummary as _;
 use crate::command::YaCommand;
 use crate::platform::Status as KvmStatus;
 use crate::utils::is_yagna_running;
