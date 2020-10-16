@@ -1,8 +1,6 @@
 
 .github/                                @prekucki
 
-.github/workflows/build-deb.yml         @golemfactory/ya-integration
-
 core/activity/                          @golemfactory/exe-unit
 core/model/src/activity.rs              @golemfactory/exe-unit
 exe-unit/                               @golemfactory/exe-unit
