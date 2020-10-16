@@ -155,9 +155,33 @@ impl RpcMessage for GetRunningCommand {
 /// Should be accessible only from local service bus (not via net ie. from remote hosts).
 pub mod local {
     use super::*;
+    use chrono::{DateTime, Utc};
+    use std::collections::BTreeMap;
+    use ya_client_model::activity::State;
 
     /// Local activity bus address.
     pub const BUS_ID: &str = "/local/activity";
+
+    /// Set state of the activity.
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Stats {
+        pub identity: NodeId,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct StatsResult {
+        pub total: BTreeMap<State, u64>,
+        pub last_1h: BTreeMap<State, u64>,
+        pub last_activity_ts: Option<DateTime<Utc>>,
+    }
+
+    impl RpcMessage for Stats {
+        const ID: &'static str = "Stats";
+        type Item = StatsResult;
+        type Error = RpcMessageError;
+    }
 
     /// Set state of the activity.
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

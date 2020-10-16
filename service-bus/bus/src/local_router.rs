@@ -49,7 +49,7 @@ impl<T: RpcMessage> RawEndpoint for Recipient<RpcEnvelope<T>> {
             };
         Box::pin(
             Recipient::send(self, RpcEnvelope::with_caller(&msg.caller, body))
-                .map_err(|e| e.into())
+                .map_err(|e| Error::from_addr("unknown recipient".into(), e))
                 .and_then(|r| async move { crate::serialization::to_vec(&r).map_err(Error::from) }),
         )
     }
@@ -66,7 +66,7 @@ impl<T: RpcMessage> RawEndpoint for Recipient<RpcEnvelope<T>> {
 
         Box::pin(
             Recipient::send(self, RpcEnvelope::with_caller(&msg.caller, body))
-                .map_err(|e| e.into())
+                .map_err(|e| Error::from_addr("unknown stream recipient".into(), e))
                 .and_then(|r| future::ready(crate::serialization::to_vec(&r).map_err(Error::from)))
                 .map_ok(|v| ResponseChunk::Full(v))
                 .into_stream(),
@@ -93,6 +93,7 @@ impl<T: RpcStreamMessage> RawEndpoint for Recipient<RpcStreamCall<T>> {
         let (tx, rx) = futures::channel::mpsc::channel(16);
         let (txe, rxe) = futures::channel::oneshot::channel();
 
+        let addr = msg.addr.clone();
         let call = RpcStreamCall {
             caller: msg.caller,
             addr: msg.addr,
@@ -103,7 +104,7 @@ impl<T: RpcStreamMessage> RawEndpoint for Recipient<RpcStreamCall<T>> {
         Arbiter::spawn(async move {
             match me.send(call).await {
                 Err(e) => {
-                    let _ = txe.send(Err(e.into()));
+                    let _ = txe.send(Err(Error::from_addr(addr, e)));
                 }
                 Ok(Err(e)) => {
                     let _ = txe.send(Err(e));
@@ -132,9 +133,10 @@ impl<T: RpcStreamMessage> RawEndpoint for Recipient<RpcStreamCall<T>> {
 
 impl RawEndpoint for Recipient<RpcRawCall> {
     fn send(&self, msg: RpcRawCall) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, Error>>>> {
+        let addr = msg.addr.clone();
         Box::pin(
             Recipient::<RpcRawCall>::send(self, msg)
-                .map_err(Error::from)
+                .map_err(|e| Error::from_addr(addr, e))
                 .then(|v| async { v? }),
         )
     }
@@ -143,9 +145,10 @@ impl RawEndpoint for Recipient<RpcRawCall> {
         &self,
         msg: RpcRawCall,
     ) -> Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>> {
+        let addr = msg.addr.clone();
         Box::pin(
             Recipient::<RpcRawCall>::send(self, msg)
-                .map_err(Error::from)
+                .map_err(|e| Error::from_addr(addr, e))
                 .flatten_fut()
                 .and_then(|v| future::ok(ResponseChunk::Full(v)))
                 .into_stream(),
@@ -447,7 +450,10 @@ impl Router {
             let router = RemoteRouter::from_registry();
             let success = !addrs.is_empty();
             for addr in addrs {
-                router.send(UpdateService::Remove(addr)).await?;
+                router
+                    .send(UpdateService::Remove(addr.clone()))
+                    .await
+                    .map_err(|e| Error::from_addr(addr, e))?;
             }
             Ok(success)
         })
@@ -516,7 +522,9 @@ impl Router {
         let addr = format!("{}/{}", addr, T::ID);
         if let Some(slot) = self.handlers.get_mut(&addr) {
             (if let Some(h) = slot.recipient() {
-                h.send(msg).map_err(Error::from).left_future()
+                h.send(msg)
+                    .map_err(|e| Error::from_addr(addr, e))
+                    .left_future()
             } else {
                 slot.send(RpcRawCall::from_envelope_addr(msg, addr))
                     .then(|b| {
@@ -531,11 +539,11 @@ impl Router {
             .left_future()
         } else {
             RemoteRouter::from_registry()
-                .send(RpcRawCall::from_envelope_addr(msg, addr))
+                .send(RpcRawCall::from_envelope_addr(msg, addr.clone()))
                 .then(|v| {
                     future::ready(match v {
                         Ok(v) => v,
-                        Err(e) => Err(e.into()),
+                        Err(e) => Err(Error::from_addr(addr, e)),
                     })
                 })
                 .then(|b| {
@@ -592,10 +600,11 @@ impl Router {
         caller: &str,
         msg: Vec<u8>,
     ) -> impl Future<Output = Result<Vec<u8>, Error>> + Unpin {
-        if let Some(slot) = self.handlers.get_mut(addr) {
+        let addr = addr.to_string();
+        if let Some(slot) = self.handlers.get_mut(&addr) {
             slot.send(RpcRawCall {
                 caller: caller.into(),
-                addr: addr.into(),
+                addr: addr.clone(),
                 body: msg,
             })
             .left_future()
@@ -603,12 +612,12 @@ impl Router {
             RemoteRouter::from_registry()
                 .send(RpcRawCall {
                     caller: caller.into(),
-                    addr: addr.into(),
+                    addr: addr.clone(),
                     body: msg,
                 })
                 .then(|v| match v {
                     Ok(r) => future::ready(r),
-                    Err(e) => future::err(e.into()),
+                    Err(e) => future::err(Error::from_addr(addr, e)),
                 })
                 .right_future()
         }
@@ -652,16 +661,17 @@ impl Router {
         caller: &str,
         msg: &[u8],
     ) -> impl Stream<Item = Result<ResponseChunk, Error>> {
-        if let Some(slot) = self.handlers.get_mut(addr) {
+        let addr = addr.to_string();
+        if let Some(slot) = self.handlers.get_mut(&addr) {
             slot.send_streaming(RpcRawCall {
                 caller: caller.into(),
-                addr: addr.into(),
+                addr,
                 body: msg.into(),
             })
             .left_stream()
         } else {
             log::warn!("no endpoint: {}", addr);
-            futures::stream::once(async { Err(Error::NoEndpoint) }).right_stream()
+            futures::stream::once(async { Err(Error::NoEndpoint(addr)) }).right_stream()
         }
     }
 }

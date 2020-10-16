@@ -67,8 +67,9 @@ impl<
 impl RawStreamHandler for () {
     type Result = Pin<Box<dyn Stream<Item = Result<ResponseChunk, Error>>>>;
 
-    fn handle(&mut self, _: &str, _: &str, _: &[u8]) -> Self::Result {
-        futures::stream::once(async { Err(Error::NoEndpoint) }).boxed_local()
+    fn handle(&mut self, _: &str, addr: &str, _: &[u8]) -> Self::Result {
+        let addr = addr.to_string();
+        futures::stream::once(async { Err(Error::NoEndpoint(addr)) }).boxed_local()
     }
 }
 

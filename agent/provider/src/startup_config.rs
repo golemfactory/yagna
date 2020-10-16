@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use structopt::{clap, StructOpt};
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
-use crate::hardware::Resources;
+use crate::hardware::{Resources, UpdateResources};
 use futures::channel::oneshot;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -35,6 +35,8 @@ pub struct ProviderConfig {
         default_value = &*DEFAULT_DATA_DIR,
     )]
     pub data_dir: DataDir,
+    #[structopt(skip = "globals.json")]
+    pub globals_file: PathBuf,
     #[structopt(skip = "presets.json")]
     pub presets_file: PathBuf,
     #[structopt(skip = "hardware.json")]
@@ -60,6 +62,9 @@ pub struct ProviderConfig {
         env = "YA_RT_STORAGE")
     ]
     pub rt_storage: Option<f64>,
+
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    pub json: bool,
 }
 
 impl ProviderConfig {
@@ -74,7 +79,7 @@ impl ProviderConfig {
 pub struct NodeConfig {
     /// Your human readable identity in the network.
     #[structopt(long, env = "NODE_NAME", hide_env_values = true)]
-    pub node_name: String,
+    pub node_name: Option<String>,
     /// Subnetwork identifier. You can set this value to filter nodes
     /// with other identifiers than selected. Useful for test purposes.
     #[structopt(long, env = "SUBNET")]
@@ -92,6 +97,15 @@ pub struct RunConfig {
 }
 
 #[derive(StructOpt)]
+pub enum ConfigConfig {
+    Get {
+        /// 'node_name' or 'subnet'. If unspecified all config is printed.
+        name: Option<String>,
+    },
+    Set(NodeConfig),
+}
+
+#[derive(StructOpt, Clone)]
 pub struct PresetNoInteractive {
     #[structopt(long)]
     pub preset_name: Option<String>,
@@ -101,6 +115,16 @@ pub struct PresetNoInteractive {
     pub pricing: Option<String>,
     #[structopt(long, parse(try_from_str = parse_key_val))]
     pub price: Vec<(String, f64)>,
+}
+
+#[derive(StructOpt)]
+#[structopt(group = clap::ArgGroup::with_name("update_names").multiple(true).required(true))]
+pub struct UpdateNames {
+    #[structopt(long, group = "update_names")]
+    pub all: bool,
+
+    #[structopt(group = "update_names")]
+    pub names: Vec<String>,
 }
 
 #[derive(StructOpt)]
@@ -121,7 +145,8 @@ pub enum PresetsConfig {
     Remove { name: String },
     /// Update a preset
     Update {
-        name: String,
+        #[structopt(flatten)]
+        names: UpdateNames,
         #[structopt(long)]
         no_interactive: bool,
         #[structopt(flatten)]
@@ -150,9 +175,10 @@ pub enum ProfileConfig {
     },
     /// Update a profile
     Update {
-        name: String,
         #[structopt(flatten)]
-        resources: Resources,
+        names: UpdateNames,
+        #[structopt(flatten)]
+        resources: UpdateResources,
     },
     /// Remove an existing profile
     Remove { name: String },
@@ -185,6 +211,8 @@ pub struct StartupConfig {
 pub enum Commands {
     /// Run provider agent
     Run(RunConfig),
+    /// Configure provider agent
+    Config(ConfigConfig),
     /// Manage offer presets
     Preset(PresetsConfig),
     /// Manage hardware profiles
