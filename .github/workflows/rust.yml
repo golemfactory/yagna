@@ -113,9 +113,10 @@ jobs:
 
       - name: cargo build router
         uses: actions-rs/cargo@v1
+        if: matrix.os != 'Windows'
         with:
           command: build
-          args: --example ya_sb_router
+          args: -p ya-sb-router --example ya_sb_router
 
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
