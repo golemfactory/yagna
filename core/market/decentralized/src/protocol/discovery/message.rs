@@ -76,6 +76,6 @@ impl BroadcastMessage for UnsubscribedOffersBcast {
     const TOPIC: &'static str = concat!(
         "market-protocol-discovery-",
         PROTOCOL_VERSION!(),
-        "market-protocol-discovery-mk1-offers-unsubscribe"
+        "-offers-unsubscribe"
     );
 }
