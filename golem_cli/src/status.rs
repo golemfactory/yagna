@@ -80,7 +80,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
             }
             let (unconfirmed, unconfirmed_cnt) = payment_status.incoming.unconfirmed();
             table.add_row(row![
-                "unconfirmed",
+                "issued",
                 format!("{} NGNT ({})", unconfirmed, unconfirmed_cnt)
             ]);
 
