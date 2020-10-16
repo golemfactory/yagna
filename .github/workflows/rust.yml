@@ -109,7 +109,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --workspace --example ya_sb_router
+          args: --workspace
+
+      - name: cargo build router
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --example ya_sb_router
 
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
