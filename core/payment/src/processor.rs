@@ -6,6 +6,7 @@ use crate::error::processor::{
 use crate::models::order::ReadObj as DbOrder;
 use bigdecimal::{BigDecimal, Zero};
 use futures::lock::Mutex;
+use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -176,7 +177,7 @@ impl PaymentProcessor {
         let orders = self
             .db_executor
             .as_dao::<OrderDao>()
-            .get_many(msg.order_ids, msg.driver)
+            .get_many(msg.order_ids, msg.driver.clone())
             .await?;
         validate_orders(
             &orders,
@@ -220,7 +221,7 @@ impl PaymentProcessor {
                 payer_addr,
                 payee_addr,
                 payment_platform,
-                msg.amount,
+                msg.amount.clone(),
                 msg.confirmation.confirmation,
                 activity_payments,
                 agreement_payments,
@@ -236,6 +237,7 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
+        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "driver" => msg.driver);
         let msg = SendPayment(payment);
         ya_net::from(payer_id)
             .to(payee_id)
@@ -245,6 +247,7 @@ impl PaymentProcessor {
 
         // TODO: Implement re-sending mechanism in case SendPayment fails
 
+        counter!("payment.invoices.requestor.paid", 1);
         Ok(())
     }
 
@@ -366,7 +369,6 @@ impl PaymentProcessor {
         // Insert payment into database (this operation creates and updates all related entities)
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         payment_dao.insert_received(payment, payee_id).await?;
-
         Ok(())
     }
 

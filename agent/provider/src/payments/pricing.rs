@@ -3,13 +3,19 @@ use bigdecimal::BigDecimal;
 use serde_json::json;
 
 use ya_agreement_utils::ComInfo;
+use ya_client_model::payment::Account;
 
 use super::model::{PaymentDescription, PaymentModel};
 use crate::market::presets::{Coefficient, Preset};
 
 pub trait PricingOffer {
     fn prices(&self, preset: &Preset) -> Vec<(Coefficient, f64)>;
-    fn build(&self, initial_price: f64, prices: Vec<(String, f64)>) -> Result<ComInfo>;
+    fn build(
+        &self,
+        accounts: &Vec<Account>,
+        initial_price: f64,
+        prices: Vec<(String, f64)>,
+    ) -> Result<ComInfo>;
 }
 
 /// Computes computations costs.
@@ -81,7 +87,12 @@ impl PricingOffer for LinearPricingOffer {
             .collect()
     }
 
-    fn build(&self, initial_price: f64, prices: Vec<(String, f64)>) -> Result<ComInfo> {
+    fn build(
+        &self,
+        accounts: &Vec<Account>,
+        initial_price: f64,
+        prices: Vec<(String, f64)>,
+    ) -> Result<ComInfo> {
         let mut usage_vector = Vec::new();
         let coefficients = prices
             .into_iter()
@@ -92,7 +103,7 @@ impl PricingOffer for LinearPricingOffer {
             .chain(std::iter::once(initial_price))
             .collect::<Vec<_>>();
 
-        let params = json!({
+        let mut params = json!({
             "scheme": "payu".to_string(),
             "scheme.payu": json!({
                 "interval_sec": self.interval
@@ -107,6 +118,15 @@ impl PricingOffer for LinearPricingOffer {
                 "vector": usage_vector
             })
         });
+
+        for account in accounts {
+            params.as_object_mut().unwrap().insert(
+                format!("payment.platform.{}", account.platform),
+                json!({
+                    "address".to_string(): account.address,
+                }),
+            );
+        }
 
         Ok(ComInfo { params })
     }

@@ -12,10 +12,11 @@ use ya_client::payment::PaymentRequestorApi;
 pub(crate) async fn allocate_funds(
     api: &PaymentRequestorApi,
     allocation_size: i64,
+    payment_platform: String,
 ) -> anyhow::Result<payment::Allocation> {
     let new_allocation = payment::NewAllocation {
         address: None,
-        payment_platform: None,
+        payment_platform: Some(payment_platform),
         total_amount: allocation_size.into(),
         timeout: None,
         make_deposit: false,
