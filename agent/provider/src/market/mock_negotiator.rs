@@ -15,10 +15,7 @@ pub struct AcceptAllNegotiator;
 
 impl Negotiator for AcceptAllNegotiator {
     fn create_offer(&mut self, offer: &OfferDefinition) -> Result<Offer> {
-        Ok(Offer::new(
-            offer.clone().into_json(),
-            offer.constraints.clone(),
-        ))
+        Ok(offer_definition_to_offer(offer.clone()))
     }
 
     fn agreement_finalized(&mut self, _agreement_id: &str, _result: AgreementResult) -> Result<()> {
@@ -65,10 +62,7 @@ impl LimitAgreementsNegotiator {
 
 impl Negotiator for LimitAgreementsNegotiator {
     fn create_offer(&mut self, offer: &OfferDefinition) -> Result<Offer> {
-        Ok(Offer::new(
-            offer.clone().into_json(),
-            offer.constraints.clone(),
-        ))
+        Ok(offer_definition_to_offer(offer.clone()))
     }
 
     fn agreement_finalized(&mut self, agreement_id: &str, _result: AgreementResult) -> Result<()> {
@@ -124,4 +118,9 @@ fn proposal_expiration_from(proposal: &Proposal) -> Result<DateTime<Utc>> {
         .clone();
     let timestamp: i64 = serde_json::from_value(value)?;
     Ok(Utc.timestamp_millis(timestamp))
+}
+
+fn offer_definition_to_offer(offer_def: OfferDefinition) -> Offer {
+    let constraints = offer_def.offer.constraints.clone();
+    Offer::new(offer_def.into_json(), constraints)
 }

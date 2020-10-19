@@ -39,7 +39,7 @@ impl MetricsService {
                 MemMetric::ID.to_string(),
                 MetricProvider::new(
                     MemMetric::default(),
-                    backlog_limit.clone(),
+                    backlog_limit,
                     caps(ctx, MemMetric::ID),
                 ),
             ),
@@ -47,7 +47,7 @@ impl MetricsService {
                 StorageMetric::ID.to_string(),
                 MetricProvider::new(
                     StorageMetric::new(ctx.work_dir.clone(), Duration::from_secs(60 * 5)),
-                    backlog_limit.clone(),
+                    backlog_limit,
                     caps(ctx, StorageMetric::ID),
                 ),
             ),
@@ -72,6 +72,17 @@ impl MetricsService {
             usage_vector: ctx.agreement.usage_vector.clone(),
             metrics,
         })
+    }
+
+    pub fn usage_vector() -> Vec<String> {
+        // TODO: sgx
+        [
+            TimeMetric::ID.to_string(),
+            CpuMetric::ID.to_string(),
+            MemMetric::ID.to_string(),
+            StorageMetric::ID.to_string(),
+        ]
+        .to_vec()
     }
 }
 

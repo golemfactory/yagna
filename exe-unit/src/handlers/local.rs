@@ -13,7 +13,7 @@ impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
     type Result = <GetState as Message>::Result;
 
     fn handle(&mut self, _: GetState, _: &mut Context<Self>) -> Self::Result {
-        GetStateResponse(self.state.inner.clone())
+        GetStateResponse(self.state.inner)
     }
 }
 
@@ -34,7 +34,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 log::debug!("Entering state: {:?}", update.state);
                 log::debug!("Report: {}", self.state.report());
 
-                self.state.inner = update.state.clone();
+                self.state.inner = update.state;
 
                 if let Some(id) = &self.ctx.activity_id {
                     let fut = report(
