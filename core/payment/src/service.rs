@@ -44,6 +44,10 @@ mod local {
         counter!("payment.invoices.provider.cancelled", 0);
         counter!("payment.invoices.provider.paid", 0);
         counter!("payment.invoices.provider.accepted", 0);
+        counter!("payment.amount.received", 0, "platform" => "NGNT");
+        // TODO: counter!("payment.amount.received", 0, "platform" => "ZKSYNC");
+        counter!("payment.amount.sent", 0, "platform" => "NGNT");
+        // TODO: counter!("payment.amount.sent", 0, "platform" => "ZKSYNC");
 
         log::debug!("Successfully bound payment local service to service bus");
     }
@@ -491,9 +495,12 @@ mod public {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
 
+        let platform = payment.payment_platform.clone();
+        let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
         match processor.verify_payment(payment).await {
             Ok(_) => {
+                counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
                 Ok(Ack {})
             }

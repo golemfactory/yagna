@@ -1,15 +1,18 @@
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
+use diesel::QueryableByName;
 use serde_json;
 use std::{convert::TryInto, time::Duration};
 use tokio::time::delay_for;
 
 use ya_client_model::activity::activity_state::{ActivityState, StatePair};
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::dao::{DaoError, Result};
 use crate::db::{models::ActivityState as DbActivityState, schema};
+use std::collections::BTreeMap;
+use ya_client_model::activity::State;
 
 pub struct ActivityStateDao<'c> {
     pool: &'c PoolType,
@@ -28,7 +31,7 @@ impl<'c> ActivityStateDao<'c> {
         log::debug!("getting activity state");
         let activity_id = activity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             Ok(dsl::activity
                 .inner_join(schema::activity_state::table)
                 .select(schema::activity_state::all_columns)
@@ -41,6 +44,70 @@ impl<'c> ActivityStateDao<'c> {
                     e => e.into(),
                 })?
                 .try_into()?)
+        })
+        .await
+    }
+
+    pub async fn stats(&self) -> Result<BTreeMap<State, u64>> {
+        readonly_transaction(self.pool, move |conn| {
+            use diesel::sql_types::{Integer, Text};
+            #[derive(QueryableByName, PartialEq, Debug)]
+            struct StatRecord {
+                #[sql_type = "Text"]
+                state: String,
+                #[sql_type = "Integer"]
+                n: i32,
+            };
+
+            let stats: Vec<StatRecord> = diesel::sql_query(
+                r#"
+            select b.name state, count(a.natural_id) n
+            from activity a join activity_state b on (a.state_id = b.id) group by b.name
+            "#,
+            )
+            .load(conn)
+            .map_err(DaoError::from)?;
+            let mut m = BTreeMap::new();
+            for v in stats {
+                let pair: StatePair = serde_json::from_str(&v.state)?;
+                if pair.1.is_none() {
+                    m.insert(pair.0, v.n as u64);
+                }
+            }
+            Ok(m)
+        })
+        .await
+    }
+
+    pub async fn stats_1h(&self) -> Result<BTreeMap<State, u64>> {
+        readonly_transaction(self.pool, move |conn| {
+            use diesel::sql_types::{Integer, Text};
+            #[derive(QueryableByName, PartialEq, Debug)]
+            struct StatRecord {
+                #[sql_type = "Text"]
+                state: String,
+                #[sql_type = "Integer"]
+                n: i32,
+            };
+
+            let stats: Vec<StatRecord> = diesel::sql_query(
+                r#"
+            select b.name state, count(a.natural_id) n
+            from activity a join activity_state b on (a.state_id = b.id)
+            where b.updated_date >= datetime('now', '-1 hour')
+            group by b.name
+            "#,
+            )
+            .load(conn)
+            .map_err(DaoError::from)?;
+            let mut m = BTreeMap::new();
+            for v in stats {
+                let pair: StatePair = serde_json::from_str(&v.state)?;
+                if pair.1.is_none() {
+                    m.insert(pair.0, v.n as u64);
+                }
+            }
+            Ok(m)
         })
         .await
     }
