@@ -28,7 +28,7 @@ gftp = []
 identity = []
 market = []
 net = []
-payment = ['bigdecimal']
+payment = ['bigdecimal', 'bitflags']
 
 [dependencies]
 ya-client-model = "0.1"
