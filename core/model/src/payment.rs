@@ -230,6 +230,13 @@ pub mod local {
         }
     }
 
+    impl std::ops::AddAssign for StatValue {
+        fn add_assign(&mut self, rhs: Self) {
+            self.agreements_count += rhs.agreements_count;
+            self.total_amount += rhs.total_amount;
+        }
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct StatusNotes {
         pub requested: StatValue,
@@ -271,6 +278,50 @@ pub mod local {
         const ID: &'static str = "GetAccounts";
         type Item = Vec<Account>;
         type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[non_exhaustive]
+    pub struct GetInvoiceStats {
+        pub node_id: NodeId,
+        pub requestor: bool,
+        pub provider: bool,
+        pub since: DateTime<Utc>,
+    }
+
+    impl GetInvoiceStats {
+        pub fn new(node_id: NodeId, since: DateTime<Utc>) -> Self {
+            Self {
+                node_id,
+                requestor: true,
+                provider: true,
+                since,
+            }
+        }
+    }
+
+    impl RpcMessage for GetInvoiceStats {
+        const ID: &'static str = "GetInvoiceStats";
+        type Item = InvoiceStats;
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    #[non_exhaustive]
+    pub struct InvoiceStatusNotes {
+        pub issued: StatValue,
+        pub received: StatValue,
+        pub accepted: StatValue,
+        pub rejected: StatValue,
+        pub failed: StatValue,
+        pub settled: StatValue,
+        pub cancelled: StatValue,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    pub struct InvoiceStats {
+        pub requestor: InvoiceStatusNotes,
+        pub provider: InvoiceStatusNotes,
     }
 }
 

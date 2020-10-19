@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::process::Stdio;
 
 use tokio::process::{Child, Command};
-use ya_core_model::payment::local::{StatusNotes, StatusResult};
+use ya_core_model::payment::local::{InvoiceStats, InvoiceStatusNotes, StatusNotes, StatusResult};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,6 +64,18 @@ impl PaymentSummary for StatusNotes {
     }
 }
 
+impl PaymentSummary for InvoiceStatusNotes {
+    fn total_pending(&self) -> (BigDecimal, u64) {
+        let value = self.accepted.clone();
+        (value.total_amount, value.agreements_count)
+    }
+
+    fn unconfirmed(&self) -> (BigDecimal, u64) {
+        let value = self.issued.clone() + self.received.clone();
+        (value.total_amount.clone(), value.agreements_count)
+    }
+}
+
 pub struct YagnaCommand {
     pub(super) cmd: Command,
 }
@@ -95,6 +107,11 @@ impl YagnaCommand {
 
     pub async fn payment_status(mut self) -> anyhow::Result<StatusResult> {
         self.cmd.args(&["--json", "payment", "status"]);
+        self.run().await
+    }
+
+    pub async fn invoice_status(mut self) -> anyhow::Result<InvoiceStats> {
+        self.cmd.args(&["--json", "payment", "invoice", "status"]);
         self.run().await
     }
 
