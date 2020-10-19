@@ -34,7 +34,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 log::debug!("Entering state: {:?}", update.state);
                 log::debug!("Report: {}", self.state.report());
 
-                self.state.inner = update.state.clone();
+                self.state.inner = update.state;
 
                 if let Some(id) = &self.ctx.activity_id {
                     let credentials = match &update.state {

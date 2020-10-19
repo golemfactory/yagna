@@ -45,12 +45,6 @@ impl Coefficient {
     }
 }
 
-impl fmt::Display for Coefficient {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 impl<'s> TryFrom<&'s str> for Coefficient {
     type Error = Error;
 
@@ -72,6 +66,12 @@ pub struct Preset {
     pub exeunit_name: String,
     pub pricing_model: String,
     pub usage_coeffs: HashMap<Coefficient, f64>,
+}
+
+impl Preset {
+    pub fn get_initial_price(&self) -> Option<f64> {
+        self.usage_coeffs.get(&Coefficient::Initial).cloned()
+    }
 }
 
 /// Responsible for presets management.
@@ -280,6 +280,23 @@ impl PresetManager {
         Ok(())
     }
 
+    pub fn update_preset<F>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Preset) -> Result<()>,
+    {
+        let mut state = self.state.lock().unwrap();
+        match state.presets.get_mut(name) {
+            None => Err(anyhow!("Preset [{}] doesn't exists.", &name)),
+            Some(preset) => {
+                // if f fails, preset stays unchanged
+                let mut new_preset = preset.clone();
+                f(&mut new_preset)?;
+                *preset = new_preset;
+                Ok(())
+            }
+        }
+    }
+
     pub fn active(&self) -> Vec<String> {
         let state = self.state.lock().unwrap();
         state.active.clone()
@@ -299,6 +316,11 @@ impl PresetManager {
                 None => Err(anyhow!("Can't find preset [{}].", name)),
             })
             .collect()
+    }
+
+    pub fn list_names(&self) -> Vec<String> {
+        let state = self.state.lock().unwrap();
+        state.presets.keys().cloned().collect()
     }
 
     pub fn activate(&mut self, name: &String) -> Result<()> {
@@ -370,7 +392,7 @@ impl PartialEq for Preset {
 impl fmt::Display for Preset {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let align = 20;
-        let align_coeff = align - 4; // Minus intent.
+        let align_coeff = align - 4; // Minus indent.
 
         write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
         write!(
@@ -393,18 +415,12 @@ impl fmt::Display for Preset {
             write!(
                 f,
                 "    {:width$}{} NGNT\n",
-                name,
+                name.to_readable(),
                 coeff,
                 width = align_coeff
             )?;
         }
 
-        write!(
-            f,
-            "    {:16}{} NGNT",
-            "Init price",
-            self.usage_coeffs.get(&Coefficient::Initial).unwrap(),
-        )?;
         Ok(())
     }
 }

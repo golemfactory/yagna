@@ -1,9 +1,11 @@
 use actix::prelude::*;
+use chrono::Utc;
 use futures::channel::oneshot;
 use futures::{FutureExt, TryFutureExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{
     activity_state::StatePair, ActivityUsage, CommandResult, ExeScriptCommand,
     ExeScriptCommandResult, State,
@@ -21,7 +23,6 @@ use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
-use chrono::Utc;
 
 pub mod agreement;
 #[cfg(feature = "sgx")]
@@ -71,6 +72,18 @@ impl<R: Runtime> ExeUnit<R> {
                 Box::new(ServiceAddr::new(runtime)),
             ],
         }
+    }
+
+    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate> {
+        use crate::runtime::process::RuntimeProcess;
+
+        let runtime_template = RuntimeProcess::offer_template(binary)?;
+        let supervisor_template = OfferTemplate::new(serde_json::json!({
+            "golem.com.usage.vector": MetricsService::usage_vector(),
+            "golem.activity.caps.transfer.protocol": TransferService::schemes(),
+        }));
+
+        Ok(supervisor_template.patch(runtime_template))
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {

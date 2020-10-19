@@ -1,3 +1,4 @@
+use metrics::counter;
 use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
@@ -6,6 +7,7 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::NodeId;
 use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
+use ya_service_api_web::middleware::Identity;
 
 use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
 use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
@@ -22,7 +24,6 @@ use crate::negotiation::{
 };
 use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
 use crate::protocol::negotiation::messages::ProposalReceived;
-use ya_service_api_web::middleware::Identity;
 
 type IsFirst = bool;
 
@@ -256,6 +257,10 @@ impl CommonBroker {
         // Send channel message to wake all query_events waiting for proposals.
         self.notifier.notify(&subscription_id).await;
 
+        match owner {
+            OwnerType::Requestor => counter!("market.proposals.requestor.received", 1),
+            OwnerType::Provider => counter!("market.proposals.provider.received", 1),
+        };
         log::info!(
             "Received counter Proposal [{}] for Proposal [{}] from [{}].",
             &proposal.body.id,

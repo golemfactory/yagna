@@ -1,5 +1,6 @@
 use actix_web::{web, Responder};
 use futures::StreamExt;
+use metrics::counter;
 use serde::Deserialize;
 
 use ya_client_model::activity::{
@@ -101,6 +102,7 @@ async fn create_activity(
         .create_if_not_exists(&create_resp.activity_id(), agreement_id)
         .await?;
 
+    counter!("activity.requestor.created", 1);
     let create_result = CreateActivityResult {
         activity_id: create_resp.activity_id().into(),
         credentials: create_resp
@@ -143,7 +145,10 @@ async fn destroy_activity(
         },
     )
     .await
-    .map(|_| web::Json(()))
+    .map(|_| {
+        counter!("activity.requestor.destroyed", 1);
+        web::Json(())
+    })
 }
 
 /// Executes an ExeScript batch within a given Activity.
@@ -175,6 +180,7 @@ async fn exec(
         .timeout(query.timeout)
         .await???;
 
+    counter!("activity.requestor.run-exescript", 1);
     Ok::<_, Error>(web::Json(batch_id))
 }
 

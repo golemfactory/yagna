@@ -2,6 +2,7 @@ use actix_rt::Arbiter;
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
+use metrics::{counter, gauge};
 use std::convert::From;
 use std::time::Duration;
 
@@ -60,6 +61,13 @@ pub fn bind_gsb(db: &DbExecutor) {
         .bind(get_activity_state_gsb)
         .bind(get_activity_usage_gsb);
 
+    // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+    // until first change to value will be made.
+    counter!("activity.provider.created", 0);
+    counter!("activity.provider.destroyed", 0);
+    counter!("activity.provider.destroyed.by_requestor", 0);
+    counter!("activity.provider.destroyed.unresponsive", 0);
+
     local::bind_gsb(db);
 }
 
@@ -91,6 +99,8 @@ async fn create_activity_gsb(
         )
         .await
         .map_err(Error::from)?;
+
+    counter!("activity.provider.created", 1);
 
     let credentials = activity_credentials(db.clone(), &activity_id, &provider_id, msg.timeout)
         .await
@@ -163,13 +173,16 @@ async fn destroy_activity_gsb(
         "waiting {:?}ms for activity status change to Terminate",
         msg.timeout
     );
-    Ok(db
+    let result = db
         .as_dao::<ActivityStateDao>()
         .get_state_wait(&msg.activity_id, vec![State::Terminated.into()])
         .timeout(msg.timeout)
         .map_err(Error::from)
         .await
-        .map(|_| ())?)
+        .map(|_| ())?;
+
+    counter!("activity.provider.destroyed.by_requestor", 1);
+    Ok(result)
 }
 
 async fn get_activity_state_gsb(
@@ -252,6 +265,8 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
             if dt > limit_s {
                 log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
                 enqueue_destroy_evt(db, &activity_id, &provider_id).await;
+
+                counter!("activity.provider.destroyed.unresponsive", 1);
                 break;
             } else if state.state.0 != State::Unresponsive && dt >= unresp_s {
                 log::warn!("activity {} unresponsive after {}s", activity_id, dt);
@@ -275,6 +290,10 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
         tokio::time::delay_for(delay).await;
     }
 
+    // If we got here, we can be sure, that activity was already destroyed.
+    // Counting activities in all other places can result with duplicated
+    // DestroyActivity events.
+    counter!("activity.provider.destroyed", 1);
     log::debug!("Stopping activity monitor: {}", activity_id);
 }
 
@@ -282,12 +301,37 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
 mod local {
     use super::*;
     use crate::common::{set_persisted_state, set_persisted_usage};
+    use ya_core_model::activity::local::StatsResult;
 
     pub fn bind_gsb(db: &DbExecutor) {
         ServiceBinder::new(activity::local::BUS_ID, db, ())
             .bind(set_activity_state_gsb)
             .bind(set_activity_usage_gsb)
-            .bind(get_agreement_id_gsb);
+            .bind(get_agreement_id_gsb)
+            .bind(activity_status);
+    }
+
+    async fn activity_status(
+        db: DbExecutor,
+        _caller: String,
+        _msg: activity::local::Stats,
+    ) -> RpcMessageResult<activity::local::Stats> {
+        let total = db
+            .as_dao::<ActivityStateDao>()
+            .stats()
+            .await
+            .map_err(Error::from)?;
+        let last_1h = db
+            .as_dao::<ActivityStateDao>()
+            .stats_1h()
+            .await
+            .map_err(Error::from)?;
+
+        Ok(StatsResult {
+            total,
+            last_1h,
+            last_activity_ts: None,
+        })
     }
 
     /// Pass activity state (which may include error details).
@@ -320,6 +364,13 @@ mod local {
         _caller: String,
         msg: activity::local::SetUsage,
     ) -> RpcMessageResult<activity::local::SetUsage> {
+        if let Some(usage_vec) = &msg.usage.current_usage {
+            let activity_id = msg.activity_id.clone();
+            for (idx, value) in usage_vec.iter().enumerate() {
+                gauge!(format!("activity.provider.usage.{}", idx), *value as i64, "activity_id" => activity_id.clone());
+            }
+        }
+
         set_persisted_usage(&db, &msg.activity_id, msg.usage).await?;
         Ok(())
     }

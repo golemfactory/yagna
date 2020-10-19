@@ -56,7 +56,7 @@ impl ExeUnitState {
         report
     }
 
-    pub fn batch_results(&self, batch_id: &String) -> Vec<ExeScriptCommandResult> {
+    pub fn batch_results(&self, batch_id: &str) -> Vec<ExeScriptCommandResult> {
         match self.batch_results.get(batch_id) {
             Some(vec) => vec.clone(),
             None => Vec::new(),
