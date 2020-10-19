@@ -1,9 +1,12 @@
 #![allow(unused)]
 
+use super::exeunit_instance::ExeUnitInstance;
 use anyhow::{anyhow, Context, Result};
+use futures::Future;
 use path_clean::PathClean;
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     collections::HashMap,
     fmt,
@@ -12,9 +15,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-
-use super::exeunit_instance::ExeUnitInstance;
-use serde_json::Value;
 use ya_agreement_utils::OfferBuilder;
 
 /// Descriptor of ExeUnit
@@ -89,11 +89,38 @@ impl ExeUnitsRegistry {
         working_dir: &Path,
     ) -> Result<ExeUnitInstance> {
         let exeunit_desc = self.find_exeunit(name)?;
+        let extended_args = Self::exeunit_args(&exeunit_desc, args)?;
+        ExeUnitInstance::new(
+            name,
+            &exeunit_desc.supervisor_path,
+            &working_dir,
+            &extended_args,
+        )
+    }
+
+    pub fn run_exeunit_with_output(
+        &self,
+        name: &str,
+        args: Vec<String>,
+        working_dir: &Path,
+    ) -> impl Future<Output = Result<String>> {
+        let working_dir = working_dir.to_owned();
+        let exeunit_desc = self.find_exeunit(name);
+        async move {
+            let exeunit_desc = exeunit_desc?;
+            ExeUnitInstance::run_with_output(
+                &exeunit_desc.supervisor_path,
+                &working_dir,
+                Self::exeunit_args(&exeunit_desc, args)?,
+            )
+            .await
+        }
+    }
+
+    fn exeunit_args(exeunit_desc: &ExeUnitDesc, args: Vec<String>) -> Result<Vec<String>> {
         // Add to arguments path to runtime, which should be spawned
         // by supervisor as subprocess.
-
         let mut extended_args = Vec::new();
-
         if let Some(runtime_path) = &exeunit_desc.runtime_path {
             let runtime_path = runtime_path.to_str().ok_or(anyhow!(
                 "ExeUnit runtime path [{}] contains invalid characters.",
@@ -106,13 +133,7 @@ impl ExeUnitsRegistry {
         // arguments, so ExeUnit can add only non-positional args.
         extended_args.extend(exeunit_desc.extra_args.iter().cloned());
         extended_args.extend(args);
-
-        ExeUnitInstance::new(
-            name,
-            &exeunit_desc.supervisor_path,
-            &working_dir,
-            &extended_args,
-        )
+        Ok(extended_args)
     }
 
     pub fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
