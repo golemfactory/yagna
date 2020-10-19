@@ -329,7 +329,7 @@ impl TaskRunner {
             "ExeUnit process exited with status {}, agreement [{}], activity [{}].",
             msg.status,
             msg.agreement_id,
-            msg.agreement_id
+            msg.activity_id
         );
 
         let destroy_msg = ActivityDestroyed {
