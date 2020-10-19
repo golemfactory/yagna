@@ -1,5 +1,6 @@
 
 .github/                                @prekucki
+.github/workflows/integration-test.yml  @golemfactory/ya-integration
 
 core/activity/                          @golemfactory/exe-unit
 core/model/src/activity.rs              @golemfactory/exe-unit
