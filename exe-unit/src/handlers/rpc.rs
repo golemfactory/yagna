@@ -79,7 +79,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
                     current_usage: Some(data),
                     timestamp: Utc::now().timestamp(),
                 }),
-                Err(e) => Err(Error::from(e).into()),
+                Err(e) => Err(e.into()),
             }
         };
 
@@ -143,7 +143,10 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         let notifier = batch.notifier.clone();
 
         let fut = async move {
-            if let Err(_) = timeout(duration, notifier.when(move |i| i >= idx)).await {
+            if timeout(duration, notifier.when(move |i| i >= idx))
+                .await
+                .is_err()
+            {
                 if msg.command_index.is_some() {
                     return Err(RpcMessageError::Timeout);
                 }
