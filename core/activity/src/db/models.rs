@@ -1,4 +1,3 @@
-#![allow(unused)]
 #![allow(clippy::all)]
 
 use super::schema::*;
@@ -9,7 +8,6 @@ use diesel::serialize::Output;
 use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
 use std::convert::TryFrom;
-use std::error::Error;
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "activity"]
@@ -71,7 +69,7 @@ pub struct ActivityState {
     pub updated_date: NaiveDateTime,
 }
 
-impl std::convert::TryFrom<ActivityState> for ya_client_model::activity::ActivityState {
+impl TryFrom<ActivityState> for ya_client_model::activity::ActivityState {
     type Error = ya_persistence::Error;
 
     fn try_from(value: ActivityState) -> Result<Self, Self::Error> {
@@ -91,7 +89,7 @@ pub struct ActivityUsage {
     pub updated_date: NaiveDateTime,
 }
 
-impl std::convert::TryFrom<ActivityUsage> for ya_client_model::activity::ActivityUsage {
+impl TryFrom<ActivityUsage> for ya_client_model::activity::ActivityUsage {
     type Error = ya_persistence::Error;
 
     fn try_from(value: ActivityUsage) -> Result<Self, Self::Error> {
@@ -102,5 +100,21 @@ impl std::convert::TryFrom<ActivityUsage> for ya_client_model::activity::Activit
                 .transpose()?,
             timestamp: value.updated_date.timestamp(),
         })
+    }
+}
+
+#[derive(Queryable, Debug, Clone, Identifiable, Insertable, AsChangeset)]
+#[table_name = "activity_credentials"]
+#[primary_key(activity_id)]
+pub struct ActivityCredentials {
+    pub activity_id: String,
+    pub credentials: String,
+}
+
+impl TryFrom<ActivityCredentials> for Option<ya_client_model::activity::Credentials> {
+    type Error = ya_persistence::Error;
+
+    fn try_from(value: ActivityCredentials) -> Result<Self, Self::Error> {
+        Ok(serde_json::from_str(&value.credentials)?)
     }
 }

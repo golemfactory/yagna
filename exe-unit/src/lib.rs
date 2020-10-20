@@ -1,16 +1,17 @@
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::oneshot;
-use futures::TryFutureExt;
+use futures::{FutureExt, TryFutureExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agreement_utils::agreement::OfferTemplate;
-use ya_client_model::activity::activity_state::StatePair;
 use ya_client_model::activity::{
-    ActivityUsage, CommandResult, ExeScriptCommand, ExeScriptCommandResult, State,
+    activity_state::StatePair, ActivityUsage, CommandResult, ExeScriptCommand,
+    ExeScriptCommandResult, State,
 };
 use ya_core_model::activity;
+use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
@@ -24,6 +25,8 @@ use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 
 pub mod agreement;
+#[cfg(feature = "sgx")]
+pub mod crypto;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -140,9 +143,26 @@ impl ExeCtx {
     }
 }
 
-impl<R: Runtime> ExeUnit<R> {
+#[derive(Clone)]
+struct RuntimeRef<R: Runtime>(Addr<ExeUnit<R>>);
+
+impl<R: Runtime> RuntimeRef<R> {
+    fn from_ctx(ctx: &Context<ExeUnit<R>>) -> Self {
+        RuntimeRef(ctx.address())
+    }
+}
+
+impl<R: Runtime> std::ops::Deref for RuntimeRef<R> {
+    type Target = Addr<ExeUnit<R>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<R: Runtime> RuntimeRef<R> {
     async fn exec(
-        addr: Addr<Self>,
+        self,
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
         exec: activity::Exec,
@@ -151,7 +171,7 @@ impl<R: Runtime> ExeUnit<R> {
         let batch_size = exec.exe_script.len();
         let on_error = |batch_id, result| async {
             let set_state = SetState::default().cmd(None).result(batch_id, result);
-            if let Err(error) = addr.send(set_state).await {
+            if let Err(error) = self.send(set_state).await {
                 log::error!("Cannot update state during exec: {:?}", error);
             }
         };
@@ -171,13 +191,9 @@ impl<R: Runtime> ExeUnit<R> {
                 break;
             }
 
-            if let Err(error) = Self::exec_cmd(
-                addr.clone(),
-                runtime.clone(),
-                transfers.clone(),
-                ctx.clone(),
-            )
-            .await
+            if let Err(error) = self
+                .exec_cmd(runtime.clone(), transfers.clone(), ctx.clone())
+                .await
             {
                 log::warn!("Command interrupted: {}", error.to_string());
                 let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::error(&error));
@@ -188,25 +204,43 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     async fn exec_cmd(
-        addr: Addr<Self>,
+        &self,
         runtime: Addr<R>,
         transfer_service: Addr<TransferService>,
         ctx: ExeCtx,
     ) -> Result<()> {
-        if let ExeScriptCommand::Terminate {} = &ctx.cmd {
-            log::warn!("Terminating running ExeScripts");
+        match &ctx.cmd {
+            ExeScriptCommand::Sign {} => {
+                let batch_id = ctx.batch_id.clone();
+                let signature = self.send(SignExeScript { batch_id }).await??;
 
-            let exclude_batches = vec![ctx.batch_id];
-            let set_state = SetState::default()
-                .state(StatePair(State::Initialized, None))
-                .cmd(None);
+                let stdout = serde_json::to_string(&signature)?;
+                let cmd_result =
+                    ctx.convert_runtime_result(RuntimeCommandResult::ok_with_output(stdout));
+                let set_state = SetState::default().result(ctx.batch_id, cmd_result);
 
-            addr.send(Stop { exclude_batches }).await??;
-            addr.send(set_state).await?;
-            return Ok(());
+                self.send(set_state).await?;
+                return Ok(());
+            }
+            ExeScriptCommand::Terminate {} => {
+                log::warn!("Terminating running ExeScripts");
+
+                let exclude_batches = vec![ctx.batch_id.clone()];
+                self.send(Stop { exclude_batches }).await??;
+
+                let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::ok());
+                let set_state = SetState::default()
+                    .state(StatePair(State::Initialized, None))
+                    .cmd(None)
+                    .result(ctx.batch_id, cmd_result);
+
+                self.send(set_state).await?;
+                return Ok(());
+            }
+            _ => (),
         }
 
-        let state = addr.send(GetState {}).await?.0;
+        let state = self.send(GetState {}).await?.0;
         let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
@@ -234,7 +268,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         log::info!("Executing command: {:?}", ctx.cmd);
 
-        addr.send(
+        self.send(
             SetState::default()
                 .state(state_pre)
                 .cmd(Some(ctx.cmd.clone())),
@@ -283,7 +317,7 @@ impl<R: Runtime> ExeUnit<R> {
             return Err(Error::CommandError(runtime_result));
         }
 
-        let state_cur = addr.send(GetState {}).await?.0;
+        let state_cur = self.send(GetState {}).await?.0;
         if state_cur != state_pre {
             return Err(StateError::UnexpectedState {
                 current: state_cur,
@@ -297,7 +331,7 @@ impl<R: Runtime> ExeUnit<R> {
             .state(state_pre.1.unwrap().into())
             .cmd(None)
             .result(ctx.batch_id, cmd_result);
-        addr.send(state_post).await?;
+        self.send(state_post).await?;
 
         Ok(())
     }
@@ -311,19 +345,37 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
         if let Some(activity_id) = &self.ctx.activity_id {
             let srv_id = activity::exeunit::bus_id(activity_id);
-            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
+
+            #[cfg(feature = "sgx")]
+            {
+                actix_rpc::bind::<activity::sgx::CallEncryptedService>(
+                    &srv_id,
+                    addr.clone().recipient(),
+                );
+            }
+            #[cfg(not(feature = "sgx"))]
+            {
+                actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
+                actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
+                actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
+            }
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
             .finish()
             .spawn(ctx);
 
-        addr.do_send(SetState::from(State::Initialized));
-        log::info!("Started");
+        let fut = async move {
+            addr.send(Initialize).await?.map_err(Error::from)?;
+            addr.send(SetState::from(State::Initialized)).await?;
+            Ok(())
+        }
+        .map_err(|e: Error| panic!("Supervisor initialization error: {}", e))
+        .map(|_| log::info!("Started"));
+
+        ctx.spawn(fut.into_actor(self));
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -334,14 +386,20 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+#[derive(Clone)]
 pub struct ExeUnitContext {
     pub activity_id: Option<String>,
     pub report_url: Option<String>,
+    pub credentials: Option<Credentials>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub runtime_args: RuntimeArgs,
+    #[cfg(feature = "sgx")]
+    #[derivative(Debug = "ignore")]
+    pub crypto: crate::crypto::Crypto,
 }
 
 impl ExeUnitContext {

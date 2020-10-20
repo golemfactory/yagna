@@ -96,7 +96,7 @@ impl Default for ExeUnitState {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ExeUnitReport {
     batches_done: usize,
     batches_pending: usize,
@@ -106,12 +106,7 @@ pub struct ExeUnitReport {
 
 impl ExeUnitReport {
     pub fn new() -> Self {
-        ExeUnitReport {
-            batches_done: 0,
-            batches_pending: 0,
-            cmds_done: 0,
-            cmds_pending: 0,
-        }
+        Default::default()
     }
 }
 
