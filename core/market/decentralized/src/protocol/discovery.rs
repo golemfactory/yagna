@@ -191,7 +191,7 @@ impl Discovery {
         caller: String,
         msg: RetrieveOffers,
     ) -> Result<Vec<ModelOffer>, DiscoveryRemoteError> {
-        log::info!("[{}] asks for {} Offers.", &caller, msg.offer_ids.len());
+        log::debug!("[{}] asks for {} Offers.", &caller, msg.offer_ids.len());
         let get_local_offers = self.inner.get_local_offers_handler.clone();
         Ok(get_local_offers.call(caller, msg).await?)
     }
