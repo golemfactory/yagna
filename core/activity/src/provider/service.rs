@@ -109,11 +109,15 @@ async fn create_activity_gsb(
             Error::from(e)
         })?;
 
-    Ok(activity::CreateResponse {
-        activity_id,
-        credentials,
-    }
-    .into())
+    Ok(if credentials.is_none() {
+        activity::CreateResponseCompat::ActivityId(activity_id)
+    } else {
+        activity::CreateResponse {
+            activity_id,
+            credentials,
+        }
+        .into()
+    })
 }
 
 async fn activity_credentials(
