@@ -5,5 +5,6 @@ mod task_runner;
 
 pub use self::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 pub use task_runner::{
-    ActivityCreated, ActivityDestroyed, GetExeUnit, TaskRunner, TaskRunnerConfig, UpdateActivity,
+    ActivityCreated, ActivityDestroyed, GetExeUnit, GetOfferTemplates, TaskRunner,
+    TaskRunnerConfig, UpdateActivity,
 };

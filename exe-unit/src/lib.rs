@@ -5,6 +5,7 @@ use futures::{SinkExt, TryFutureExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::activity_state::StatePair;
 use ya_client_model::activity::{ActivityUsage, ExeScriptCommand, RuntimeEvent, State};
 use ya_core_model::activity;
@@ -69,6 +70,18 @@ impl<R: Runtime> ExeUnit<R> {
                 Box::new(ServiceAddr::new(runtime)),
             ],
         }
+    }
+
+    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate> {
+        use crate::runtime::process::RuntimeProcess;
+
+        let runtime_template = RuntimeProcess::offer_template(binary)?;
+        let supervisor_template = OfferTemplate::new(serde_json::json!({
+            "golem.com.usage.vector": MetricsService::usage_vector(),
+            "golem.activity.caps.transfer.protocol": TransferService::schemes(),
+        }));
+
+        Ok(supervisor_template.patch(runtime_template))
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {

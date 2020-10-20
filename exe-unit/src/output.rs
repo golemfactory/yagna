@@ -229,7 +229,7 @@ impl CaptureBuffer {
     }
 }
 
-fn vec_to_string(vec: Vec<u8>) -> Option<String> {
+pub(crate) fn vec_to_string(vec: Vec<u8>) -> Option<String> {
     if vec.is_empty() {
         return None;
     }

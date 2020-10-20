@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
-use crate::output::forward_output;
+use crate::output::{forward_output, vec_to_string};
 use crate::process::kill;
 use crate::process::ProcessTree;
 use crate::process::SystemError;
@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
+use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService};
 
@@ -53,6 +54,39 @@ impl RuntimeProcess {
             children: HashSet::new(),
             service: None,
             monitor: None,
+        }
+    }
+
+    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate, Error> {
+        let current_path = std::env::current_dir();
+        let args = vec![OsString::from("offer-template")];
+
+        log::info!(
+            "Executing {:?} with {:?} from path {:?}",
+            binary,
+            args,
+            current_path
+        );
+
+        let child = std::process::Command::new(binary.clone())
+            .args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+
+        let result = child.wait_with_output()?;
+        match result.status.success() {
+            true => {
+                let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
+                Ok(serde_json::from_str(&stdout)?)
+            }
+            false => {
+                log::warn!(
+                    "Cannot read offer template from runtime; using defaults [{}]",
+                    binary.display()
+                );
+                Ok(OfferTemplate::default())
+            }
         }
     }
 
