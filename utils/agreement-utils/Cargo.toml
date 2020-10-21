@@ -10,7 +10,7 @@ description="Yagna agreement utils"
 keywords=["golem", "yagna"]
 
 [dependencies]
-ya-client-model = "0.1"
+ya-client-model = "0.2"
 
 serde = "1.0"
 serde_json = "1.0"

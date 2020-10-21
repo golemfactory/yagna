@@ -12,8 +12,8 @@ testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
 [dependencies]
 ya-agreement-utils = "0.1"
 ya-std-utils = "0.1"
-ya-client = "0.3"
-ya-core-model = { version = "0.1", features = ["market", "net"] }
+ya-client = "0.4"
+ya-core-model = { version = "0.2", features = ["market", "net"] }
 ya-market-resolver = "0.2"
 ya-net = "0.1"
 ya-persistence = "0.2"

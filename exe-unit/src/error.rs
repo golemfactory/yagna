@@ -5,6 +5,7 @@ pub use ya_transfer::error::Error as TransferError;
 use crate::message::RuntimeCommandResult;
 use crate::metrics::error::MetricError;
 use crate::state::StateError;
+use hex::FromHexError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum LocalServiceError {
@@ -58,6 +59,14 @@ pub enum Error {
     UsageLimitExceeded(String),
     #[error("Agreement error: {0}")]
     AgreementError(#[from] agreement::Error),
+    #[error("{0}")]
+    Other(String),
+    #[cfg(feature = "sgx")]
+    #[error("Crypto error: {0:?}")]
+    Crypto(#[from] secp256k1::Error),
+    #[cfg(feature = "sgx")]
+    #[error("Attestation error: {0}")]
+    Attestation(String),
 }
 
 impl Error {
@@ -93,6 +102,12 @@ impl From<ya_service_bus::Error> for Error {
     }
 }
 
+impl From<FromHexError> for Error {
+    fn from(e: FromHexError) -> Self {
+        Error::Other(e.to_string())
+    }
+}
+
 impl From<Error> for RpcError {
     fn from(e: Error) -> Self {
         match e {
@@ -108,6 +123,11 @@ impl From<Error> for RpcError {
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
+            Error::Other(e) => RpcError::Service(e),
+            #[cfg(feature = "sgx")]
+            Error::Crypto(e) => RpcError::Service(e.to_string()),
+            #[cfg(feature = "sgx")]
+            Error::Attestation(e) => RpcError::Service(e.to_string()),
         }
     }
 }

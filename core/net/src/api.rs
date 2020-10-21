@@ -1,6 +1,4 @@
 use std::future::Future;
-#[cfg(any(feature = "service", test))]
-use ya_client_model::NodeId;
 use ya_core_model::net;
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, SendBroadcastMessage, ToEndpoint,
@@ -8,6 +6,8 @@ use ya_core_model::net::local::{
 pub use ya_core_model::net::{
     from, net_service, NetApiError, NetDst, NetSrc, RemoteEndpoint, TryRemoteEndpoint,
 };
+#[cfg(any(feature = "service", test))]
+use ya_core_model::NodeId;
 use ya_service_bus::{typed as bus, Handle, RpcEndpoint, RpcMessage};
 
 pub async fn bind_broadcast_with_caller<MsgType, Output, F>(
