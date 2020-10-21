@@ -56,7 +56,7 @@ impl ExeUnitState {
         report
     }
 
-    pub fn batch_results(&self, batch_id: &String) -> Vec<ExeScriptCommandResult> {
+    pub fn batch_results(&self, batch_id: &str) -> Vec<ExeScriptCommandResult> {
         match self.batch_results.get(batch_id) {
             Some(vec) => vec.clone(),
             None => Vec::new(),
@@ -74,10 +74,10 @@ impl ExeUnitState {
         self.notifier(&batch_id).notify(idx);
     }
 
-    pub fn notifier(&mut self, batch_id: &String) -> &mut Notify<usize> {
+    pub fn notifier(&mut self, batch_id: &str) -> &mut Notify<usize> {
         let notifiers = &mut self.batch_notifiers;
         if !notifiers.contains_key(batch_id) {
-            notifiers.insert(batch_id.clone(), Notify::default());
+            notifiers.insert(batch_id.to_owned(), Notify::default());
         }
         notifiers.get_mut(batch_id).unwrap()
     }
@@ -96,7 +96,7 @@ impl Default for ExeUnitState {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ExeUnitReport {
     batches_done: usize,
     batches_pending: usize,
@@ -106,12 +106,7 @@ pub struct ExeUnitReport {
 
 impl ExeUnitReport {
     pub fn new() -> Self {
-        ExeUnitReport {
-            batches_done: 0,
-            batches_pending: 0,
-            cmds_done: 0,
-            cmds_pending: 0,
-        }
+        Default::default()
     }
 }
 

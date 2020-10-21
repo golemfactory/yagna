@@ -28,12 +28,13 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 
 use crate::processor::GNTDriverProcessor;
-use ethereum_types::{Address, H256};
+use ethereum_types::{Address, H256, U256};
 use futures3::prelude::*;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time;
 use uuid::Uuid;
 use web3::contract::Contract;
 use web3::transports::Http;
@@ -51,6 +52,8 @@ const CREATE_FAUCET_FUNCTION: &str = "create";
 
 pub const PLATFORM_NAME: &'static str = "NGNT";
 pub const DRIVER_NAME: &'static str = "ngnt";
+
+const ETH_FAUCET_MAX_WAIT: time::Duration = time::Duration::from_secs(180);
 
 async fn load_active_accounts(tx_sender: Addr<sender::TransactionSender>) -> GNTDriverResult<()> {
     log::info!("Load active accounts on driver start");
@@ -138,6 +141,23 @@ impl GntDriver {
         })
     }
 
+    fn wait_for_eth<'a>(&self, address: Address) -> impl Future<Output = GNTDriverResult<()>> + 'a {
+        let client = self.ethereum_client.clone();
+        async move {
+            log::info!("Waiting for ETH from faucet...");
+            let wait_until = Utc::now() + chrono::Duration::from_std(ETH_FAUCET_MAX_WAIT).unwrap();
+            while Utc::now() < wait_until {
+                if client.get_balance(address).await? > U256::zero() {
+                    log::info!("Received ETH from faucet.");
+                    return Ok(());
+                }
+                tokio::time::delay_for(time::Duration::from_secs(3)).await;
+            }
+            log::error!("Waiting for ETH timed out.");
+            Err(GNTDriverError::InsufficientFunds)
+        }
+    }
+
     /// Requests GNT from Faucet
     fn request_gnt_from_faucet<'a>(
         &self,
@@ -203,13 +223,15 @@ impl GntDriver {
                 && self.ethereum_client.chain_id() == Chain::Rinkeby.id()
             {
                 let address = utils::str_to_addr(address).unwrap();
-                let req = self.request_gnt_from_faucet(address);
+                let wait_for_eth = self.wait_for_eth(address);
+                let request_gnt = self.request_gnt_from_faucet(address);
                 let fut = async move {
                     faucet::EthFaucetConfig::from_env()
                         .await?
                         .request_eth(address)
                         .await?;
-                    req.await?;
+                    wait_for_eth.await?;
+                    request_gnt.await?;
 
                     gnt::register_account(addr, mode).await?;
                     Ok(())

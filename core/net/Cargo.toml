@@ -9,8 +9,7 @@ default = []
 service = []
 
 [dependencies]
-ya-client-model = "0.1"
-ya-core-model = { version = "0.1", features=["net", "identity"] }
+ya-core-model = { path = "../model", features=["net", "identity"] }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.2"
@@ -21,10 +20,6 @@ futures = "0.3"
 log = "0.4"
 serde_json = "1.0"
 thiserror = "1.0"
-
-[[example]]
-name = "test_net_mk1"
-required-features = ["service"]
 
 [dev-dependencies]
 ya-sb-proto = "0.1"

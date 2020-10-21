@@ -1,5 +1,6 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
+use futures::prelude::*;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -22,8 +23,10 @@ compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\"
 
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
+use ya_metrics::MetricsService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
+use ya_sgx::SgxService;
 
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
@@ -81,7 +84,8 @@ struct CliArgs {
 
     /// Accept the disclaimer and privacy warning found at
     /// {n}https://handbook.golem.network/see-also/terms
-    #[structopt(long, set = clap::ArgSettings::Global)]
+    #[structopt(long)]
+    #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
 
     /// Enter interactive mode
@@ -127,7 +131,11 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
-            accept_terms: args.accept_terms,
+            accept_terms: if cfg!(feature = "tos") {
+                args.accept_terms
+            } else {
+                true
+            },
             interactive: args.interactive,
         })
     }
@@ -145,6 +153,12 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
             Some(db) => db.clone(),
             None => self.default_db.clone(),
         }
+    }
+}
+
+impl<S: 'static> Provider<S, ()> for ServiceContext {
+    fn component(&self) -> () {
+        ()
     }
 }
 
@@ -170,16 +184,22 @@ impl ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
+    // Metrics service must be activated first, to allow all
+    // other services to initialize counters and other metrics.
+    #[enable(gsb, rest)]
+    Metrics(MetricsService),
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
     #[enable(gsb)]
     Net(NetService),
     #[enable(gsb, rest)]
     Market(MarketService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(gsb)]
+    SgxDriver(SgxService),
 }
 
 #[allow(unused)]
@@ -248,6 +268,28 @@ struct ServiceCommandOpts {
     api_url: Url,
 }
 
+#[cfg(unix)]
+async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> {
+    let addr = match env::var_os("NOTIFY_SOCKET") {
+        Some(v) => v,
+        None => {
+            return Ok(());
+        }
+    };
+    if unset_environment {
+        env::remove_var("NOTIFY_SOCKET");
+    }
+    let mut socket = tokio::net::UnixDatagram::unbound()?;
+    socket.send_to(state.as_ref(), addr).await?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn sd_notify(_unset_environment: bool, _state: &str) -> std::io::Result<()> {
+    // ignore for windows.
+    Ok(())
+}
+
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         if !ctx.accept_terms {
@@ -276,17 +318,19 @@ impl ServiceCommand {
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
                 let api_host_port = rest_api_host_port(api_url.clone());
-                HttpServer::new(move || {
+
+                let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
+
                     Services::rest(app, &context)
                 })
                 .bind(api_host_port.clone())
-                .context(format!("Failed to bind http server on {:?}", api_host_port))?
-                .run()
-                .await?;
+                .context(format!("Failed to bind http server on {:?}", api_host_port))?;
+
+                future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service finished!", name);
                 Ok(CommandOutput::object(format!(
@@ -338,7 +382,13 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     let args: CliArgs = CliArgs::from_args();
 
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or(args.log_level()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or(format!(
+            "{},actix_web::middleware::logger=warn",
+            args.log_level()
+        )),
+    );
     env_logger::init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME

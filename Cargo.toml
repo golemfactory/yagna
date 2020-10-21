@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.3.4-alpha.0"
+version = "0.4.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,12 +10,13 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['market-forwarding', 'gnt-driver', 'gftp/bin']
+default = ['market-decentralized', 'gnt-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored"]
 market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized', 'gftp/bin']
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
+tos = []
 
 [[bin]]
 name = "yagna"
@@ -36,12 +37,14 @@ ya-payment = "0.1"
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
+ya-sgx = "0.1"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 ya-utils-path = "0.1"
+ya-metrics = "0.1"
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -56,11 +59,34 @@ log = "0.4"
 openssl = "0.10"
 structopt = "0.3"
 url = "2.1.1"
+tokio = {version = "0.2.22", features=["uds"]}
 
 [package.metadata.deb]
+name="golem-requestor"
 assets = [
     ["target/release/yagna", "usr/bin/", "755"],
-    ["target/release/ya-requestor", "usr/bin/", "755"],
+    ["target/release/gftp", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/yagna/", "644"],
+    ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
+]
+conflicts="ya-provider"
+features=["static-openssl"]
+maintainer-scripts="debian/core"
+depends="libgcc1, libc6 (>= 2.23)"
+extended-description="""The Next Golem Milestone.
+
+An open platform and marketplace for distributed computations.
+"""
+
+
+[package.metadata.deb.variants.provider]
+name="golem-provider"
+replaces="golem-requestor"
+maintainer-scripts="debian/core"
+features=["static-openssl"]
+depends="libgcc1, libc6 (>= 2.23)"
+assets = [
+    ["target/release/yagna", "usr/bin/", "755"],
     ["target/release/ya-provider", "usr/bin/", "755"],
     ["target/release/gftp", "usr/bin/", "755"],
     ["target/release/exe-unit", "usr/lib/yagna/plugins/", "755"],
@@ -68,7 +94,7 @@ assets = [
     ["core/serv/README.md", "usr/share/doc/yagna/service.md", "644"],
     ["agent/provider/readme.md", "usr/share/doc/yagna/run-provider.md", "644"],
 ]
-features=["static-openssl"]
+
 
 [workspace]
 members = [
@@ -93,9 +119,11 @@ members = [
     "core/serv-api/derive",
     "core/serv-api/interfaces",
     "core/serv-api/web",
+    "core/sgx",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
+    "golem_cli",
     "service-bus/bus",
     "service-bus/derive",
     "service-bus/proto",
@@ -109,6 +137,7 @@ members = [
     "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
+    "core/metrics"
 ]
 
 [patch.crates-io]
@@ -123,7 +152,7 @@ ya-market-forwarding = { path = "core/market/forwarding" }
 ya-market-resolver = { path = "core/market/resolver" }
 ya-net = { path = "core/net" }
 ya-payment = { path = "core/payment" }
-
+ya-sgx = { path = "core/sgx" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -141,8 +170,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "099944b74c2743457feb825ccc4b8b3d83f587c4" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "099944b74c2743457feb825ccc4b8b3d83f587c4" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -155,3 +184,4 @@ ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
+ya-metrics = { path = "core/metrics" }

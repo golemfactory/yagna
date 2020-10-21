@@ -111,11 +111,19 @@ jobs:
           command: build
           args: --workspace
 
+      - name: cargo build router
+        uses: actions-rs/cargo@v1
+        if: matrix.os != 'Windows'
+        with:
+          command: build
+          args: -p ya-sb-router --example ya_sb_router
+
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
         run: |
           mkdir build
-          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit} build
+          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit,golemsp} build
+          cp target/debug/examples/ya_sb_router build
           strip -x build/*
 
       - name: Copy binaries Windows

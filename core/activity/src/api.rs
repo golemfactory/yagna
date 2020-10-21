@@ -28,10 +28,17 @@ mod common {
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
+            // .service(get_activities_web)
             .service(get_activity_state_web)
             .service(get_activity_usage_web)
     }
 
+    // TODO this endpoint needs authorization via Identity, otherwise is vulnerable for attacks.
+    // #[actix_web::get("/activity")]
+    // async fn get_activities_web(db: web::Data<DbExecutor>) -> impl Responder {
+    //     log::debug!("get_activities_web");
+    //     get_activities(&db).await.map(web::Json)
+    // }
     #[actix_web::get("/activity/{activity_id}/state")]
     async fn get_activity_state_web(
         db: web::Data<DbExecutor>,
@@ -39,22 +46,30 @@ mod common {
         query: web::Query<QueryTimeout>,
         id: Identity,
     ) -> impl Responder {
+        log::debug!("get_activity_state_web");
+
         // check if caller is the Provider
         if authorize_activity_executor(&db, id.identity, &path.activity_id)
             .await
             .is_ok()
         {
+            log::trace!("get_activity_state_web: I'm the provider");
             return get_persisted_state(&db, &path.activity_id)
                 .await
                 .map(web::Json);
         }
 
+        log::trace!("get_activity_state_web: Not provider, maybe requestor?");
+
         // check if caller is the Requestor
         authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+
+        log::trace!("get_activity_state_web: I'm the requestor");
 
         // Return locally persisted usage if activity has been already terminated or terminating
         let state = get_persisted_state(&db, &path.activity_id).await?;
         if !state.alive() {
+            log::trace!("get_activity_state_web: got persisted state");
             return Ok(web::Json(state));
         }
 

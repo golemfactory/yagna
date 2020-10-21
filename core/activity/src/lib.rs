@@ -10,6 +10,7 @@ mod dao;
 pub mod db;
 
 mod api;
+mod cli;
 mod error;
 mod provider;
 mod requestor;

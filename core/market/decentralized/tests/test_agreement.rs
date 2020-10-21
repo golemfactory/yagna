@@ -21,7 +21,7 @@ const PROV_NAME: &str = "Node-2";
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_gsb_get_agreement() -> Result<()> {
-    let network = MarketsNetwork::new("test_gsb_get_agreement")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -60,7 +60,7 @@ async fn test_gsb_get_agreement() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_agreement() -> Result<()> {
-    let network = MarketsNetwork::new("test_get_agreement")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -96,7 +96,7 @@ async fn test_get_agreement() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_not_existing_agreement() -> Result<()> {
-    let network = MarketsNetwork::new("test_rest_get_not_existing_agreement")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -130,7 +130,7 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() -> Result<()> {
-    let network = MarketsNetwork::new("full_market_interaction_aka_happy_path")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -206,7 +206,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_creation_should_fail() -> Result<()> {
-    let network = MarketsNetwork::new("second_creation_should_fail")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -241,7 +241,7 @@ async fn second_creation_should_fail() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_confirmation_should_fail() -> Result<()> {
-    let network = MarketsNetwork::new("second_confirmation_should_fail")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -285,7 +285,7 @@ async fn second_confirmation_should_fail() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn agreement_expired_before_confirmation() -> Result<()> {
-    let network = MarketsNetwork::new("agreement_expired_before_confirmation")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -325,7 +325,7 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn agreement_expired_before_approval() -> Result<()> {
-    let network = MarketsNetwork::new("agreement_expired_before_approval")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -371,7 +371,7 @@ async fn agreement_expired_before_approval() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn waiting_wo_confirmation_should_fail() -> Result<()> {
-    let network = MarketsNetwork::new("waiting_wo_confirmation_should_fail")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -409,7 +409,7 @@ async fn waiting_wo_confirmation_should_fail() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn approval_before_confirmation_should_fail() -> Result<()> {
-    let network = MarketsNetwork::new("approval_before_confirmation_should_fail")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -454,7 +454,7 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn approval_without_waiting_should_pass() -> Result<()> {
-    let network = MarketsNetwork::new("approval_without_waiting_should_pass")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -502,7 +502,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn waiting_after_approval_should_pass() -> Result<()> {
-    let network = MarketsNetwork::new("waiting_after_approval_should_pass")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -556,7 +556,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_approval_should_fail() -> Result<()> {
-    let network = MarketsNetwork::new("second_approval_should_fail")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -619,7 +619,7 @@ async fn second_approval_should_fail() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_waiting_should_pass() -> Result<()> {
-    let network = MarketsNetwork::new("second_waiting_should_pass")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -680,7 +680,7 @@ async fn second_waiting_should_pass() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn net_err_while_confirming() -> Result<()> {
-    let network = MarketsNetwork::new("net_err_while_confirming")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -722,7 +722,7 @@ async fn net_err_while_confirming() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn net_err_while_approving() -> Result<()> {
-    let network = MarketsNetwork::new("net_err_while_approving")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -779,7 +779,7 @@ async fn net_err_while_approving() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_requestor_proposal() -> Result<()> {
-    let network = MarketsNetwork::new("cant_promote_requestor_proposal")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -824,7 +824,7 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_initial_proposal() -> Result<()> {
-    let network = MarketsNetwork::new("cant_promote_initial_proposal")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
@@ -867,7 +867,7 @@ async fn cant_promote_initial_proposal() -> Result<()> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_not_last_proposal() -> Result<()> {
-    let network = MarketsNetwork::new("cant_promote_not_last_proposal")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
         .await?
