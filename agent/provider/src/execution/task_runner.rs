@@ -409,10 +409,6 @@ impl TaskRunner {
             args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
         }
 
-        args.push("service-bus");
-        args.push(activity_id);
-        args.push(activity::local::BUS_ID);
-
         let args = args.iter().map(ToString::to_string).collect();
 
         log::info!(
