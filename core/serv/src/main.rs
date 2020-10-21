@@ -26,6 +26,8 @@ use ya_identity::service::Identity as IdentityService;
 use ya_metrics::MetricsService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
+use ya_sgx::SgxService;
+
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -196,6 +198,8 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(gsb)]
+    SgxDriver(SgxService),
 }
 
 #[allow(unused)]

@@ -1,14 +1,16 @@
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
-use futures::{SinkExt, TryFutureExt};
+use futures::{FutureExt, SinkExt, TryFutureExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agreement_utils::agreement::OfferTemplate;
-use ya_client_model::activity::activity_state::StatePair;
-use ya_client_model::activity::{ActivityUsage, ExeScriptCommand, RuntimeEvent, State};
+use ya_client_model::activity::{
+    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, RuntimeEvent, State,
+};
 use ya_core_model::activity;
+use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
@@ -22,6 +24,8 @@ use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 
 pub mod agreement;
+#[cfg(feature = "sgx")]
+pub mod crypto;
 pub mod error;
 mod handlers;
 pub mod message;
@@ -107,10 +111,27 @@ impl<R: Runtime> ExeUnit<R> {
     }
 }
 
-impl<R: Runtime> ExeUnit<R> {
+#[derive(Clone)]
+struct RuntimeRef<R: Runtime>(Addr<ExeUnit<R>>);
+
+impl<R: Runtime> RuntimeRef<R> {
+    fn from_ctx(ctx: &Context<ExeUnit<R>>) -> Self {
+        RuntimeRef(ctx.address())
+    }
+}
+
+impl<R: Runtime> std::ops::Deref for RuntimeRef<R> {
+    type Target = Addr<ExeUnit<R>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<R: Runtime> RuntimeRef<R> {
     async fn exec(
+        self,
         exec: activity::Exec,
-        addr: Addr<Self>,
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
         mut events: mpsc::Sender<RuntimeEvent>,
@@ -129,18 +150,14 @@ impl<R: Runtime> ExeUnit<R> {
             }
 
             let runtime_cmd = ExecuteCommand {
-                batch_id: exec.batch_id.clone(),
+                batch_id: batch_id.clone(),
                 idx,
                 command: cmd.clone(),
                 tx: events.clone(),
             };
-            let result = Self::exec_cmd(
-                runtime_cmd,
-                addr.clone(),
-                runtime.clone(),
-                transfers.clone(),
-            )
-            .await;
+            let result = self
+                .exec_cmd(runtime_cmd, runtime.clone(), transfers.clone())
+                .await;
 
             let (return_code, message) = match result {
                 Ok(_) => (0, None),
@@ -164,20 +181,41 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     async fn exec_cmd(
+        &self,
         runtime_cmd: ExecuteCommand,
-        addr: Addr<Self>,
         runtime: Addr<R>,
         transfer_service: Addr<TransferService>,
     ) -> Result<()> {
-        if let ExeScriptCommand::Terminate {} = &runtime_cmd.command {
-            log::warn!("Terminating running ExeScripts");
-            let exclude_batches = vec![runtime_cmd.batch_id];
-            addr.send(Stop { exclude_batches }).await??;
-            addr.send(SetState::from(State::Initialized)).await?;
-            return Ok(());
+        match &runtime_cmd.command {
+            ExeScriptCommand::Sign {} => {
+                let batch_id = runtime_cmd.batch_id.clone();
+                let signature = self.send(SignExeScript { batch_id }).await??;
+                let stdout = serde_json::to_string(&signature)?;
+
+                runtime_cmd
+                    .tx
+                    .clone()
+                    .send(RuntimeEvent::stdout(
+                        runtime_cmd.batch_id.clone(),
+                        runtime_cmd.idx,
+                        CommandOutput::Str(stdout),
+                    ))
+                    .await
+                    .map_err(|e| Error::runtime(format!("Unable to send stdout event: {:?}", e)))?;
+
+                return Ok(());
+            }
+            ExeScriptCommand::Terminate {} => {
+                log::debug!("Terminating running ExeScripts");
+                let exclude_batches = vec![runtime_cmd.batch_id];
+                self.send(Stop { exclude_batches }).await??;
+                self.send(SetState::from(State::Initialized)).await?;
+                return Ok(());
+            }
+            _ => (),
         }
 
-        let state = addr.send(GetState {}).await?.0;
+        let state = self.send(GetState {}).await?.0;
         let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
                 return Err(StateError::Busy(state).into());
@@ -205,7 +243,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        addr.send(SetState::from(state_pre.clone())).await?;
+        self.send(SetState::from(state_pre.clone())).await?;
 
         match &runtime_cmd.command {
             ExeScriptCommand::Transfer { from, to, args } => {
@@ -231,7 +269,7 @@ impl<R: Runtime> ExeUnit<R> {
 
         if let ExeScriptCommand::Deploy { .. } = &runtime_cmd.command {
             let mut runtime_mode = RuntimeMode::ProcessPerCommand;
-            let stdout = addr
+            let stdout = self
                 .send(GetStdOut {
                     batch_id: runtime_cmd.batch_id.clone(),
                     idx: runtime_cmd.idx,
@@ -251,7 +289,7 @@ impl<R: Runtime> ExeUnit<R> {
             runtime.send(SetRuntimeMode(runtime_mode)).await??;
         }
 
-        let state_cur = addr.send(GetState {}).await?.0;
+        let state_cur = self.send(GetState {}).await?.0;
         if state_cur != state_pre {
             return Err(StateError::UnexpectedState {
                 current: state_cur,
@@ -260,7 +298,7 @@ impl<R: Runtime> ExeUnit<R> {
             .into());
         }
 
-        addr.send(SetState::from(state_pre.1.unwrap())).await?;
+        self.send(SetState::from(state_pre.1.unwrap())).await?;
         Ok(())
     }
 }
@@ -275,21 +313,41 @@ impl<R: Runtime> Actor for ExeUnit<R> {
         let addr = ctx.address();
         if let Some(activity_id) = &self.ctx.activity_id {
             let srv_id = activity::exeunit::bus_id(activity_id);
-            actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
             actix_rpc::bind::<activity::GetUsage>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
-            actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
 
-            actix_rpc::binds::<activity::StreamExecBatchResults>(&srv_id, addr.clone().recipient());
+            #[cfg(feature = "sgx")]
+            {
+                actix_rpc::bind::<activity::sgx::CallEncryptedService>(
+                    &srv_id,
+                    addr.clone().recipient(),
+                );
+            }
+            #[cfg(not(feature = "sgx"))]
+            {
+                actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
+                actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
+                actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
+                actix_rpc::binds::<activity::StreamExecBatchResults>(
+                    &srv_id,
+                    addr.clone().recipient(),
+                );
+            }
         }
 
         IntervalFunc::new(*DEFAULT_REPORT_INTERVAL, Self::report_usage)
             .finish()
             .spawn(ctx);
 
-        addr.do_send(SetState::from(State::Initialized));
-        log::info!("Started");
+        let fut = async move {
+            addr.send(Initialize).await?.map_err(Error::from)?;
+            addr.send(SetState::from(State::Initialized)).await?;
+            Ok(())
+        }
+        .map_err(|e: Error| panic!("Supervisor initialization error: {}", e))
+        .map(|_| log::info!("Started"));
+
+        ctx.spawn(fut.into_actor(self));
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -300,14 +358,20 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(derivative::Derivative)]
+#[derivative(Debug)]
+#[derive(Clone)]
 pub struct ExeUnitContext {
     pub activity_id: Option<String>,
     pub report_url: Option<String>,
+    pub credentials: Option<Credentials>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub runtime_args: RuntimeArgs,
+    #[cfg(feature = "sgx")]
+    #[derivative(Debug = "ignore")]
+    pub crypto: crate::crypto::Crypto,
 }
 
 impl ExeUnitContext {

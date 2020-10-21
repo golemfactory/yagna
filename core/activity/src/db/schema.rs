@@ -9,12 +9,20 @@ table! {
 }
 
 table! {
+    activity_credentials (activity_id) {
+        activity_id -> Text,
+        credentials -> Text,
+    }
+}
+
+table! {
     activity_event (id) {
         id -> Integer,
         activity_id -> Integer,
         identity_id -> Text,
         event_date -> Timestamp,
         event_type_id -> Integer,
+        requestor_pub_key -> Nullable<Binary>,
     }
 }
 
@@ -73,6 +81,7 @@ joinable!(runtime_event -> runtime_event_type (type_id));
 
 allow_tables_to_appear_in_same_query!(
     activity,
+    activity_credentials,
     activity_event,
     activity_event_type,
     activity_state,

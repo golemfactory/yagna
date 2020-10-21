@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::runtime::RuntimeMode;
+use crate::state::CommandState;
 use crate::Result;
 use actix::prelude::*;
 use futures::channel::mpsc;
@@ -83,11 +84,34 @@ pub struct SetTaskPackagePath(pub PathBuf);
 #[rtype(result = "Result<()>")]
 pub struct SetRuntimeMode(pub RuntimeMode);
 
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Initialize;
+
 #[derive(Clone, Debug, PartialEq, Message)]
 #[rtype(result = "()")]
 pub struct Register<Svc>(pub Addr<Svc>)
 where
     Svc: Actor<Context = Context<Svc>> + Handler<Shutdown>;
+
+#[derive(Clone, Debug, Message)]
+#[rtype(result = "Result<SignExeScriptResponse>")]
+pub struct SignExeScript {
+    pub batch_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignExeScriptResponse {
+    pub output: String,
+    pub sig: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignatureStub {
+    pub script: Vec<ExeScriptCommand>,
+    pub results: Vec<CommandState>,
+    pub digest: String,
+}
 
 #[derive(Clone, Debug, Default, Message)]
 #[rtype(result = "Result<()>")]

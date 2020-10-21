@@ -35,12 +35,63 @@ pub struct Create {
     pub provider_id: NodeId,
     pub agreement_id: String,
     pub timeout: Option<f32>,
+    // secp256k1 - public key
+    #[serde(default)]
+    pub requestor_pub_key: Option<Vec<u8>>,
 }
 
 impl RpcMessage for Create {
     const ID: &'static str = "CreateActivity";
-    type Item = String;
+    type Item = CreateResponseCompat;
     type Error = RpcMessageError;
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateResponse {
+    pub activity_id: String,
+    pub credentials: Option<local::Credentials>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CreateResponseCompat {
+    ActivityId(String),
+    Response(CreateResponse),
+}
+
+impl CreateResponseCompat {
+    pub fn activity_id(&self) -> &str {
+        match self {
+            Self::ActivityId(v) => v.as_ref(),
+            Self::Response(r) => r.activity_id.as_ref(),
+        }
+    }
+
+    pub fn credentials(&self) -> Option<&local::Credentials> {
+        match self {
+            Self::ActivityId(_) => None,
+            Self::Response(r) => r.credentials.as_ref(),
+        }
+    }
+}
+
+impl From<CreateResponseCompat> for CreateResponse {
+    fn from(compat: CreateResponseCompat) -> Self {
+        match compat {
+            CreateResponseCompat::ActivityId(activity_id) => CreateResponse {
+                activity_id,
+                credentials: None,
+            },
+            CreateResponseCompat::Response(response) => response,
+        }
+    }
+}
+
+impl From<CreateResponse> for CreateResponseCompat {
+    fn from(response: CreateResponse) -> Self {
+        CreateResponseCompat::Response(response)
+    }
 }
 
 /// Destroy activity.
@@ -84,6 +135,24 @@ impl RpcMessage for GetUsage {
     const ID: &'static str = "GetActivityUsage";
     type Item = ActivityUsage;
     type Error = RpcMessageError;
+}
+
+pub mod sgx {
+    use super::*;
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct CallEncryptedService {
+        pub activity_id: String,
+        pub sender: NodeId,
+        pub bytes: Vec<u8>,
+    }
+
+    impl RpcMessage for CallEncryptedService {
+        const ID: &'static str = "CallEncryptedService";
+        type Item = Vec<u8>;
+        type Error = RpcMessageError;
+    }
 }
 
 /// Execute a script within the activity. Returns `batch_id`.
@@ -190,12 +259,43 @@ pub mod local {
         pub activity_id: String,
         pub state: ActivityState,
         pub timeout: Option<f32>,
+        #[serde(default)]
+        pub credentials: Option<Credentials>,
+    }
+
+    impl SetState {
+        pub fn new(
+            activity_id: String,
+            state: ActivityState,
+            credentials: Option<Credentials>,
+        ) -> Self {
+            SetState {
+                activity_id,
+                state,
+                timeout: Default::default(),
+                credentials,
+            }
+        }
     }
 
     impl RpcMessage for SetState {
         const ID: &'static str = "SetActivityState";
         type Item = ();
         type Error = RpcMessageError;
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum Credentials {
+        Sgx {
+            requestor: Vec<u8>,
+            enclave: Vec<u8>,
+            // sha3-256
+            payload_sha3: [u8; 32],
+            enclave_hash: [u8; 32],
+            ias_report: String,
+            ias_sig: Vec<u8>,
+        },
     }
 
     /// Set usage counters for the activity.

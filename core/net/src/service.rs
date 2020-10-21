@@ -4,9 +4,9 @@ use futures::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
-use ya_client_model::NodeId;
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_core_model::net::{self, local as local_net, local::SendBroadcastMessage};
+use ya_core_model::NodeId;
 use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
 };

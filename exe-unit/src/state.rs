@@ -166,6 +166,9 @@ impl Batch {
                 ExeScriptCommandResult {
                     index: i as u32,
                     result,
+                    // FIXME: output options
+                    stdout: None,
+                    stderr: None,
                     is_batch_finished: i == batch_size - 1 || result == CommandResult::Error,
                     message: r.message(),
                 }
@@ -232,6 +235,7 @@ impl<T: Clone> Default for Broadcast<T> {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommandState {
     pub result: Option<CommandResult>,
     pub stdout: Option<String>,
@@ -259,7 +263,7 @@ impl Default for CommandState {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct ExeUnitReport {
     batches_done: usize,
     batches_pending: usize,
@@ -269,12 +273,7 @@ pub struct ExeUnitReport {
 
 impl ExeUnitReport {
     pub fn new() -> Self {
-        ExeUnitReport {
-            batches_done: 0,
-            batches_pending: 0,
-            cmds_done: 0,
-            cmds_pending: 0,
-        }
+        Default::default()
     }
 }
 

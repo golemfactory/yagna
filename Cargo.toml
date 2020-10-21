@@ -36,6 +36,7 @@ ya-payment = "0.1"
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
+ya-sgx = "0.1"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.1"
 ya-service-api-interfaces = "0.1"
@@ -116,6 +117,7 @@ members = [
     "core/serv-api/derive",
     "core/serv-api/interfaces",
     "core/serv-api/web",
+    "core/sgx",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
@@ -147,6 +149,7 @@ ya-market-forwarding = { path = "core/market/forwarding" }
 ya-market-resolver = { path = "core/market/resolver" }
 ya-net = { path = "core/net" }
 ya-payment = { path = "core/payment" }
+ya-sgx = { path = "core/sgx" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -164,8 +167,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "86ab7835bf9184f1c5b9e32931c80c495c662513"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "86ab7835bf9184f1c5b9e32931c80c495c662513"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "76c180a69033181322bcb1867c48092128fa01d6"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "76c180a69033181322bcb1867c48092128fa01d6"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }

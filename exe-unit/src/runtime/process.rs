@@ -20,7 +20,7 @@ use std::sync::Arc;
 use tokio::process::Command;
 use tokio_util::codec::{BytesCodec, FramedRead};
 use ya_agreement_utils::agreement::OfferTemplate;
-use ya_client_model::activity::{ExeScriptCommand, RuntimeEvent};
+use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
@@ -122,7 +122,9 @@ impl RuntimeProcess {
                 cmd_args.extend(args.into_iter().map(OsString::from));
                 cmd_args
             }
-            ExeScriptCommand::Run { entry_point, args } => {
+            ExeScriptCommand::Run {
+                entry_point, args, ..
+            } => {
                 let mut cmd_args = vec![
                     OsString::from("run"),
                     OsString::from("--entrypoint"),
@@ -155,11 +157,11 @@ impl RuntimeProcess {
 
             let id = batch_id.clone();
             forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
-                RuntimeEvent::stdout(id.clone(), idx, out)
+                RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Str(out))
             });
             let id = batch_id.clone();
             forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
-                RuntimeEvent::stderr(id.clone(), idx, out)
+                RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Str(out))
             });
 
             let proc = if cfg!(feature = "sgx") {
@@ -213,6 +215,7 @@ impl RuntimeProcess {
             ExeScriptCommand::Run {
                 entry_point,
                 mut args,
+                ..
             } => {
                 log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
 
@@ -243,11 +246,15 @@ impl RuntimeProcess {
                     while let Some(status) = events.rx.next().await {
                         if let Some(out) = vec_to_string(status.stdout) {
                             let batch_id = batch_id.clone();
-                            let _ = tx.send(RuntimeEvent::stdout(batch_id, idx, out)).await;
+                            let _ = tx
+                                .send(RuntimeEvent::stdout(batch_id, idx, CommandOutput::Str(out)))
+                                .await;
                         }
                         if let Some(out) = vec_to_string(status.stderr) {
                             let batch_id = batch_id.clone();
-                            let _ = tx.send(RuntimeEvent::stderr(batch_id, idx, out)).await;
+                            let _ = tx
+                                .send(RuntimeEvent::stderr(batch_id, idx, CommandOutput::Str(out)))
+                                .await;
                         }
                         if !status.running {
                             return Ok(status.return_code);

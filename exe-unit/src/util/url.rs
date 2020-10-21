@@ -29,7 +29,7 @@ impl TransferUrl {
 
     pub fn parse(url: &str, fallback_scheme: &str) -> Result<Self, TransferError> {
         let url = url.trim();
-        if url.len() == 0 {
+        if url.is_empty() {
             return Err(TransferError::InvalidUrlError("Empty URL".to_owned()));
         }
 
