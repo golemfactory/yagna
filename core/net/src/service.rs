@@ -4,9 +4,9 @@ use futures::prelude::*;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
-use ya_client_model::NodeId;
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_core_model::net::{self, local as local_net, local::SendBroadcastMessage};
+use ya_core_model::NodeId;
 use ya_service_bus::{
     connection, typed as bus, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
@@ -97,13 +97,16 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         let central_bus = central_bus.clone();
         let default_caller = default_node_id.to_string();
         local_bus::subscribe(net::BUS_ID, move |_caller: &str, addr: &str, msg: &[u8]| {
+            let addr = addr.to_string();
             log::debug!(
                 "Sending message to hub. Called by: {}, addr: {}.",
                 my_net_node_id,
                 addr
             );
             // `_caller` here is usually "local", so we replace it with our default node id
-            central_bus.call(default_caller.clone(), addr.to_string(), Vec::from(msg))
+            central_bus
+                .call(default_caller.clone(), addr.clone(), Vec::from(msg))
+                .map_err(|e| Error::RemoteError(addr, e.to_string()))
         });
     }
 
@@ -126,11 +129,13 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
             }
 
             central_bus
-                .call(from_node.to_string(), to_addr, Vec::from(msg))
+                .call(from_node.to_string(), to_addr.clone(), Vec::from(msg))
+                .map_err(|e| Error::RemoteError(to_addr, e.to_string()))
                 .right_future()
         });
     }
 
+    // Subscribe broadcast on remote
     {
         let bcast = bcast.clone();
         let central_bus = central_bus.clone();
@@ -152,6 +157,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         });
     }
 
+    // Send broadcast to remote
     {
         let central_bus = central_bus.clone();
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);

@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use derive_more::Display;
 use futures::future::join_all;
+use futures::{FutureExt, TryFutureExt};
 use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
 
-use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
 use ya_client_model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_core_model::activity;
@@ -25,6 +26,7 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
+use crate::market::Preset;
 use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // =========================================== //
@@ -43,6 +45,10 @@ pub struct UpdateActivity;
 pub struct GetExeUnit {
     pub name: String,
 }
+
+#[derive(Message)]
+#[rtype(result = "Result<HashMap<String, OfferTemplate>>")]
+pub struct GetOfferTemplates(pub Vec<Preset>);
 
 // =========================================== //
 // Public signals sent by TaskRunner
@@ -79,6 +85,7 @@ pub struct ActivityDestroyed {
 struct CreateActivity {
     pub activity_id: String,
     pub agreement_id: String,
+    pub requestor_pub_key: Option<String>,
 }
 
 /// Called when we got destroyActivity event.
@@ -228,9 +235,14 @@ impl TaskRunner {
                     ProviderEvent::CreateActivity {
                         activity_id,
                         agreement_id,
+                        requestor_pub_key,
                     } => {
                         myself
-                            .send(CreateActivity::new(activity_id, agreement_id))
+                            .send(CreateActivity::new(
+                                activity_id,
+                                agreement_id,
+                                requestor_pub_key.as_ref(),
+                            ))
                             .await?
                     }
                     ProviderEvent::DestroyActivity {
@@ -268,7 +280,12 @@ impl TaskRunner {
 
         let exeunit_name = exe_unit_name_from(&agreement)?;
 
-        let task = match self.create_task(&exeunit_name, &msg.activity_id, &msg.agreement_id) {
+        let task = match self.create_task(
+            &exeunit_name,
+            &msg.activity_id,
+            &msg.agreement_id,
+            msg.requestor_pub_key.as_ref().map(|s| s.as_str()),
+        ) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
         };
@@ -323,7 +340,7 @@ impl TaskRunner {
             "ExeUnit process exited with status {}, agreement [{}], activity [{}].",
             msg.status,
             msg.agreement_id,
-            msg.agreement_id
+            msg.activity_id
         );
 
         let destroy_msg = ActivityDestroyed {
@@ -346,12 +363,21 @@ impl TaskRunner {
         Ok(())
     }
 
+    fn offer_template(&self, exeunit_name: &str) -> impl Future<Output = Result<String>> {
+        let working_dir = self.tasks_dir.clone();
+        let args = vec![String::from("offer-template")];
+        self.registry
+            .run_exeunit_with_output(exeunit_name, args, &working_dir)
+            .map_err(|error| error.context(format!("ExeUnit offer-template command failed")))
+    }
+
     #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
         exeunit_name: &str,
         activity_id: &str,
         agreement_id: &str,
+        requestor_pub_key: Option<&str>,
     ) -> Result<Task> {
         let working_dir = self
             .tasks_dir
@@ -374,14 +400,14 @@ impl TaskRunner {
 
         self.save_agreement(&agreement_path, &agreement_id)?;
 
-        let mut args = vec![];
+        let mut args = vec!["service-bus", activity_id, activity::local::BUS_ID];
         args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
 
-        args.push("service-bus");
-        args.push(activity_id);
-        args.push(activity::local::BUS_ID);
+        if let Some(req_pub_key) = requestor_pub_key {
+            args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
+        }
 
         let args = args.iter().map(ToString::to_string).collect();
 
@@ -517,6 +543,30 @@ forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 
+impl Handler<GetOfferTemplates> for TaskRunner {
+    type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
+
+    fn handle(&mut self, msg: GetOfferTemplates, _: &mut Context<Self>) -> Self::Result {
+        let entries = msg
+            .0
+            .into_iter()
+            .map(|p| (p.name, self.offer_template(&p.exeunit_name)))
+            .collect::<Vec<_>>();
+
+        async move {
+            let mut result: HashMap<String, OfferTemplate> = HashMap::new();
+            for (key, fut) in entries {
+                log::info!("Reading offer template for {}", key);
+                let string = fut.await?;
+                let value = serde_json::from_str(string.as_str())?;
+                result.insert(key, value);
+            }
+            Ok(result)
+        }
+        .boxed_local()
+    }
+}
+
 forward_actix_handler!(
     TaskRunner,
     Subscribe<ActivityCreated>,
@@ -647,10 +697,15 @@ impl Handler<AgreementBroken> for TaskRunner {
 // =========================================== //
 
 impl CreateActivity {
-    pub fn new(activity_id: &str, agreement_id: &str) -> CreateActivity {
+    pub fn new<S: AsRef<str>>(
+        activity_id: S,
+        agreement_id: S,
+        requestor_pub_key: Option<S>,
+    ) -> CreateActivity {
         CreateActivity {
-            activity_id: activity_id.to_string(),
-            agreement_id: agreement_id.to_string(),
+            activity_id: activity_id.as_ref().to_string(),
+            agreement_id: agreement_id.as_ref().to_string(),
+            requestor_pub_key: requestor_pub_key.map(|s| s.as_ref().to_string()),
         }
     }
 }

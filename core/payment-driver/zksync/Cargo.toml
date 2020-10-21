@@ -26,8 +26,8 @@ uuid = { version = "0.8", features = ["v4"] }
 web3 = "0.10.0"
 #
 # ## yagna dependencies
-ya-client-model = { version = "0.1" }
-ya-core-model = { version = "0.1", features = ["driver", "identity", "payment"] }
+ya-client-model = { version = "0.2.0" }
+ya-core-model = { version = "0.2.1", features = ["driver", "identity", "payment"] }
 ya-service-bus = "0.2"
 
 [dev-dependencies]

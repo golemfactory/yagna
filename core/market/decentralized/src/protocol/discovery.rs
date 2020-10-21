@@ -154,7 +154,9 @@ impl Discovery {
                 let offers = self
                     .get_remote_offers(caller.clone(), unknown_offer_ids)
                     .await
-                    .map_err(|e| log::warn!("Can't get Offers from [{}]. Error: {}", &caller, e))?;
+                    .map_err(|e| {
+                        log::debug!("Can't get Offers from [{}]. Error: {}", &caller, e)
+                    })?;
 
                 // We still could fail to add some Offers to database. If we fail to add them, we don't
                 // want to propagate subscription further.

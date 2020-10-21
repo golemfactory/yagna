@@ -10,7 +10,7 @@ use ya_client::model::market::proposal::State;
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_get_proposal")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Requestor1")
         .await?
@@ -54,7 +54,7 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new("test_get_proposal_not_found")
+    let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Requestor1")
         .await?
