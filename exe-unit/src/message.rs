@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::runtime::RuntimeMode;
-use crate::state::CommandState;
+use crate::state::CommandStateRepr;
 use crate::Result;
 use actix::prelude::*;
 use futures::channel::mpsc;
@@ -109,7 +109,7 @@ pub struct SignExeScriptResponse {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignatureStub {
     pub script: Vec<ExeScriptCommand>,
-    pub results: Vec<CommandState>,
+    pub results: Vec<CommandStateRepr>,
     pub digest: String,
 }
 

@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
+use crate::output::{forward_output, vec_to_string};
 use crate::process::kill;
 use crate::process::ProcessTree;
 use crate::process::SystemError;
@@ -7,8 +8,7 @@ use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
 use crate::ExeUnitContext;
 use actix::prelude::*;
-use futures::channel::mpsc;
-use futures::future::LocalBoxFuture;
+use futures::future::{self, LocalBoxFuture};
 use futures::prelude::*;
 use futures::{FutureExt, SinkExt, TryFutureExt};
 use std::collections::HashSet;
@@ -18,7 +18,6 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
-use tokio_util::codec::{BytesCodec, FramedRead};
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService};
@@ -95,7 +94,7 @@ impl RuntimeProcess {
         let pkg_path = self
             .task_package_path
             .clone()
-            .ok_or(Error::RuntimeError("Missing task package path".to_owned()))?;
+            .ok_or(Error::runtime("missing task package path"))?;
 
         let mut args = self.runtime_args.to_command_line(&pkg_path);
         args.extend(cmd_args);
@@ -134,7 +133,7 @@ impl RuntimeProcess {
                 cmd_args.extend(args.into_iter().map(OsString::from));
                 cmd_args
             }
-            _ => return futures::future::ok(0).boxed_local(),
+            _ => return future::ok(0).boxed_local(),
         };
         let binary = self.binary.clone();
         let args = self.args(cmd_args);
@@ -157,18 +156,17 @@ impl RuntimeProcess {
 
             let id = batch_id.clone();
             forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
-                RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Str(out))
+                RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Bin(out))
             });
             let id = batch_id.clone();
             forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
-                RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Str(out))
+                RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
             let proc = if cfg!(feature = "sgx") {
                 ChildProcess::from(child.id())
             } else {
-                let tree = ProcessTree::try_new(child.id())
-                    .map_err(|e| Error::RuntimeError(e.to_string()))?;
+                let tree = ProcessTree::try_new(child.id()).map_err(Error::runtime)?;
                 ChildProcess::from(tree)
             };
 
@@ -187,23 +185,27 @@ impl RuntimeProcess {
         let binary = self.binary.clone();
         match cmd.command {
             ExeScriptCommand::Start { args } => {
-                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
                 let mut cmd_args = vec![OsString::from("start")];
                 cmd_args.extend(args.into_iter().map(OsString::from));
-                let args = self.args(cmd_args).unwrap_or_else(|_| Vec::new());
+                let args = match self.args(cmd_args) {
+                    Ok(args) => args,
+                    Err(error) => {
+                        let msg = format!("invalid START arguments: {:?}", error);
+                        return future::err(Error::runtime(msg)).boxed_local();
+                    }
+                };
 
                 log::info!("Executing {:?} with {:?}", binary, args);
 
+                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
                 let mut command = Command::new(binary);
                 command.args(args);
 
                 async move {
-                    let service = spawn(command, monitor)
-                        .map_err(|e| Error::RuntimeError(e.to_string()))
-                        .await?;
+                    let service = spawn(command, monitor).map_err(Error::runtime).await?;
                     service
                         .hello(SERVICE_PROTOCOL_VERSION)
-                        .map_err(|e| Error::RuntimeError(format!("{:?}", e)))
+                        .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)))
                         .await?;
                     address
                         .send(SetProcessService(ProcessService::new(service)))
@@ -215,12 +217,18 @@ impl RuntimeProcess {
             ExeScriptCommand::Run {
                 entry_point,
                 mut args,
-                ..
+                capture: _,
             } => {
+                let service = match self.service.as_ref() {
+                    Some(svc) => svc.service.clone(),
+                    None => {
+                        return future::err(Error::runtime("START command not run")).boxed_local()
+                    }
+                };
+
                 log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
 
-                let service = self.service.as_ref().unwrap().service.clone();
-                let mut monitor = self.monitor.as_ref().unwrap().clone();
+                let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
                 let batch_id = cmd.batch_id.clone();
                 let idx = cmd.idx;
                 let mut tx = cmd.tx.clone();
@@ -228,7 +236,7 @@ impl RuntimeProcess {
                 async move {
                     let name = Path::new(&entry_point)
                         .file_name()
-                        .ok_or_else(|| Error::RuntimeError("Invalid binary name".into()))?;
+                        .ok_or_else(|| Error::runtime("Invalid binary name"))?;
                     args.insert(0, name.to_string_lossy().to_string());
 
                     let mut run_process = RunProcess::default();
@@ -241,20 +249,27 @@ impl RuntimeProcess {
                     };
                     let mut events = match monitor.events(process.pid) {
                         Some(events) => events,
-                        _ => return Err(Error::RuntimeError("Process already monitored".into())),
+                        _ => return Err(Error::runtime("Process already monitored")),
                     };
+
                     while let Some(status) = events.rx.next().await {
-                        if let Some(out) = vec_to_string(status.stdout) {
+                        if !status.stdout.is_empty() {
                             let batch_id = batch_id.clone();
-                            let _ = tx
-                                .send(RuntimeEvent::stdout(batch_id, idx, CommandOutput::Str(out)))
-                                .await;
+                            let evt = RuntimeEvent::stdout(
+                                batch_id,
+                                idx,
+                                CommandOutput::Bin(status.stdout),
+                            );
+                            let _ = tx.send(evt).await;
                         }
-                        if let Some(out) = vec_to_string(status.stderr) {
+                        if !status.stderr.is_empty() {
                             let batch_id = batch_id.clone();
-                            let _ = tx
-                                .send(RuntimeEvent::stderr(batch_id, idx, CommandOutput::Str(out)))
-                                .await;
+                            let evt = RuntimeEvent::stderr(
+                                batch_id,
+                                idx,
+                                CommandOutput::Bin(status.stderr),
+                            );
+                            let _ = tx.send(evt).await;
                         }
                         if !status.running {
                             return Ok(status.return_code);
@@ -264,29 +279,9 @@ impl RuntimeProcess {
                 }
                 .boxed_local()
             }
-            _ => futures::future::ok(0).boxed_local(),
+            _ => future::ok(0).boxed_local(),
         }
     }
-}
-
-fn forward_output<F, R>(read: R, tx: &mpsc::Sender<RuntimeEvent>, f: F)
-where
-    F: Fn(String) -> RuntimeEvent + 'static,
-    R: tokio::io::AsyncRead + 'static,
-{
-    let tx = tx.clone();
-    let stream = FramedRead::new(read, BytesCodec::new())
-        .filter_map(|result| async { result.ok() })
-        .filter_map(|bytes| async move { bytes_to_string(bytes) })
-        .ready_chunks(16)
-        .map(|v| v.join("\n"))
-        .map(f)
-        .map(|evt| Ok(evt));
-    Arbiter::spawn(async move {
-        if let Err(e) = stream.forward(tx).await {
-            log::error!("Error forwarding output: {:?}", e);
-        }
-    });
 }
 
 impl Runtime for RuntimeProcess {}
@@ -367,14 +362,17 @@ impl Handler<Shutdown> for RuntimeProcess {
 
     fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
         let timeout = process_kill_timeout_seconds();
-        let futs = self.children.drain().map(move |t| t.kill(timeout));
+        let service = self.service.take();
+        let mut children = std::mem::replace(&mut self.children, HashSet::new());
 
-        self.mode = RuntimeMode::default();
-        self.service.take();
-
-        futures::future::join_all(futs)
-            .map(|_| Ok(()))
-            .boxed_local()
+        async move {
+            if let Some(svc) = service {
+                let _ = svc.service.shutdown().await;
+            }
+            let _ = future::join_all(children.drain().map(move |t| t.kill(timeout))).await;
+            Ok(())
+        }
+        .boxed_local()
     }
 }
 
@@ -469,30 +467,6 @@ impl PartialEq for ProcessService {
 }
 
 impl Eq for ProcessService {}
-
-fn bytes_to_string<B: AsRef<[u8]>>(bytes: B) -> Option<String> {
-    let bytes = bytes.as_ref();
-    let string = String::from_utf8_lossy(bytes);
-    if string.is_empty() {
-        return None;
-    }
-    Some(string.to_string())
-}
-
-fn vec_to_string(vec: Vec<u8>) -> Option<String> {
-    if vec.is_empty() {
-        return None;
-    }
-    let string = match String::from_utf8(vec) {
-        Ok(utf8) => utf8.to_owned(),
-        Err(error) => error
-            .as_bytes()
-            .into_iter()
-            .map(|&c| c as char)
-            .collect::<String>(),
-    };
-    Some(string)
-}
 
 #[derive(Message)]
 #[rtype("()")]

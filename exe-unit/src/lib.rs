@@ -31,6 +31,7 @@ mod handlers;
 pub mod message;
 pub mod metrics;
 mod notify;
+mod output;
 pub mod process;
 pub mod runtime;
 pub mod service;
