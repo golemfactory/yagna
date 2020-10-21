@@ -1,31 +1,59 @@
 // External uses
-pub use client::wallet::PackedEthSignature;
-use client::wallet::ETH_SIGN_MESSAGE;
+use async_trait::async_trait;
 use tiny_keccak::keccak256;
 use web3::types::H160;
+use ya_client_model::NodeId;
+use zksync::zksync_types::{
+    tx::{PackedEthSignature, TxEthSignature},
+    Address,
+};
+use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 
 // Workspace uses
 
 // Local uses
 use crate::utils::get_sign_tx;
 
-pub async fn get_zksync_seed(pub_address: H160) -> Vec<u8> {
-    info!("Creating zksync seed. address={}", pub_address);
-    let address = pub_address.as_bytes().into();
-    let sign_tx = get_sign_tx(address);
-    let seed = sign_tx(message_to_signable_bytes(ETH_SIGN_MESSAGE.as_bytes(), true)).await;
-    convert_to_eth_signature(seed)
+struct YagnaEthSigner {
+    eth_address: Address,
 }
 
-pub async fn eth_sign_transfer(pub_address: H160, message: String) -> Vec<u8> {
-    info!(
-        "Signing eth transfer. address={}, message={}",
-        pub_address, message
-    );
-    let address: [u8; 20] = *pub_address.as_fixed_bytes();
-    let sign_tx = get_sign_tx(address.into());
-    let eth_sign_hex = sign_tx(message_to_signable_bytes(message.as_bytes(), true)).await;
-    convert_to_eth_signature(eth_sign_hex)
+impl YagnaEthSigner {
+    pub fn new(eth_address: Address) -> Self {
+        Self { eth_address }
+    }
+}
+
+impl Clone for YagnaEthSigner {
+    fn clone(&self) -> Self {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl EthereumSigner for YagnaEthSigner {
+    async fn get_address(&self) -> Result<Address, SignerError> {
+        Ok(self.eth_address)
+    }
+
+    async fn sign_message(&self, message: &[u8]) -> Result<TxEthSignature, SignerError> {
+        log::debug!("YagnaEthSigner sign_message({})", hex::encode(message));
+        let msg_as_bytes = message_to_signable_bytes(message, true);
+        let sign_tx = get_sign_tx(self.eth_address.as_bytes().into());
+        let signature = sign_tx(msg_as_bytes).await;
+        let signature = convert_to_eth_byte_order(signature);
+        let packed_sig = PackedEthSignature::deserialize_packed(&signature).map_err(
+            |_| SignerError::SigningFailed("Failed to pack eth signature".to_string())
+        )?;
+        let tx_eth_sig = TxEthSignature::EthereumSignature(packed_sig);
+        Ok(tx_eth_sig)
+    }
+
+    async fn sign_transaction(&self, raw_tx: RawTransaction) -> Result<Vec<u8>, SignerError> {
+        info!("sign_transaction");
+        todo!();
+        Ok(vec![])
+    }
 }
 
 fn message_to_signable_bytes(msg: &[u8], include_prefix: bool) -> Vec<u8> {
@@ -41,7 +69,7 @@ fn message_to_signable_bytes(msg: &[u8], include_prefix: bool) -> Vec<u8> {
     keccak256(&bytes).into()
 }
 
-fn convert_to_eth_signature(signature: Vec<u8>) -> Vec<u8> {
+fn convert_to_eth_byte_order(signature: Vec<u8>) -> Vec<u8> {
     let v = &signature[0];
     let r = &signature[1..33];
     let s = &signature[33..65];

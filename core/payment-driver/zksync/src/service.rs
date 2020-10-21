@@ -2,8 +2,8 @@
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
 use chrono::Utc;
-use client::rpc_client::RpcClient;
-use client::wallet::{BalanceState, Wallet};
+// use client::rpc_client::RpcClient;
+// use client::wallet::{BalanceState, Wallet};
 use num::bigint::ToBigInt;
 use num::pow::pow;
 use num::BigUint;
@@ -18,7 +18,7 @@ use ya_core_model::payment::local as payment_srv;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
-use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
+// use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
 use crate::{DRIVER_NAME, PLATFORM_NAME};
 
 const ZKSYNC_RPC_ADDRESS: &'static str = "https://rinkeby-api.zksync.io/jsrpc";
@@ -81,15 +81,16 @@ async fn get_account_balance(
 ) -> Result<BigDecimal, GenericError> {
     log::debug!("get account balance: {:?}", msg);
 
-    let pub_address = Address::from_str(&msg.address()[2..]).unwrap();
-    let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
-    let wallet = Wallet::from_public_address(pub_address, provider);
-    let balance_com = wallet
-        .get_balance(ZKSYNC_TOKEN_NAME, BalanceState::Committed)
-        .await;
+    // let pub_address = Address::from_str(&msg.address()[2..]).unwrap();
+    // let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
+    // let wallet = Wallet::from_public_address(pub_address, provider);
+    // let balance_com = wallet
+    //     .get_balance(ZKSYNC_TOKEN_NAME, BalanceState::Committed)
+    //     .await;
 
-    log::debug!("balance: {}", balance_com);
-    Ok(BigDecimal::from_str(&balance_com.to_string()).unwrap())
+    // log::debug!("balance: {}", balance_com);
+    // Ok(BigDecimal::from_str(&balance_com.to_string()).unwrap())
+    Ok(BigDecimal::from_str("1").unwrap())
 }
 
 async fn get_transaction_balance(
@@ -116,27 +117,29 @@ async fn schedule_payment(
         date: Some(Utc::now()),
     };
 
-    let pub_address = Address::from_str(&details.sender[2..]).map_err(GenericError::new)?;
-    let seed = get_zksync_seed(pub_address).await;
-    let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
-    let wallet = Wallet::from_seed(seed, pub_address, provider);
+    // let pub_address = Address::from_str(&details.sender[2..]).map_err(GenericError::new)?;
+    // // TODO: Make chainid from a config like GNT driver
+    // let chain_id = 4;
+    // let seed = get_zksync_seed(pub_address, chain_id).await;
+    // let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
+    // let wallet = Wallet::from_seed(seed, pub_address, provider);
+    //
+    // let recipient = Address::from_str(&details.recipient[2..]).unwrap();
+    // // TODO: Get token decimals from zksync-provider / wallet
+    // let amount = &details.amount * pow(BigDecimal::from(10u32), 18);
+    // let amount = amount.to_bigint().unwrap().to_biguint().unwrap();
+    // let amount = pack_up(&amount);
+    // let (tx, msg) = wallet
+    //     .prepare_sync_transfer(&recipient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
+    //     .await;
+    // let signed_msg = eth_sign_transfer(pub_address, msg).await;
+    // let packed_sig = PackedEthSignature::deserialize_packed(&signed_msg).unwrap();
+    // let tx_hash = wallet.sync_transfer(tx, packed_sig).await;
 
-    let recipient = Address::from_str(&details.recipient[2..]).unwrap();
-    // TODO: Get token decimals from zksync-provider / wallet
-    let amount = &details.amount * pow(BigDecimal::from(10u32), 18);
-    let amount = amount.to_bigint().unwrap().to_biguint().unwrap();
-    let amount = pack_up(&amount);
-    let (tx, msg) = wallet
-        .prepare_sync_transfer(&recipient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
-        .await;
-    let signed_msg = eth_sign_transfer(pub_address, msg).await;
-    let packed_sig = PackedEthSignature::deserialize_packed(&signed_msg).unwrap();
-    let tx_hash = wallet.sync_transfer(tx, packed_sig).await;
-
-    log::info!(
-        "Created zksync transaction with hash={}",
-        hex::encode(tx_hash)
-    );
+    // log::info!(
+    //     "Created zksync transaction with hash={}",
+    //     hex::encode(tx_hash)
+    // );
 
     let confirmation = serde_json::to_string(&details)
         .map_err(GenericError::new)?
