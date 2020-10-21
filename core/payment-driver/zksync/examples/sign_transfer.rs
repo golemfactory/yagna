@@ -126,7 +126,7 @@ async fn main() {
         .unwrap()
         .token(input_token)
         .unwrap()
-        .amount(BigUint::from_str(input_amount).unwrap())
+        .amount(BigUint::from_str(input_amount.to_string()).unwrap())
         .send()
         .await
         .unwrap();

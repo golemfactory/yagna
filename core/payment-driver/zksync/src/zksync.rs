@@ -1,8 +1,6 @@
 // External uses
 use async_trait::async_trait;
 use tiny_keccak::keccak256;
-use web3::types::H160;
-use ya_client_model::NodeId;
 use zksync::zksync_types::{
     tx::{PackedEthSignature, TxEthSignature},
     Address,
@@ -14,7 +12,7 @@ use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 // Local uses
 use crate::utils::sign_tx;
 
-struct YagnaEthSigner {
+pub struct YagnaEthSigner {
     eth_address: Address,
 }
 

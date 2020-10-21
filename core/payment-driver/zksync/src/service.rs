@@ -2,15 +2,15 @@
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
 use chrono::Utc;
-// use client::rpc_client::RpcClient;
-// use client::wallet::{BalanceState, Wallet};
 use num::bigint::ToBigInt;
 use num::pow::pow;
 use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
-use web3::types::Address;
+use zksync::types::{network::Network, BlockStatus};
 use zksync::utils::{closest_packable_token_amount, is_token_amount_packable};
+use zksync::zksync_types::Address;
+use zksync::{Provider, Wallet, WalletCredentials};
 
 // Workspace uses
 use ya_core_model::driver::*;
@@ -19,9 +19,8 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 // use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
-use crate::{DRIVER_NAME, PLATFORM_NAME};
+use crate::{zksync::YagnaEthSigner, DRIVER_NAME, PLATFORM_NAME};
 
-const ZKSYNC_RPC_ADDRESS: &'static str = "https://rinkeby-api.zksync.io/jsrpc";
 const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
 pub fn bind_service() {
@@ -117,29 +116,67 @@ async fn schedule_payment(
         date: Some(Utc::now()),
     };
 
-    // let pub_address = Address::from_str(&details.sender[2..]).map_err(GenericError::new)?;
-    // // TODO: Make chainid from a config like GNT driver
-    // let chain_id = 4;
-    // let seed = get_zksync_seed(pub_address, chain_id).await;
-    // let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
-    // let wallet = Wallet::from_seed(seed, pub_address, provider);
-    //
-    // let recipient = Address::from_str(&details.recipient[2..]).unwrap();
-    // // TODO: Get token decimals from zksync-provider / wallet
-    // let amount = &details.amount * pow(BigDecimal::from(10u32), 18);
-    // let amount = amount.to_bigint().unwrap().to_biguint().unwrap();
-    // let amount = pack_up(&amount);
-    // let (tx, msg) = wallet
-    //     .prepare_sync_transfer(&recipient, ZKSYNC_TOKEN_NAME.to_string(), amount, None)
-    //     .await;
-    // let signed_msg = eth_sign_transfer(pub_address, msg).await;
-    // let packed_sig = PackedEthSignature::deserialize_packed(&signed_msg).unwrap();
-    // let tx_hash = wallet.sync_transfer(tx, packed_sig).await;
+    let pub_key_addr = Address::from_str(&details.sender[2..]).map_err(GenericError::new)?;
+    // TODO: Get token decimals from zksync-provider / wallet
+    let amount = &details.amount * pow(BigDecimal::from(10u32), 18);
+    let amount = amount
+        .to_bigint()
+        .ok_or(GenericError::new("Amount invalid"))?
+        .to_biguint()
+        .ok_or(GenericError::new("Amount invalid"))?;
+    let amount = pack_up(&amount);
+    // TODO: Make chainid from a config like GNT driver
+    let provider = Provider::new(Network::Rinkeby);
+    let ext_eth_signer = YagnaEthSigner::new(pub_key_addr);
+    info!("connected to zksync provider");
 
-    // log::info!(
-    //     "Created zksync transaction with hash={}",
-    //     hex::encode(tx_hash)
-    // );
+    let creds = WalletCredentials::from_eth_signer(pub_key_addr, ext_eth_signer, Network::Rinkeby)
+        .await
+        .map_err(GenericError::new)?;
+    info!("created credentials");
+
+    let wallet = Wallet::new(provider, creds)
+        .await
+        .map_err(GenericError::new)?;
+    info!("created wallet");
+
+    let balance = wallet
+        .get_balance(BlockStatus::Committed, "GNT")
+        .await
+        .map_err(GenericError::new)?;
+    info!("balance={}", balance);
+
+    if wallet
+        .is_signing_key_set()
+        .await
+        .map_err(GenericError::new)?
+        == false
+    {
+        let unlock = wallet
+            .start_change_pubkey()
+            .fee_token(ZKSYNC_TOKEN_NAME)
+            .map_err(GenericError::new)?
+            .send()
+            .await
+            .map_err(GenericError::new)?;
+        info!("unlock={:?}", unlock);
+    }
+
+    let transfer = wallet
+        .start_transfer()
+        .str_to(&details.recipient[2..])
+        .map_err(GenericError::new)?
+        .token(ZKSYNC_TOKEN_NAME)
+        .map_err(GenericError::new)?
+        .amount(amount)
+        .send()
+        .await
+        .map_err(GenericError::new)?;
+
+    log::info!(
+        "Created zksync transaction with hash={}",
+        hex::encode(transfer.hash())
+    );
 
     let confirmation = serde_json::to_string(&details)
         .map_err(GenericError::new)?

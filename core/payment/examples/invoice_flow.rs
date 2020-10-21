@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
         .issue_invoice(&NewInvoice {
             agreement_id: "agreement_id".to_string(),
             activity_ids: None,
-            amount: BigDecimal::from(1u64),
+            amount: BigDecimal::from(1.230028519070000),
             payment_due_date: Utc::now(),
         })
         .await?;
