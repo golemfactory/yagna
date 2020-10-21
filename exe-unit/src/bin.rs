@@ -21,35 +21,38 @@ use ya_utils_path::normalize_path;
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(version = ya_compile_time_utils::crate_version_commit!())]
 struct Cli {
-    /// Agreement file path
-    #[structopt(long, short)]
-    agreement: PathBuf,
-
-    /// Working directory
-    #[structopt(long, short)]
-    work_dir: PathBuf,
-
-    /// Common cache directory
-    #[structopt(long, short)]
-    cache_dir: PathBuf,
-
     /// Runtime binary path
     #[structopt(long, short)]
     binary: PathBuf,
     /// Hand off resource cap limiting to the Runtime
-    #[structopt(long = "cap-handoff", parse(from_flag = std::ops::Not::not))]
+    #[structopt(
+        long = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
+    )]
     supervise_caps: bool,
     /// Enclave secret key used in secure communication
-    #[structopt(long, env = "EXE_UNIT_SEC_KEY", hide_env_values = true)]
+    #[structopt(
+        long,
+        env = "EXE_UNIT_SEC_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
+    )]
     sec_key: Option<String>,
     /// Requestor public key used in secure communication
-    #[structopt(long, env = "EXE_UNIT_REQUESTOR_PUB_KEY", hide_env_values = true)]
+    #[structopt(
+        long,
+        env = "EXE_UNIT_REQUESTOR_PUB_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
+    )]
     requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
     command: Command,
 }
 
 #[derive(structopt::StructOpt, Debug)]
+#[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Command {
     /// Execute commands from file
     FromFile {
@@ -116,9 +119,6 @@ fn run() -> anyhow::Result<()> {
     #[allow(unused_mut)]
     let mut cli: Cli = Cli::from_args();
 
-    if !cli.agreement.exists() {
-        bail!("Agreement file does not exist: {}", cli.agreement.display());
-    }
     if !cli.binary.exists() {
         bail!("Runtime binary does not exist: {}", cli.binary.display());
     }
