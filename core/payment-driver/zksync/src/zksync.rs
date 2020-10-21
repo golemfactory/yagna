@@ -12,7 +12,7 @@ use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 // Workspace uses
 
 // Local uses
-use crate::utils::get_sign_tx;
+use crate::utils::sign_tx;
 
 struct YagnaEthSigner {
     eth_address: Address,
@@ -38,13 +38,12 @@ impl EthereumSigner for YagnaEthSigner {
 
     async fn sign_message(&self, message: &[u8]) -> Result<TxEthSignature, SignerError> {
         log::debug!("YagnaEthSigner sign_message({})", hex::encode(message));
+        let node_id = self.eth_address.as_bytes().into();
         let msg_as_bytes = message_to_signable_bytes(message, true);
-        let sign_tx = get_sign_tx(self.eth_address.as_bytes().into());
-        let signature = sign_tx(msg_as_bytes).await;
+        let signature = sign_tx(node_id, msg_as_bytes).await?;
         let signature = convert_to_eth_byte_order(signature);
-        let packed_sig = PackedEthSignature::deserialize_packed(&signature).map_err(
-            |_| SignerError::SigningFailed("Failed to pack eth signature".to_string())
-        )?;
+        let packed_sig = PackedEthSignature::deserialize_packed(&signature)
+            .map_err(|_| SignerError::SigningFailed("Failed to pack eth signature".to_string()))?;
         let tx_eth_sig = TxEthSignature::EthereumSignature(packed_sig);
         Ok(tx_eth_sig)
     }
