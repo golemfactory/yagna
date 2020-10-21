@@ -25,13 +25,34 @@ struct Cli {
     #[structopt(long, short)]
     binary: PathBuf,
     /// Hand off resource cap limiting to the Runtime
-    #[structopt(long = "cap-handoff", parse(from_flag = std::ops::Not::not))]
+    #[structopt(
+        long = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
+    )]
     supervise_caps: bool,
+    /// Enclave secret key used in secure communication
+    #[structopt(
+        long,
+        env = "EXE_UNIT_SEC_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
+    )]
+    sec_key: Option<String>,
+    /// Requestor public key used in secure communication
+    #[structopt(
+        long,
+        env = "EXE_UNIT_REQUESTOR_PUB_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
+    )]
+    requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
     command: Command,
 }
 
 #[derive(structopt::StructOpt, Debug)]
+#[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Command {
     /// Execute commands from file
     FromFile {
@@ -76,9 +97,28 @@ fn create_path(path: &PathBuf) -> anyhow::Result<PathBuf> {
     Ok(normalize_path(path)?)
 }
 
+#[cfg(feature = "sgx")]
+fn init_crypto(
+    sec_key: Option<String>,
+    req_key: Option<String>,
+) -> anyhow::Result<ya_exe_unit::crypto::Crypto> {
+    use ya_exe_unit::crypto::Crypto;
+
+    let req_key = req_key.ok_or_else(|| anyhow::anyhow!("Missing requestor public key"))?;
+    match sec_key {
+        Some(key) => Ok(Crypto::try_with_keys(key, req_key)?),
+        None => {
+            log::info!("Generating a new key pair...");
+            Ok(Crypto::try_new(req_key)?)
+        }
+    }
+}
+
 fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
-    let cli: Cli = Cli::from_args();
+    #[allow(unused_mut)]
+    let mut cli: Cli = Cli::from_args();
+
     if !cli.binary.exists() {
         bail!("Runtime binary does not exist: {}", cli.binary.display());
     }
@@ -149,10 +189,16 @@ fn run() -> anyhow::Result<()> {
     let ctx = ExeUnitContext {
         activity_id: ctx_activity_id,
         report_url: ctx_report_url,
+        credentials: None,
         agreement,
         work_dir,
         cache_dir,
         runtime_args,
+        #[cfg(feature = "sgx")]
+        crypto: init_crypto(
+            cli.sec_key.replace("<hidden>".into()),
+            cli.requestor_pub_key.clone(),
+        )?,
     };
 
     log::debug!("CLI args: {:?}", cli);
@@ -198,10 +244,11 @@ fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
 }
 
 fn main() {
-    if let Err(_) = configure_logger(flexi_logger::Logger::with_env())
+    if configure_logger(flexi_logger::Logger::with_env())
         .log_to_file()
         .directory("logs")
         .start()
+        .is_err()
     {
         configure_logger(flexi_logger::Logger::with_env())
             .start()

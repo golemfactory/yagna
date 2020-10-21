@@ -266,14 +266,11 @@ macro_rules! actor_try {
 impl Handler<DeployImage> for TransferService {
     type Result = ActorResponse<Self, PathBuf, Error>;
 
+    #[allow(unused_variables)]
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let file_provider: FileTransferProvider = Default::default();
         let source_url = actor_try!(TransferUrl::parse_with_hash(&self.task_package, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
-        let temp_path = self.cache.to_temp_path(&cache_name);
-        let cache_path = self.cache.to_cache_path(&cache_name);
         let final_path = self.cache.to_final_path(&cache_name);
-        let temp_url = Url::from_file_path(temp_path.to_path_buf()).unwrap();
 
         log::info!(
             "Deploying from {:?} to {:?}",
@@ -283,38 +280,63 @@ impl Handler<DeployImage> for TransferService {
 
         let args = TransferArgs::default();
         let source = actor_try!(self.source(&source_url, &args));
-        let dest = file_provider.destination(&temp_url, &args);
+        #[cfg(not(feature = "sgx"))]
+        {
+            let file_provider: FileTransferProvider = Default::default();
+            let cache_path = self.cache.to_cache_path(&cache_name);
+            let temp_path = self.cache.to_temp_path(&cache_name);
+            let temp_url = Url::from_file_path(temp_path.to_path_buf()).unwrap();
 
-        let address = ctx.address();
-        let (handle, reg) = AbortHandle::new_pair();
-        let abort = Abort::from(handle);
+            let source = actor_try!(self.source(&source_url, &Default::default()));
+            let dest = file_provider.destination(&temp_url, &Default::default());
 
-        let fut = async move {
-            let final_path = final_path.to_path_buf();
-            let temp_path = temp_path.to_path_buf();
-            let cache_path = cache_path.to_path_buf();
+            let address = ctx.address();
+            let (handle, reg) = AbortHandle::new_pair();
+            let abort = Abort::from(handle);
 
-            if cache_path.exists() {
-                log::info!("Deploying cached image: {:?}", cache_path);
+            let fut = async move {
+                let final_path = final_path.to_path_buf();
+                let temp_path = temp_path.to_path_buf();
+                let cache_path = cache_path.to_path_buf();
+
+                if cache_path.exists() {
+                    log::info!("Deploying cached image: {:?}", cache_path);
+                    std::fs::copy(cache_path, &final_path)?;
+                    return Ok(final_path);
+                }
+
+                address.send(AddAbortHandle(abort.clone())).await?;
+                Abortable::new(transfer(source, dest), reg)
+                    .await
+                    .map_err(TransferError::from)??;
+                address.send(RemoveAbortHandle(abort)).await?;
+
+                // TODO: missing sync before rename.
+                std::fs::rename(temp_path, &cache_path)?;
                 std::fs::copy(cache_path, &final_path)?;
-                return Ok(final_path);
-            }
 
-            address.send(AddAbortHandle(abort.clone())).await?;
-            Abortable::new(transfer(source, dest), reg)
-                .await
-                .map_err(TransferError::from)??;
-            address.send(RemoveAbortHandle(abort)).await?;
+                log::info!("Deployment from {:?} finished", source_url.url);
+                Ok(final_path)
+            };
+            return ActorResponse::r#async(fut.into_actor(self));
+        }
 
-            // TODO: missing sync before rename.
-            std::fs::rename(temp_path, &cache_path)?;
-            std::fs::copy(cache_path, &final_path)?;
-
-            log::info!("Deployment from {:?} finished", source_url.url);
-            Ok(final_path)
-        };
-
-        return ActorResponse::r#async(fut.into_actor(self));
+        #[cfg(feature = "sgx")]
+        {
+            let fut = async move {
+                let final_path = final_path.to_path_buf();
+                let resp = reqwest::get(source_url.url)
+                    .await
+                    .map_err(|e| Error::Other(e.to_string()))?;
+                let bytes = resp
+                    .bytes()
+                    .await
+                    .map_err(|e| Error::Other(e.to_string()))?;
+                std::fs::write(&final_path, bytes)?;
+                Ok(final_path)
+            };
+            return ActorResponse::r#async(fut.into_actor(self));
+        }
     }
 }
 
@@ -334,7 +356,7 @@ impl Handler<TransferResource> for TransferService {
         let (handle, reg) = AbortHandle::new_pair();
         let abort = Abort::from(handle);
 
-        return ActorResponse::r#async(
+        ActorResponse::r#async(
             async move {
                 address.send(AddAbortHandle(abort.clone())).await?;
                 Abortable::new(transfer(source, dest), reg)
@@ -345,7 +367,7 @@ impl Handler<TransferResource> for TransferService {
                 Ok(())
             }
             .into_actor(self),
-        );
+        )
     }
 }
 
@@ -415,11 +437,13 @@ impl Cache {
     }
 
     #[inline(always)]
+    #[cfg(not(feature = "sgx"))]
     fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
         ProjectedPath::local(self.tmp_dir.clone(), path.temp_path_buf())
     }
 
     #[inline(always)]
+    #[cfg(not(feature = "sgx"))]
     fn to_cache_path(&self, path: &CachePath) -> ProjectedPath {
         ProjectedPath::local(self.tmp_dir.clone(), path.cache_path_buf())
     }

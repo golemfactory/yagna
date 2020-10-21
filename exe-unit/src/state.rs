@@ -290,6 +290,16 @@ impl CommandState {
             message: None,
         }
     }
+
+    #[allow(dead_code)]
+    pub fn repr(&self) -> CommandStateRepr {
+        CommandStateRepr {
+            result: self.result.clone(),
+            stdout: self.stdout.output_string(),
+            stderr: self.stderr.output_string(),
+            message: self.message.clone(),
+        }
+    }
 }
 
 impl<'c> From<&'c Option<Capture>> for CommandState {
@@ -312,7 +322,15 @@ impl<'c> From<&'c Capture> for CommandState {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommandStateRepr {
+    pub result: Option<CommandResult>,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct ExeUnitReport {
     batches_done: usize,
     batches_pending: usize,
@@ -322,12 +340,7 @@ pub(crate) struct ExeUnitReport {
 
 impl ExeUnitReport {
     pub fn new() -> Self {
-        ExeUnitReport {
-            batches_done: 0,
-            batches_pending: 0,
-            cmds_done: 0,
-            cmds_pending: 0,
-        }
+        Default::default()
     }
 }
 

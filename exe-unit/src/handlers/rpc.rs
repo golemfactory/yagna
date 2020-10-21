@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::message::{GetBatchResults, GetMetrics};
 use crate::runtime::Runtime;
-use crate::ExeUnit;
+use crate::{ExeUnit, RuntimeRef};
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::oneshot;
@@ -11,6 +11,9 @@ use tokio::time::timeout;
 use ya_client_model::activity::{ActivityState, ActivityUsage, ExeScriptCommandResult};
 use ya_core_model::activity::*;
 use ya_service_bus::{Error as RpcError, RpcEnvelope, RpcStreamCall};
+
+#[cfg(feature = "sgx")]
+use ya_client_model::activity::encrypted::RpcMessageError as SgxMessageError;
 
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
@@ -28,15 +31,16 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
         let msg = msg.into_inner();
         self.state.start_batch(msg.clone(), tx);
 
-        let fut = Self::exec(
-            msg,
-            ctx.address(),
-            self.runtime.clone(),
-            self.transfers.clone(),
-            self.events.tx.clone(),
-            rx,
-        );
-        ctx.spawn(fut.into_actor(self));
+        let fut = RuntimeRef::from_ctx(&ctx)
+            .exec(
+                msg,
+                self.runtime.clone(),
+                self.transfers.clone(),
+                self.events.tx.clone(),
+                rx,
+            )
+            .into_actor(self);
+        ctx.spawn(fut);
 
         Ok(batch_id)
     }
@@ -192,5 +196,108 @@ impl<R: Runtime> Handler<RpcStreamCall<StreamExecBatchResults>> for ExeUnit<R> {
             .sink_map_err(|e| RpcError::GsbFailure(e.to_string()));
 
         ActorResponse::r#async(async move { rx.forward(reply).await }.into_actor(self))
+    }
+}
+
+#[cfg(feature = "sgx")]
+impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> {
+    type Result = ResponseFuture<Result<Vec<u8>, RpcMessageError>>;
+
+    fn handle(
+        &mut self,
+        msg: RpcEnvelope<sgx::CallEncryptedService>,
+        ctx: &mut Context<Self>,
+    ) -> Self::Result {
+        use futures::prelude::*;
+        use ya_client_model::activity::encrypted::{Request, RequestCommand, Response};
+
+        let me = ctx.address();
+        let dec = self.ctx.crypto.ctx();
+        let enc = self.ctx.crypto.ctx();
+
+        async move {
+            let request: Request = dec
+                .decrypt(msg.bytes.as_slice())
+                .map_err(|e| SgxMessageError::BadRequest(format!("Decryption error: {:?}", e)))?;
+            let activity_id = request.activity_id;
+            let batch_id = request.batch_id;
+            let timeout = request.timeout;
+
+            Ok(match request.command {
+                RequestCommand::Exec { exe_script } => {
+                    let msg = Exec {
+                        activity_id,
+                        batch_id,
+                        timeout,
+                        exe_script,
+                    };
+                    Response::Exec(
+                        me.send(RpcEnvelope::local(msg))
+                            .await
+                            .map_err(|_| {
+                                SgxMessageError::Service("fatal: exe-unit disconnected".to_string())
+                            })?
+                            .map_err(rpc_to_sgx_error),
+                    )
+                }
+                RequestCommand::GetExecBatchResults { command_index } => {
+                    let msg = GetExecBatchResults {
+                        activity_id,
+                        batch_id,
+                        timeout,
+                        command_index,
+                    };
+                    Response::GetExecBatchResults(
+                        me.send(RpcEnvelope::local(msg))
+                            .await
+                            .map_err(|_e| {
+                                SgxMessageError::Service("fatal: exe-unit disconnected".to_string())
+                            })?
+                            .map_err(rpc_to_sgx_error),
+                    )
+                }
+                RequestCommand::GetRunningCommand => {
+                    let msg = GetRunningCommand {
+                        activity_id,
+                        timeout,
+                    };
+                    Response::GetRunningCommand(
+                        me.send(RpcEnvelope::local(msg))
+                            .await
+                            .map_err(|_e| {
+                                SgxMessageError::Service("fatal: exe-unit disconnected".to_string())
+                            })?
+                            .map_err(rpc_to_sgx_error),
+                    )
+                }
+            })
+        }
+        .then(move |v| {
+            let response = match v {
+                Err(e) => Response::Error(e),
+                Ok(v) => v,
+            };
+            match enc.encrypt(&response) {
+                Ok(bytes) => future::ok(bytes),
+                Err(err) => future::err(RpcMessageError::BadRequest(format!(
+                    "Encryption error: {:?}",
+                    err
+                ))),
+            }
+        })
+        .boxed_local()
+    }
+}
+
+#[cfg(feature = "sgx")]
+fn rpc_to_sgx_error(error: RpcMessageError) -> SgxMessageError {
+    match error {
+        RpcMessageError::Service(m) => SgxMessageError::Service(m),
+        RpcMessageError::Activity(m) => SgxMessageError::Activity(m),
+        RpcMessageError::BadRequest(m) => SgxMessageError::BadRequest(m),
+        RpcMessageError::UsageLimitExceeded(m) => SgxMessageError::UsageLimitExceeded(m),
+        RpcMessageError::NotFound(m) => SgxMessageError::NotFound(m),
+        RpcMessageError::Forbidden(m) => SgxMessageError::Forbidden(m),
+        RpcMessageError::Timeout => SgxMessageError::Timeout,
     }
 }
