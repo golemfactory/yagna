@@ -199,7 +199,7 @@ impl<R: Runtime> RuntimeRef<R> {
                     .send(RuntimeEvent::stdout(
                         runtime_cmd.batch_id.clone(),
                         runtime_cmd.idx,
-                        CommandOutput::Str(stdout),
+                        CommandOutput::Bin(stdout.into_bytes()),
                     ))
                     .await
                     .map_err(|e| Error::runtime(format!("Unable to send stdout event: {:?}", e)))?;
