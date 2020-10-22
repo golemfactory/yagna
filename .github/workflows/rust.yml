@@ -21,10 +21,18 @@ jobs:
         # was commented bc of too much spend on Macos which is counted 10x, Windows is 2x
         #os: [windows-latest, ubuntu-latest]
         os: [macos-latest, windows-latest, ubuntu-latest]
+    outputs:
+      # map step output to job output
+      # this value is used by integration-test job
+      yagna_sha: ${{ steps.store_sha.outputs.yagna_sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v1
+
+      - name: Store head commit hash
+        id: store_sha
+        run: echo "::set-output name=yagna_sha::$(git rev-parse --short HEAD)"
 
       - name: Install Last Stable Rust
         uses: actions-rs/toolchain@v1
@@ -175,7 +183,7 @@ jobs:
       - name: Run test suite
         env:
           GITHUB_API_TOKEN: ${{ secrets.YAGNA_WORKFLOW_TOKEN }}
-        run: python -m pytest test/yagna/e2e -svx --log-cli-level=DEBUG
+        run: python -m pytest test/yagna/e2e -svx --log-cli-level=DEBUG --yagna-commit-hash ${{ needs.build.outputs.yagna_sha }}
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
