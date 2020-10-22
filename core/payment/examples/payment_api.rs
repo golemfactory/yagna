@@ -22,9 +22,7 @@ use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 use ya_service_bus::typed as bus;
-use ya_zksync_driver::{
-    PaymentDriverService as ZksyncDriverService, DRIVER_NAME as ZKSYNC_DRIVER_NAME,
-};
+use ya_zksync_driver as zksync;
 
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
@@ -101,7 +99,7 @@ pub async fn start_zksync_driver(requestor_account: Box<EthAccount>) -> anyhow::
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    ZksyncDriverService::gsb(&()).await?;
+    zksync::PaymentDriverService::gsb(&()).await?;
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(())
@@ -205,7 +203,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Driver::Zksync => {
             start_zksync_driver(requestor_account).await?;
-            ZKSYNC_DRIVER_NAME
+            (zksync::DRIVER_NAME, zksync::PLATFORM_NAME)
         }
     };
 
