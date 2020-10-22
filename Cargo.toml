@@ -16,6 +16,7 @@ market-forwarding = ['ya-market-forwarding']
 market-decentralized = ['ya-market-decentralized', 'gftp/bin']
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
+zksync-driver = ['ya-zksync-driver']
 tos = []
 
 [[bin]]

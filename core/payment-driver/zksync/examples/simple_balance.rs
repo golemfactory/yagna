@@ -1,7 +1,7 @@
-use client::rpc_client::RpcClient;
-use client::wallet::{Wallet, BalanceState};
+use zksync::types::network::Network;
+use zksync::zksync_types::Address;
+use zksync::Provider;
 
-use web3::types::{Address};
 use std::str::FromStr;
 
 #[macro_use]
@@ -13,17 +13,28 @@ async fn main() {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
     info!("Simple balance check example.");
-    let pub_key = "7cfbf8aac6b460bf27a58e9720cf51db45b438e7";
+    let pub_key = "bf55a824c3114b07899e63870917da1bc01bcd06";
 
     info!("Public key. {}", pub_key);
     let pub_address = Address::from_str(pub_key).unwrap();
     info!("Public address. {}", pub_address);
-    let provider = RpcClient::new("https://rinkeby-api.zksync.io/jsrpc");
+    let provider = Provider::new(Network::Rinkeby);
 
-    let wallet = Wallet::from_public_address(pub_address, provider);
+    let acc_info = provider.account_info(pub_address).await.unwrap();
+    debug!("{:?}", acc_info);
     let token = "GNT";
-    let balance_com = wallet.get_balance(token, BalanceState::Committed).await;
-    let balance_ver = wallet.get_balance(token, BalanceState::Verified).await;
+    let balance_com = acc_info
+        .committed
+        .balances
+        .get(&token as &str)
+        .map(|x| x.0.clone())
+        .unwrap_or_default();
+    let balance_ver = acc_info
+        .verified
+        .balances
+        .get(&token as &str)
+        .map(|x| x.0.clone())
+        .unwrap_or_default();
 
     info!("balance_com: {}", balance_com);
     info!("balance_ver: {}", balance_ver);

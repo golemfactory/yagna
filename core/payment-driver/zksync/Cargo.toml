@@ -9,21 +9,28 @@ default = []
 
 [dependencies]
 actix = "0.9"
+async-trait = "0.1"
 anyhow = "1.0"
 num = { version = "0.2", features = ["serde"] }
 bigdecimal = { version = "0.1.0" }
-client = { git = "https://github.com/golemfactory/zksync", branch = "pay/client-crate"}
+zksync = { git = "https://github.com/matter-labs/zksync", branch = "master"}
+zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", branch = "master"}
 chrono = { version = "0.4", features = ["serde"] }
+futures3 = { version = "0.3", features = ["compat"], package = "futures" }
+hex = "0.4"
 log = "0.4.8"
 serde_json = "^1.0"
+tiny-keccak = "1.4.2"
 tokio = { version = "0.2", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
 web3 = "0.10.0"
 #
 # ## yagna dependencies
+ya-client-model = { version = "0.2.0" }
 ya-core-model = { version = "0.2.1", features = ["driver", "identity", "payment"] }
 ya-service-bus = "0.2"
 
 [dev-dependencies]
 dotenv = "0.15.0"
 env_logger = "0.7.1"
+ethkey = "0.3.1"

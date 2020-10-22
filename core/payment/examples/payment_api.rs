@@ -15,7 +15,6 @@ use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_gnt_driver as gnt;
-use ya_zksync_driver::{PaymentDriverService as ZksyncDriverService, DRIVER_NAME as ZKSYNC_DRIVER_NAME};
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
@@ -23,12 +22,13 @@ use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 use ya_service_bus::typed as bus;
+use ya_zksync_driver as zksync;
 
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
     Ngnt,
-    Zksync
+    Zksync,
 }
 
 impl FromStr for Driver {
@@ -94,8 +94,14 @@ pub async fn start_gnt_driver(
     Ok(())
 }
 
-pub async fn start_zksync_driver() -> anyhow::Result<()> {
-    ZksyncDriverService::gsb(&()).await?;
+pub async fn start_zksync_driver(requestor_account: Box<EthAccount>) -> anyhow::Result<()> {
+    let requestor = NodeId::from(requestor_account.address().as_ref());
+    fake_list_identities(vec![requestor]);
+    fake_subscribe_to_events();
+
+    zksync::PaymentDriverService::gsb(&()).await?;
+    let requestor_sign_tx = get_sign_tx(requestor_account);
+    fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(())
 }
 
@@ -184,6 +190,7 @@ async fn main() -> anyhow::Result<()> {
     db.apply_migration(migrations::run_with_output)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
+    log::debug!("bind_gsb_router()");
 
     let (driver_name, platform) = match args.driver {
         Driver::Dummy => {
@@ -195,13 +202,14 @@ async fn main() -> anyhow::Result<()> {
             (gnt::DRIVER_NAME, gnt::PLATFORM_NAME)
         }
         Driver::Zksync => {
-            start_zksync_driver().await?;
-            ZKSYNC_DRIVER_NAME
+            start_zksync_driver(requestor_account).await?;
+            (zksync::DRIVER_NAME, zksync::PLATFORM_NAME)
         }
     };
 
     let processor = PaymentProcessor::new(db.clone());
     ya_payment::service::bind_service(&db, processor);
+    log::debug!("bind_service()");
 
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(provider_id.clone(), AccountMode::RECV))
@@ -231,6 +239,8 @@ async fn main() -> anyhow::Result<()> {
         serde_json::to_string(&offer_properties)?
     );
 
+    log::info!("start agreement...");
+
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
         demand: market::Demand {
@@ -257,7 +267,12 @@ async fn main() -> anyhow::Result<()> {
 
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
+    log::info!("bind remote...");
     ya_net::bind_remote(provider_id, vec![provider_id, requestor_id]).await?;
+
+    log::info!("get_rest_addr...");
+    let rest_addr = rest_api_addr();
+    log::info!("Starting http server on port {}", rest_addr);
 
     HttpServer::new(move || {
         let provider_identity = Identity {
@@ -283,7 +298,7 @@ async fn main() -> anyhow::Result<()> {
             .wrap(middleware::Logger::default())
             .service(payment_service)
     })
-    .bind(rest_api_addr())?
+    .bind(rest_addr)?
     .run()
     .await?;
 
