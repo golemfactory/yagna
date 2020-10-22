@@ -1,9 +1,7 @@
 // External crates
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
-use bigdecimal::Zero;
 use chrono::Utc;
-use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
 use zksync::types::{network::Network, BlockStatus};
@@ -18,12 +16,11 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 // Local uses
 // use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
 use crate::{
-    utils::{big_dec_to_big_uint, big_uint_to_big_dec, pack_up},
-    zksync::YagnaEthSigner,
-    DRIVER_NAME, PLATFORM_NAME,
+    faucet,
+    utils::{big_dec_to_big_uint, pack_up},
+    zksync::{account_balance, YagnaEthSigner},
+    DRIVER_NAME, PLATFORM_NAME, ZKSYNC_TOKEN_NAME,
 };
-
-const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
 pub fn bind_service() {
     log::debug!("Binding payment driver service to service bus");
@@ -61,6 +58,10 @@ async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> 
     let address = msg.address();
     let mode = msg.mode();
 
+    if mode.contains(AccountMode::SEND) {
+        faucet::request_ngnt(&address).await?;
+    }
+
     let msg = payment_srv::RegisterAccount {
         platform: PLATFORM_NAME.to_string(),
         address,
@@ -82,21 +83,8 @@ async fn get_account_balance(
 ) -> Result<BigDecimal, GenericError> {
     log::debug!("get account balance: {:?}", msg);
 
-    let pub_address = Address::from_str(&msg.address()[2..]).map_err(GenericError::new)?;
-    // TODO: Make chainid from a config like GNT driver
-    let provider = Provider::new(Network::Rinkeby);
-    let acc_info = provider
-        .account_info(pub_address)
-        .await
-        .map_err(GenericError::new)?;
-    let balance_com = acc_info
-        .committed
-        .balances
-        .get(ZKSYNC_TOKEN_NAME)
-        .map(|x| x.0.clone())
-        .unwrap_or(BigUint::zero());
-    Ok(big_uint_to_big_dec(balance_com)?)
-    // Ok(BigDecimal::from_str("1").unwrap())
+    let addr = Address::from_str(&msg.address()[2..]).map_err(GenericError::new)?;
+    Ok(account_balance(addr).await?)
 }
 
 async fn get_transaction_balance(

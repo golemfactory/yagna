@@ -1,16 +1,18 @@
 // External uses
 use async_trait::async_trait;
+use bigdecimal::{BigDecimal, Zero};
+use num::BigUint;
 use tiny_keccak::keccak256;
-use zksync::zksync_types::{
-    tx::{PackedEthSignature, TxEthSignature},
-    Address,
-};
+use zksync::{Provider, Network};
+use zksync::zksync_types::{tx::{PackedEthSignature, TxEthSignature}, Address, H160};
 use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 
 // Workspace uses
 
 // Local uses
-use crate::utils::sign_tx;
+use crate::utils::{sign_tx, big_uint_to_big_dec};
+use crate::ZKSYNC_TOKEN_NAME;
+use ya_core_model::driver::GenericError;
 
 pub struct YagnaEthSigner {
     eth_address: Address,
@@ -74,4 +76,20 @@ fn convert_to_eth_byte_order(signature: Vec<u8>) -> Vec<u8> {
     result.extend_from_slice(&s);
     result.push(if v % 2 == 1 { 0x1c } else { 0x1b });
     result.into()
+}
+
+pub async fn account_balance(addr: H160) -> Result<BigDecimal, GenericError> {
+    // TODO: Make chainid from a config like GNT driver
+    let provider = Provider::new(Network::Rinkeby);
+    let acc_info = provider
+        .account_info(addr)
+        .await
+        .map_err(GenericError::new)?;
+    let balance_com = acc_info
+        .committed
+        .balances
+        .get(ZKSYNC_TOKEN_NAME)
+        .map(|x| x.0.clone())
+        .unwrap_or(BigUint::zero());
+    Ok(big_uint_to_big_dec(balance_com))
 }

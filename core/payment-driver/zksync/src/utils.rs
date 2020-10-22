@@ -1,9 +1,10 @@
 // External uses
 use bigdecimal::BigDecimal;
 use futures3::{Future, FutureExt};
+use lazy_static::lazy_static;
 use num::bigint::ToBigInt;
 use num::pow::pow;
-use num::BigUint;
+use num::{BigInt, BigUint};
 use std::pin::Pin;
 use tokio::task;
 use zksync::utils::{closest_packable_token_amount, is_token_amount_packable};
@@ -15,10 +16,10 @@ use ya_core_model::driver::GenericError;
 use ya_core_model::identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-// Copied from core/payment-driver/gnt/utils.rs
-
-// TODO: Get token decimals from zksync-provider / wallet
-const PRECISION: u64 = 1_000_000_000_000_000_000;
+lazy_static! {
+    // TODO: Get token decimals from zksync-provider / wallet
+    static ref PRECISION: BigDecimal = BigDecimal::from(1_000_000_000_000_000_000u64);
+}
 
 pub fn sign_tx(
     node_id: NodeId,
@@ -40,7 +41,7 @@ pub fn sign_tx(
 }
 
 pub fn big_dec_to_big_uint(v: BigDecimal) -> Result<BigUint, GenericError> {
-    let v = v * Into::<BigDecimal>::into(PRECISION);
+    let v = v * &(*PRECISION);
     let v = v
         .to_bigint()
         .ok_or(GenericError::new("Failed to convert to bigint"))?;
@@ -50,9 +51,9 @@ pub fn big_dec_to_big_uint(v: BigDecimal) -> Result<BigUint, GenericError> {
     Ok(v)
 }
 
-pub fn big_uint_to_big_dec(v: BigUint) -> Result<BigDecimal, GenericError> {
-    let v: BigDecimal = v.to_string().parse().map_err(GenericError::new)?;
-    Ok(v / Into::<BigDecimal>::into(PRECISION))
+pub fn big_uint_to_big_dec(v: BigUint) -> BigDecimal {
+    let v: BigDecimal = Into::<BigInt>::into(v).into();
+    v / &(*PRECISION)
 }
 
 /// Find the closest **bigger** packable amount
