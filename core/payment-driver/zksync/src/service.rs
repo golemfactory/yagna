@@ -2,11 +2,11 @@
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use futures3::TryFutureExt;
 use std::str::FromStr;
 use uuid::Uuid;
-use zksync::types::{network::Network, BlockStatus};
+use zksync::types::BlockStatus;
 use zksync::zksync_types::Address;
-use zksync::{Provider, Wallet, WalletCredentials};
 
 // Workspace uses
 use ya_core_model::driver::*;
@@ -14,11 +14,11 @@ use ya_core_model::payment::local as payment_srv;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
-// use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
+use crate::zksync::unlock_wallet;
 use crate::{
     faucet,
     utils::{big_dec_to_big_uint, pack_up},
-    zksync::{account_balance, YagnaEthSigner},
+    zksync::{account_balance, get_wallet},
     DRIVER_NAME, PLATFORM_NAME, ZKSYNC_TOKEN_NAME,
 };
 
@@ -60,6 +60,7 @@ async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> 
 
     if mode.contains(AccountMode::SEND) {
         faucet::request_ngnt(&address).await?;
+        get_wallet(&address).and_then(unlock_wallet).await?;
     }
 
     let msg = payment_srv::RegisterAccount {
@@ -111,45 +112,15 @@ async fn schedule_payment(
         date: Some(Utc::now()),
     };
 
-    let pub_key_addr = Address::from_str(&details.sender[2..]).map_err(GenericError::new)?;
     let amount = big_dec_to_big_uint(details.amount.clone())?;
     let amount = pack_up(&amount);
-    // TODO: Make chainid from a config like GNT driver
-    let provider = Provider::new(Network::Rinkeby);
-    let ext_eth_signer = YagnaEthSigner::new(pub_key_addr);
-    info!("connected to zksync provider");
-
-    let creds = WalletCredentials::from_eth_signer(pub_key_addr, ext_eth_signer, Network::Rinkeby)
-        .await
-        .map_err(GenericError::new)?;
-    info!("created credentials");
-
-    let wallet = Wallet::new(provider, creds)
-        .await
-        .map_err(GenericError::new)?;
-    info!("created wallet");
+    let wallet = get_wallet(&details.sender).await?;
 
     let balance = wallet
         .get_balance(BlockStatus::Committed, "GNT")
         .await
         .map_err(GenericError::new)?;
     info!("balance={}", balance);
-
-    if wallet
-        .is_signing_key_set()
-        .await
-        .map_err(GenericError::new)?
-        == false
-    {
-        let unlock = wallet
-            .start_change_pubkey()
-            .fee_token(ZKSYNC_TOKEN_NAME)
-            .map_err(GenericError::new)?
-            .send()
-            .await
-            .map_err(GenericError::new)?;
-        info!("unlock={:?}", unlock);
-    }
 
     let transfer = wallet
         .start_transfer()
@@ -203,28 +174,4 @@ async fn verify_payment(
     let json_str = std::str::from_utf8(confirmation.confirmation.as_slice()).unwrap();
     let details = serde_json::from_str(&json_str).unwrap();
     Ok(details)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_increase_least_significant_digit() {
-        let amount = BigUint::from_str("999000").unwrap();
-        let increased = increase_least_significant_digit(&amount);
-        let expected = BigUint::from_str("1000000").unwrap();
-        assert_eq!(increased, expected);
-    }
-
-    #[test]
-    fn test_pack_up() {
-        let amount = BigUint::from_str("12300285190700000000").unwrap();
-        let packable = pack_up(&amount);
-        assert!(
-            zksync::utils::is_token_amount_packable(&packable),
-            "Not packable!"
-        );
-        assert!(packable >= amount, "To little!");
-    }
 }

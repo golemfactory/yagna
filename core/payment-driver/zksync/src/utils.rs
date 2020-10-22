@@ -74,3 +74,28 @@ fn increase_least_significant_digit(amount: &BigUint) -> BigUint {
     }
     amount.clone() // zero
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_increase_least_significant_digit() {
+        let amount = BigUint::from_str("999000").unwrap();
+        let increased = increase_least_significant_digit(&amount);
+        let expected = BigUint::from_str("1000000").unwrap();
+        assert_eq!(increased, expected);
+    }
+
+    #[test]
+    fn test_pack_up() {
+        let amount = BigUint::from_str("12300285190700000000").unwrap();
+        let packable = pack_up(&amount);
+        assert!(
+            zksync::utils::is_token_amount_packable(&packable),
+            "Not packable!"
+        );
+        assert!(packable >= amount, "To little!");
+    }
+}
