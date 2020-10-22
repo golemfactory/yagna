@@ -1,9 +1,9 @@
 // External crates
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
+use bigdecimal::Zero;
 use chrono::Utc;
-use num::bigint::ToBigInt;
-use num::pow::pow;
+use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
 use zksync::types::{network::Network, BlockStatus};
@@ -17,7 +17,11 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 // use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
-use crate::{utils::pack_up, zksync::YagnaEthSigner, DRIVER_NAME, PLATFORM_NAME};
+use crate::{
+    utils::{big_dec_to_big_uint, big_uint_to_big_dec, pack_up},
+    zksync::YagnaEthSigner,
+    DRIVER_NAME, PLATFORM_NAME,
+};
 
 const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
@@ -78,16 +82,21 @@ async fn get_account_balance(
 ) -> Result<BigDecimal, GenericError> {
     log::debug!("get account balance: {:?}", msg);
 
-    // let pub_address = Address::from_str(&msg.address()[2..]).unwrap();
-    // let provider = RpcClient::new(ZKSYNC_RPC_ADDRESS);
-    // let wallet = Wallet::from_public_address(pub_address, provider);
-    // let balance_com = wallet
-    //     .get_balance(ZKSYNC_TOKEN_NAME, BalanceState::Committed)
-    //     .await;
-
-    // log::debug!("balance: {}", balance_com);
-    // Ok(BigDecimal::from_str(&balance_com.to_string()).unwrap())
-    Ok(BigDecimal::from_str("1").unwrap())
+    let pub_address = Address::from_str(&msg.address()[2..]).map_err(GenericError::new)?;
+    // TODO: Make chainid from a config like GNT driver
+    let provider = Provider::new(Network::Rinkeby);
+    let acc_info = provider
+        .account_info(pub_address)
+        .await
+        .map_err(GenericError::new)?;
+    let balance_com = acc_info
+        .committed
+        .balances
+        .get(ZKSYNC_TOKEN_NAME)
+        .map(|x| x.0.clone())
+        .unwrap_or(BigUint::zero());
+    Ok(big_uint_to_big_dec(balance_com)?)
+    // Ok(BigDecimal::from_str("1").unwrap())
 }
 
 async fn get_transaction_balance(
@@ -115,13 +124,7 @@ async fn schedule_payment(
     };
 
     let pub_key_addr = Address::from_str(&details.sender[2..]).map_err(GenericError::new)?;
-    // TODO: Get token decimals from zksync-provider / wallet
-    let amount = &details.amount * pow(BigDecimal::from(10u32), 18);
-    let amount = amount
-        .to_bigint()
-        .ok_or(GenericError::new("Amount invalid"))?
-        .to_biguint()
-        .ok_or(GenericError::new("Amount invalid"))?;
+    let amount = big_dec_to_big_uint(details.amount.clone())?;
     let amount = pack_up(&amount);
     // TODO: Make chainid from a config like GNT driver
     let provider = Provider::new(Network::Rinkeby);

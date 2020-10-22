@@ -1,5 +1,7 @@
 // External uses
+use bigdecimal::BigDecimal;
 use futures3::{Future, FutureExt};
+use num::bigint::ToBigInt;
 use num::pow::pow;
 use num::BigUint;
 use std::pin::Pin;
@@ -9,10 +11,15 @@ use zksync_eth_signer::error::SignerError;
 
 // Workspace uses
 use ya_client_model::NodeId;
+use ya_core_model::driver::GenericError;
 use ya_core_model::identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Copied from core/payment-driver/gnt/utils.rs
+
+// TODO: Get token decimals from zksync-provider / wallet
+const PRECISION: u64 = 1_000_000_000_000_000_000;
+
 pub fn sign_tx(
     node_id: NodeId,
     payload: Vec<u8>,
@@ -30,6 +37,22 @@ pub fn sign_tx(
         Err(e) => Err(SignerError::SigningFailed(e.to_string())),
     });
     Box::pin(fut)
+}
+
+pub fn big_dec_to_big_uint(v: BigDecimal) -> Result<BigUint, GenericError> {
+    let v = v * Into::<BigDecimal>::into(PRECISION);
+    let v = v
+        .to_bigint()
+        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+    let v = v
+        .to_biguint()
+        .ok_or(GenericError::new("Failed to convert to biguint"))?;
+    Ok(v)
+}
+
+pub fn big_uint_to_big_dec(v: BigUint) -> Result<BigDecimal, GenericError> {
+    let v: BigDecimal = v.to_string().parse().map_err(GenericError::new)?;
+    Ok(v / Into::<BigDecimal>::into(PRECISION))
 }
 
 /// Find the closest **bigger** packable amount
