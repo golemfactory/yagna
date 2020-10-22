@@ -4,11 +4,9 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use num::bigint::ToBigInt;
 use num::pow::pow;
-use num::BigUint;
 use std::str::FromStr;
 use uuid::Uuid;
 use zksync::types::{network::Network, BlockStatus};
-use zksync::utils::{closest_packable_token_amount, is_token_amount_packable};
 use zksync::zksync_types::Address;
 use zksync::{Provider, Wallet, WalletCredentials};
 
@@ -19,7 +17,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 // use crate::zksync::{eth_sign_transfer, get_zksync_seed, PackedEthSignature};
-use crate::{zksync::YagnaEthSigner, DRIVER_NAME, PLATFORM_NAME};
+use crate::{utils::pack_up, zksync::YagnaEthSigner, DRIVER_NAME, PLATFORM_NAME};
 
 const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
@@ -214,25 +212,6 @@ async fn verify_payment(
     let json_str = std::str::from_utf8(confirmation.confirmation.as_slice()).unwrap();
     let details = serde_json::from_str(&json_str).unwrap();
     Ok(details)
-}
-
-fn increase_least_significant_digit(amount: &BigUint) -> BigUint {
-    let digits = amount.to_radix_le(10);
-    for i in 0..(digits.len()) {
-        if digits[i] != 0 {
-            return amount + pow(BigUint::from(10u32), i);
-        }
-    }
-    amount.clone() // zero
-}
-
-/// Find the closest **bigger** packable amount
-fn pack_up(amount: &BigUint) -> BigUint {
-    let mut packable_amount = closest_packable_token_amount(&amount);
-    while (&packable_amount < amount) || !is_token_amount_packable(&packable_amount) {
-        packable_amount = increase_least_significant_digit(&packable_amount);
-    }
-    packable_amount
 }
 
 #[cfg(test)]
