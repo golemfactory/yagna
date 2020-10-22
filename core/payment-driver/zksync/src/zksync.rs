@@ -46,10 +46,9 @@ impl EthereumSigner for YagnaEthSigner {
         Ok(tx_eth_sig)
     }
 
-    async fn sign_transaction(&self, raw_tx: RawTransaction) -> Result<Vec<u8>, SignerError> {
-        info!("sign_transaction");
+    async fn sign_transaction(&self, _raw_tx: RawTransaction) -> Result<Vec<u8>, SignerError> {
+        log::debug!("YagnaEthSigner sign_transaction");
         todo!();
-        Ok(vec![])
     }
 }
 
