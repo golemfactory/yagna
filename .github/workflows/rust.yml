@@ -32,12 +32,12 @@ jobs:
 
       - name: Store head commit hash (pull request)
         id: store_hash_pull
-        if: github.event_name == "pull_request"
+        if: github.event_name == 'pull_request'
         run: echo "::set-output name=sha::${{ github.event.pull_request.head.sha }}"
 
       - name: Store head commit hash (push)
         id: store_hash_push
-        if: github.event_name == "push"
+        if: github.event_name == 'push'
         run: echo "::set-output name=sha::${{ github.sha }}"
 
       - name: Install Last Stable Rust
