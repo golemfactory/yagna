@@ -24,15 +24,21 @@ jobs:
     outputs:
       # map step output to job output
       # this value is used by integration-test job
-      yagna_sha: ${{ steps.store_sha.outputs.yagna_sha }}
+      yagna_sha: ${{ steps.store_hash_pull.outputs.sha || steps.store_hash_push.outputs.sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Store head commit hash
-        id: store_sha
-        run: echo "::set-output name=yagna_sha::$(git rev-parse --short HEAD)"
+      - name: Store head commit hash (pull request)
+        id: store_hash_pull
+        if: github.event_name == "pull_request"
+        run: echo "::set-output name=sha::${{ github.event.pull_request.head.sha }}"
+
+      - name: Store head commit hash (push)
+        id: store_hash_push
+        if: github.event_name == "push"
+        run: echo "::set-output name=sha::${{ github.sha }}"
 
       - name: Install Last Stable Rust
         uses: actions-rs/toolchain@v1
