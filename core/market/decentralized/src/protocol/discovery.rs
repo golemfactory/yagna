@@ -214,7 +214,7 @@ impl Discovery {
         let unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
 
         if !unsubscribed_offer_ids.is_empty() {
-            log::info!(
+            log::debug!(
                 "Propagating further {} unsubscribed Offers from {} received from [{}].",
                 unsubscribed_offer_ids.len(),
                 num_received_ids,
