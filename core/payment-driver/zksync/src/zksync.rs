@@ -1,16 +1,78 @@
 // External uses
 use async_trait::async_trait;
+use bigdecimal::{BigDecimal, Zero};
+use lazy_static::lazy_static;
+use num::BigUint;
+use std::env;
+use std::str::FromStr;
 use tiny_keccak::keccak256;
 use zksync::zksync_types::{
     tx::{PackedEthSignature, TxEthSignature},
-    Address,
+    Address, H160,
 };
+use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 
 // Workspace uses
+use ya_core_model::driver::GenericError;
 
 // Local uses
-use crate::utils::sign_tx;
+use crate::utils::{big_uint_to_big_dec, sign_tx};
+use crate::ZKSYNC_TOKEN_NAME;
+
+lazy_static! {
+    pub static ref NETWORK: Network = {
+        let chain_id = env::var("CHAIN_ID")
+            .unwrap_or("rinkeby".to_string())
+            .to_lowercase();
+        match chain_id.as_str() {
+            "rinkeby" => Network::Rinkeby,
+            "mainnet" => Network::Mainnet,
+            _ => panic!(format!("Invalid chain id: {}", chain_id)),
+        }
+    };
+    static ref PROVIDER: Provider = Provider::new(*NETWORK);
+}
+
+pub fn get_provider() -> Provider {
+    (*PROVIDER).clone()
+}
+
+pub async fn get_wallet(addr: &str) -> Result<Wallet<YagnaEthSigner>, GenericError> {
+    let addr = Address::from_str(&addr[2..]).map_err(GenericError::new)?;
+    let provider = get_provider();
+    let signer = YagnaEthSigner::new(addr);
+    let credentials = WalletCredentials::from_eth_signer(addr, signer, *NETWORK)
+        .await
+        .map_err(GenericError::new)?;
+    let wallet = Wallet::new(provider, credentials)
+        .await
+        .map_err(GenericError::new)?;
+    Ok(wallet)
+}
+
+pub async fn unlock_wallet<S: EthereumSigner + Clone>(
+    wallet: Wallet<S>,
+) -> Result<(), GenericError> {
+    if !wallet
+        .is_signing_key_set()
+        .await
+        .map_err(GenericError::new)?
+    {
+        log::info!("Unlocking wallet... address = {}", wallet.signer.address);
+        let unlock = wallet
+            .start_change_pubkey()
+            .fee_token(ZKSYNC_TOKEN_NAME)
+            .map_err(GenericError::new)?
+            .send()
+            .await
+            .map_err(GenericError::new)?;
+        info!("Unlock tx: {:?}", unlock);
+        let tx_info = unlock.wait_for_commit().await.map_err(GenericError::new)?;
+        log::info!("Wallet unlocked. tx_info = {:?}", tx_info);
+    }
+    Ok(())
+}
 
 pub struct YagnaEthSigner {
     eth_address: Address,
@@ -74,4 +136,19 @@ fn convert_to_eth_byte_order(signature: Vec<u8>) -> Vec<u8> {
     result.extend_from_slice(&s);
     result.push(if v % 2 == 1 { 0x1c } else { 0x1b });
     result.into()
+}
+
+pub async fn account_balance(addr: H160) -> Result<BigDecimal, GenericError> {
+    let provider = get_provider();
+    let acc_info = provider
+        .account_info(addr)
+        .await
+        .map_err(GenericError::new)?;
+    let balance_com = acc_info
+        .committed
+        .balances
+        .get(ZKSYNC_TOKEN_NAME)
+        .map(|x| x.0.clone())
+        .unwrap_or(BigUint::zero());
+    Ok(big_uint_to_big_dec(balance_com))
 }
