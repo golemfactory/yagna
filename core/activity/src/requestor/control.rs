@@ -80,7 +80,7 @@ async fn create_activity(
     authorize_agreement_initiator(id.identity, agreement_id).await?;
 
     let agreement = get_agreement(&agreement_id).await?;
-    log::info!("agreement: {:#?}", agreement);
+    log::debug!("agreement: {:#?}", agreement);
 
     let provider_id = agreement.provider_id()?.parse()?;
     let msg = activity::Create {
