@@ -2,9 +2,7 @@
 extern crate log;
 
 use std::convert::TryInto;
-use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use num::BigUint;
@@ -18,7 +16,6 @@ use zksync::{Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 
 use ethkey::EthAccount;
-use futures3::Future;
 use tiny_keccak::keccak256;
 
 struct YagnaEthSigner {
@@ -29,8 +26,6 @@ impl YagnaEthSigner {
     pub fn new(eth_address: Address) -> Self {
         Self { eth_address }
     }
-
-    fn get_sign_tx(&self) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>> {}
 }
 
 impl Clone for YagnaEthSigner {
@@ -49,10 +44,9 @@ impl EthereumSigner for YagnaEthSigner {
         let msg_as_bytes = message_to_signable_bytes(message, true);
 
         let requestor_account = EthAccount::load_or_generate("requestor.key.json", "").unwrap();
-        let sign_tx = get_sign_tx(requestor_account);
         info!("connected sign_tx");
 
-        let signature = sign_tx(msg_as_bytes).await;
+        let signature = sign_tx(requestor_account, msg_as_bytes);
         info!("got signature");
         let signature = convert_to_eth_byte_order(signature);
         info!("put signature in order");
@@ -65,7 +59,7 @@ impl EthereumSigner for YagnaEthSigner {
         Ok(tx_eth_sig)
     }
 
-    async fn sign_transaction(&self, raw_tx: RawTransaction) -> Result<Vec<u8>, SignerError> {
+    async fn sign_transaction(&self, _raw_tx: RawTransaction) -> Result<Vec<u8>, SignerError> {
         info!("sign_transaction");
         Ok(vec![])
     }
@@ -126,7 +120,7 @@ async fn main() {
         .unwrap()
         .token(input_token)
         .unwrap()
-        .amount(BigUint::from_str(input_amount.to_string()).unwrap())
+        .amount(BigUint::from_str(input_amount).unwrap())
         .send()
         .await
         .unwrap();
@@ -158,22 +152,13 @@ fn convert_to_eth_byte_order(signature: Vec<u8>) -> Vec<u8> {
     result
 }
 
-fn get_sign_tx(
-    account: Box<EthAccount>,
-) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>> {
-    let account: Arc<EthAccount> = account.into();
-    move |msg| {
-        let account = account.clone();
-        let fut = async move {
-            let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
-            let signature = account.sign(&msg).unwrap();
-            info!("Signature: {:?}", signature);
-            let mut v = Vec::with_capacity(65);
-            v.push(signature.v);
-            v.extend_from_slice(&signature.r);
-            v.extend_from_slice(&signature.s);
-            v
-        };
-        Box::pin(fut)
-    }
+fn sign_tx(account: Box<EthAccount>, msg: Vec<u8>) -> Vec<u8> {
+    let msg: [u8; 32] = msg.as_slice().try_into().unwrap();
+    let signature = account.sign(&msg).unwrap();
+    info!("Signature: {:?}", signature);
+    let mut v = Vec::with_capacity(65);
+    v.push(signature.v);
+    v.extend_from_slice(&signature.r);
+    v.extend_from_slice(&signature.s);
+    v
 }

@@ -22,16 +22,18 @@ use crate::ZKSYNC_TOKEN_NAME;
 
 lazy_static! {
     pub static ref NETWORK: Network = {
-        let chain_id = env::var("CHAIN_ID")
+        let chain_id = env::var("ZKSYNC_CHAIN")
             .unwrap_or("rinkeby".to_string())
             .to_lowercase();
-        match chain_id.as_str() {
-            "rinkeby" => Network::Rinkeby,
-            "mainnet" => Network::Mainnet,
-            _ => panic!(format!("Invalid chain id: {}", chain_id)),
+        match chain_id.parse() {
+            Ok(network) => network,
+            Err(_) => panic!(format!("Invalid chain id: {}", chain_id)),
         }
     };
-    static ref PROVIDER: Provider = Provider::new(*NETWORK);
+    static ref PROVIDER: Provider = match env::var("ZKSYNC_RPC_ADDRESS").ok() {
+        Some(rpc_addr) => Provider::from_addr(rpc_addr),
+        None => Provider::new(*NETWORK),
+    };
 }
 
 pub fn get_provider() -> Provider {
