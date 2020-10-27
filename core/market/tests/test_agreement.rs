@@ -17,7 +17,7 @@ use ya_service_bus::RpcEndpoint;
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_gsb_get_agreement() -> Result<()> {
@@ -56,7 +56,7 @@ async fn test_gsb_get_agreement() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_agreement() -> Result<()> {
@@ -92,7 +92,7 @@ async fn test_get_agreement() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_not_existing_agreement() -> Result<()> {
@@ -126,7 +126,7 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() -> Result<()> {
@@ -202,7 +202,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
 /// Requestor can't counter the same Proposal for the second time.
 // TODO: Should it be allowed after expiration?? For sure it shouldn't be allowed
 // TODO: after rejection, because rejection always ends negotiations.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_creation_should_fail() -> Result<()> {
@@ -237,7 +237,7 @@ async fn second_creation_should_fail() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_confirmation_should_fail() -> Result<()> {
@@ -281,7 +281,7 @@ async fn second_confirmation_should_fail() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn agreement_expired_before_confirmation() -> Result<()> {
@@ -321,7 +321,7 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn agreement_expired_before_approval() -> Result<()> {
@@ -367,7 +367,7 @@ async fn agreement_expired_before_approval() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn waiting_wo_confirmation_should_fail() -> Result<()> {
@@ -405,7 +405,7 @@ async fn waiting_wo_confirmation_should_fail() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn approval_before_confirmation_should_fail() -> Result<()> {
@@ -450,7 +450,7 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn approval_without_waiting_should_pass() -> Result<()> {
@@ -498,7 +498,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn waiting_after_approval_should_pass() -> Result<()> {
@@ -552,7 +552,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_approval_should_fail() -> Result<()> {
@@ -615,7 +615,7 @@ async fn second_approval_should_fail() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn second_waiting_should_pass() -> Result<()> {
@@ -676,7 +676,7 @@ async fn second_waiting_should_pass() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn net_err_while_confirming() -> Result<()> {
@@ -718,7 +718,7 @@ async fn net_err_while_confirming() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn net_err_while_approving() -> Result<()> {
@@ -775,7 +775,7 @@ async fn net_err_while_approving() -> Result<()> {
 
 /// Requestor can create Agreements only from Proposals, that came from Provider.
 /// He can turn his own Proposal into Agreement.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_requestor_proposal() -> Result<()> {
@@ -820,7 +820,7 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
 
 /// Requestor can't create Agreement from initial Proposal. At least one step
 /// of negotiations must happen, before he can create Agreement.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_initial_proposal() -> Result<()> {
@@ -863,7 +863,7 @@ async fn cant_promote_initial_proposal() -> Result<()> {
 
 /// Requestor can promote only last proposal in negotiation chain.
 /// If negotiations were more advanced, `create_agreement` will end with error.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_not_last_proposal() -> Result<()> {

@@ -11,7 +11,7 @@ use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
 /// Initialize two markets and add Offers.
 /// Third market that will be instantiated after these two, should
 /// get all Offers from them, if cyclic broadcasting works properly.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
@@ -78,7 +78,7 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
 /// First initiate two Nodes with Offers, that will be shared with all 3 test Nodes.
 /// Than break networking for one Node and in meantime unsubscribe some of Offers.
 /// After networking will be reenabled, we expect, that 3rd Node will get all unsubscribes.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
@@ -187,7 +187,7 @@ async fn test_unsubscribes_cyclic_broadcasts() -> Result<(), anyhow::Error> {
 /// Subscribing and unsubscribing should work despite network errors.
 /// Market should return subscription id and Offer propagation will take place
 /// later during cyclic broadcasts. The same applies to unsubscribes.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
@@ -223,7 +223,7 @@ async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
 
 /// Nodes send in cyclic broadcasts not only own Offers, but Offers
 /// from other Nodes either.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
@@ -295,7 +295,7 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
 
 /// Nodes send in cyclic broadcasts not only own Offers unsubscribes, but Offers
 /// from other Nodes either.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_sharing_someones_else_unsubscribes() -> Result<(), anyhow::Error> {
