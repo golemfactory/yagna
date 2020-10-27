@@ -1,23 +1,20 @@
-// #[macro_use]
-// extern crate diesel;
-#[macro_use]
-extern crate log;
+/*
+    Payment driver for yagna using zksync.
 
-mod faucet;
-mod service;
-mod utils;
-pub mod zksync;
+    This file only contains constants and imports.
+*/
 
+// Public
 pub const PLATFORM_NAME: &'static str = "ZK-NGNT";
 pub const DRIVER_NAME: &'static str = "zksync";
 pub const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
-pub struct PaymentDriverService;
+pub use service::ZksyncService as PaymentDriverService;
 
-impl PaymentDriverService {
-    pub async fn gsb<Context>(_context: &Context) -> anyhow::Result<()> {
-        self::service::bind_service();
-        self::service::subscribe_to_identity_events().await;
-        Ok(())
-    }
-}
+// Private
+#[macro_use]
+extern crate log;
+
+mod driver;
+mod service;
+mod zksync;
