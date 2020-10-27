@@ -84,13 +84,15 @@ where
     pub async fn wait_for_event(&mut self) -> Result<(), NotifierError<Type>> {
         while let Ok(value) = self.receiver.recv().await {
             match value {
-                Notification::<Type>::NewEvent(value) => {
-                    if value == self.subscription_id {
+                Notification::<Type>::NewEvent(subscription_id) => {
+                    if subscription_id == self.subscription_id {
                         return Ok(());
                     }
                 }
                 Notification::<Type>::StopEvents(subscription_id) => {
-                    return Err(NotifierError::Unsubscribed(subscription_id));
+                    if subscription_id == self.subscription_id {
+                        return Err(NotifierError::Unsubscribed(subscription_id));
+                    }
                 }
             }
         }
