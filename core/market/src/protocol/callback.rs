@@ -36,7 +36,7 @@ impl<MsgType: CallbackMessage> HandlerSlot<MsgType> {
 /// Trait to use in functions for binding callbacks.
 /// Example:
 /// ```rust
-/// use ya_market_decentralized::testing::callback::{CallbackHandler, HandlerSlot, CallbackMessage};
+/// use ya_market::testing::callback::{CallbackHandler, HandlerSlot, CallbackMessage};
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Clone, Serialize, Deserialize)]

@@ -1,6 +1,6 @@
-use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
-use ya_market_decentralized::testing::{
+use ya_market::assert_err_eq;
+use ya_market::testing::proposal_util::exchange_draft_proposals;
+use ya_market::testing::{
     GetProposalError, MarketServiceExt, MarketsNetwork, OwnerType, ProposalError,
 };
 

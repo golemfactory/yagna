@@ -2,12 +2,10 @@ use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
-use ya_market_decentralized::testing::mock_node::MarketServiceExt;
-use ya_market_decentralized::testing::proposal_util::{
-    exchange_draft_proposals, NegotiationHelper,
-};
-use ya_market_decentralized::testing::MarketsNetwork;
-use ya_market_decentralized::testing::{
+use ya_market::testing::mock_node::MarketServiceExt;
+use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
+use ya_market::testing::MarketsNetwork;
+use ya_market::testing::{
     client::sample_demand, client::sample_offer, events_helper::*, AgreementError,
     AgreementStateError, ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
 };

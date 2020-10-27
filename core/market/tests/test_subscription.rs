@@ -1,7 +1,7 @@
-use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::client::{sample_demand, sample_offer};
-use ya_market_decentralized::testing::{DemandError, QueryOfferError};
-use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
+use ya_market::assert_err_eq;
+use ya_market::testing::client::{sample_demand, sample_offer};
+use ya_market::testing::{DemandError, QueryOfferError};
+use ya_market::testing::{MarketServiceExt, MarketsNetwork};
 use ya_market_resolver::flatten::flatten_json;
 
 /// Test subscribes offers, checks if offer is available

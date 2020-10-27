@@ -1,9 +1,9 @@
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::proposal::State;
-use ya_market_decentralized::testing::mock_offer::client::{sample_demand, sample_offer};
-use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork, OwnerType, ProposalId};
-use ya_market_decentralized::testing::{QueryEventsError, TakeEventsError};
-use ya_market_decentralized::MarketService;
+use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
+use ya_market::testing::{MarketServiceExt, MarketsNetwork, OwnerType, ProposalId};
+use ya_market::testing::{QueryEventsError, TakeEventsError};
+use ya_market::MarketService;
 
 use std::str::FromStr;
 use std::sync::Arc;

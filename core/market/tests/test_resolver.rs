@@ -1,7 +1,7 @@
 use std::{future::Future, time::Duration};
 use tokio::time::{timeout, Timeout};
 
-use ya_market_decentralized::testing::{
+use ya_market::testing::{
     client::{sample_demand, sample_offer},
     MarketsNetwork,
 };

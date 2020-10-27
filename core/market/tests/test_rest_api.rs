@@ -7,7 +7,7 @@ use serde_json::json;
 
 use ya_client::model::market::Agreement;
 use ya_client::model::{market::Demand, market::Offer, market::Proposal, ErrorMessage};
-use ya_market_decentralized::testing::{
+use ya_market::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
     proposal_util::exchange_draft_proposals,

@@ -5,13 +5,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::time::Duration;
 
-use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::discovery::{message::*, Discovery};
-use ya_market_decentralized::testing::mock_offer::{
-    client, sample_offer, sample_offer_with_expiration,
-};
-use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
-use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
+use ya_market::assert_err_eq;
+use ya_market::testing::discovery::{message::*, Discovery};
+use ya_market::testing::mock_offer::{client, sample_offer, sample_offer_with_expiration};
+use ya_market::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
+use ya_market::testing::{QueryOfferError, SubscriptionId};
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.

@@ -1,14 +1,12 @@
 use ya_client::model::market::proposal::State;
-use ya_market_decentralized::testing::events_helper::{provider, requestor, ClientProposalHelper};
-use ya_market_decentralized::testing::mock_offer::client::{
+use ya_market::testing::events_helper::{provider, requestor, ClientProposalHelper};
+use ya_market::testing::mock_offer::client::{
     not_matching_demand, not_matching_offer, sample_demand, sample_offer,
 };
-use ya_market_decentralized::testing::proposal_util::{
-    exchange_draft_proposals, NegotiationHelper,
-};
-use ya_market_decentralized::testing::MarketsNetwork;
-use ya_market_decentralized::testing::OwnerType;
-use ya_market_decentralized::testing::{ProposalError, SaveProposalError};
+use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
+use ya_market::testing::MarketsNetwork;
+use ya_market::testing::OwnerType;
+use ya_market::testing::{ProposalError, SaveProposalError};
 use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.

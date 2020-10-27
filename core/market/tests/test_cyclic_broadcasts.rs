@@ -2,11 +2,11 @@ use rand::seq::SliceRandom;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::mock_offer::client;
-use ya_market_decentralized::testing::Config;
-use ya_market_decentralized::testing::QueryOfferError;
-use ya_market_decentralized::testing::{MarketServiceExt, MarketsNetwork};
+use ya_market::assert_err_eq;
+use ya_market::testing::mock_offer::client;
+use ya_market::testing::Config;
+use ya_market::testing::QueryOfferError;
+use ya_market::testing::{MarketServiceExt, MarketsNetwork};
 
 /// Initialize two markets and add Offers.
 /// Third market that will be instantiated after these two, should
