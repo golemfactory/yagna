@@ -26,6 +26,7 @@ rand = "0.7.2"
 rmp-serde = {version = "=0.14.3", optional=true }
 serde = { version = "1.0.102", features = ["derive"] }
 serde_json = { version = "1.0.48", optional = true }
+stubborn-io = "0.1.10"
 thiserror = "1.0.9"
 tokio = { version = "0.2.6", features = ["tcp", "time"] }
 tokio-util = "0.2.0"

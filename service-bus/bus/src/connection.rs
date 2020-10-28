@@ -9,6 +9,7 @@ use std::{
     convert::TryInto,
     pin::Pin,
 };
+use stubborn_io::{ReconnectOptions, StubbornTcpStream};
 
 use ya_sb_proto::codec::{GsbMessage, ProtocolError};
 use ya_sb_proto::{
@@ -935,4 +936,46 @@ pub async fn tcp(addr: std::net::SocketAddr) -> Result<TcpTransport, std::io::Er
         s,
         ya_sb_proto::codec::GsbMessageCodec::default(),
     ))
+}
+
+pub type TcpTransportReconnectable = tokio_util::codec::Framed<
+    StubbornTcpStream<std::net::SocketAddr>,
+    ya_sb_proto::codec::GsbMessageCodec,
+>;
+
+pub struct TcpReconnectable {
+    address: std::net::SocketAddr,
+    config: ReconnectOptions,
+}
+
+impl TcpReconnectable {
+    pub fn new(address: std::net::SocketAddr) -> TcpReconnectable {
+        TcpReconnectable {
+            address,
+            config: ReconnectOptions::new(),
+        }
+    }
+
+    pub async fn connect(self) -> Result<TcpTransportReconnectable, std::io::Error> {
+        let stream = StubbornTcpStream::connect_with_options(self.address, self.config).await?;
+        Ok(tokio_util::codec::Framed::new(
+            stream,
+            ya_sb_proto::codec::GsbMessageCodec::default(),
+        ))
+    }
+
+    pub fn on_connect(mut self, callback: Box<dyn Fn() + Send + Sync>) -> Self {
+        self.config = self.config.with_on_connect_callback(callback);
+        self
+    }
+
+    pub fn on_disconnect(mut self, callback: Box<dyn Fn() + Send + Sync>) -> Self {
+        self.config = self.config.with_on_disconnect_callback(callback);
+        self
+    }
+
+    pub fn on_connect_fail(mut self, callback: Box<dyn Fn() + Send + Sync>) -> Self {
+        self.config = self.config.with_on_connect_fail_callback(callback);
+        self
+    }
 }

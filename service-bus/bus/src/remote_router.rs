@@ -91,7 +91,7 @@ impl RemoteRouter {
         if let Some(c) = &self.connection {
             return future::ok((*c).clone()).left_future();
         }
-        log::debug!("wait for connection");
+        log::info!("Waiting for connection...");
         let (tx, rx) = oneshot::channel();
         self.pending_calls.push(tx);
         rx.map_err(From::from).right_future()
