@@ -7,7 +7,6 @@
 // Extrernal crates
 use actix::Arbiter;
 use std::sync::Arc;
-use uuid::Uuid;
 
 // Workspace uses
 use ya_client_model::NodeId;
@@ -24,8 +23,10 @@ use ya_service_bus::{
 // Local uses
 use crate::driver::PaymentDriver;
 
-pub fn bind_service(driver: Arc<dyn PaymentDriver>) {
+pub async fn bind_service<D: PaymentDriver + 'static>(driver: D) {
     log::debug!("Binding payment driver service to service bus");
+    let driver = Arc::new(driver);
+    let bus_id = driver_bus_id(driver.get_name());
 
     /* Short variable names explained:
         db = DbExecutor || ()
@@ -34,7 +35,7 @@ pub fn bind_service(driver: Arc<dyn PaymentDriver>) {
         m = message
     */
     #[rustfmt::skip] // Keep move's neatly alligned
-    ServiceBinder::new(&driver_bus_id(driver.get_name()), &(), driver)
+    ServiceBinder::new(&bus_id, &(), driver)
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.init(db, c, m).await }
         )
@@ -55,13 +56,8 @@ pub fn bind_service(driver: Arc<dyn PaymentDriver>) {
         );
 
     log::debug!("Successfully bound payment driver service to service bus");
-}
-
-pub async fn subscribe_to_identity_events(driver: Arc<dyn PaymentDriver>) {
     log::debug!("Subscribing to identity events");
-    let message = identity::Subscribe {
-        endpoint: driver_bus_id(driver.get_name()),
-    };
+    let message = identity::Subscribe { endpoint: bus_id };
     let result = service(identity::BUS_ID).send(message).await;
     match result {
         Err(e) => log::error!("init app-key listener error: {}", e),
@@ -100,16 +96,16 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
 
 pub fn notify_payment(
     driver: &(dyn PaymentDriver),
+    order_id: &str,
     details: &PaymentDetails,
     confirmation: Vec<u8>,
-) -> String {
-    let order_id = Uuid::new_v4().to_string();
+) {
     let msg = payment_srv::NotifyPayment {
         driver: driver.get_name(),
         amount: details.amount.clone(),
         sender: details.sender.clone(),
         recipient: details.recipient.clone(),
-        order_ids: vec![order_id.clone()],
+        order_ids: vec![order_id.to_string()],
         confirmation: PaymentConfirmation { confirmation },
     };
 
@@ -121,5 +117,4 @@ pub fn notify_payment(
             .await
             .map_err(|e| log::error!("{}", e));
     });
-    order_id
 }

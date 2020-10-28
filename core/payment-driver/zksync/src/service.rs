@@ -15,10 +15,9 @@ impl ZksyncService {
         log::debug!("Connecting ZksyncService to gsb...");
 
         let accounts = Accounts::new_rc();
-        let driver = ZksyncDriver::new_arc(accounts);
+        let driver = ZksyncDriver::new(accounts);
 
-        bus::bind_service(driver.clone());
-        bus::subscribe_to_identity_events(driver).await;
+        bus::bind_service(driver).await;
 
         log::info!("Succesfully connected ZksyncService to gsb.");
         Ok(())

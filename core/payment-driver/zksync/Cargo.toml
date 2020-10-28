@@ -22,6 +22,7 @@ log = "0.4.8"
 num = { version = "0.2", features = ["serde"] }
 tiny-keccak = "1.4.2"
 tokio = { version = "0.2", features = ["full"] }
+uuid = { version = "0.8", features = ["v4"] }
 
 ## yagna dependencies
 ya-payment-driver = { version = "0.1.0" }

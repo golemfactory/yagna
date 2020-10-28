@@ -3,9 +3,8 @@
 
     Please limit the logic in this file, use local mods to handle the calls.
 */
-
-// External crates
-use std::sync::Arc;
+// Extrnal crates
+use uuid::Uuid;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -27,14 +26,10 @@ pub struct ZksyncDriver {
 }
 
 impl ZksyncDriver {
-    fn new(accounts: AccountsRc) -> Self {
+    pub fn new(accounts: AccountsRc) -> Self {
         Self {
             active_accounts: accounts,
         }
-    }
-
-    pub fn new_arc(accounts: AccountsRc) -> Arc<Self> {
-        Arc::new(Self::new(accounts))
     }
 }
 
@@ -110,7 +105,8 @@ impl PaymentDriver for ZksyncDriver {
         let confirmation = driver_utils::to_confirmation(&details)?;
         // TODO: move to database / background task
         wallet::make_transfer(&details).await?;
-        let order_id = bus::notify_payment(self, &details, confirmation);
+        let order_id = Uuid::new_v4().to_string();
+        bus::notify_payment(self, &order_id, &details, confirmation);
 
         log::info!(
             "Scheduled payment with success. order_id={}, details={:?}",
