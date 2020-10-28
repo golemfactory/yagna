@@ -1,14 +1,13 @@
 use actix::prelude::*;
 use chrono::Utc;
-use futures::channel::oneshot;
-use futures::{FutureExt, TryFutureExt};
+use futures::channel::{mpsc, oneshot};
+use futures::{FutureExt, SinkExt, TryFutureExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{
-    activity_state::StatePair, ActivityUsage, CommandResult, ExeScriptCommand,
-    ExeScriptCommandResult, State,
+    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, RuntimeEvent, State,
 };
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
@@ -32,6 +31,7 @@ mod handlers;
 pub mod message;
 pub mod metrics;
 mod notify;
+mod output;
 pub mod process;
 pub mod runtime;
 pub mod service;
@@ -47,6 +47,7 @@ lazy_static::lazy_static! {
 pub struct ExeUnit<R: Runtime> {
     ctx: ExeUnitContext,
     state: ExeUnitState,
+    events: Channel<RuntimeEvent>,
     runtime: Addr<R>,
     metrics: Addr<MetricsService>,
     transfers: Addr<TransferService>,
@@ -63,6 +64,7 @@ impl<R: Runtime> ExeUnit<R> {
         ExeUnit {
             ctx,
             state: ExeUnitState::default(),
+            events: Channel::default(),
             runtime: runtime.clone(),
             metrics: metrics.clone(),
             transfers: transfers.clone(),
@@ -87,15 +89,16 @@ impl<R: Runtime> ExeUnit<R> {
     }
 
     fn report_usage(&mut self, context: &mut Context<Self>) {
-        if let Some(activity_id) = &self.ctx.activity_id {
-            let fut = report_usage(
-                self.ctx.report_url.clone().unwrap(),
-                activity_id.clone(),
-                context.address(),
-                self.metrics.clone(),
-            );
-            context.spawn(fut.into_actor(self));
-        };
+        if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
+            return;
+        }
+        let fut = report_usage(
+            self.ctx.report_url.clone().unwrap(),
+            self.ctx.activity_id.clone().unwrap(),
+            context.address(),
+            self.metrics.clone(),
+        );
+        context.spawn(fut.into_actor(self));
     }
 
     async fn stop_runtime(runtime: Addr<R>, reason: ShutdownReason) {
@@ -105,40 +108,6 @@ impl<R: Runtime> ExeUnit<R> {
             .await
         {
             log::warn!("Unable to stop the runtime: {:?}", e);
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-struct ExeCtx {
-    batch_id: String,
-    batch_size: usize,
-    idx: usize,
-    cmd: ExeScriptCommand,
-}
-
-impl ExeCtx {
-    pub fn convert_runtime_result(&self, result: RuntimeCommandResult) -> ExeScriptCommandResult {
-        let stdout = result
-            .stdout
-            .filter(|s| !s.is_empty())
-            .map(|s| format!("stdout: {}", s));
-        let stderr = result
-            .stderr
-            .filter(|s| !s.is_empty())
-            .map(|s| format!("stderr: {}", s));
-        let message = match (stdout, stderr) {
-            (None, None) => None,
-            (Some(stdout), None) => Some(stdout),
-            (None, Some(stderr)) => Some(stderr),
-            (Some(stdout), Some(stderr)) => Some(format!("{}\n{}", stdout, stderr)),
-        };
-        let finished = self.idx == self.batch_size - 1 || result.result == CommandResult::Error;
-        ExeScriptCommandResult {
-            index: self.idx as u32,
-            result: result.result,
-            is_batch_finished: finished,
-            message,
         }
     }
 }
@@ -163,41 +132,50 @@ impl<R: Runtime> std::ops::Deref for RuntimeRef<R> {
 impl<R: Runtime> RuntimeRef<R> {
     async fn exec(
         self,
+        exec: activity::Exec,
         runtime: Addr<R>,
         transfers: Addr<TransferService>,
-        exec: activity::Exec,
+        mut events: mpsc::Sender<RuntimeEvent>,
         mut control: oneshot::Receiver<()>,
     ) {
-        let batch_size = exec.exe_script.len();
-        let on_error = |batch_id, result| async {
-            let set_state = SetState::default().cmd(None).result(batch_id, result);
-            if let Err(error) = self.send(set_state).await {
-                log::error!("Cannot update state during exec: {:?}", error);
-            }
-        };
-
         for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
-            let ctx = ExeCtx {
-                batch_id: exec.batch_id.clone(),
-                batch_size,
-                idx,
-                cmd,
-            };
-
             if let Ok(Some(_)) = control.try_recv() {
-                let cmd_result =
-                    ctx.convert_runtime_result(RuntimeCommandResult::error("interrupted"));
-                on_error(ctx.batch_id, cmd_result).await;
+                log::warn!("Batch {} execution aborted", exec.batch_id);
                 break;
             }
 
-            if let Err(error) = self
-                .exec_cmd(runtime.clone(), transfers.clone(), ctx.clone())
-                .await
-            {
-                log::warn!("Command interrupted: {}", error.to_string());
-                let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::error(&error));
-                on_error(ctx.batch_id, cmd_result).await;
+            let batch_id = exec.batch_id.clone();
+            let evt = RuntimeEvent::started(batch_id.clone(), idx, cmd.clone());
+            if let Err(e) = events.send(evt).await {
+                log::error!("Unable to report event: {:?}", e);
+            }
+
+            let runtime_cmd = ExecuteCommand {
+                batch_id: batch_id.clone(),
+                idx,
+                command: cmd.clone(),
+                tx: events.clone(),
+            };
+            let result = self
+                .exec_cmd(runtime_cmd, runtime.clone(), transfers.clone())
+                .await;
+
+            let (return_code, message) = match result {
+                Ok(_) => (0, None),
+                Err(ref err) => match err {
+                    Error::CommandExitCodeError(c) => (*c, Some(err.to_string())),
+                    _ => (-1, Some(err.to_string())),
+                },
+            };
+
+            let evt = RuntimeEvent::finished(batch_id.clone(), idx, return_code, message.clone());
+            if let Err(e) = events.send(evt).await {
+                log::error!("Unable to report event: {:?}", e);
+            }
+
+            if return_code != 0 {
+                let message = message.unwrap_or("reason unspecified".into());
+                log::warn!("Batch {} execution interrupted: {}", batch_id, message);
                 break;
             }
         }
@@ -205,36 +183,34 @@ impl<R: Runtime> RuntimeRef<R> {
 
     async fn exec_cmd(
         &self,
+        runtime_cmd: ExecuteCommand,
         runtime: Addr<R>,
         transfer_service: Addr<TransferService>,
-        ctx: ExeCtx,
     ) -> Result<()> {
-        match &ctx.cmd {
+        match &runtime_cmd.command {
             ExeScriptCommand::Sign {} => {
-                let batch_id = ctx.batch_id.clone();
+                let batch_id = runtime_cmd.batch_id.clone();
                 let signature = self.send(SignExeScript { batch_id }).await??;
-
                 let stdout = serde_json::to_string(&signature)?;
-                let cmd_result =
-                    ctx.convert_runtime_result(RuntimeCommandResult::ok_with_output(stdout));
-                let set_state = SetState::default().result(ctx.batch_id, cmd_result);
 
-                self.send(set_state).await?;
+                runtime_cmd
+                    .tx
+                    .clone()
+                    .send(RuntimeEvent::stdout(
+                        runtime_cmd.batch_id.clone(),
+                        runtime_cmd.idx,
+                        CommandOutput::Bin(stdout.into_bytes()),
+                    ))
+                    .await
+                    .map_err(|e| Error::runtime(format!("Unable to send stdout event: {:?}", e)))?;
+
                 return Ok(());
             }
             ExeScriptCommand::Terminate {} => {
-                log::warn!("Terminating running ExeScripts");
-
-                let exclude_batches = vec![ctx.batch_id.clone()];
+                log::debug!("Terminating running ExeScripts");
+                let exclude_batches = vec![runtime_cmd.batch_id];
                 self.send(Stop { exclude_batches }).await??;
-
-                let cmd_result = ctx.convert_runtime_result(RuntimeCommandResult::ok());
-                let set_state = SetState::default()
-                    .state(StatePair(State::Initialized, None))
-                    .cmd(None)
-                    .result(ctx.batch_id, cmd_result);
-
-                self.send(set_state).await?;
+                self.send(SetState::from(State::Initialized)).await?;
                 return Ok(());
             }
             _ => (),
@@ -248,17 +224,17 @@ impl<R: Runtime> RuntimeRef<R> {
             (State::New, _) | (State::Terminated, _) => {
                 return Err(StateError::InvalidState(state).into());
             }
-            (State::Initialized, _) => match &ctx.cmd {
+            (State::Initialized, _) => match &runtime_cmd.command {
                 ExeScriptCommand::Deploy { .. } => {
                     StatePair(State::Initialized, Some(State::Deployed))
                 }
                 _ => return Err(StateError::InvalidState(state).into()),
             },
-            (State::Deployed, _) => match &ctx.cmd {
+            (State::Deployed, _) => match &runtime_cmd.command {
                 ExeScriptCommand::Start { .. } => StatePair(State::Deployed, Some(State::Ready)),
                 _ => return Err(StateError::InvalidState(state).into()),
             },
-            (s, _) => match &ctx.cmd {
+            (s, _) => match &runtime_cmd.command {
                 ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
                     return Err(StateError::InvalidState(state).into());
                 }
@@ -266,16 +242,11 @@ impl<R: Runtime> RuntimeRef<R> {
             },
         };
 
-        log::info!("Executing command: {:?}", ctx.cmd);
+        log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.send(
-            SetState::default()
-                .state(state_pre)
-                .cmd(Some(ctx.cmd.clone())),
-        )
-        .await?;
+        self.send(SetState::from(state_pre.clone())).await?;
 
-        match &ctx.cmd {
+        match &runtime_cmd.command {
             ExeScriptCommand::Transfer { from, to, args } => {
                 let msg = TransferResource {
                     from: from.clone(),
@@ -292,29 +263,31 @@ impl<R: Runtime> RuntimeRef<R> {
             _ => (),
         }
 
-        let runtime_result = runtime.send(RuntimeCommand(ctx.cmd.clone())).await??;
+        let exit_code = runtime.send(runtime_cmd.clone()).await??;
+        if exit_code != 0 {
+            return Err(Error::CommandExitCodeError(exit_code));
+        }
 
-        if let ExeScriptCommand::Deploy { .. } = &ctx.cmd {
+        if let ExeScriptCommand::Deploy { .. } = &runtime_cmd.command {
             let mut runtime_mode = RuntimeMode::ProcessPerCommand;
-            if let Some(output) = &runtime_result.stdout {
-                let deployment = match deploy::DeployResult::from_bytes(output) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::error!("Deploy failed: {}", e);
-                        return Err(Error::CommandError(runtime_result));
-                    }
-                };
-                log::info!("Adding volumes: {:?}", deployment.vols);
+            let stdout = self
+                .send(GetStdOut {
+                    batch_id: runtime_cmd.batch_id.clone(),
+                    idx: runtime_cmd.idx,
+                })
+                .await?;
+
+            if let Some(output) = stdout {
+                let deployment = deploy::DeployResult::from_bytes(output).map_err(|e| {
+                    log::error!("Deploy failed: {}", e);
+                    Error::CommandError(e.to_string())
+                })?;
                 transfer_service
                     .send(AddVolumes::new(deployment.vols))
                     .await??;
                 runtime_mode = deployment.start_mode.into();
             }
             runtime.send(SetRuntimeMode(runtime_mode)).await??;
-        }
-
-        if let CommandResult::Error = runtime_result.result {
-            return Err(Error::CommandError(runtime_result));
         }
 
         let state_cur = self.send(GetState {}).await?.0;
@@ -326,13 +299,7 @@ impl<R: Runtime> RuntimeRef<R> {
             .into());
         }
 
-        let cmd_result = ctx.convert_runtime_result(runtime_result);
-        let state_post = SetState::default()
-            .state(state_pre.1.unwrap().into())
-            .cmd(None)
-            .result(ctx.batch_id, cmd_result);
-        self.send(state_post).await?;
-
+        self.send(SetState::from(state_pre.1.unwrap())).await?;
         Ok(())
     }
 }
@@ -341,8 +308,10 @@ impl<R: Runtime> Actor for ExeUnit<R> {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let addr = ctx.address();
+        let rx = self.events.rx.take().unwrap();
+        Self::add_stream(rx, ctx);
 
+        let addr = ctx.address();
         if let Some(activity_id) = &self.ctx.activity_id {
             let srv_id = activity::exeunit::bus_id(activity_id);
             actix_rpc::bind::<activity::GetState>(&srv_id, addr.clone().recipient());
@@ -360,6 +329,10 @@ impl<R: Runtime> Actor for ExeUnit<R> {
                 actix_rpc::bind::<activity::Exec>(&srv_id, addr.clone().recipient());
                 actix_rpc::bind::<activity::GetExecBatchResults>(&srv_id, addr.clone().recipient());
                 actix_rpc::bind::<activity::GetRunningCommand>(&srv_id, addr.clone().recipient());
+                actix_rpc::binds::<activity::StreamExecBatchResults>(
+                    &srv_id,
+                    addr.clone().recipient(),
+                );
             }
         }
 
@@ -417,6 +390,18 @@ impl ExeUnitContext {
     }
 }
 
+struct Channel<T> {
+    tx: mpsc::Sender<T>,
+    rx: Option<mpsc::Receiver<T>>,
+}
+
+impl<T> Default for Channel<T> {
+    fn default() -> Self {
+        let (tx, rx) = mpsc::channel(8);
+        Channel { tx, rx: Some(rx) }
+    }
+}
+
 pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: String, msg: M) {
     let result = ya_service_bus::typed::service(&url)
         .send(msg)
@@ -449,6 +434,7 @@ async fn report_usage<R: Runtime>(
             }
             Err(err) => match err {
                 Error::UsageLimitExceeded(info) => {
+                    log::warn!("Usage limit exceeded: {}", info);
                     exe_unit.do_send(Shutdown(ShutdownReason::UsageLimitExceeded(info)));
                 }
                 error => log::warn!("Unable to retrieve metrics: {:?}", error),
