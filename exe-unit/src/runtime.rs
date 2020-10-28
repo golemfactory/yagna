@@ -11,7 +11,7 @@ pub mod process;
 pub trait Runtime:
     Actor<Context = Context<Self>>
     + Handler<Shutdown>
-    + Handler<RuntimeCommand>
+    + Handler<ExecuteCommand>
     + Handler<SetTaskPackagePath>
     + Handler<SetRuntimeMode>
 {
