@@ -65,6 +65,21 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(db: &DbExecutor, driv
     }
 }
 
+pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
+    log::debug!("list_unlocked_identities");
+    let message = identity::List {};
+    let result = service(identity::BUS_ID).send(message).await.map_err(GenericError::new)?.map_err(GenericError::new)?;
+    let mut unlocked_list = vec!();
+
+    for node in result {
+        if !node.is_locked {
+            unlocked_list.push(node.node_id);
+        }
+    }
+    log::debug!("list_unlocked_identities completed. result={:?}", unlocked_list);
+    Ok(unlocked_list)
+}
+
 pub async fn register_account(
     driver: &(dyn PaymentDriver),
     address: &str,

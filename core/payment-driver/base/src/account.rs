@@ -65,7 +65,7 @@ impl Accounts {
         }
     }
 
-    fn add_account(&mut self, account: NodeId) {
+    pub fn add_account(&mut self, account: NodeId) {
         self.accounts.insert(account.to_string(), account);
         log::info!("Account: {:?} is unlocked", account.to_string());
     }

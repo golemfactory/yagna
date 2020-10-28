@@ -34,6 +34,20 @@ impl ZksyncDriver {
             active_accounts: Accounts::new_rc(),
         }
     }
+    pub async fn load_active_accounts(&self) {
+        log::debug!("load_active_accounts");
+        let mut accounts = self.active_accounts.borrow_mut();
+        let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
+        for account in unlocked_accounts {
+            log::debug!("account={}",account);
+            accounts.add_account(account)
+        }
+    }
+
+    fn is_account_active(&self, address: &str) -> bool {
+        self.active_accounts.as_ref().borrow().get_node_id(address).is_some()
+    }
+
 }
 
 #[async_trait(?Send)]
@@ -84,10 +98,15 @@ impl PaymentDriver for ZksyncDriver {
 
     async fn init(&self, _db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
+        let address = msg.address().clone();
+
+        // TODO: payment_api fails to start due to provider account not unlocked
+        // if !self.is_account_active(&address) {
+        //     return Err(GenericError::new("Can not init, account not active"));
+        // }
 
         wallet::init_wallet(&msg).await?;
 
-        let address = msg.address().clone();
         let mode = msg.mode();
         bus::register_account(self, &address, mode).await?;
 
@@ -108,6 +127,10 @@ impl PaymentDriver for ZksyncDriver {
         msg: SchedulePayment,
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
+
+        if !self.is_account_active(&msg.sender().clone()) {
+            return Err(GenericError::new("Can not init, account not active"));
+        }
 
         let date = Utc::now();
         let details = driver_utils::to_payment_details(msg, Some(date));
