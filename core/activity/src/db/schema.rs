@@ -51,10 +51,33 @@ table! {
     }
 }
 
+table! {
+    runtime_event (id) {
+        id -> Integer,
+        activity_id -> Integer,
+        batch_id -> Text,
+        index -> Integer,
+        timestamp -> Timestamp,
+        type_id -> Integer,
+        command -> Nullable<Text>,
+        return_code -> Nullable<Integer>,
+        message -> Nullable<Text>,
+    }
+}
+
+table! {
+    runtime_event_type (id) {
+        id -> Integer,
+        name -> Text,
+    }
+}
+
 joinable!(activity -> activity_state (state_id));
 joinable!(activity -> activity_usage (usage_id));
 joinable!(activity_event -> activity (activity_id));
 joinable!(activity_event -> activity_event_type (event_type_id));
+joinable!(runtime_event -> activity (activity_id));
+joinable!(runtime_event -> runtime_event_type (type_id));
 
 allow_tables_to_appear_in_same_query!(
     activity,
@@ -63,4 +86,6 @@ allow_tables_to_appear_in_same_query!(
     activity_event_type,
     activity_state,
     activity_usage,
+    runtime_event,
+    runtime_event_type,
 );
