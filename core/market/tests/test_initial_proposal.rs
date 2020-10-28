@@ -356,6 +356,52 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// Run two query events in the same time.
+/// The same event shouldn't be returned twice.
+#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_unsubscribe_demand_while_query_events_for_other() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let identity1 = network.get_default_id("Node-1");
+
+    let demand_id1 = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await?;
+    let demand_id2 = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await?;
+
+    let demand_id1_copy = demand_id1.clone();
+    let market_copy = market1.clone();
+
+    let query = tokio::spawn(async move {
+        let events = market_copy
+            .query_events(&demand_id1_copy, 1.2, Some(5))
+            .await?;
+        Result::<_, anyhow::Error>::Ok(events)
+    });
+
+    // Wait for a while, and unsubscribe second demand and subscribe first offer.
+    tokio::time::delay_for(Duration::from_millis(50)).await;
+    market1.unsubscribe_demand(&demand_id2, &identity1).await?;
+    market1.subscribe_offer(&sample_offer(), &identity1).await?;
+
+    // Query events for first demand should return single Proposal.
+    let events = tokio::time::timeout(Duration::from_millis(1250), query).await???;
+    assert_eq!(events.len(), 1);
+
+    // We expect, there are no events left.
+    let events = market1.query_events(&demand_id1, 0.1, Some(5)).await?;
+    assert_eq!(events.len(), 0);
+    Ok(())
+}
+
 /// Requestor gets initial proposal from market and counters it. Proposal should be
 /// propagated to Provider node and added to events.
 /// Both Offer and Demand are on the same node.
