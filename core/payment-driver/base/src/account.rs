@@ -41,6 +41,7 @@ impl Accounts {
     }
 
     pub fn handle_event(&mut self, msg: IdentityEvent) {
+        log::debug!("handle_event: {:?}", &msg);
         match msg {
             IdentityEvent::AccountLocked { identity } => self.remove_account(identity),
             IdentityEvent::AccountUnlocked { identity } => self.add_account(identity),

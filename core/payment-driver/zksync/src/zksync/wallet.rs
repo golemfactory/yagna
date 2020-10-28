@@ -15,10 +15,7 @@ use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
-use ya_payment_driver::{
-    driver::{GenericError, Init, PaymentDetails},
-    model::AccountMode,
-};
+use ya_payment_driver::model::{AccountMode, GenericError, Init, PaymentDetails};
 
 // Local uses
 use crate::{

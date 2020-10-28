@@ -9,15 +9,15 @@ use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityEr
 
 // Local uses
 use crate::account::AccountsRefMut;
+use crate::model::{
+    Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
+    SchedulePayment, VerifyPayment,
+};
 
 // Public revealed uses, required to implement this trait
 pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
 pub use ya_client_model::NodeId;
-pub use ya_core_model::driver::{
-    Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
-    SchedulePayment, VerifyPayment,
-};
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {

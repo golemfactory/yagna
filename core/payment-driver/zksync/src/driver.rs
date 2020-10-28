@@ -11,9 +11,10 @@ use std::sync::Arc;
 use ya_payment_driver::{
     account::{AccountsRc, AccountsRefMut},
     bus,
-    driver::{
-        async_trait, Ack, BigDecimal, GenericError, GetAccountBalance, GetTransactionBalance, Init,
-        PaymentDetails, PaymentDriver, SchedulePayment, VerifyPayment,
+    driver::{async_trait, BigDecimal, PaymentDriver},
+    model::{
+        Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
+        SchedulePayment, VerifyPayment,
     },
     utils as driver_utils,
 };
