@@ -4390,31 +4390,13 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
-dependencies = [
- "rand 0.6.5",
- "secp256k1-sys 0.1.2",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
- "secp256k1-sys 0.3.0",
+ "rand 0.6.5",
+ "secp256k1-sys",
  "serde",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab2c26f0d3552a0f12e639ae8a64afc2e3db9c52fe32f5fc6c289d38519f220"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -6082,6 +6064,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "anyhow",
+ "bytes 0.5.6",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -6092,6 +6075,7 @@ dependencies = [
  "libsqlite3-sys",
  "log 0.4.11",
  "metrics",
+ "mime 0.3.16",
  "r2d2",
  "serde",
  "serde_json",
@@ -6149,7 +6133,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3#e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=442d2dc64a11231dd3a931abe512ad858f998605#442d2dc64a11231dd3a931abe512ad858f998605"
 dependencies = [
  "awc",
  "backtrace",
@@ -6160,6 +6144,7 @@ dependencies = [
  "futures 0.3.6",
  "hex",
  "log 0.4.11",
+ "mime 0.3.16",
  "rand 0.6.5",
  "serde",
  "serde_json",
@@ -6185,7 +6170,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3#e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=442d2dc64a11231dd3a931abe512ad858f998605#442d2dc64a11231dd3a931abe512ad858f998605"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -6281,7 +6266,7 @@ dependencies = [
  "rand 0.6.5",
  "regex",
  "reqwest",
- "secp256k1 0.17.2",
+ "secp256k1 0.19.0",
  "serde",
  "serde_json",
  "serde_yaml",

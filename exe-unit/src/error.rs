@@ -2,7 +2,6 @@ use ya_agreement_utils::agreement;
 use ya_core_model::activity::RpcMessageError as RpcError;
 pub use ya_transfer::error::Error as TransferError;
 
-use crate::message::RuntimeCommandResult;
 use crate::metrics::error::MetricError;
 use crate::state::StateError;
 use hex::FromHexError;
@@ -47,8 +46,10 @@ pub enum Error {
     JsonError(#[from] serde_json::Error),
     #[error("Gsb error: {0}")]
     GsbError(String),
-    #[error("ExeScript command error: {0:?}")]
-    CommandError(RuntimeCommandResult),
+    #[error("ExeScript command error: {0}")]
+    CommandError(String),
+    #[error("ExeScript command exited with code {0}")]
+    CommandExitCodeError(i32),
     #[error("Local service error: {0}")]
     LocalServiceError(#[from] LocalServiceError),
     #[error("Remote service error: {0}")]
@@ -75,6 +76,10 @@ impl Error {
         LocalServiceError: From<E>,
     {
         Error::from(LocalServiceError::from(err))
+    }
+
+    pub fn runtime(err: impl ToString) -> Self {
+        Error::RuntimeError(err.to_string())
     }
 }
 
@@ -120,6 +125,7 @@ impl From<Error> for RpcError {
             Error::RuntimeError(e) => RpcError::Activity(e),
             Error::AgreementError(e) => RpcError::Service(e.to_string()),
             Error::CommandError(_) => RpcError::Service(e.to_string()),
+            Error::CommandExitCodeError(_) => RpcError::Service(e.to_string()),
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
