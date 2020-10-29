@@ -17,7 +17,7 @@
 */
 
 // External crates
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -29,7 +29,6 @@ use crate::driver::NodeId;
 
 // Public types
 pub type AccountsRc = Rc<RefCell<Accounts>>;
-pub type AccountsRefMut<'a> = RefMut<'a, Accounts>;
 
 pub struct Accounts {
     accounts: HashMap<String, NodeId>,

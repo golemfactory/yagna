@@ -8,9 +8,9 @@ use uuid::Uuid;
 
 // Workspace uses
 use ya_payment_driver::{
-    account::{AccountsRc, AccountsRefMut},
+    account::AccountsRc,
     bus,
-    driver::{async_trait, BigDecimal, PaymentDriver},
+    driver::{async_trait, BigDecimal, PaymentDriver, IdentityError, IdentityEvent},
     model::{
         Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
         SchedulePayment, VerifyPayment,
@@ -35,9 +35,14 @@ impl ZksyncDriver {
 
 #[async_trait(?Send)]
 impl PaymentDriver for ZksyncDriver {
-    // Accounts are stored on ZksyncDriver, but updated by PaymentDriver's shared logic
-    fn get_accounts(&self) -> AccountsRefMut {
-        self.active_accounts.borrow_mut()
+    async fn account_event(
+        &self,
+        _db: (),
+        _caller: String,
+        msg: IdentityEvent,
+    ) -> Result<(), IdentityError> {
+        self.active_accounts.borrow_mut().handle_event(msg);
+        Ok(())
     }
 
     async fn get_account_balance(

@@ -5,10 +5,8 @@
 // External crates
 
 // Workspace uses
-use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityError};
 
 // Local uses
-use crate::account::AccountsRefMut;
 use crate::model::{
     Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
     SchedulePayment, VerifyPayment,
@@ -18,10 +16,17 @@ use crate::model::{
 pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
 pub use ya_client_model::NodeId;
+pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityError};
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
-    // -- Required to implement
+    async fn account_event(
+        &self,
+        _db: (),
+        _caller: String,
+        msg: IdentityEvent,
+    ) -> Result<(), IdentityError>;
+
     async fn get_account_balance(
         &self,
         db: (),
@@ -29,8 +34,6 @@ pub trait PaymentDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError>;
 
-    // used to update the active accounts, see `accounts.rs` for more details
-    fn get_accounts(&self) -> AccountsRefMut;
     // used by bus to bind service
     fn get_name(&self) -> String;
     fn get_platform(&self) -> String;
@@ -57,16 +60,4 @@ pub trait PaymentDriver {
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
-
-    // -- Shared functions
-
-    async fn account_event(
-        &self,
-        _db: (),
-        _caller: String,
-        msg: IdentityEvent,
-    ) -> Result<(), IdentityError> {
-        self.get_accounts().handle_event(msg);
-        Ok(())
-    }
 }
