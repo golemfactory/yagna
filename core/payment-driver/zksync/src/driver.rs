@@ -4,16 +4,18 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
+use chrono::Utc;
+use serde_json;
 use uuid::Uuid;
 
 // Workspace uses
 use ya_payment_driver::{
     account::AccountsRc,
     bus,
-    driver::{async_trait, BigDecimal, PaymentDriver, IdentityError, IdentityEvent},
+    driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, PaymentDriver},
     model::{
-        Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
-        SchedulePayment, VerifyPayment,
+        Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentConfirmation,
+        PaymentDetails, SchedulePayment, VerifyPayment,
     },
     utils as driver_utils,
 };
@@ -106,8 +108,9 @@ impl PaymentDriver for ZksyncDriver {
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
 
-        let details = driver_utils::to_payment_details(msg);
-        let confirmation = driver_utils::to_confirmation(&details)?;
+        let date = Utc::now();
+        let details = driver_utils::to_payment_details(msg, Some(date));
+        let confirmation = to_confirmation(&details)?;
         // TODO: move to database / background task
         wallet::make_transfer(&details).await?;
         let order_id = Uuid::new_v4().to_string();
@@ -130,7 +133,21 @@ impl PaymentDriver for ZksyncDriver {
         log::debug!("verify_payment: {:?}", msg);
         // todo!()
         // wallet::verify_transfer(msg).await?
-        let details = driver_utils::from_confirmation(msg.confirmation())?;
+        let details = from_confirmation(msg.confirmation())?;
         Ok(details)
     }
+}
+
+// Used by the DummyDriver to have a 2 way conversion between details & confirmation
+fn to_confirmation(details: &PaymentDetails) -> Result<Vec<u8>, GenericError> {
+    Ok(serde_json::to_string(details)
+        .map_err(GenericError::new)?
+        .into_bytes())
+}
+
+fn from_confirmation(confirmation: PaymentConfirmation) -> Result<PaymentDetails, GenericError> {
+    let json_str =
+        std::str::from_utf8(confirmation.confirmation.as_slice()).map_err(GenericError::new)?;
+    let details = serde_json::from_str(&json_str).map_err(GenericError::new)?;
+    Ok(details)
 }
