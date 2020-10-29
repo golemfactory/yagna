@@ -422,17 +422,7 @@ async fn run_step(
         let addr = addr.clone();
         async move {
             match market_api.collect(&id, Some(2.0), Some(2)).await {
-                Err(error) => {
-                    log::error!("Can't query market events. Error: {}", error);
-                    match error {
-                        ya_client::error::Error::HttpStatusCode { code, .. } => {
-                            if code.as_u16() == 404 {
-                                let _ = addr.send(ReSubscribe(id.clone())).await;
-                            }
-                        }
-                        _ => (),
-                    }
-                }
+                Err(error) => log::error!("Can't query market events. Error: {}", error),
                 Ok(events) => {
                     ProviderMarket::dispatch_events(
                         events,
@@ -447,66 +437,6 @@ async fn run_step(
     }))
     .await;
     Ok(())
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-struct ReSubscribe(String);
-
-impl Handler<ReSubscribe> for ProviderMarket {
-    type Result = ();
-
-    fn handle(&mut self, msg: ReSubscribe, ctx: &mut Self::Context) -> Self::Result {
-        let subscription_id = msg.0;
-        if let Some(offer_subscription) = self.offer_subscriptions.get(&subscription_id) {
-            let offer = offer_subscription.offer.clone();
-            let market_api = self.market_api.clone();
-            let _ = ctx.spawn(
-                async move {
-                    match market_api.subscribe(&offer).await {
-                        Ok(new_subscription_id) => Some((subscription_id, new_subscription_id)),
-                        Err(e) => {
-                            log::error!("unable to resubscribe {}: {}", subscription_id, e);
-                            None
-                        }
-                    }
-                }
-                .into_actor(self)
-                .then(|r, act, _ctx| {
-                    let market_api = act.market_api.clone();
-                    let to_unsubscribe = if let Some((old_subscription_id, new_subscription_id)) = r
-                    {
-                        if let Some(mut offer_subscription) =
-                            act.offer_subscriptions.remove(&old_subscription_id)
-                        {
-                            offer_subscription.subscription_id = new_subscription_id.clone();
-                            log::info!(
-                                "offer [{}] resubscribed as [{}]",
-                                old_subscription_id,
-                                new_subscription_id
-                            );
-                            let _ = act
-                                .offer_subscriptions
-                                .insert(new_subscription_id, offer_subscription);
-                            None
-                        } else {
-                            Some(new_subscription_id)
-                        }
-                    } else {
-                        None
-                    };
-                    async move {
-                        if let Some(new_subscription_id) = to_unsubscribe {
-                            if let Err(e) = market_api.unsubscribe(&new_subscription_id).await {
-                                log::warn!("fail to unsubscribe: {}: {}", new_subscription_id, e);
-                            }
-                        }
-                    }
-                    .into_actor(act)
-                }),
-            );
-        }
-    }
 }
 
 // =========================================== //
