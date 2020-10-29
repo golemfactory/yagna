@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
 use ya_client_model::market::{Agreement, Offer, Proposal, ProviderEvent};
 use ya_utils_actix::{
@@ -17,11 +18,8 @@ use ya_utils_actix::{
 use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, AgreementResult, Negotiator, ProposalResponse};
 use super::Preset;
-use crate::task_manager::{AgreementBroken, AgreementClosed};
-
-// Temporrary
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
-use ya_agreement_utils::{AgreementView, OfferDefinition};
+use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // =========================================== //
 // Public exposed messages
@@ -62,11 +60,11 @@ pub struct AgreementApproved {
 // Internal messages
 // =========================================== //
 
-/// Send when subscribing to market will be finished.
+/// Sent when subscribing offer to the market will be finished.
 #[rtype(result = "Result<()>")]
 #[derive(Debug, Clone, Message)]
-struct OfferSubscription {
-    subscription_id: String,
+struct Subscription {
+    id: String,
     preset: Preset,
     offer: Offer,
 }
@@ -74,21 +72,21 @@ struct OfferSubscription {
 #[derive(Message)]
 #[rtype(result = "Result<ProposalResponse>")]
 struct GotProposal {
-    subscription: OfferSubscription,
+    subscription: Subscription,
     proposal: Proposal,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<AgreementResponse>")]
 struct GotAgreement {
-    subscription: OfferSubscription,
+    subscription: Subscription,
     agreement: AgreementView,
 }
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 struct AgreementFinalized {
-    agreement_id: String,
+    id: String,
     result: AgreementResult,
 }
 
@@ -97,13 +95,13 @@ struct AgreementFinalized {
 // =========================================== //
 
 /// Manages market api communication and forwards proposal to implementation of market strategy.
-// Outputing empty string for logfn macro purposes
+// Outputting empty string for logfn macro purposes
 #[derive(Display)]
 #[display(fmt = "")]
 pub struct ProviderMarket {
     negotiator: Box<dyn Negotiator>,
-    market_api: Arc<MarketProviderApi>,
-    offer_subscriptions: HashMap<String, OfferSubscription>,
+    api: Arc<MarketProviderApi>,
+    subscriptions: HashMap<String, Subscription>,
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<AgreementApproved>,
@@ -114,64 +112,54 @@ impl ProviderMarket {
     // Initialization
     // =========================================== //
 
-    pub fn new(market_api: MarketProviderApi, negotiator_type: &str) -> ProviderMarket {
+    pub fn new(api: MarketProviderApi, negotiator_type: &str) -> ProviderMarket {
         return ProviderMarket {
-            market_api: Arc::new(market_api),
+            api: Arc::new(api),
             negotiator: create_negotiator(negotiator_type),
-            offer_subscriptions: HashMap::new(),
+            subscriptions: HashMap::new(),
             agreement_signed_signal: SignalSlot::<AgreementApproved>::new(),
         };
     }
 
-    async fn create_offer(
+    async fn subscribe(
         myself: Addr<ProviderMarket>,
-        market_api: Arc<MarketProviderApi>,
+        api: Arc<MarketProviderApi>,
         offer: Offer,
         preset: Preset,
     ) -> Result<()> {
-        let subscription_id = market_api.subscribe(&offer).await?;
-        let sub = OfferSubscription {
-            subscription_id,
-            offer,
-            preset,
-        };
+        let id = api.subscribe(&offer).await?;
 
-        let _ = myself.send(sub).await?;
+        let _ = myself.send(Subscription { id, offer, preset }).await?;
         Ok(())
     }
 
-    fn on_offer_subscribed(
-        &mut self,
-        msg: OfferSubscription,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
+    fn on_subscription(&mut self, msg: Subscription, _ctx: &mut Context<Self>) -> Result<()> {
         log::info!(
             "Subscribed offer. Subscription id [{}], preset [{}].",
-            &msg.subscription_id,
+            &msg.id,
             &msg.preset.name
         );
 
-        self.offer_subscriptions
-            .insert(msg.subscription_id.clone(), msg);
+        self.subscriptions.insert(msg.id.clone(), msg);
         Ok(())
     }
 
-    async fn unsubscribe(
-        market_api: Arc<MarketProviderApi>,
+    async fn unsubscribe_all(
+        api: Arc<MarketProviderApi>,
         subscriptions: Vec<String>,
     ) -> Result<()> {
         for subscription in subscriptions.iter() {
             log::info!("Unsubscribing: {}", subscription);
-            market_api.unsubscribe(&subscription).await?;
+            api.unsubscribe(&subscription).await?;
         }
         Ok(())
     }
 
     async fn dispatch_events(
         events: Vec<ProviderEvent>,
-        addr: Addr<ProviderMarket>,
-        market_api: Arc<MarketProviderApi>,
-        subscription: OfferSubscription,
+        myself: Addr<ProviderMarket>,
+        api: Arc<MarketProviderApi>,
+        subscription: Subscription,
     ) {
         if events.len() == 0 {
             return;
@@ -186,19 +174,14 @@ impl ProviderMarket {
         let dispatch_futures = events
             .iter()
             .map(|event| {
-                ProviderMarket::dispatch_event(
-                    addr.clone(),
-                    market_api.clone(),
-                    subscription.clone(),
-                    event,
-                )
-                .map_err(|error| {
-                    log::error!(
-                        "Error processing event: {}, subscription_id: {}.",
-                        error,
-                        subscription.subscription_id
-                    );
-                })
+                Self::dispatch_event(myself.clone(), api.clone(), subscription.clone(), event)
+                    .map_err(|error| {
+                        log::error!(
+                            "Error processing event: {}, subscription_id: {}.",
+                            error,
+                            subscription.id
+                        );
+                    })
             })
             .collect::<Vec<_>>();
 
@@ -207,16 +190,16 @@ impl ProviderMarket {
 
     async fn dispatch_event(
         myself: Addr<ProviderMarket>,
-        market_api: Arc<MarketProviderApi>,
-        subscription: OfferSubscription,
+        api: Arc<MarketProviderApi>,
+        subscription: Subscription,
         event: &ProviderEvent,
     ) -> Result<()> {
         match event {
             ProviderEvent::ProposalEvent { proposal, .. } => {
-                ProviderMarket::process_proposal(myself, market_api, subscription, proposal).await
+                Self::process_proposal(myself, api, subscription, proposal).await
             }
             ProviderEvent::AgreementEvent { agreement, .. } => {
-                ProviderMarket::process_agreement(myself, market_api, subscription, agreement).await
+                Self::process_agreement(myself, api, subscription, agreement).await
             }
             _ => unimplemented!(),
         }
@@ -224,12 +207,12 @@ impl ProviderMarket {
 
     async fn process_proposal(
         myself: Addr<ProviderMarket>,
-        market_api: Arc<MarketProviderApi>,
-        subscription: OfferSubscription,
+        api: Arc<MarketProviderApi>,
+        subscription: Subscription,
         demand: &Proposal,
     ) -> Result<()> {
         let proposal_id = demand.proposal_id()?;
-        let subscription_id = subscription.subscription_id.clone();
+        let subscription_id = subscription.id.clone();
         let offer = subscription.offer.clone();
 
         log::info!(
@@ -245,23 +228,17 @@ impl ProviderMarket {
         {
             Ok(action) => match action {
                 ProposalResponse::CounterProposal { offer } => {
-                    market_api
-                        .counter_proposal(&offer, &subscription_id)
-                        .await?;
+                    api.counter_proposal(&offer, &subscription_id).await?;
                 }
                 ProposalResponse::AcceptProposal => {
                     let offer = demand.counter_offer(offer)?;
-                    market_api
-                        .counter_proposal(&offer, &subscription_id)
-                        .await?;
+                    api.counter_proposal(&offer, &subscription_id).await?;
                 }
                 ProposalResponse::IgnoreProposal => {
                     log::info!("Ignoring proposal {:?}", proposal_id)
                 }
                 ProposalResponse::RejectProposal => {
-                    market_api
-                        .reject_proposal(&subscription_id, proposal_id)
-                        .await?;
+                    api.reject_proposal(&subscription_id, proposal_id).await?;
                 }
             },
             Err(error) => log::error!(
@@ -275,8 +252,8 @@ impl ProviderMarket {
 
     async fn process_agreement(
         myself: Addr<ProviderMarket>,
-        market_api: Arc<MarketProviderApi>,
-        subscription: OfferSubscription,
+        api: Arc<MarketProviderApi>,
+        subscription: Subscription,
         agreement: &Agreement,
     ) -> Result<()> {
         log::info!(
@@ -284,14 +261,13 @@ impl ProviderMarket {
             agreement.agreement_id,
             agreement
                 .demand
-                .requestor_id
-                .as_ref()
+                .requestor_id()
                 .unwrap_or(&"None".to_string()),
             subscription.preset.name,
         );
 
         let agreement = AgreementView::try_from(agreement)
-            .map_err(|error| anyhow!("Invalid agreement. Error: {}", error))?;
+            .map_err(|e| anyhow!("Invalid agreement. Error: {}", e))?;
 
         let response = myself
             .send(GotAgreement::new(subscription, agreement.clone()))
@@ -301,14 +277,14 @@ impl ProviderMarket {
                 AgreementResponse::ApproveAgreement => {
                     // TODO: We should retry approval, but only a few times, than we should
                     //       give up since it's better to take another agreement.
-                    let result = market_api
+                    let result = api
                         .approve_agreement(&agreement.agreement_id, Some(10.0))
                         .await;
 
                     if let Err(error) = result {
                         // Notify negotiator, that we couldn't approve.
                         let msg = AgreementFinalized {
-                            agreement_id: agreement.agreement_id.clone(),
+                            id: agreement.agreement_id.clone(),
                             result: AgreementResult::ApprovalFailed,
                         };
                         let _ = myself.send(msg).await;
@@ -328,7 +304,7 @@ impl ProviderMarket {
                     let _ = myself.send(message).await?;
                 }
                 AgreementResponse::RejectAgreement => {
-                    market_api.reject_agreement(&agreement.agreement_id).await?;
+                    api.reject_agreement(&agreement.agreement_id).await?;
                 }
             },
             Err(error) => log::error!(
@@ -413,24 +389,18 @@ impl ProviderMarket {
 
 // Called time-to-time to read events.
 async fn run_step(
-    addr: Addr<ProviderMarket>,
-    market_api: Arc<MarketProviderApi>,
-    subscriptions: HashMap<String, OfferSubscription>,
+    market: Addr<ProviderMarket>,
+    api: Arc<MarketProviderApi>,
+    subscriptions: HashMap<String, Subscription>,
 ) -> Result<()> {
-    let _ = future::join_all(subscriptions.into_iter().map(move |(id, subscription)| {
-        let market_api = market_api.clone();
-        let addr = addr.clone();
+    let _ = future::join_all(subscriptions.into_iter().map(move |(id, subs)| {
+        let api = api.clone();
+        let market = market.clone();
         async move {
-            match market_api.collect(&id, Some(2.0), Some(2)).await {
+            match api.collect(&id, Some(2.0), Some(2)).await {
                 Err(error) => log::error!("Can't query market events. Error: {}", error),
                 Ok(events) => {
-                    ProviderMarket::dispatch_events(
-                        events,
-                        addr.clone(),
-                        market_api.clone(),
-                        subscription,
-                    )
-                    .await
+                    ProviderMarket::dispatch_events(events, market.clone(), api.clone(), subs).await
                 }
             }
         }
@@ -451,10 +421,10 @@ impl Handler<UpdateMarket> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, _msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
-        let client = self.market_api.clone();
+        let client = self.api.clone();
         let myself = ctx.address();
 
-        let fut = run_step(myself, client, self.offer_subscriptions.clone());
+        let fut = run_step(myself, client, self.subscriptions.clone());
         ActorResponse::r#async(fut.into_actor(self))
     }
 }
@@ -483,7 +453,7 @@ impl Handler<CreateOffer> for ProviderMarket {
         };
 
         let myself = ctx.address();
-        let client = self.market_api.clone();
+        let client = self.api.clone();
 
         log::debug!(
             "Offer created: {}",
@@ -494,7 +464,7 @@ impl Handler<CreateOffer> for ProviderMarket {
 
         let future = async move {
             let preset_name = msg.preset.name.clone();
-            ProviderMarket::create_offer(myself, client, offer, msg.preset)
+            Self::subscribe(myself, client, offer, msg.preset)
                 .await
                 .map_err(|error| {
                     log::error!(
@@ -514,13 +484,10 @@ impl Handler<AgreementFinalized> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: AgreementFinalized, ctx: &mut Context<Self>) -> Self::Result {
-        if let Err(error) = self
-            .negotiator
-            .agreement_finalized(&msg.agreement_id, msg.result)
-        {
+        if let Err(error) = self.negotiator.agreement_finalized(&msg.id, msg.result) {
             log::warn!(
                 "Negotiator failed while handling agreement [{}] finalize. Error: {}",
-                &msg.agreement_id,
+                &msg.id,
                 error,
             );
         }
@@ -528,13 +495,12 @@ impl Handler<AgreementFinalized> for ProviderMarket {
         log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
 
         let myself = ctx.address();
-        let subscriptions = std::mem::replace(&mut self.offer_subscriptions, HashMap::new());
+        let subscriptions = std::mem::replace(&mut self.subscriptions, HashMap::new());
         let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
-        let market_api = self.market_api.clone();
+        let api = self.api.clone();
 
         let fut = async move {
-            if let Err(e) = ProviderMarket::unsubscribe(market_api.clone(), subscription_ids).await
-            {
+            if let Err(e) = Self::unsubscribe_all(api.clone(), subscription_ids).await {
                 log::warn!("Failed to unsubscribe offers from the market: {:?}", e);
             }
 
@@ -543,9 +509,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
                 let preset = sub.preset;
                 let preset_name = preset.name.clone();
 
-                if let Err(e) =
-                    Self::create_offer(myself.clone(), market_api.clone(), offer, preset).await
-                {
+                if let Err(e) = Self::subscribe(myself.clone(), api.clone(), offer, preset).await {
                     log::warn!(
                         "Unable to create subscription for preset {:?}: {:?}",
                         preset_name,
@@ -590,14 +554,14 @@ impl Handler<Unsubscribe> for ProviderMarket {
         let subscriptions = match msg.0 {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
-                std::mem::replace(&mut self.offer_subscriptions, HashMap::new())
+                std::mem::replace(&mut self.subscriptions, HashMap::new())
                     .into_iter()
                     .map(|(k, _)| k)
                     .collect::<Vec<_>>()
             }
             OfferKind::WithPresets(preset_names) => {
                 let subs = self
-                    .offer_subscriptions
+                    .subscriptions
                     .iter()
                     .filter_map(|(n, sub)| match preset_names.contains(&sub.preset.name) {
                         true => Some(n.clone()),
@@ -605,21 +569,21 @@ impl Handler<Unsubscribe> for ProviderMarket {
                     })
                     .collect::<Vec<_>>();
                 subs.iter().for_each(|s| {
-                    self.offer_subscriptions.remove(s);
+                    self.subscriptions.remove(s);
                 });
 
                 log::info!("Unsubscribing {} active offer(s)", subs.len());
                 subs
             }
         };
-        let client = self.market_api.clone();
-        ActorResponse::r#async(ProviderMarket::unsubscribe(client, subscriptions).into_actor(self))
+        let client = self.api.clone();
+        ActorResponse::r#async(Self::unsubscribe_all(client, subscriptions).into_actor(self))
     }
 }
 
 forward_actix_handler!(ProviderMarket, GotProposal, on_proposal);
 forward_actix_handler!(ProviderMarket, GotAgreement, on_agreement);
-forward_actix_handler!(ProviderMarket, OfferSubscription, on_offer_subscribed);
+forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
 forward_actix_handler!(ProviderMarket, Subscribe<AgreementApproved>, on_subscribe);
 forward_actix_handler!(ProviderMarket, AgreementApproved, on_agreement_approved);
 
@@ -643,7 +607,7 @@ fn create_negotiator(name: &str) -> Box<dyn Negotiator> {
 // =========================================== //
 
 impl GotProposal {
-    fn new(subscription: OfferSubscription, proposal: Proposal) -> Self {
+    fn new(subscription: Subscription, proposal: Proposal) -> Self {
         Self {
             subscription,
             proposal,
@@ -652,7 +616,7 @@ impl GotProposal {
 }
 
 impl GotAgreement {
-    fn new(subscription: OfferSubscription, agreement: AgreementView) -> Self {
+    fn new(subscription: Subscription, agreement: AgreementView) -> Self {
         Self {
             subscription,
             agreement,
@@ -663,7 +627,7 @@ impl GotAgreement {
 impl From<AgreementBroken> for AgreementFinalized {
     fn from(msg: AgreementBroken) -> Self {
         AgreementFinalized {
-            agreement_id: msg.agreement_id,
+            id: msg.agreement_id,
             result: AgreementResult::Broken { reason: msg.reason },
         }
     }
@@ -672,7 +636,7 @@ impl From<AgreementBroken> for AgreementFinalized {
 impl From<AgreementClosed> for AgreementFinalized {
     fn from(msg: AgreementClosed) -> Self {
         AgreementFinalized {
-            agreement_id: msg.agreement_id,
+            id: msg.agreement_id,
             result: AgreementResult::Closed,
         }
     }
