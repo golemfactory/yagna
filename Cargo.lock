@@ -2599,21 +2599,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonwebtoken"
-version = "6.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a81d1812d731546d2614737bee92aa071d37e9afa1409bc374da9e5e70e70b22"
-dependencies = [
- "base64 0.10.1",
- "chrono",
- "ring",
- "serde",
- "serde_derive",
- "serde_json",
- "untrusted",
-]
-
-[[package]]
 name = "keccak"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6375,8 +6360,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-market-decentralized"
-version = "0.1.0"
+name = "ya-market"
+version = "0.2.0"
 dependencies = [
  "actix-http",
  "actix-rt",
@@ -6412,7 +6397,7 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client 0.4.0",
  "ya-core-model 0.2.1",
- "ya-market-decentralized",
+ "ya-market",
  "ya-market-resolver",
  "ya-net",
  "ya-persistence",
@@ -6421,39 +6406,6 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-std-utils",
-]
-
-[[package]]
-name = "ya-market-forwarding"
-version = "0.1.0"
-dependencies = [
- "actix-rt",
- "actix-web",
- "anyhow",
- "awc",
- "chrono",
- "diesel",
- "diesel_migrations",
- "env_logger 0.7.1",
- "futures 0.3.6",
- "jsonwebtoken",
- "lazy_static",
- "libsqlite3-sys",
- "log 0.4.11",
- "r2d2",
- "serde",
- "serde_json",
- "thiserror",
- "tokio 0.2.22",
- "url 2.1.1",
- "ya-client 0.4.0",
- "ya-core-model 0.2.1",
- "ya-net",
- "ya-persistence",
- "ya-service-api",
- "ya-service-api-interfaces",
- "ya-service-api-web",
- "ya-service-bus",
 ]
 
 [[package]]
@@ -6966,8 +6918,7 @@ dependencies = [
  "ya-dummy-driver",
  "ya-gnt-driver",
  "ya-identity",
- "ya-market-decentralized",
- "ya-market-forwarding",
+ "ya-market",
  "ya-metrics",
  "ya-net",
  "ya-payment",

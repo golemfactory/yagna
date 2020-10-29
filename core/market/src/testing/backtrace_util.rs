@@ -13,9 +13,7 @@ fn adjust_backtrace_level(frames: &[backtrace::BacktraceFrame]) -> Option<usize>
     for frame in frames.iter() {
         if let Some(name) = get_innermost_backtrace_symbol(frame) {
             // Note: On windows there is no "::<hash>" suffix
-            if name.starts_with(
-                "ya_market_decentralized::testing::backtrace_util::generate_backtraced_name",
-            ) {
+            if name.starts_with("ya_market::testing::backtrace_util::generate_backtraced_name") {
                 return Some(idx);
             }
         }

@@ -1,12 +1,12 @@
-use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::proposal_util::exchange_draft_proposals;
-use ya_market_decentralized::testing::{
+use ya_market::assert_err_eq;
+use ya_market::testing::proposal_util::exchange_draft_proposals;
+use ya_market::testing::{
     GetProposalError, MarketServiceExt, MarketsNetwork, OwnerType, ProposalError,
 };
 
 use ya_client::model::market::proposal::State;
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal() -> Result<(), anyhow::Error> {
@@ -50,7 +50,7 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
 }
 
 /// Try to query not existing Proposal.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {

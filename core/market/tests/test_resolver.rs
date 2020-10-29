@@ -1,13 +1,13 @@
 use std::{future::Future, time::Duration};
 use tokio::time::{timeout, Timeout};
 
-use ya_market_decentralized::testing::{
+use ya_market::testing::{
     client::{sample_demand, sample_offer},
     MarketsNetwork,
 };
 
 /// Test adds Offer on single node. Resolver should not emit Proposal.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_single_not_resolve_offer() -> Result<(), anyhow::Error> {
@@ -35,7 +35,7 @@ async fn test_single_not_resolve_offer() -> Result<(), anyhow::Error> {
 }
 
 /// Test adds Offer and Demand. Resolver should emit Proposal on Demand node.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
@@ -76,7 +76,7 @@ async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
 }
 
 /// Test adds Demand on single node. Resolver should not emit Proposal.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_single_not_resolve_demand() -> Result<(), anyhow::Error> {
@@ -104,7 +104,7 @@ async fn test_single_not_resolve_demand() -> Result<(), anyhow::Error> {
 }
 
 /// Test adds Offer on two nodes and Demand third. Resolver should emit two Proposals on Demand node.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_resolve_2xoffer_demand() -> Result<(), anyhow::Error> {

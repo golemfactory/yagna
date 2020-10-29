@@ -11,18 +11,9 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 use url::Url;
-
-#[cfg(all(feature = "market-forwarding", feature = "market-decentralized"))]
-compile_error!("To use `market-decentralized` pls do `--no-default-features`.");
-#[cfg(all(feature = "market-decentralized", not(feature = "market-forwarding")))]
-use ya_market_decentralized::MarketService;
-#[cfg(feature = "market-forwarding")]
-use ya_market_forwarding::MarketService;
-#[cfg(not(any(feature = "market-forwarding", feature = "market-decentralized")))]
-compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
-
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
+use ya_market::MarketService;
 use ya_metrics::MetricsService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
