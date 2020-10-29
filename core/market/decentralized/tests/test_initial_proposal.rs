@@ -356,13 +356,15 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-/// Run two query events in the same time.
-/// The same event shouldn't be returned twice.
+/// Subscribe two Demands, query events for one, unsubscribe second and subscribe Offer.
+/// This should result in single ProposalEvent.
+/// Caught after Alpha.3 release by testnet checker running simultanously
+/// two yapapi blender examples using same app-key.
 #[cfg_attr(not(feature = "market-test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_unsubscribe_demand_while_query_events_for_other() -> Result<(), anyhow::Error> {
-    let network = MarketsNetwork::new(None)
+    let network = MarketsNetwork::new("test_unsubscribe_demand_while_query_events_for_other")
         .await
         .add_market_instance("Node-1")
         .await?;
