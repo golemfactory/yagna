@@ -36,8 +36,15 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         .on_connect(Box::new(move || {
             let mut sender = disconnect_sender.clone();
             Arbiter::spawn(async move {
-                sender.send(()).await
-                    .map_err(|e| log::error!("Failed to send notification about reconnect to central net. {}", e))
+                sender
+                    .send(())
+                    .await
+                    .map_err(|e| {
+                        log::error!(
+                            "Failed to send notification about reconnect to central net. {}",
+                            e
+                        )
+                    })
                     .ok();
             });
         }))
@@ -233,7 +240,8 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     Arbiter::spawn(async move {
         // Rebind network service on central net, after network connection was lost.
         while let Some(_) = disconnect_receiver.recv().await {
-            bind_net_on_remote(central_bus.clone(), &nodes, &hub_addr).await
+            bind_net_on_remote(central_bus.clone(), &nodes, &hub_addr)
+                .await
                 //.map_err(|e| log::error!("Failed to bind net endpoints on central net {}. {}", &hub_addr, e))
                 .ok();
             subscribe_broadcast(central_bus.clone(), &bcast).await;

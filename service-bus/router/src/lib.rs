@@ -10,6 +10,8 @@ use std::hash::Hash;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::stream::StreamExt;
+use tokio::sync::oneshot;
 use tokio_util::codec::*;
 
 use ya_sb_proto::codec::{GsbMessage, GsbMessageCodec, ProtocolError};
@@ -62,6 +64,7 @@ where
     topic_subscriptions: HashMap<TopicId, HashSet<A>>,
     reversed_subscriptions: HashMap<A, HashSet<TopicId>>,
     last_seen: HashMap<A, NaiveDateTime>,
+    disconnect_sender: HashMap<A, oneshot::Sender<()>>,
 }
 
 impl<A, M, E> RawRouter<A, M, E>
@@ -81,17 +84,34 @@ where
             topic_subscriptions: HashMap::new(),
             reversed_subscriptions: HashMap::new(),
             last_seen: HashMap::new(),
+            disconnect_sender: HashMap::new(),
         }
     }
 
-    pub fn connect<B: Sink<M, Error = E> + Send + 'static>(&mut self, addr: A, sink: B) {
+    pub fn connect<B: Sink<M, Error = E> + Send + 'static>(
+        &mut self,
+        addr: A,
+        sink: B,
+        disconnect_channel: oneshot::Sender<()>,
+    ) {
         log::debug!("Accepted connection from {}", addr);
         self.dispatcher.register(addr.clone(), sink).unwrap();
-        self.last_seen.insert(addr, Utc::now().naive_utc());
+        self.last_seen.insert(addr.clone(), Utc::now().naive_utc());
+        self.disconnect_sender.insert(addr, disconnect_channel);
     }
 
     pub fn disconnect(&mut self, addr: &A) {
         log::debug!("Closing connection with {}", addr);
+        self.disconnect_sender
+            .remove(addr)
+            .ok_or(anyhow::anyhow!(
+                "Disconnect notifier not found for {}",
+                addr
+            ))
+            .map(|channel| channel.send(()).ok())
+            .map_err(|e| log::error!("{}", e))
+            .ok();
+
         self.last_seen.remove(addr);
 
         // IDs of all endpoints registered by this server
@@ -516,10 +536,21 @@ where
     {
         let router = self.router.clone();
         tokio::spawn(async move {
-            router.lock().await.connect(addr.clone(), writer);
+            let (disconnect_sender, disconnect_receiver) = oneshot::channel::<()>();
 
+            router
+                .lock()
+                .await
+                .connect(addr.clone(), writer, disconnect_sender);
             reader
                 .err_into()
+                .merge(
+                    async move {
+                        disconnect_receiver.await?;
+                        Err(anyhow::anyhow!("Connection broken due to ping."))
+                    }
+                    .into_stream(),
+                )
                 .try_for_each(|msg: GsbMessage| async {
                     router.lock().await.handle_message(addr.clone(), msg)
                 })
