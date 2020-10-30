@@ -468,7 +468,7 @@ cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json --o
 ## Central setup
 We have centrally deployed (@ ip: `3.249.139.167`) three independent standalone modules/apps:
  - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 3.249.139.167:7464 \
-   (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -l tcp://0.0.0.0:7464`)
+   (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -- -l tcp://0.0.0.0:7464`)
  - simple "images store" @ 3.249.139.167:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
