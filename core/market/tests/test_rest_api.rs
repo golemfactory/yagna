@@ -7,7 +7,7 @@ use serde_json::json;
 
 use ya_client::model::market::Agreement;
 use ya_client::model::{market::Demand, market::Offer, market::Proposal, ErrorMessage};
-use ya_market_decentralized::testing::{
+use ya_market::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
     proposal_util::exchange_draft_proposals,
@@ -16,7 +16,7 @@ use ya_market_decentralized::testing::{
 };
 use ya_market_resolver::flatten::flatten_json;
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
@@ -66,7 +66,7 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
@@ -96,7 +96,7 @@ async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result<()> {
@@ -129,7 +129,7 @@ async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
@@ -194,7 +194,7 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
@@ -259,7 +259,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_proposal() -> anyhow::Result<()> {
@@ -317,7 +317,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_agreement() -> anyhow::Result<()> {
@@ -363,7 +363,7 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
     Ok(())
 }
 
-// #[cfg_attr(not(feature = "market-test-suite"), ignore)]
+// #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[actix_rt::test]
 // #[serial_test::serial]
 // async fn test_rest_get_proposal_wrong_subscription() -> anyhow::Result<()> {

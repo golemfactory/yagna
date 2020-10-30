@@ -11,8 +11,6 @@
       - GSB port `6011`
     - Net Mk1 Test Hub
       - Port `7477`
-    - Market API Mock TestBed
-      - On `http://localhost:5001`
 2) Launch sample Agents:
     - Sample Provider Agent
       - With WasmTime ExeUnit

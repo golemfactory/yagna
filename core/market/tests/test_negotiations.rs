@@ -1,18 +1,16 @@
 use ya_client::model::market::proposal::State;
-use ya_market_decentralized::testing::events_helper::{provider, requestor, ClientProposalHelper};
-use ya_market_decentralized::testing::mock_offer::client::{
+use ya_market::testing::events_helper::{provider, requestor, ClientProposalHelper};
+use ya_market::testing::mock_offer::client::{
     not_matching_demand, not_matching_offer, sample_demand, sample_offer,
 };
-use ya_market_decentralized::testing::proposal_util::{
-    exchange_draft_proposals, NegotiationHelper,
-};
-use ya_market_decentralized::testing::MarketsNetwork;
-use ya_market_decentralized::testing::OwnerType;
-use ya_market_decentralized::testing::{ProposalError, SaveProposalError};
+use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
+use ya_market::testing::MarketsNetwork;
+use ya_market::testing::OwnerType;
+use ya_market::testing::{ProposalError, SaveProposalError};
 use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
@@ -152,7 +150,7 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
 
 /// Can't counter proposal, that was already countered.
 /// Market should reject such attempts.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
@@ -250,7 +248,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
 }
 
 /// Can't counter own proposal.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
@@ -334,7 +332,7 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
 }
 
 /// Requestor can't counter Proposal, for which he has unsubscribed Demand.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
@@ -380,7 +378,7 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
 }
 
 /// Provider can't counter Proposal, for which he has unsubscribed Offer.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
@@ -440,7 +438,7 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
 
 /// Requestor tries to counter initial Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
@@ -489,7 +487,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::
 
 /// Requestor tries to counter draft Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
@@ -532,7 +530,7 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Er
 
 /// Provider tries to counter draft Proposal, for which Demand was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Requestor Node.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::Error> {
@@ -585,7 +583,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
 
 /// Try to send not matching counter Proposal to Provider. Our market
 /// should reject such Proposal. Error should occur on Requestor side.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
@@ -622,7 +620,7 @@ async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
 
 /// Try to send not matching counter Proposal to Requestor. Our market
 /// should reject such Proposal. Error should occur on Provider side.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {

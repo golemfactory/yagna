@@ -1,12 +1,12 @@
 use anyhow::Result;
 use chrono::{Duration, NaiveDateTime, Utc};
-use ya_market_decentralized::testing::cleaner::clean;
-use ya_market_decentralized::testing::dao::TestingDao;
-use ya_market_decentralized::testing::events_helper::{generate_event, TestMarketEvent};
-use ya_market_decentralized::testing::mock_agreement::generate_agreement;
-use ya_market_decentralized::testing::mock_offer::{generate_demand, generate_offer};
-use ya_market_decentralized::testing::proposal_util::{generate_negotiation, generate_proposal};
-use ya_market_decentralized::testing::{
+use ya_market::testing::cleaner::clean;
+use ya_market::testing::dao::TestingDao;
+use ya_market::testing::events_helper::{generate_event, TestMarketEvent};
+use ya_market::testing::mock_agreement::generate_agreement;
+use ya_market::testing::mock_offer::{generate_demand, generate_offer};
+use ya_market::testing::proposal_util::{generate_negotiation, generate_proposal};
+use ya_market::testing::{
     Agreement, AgreementDao, DbProposal, Demand, DemandDao, MarketsNetwork, Negotiation, Offer,
     OfferDao,
 };
@@ -20,7 +20,7 @@ fn past() -> NaiveDateTime {
     (Utc::now() - Duration::days(91)).naive_utc()
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement() -> Result<()> {
@@ -43,7 +43,7 @@ async fn test_agreement() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_demand() -> Result<()> {
@@ -72,7 +72,7 @@ async fn test_demand() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_offer() -> Result<()> {
@@ -106,7 +106,7 @@ async fn test_offer() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_events() -> Result<()> {
@@ -130,7 +130,7 @@ async fn test_events() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_proposal() -> Result<()> {
@@ -191,7 +191,7 @@ async fn test_proposal() -> Result<()> {
     Ok(())
 }
 
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_proposal_lotsa_negotiations() -> Result<()> {

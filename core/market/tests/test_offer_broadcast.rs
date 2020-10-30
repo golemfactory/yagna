@@ -5,17 +5,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::time::Duration;
 
-use ya_market_decentralized::assert_err_eq;
-use ya_market_decentralized::testing::discovery::{message::*, Discovery};
-use ya_market_decentralized::testing::mock_offer::{
-    client, sample_offer, sample_offer_with_expiration,
-};
-use ya_market_decentralized::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
-use ya_market_decentralized::testing::{QueryOfferError, SubscriptionId};
+use ya_market::assert_err_eq;
+use ya_market::testing::discovery::{message::*, Discovery};
+use ya_market::testing::mock_offer::{client, sample_offer, sample_offer_with_expiration};
+use ya_market::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
+use ya_market::testing::{QueryOfferError, SubscriptionId};
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
@@ -65,7 +63,7 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 /// We check here, if valid Offer isn't rejected by market for some unknown reason.
 /// If it is rejected, we can't trust other tests, that check if broadcasts validation
 /// works correctly.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
@@ -103,7 +101,7 @@ async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
 /// Offer subscription id should be validated on reception. If Offer
 /// id hash doesn't match hash computed from Offer fields, Market should
 /// reject such an Offer since it could be some kind of attack.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
@@ -143,7 +141,7 @@ async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
 }
 
 /// Node should reject Offer, that already expired.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
@@ -188,7 +186,7 @@ async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
 /// This test broadcasts unsubscribed Offer and checks how other market Nodes
 /// behave. We expect that market nodes will stop broadcast and Discovery interface will
 /// get Offer only from himself.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
@@ -281,7 +279,7 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 /// Discovery `RetrieveOffers` GSB endpoint should return only existing Offers.
 /// Test sends RetrieveOffers requesting existing and not existing subscription.
 /// Market is expected to return only existing Offer without any error.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
