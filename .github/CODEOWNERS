@@ -1,15 +1,16 @@
 
-.github/			@prekucki
+.github/                                @prekucki
+.github/workflows/integration-test.yml  @golemfactory/ya-integration
 
-core/activity/                  @golemfactory/exe-unit
-core/model/src/activity.rs      @golemfactory/exe-unit
-exe-unit/                       @golemfactory/exe-unit
+core/activity/                          @golemfactory/exe-unit
+core/model/src/activity.rs              @golemfactory/exe-unit
+exe-unit/                               @golemfactory/exe-unit
 
-core/market/                    @golemfactory/ya-market
-core/model/src/market.rs        @golemfactory/ya-market
+core/market/                            @golemfactory/ya-market
+core/model/src/market.rs                @golemfactory/ya-market
 
-service-bus/                    @golemfactory/ya-net
-core/net/                       @golemfactory/ya-net
+service-bus/                            @golemfactory/ya-net
+core/net/                               @golemfactory/ya-net
 
-core/payment-driver             @golemfactory/ya-payment
-core/payment                    @golemfactory/ya-payment
+core/payment-driver                     @golemfactory/ya-payment
+core/payment                            @golemfactory/ya-payment
