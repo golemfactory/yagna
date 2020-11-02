@@ -58,7 +58,7 @@ pub(super) async fn receive_remote_offers(
         .await;
 
     counter!("market.offers.incoming", added_offers_ids.len() as u64);
-    log::info!(
+    log::debug!(
         "Received {} new Offers from [{}]: \n{}",
         added_offers_ids.len(),
         caller,
@@ -134,7 +134,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
             "market.offers.unsubscribes.incoming",
             new_unsubscribes.len() as u64
         );
-        log::info!(
+        log::debug!(
             "Received {} new Offers to unsubscribe from [{}]: \n{}",
             new_unsubscribes.len(),
             caller,
