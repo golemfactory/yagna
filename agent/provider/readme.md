@@ -133,7 +133,7 @@ To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov
     ```
     If you want to set `debug` log level or higher its good to filter out core crates to `info`:
     ```bash
-    RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info cargo run service run
+    RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info,web3=info cargo run service run
     ```
 
 2. Create app-key token
