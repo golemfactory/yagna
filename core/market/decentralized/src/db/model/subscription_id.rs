@@ -192,7 +192,7 @@ where
                 .0
                 .iter()
                 .format_with("\n", |elt, f| f(&format_args!(" {}", elt)));
-            write!(f, "[\n{}\n]", data_formatter)?;
+            write!(f, "{}", data_formatter)?;
         }
         Ok(())
     }
