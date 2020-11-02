@@ -169,7 +169,7 @@ impl Discovery {
         };
 
         if !new_offer_ids.is_empty() {
-            log::debug!(
+            log::info!(
                 "Propagating {}/{} Offers received from [{}].",
                 new_offer_ids.len(),
                 num_ids_received,
